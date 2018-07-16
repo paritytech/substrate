@@ -46,7 +46,7 @@ const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 
 bitflags! {
 	/// Node roles bitmask.
-	pub struct Role: u32 {
+	pub struct Roles: u8 {
 		/// No network.
 		const NONE = 0b00000000;
 		/// Full node, does not participate in consensus.

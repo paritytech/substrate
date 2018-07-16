@@ -70,7 +70,7 @@ pub trait Context {
 }
 
 /// Statements circulated among peers.
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Statement<C, D> {
 	/// Broadcast by a authority to indicate that this is his candidate for
 	/// inclusion.
@@ -141,7 +141,7 @@ impl<C: Decode, D: Decode> Decode for Statement<C, D> {
 }
 
 /// A signed statement.
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct SignedStatement<C, D, V, S> {
 	/// The statement.
 	pub statement: Statement<C, D>,
@@ -151,6 +151,23 @@ pub struct SignedStatement<C, D, V, S> {
 	pub sender: V,
 }
 
+impl<C: Encode, D: Encode, V: Encode, S: Encode> Encode for SignedStatement<C, D, V, S> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.statement);
+		dest.push(&self.signature);
+		dest.push(&self.sender);
+	}
+}
+
+impl<C: Decode, D: Decode, V: Decode, S: Decode> Decode for SignedStatement<C, D, V, S> {
+	fn decode<I: Input>(value: &mut I) -> Option<Self> {
+		Some(SignedStatement {
+			statement: Decode::decode(value)?,
+			signature: Decode::decode(value)?,
+			sender: Decode::decode(value)?,
+		})
+	}
+}
 /// Misbehavior: voting more than one way on candidate validity.
 ///
 /// Since there are three possible ways to vote, a double vote is possible in

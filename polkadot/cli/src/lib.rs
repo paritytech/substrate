@@ -222,19 +222,19 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			// TODO [rob]: collation node implementation
 			// This isn't a thing. Different parachains will have their own collator executables and
 			// maybe link to libpolkadot to get a light-client. 
-			service::Role::LIGHT
+			service::Roles::LIGHT
 		} else if matches.is_present("light") {
 			info!("Starting (light)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
-			service::Role::LIGHT
+			service::Roles::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
 			info!("Starting validator");
 			config.execution_strategy = service::ExecutionStrategy::Both;
-			service::Role::AUTHORITY
+			service::Roles::AUTHORITY
 		} else {
 			info!("Starting (heavy)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
-			service::Role::FULL
+			service::Roles::FULL
 		};
 
 	if let Some(s) = matches.value_of("execution") {
@@ -303,7 +303,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		None
 	};
 
-	match role == service::Role::LIGHT {
+	match role == service::Roles::LIGHT {
 		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, &matches, sys_conf, worker)?,
 		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, &matches, sys_conf, worker)?,
 	}
