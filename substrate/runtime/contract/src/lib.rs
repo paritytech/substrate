@@ -260,6 +260,50 @@ impl<T: Trait> staking::OnAccountKill<T::AccountId> for Module<T> {
 	}
 }
 
+pub struct GasMeter {
+	gas_left: u64,
+}
+impl GasMeter {
+	pub fn new(gas_limit: u64) -> GasMeter {
+		GasMeter {
+			gas_left: gas_limit,
+		}
+	}
+	/// Account for used gas.
+	///
+	/// Returns `false` if there is not enough gas or addition of the specified
+	/// amount of gas has lead to overflow. On success returns `true`.
+	///
+	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
+	#[must_use]
+	pub fn charge(&mut self, amount: u64) -> bool {
+		match self.gas_left.checked_sub(amount) {
+			None => false,
+			Some(val) if val == 0 => false,
+			Some(val) => {
+				self.gas_left = val;
+				true
+			}
+		}
+	}
+
+	/// Override current gas left value.
+	///
+	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
+	#[must_use]
+	pub fn set_gas_left(&mut self, gas_left: u64) -> bool {
+		self.gas_left = gas_left;
+
+		// Continue only if there is gas left.
+		gas_left > 0
+	}
+
+	/// Returns how much gas left from the initial budget.
+	pub fn gas_left(&self) -> u64 {
+		self.gas_left
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use {

@@ -4,6 +4,7 @@ use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
 use parity_wasm::elements::{self, External, MemoryType};
+use {GasMeter};
 
 pub struct CreateReceipt<Address> {
 	pub address: Address,
@@ -91,7 +92,7 @@ struct Runtime<'a, T: Ext + 'a> {
 	ext: &'a mut T,
 	config: Config,
 	memory: sandbox::Memory,
-	gas_meter: GasMeter,
+	gas_meter: &'a mut GasMeter,
 	special_trap: Option<SpecialTrap>,
 }
 impl<'a, T: Ext + 'a> Runtime<'a, T> {
@@ -119,50 +120,6 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 		} else {
 			Err(())
 		}
-	}
-}
-
-struct GasMeter {
-	gas_left: u64,
-}
-impl GasMeter {
-	fn new(gas_limit: u64) -> GasMeter {
-		GasMeter {
-			gas_left: gas_limit,
-		}
-	}
-	/// Account for used gas.
-	///
-	/// Returns `false` if there is not enough gas or addition of the specified
-	/// amount of gas has lead to overflow. On success returns `true`.
-	///
-	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
-	#[must_use]
-	fn charge(&mut self, amount: u64) -> bool {
-		match self.gas_left.checked_sub(amount) {
-			None => false,
-			Some(val) if val == 0 => false,
-			Some(val) => {
-				self.gas_left = val;
-				true
-			}
-		}
-	}
-
-	/// Override current gas left value.
-	///
-	/// Intuition about the return value sense is to answer the question 'are we allowed to continue?'
-	#[must_use]
-	fn set_gas_left(&mut self, gas_left: u64) -> bool {
-		self.gas_left = gas_left;
-
-		// Continue only if there is gas left.
-		gas_left > 0
-	}
-
-	/// Returns how much gas left from the initial budget.
-	fn gas_left(&self) -> u64 {
-		self.gas_left
 	}
 }
 
@@ -227,7 +184,7 @@ impl ExecutionResult {
 pub fn execute<'a, T: Ext>(
 	code: &[u8],
 	ext: &'a mut T,
-	gas_limit: u64,
+	gas_meter: &mut GasMeter,
 ) -> Result<ExecutionResult, Error> {
 	// TODO: Receive data as an argument
 
@@ -437,7 +394,7 @@ pub fn execute<'a, T: Ext>(
 		ext,
 		config,
 		memory,
-		gas_meter: GasMeter::new(gas_limit),
+		gas_meter,
 		special_trap: None,
 	};
 
@@ -625,6 +582,7 @@ mod tests {
 	use std::fmt;
 	use wabt;
 	use std::collections::HashMap;
+	use GasMeter;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
@@ -784,7 +742,7 @@ mod tests {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
 		let mut mock_ext = MockExt::default();
-		execute(&code_transfer, &mut mock_ext, 50_000).unwrap();
+		execute(&code_transfer, &mut mock_ext, &mut GasMeter::new(50_000)).unwrap();
 
 		assert_eq!(&mock_ext.transfers, &[TransferEntry {
 			to: 2,
@@ -811,7 +769,7 @@ r#"
 		let mut mock_ext = MockExt::default();
 
 		assert_matches!(
-			execute(&code_mem, &mut mock_ext, 100_000),
+			execute(&code_mem, &mut mock_ext, &mut GasMeter::new(100_000)),
 			Err(_)
 		);
 	}

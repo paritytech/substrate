@@ -70,7 +70,9 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 					gas_price: self.gas_price,
 					depth: self.depth + 1,
 				};
-				vm::execute(&dest_code, &mut nested, gas_limit)
+
+				let mut gas_meter = ::GasMeter::new(gas_limit);
+				vm::execute(&dest_code, &mut nested, &mut gas_meter)
 					.map_err(|_| "vm execute returned error")?
 			} else {
 				// that was a plain transfer
@@ -120,7 +122,9 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 					gas_price: self.gas_price,
 					depth: self.depth + 1,
 				};
-				vm::execute(ctor, &mut nested, gas_limit).map_err(|_| ())?
+
+				let mut gas_meter = ::GasMeter::new(gas_limit);
+				vm::execute(ctor, &mut nested, &mut gas_meter).map_err(|_| ())?
 			};
 
 			overlay.set_code(&dest, exec_result.return_data().to_vec());
