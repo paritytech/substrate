@@ -101,6 +101,8 @@ impl From<HashMap<Vec<u8>, Vec<u8>>> for InMemory {
 	}
 }
 
+impl super::Error for Void {}
+
 impl Backend for InMemory {
 	type Error = Void;
 	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
