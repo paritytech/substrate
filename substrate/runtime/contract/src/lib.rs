@@ -164,7 +164,7 @@ impl<T: Trait> Module<T> {
 
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
-		{
+		let result = {
 			let mut ctx = ExecutionContext {
 				// TODO: avoid this
 				_caller: aux.clone(),
@@ -172,13 +172,13 @@ impl<T: Trait> Module<T> {
 				depth: 0,
 				account_db: &mut overlay,
 			};
-			ctx.call(dest, value, &mut gas_meter, data)?;
+			ctx.call(dest, value, &mut gas_meter, data)
+		};
 
-			// TODO: Most of the value should be returned even if it is returned an error
+		if let Ok(_) = result {
+			// Commit all changes that made it thus far into the persistant storage.
+			account_db::DirectAccountDb.commit(overlay.into_change_set());
 		}
-
-		// Commit all changes that made it thus far into the persistant storage.
-		account_db::DirectAccountDb.commit(overlay.into_change_set());
 
 		// Refund cost of the unused gas.
 		//
@@ -186,7 +186,7 @@ impl<T: Trait> Module<T> {
 		// can alter the balance of the caller.
 		gas::refund_unused_gas::<T>(aux, gas_meter);
 
-		Ok(())
+		result.map(|_| ())
 	}
 
 	fn create(
@@ -206,7 +206,7 @@ impl<T: Trait> Module<T> {
 
 		let mut overlay = OverlayAccountDb::<T>::new(&account_db::DirectAccountDb);
 
-		{
+		let result = {
 			let mut ctx = ExecutionContext {
 				// TODO: avoid this
 				_caller: aux.clone(),
@@ -214,14 +214,14 @@ impl<T: Trait> Module<T> {
 				depth: 0,
 				account_db: &mut overlay,
 			};
+
 			ctx.create(endownment, &mut gas_meter, &ctor_code, &data)
-				.map_err(|_| "create failed")?;
+		};
 
-			// TODO: Most of the value should be returned even if it is returned an error
+		if let Ok(_) = result {
+			// Commit all changes that made it thus far into the persistant storage.
+			account_db::DirectAccountDb.commit(overlay.into_change_set());
 		}
-
-		// Commit all changes that made it thus far into the persistant storage.
-		account_db::DirectAccountDb.commit(overlay.into_change_set());
 
 		// Refund cost of the unused gas.
 		//
@@ -229,7 +229,7 @@ impl<T: Trait> Module<T> {
 		// can alter the balance of the caller.
 		gas::refund_unused_gas::<T>(aux, gas_meter);
 
-		Ok(())
+		result.map(|_| ())
 	}
 }
 
@@ -666,6 +666,39 @@ r#"
 				assert_eq!(<StorageOf<Test>>::get(2, b"hello".to_vec()), Some(b"3".to_vec()));
 				assert_eq!(<StorageOf<Test>>::get(2, b"world".to_vec()), Some(b"4".to_vec()));
 			}
+		});
+	}
+
+	const CODE_UNREACHABLE: &'static str =
+r#"
+(module
+	(func (export "call")
+		nop
+		unreachable
+	)
+)
+"#;
+
+	#[test]
+	fn top_level_call_refunds_even_if_fails() {
+		let code_unreachable = wabt::wat2wasm(CODE_UNREACHABLE).unwrap();
+		with_externalities(&mut new_test_ext(0, 4), || {
+			<CodeOf<Test>>::insert(1, code_unreachable.to_vec());
+
+			Staking::set_free_balance(&0, 100_000_000);
+
+			assert_err!(Contract::call(
+				&0,
+				1,
+				0,
+				100_000,
+				Vec::new(),
+			), "vm execute returned error while call");
+
+			assert_eq!(
+				Staking::free_balance(&0),
+				100_000_000 - (4 * 3) - (4 * 135),
+			);
 		});
 	}
 }
