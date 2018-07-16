@@ -138,7 +138,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 					depth: self.depth + 1,
 				};
 				vm::execute(ctor, &mut nested, gas_meter)
-					.map_err(|_| "vm execute returned error while call")?
+					.map_err(|_| "vm execute returned error while create")?
 			};
 
 			overlay.set_code(&dest, exec_result.return_data().to_vec());
