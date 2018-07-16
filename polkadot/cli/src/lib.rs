@@ -221,7 +221,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			info!("Starting collator");
 			// TODO [rob]: collation node implementation
 			// This isn't a thing. Different parachains will have their own collator executables and
-			// maybe link to libpolkadot to get a light-client. 
+			// maybe link to libpolkadot to get a light-client.
 			service::Roles::LIGHT
 		} else if matches.is_present("light") {
 			info!("Starting (light)");

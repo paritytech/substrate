@@ -101,3 +101,19 @@ You can start a development chain with:
 ```
 cargo run -- --chain=dev --validator --key Alice
 ```
+
+## Shell completion
+
+The Polkadot cli command supports shell auto-completion. For this to work, you will need to run the completion script matching you build and system.
+
+Assuming you built a release version using `cargo build --release` and use `bash` run the followig:
+```
+source target/release/completion-scripts/polkadot.bash
+```
+
+You can find completion scripts for:
+- bash
+- fish
+- zsh
+- elvish
+- powershell
