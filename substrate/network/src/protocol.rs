@@ -238,7 +238,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 			Some(m) => m,
 			None => {
 				trace!(target: "sync", "Invalid packet from {}", peer_id);
-				io.disable_peer(peer_id, &format!("Peer sent us a packet with invalid format"));
+				io.disable_peer(peer_id, "Peer sent us a packet with invalid format");
 				return;
 			}
 		};
