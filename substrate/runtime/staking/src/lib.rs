@@ -104,7 +104,7 @@ pub trait Trait: system::Trait + session::Trait {
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
 	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
-	/// A function which invoked when the given account is dead.
+	/// A function which is invoked when the given account is dead.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
 	type OnAccountKill: OnAccountKill<Self::AccountId>;
@@ -155,8 +155,8 @@ decl_storage! {
 	pub TransferFee get(transfer_fee): b"sta:transfer_fee" => required T::Balance;
 	// The fee required to create an account. At least as big as ReclaimRebate.
 	pub CreationFee get(creation_fee): b"sta:creation_fee" => required T::Balance;
-	// TODO: Move it to contract module.
-	// TODO: Take in gas?
+	// TODO: Move it to contract module. (Gav confirmed it)
+	// TODO: Take in gas, 
 	// The fee required to create a contract. At least as big as ReclaimRebate.
 	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
 	// Maximum reward, per validator, that is provided per acceptable session.
@@ -191,7 +191,9 @@ decl_storage! {
 	// This is the only balance that matters in terms of most operations on tokens. It is
 	// alone used to determine the balance when in the contract execution environment. When this
 	// balance falls below the value of `ExistentialDeposit`, then the "current account" is
-	// deleted: specifically, `Bondage`, `StorageOf` and `FreeBalance`.
+	// deleted: specifically, `Bondage` and `FreeBalance`. Furthermore, `OnAccountKill` callback
+	// is invoked, giving a chance to external modules to cleanup data associated with
+	// the deleted account.
 	//
 	// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 	// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
