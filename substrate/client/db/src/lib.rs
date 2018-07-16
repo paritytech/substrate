@@ -43,7 +43,7 @@ mod utils;
 use std::sync::Arc;
 use std::path::PathBuf;
 
-use codec::Slicable;
+use codec::{Decode, Encode};
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
@@ -54,7 +54,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, H
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
-use state_machine::{CodeExecutor, TrieH256, DBValue};
+use state_machine::{CodeExecutor, TrieH256, DBValue, ExecutionStrategy};
 use utils::{Meta, db_err, meta_keys, number_to_db_key, open_database, read_db, read_id, read_meta};
 use state_db::StateDb;
 pub use state_db::PruningMode;
@@ -79,17 +79,16 @@ pub fn new_client<E, S, Block>(
 	settings: DatabaseSettings,
 	executor: E,
 	genesis_storage: S,
+	execution_strategy: ExecutionStrategy,
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
-		<Block::Header as HeaderT>::Number: As<u32>,
-		Block::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
 		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
-	Ok(client::Client::new(backend, executor, genesis_storage)?)
+	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategy)?)
 }
 
 mod columns {
@@ -126,7 +125,7 @@ pub struct BlockchainDb<Block: BlockT> {
 	meta: RwLock<Meta<<Block::Header as HeaderT>::Number, Block::Hash>>,
 }
 
-impl<Block: BlockT> BlockchainDb<Block> where <Block::Header as HeaderT>::Number: As<u32> {
+impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		Ok(BlockchainDb {
@@ -147,7 +146,7 @@ impl<Block: BlockT> BlockchainDb<Block> where <Block::Header as HeaderT>::Number
 	}
 }
 
-impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> where <Block::Header as HeaderT>::Number: As<u32> {
+impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>, client::error::Error> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, id)? {
 			Some(header) => match Block::Header::decode(&mut &header[..]) {
@@ -185,10 +184,10 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 	}
 }
 
-impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> where <Block::Header as HeaderT>::Number: As<u32> {
+impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, client::error::Error> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::BODY, id)? {
-			Some(body) => match Slicable::decode(&mut &body[..]) {
+			Some(body) => match Decode::decode(&mut &body[..]) {
 				Some(body) => Ok(Some(body)),
 				None => return Err(client::error::ErrorKind::Backend("Error decoding body".into()).into()),
 			}
@@ -198,7 +197,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> w
 
 	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, client::error::Error> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::JUSTIFICATION, id)? {
-			Some(justification) => match Slicable::decode(&mut &justification[..]) {
+			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Some(justification) => Ok(Some(justification)),
 				None => return Err(client::error::ErrorKind::Backend("Error decoding justification".into()).into()),
 			}
@@ -275,7 +274,7 @@ pub struct Backend<Block: BlockT> {
 	finalization_window: u64,
 }
 
-impl<Block: BlockT> Backend<Block> where <Block::Header as HeaderT>::Number: As<u32> {
+impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	pub fn new(config: DatabaseSettings, finalization_window: u64) -> Result<Self, client::error::Error> {
 		let db = open_database(&config, "full")?;
@@ -324,10 +323,7 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
-	<Block::Header as HeaderT>::Number: As<u32>,
-	Block::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
-{
+impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
@@ -376,7 +372,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 				let finalizing_hash = if self.finalization_window == 0 {
 					Some(hash)
 				} else {
-					self.blockchain.hash(As::sa((number_u64 - self.finalization_window) as u32))?
+					self.blockchain.hash(As::sa((number_u64 - self.finalization_window) as u64))?
 				};
 				if let Some(finalizing_hash) = finalizing_hash {
 					trace!("Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
@@ -407,15 +403,13 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 		}
 
 		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
-			let root: [u8; 32] = hdr.state_root().clone().into();
-			DbState::with_storage(self.storage.clone(), root.into())
+			let root: TrieH256  = TrieH256::from_slice(hdr.state_root().as_ref());
+			DbState::with_storage(self.storage.clone(), root)
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
 	}
 }
 
-impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block> where
-	<Block::Header as HeaderT>::Number: As<u32>,
-	Block::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
+impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block> 
 {}
 
 #[cfg(test)]

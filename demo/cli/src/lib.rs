@@ -64,6 +64,14 @@ impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for D
 	{
 		Err("unimplemented".into())
 	}
+
+	fn light_status(&self) -> extrinsic_pool::txpool::LightStatus {
+		unreachable!()
+	}
+
+	fn import_notification_stream(&self) -> extrinsic_pool::api::EventStream {
+		unreachable!()
+	}
 }
 
 struct DummySystem;
@@ -99,7 +107,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 
 	// Create client
-	let executor = demo_executor::Executor::new();
+	let executor = demo_executor::Executor::with_heap_pages(8);
 
 	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
 	let genesis_config = GenesisConfig {

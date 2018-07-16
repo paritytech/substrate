@@ -19,9 +19,7 @@
 use alloc::vec::Vec;
 use alloc::boxed::Box;
 use core::{mem, slice};
-use super::joiner::Joiner;
 use arrayvec::ArrayVec;
-
 /// Trait that allows reading of data into a slice.
 pub trait Input {
 	/// Read into the provided input slice. Returns the number of bytes read.
@@ -55,14 +53,47 @@ impl<R: ::std::io::Read> Input for R {
 	}
 }
 
-/// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
-pub trait Slicable: Sized {
-	/// Attempt to deserialise the value from input.
-	fn decode<I: Input>(value: &mut I) -> Option<Self>;
+/// Trait that allows writing of data.
+pub trait Output: Sized {
+	/// Write to the output.
+	fn write(&mut self, bytes: &[u8]);
+
+	fn push_byte(&mut self, byte: u8) {
+		self.write(&[byte]);
+	}
+
+	fn push<V: Encode + ?Sized>(&mut self, value: &V) {
+		value.encode_to(self);
+	}
+}
+
+#[cfg(not(feature = "std"))]
+impl Output for Vec<u8> {
+	fn write(&mut self, bytes: &[u8]) {
+		self.extend(bytes);
+	}
+}
+
+#[cfg(feature = "std")]
+impl<W: ::std::io::Write> Output for W {
+	fn write(&mut self, bytes: &[u8]) {
+		(self as &mut ::std::io::Write).write(bytes).expect("Codec outputs are infallible");
+	}
+}
+
+/// Trait that allows zero-copy write of value-references to slices in LE format.
+/// Implementations should override `using_encoded` for value types and `encode_to` for allocating types.
+pub trait Encode {
+	/// Convert self to a slice and append it to the destination.
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		self.using_encoded(|buf| dest.write(buf));
+	}
 
 	/// Convert self to an owned vector.
 	fn encode(&self) -> Vec<u8> {
-		self.using_encoded(|s| s.to_vec())
+		let mut r = Vec::new();
+		self.encode_to(&mut r);
+		r
 	}
 
 	/// Convert self to a slice and then invoke the given closure with it.
@@ -71,17 +102,32 @@ pub trait Slicable: Sized {
 	}
 }
 
-/// Encode a bytes slice as `Slicable` that can be decoded into a vector.
-pub fn encode_slice(bytes: &[u8]) -> Vec<u8> {
-	let len = bytes.len();
-	assert!(len <= u32::max_value() as usize, "Attempted to serialize a collection with too many elements.");
-
-	let mut r: Vec<u8> = Vec::new().and(&(len as u32));
-	r.extend_from_slice(bytes);
-	r
+/// Trait that allows zero-copy read of value-references from slices in LE format.
+pub trait Decode: Sized {
+	/// Attempt to deserialise the value from input.
+	fn decode<I: Input>(value: &mut I) -> Option<Self>;
 }
 
-impl<T: Slicable, E: Slicable> Slicable for Result<T, E> {
+/// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
+pub trait Codec: Decode + Encode {}
+impl<S: Decode + Encode> Codec for S {}
+
+impl<T: Encode, E: Encode> Encode for Result<T, E> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		match *self {
+			Ok(ref t) => {
+				dest.push_byte(0);
+				t.encode_to(dest);
+			}
+			Err(ref e) => {
+				dest.push_byte(1);
+				e.encode_to(dest);
+			}
+		}
+	}
+}
+
+impl<T: Decode, E: Decode> Decode for Result<T, E> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			0 => Some(Ok(T::decode(input)?)),
@@ -89,36 +135,12 @@ impl<T: Slicable, E: Slicable> Slicable for Result<T, E> {
 			_ => None,
 		}
 	}
-
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		match *self {
-			Ok(ref t) => {
-				v.push(0);
-				t.using_encoded(|s| v.extend(s));
-			}
-			Err(ref e) => {
-				v.push(1);
-				e.using_encoded(|s| v.extend(s));
-			}
-		}
-		v
-	}
 }
 
 /// Shim type because we can't do a specialised implementation for `Option<bool>` directly.
 pub struct OptionBool(pub Option<bool>);
 
-impl Slicable for OptionBool {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		match input.read_byte()? {
-			0 => Some(OptionBool(None)),
-			1 => Some(OptionBool(Some(true))),
-			2 => Some(OptionBool(Some(false))),
-			_ => None,
-		}
-	}
-
+impl Encode for OptionBool {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[match *self {
 			OptionBool(None) => 0u8,
@@ -128,7 +150,30 @@ impl Slicable for OptionBool {
 	}
 }
 
-impl<T: Slicable> Slicable for Option<T> {
+impl Decode for OptionBool {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			0 => Some(OptionBool(None)),
+			1 => Some(OptionBool(Some(true))),
+			2 => Some(OptionBool(Some(false))),
+			_ => None,
+		}
+	}
+}
+
+impl<T: Encode> Encode for Option<T> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		match *self {
+			Some(ref t) => {
+				dest.push_byte(1);
+				t.encode_to(dest);
+			}
+			None => dest.push_byte(0),
+		}
+	}
+}
+
+impl<T: Decode> Decode for Option<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			0 => Some(None),
@@ -136,38 +181,25 @@ impl<T: Slicable> Slicable for Option<T> {
 			_ => None,
 		}
 	}
-
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		match *self {
-			Some(ref t) => {
-				v.push(1);
-				t.using_encoded(|s| v.extend(s));
-			}
-			None => v.push(0),
-		}
-		v
-	}
 }
 
 macro_rules! impl_array {
 	( $( $n:expr )* ) => { $(
-		impl<T: Slicable> Slicable for [T; $n] {
+		impl<T: Encode> Encode for [T; $n] {
+			fn encode_to<W: Output>(&self, dest: &mut W) {
+				for item in self.iter() {
+					item.encode_to(dest);
+				}
+			}
+		}
+
+		impl<T: Decode> Decode for [T; $n] {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
 				let mut r = ArrayVec::new();
 				for _ in 0..$n {
 					r.push(T::decode(input)?);
 				}
 				r.into_inner().ok()
-			}
-
-			fn encode(&self) -> Vec<u8> {
-				use core::iter::Extend;
-				let mut r = Vec::new();
-				for item in self.iter() {
-					item.using_encoded(|e| r.extend(e));
-				}
-				r
 			}
 		}
 	)* }
@@ -176,17 +208,34 @@ macro_rules! impl_array {
 impl_array!(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
 	40 48 56 64 72 96 128 160 192 224 256);
 
-impl<T: Slicable> Slicable for Box<T> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Box::new(T::decode(input)?))
-	}
-
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.as_ref().using_encoded(f)
+impl<T: Encode> Encode for Box<T> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_ref().encode_to(dest)
 	}
 }
 
-impl Slicable for Vec<u8> {
+impl<T: Decode> Decode for Box<T> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(Box::new(T::decode(input)?))
+	}
+}
+
+impl Encode for [u8] {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		let len = self.len();
+		assert!(len <= u32::max_value() as usize, "Attempted to serialize a collection with too many elements.");
+		(len as u32).encode_to(dest);
+		dest.write(self)
+	}
+}
+
+impl Encode for Vec<u8> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_slice().encode_to(dest)
+	}
+}
+
+impl Decode for Vec<u8> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).and_then(move |len| {
 			let len = len as usize;
@@ -198,13 +247,26 @@ impl Slicable for Vec<u8> {
 			}
 		})
 	}
+}
 
-	fn encode(&self) -> Vec<u8> {
-		encode_slice(&self)
+impl<T: Encode> Encode for [T] {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		let len = self.len();
+		assert!(len <= u32::max_value() as usize, "Attempted to serialize a collection with too many elements.");
+		(len as u32).encode_to(dest);
+		for item in self {
+			item.encode_to(dest);
+		}
 	}
 }
 
-impl<T: Slicable> Slicable for Vec<T> {
+impl<T: Encode> Encode for Vec<T> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_slice().encode_to(dest)
+	}
+}
+
+impl<T: Decode> Decode for Vec<T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).and_then(move |len| {
 			let mut r = Vec::with_capacity(len as usize);
@@ -214,24 +276,10 @@ impl<T: Slicable> Slicable for Vec<T> {
 			Some(r)
 		})
 	}
-
-	fn encode(&self) -> Vec<u8> {
-		use core::iter::Extend;
-
-		let len = self.len();
-		assert!(len <= u32::max_value() as usize, "Attempted to serialize vec with too many elements.");
-
-		let mut r: Vec<u8> = Vec::new().and(&(len as u32));
-		for item in self {
-			item.using_encoded(|e| r.extend(e))
-		}
-		r
-	}
 }
 
-impl Slicable for () {
-	fn decode<I: Input>(_: &mut I) -> Option<()> {
-		Some(())
+impl Encode for () {
+	fn encode_to<T: Output>(&self, _dest: &mut T) {
 	}
 
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
@@ -243,26 +291,46 @@ impl Slicable for () {
 	}
 }
 
+impl Decode for () {
+	fn decode<I: Input>(_: &mut I) -> Option<()> {
+		Some(())
+	}
+}
+
 macro_rules! tuple_impl {
 	($one:ident,) => {
-		impl<$one: Slicable> Slicable for ($one,) {
+		impl<$one: Encode> Encode for ($one,) {
+			fn encode_to<T: Output>(&self, dest: &mut T) {
+				self.0.encode_to(dest);
+			}
+		}
+
+		impl<$one: Decode> Decode for ($one,) {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
 				match $one::decode(input) {
 					None => None,
 					Some($one) => Some(($one,)),
 				}
 			}
+		}
+	};
+	($first:ident, $($rest:ident,)+) => {
+		impl<$first: Encode, $($rest: Encode),+>
+		Encode for
+		($first, $($rest),+) {
+			fn encode_to<T: Output>(&self, dest: &mut T) {
+				let (
+					ref $first,
+					$(ref $rest),+
+				) = *self;
 
-			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-				self.0.using_encoded(f)
+				$first.encode_to(dest);
+				$($rest.encode_to(dest);)+
 			}
 		}
 
-
-	};
-	($first:ident, $($rest:ident,)+) => {
-		impl<$first: Slicable, $($rest: Slicable),+>
-		Slicable for
+		impl<$first: Decode, $($rest: Decode),+>
+		Decode for
 		($first, $($rest),+) {
 			fn decode<INPUT: Input>(input: &mut INPUT) -> Option<Self> {
 				Some((
@@ -276,22 +344,6 @@ macro_rules! tuple_impl {
 					},)+
 				))
 			}
-
-			fn using_encoded<RETURN, PROCESS>(&self, f: PROCESS) -> RETURN
-				where PROCESS: FnOnce(&[u8]) -> RETURN
-			{
-				let mut v = Vec::new();
-
-				let (
-					ref $first,
-					$(ref $rest),+
-				) = *self;
-
-				$first.using_encoded(|s| v.extend(s));
-				$($rest.using_encoded(|s| v.extend(s));)+
-
-				f(v.as_slice())
-			}
 		}
 
 		tuple_impl!($($rest,)+);
@@ -300,15 +352,13 @@ macro_rules! tuple_impl {
 
 #[allow(non_snake_case)]
 mod inner_tuple_impl {
-	use alloc::vec::Vec;
-
-	use super::{Input, Slicable};
+	use super::{Input, Output, Decode, Encode};
 	tuple_impl!(A, B, C, D, E, F, G, H, I, J, K,);
 }
 
 /// Trait to allow conversion to a know endian representation when sensitive.
 /// Types implementing this trait must have a size > 0.
-// note: the copy bound and static lifetimes are necessary for safety of `Slicable` blanket
+// note: the copy bound and static lifetimes are necessary for safety of `Codec` blanket
 // implementation.
 trait EndianSensitive: Copy + 'static {
 	fn to_le(self) -> Self { self }
@@ -330,22 +380,7 @@ macro_rules! impl_endians {
 			fn as_le_then<T, F: FnOnce(&Self) -> T>(&self, f: F) -> T { let d = self.to_le(); f(&d) }
 		}
 
-		impl Slicable for $t {
-			fn decode<I: Input>(input: &mut I) -> Option<Self> {
-				let size = mem::size_of::<$t>();
-				assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
-				let mut val: $t = unsafe { mem::zeroed() };
-
-				unsafe {
-					let raw: &mut [u8] = slice::from_raw_parts_mut(
-						&mut val as *mut $t as *mut u8,
-						size
-					);
-					if input.read(raw) != size { return None }
-				}
-				Some(val.from_le())
-			}
-
+		impl Encode for $t {
 			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 				self.as_le_then(|le| {
 					let size = mem::size_of::<$t>();
@@ -362,13 +397,8 @@ macro_rules! impl_endians {
 				})
 			}
 		}
-	)* }
-}
-macro_rules! impl_non_endians {
-	( $( $t:ty ),* ) => { $(
-		impl EndianSensitive for $t {}
 
-		impl Slicable for $t {
+		impl Decode for $t {
 			fn decode<I: Input>(input: &mut I) -> Option<Self> {
 				let size = mem::size_of::<$t>();
 				assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
@@ -383,7 +413,14 @@ macro_rules! impl_non_endians {
 				}
 				Some(val.from_le())
 			}
+		}
+	)* }
+}
+macro_rules! impl_non_endians {
+	( $( $t:ty ),* ) => { $(
+		impl EndianSensitive for $t {}
 
+		impl Encode for $t {
 			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 				self.as_le_then(|le| {
 					let size = mem::size_of::<$t>();
@@ -398,6 +435,23 @@ macro_rules! impl_non_endians {
 
 					f(value_slice)
 				})
+			}
+		}
+
+		impl Decode for $t {
+			fn decode<I: Input>(input: &mut I) -> Option<Self> {
+				let size = mem::size_of::<$t>();
+				assert!(size > 0, "EndianSensitive can never be implemented for a zero-sized type.");
+				let mut val: $t = unsafe { mem::zeroed() };
+
+				unsafe {
+					let raw: &mut [u8] = slice::from_raw_parts_mut(
+						&mut val as *mut $t as *mut u8,
+						size
+					);
+					if input.read(raw) != size { return None }
+				}
+				Some(val.from_le())
 			}
 		}
 	)* }

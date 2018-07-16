@@ -1,6 +1,6 @@
 # Polkadot
 
-Implementation of a https://polkadot.io node in Rust.
+Implementation of a https://polkadot.network node in Rust.
 
 ## To play
 
@@ -56,7 +56,7 @@ polkadot --chain=local --validator --key Alice -d /tmp/alice
 and in the other, run:
 
 ```
-polkadot --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes 'enode://ALICE_BOOTNODE_ID_HERE@127.0.0.1:30333'
+polkadot --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes '/ip4/127.0.0.1/tcp/30333/p2p/ALICE_BOOTNODE_ID_HERE'
 ```
 
 Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of
@@ -73,7 +73,6 @@ rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
 rustup update stable
 cargo install --git https://github.com/alexcrichton/wasm-gc
-cargo install --git https://github.com/pepyakin/wasm-export-table.git
 sudo apt install cmake pkg-config libssl-dev
 ```
 

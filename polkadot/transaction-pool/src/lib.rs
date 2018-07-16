@@ -43,9 +43,9 @@ use std::{
 	sync::Arc,
 };
 
-use codec::Slicable;
+use codec::{Decode, Encode};
 use extrinsic_pool::{
-	api::ExtrinsicPool,
+	api::{ExtrinsicPool, EventStream},
 	txpool::{self, Readiness, scoring::{Change, Choice}},
 	watcher::Watcher,
 	Pool,
@@ -80,7 +80,7 @@ impl VerifiedTransaction {
 
 	/// Convert to primitive unchecked extrinsic.
 	pub fn primitive_extrinsic(&self) -> ::primitives::UncheckedExtrinsic {
-		Slicable::decode(&mut self.as_transaction().encode().as_slice())
+		Decode::decode(&mut self.as_transaction().encode().as_slice())
 			.expect("UncheckedExtrinsic shares repr with Vec<u8>; qed")
 	}
 
@@ -420,6 +420,14 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 
 		self.inner.submit_and_watch(verifier, decoded)
 	}
+
+	fn light_status(&self) -> LightStatus {
+		self.inner.light_status()
+	}
+
+	fn import_notification_stream(&self) -> EventStream {
+		self.inner.import_notification_stream()
+	}
 }
 
 #[cfg(test)]
@@ -427,7 +435,7 @@ mod tests {
 	use std::sync::{atomic::{self, AtomicBool}, Arc};
 	use super::TransactionPool;
 	use substrate_keyring::Keyring::{self, *};
-	use codec::Slicable;
+	use codec::{Decode, Encode};
 	use polkadot_api::{PolkadotApi, BlockBuilder, Result};
 	use primitives::{AccountId, AccountIndex, Block, BlockId, Hash, Index, SessionKey, Timestamp,
 		UncheckedExtrinsic as FutureProofUncheckedExtrinsic};

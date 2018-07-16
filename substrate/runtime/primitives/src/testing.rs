@@ -18,7 +18,7 @@
 
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
-use codec::{Slicable, Input};
+use codec::{Decode, Encode, Codec, Input, Output};
 use runtime_support::AuxDispatchable;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 
@@ -28,14 +28,19 @@ pub use substrate_primitives::H256;
 pub struct Digest {
 	pub logs: Vec<u64>,
 }
-impl Slicable for Digest {
+
+impl Decode for Digest {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Vec::<u64>::decode(input).map(|logs| Digest { logs })
 	}
+}
+
+impl Encode for Digest {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.logs.using_encoded(f)
 	}
 }
+
 impl traits::Digest for Digest {
 	type Item = u64;
 	fn push(&mut self, item: Self::Item) {
@@ -53,27 +58,29 @@ pub struct Header {
 	pub extrinsics_root: H256,
 	pub digest: Digest,
 }
-impl Slicable for Header {
+
+impl Decode for Header {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
-			parent_hash: Slicable::decode(input)?,
-			number: Slicable::decode(input)?,
-			state_root: Slicable::decode(input)?,
-			extrinsics_root: Slicable::decode(input)?,
-			digest: Slicable::decode(input)?,
+			parent_hash: Decode::decode(input)?,
+			number: Decode::decode(input)?,
+			state_root: Decode::decode(input)?,
+			extrinsics_root: Decode::decode(input)?,
+			digest: Decode::decode(input)?,
 		})
 	}
+}
 
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		self.parent_hash.using_encoded(|s| v.extend(s));
-		self.number.using_encoded(|s| v.extend(s));
-		self.state_root.using_encoded(|s| v.extend(s));
-		self.extrinsics_root.using_encoded(|s| v.extend(s));
-		self.digest.using_encoded(|s| v.extend(s));
-		v
+impl Encode for Header {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.parent_hash);
+		dest.push(&self.number);
+		dest.push(&self.state_root);
+		dest.push(&self.extrinsics_root);
+		dest.push(&self.digest);
 	}
 }
+
 impl traits::Header for Header {
 	type Number = u64;
 	type Hashing = BlakeTwo256;
@@ -109,25 +116,25 @@ impl traits::Header for Header {
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
-pub struct Block<Xt: Slicable + Sized + Send + Sync + Serialize + Clone + Eq + Debug> {
+pub struct Block<Xt> {
 	pub header: Header,
 	pub extrinsics: Vec<Xt>,
 }
-impl<Xt: Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Slicable for Block<Xt> {
+impl<Xt: Decode> Decode for Block<Xt> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Block {
-			header: Slicable::decode(input)?,
-			extrinsics: Slicable::decode(input)?,
+			header: Decode::decode(input)?,
+			extrinsics: Decode::decode(input)?,
 		})
 	}
-	fn encode(&self) -> Vec<u8> {
-		let mut v: Vec<u8> = Vec::new();
-		v.extend(self.header.encode());
-		v.extend(self.extrinsics.encode());
-		v
+}
+impl<Xt: Encode> Encode for Block<Xt> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.header);
+		dest.push(&self.extrinsics);
 	}
 }
-impl<Xt: 'static + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
+impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
 	type Extrinsic = Xt;
 	type Header = Header;
 	type Hash = <Header as traits::Header>::Hash;
@@ -147,21 +154,25 @@ impl<Xt: 'static + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
-pub struct TestXt<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize>(pub (u64, u64, Call));
+pub struct TestXt<Call>(pub (u64, u64, Call));
 
-impl<Call: AuxDispatchable + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Slicable for TestXt<Call> {
+impl<Call: Decode> Decode for TestXt<Call> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(TestXt(Slicable::decode(input)?))
-	}
-	fn encode(&self) -> Vec<u8> {
-		self.0.encode()
+		Some(TestXt(Decode::decode(input)?))
 	}
 }
-impl<Call: Slicable + Sync + Send + Serialize + AuxDispatchable, Context> Checkable<Context> for TestXt<Call> {
+
+impl<Call: Encode> Encode for TestXt<Call> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		self.0.encode_to(dest)
+	}
+}
+
+impl<Call: Codec + Sync + Send + Serialize + AuxDispatchable, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
 	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
-impl<Call: AuxDispatchable<Aux = u64> + Slicable + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
+impl<Call: AuxDispatchable<Aux = u64> + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
 	type AccountId = u64;
 	type Index = u64;
 	fn sender(&self) -> &u64 { &(self.0).0 }

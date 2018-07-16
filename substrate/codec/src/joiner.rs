@@ -17,16 +17,16 @@
 //! Trait
 
 use core::iter::Extend;
-use super::slicable::Slicable;
+use super::Codec;
 
 /// Trait to allow itself to be serialised into a value which can be extended
 /// by bytes.
 pub trait Joiner {
-	fn and<V: Slicable + Sized>(self, value: &V) -> Self;
+	fn and<V: Codec + Sized>(self, value: &V) -> Self;
 }
 
 impl<T> Joiner for T where T: for<'a> Extend<&'a u8> {
-	fn and<V: Slicable + Sized>(mut self, value: &V) -> Self {
+	fn and<V: Codec + Sized>(mut self, value: &V) -> Self {
 		value.using_encoded(|s| self.extend(s));
 		self
 	}

@@ -41,6 +41,8 @@ extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_extrinsic_pool;
+extern crate substrate_service;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
@@ -76,8 +78,8 @@ use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use polkadot_primitives::{Block, BlockId};
-use codec::Slicable;
+use polkadot_primitives::BlockId;
+use codec::{Decode, Encode};
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
 
@@ -141,8 +143,7 @@ pub trait Worker {
 	fn exit_only(self) -> Self::Exit;
 
 	/// Do work and schedule exit.
-	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work
-		where ClientError: From<<<<C as ServiceComponents>::Backend as ClientBackend<PolkadotBlock>>::State as StateMachineBackend>::Error>;
+	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work;
 }
 
 /// Parse command line arguments and start the node.
@@ -199,13 +200,14 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	}
 
 	let base_path = base_path(&matches);
+
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(|| keystore_path(&base_path))
+		.unwrap_or_else(|| keystore_path(&base_path, config.chain_spec.id()))
 		.to_string_lossy()
 		.into();
 
-	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 
 	config.pruning = match matches.value_of("pruning") {
 		Some("archive") => PruningMode::ArchiveAll,
@@ -218,24 +220,38 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		if matches.is_present("collator") {
 			info!("Starting collator");
 			// TODO [rob]: collation node implementation
-			service::Role::FULL
+			// This isn't a thing. Different parachains will have their own collator executables and
+			// maybe link to libpolkadot to get a light-client.
+			service::Roles::LIGHT
 		} else if matches.is_present("light") {
 			info!("Starting (light)");
-			service::Role::LIGHT
+			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			service::Roles::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
 			info!("Starting validator");
-			service::Role::AUTHORITY
+			config.execution_strategy = service::ExecutionStrategy::Both;
+			service::Roles::AUTHORITY
 		} else {
 			info!("Starting (heavy)");
-			service::Role::FULL
+			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			service::Roles::FULL
 		};
+
+	if let Some(s) = matches.value_of("execution") {
+		config.execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+		};
+	}
 
 	config.roles = role;
 	{
 		config.network.boot_nodes.extend(matches
 			.values_of("bootnodes")
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
-		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
+		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 
 		let port = match matches.value_of("port") {
@@ -287,7 +303,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		None
 	};
 
-	match role == service::Role::LIGHT {
+	match role == service::Roles::LIGHT {
 		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, &matches, sys_conf, worker)?,
 		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, &matches, sys_conf, worker)?,
 	}
@@ -311,7 +327,7 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let base_path = base_path(matches);
 	let (spec, _) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 	info!("DB path: {}", config.database_path);
 	let client = service::new_client(config)?;
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
@@ -376,7 +392,7 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let (spec, _) = load_spec(&matches)?;
 	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
-	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 	let client = service::new_client(config)?;
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 
@@ -391,7 +407,7 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	};
 
 	info!("Importing blocks");
-	let count: u32 = Slicable::decode(&mut file).ok_or("Error reading file")?;
+	let count: u32 = Decode::decode(&mut file).ok_or("Error reading file")?;
 	let mut block = 0;
 	for _ in 0 .. count {
 		if exit_recv.try_recv().is_ok() {
@@ -427,7 +443,6 @@ fn run_until_exit<C, W>(
 	where
 		C: service::Components,
 		W: Worker,
-		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
 {
 	let (exit_send, exit) = exit_future::signal();
 
@@ -439,10 +454,11 @@ fn run_until_exit<C, W>(
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", matches)?;
 
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(service.client(), executor.clone());
-			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool(), executor.clone());
-			rpc::rpc_handler::<Block, _, _, _, _>(
-				service.client(),
+			let client = substrate_service::Service::client(&service);
+			let chain = rpc::apis::chain::Chain::new(client.clone(), executor.clone());
+			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool(), executor.clone());
+			rpc::rpc_handler::<service::ComponentBlock<C>, _, _, _, _>(
+				client,
 				chain,
 				author,
 				sys_conf.clone(),
@@ -484,20 +500,26 @@ fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) ->
 	Ok(address)
 }
 
-fn keystore_path(base_path: &Path) -> PathBuf {
+fn keystore_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(chain_id);
 	path.push("keystore");
 	path
 }
 
-fn db_path(base_path: &Path) -> PathBuf {
+fn db_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(chain_id);
 	path.push("db");
 	path
 }
 
-fn network_path(base_path: &Path) -> PathBuf {
+fn network_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(chain_id);
 	path.push("network");
 	path
 }

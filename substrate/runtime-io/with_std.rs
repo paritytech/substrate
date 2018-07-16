@@ -168,13 +168,13 @@ macro_rules! impl_stubs {
 	};
 	(@METHOD $data: ident $new_name: ident => $invoke:expr) => {{
 		let mut data = $data;
-		let input = match $crate::codec::Slicable::decode(&mut data) {
+		let input = match $crate::codec::Decode::decode(&mut data) {
 			Some(input) => input,
 			None => panic!("Bad input data provided to {}", stringify!($new_name)),
 		};
 
 		let output = $invoke(input);
-		Some($crate::codec::Slicable::encode(&output))
+		Some($crate::codec::Encode::encode(&output))
 	}}
 }
 

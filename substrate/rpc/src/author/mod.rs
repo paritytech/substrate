@@ -19,7 +19,7 @@
 use std::sync::Arc;
 
 use client::{self, Client};
-use codec::Slicable;
+use codec::Codec;
 use extrinsic_pool::{
 	api::{Error, ExtrinsicPool},
 	watcher::Status,
@@ -30,9 +30,8 @@ use primitives::Bytes;
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
 use state_machine;
-use tokio::runtime::TaskExecutor;
-
 use subscriptions::Subscriptions;
+use tokio::runtime::TaskExecutor;
 
 pub mod error;
 
@@ -92,10 +91,9 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 	E: client::CallExecutor<Block> + Send + Sync + 'static,
 	Block: traits::Block + 'static,
 	Hash: traits::MaybeSerializeDebug + Sync + Send + 'static,
-	client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash>,
 	P::Error: 'static,
-	Ex: Slicable,
+	Ex: Codec,
 {
 	type Metadata = ::metadata::Metadata;
 

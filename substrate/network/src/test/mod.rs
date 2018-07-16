@@ -28,9 +28,10 @@ use io::SyncIo;
 use protocol::{Context, Protocol};
 use config::ProtocolConfig;
 use service::TransactionPool;
-use network::{PeerId, SessionInfo, Error as NetworkError};
+use network_libp2p::{PeerId, SessionInfo, Error as NetworkError};
 use keyring::Keyring;
-use codec::Slicable;
+use codec::Encode;
+use import_queue::tests::SyncImportQueue;
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 use specialization::Specialization;
@@ -80,7 +81,7 @@ impl<'p> Drop for TestIo<'p> {
 }
 
 impl<'p> SyncIo for TestIo<'p> {
-	fn disable_peer(&mut self, peer_id: PeerId) {
+	fn disable_peer(&mut self, peer_id: PeerId, _reason: &str) {
 		self.disconnect_peer(peer_id);
 	}
 
@@ -247,7 +248,8 @@ impl TestNet {
 	pub fn add_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
-		let sync = Protocol::new(config.clone(), client.clone(), None, tx_pool, DummySpecialization).unwrap();
+		let import_queue = Arc::new(SyncImportQueue);
+		let sync = Protocol::new(config.clone(), client.clone(), import_queue, None, tx_pool, DummySpecialization).unwrap();
 		self.peers.push(Arc::new(Peer {
 			sync: sync,
 			client: client,

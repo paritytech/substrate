@@ -18,7 +18,7 @@
 
 use core::{intrinsics, panic, alloc};
 use parachain::{self, ValidationResult};
-use parachain::codec::Slicable;
+use parachain::codec::{Encode, Decode};
 use super::{HeadData, BlockData};
 
 #[panic_implementation]

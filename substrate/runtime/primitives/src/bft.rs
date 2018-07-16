@@ -17,7 +17,7 @@
 //! Message formats for the BFT consensus layer.
 
 use rstd::prelude::*;
-use codec::{Slicable, Input};
+use codec::{Decode, Encode, Input, Output};
 use substrate_primitives::{AuthorityId, Signature};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -51,59 +51,58 @@ pub enum Action<Block, H> {
 	AdvanceRound(u32),
 }
 
-impl<Block: Slicable, Hash: Slicable> Slicable for Action<Block, Hash> {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
+impl<Block: Encode, Hash: Encode> Encode for Action<Block, Hash> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			Action::Propose(ref round, ref block) => {
-				v.push(ActionKind::Propose as u8);
-				round.using_encoded(|s| v.extend(s));
-				block.using_encoded(|s| v.extend(s));
+				dest.push_byte(ActionKind::Propose as u8);
+				dest.push(round);
+				dest.push(block);
 			}
 			Action::ProposeHeader(ref round, ref hash) => {
-				v.push(ActionKind::ProposeHeader as u8);
-				round.using_encoded(|s| v.extend(s));
-				hash.using_encoded(|s| v.extend(s));
+				dest.push_byte(ActionKind::ProposeHeader as u8);
+				dest.push(round);
+				dest.push(hash);
 			}
 			Action::Prepare(ref round, ref hash) => {
-				v.push(ActionKind::Prepare as u8);
-				round.using_encoded(|s| v.extend(s));
-				hash.using_encoded(|s| v.extend(s));
+				dest.push_byte(ActionKind::Prepare as u8);
+				dest.push(round);
+				dest.push(hash);
 			}
 			Action::Commit(ref round, ref hash) => {
-				v.push(ActionKind::Commit as u8);
-				round.using_encoded(|s| v.extend(s));
-				hash.using_encoded(|s| v.extend(s));
+				dest.push_byte(ActionKind::Commit as u8);
+				dest.push(round);
+				dest.push(hash);
 			}
 			Action::AdvanceRound(ref round) => {
-				v.push(ActionKind::AdvanceRound as u8);
-				round.using_encoded(|s| v.extend(s));
+				dest.push_byte(ActionKind::AdvanceRound as u8);
+				dest.push(round);
 			}
 		}
-
-		v
 	}
+}
 
+impl<Block: Decode, Hash: Decode> Decode for Action<Block, Hash> {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match i8::decode(value) {
 			Some(x) if x == ActionKind::Propose as i8 => {
-				let (round, block) = Slicable::decode(value)?;
+				let (round, block) = Decode::decode(value)?;
 				Some(Action::Propose(round, block))
 			}
 			Some(x) if x == ActionKind::ProposeHeader as i8 => {
-				let (round, hash) = Slicable::decode(value)?;
+				let (round, hash) = Decode::decode(value)?;
 				Some(Action::ProposeHeader(round, hash))
 			}
 			Some(x) if x == ActionKind::Prepare as i8 => {
-				let (round, hash) = Slicable::decode(value)?;
+				let (round, hash) = Decode::decode(value)?;
 				Some(Action::Prepare(round, hash))
 			}
 			Some(x) if x == ActionKind::Commit as i8 => {
-				let (round, hash) = Slicable::decode(value)?;
+				let (round, hash) = Decode::decode(value)?;
 				Some(Action::Commit(round, hash))
 			}
 			Some(x) if x == ActionKind::AdvanceRound as i8 => {
-				Slicable::decode(value).map(Action::AdvanceRound)
+				Decode::decode(value).map(Action::AdvanceRound)
 			}
 			_ => None,
 		}
@@ -123,17 +122,18 @@ pub struct Message<Block, Hash> {
 	pub action: Action<Block, Hash>,
 }
 
-impl<Block: Slicable, Hash: Slicable> Slicable for Message<Block, Hash> {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = self.parent.encode();
-		self.action.using_encoded(|s| v.extend(s));
-		v
+impl<Block: Encode, Hash: Encode> Encode for Message<Block, Hash> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.parent);
+		dest.push(&self.action);
 	}
+}
 
+impl<Block: Decode, Hash: Decode> Decode for Message<Block, Hash> {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		Some(Message {
-			parent: Slicable::decode(value)?,
-			action: Slicable::decode(value)?,
+			parent: Decode::decode(value)?,
+			action: Decode::decode(value)?,
 		})
 	}
 }
@@ -150,22 +150,20 @@ pub struct Justification<H> {
 	pub signatures: Vec<(AuthorityId, Signature)>
 }
 
-impl<H: Slicable> Slicable for Justification<H> {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.round_number.using_encoded(|s| v.extend(s));
-		self.hash.using_encoded(|s| v.extend(s));
-		self.signatures.using_encoded(|s| v.extend(s));
-
-		v
+impl<H: Encode> Encode for Justification<H> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.round_number);
+		dest.push(&self.hash);
+		dest.push(&self.signatures);
 	}
+}
 
+impl<H: Decode> Decode for Justification<H> {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		Some(Justification {
-			round_number: Slicable::decode(value)?,
-			hash: Slicable::decode(value)?,
-			signatures: Slicable::decode(value)?,
+			round_number: Decode::decode(value)?,
+			hash: Decode::decode(value)?,
+			signatures: Decode::decode(value)?,
 		})
 	}
 }
@@ -213,35 +211,34 @@ pub struct MisbehaviorReport<Hash, Number> {
 	pub misbehavior: MisbehaviorKind<Hash>,
 }
 
-impl<Hash: Slicable, Number: Slicable> Slicable for MisbehaviorReport<Hash, Number> {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		self.parent_hash.using_encoded(|s| v.extend(s));
-		self.parent_number.using_encoded(|s| v.extend(s));
-		self.target.using_encoded(|s| v.extend(s));
+impl<Hash: Encode, Number: Encode> Encode for MisbehaviorReport<Hash, Number> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.parent_hash);
+		dest.push(&self.parent_number);
+		dest.push(&self.target);
 
 		match self.misbehavior {
 			MisbehaviorKind::BftDoublePrepare(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
-				(MisbehaviorCode::BftDoublePrepare as i8).using_encoded(|s| v.extend(s));
-				round.using_encoded(|s| v.extend(s));
-				h_a.using_encoded(|s| v.extend(s));
-				s_a.using_encoded(|s| v.extend(s));
-				h_b.using_encoded(|s| v.extend(s));
-				s_b.using_encoded(|s| v.extend(s));
+				dest.push(&(MisbehaviorCode::BftDoublePrepare as i8));
+				dest.push(round);
+				dest.push(h_a);
+				dest.push(s_a);
+				dest.push(h_b);
+				dest.push(s_b);
 			}
 			MisbehaviorKind::BftDoubleCommit(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
-				(MisbehaviorCode::BftDoubleCommit as i8).using_encoded(|s| v.extend(s));
-				round.using_encoded(|s| v.extend(s));
-				h_a.using_encoded(|s| v.extend(s));
-				s_a.using_encoded(|s| v.extend(s));
-				h_b.using_encoded(|s| v.extend(s));
-				s_b.using_encoded(|s| v.extend(s));
+				dest.push(&(MisbehaviorCode::BftDoubleCommit as i8));
+				dest.push(round);
+				dest.push(h_a);
+				dest.push(s_a);
+				dest.push(h_b);
+				dest.push(s_b);
 			}
 		}
-
-		v
 	}
+}
 
+impl<Hash: Decode, Number: Decode> Decode for MisbehaviorReport<Hash, Number> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let parent_hash = Hash::decode(input)?;
 		let parent_number = Number::decode(input)?;
