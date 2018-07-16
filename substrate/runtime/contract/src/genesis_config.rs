@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use {Trait, ContractFee};
+use {Trait, ContractFee, CallBaseFee, CreateBaseFee};
 
 use runtime_primitives;
 use runtime_io::{self, twox_128};
@@ -26,12 +26,16 @@ use codec::Slicable;
 #[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	pub contract_fee: T::Balance,
+	pub call_base_fee: T::Gas,
+	pub create_base_fee: T::Gas,
 }
 
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
 		let r: runtime_io::TestExternalities = map![
-			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode()
+			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
+			twox_128(<CallBaseFee<T>>::key()).to_vec() => self.call_base_fee.encode(),
+			twox_128(<CreateBaseFee<T>>::key()).to_vec() => self.create_base_fee.encode()
 		];
 		Ok(r)
 	}

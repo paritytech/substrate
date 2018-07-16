@@ -53,8 +53,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 		// TODO: check the new depth
 
-		// TODO: Get the base call fee from the storage
-		let call_base_fee = T::Gas::sa(135);
+		let call_base_fee = <Module<T>>::call_base_fee();
 		if gas_meter.charge(call_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base call fee");
 		}
@@ -109,12 +108,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 	) -> Result<CreateReceipt<T>, &'static str> {
 		// TODO: check the new depth
 
-		// TODO: Charge here the base price for create
-
-		// TODO: We settled on charging with DOTs.
-		// fee / gas_price = some amount of gas. Substract from the gas meter.
-
-		let create_base_fee = T::Gas::sa(175);
+		let create_base_fee = <Module<T>>::create_base_fee();
 		if gas_meter.charge(create_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base create fee");
 		}

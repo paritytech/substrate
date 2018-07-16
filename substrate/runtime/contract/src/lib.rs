@@ -124,7 +124,10 @@ decl_storage! {
 	trait Store for Module<T: Trait>;
 
 	// The fee required to create a contract. At least as big as staking ReclaimRebate.
-	pub ContractFee get(contract_fee): b"con:contract_fee" => required T::Balance;
+	ContractFee get(contract_fee): b"con:contract_fee" => required T::Balance;
+	CallBaseFee get(call_base_fee): b"con:base_call_fee" => required T::Gas;
+	CreateBaseFee get(create_base_fee): b"con:base_create_fee" => required T::Gas;
+
 
 	// The code associated with an account.
 	pub CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
@@ -332,6 +335,8 @@ mod tests {
 		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(GenesisConfig::<Test> {
 			contract_fee: 21,
+			call_base_fee: 135,
+			create_base_fee: 175,
 		}.build_storage().unwrap());
 		t
 	}
