@@ -71,20 +71,22 @@ mod vm;
 mod gas;
 mod genesis_config;
 
-use exec::ExecutionContext;
-
-use account_db::{AccountDb, OverlayAccountDb};
-
 pub use genesis_config::GenesisConfig;
-
+use exec::ExecutionContext;
+use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
-use runtime_primitives::traits::RefInto;
+
+use codec::Slicable;
+use runtime_primitives::traits::{As, RefInto, SimpleArithmetic};
 use runtime_support::dispatch::Result;
-use runtime_support::StorageMap;
+use runtime_support::{Parameter, StorageMap};
 
 pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
+
+	// As<u32> is needed for wasm-utils
+	type Gas: Parameter + Slicable + SimpleArithmetic + Copy + As<Self::Balance> + As<u64> + As<u32>;
 }
 
 pub trait ContractAddressFor<AccountId: Sized> {
@@ -102,16 +104,16 @@ decl_module! {
 			aux,
 			dest: T::AccountId,
 			value: T::Balance,
-			gas_price: u64,
-			gas_limit: u64,
+			gas_price: T::Balance,
+			gas_limit: T::Gas,
 			data: Vec<u8>
 		) -> Result = 0;
 
 		fn create(
 			aux,
 			value: T::Balance,
-			gas_price: u64,
-			gas_limit: u64,
+			gas_price: T::Balance,
+			gas_limit: T::Gas,
 			ctor: Vec<u8>,
 			data: Vec<u8>
 		) -> Result = 1;
@@ -149,8 +151,8 @@ impl<T: Trait> Module<T> {
 		aux: &<T as consensus::Trait>::PublicAux,
 		dest: T::AccountId,
 		value: T::Balance,
-		gas_price: u64,
-		gas_limit: u64,
+		gas_price: T::Balance,
+		gas_limit: T::Gas,
 		data: Vec<u8>,
 	) -> Result {
 		let aux = aux.ref_into();
@@ -191,8 +193,8 @@ impl<T: Trait> Module<T> {
 	fn create(
 		aux: &<T as consensus::Trait>::PublicAux,
 		endownment: T::Balance,
-		gas_price: u64,
-		gas_limit: u64,
+		gas_price: T::Balance,
+		gas_limit: T::Gas,
 		ctor_code: Vec<u8>,
 		data: Vec<u8>,
 	) -> Result {
@@ -286,6 +288,7 @@ mod tests {
 		type OnSessionChange = Staking;
 	}
 	impl Trait for Test {
+		type Gas = u64;
 		type DetermineContractAddress = DummyContractAddressFor;
 	}
 

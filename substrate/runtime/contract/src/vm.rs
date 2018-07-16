@@ -5,10 +5,12 @@ use pwasm_utils::rules;
 use rstd::prelude::*;
 use sandbox;
 use gas::{GasMeter, GasMeterResult};
+use runtime_primitives::traits::{As, CheckedMul};
+use {Trait};
 
-pub struct CreateReceipt<Address> {
+pub struct CreateReceipt<Address, Gas> {
 	pub address: Address,
-	pub gas_left: u64,
+	pub gas_left: Gas,
 }
 
 /// An interface that provides an access to the external environment in which the
@@ -16,12 +18,7 @@ pub struct CreateReceipt<Address> {
 ///
 /// This interface is specialised to an account of the executing code, so all
 /// operations are implicitly performed on that account.
-pub trait Ext {
-	/// The indentifier of an account.
-	type AccountId: Slicable + Clone;
-	/// The balance of an account.
-	type Balance: Slicable;
-
+pub trait Ext<T: Trait> {
 	/// Returns the storage entry of the executing account by the given key.
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
@@ -36,17 +33,17 @@ pub trait Ext {
 	fn create(
 		&mut self,
 		code: &[u8],
-		value: Self::Balance,
-		gas_meter: &mut GasMeter,
+		value: T::Balance,
+		gas_meter: &mut GasMeter<T::Gas>,
 		data: Vec<u8>,
-	) -> Result<CreateReceipt<Self::AccountId>, ()>;
+	) -> Result<CreateReceipt<T::AccountId, T::Gas>, ()>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
 	fn call(
 		&mut self,
-		to: &Self::AccountId,
-		value: Self::Balance,
-		gas_meter: &mut GasMeter,
+		to: &T::AccountId,
+		value: T::Balance,
+		gas_meter: &mut GasMeter<T::Gas>,
 		data: Vec<u8>,
 	) -> Result<ExecutionResult, ()>;
 }
@@ -100,14 +97,14 @@ enum SpecialTrap {
 	Return(Vec<u8>),
 }
 
-struct Runtime<'a, T: Ext + 'a> {
-	ext: &'a mut T,
-	config: Config,
+struct Runtime<'a, T: Trait + 'a, E: Ext<T> + 'a> {
+	ext: &'a mut E,
+	config: &'a Config<T>,
 	memory: sandbox::Memory,
-	gas_meter: &'a mut GasMeter,
+	gas_meter: &'a mut GasMeter<T::Gas>,
 	special_trap: Option<SpecialTrap>,
 }
-impl<'a, T: Ext + 'a> Runtime<'a, T> {
+impl<'a, T: Trait, E: Ext<T> + 'a> Runtime<'a, T, E> {
 	fn memory(&self) -> &sandbox::Memory {
 		&self.memory
 	}
@@ -117,8 +114,9 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	///
 	/// Returns `Err` if there is not enough gas.
 	fn store_return_data(&mut self, data: Vec<u8>) -> Result<(), ()> {
-		let price = (self.config.return_data_per_byte_cost as u64)
-			.checked_mul(data.len() as u64)
+		let data_len = <T::Gas as As<u64>>::sa(data.len() as u64);
+		let price = (self.config.return_data_per_byte_cost)
+			.checked_mul(&data_len)
 			.ok_or_else(|| ())?;
 
 		match self.gas_meter.charge(price) {
@@ -131,8 +129,8 @@ impl<'a, T: Ext + 'a> Runtime<'a, T> {
 	}
 }
 
-fn to_execution_result<T: Ext>(
-	runtime: Runtime<T>,
+fn to_execution_result<T: Trait, E: Ext<T>>(
+	runtime: Runtime<T, E>,
 	run_err: Option<sandbox::Error>,
 ) -> Result<ExecutionResult, Error> {
 	let mut return_data = Vec::new();
@@ -180,10 +178,10 @@ impl ExecutionResult {
 }
 
 /// Execute the given code as a contract.
-pub fn execute<'a, T: Ext>(
+pub fn execute<'a, T: Trait, E: Ext<T>>(
 	code: &[u8],
-	ext: &'a mut T,
-	gas_meter: &mut GasMeter,
+	ext: &'a mut E,
+	gas_meter: &mut GasMeter<T::Gas>,
 ) -> Result<ExecutionResult, Error> {
 	// TODO: Receive data as an argument
 
@@ -192,13 +190,14 @@ pub fn execute<'a, T: Ext>(
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
 	// - amount: How much gas is used.
-	fn ext_gas<T: Ext>(
-		e: &mut Runtime<T>,
+	fn ext_gas<T: Trait, E: Ext<T>>(
+		e: &mut Runtime<T, E>,
 		args: &[sandbox::TypedValue],
 	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let amount = args[0].as_i32().unwrap() as u32;
+		let amount = <T::Gas as As<u32>>::sa(amount);
 
-		match e.gas_meter.charge(amount as u64) {
+		match e.gas_meter.charge(amount) {
 			GasMeterResult::Proceed => Ok(sandbox::ReturnValue::Unit),
 			GasMeterResult::OutOfGas => Err(sandbox::HostError),
 		}
@@ -214,8 +213,8 @@ pub fn execute<'a, T: Ext>(
 	//   at the given location will be removed.
 	// - value_ptr: pointer into the linear memory
 	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
-	fn ext_set_storage<T: Ext>(
-		e: &mut Runtime<T>,
+	fn ext_set_storage<T: Trait, E: Ext<T>>(
+		e: &mut Runtime<T, E>,
 		args: &[sandbox::TypedValue],
 	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let location_ptr = args[0].as_i32().unwrap() as u32;
@@ -248,8 +247,8 @@ pub fn execute<'a, T: Ext>(
 	//   memory where the location of the requested value is placed.
 	// - dest_ptr: pointer where contents of the specified storage location
 	//   should be placed.
-	fn ext_get_storage<T: Ext>(
-		e: &mut Runtime<T>,
+	fn ext_get_storage<T: Trait, E: Ext<T>>(
+		e: &mut Runtime<T, E>,
 		args: &[sandbox::TypedValue],
 	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let location_ptr = args[0].as_i32().unwrap() as u32;
@@ -268,8 +267,8 @@ pub fn execute<'a, T: Ext>(
 	}
 
 	// ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_transfer<T: Ext>(
-		e: &mut Runtime<T>,
+	fn ext_transfer<T: Trait, E: Ext<T>>(
+		e: &mut Runtime<T, E>,
 		args: &[sandbox::TypedValue],
 	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let transfer_to_ptr = args[0].as_i32().unwrap() as u32;
@@ -316,8 +315,8 @@ pub fn execute<'a, T: Ext>(
 	}
 
 	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_create<T: Ext>(
-		e: &mut Runtime<T>,
+	fn ext_create<T: Trait, E: Ext<T>>(
+		e: &mut Runtime<T, E>,
 		args: &[sandbox::TypedValue],
 	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let code_ptr = args[0].as_i32().unwrap() as u32;
@@ -363,8 +362,8 @@ pub fn execute<'a, T: Ext>(
 	}
 
 	// ext_return(data_ptr: u32, data_len: u32) -> !
-	fn ext_return<T: Ext>(
-		e: &mut Runtime<T>,
+	fn ext_return<T: Trait, E: Ext<T>>(
+		e: &mut Runtime<T, E>,
 		args: &[sandbox::TypedValue],
 	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
 		let data_ptr = args[0].as_i32().unwrap() as u32;
@@ -391,19 +390,19 @@ pub fn execute<'a, T: Ext>(
 	} = prepare_contract(code, &config)?;
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
-	imports.add_host_func("env", "gas", ext_gas::<T>);
-	imports.add_host_func("env", "ext_set_storage", ext_set_storage::<T>);
-	imports.add_host_func("env", "ext_get_storage", ext_get_storage::<T>);
+	imports.add_host_func("env", "gas", ext_gas::<T, E>);
+	imports.add_host_func("env", "ext_set_storage", ext_set_storage::<T, E>);
+	imports.add_host_func("env", "ext_get_storage", ext_get_storage::<T, E>);
 	// TODO: Rename it to ext_call.
-	imports.add_host_func("env", "ext_transfer", ext_transfer::<T>);
-	imports.add_host_func("env", "ext_create", ext_create::<T>);
-	imports.add_host_func("env", "ext_return", ext_return::<T>);
+	imports.add_host_func("env", "ext_transfer", ext_transfer::<T, E>);
+	imports.add_host_func("env", "ext_create", ext_create::<T, E>);
+	imports.add_host_func("env", "ext_return", ext_return::<T, E>);
 	// TODO: ext_balance, ext_address, ext_callvalue, etc.
 	imports.add_memory("env", "memory", memory.clone());
 
 	let mut runtime = Runtime {
 		ext,
-		config,
+		config: &config,
 		memory,
 		gas_meter,
 		special_trap: None,
@@ -419,15 +418,15 @@ pub fn execute<'a, T: Ext>(
 
 // TODO: Extract it to the root of the crate
 #[derive(Clone)]
-struct Config {
+struct Config<T: Trait> {
 	/// Gas cost of a growing memory by single page.
-	grow_mem_cost: u32,
+	grow_mem_cost: T::Gas,
 
 	/// Gas cost of a regular operation.
-	regular_op_cost: u32,
+	regular_op_cost: T::Gas,
 
 	/// Gas cost per one byte returned.
-	return_data_per_byte_cost: u32,
+	return_data_per_byte_cost: T::Gas,
 
 	/// How tall the stack is allowed to grow?
 	///
@@ -440,28 +439,28 @@ struct Config {
 	max_memory_pages: u32,
 }
 
-impl Default for Config {
-	fn default() -> Config {
+impl<T: Trait> Default for Config<T> {
+	fn default() -> Config<T> {
 		Config {
-			grow_mem_cost: 1,
-			regular_op_cost: 1,
-			return_data_per_byte_cost: 1,
+			grow_mem_cost: T::Gas::sa(1),
+			regular_op_cost: T::Gas::sa(1),
+			return_data_per_byte_cost: T::Gas::sa(1),
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
 		}
 	}
 }
 
-struct ContractModule {
+struct ContractModule<'a, T: Trait + 'a> {
 	// An `Option` is used here for loaning (`take()`-ing) the module.
 	// Invariant: Can't be `None` (i.e. on enter and on exit from the function
 	// the value *must* be `Some`).
 	module: Option<elements::Module>,
-	config: Config,
+	config: &'a Config<T>,
 }
 
-impl ContractModule {
-	fn new(original_code: &[u8], config: Config) -> Result<ContractModule, Error> {
+impl<'a, T: Trait> ContractModule<'a, T> {
+	fn new(original_code: &[u8], config: &'a Config<T>) -> Result<ContractModule<'a, T>, Error> {
 		let module =
 			elements::deserialize_buffer(original_code).map_err(|_| Error::Deserialization)?;
 		Ok(ContractModule {
@@ -490,8 +489,8 @@ impl ContractModule {
 	}
 
 	fn inject_gas_metering(&mut self) -> Result<(), Error> {
-		let gas_rules = rules::Set::new(self.config.regular_op_cost, Default::default())
-			.with_grow_cost(self.config.grow_mem_cost)
+		let gas_rules = rules::Set::new(self.config.regular_op_cost.as_(), Default::default())
+			.with_grow_cost(self.config.grow_mem_cost.as_())
 			.with_forbidden_floats();
 
 		let module = self
@@ -551,8 +550,8 @@ struct PreparedContract {
 	memory: sandbox::Memory,
 }
 
-fn prepare_contract(original_code: &[u8], config: &Config) -> Result<PreparedContract, Error> {
-	let mut contract_module = ContractModule::new(original_code, config.clone())?;
+fn prepare_contract<T: Trait>(original_code: &[u8], config: &Config<T>) -> Result<PreparedContract, Error> {
+	let mut contract_module = ContractModule::new(original_code, config)?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.inject_gas_metering()?;
 	contract_module.inject_stack_height_metering()?;
@@ -598,6 +597,7 @@ mod tests {
 	use std::fmt;
 	use wabt;
 	use gas::GasMeter;
+	use ::tests::Test;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
@@ -617,10 +617,7 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		next_account_id: u64,
 	}
-	impl Ext for MockExt {
-		type AccountId = u64;
-		type Balance = u64;
-
+	impl Ext<Test> for MockExt {
 		fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}
@@ -630,10 +627,10 @@ mod tests {
 		fn create(
 			&mut self,
 			code: &[u8],
-			endownment: Self::Balance,
-			gas_meter: &mut GasMeter,
+			endownment: u64,
+			gas_meter: &mut GasMeter<u64>,
 			data: Vec<u8>,
-		) -> Result<CreateReceipt<u64>, ()> {
+		) -> Result<CreateReceipt<u64, u64>, ()> {
 			self.creates.push(CreateEntry {
 				code: code.to_vec(),
 				endownment,
@@ -649,9 +646,9 @@ mod tests {
 		}
 		fn call(
 			&mut self,
-			to: &Self::AccountId,
-			value: Self::Balance,
-			_gas_meter: &mut GasMeter,
+			to: &u64,
+			value: u64,
+			_gas_meter: &mut GasMeter<u64>,
 			_data: Vec<u8>,
 		) -> Result<ExecutionResult, ()> {
 			self.transfers.push(TransferEntry { to: *to, value });
@@ -671,7 +668,7 @@ mod tests {
 
 	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
 		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
-		let config = Config::default();
+		let config = Config::<Test>::default();
 		prepare_contract(wasm.as_ref(), &config)
 	}
 
@@ -684,7 +681,7 @@ mod tests {
 	#[test]
 	fn memory() {
 		// This test assumes that maximum page number is configured to a certain number.
-		assert_eq!(Config::default().max_memory_pages, 16);
+		assert_eq!(Config::<Test>::default().max_memory_pages, 16);
 
 		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 1)))"#);
 		assert_matches!(r, Ok(_));

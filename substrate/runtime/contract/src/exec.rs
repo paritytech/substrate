@@ -27,7 +27,7 @@ use system;
 
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
-	pub gas_left: u64,
+	pub gas_left: T::Gas,
 }
 
 pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
@@ -36,7 +36,7 @@ pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
 	// typically should be dest
 	pub self_account: T::AccountId,
 	pub account_db: &'a mut OverlayAccountDb<'b, T>,
-	pub gas_price: u64, // TODO: Change T::Balance
+	pub gas_price: T::Balance,
 	pub depth: usize,
 }
 
@@ -46,7 +46,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		&mut self,
 		dest: T::AccountId,
 		value: T::Balance,
-		gas_meter: &mut GasMeter,
+		gas_meter: &mut GasMeter<T::Gas>,
 		_data: Vec<u8>,
 	) -> Result<vm::ExecutionResult, &'static str> {
 		let dest_code = <CodeOf<T>>::get(&dest);
@@ -54,7 +54,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		// TODO: check the new depth
 
 		// TODO: Get the base call fee from the storage
-		let call_base_fee = 135;
+		let call_base_fee = T::Gas::sa(135);
 		if gas_meter.charge(call_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base call fee");
 		}
@@ -103,7 +103,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 	pub fn create(
 		&mut self,
 		endownment: T::Balance,
-		gas_meter: &mut GasMeter,
+		gas_meter: &mut GasMeter<T::Gas>,
 		ctor: &[u8],
 		_data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
@@ -114,7 +114,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		// TODO: We settled on charging with DOTs.
 		// fee / gas_price = some amount of gas. Substract from the gas meter.
 
-		let create_base_fee = 175;
+		let create_base_fee = T::Gas::sa(175);
 		if gas_meter.charge(create_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base create fee");
 		}
@@ -164,8 +164,8 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 }
 
 fn transfer<T: Trait>(
-	gas_meter: &mut GasMeter,
-	gas_price: u64,
+	gas_meter: &mut GasMeter<T::Gas>,
+	gas_price: T::Balance,
 	contract_create: bool,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
@@ -185,7 +185,8 @@ fn transfer<T: Trait>(
 	};
 
 	// Convert fee into gas units and charge it from gas meter.
-	let gas_fee = T::Balance::as_(fee) / gas_price;
+	let gas_fee: T::Balance = fee / gas_price;
+	let gas_fee: T::Gas = <T::Gas as As<T::Balance>>::sa(gas_fee);
 	if gas_meter.charge(gas_fee).is_out_of_gas() {
 		return Err("not enough gas to pay transfer fee");
 	}
@@ -214,10 +215,7 @@ fn transfer<T: Trait>(
 	Ok(())
 }
 
-impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
-	type AccountId = T::AccountId;
-	type Balance = T::Balance;
-
+impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for ExecutionContext<'a, 'b, T> {
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.account_db.get_storage(&self.self_account, key)
 	}
@@ -230,10 +228,10 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 	fn create(
 		&mut self,
 		code: &[u8],
-		endownment: Self::Balance,
-		gas_meter: &mut GasMeter,
+		endownment: T::Balance,
+		gas_meter: &mut GasMeter<T::Gas>,
 		data: Vec<u8>,
-	) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
+	) -> Result<vm::CreateReceipt<T::AccountId, T::Gas>, ()> {
 		let receipt = self
 			.create(endownment, gas_meter, code, &data)
 			.map_err(|_| ())?;
@@ -245,9 +243,9 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 
 	fn call(
 		&mut self,
-		to: &Self::AccountId,
-		value: Self::Balance,
-		gas_meter: &mut GasMeter,
+		to: &T::AccountId,
+		value: T::Balance,
+		gas_meter: &mut GasMeter<T::Gas>,
 		data: Vec<u8>,
 	) -> Result<vm::ExecutionResult, ()> {
 		self.call(to.clone(), value, gas_meter, data)
