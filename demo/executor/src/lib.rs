@@ -35,13 +35,14 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_runtime_consensus as consensus;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
+pub use substrate_executor::NativeExecutor;
 native_executor_instance!(pub Executor, demo_runtime::api::dispatch, demo_runtime::VERSION, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm"));
 
 #[cfg(test)]
 mod tests {
 	use runtime_io;
 	use super::Executor;
-	use substrate_executor::WasmExecutor;
+	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use codec::{Slicable, Joiner};
 	use keyring::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap};
@@ -94,7 +95,7 @@ mod tests {
 	}
 
 	fn executor() -> ::substrate_executor::NativeExecutor<Executor> {
-		Executor::with_heap_pages(8)
+		::substrate_executor::NativeExecutor::with_heap_pages(8)
 	}
 
 	#[test]
