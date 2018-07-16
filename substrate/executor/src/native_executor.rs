@@ -105,8 +105,8 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	const VERSION: RuntimeVersion;
 
 	/// Construct corresponding `NativeExecutor` with given `heap_pages`.
-	fn with_heap_pages(heap_pages: usize) -> NativeExecutor<Self> where Self: Sized {
-		NativeExecutor::with_heap_pages(heap_pages)
+	fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> NativeExecutor<Self> where Self: Sized {
+		NativeExecutor::with_heap_pages(min_heap_pages, max_heap_pages)
 	}
 }
 
@@ -122,7 +122,7 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// Create new instance with specific number of pages for wasm fallback's heap.
-	pub fn with_heap_pages(heap_pages: usize) -> Self {
+	pub fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> Self {
 		// FIXME: set this entry at compile time
 		RUNTIMES_CACHE.lock().insert(
 			gen_cache_key(D::native_equivalent()),
@@ -130,7 +130,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: WasmExecutor::new(1, heap_pages),
+			fallback: WasmExecutor::new(min_heap_pages, max_heap_pages),
 		}
 	}
 }
@@ -207,8 +207,8 @@ macro_rules! native_executor_instance {
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
 
-			fn with_heap_pages(heap_pages: usize) -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::with_heap_pages(heap_pages)
+			fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor::with_heap_pages(min_heap_pages, max_heap_pages)
 			}
 		}
 	}

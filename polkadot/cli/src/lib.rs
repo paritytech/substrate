@@ -236,8 +236,11 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			service::Role::FULL
 		};
 
-	if let Some(v) = matches.value_of("heap-pages") {
-		config.heap_pages = v.parse().map_err(|_| "Invalid --heap-pages argument")?;
+	if let Some(v) = matches.value_of("min-heap-pages") {
+		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
+	}
+	if let Some(v) = matches.value_of("max-heap-pages") {
+		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
 	}
 
 	if let Some(s) = matches.value_of("execution") {
@@ -397,8 +400,11 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path).to_string_lossy().into();
 
-	if let Some(v) = matches.value_of("heap-pages") {
-		config.heap_pages = v.parse().map_err(|_| "Invalid --heap-pages argument")?;
+	if let Some(v) = matches.value_of("min-heap-pages") {
+		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
+	}
+	if let Some(v) = matches.value_of("max-heap-pages") {
+		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
 	}
 
 	if let Some(s) = matches.value_of("execution") {

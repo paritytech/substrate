@@ -95,7 +95,7 @@ mod tests {
 	}
 
 	fn executor() -> ::substrate_executor::NativeExecutor<Executor> {
-		::substrate_executor::NativeExecutor::with_heap_pages(8)
+		::substrate_executor::NativeExecutor::with_heap_pages(8, 8)
 	}
 
 	#[test]
@@ -340,7 +340,7 @@ mod tests {
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext();
 
-		let r = Executor::with_heap_pages(8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, true).0;
+		let r = Executor::with_heap_pages(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, true).0;
 		assert!(r.is_ok());
 	}
 
@@ -348,7 +348,7 @@ mod tests {
 	fn native_big_block_import_fails_on_fallback() {
 		let mut t = new_test_ext();
 
-		let r = Executor::with_heap_pages(8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, false).0;
+		let r = Executor::with_heap_pages(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, false).0;
 		assert!(!r.is_ok());
 	}
 

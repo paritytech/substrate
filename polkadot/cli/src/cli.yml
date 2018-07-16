@@ -99,10 +99,14 @@ args:
       long: execution
       value_name: STRATEGY
       help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
-  - heap-pages:
-      long: heap-pages
+  - min-heap-pages:
+      long: min-heap-pages
       value_name: COUNT
-      help: The number of 64KB pages to allocate for Wasm execution. Don't alter this unless you know what you're doing.
+      help: The number of 64KB pages to allocate for Wasm execution initially.
+  - max-heap-pages:
+      long: max-heap-pages
+      value_name: COUNT
+      help: The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
 subcommands:
   - build-spec:
       about: Build a spec.json file, outputing to stdout
@@ -170,7 +174,11 @@ subcommands:
               long: execution
               value_name: STRATEGY
               help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
-          - heap-pages:
-              long: heap-pages
+          - min-heap-pages:
+              long: min-heap-pages
               value_name: COUNT
-              help: The number of 64KB pages to allocate for Wasm execution. Don't alter this unless you know what you're doing.
+              help: The number of 64KB pages to allocate for Wasm execution initially.
+          - max-heap-pages:
+              long: max-heap-pages
+              value_name: COUNT
+              help: The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.

@@ -64,6 +64,15 @@ impl Heap {
 	}
 }
 
+#[cfg(feature="wasm-extern-trace")]
+macro_rules! debug_trace {
+	( $( $x:tt )* ) => ( trace!( $( $x )* ) )
+}
+#[cfg(not(feature="wasm-extern-trace"))]
+macro_rules! debug_trace {
+	( $( $x:tt )* ) => ()
+}
+
 struct FunctionExecutor<'e, E: Externalities + 'e> {
 	sandbox_store: sandbox::Store,
 	heap: Heap,
@@ -131,6 +140,7 @@ impl ReadPrimitive<u32> for MemoryInstance {
 	}
 }
 
+#[allow(dead_code)]
 fn ascii_format(asciish: &[u8]) -> String {
 	let mut r = String::new();
 	let mut latch = false;
@@ -180,51 +190,56 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize)
 			.map_err(|_| UserError("Invalid attempt to copy_nonoverlapping in ext_memcpy"))?;
-		trace!(target: "runtime-io", "memcpy {} from {}, {} bytes", dest, src, count);
+		debug_trace!(target: "runtime-io", "memcpy {} from {}, {} bytes", dest, src, count);
 		Ok(dest)
 	},
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy(src as usize, dest as usize, count as usize)
 			.map_err(|_| UserError("Invalid attempt to copy in ext_memmove"))?;
-		trace!(target: "runtime-io", "memmove {} from {}, {} bytes", dest, src, count);
+		debug_trace!(target: "runtime-io", "memmove {} from {}, {} bytes", dest, src, count);
 		Ok(dest)
 	},
 	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
-		trace!(target: "runtime-io", "memset {} with {}, {} bytes", dest, val, count);
+		debug_trace!(target: "runtime-io", "memset {} with {}, {} bytes", dest, val, count);
 		this.memory.clear(dest as usize, val as u8, count as usize)
 			.map_err(|_| UserError("Invalid attempt to clear in ext_memset"))?;
 		Ok(dest)
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
 		let r = this.heap.allocate(size);
-		trace!(target: "runtime-io", "malloc {} bytes at {}", size, r);
+		debug_trace!(target: "runtime-io", "malloc {} bytes at {}", size, r);
 		Ok(r)
 	},
 	ext_free(addr: *mut u8) => {
 		this.heap.deallocate(addr);
-		trace!(target: "runtime-io", "free {}", addr);
+		debug_trace!(target: "runtime-io", "free {}", addr);
 		Ok(())
 	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_storage"))?;
-		if let Some(preimage) = this.hash_lookup.get(&key) {
-			trace!(target: "wasm-trace", "*** Setting storage: %{} -> {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+		if let Some(_preimage) = this.hash_lookup.get(&key) {
+			debug_trace!(target: "wasm-trace", "*** Setting storage: %{} -> {}   [k={}]", ascii_format(&_preimage), HexDisplay::from(&value), HexDisplay::from(&key));
 		} else {
-			trace!(target: "wasm-trace", "*** Setting storage:  {} -> {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			debug_trace!(target: "wasm-trace", "*** Setting storage:  {} -> {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
 		}
 		this.ext.set_storage(key, value);
 		Ok(())
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
-		if let Some(preimage) = this.hash_lookup.get(&key) {
-			trace!(target: "wasm-trace", "*** Clearing storage: %{}   [k={}]", ascii_format(&preimage), HexDisplay::from(&key));
-		} else {
-			trace!(target: "wasm-trace", "*** Clearing storage:  {}   [k={}]", ascii_format(&key), HexDisplay::from(&key));
-		}
+		debug_trace!(target: "wasm-trace", "*** Clearing storage: {}   [k={}]", 
+			if let Some(_preimage) = this.hash_lookup.get(&key) {
+				format!("%{}", ascii_format(&_preimage))
+			} else {
+				format!(" {}", ascii_format(&key))
+			}, HexDisplay::from(&key));
 		this.ext.clear_storage(&key);
 		Ok(())
+	},
+	ext_exists_storage(key_data: *const u8, key_len: u32) -> u32 => {
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_storage"))?;
+		Ok(if this.ext.exists_storage(&key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
@@ -236,11 +251,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_storage"))?;
 		let maybe_value = this.ext.storage(&key);
 
-		if let Some(preimage) = this.hash_lookup.get(&key) {
-			trace!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
-		} else {
-			trace!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
-		}
+		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]", 
+			if let Some(_preimage) = this.hash_lookup.get(&key) {
+				format!("%{}", ascii_format(&_preimage))
+			} else {
+				format!(" {}", ascii_format(&key))
+			},
+			if let Some(ref b) = maybe_value {
+				format!("{}", HexDisplay::from(b))
+			} else {
+				"<empty>".to_owned()
+			},
+			HexDisplay::from(&key)
+		);
 
 		if let Some(value) = maybe_value {
 			let offset = this.heap.allocate(value.len() as u32) as u32;
@@ -258,11 +281,20 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_get_storage_into"))?;
 		let maybe_value = this.ext.storage(&key);
-		if let Some(preimage) = this.hash_lookup.get(&key) {
-			trace!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
-		} else {
-			trace!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
-		}
+		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]", 
+			if let Some(_preimage) = this.hash_lookup.get(&key) {
+				format!("%{}", ascii_format(&_preimage))
+			} else {
+				format!(" {}", ascii_format(&key))
+			},
+			if let Some(ref b) = maybe_value {
+				format!("{}", HexDisplay::from(b))
+			} else {
+				"<empty>".to_owned()
+			},
+			HexDisplay::from(&key)
+		);
+
 		if let Some(value) = maybe_value {
 			let value = &value[value_offset as usize..];
 			let written = ::std::cmp::min(value_len as usize, value.len());
@@ -298,17 +330,20 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
 			let hashed = twox_128(&[0u8; 0]);
-			trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
+			debug_trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
 			hashed
 		} else {
 			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_128"))?;
 			let hashed_key = twox_128(&key);
-			if let Ok(skey) = ::std::str::from_utf8(&key) {
-				trace!(target: "xxhash", "XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
-			} else {
-				trace!(target: "xxhash", "XXhash: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&hashed_key));
-			}
+			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
+				if let Ok(_skey) = ::std::str::from_utf8(&key) {
+					_skey.to_owned()
+				} else {
+					format!("{}", HexDisplay::from(&key))
+				},
+				HexDisplay::from(&hashed_key)
+			);
 			this.hash_lookup.insert(hashed_key.to_vec(), key);
 			hashed_key
 		};
@@ -475,7 +510,7 @@ pub struct WasmExecutor {
 	/// The max number of pages to allocate for the heap.
 	pub max_heap_pages: usize,
 
-	try_heap_pages: Mutex<usize>,
+	try_heap_pages: Mutex<(usize, usize)>,
 }
 
 impl Clone for WasmExecutor {
@@ -483,10 +518,13 @@ impl Clone for WasmExecutor {
 		WasmExecutor {
 			min_heap_pages: self.min_heap_pages,
 			max_heap_pages: self.max_heap_pages,
-			try_heap_pages: Mutex::new(self.min_heap_pages),
+			try_heap_pages: Mutex::new((self.min_heap_pages, 0)),
 		}
 	}
 }
+
+// Number of executions to continue with the old heap_pages before reducing to the next lowest POT.
+const DECAY_TIMEOUT: usize = 16;
 
 impl WasmExecutor {
 
@@ -495,7 +533,7 @@ impl WasmExecutor {
 		WasmExecutor {
 			min_heap_pages,
 			max_heap_pages,
-			try_heap_pages: Mutex::new(min_heap_pages),
+			try_heap_pages: Mutex::new((min_heap_pages, 0)),
 		}
 	}
 
@@ -531,7 +569,7 @@ impl WasmExecutor {
 			.and_then(|e| e.as_table().cloned());
 
 		let mut try_heap_pages = self.try_heap_pages.lock();
-		let mut fec = FunctionExecutor::new(memory.clone(), *try_heap_pages, table, ext)?;
+		let mut fec = FunctionExecutor::new(memory.clone(), try_heap_pages.0, table, ext)?;
 
 		// finish instantiation by running 'start' function (if any).
 		let instance = intermediate_instance.run_start(&mut fec)?;
@@ -551,19 +589,26 @@ impl WasmExecutor {
 
 		let returned = match result {
 			Ok(x) => x,
-			Err(_) if *try_heap_pages < self.max_heap_pages => {
-				let old = *try_heap_pages;
-				*try_heap_pages = (old * 8).min(self.max_heap_pages);
-				trace!(target: "wasm-executor", "Shrunk heap size too small at {} pages. Retrying with {}", old, *try_heap_pages);
+			Err(_) if try_heap_pages.0 < self.max_heap_pages => {
+				let old = try_heap_pages.0;
+				*try_heap_pages = ((old * 2).min(self.max_heap_pages), DECAY_TIMEOUT);
+				trace!(target: "wasm-executor", "Shrunk heap size too small at {} pages. Retrying with {}", old, try_heap_pages.0);
 				return Err(ErrorKind::PleaseRetry.into())
 			}
 			Err(e) => {
-				trace!(target: "wasm-executor", "Failed to execute code with {} pages", *try_heap_pages);
+				trace!(target: "wasm-executor", "Failed to execute code with {} pages", try_heap_pages.0);
 				return Err(e.into())
 			},
 		};
 
-		*try_heap_pages = self.min_heap_pages;
+		let decay_timeout = try_heap_pages.1;
+		if decay_timeout == 0 {
+			if try_heap_pages.0 > self.min_heap_pages {
+				*try_heap_pages = (self.min_heap_pages.max(try_heap_pages.0 - 1), DECAY_TIMEOUT);
+			}
+		} else {
+			try_heap_pages.1 -= 1;
+		}
 
 		if let Some(I64(r)) = returned {
 			let offset = r as u32;
