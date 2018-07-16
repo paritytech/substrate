@@ -256,6 +256,8 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		authorities: &[AuthorityId],
 		sign_with: Arc<ed25519::Pair>
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
+		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
+
 		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
 
 		let parent_hash = parent_header.hash().into();
@@ -263,6 +265,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		let id = BlockId::hash(parent_hash);
 		let duty_roster = self.client.duty_roster(&id)?;
 		let random_seed = self.client.random_seed(&id)?;
+		let random_seed = BlakeTwo256::hash(&*random_seed);
 
 		let (group_info, local_duty) = make_group_info(
 			duty_roster,
