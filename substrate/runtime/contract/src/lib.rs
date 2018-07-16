@@ -37,7 +37,7 @@ extern crate assert_matches;
 extern crate wabt;
 
 use rstd::prelude::*;
-use codec::Slicable;
+use codec::{Codec, Decode};
 
 use parity_wasm::elements::{self, External, MemoryType};
 use pwasm_utils::rules;
@@ -49,9 +49,9 @@ use pwasm_utils::rules;
 /// operations are implicitly performed on that account.
 pub trait Ext {
 	/// The indentifier of an account.
-	type AccountId: Slicable + Clone;
+	type AccountId: Codec + Clone;
 	/// The balance of an account.
-	type Balance: Slicable;
+	type Balance: Codec;
 
 	/// Returns the storage entry of the executing account by the given key.
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>>;

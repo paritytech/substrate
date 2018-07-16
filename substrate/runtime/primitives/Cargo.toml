@@ -13,6 +13,7 @@ substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-io = { path = "../../runtime-io", default_features = false }
 substrate-runtime-support = { path = "../../runtime-support", default_features = false }
+log = {version = "0.3", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"
@@ -23,6 +24,7 @@ std = [
 	"num-traits/std",
 	"serde",
 	"serde_derive",
+	"log",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",

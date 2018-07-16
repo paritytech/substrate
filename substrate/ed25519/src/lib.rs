@@ -23,7 +23,7 @@ extern crate untrusted;
 extern crate blake2_rfc;
 
 use ring::{rand, signature};
-use primitives::hash::H512;
+use primitives::{hash::H512, AuthorityId};
 use base58::{ToBase58, FromBase58};
 
 #[cfg(test)]
@@ -166,15 +166,28 @@ impl AsRef<Pair> for Pair {
 	}
 }
 
+impl Into<AuthorityId> for Public {
+	fn into(self) -> AuthorityId {
+		AuthorityId(self.0)
+	}
+}
+
+impl From<AuthorityId> for Public {
+	fn from(id: AuthorityId) -> Self {
+		Public(id.0)
+	}
+}
+
 impl ::std::fmt::Display for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{}", ::primitives::hexdisplay::HexDisplay::from(&self.0))
+		write!(f, "{}", self.to_ss58check())
 	}
 }
 
 impl ::std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{}", ::primitives::hexdisplay::HexDisplay::from(&self.0))
+		let s = self.to_ss58check();
+		write!(f, "{} ({}...)", ::primitives::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 }
 

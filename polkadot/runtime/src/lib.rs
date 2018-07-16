@@ -56,6 +56,8 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
+#[macro_use]
+extern crate substrate_runtime_version as version;
 
 #[cfg(feature = "std")]
 mod checked_block;
@@ -69,6 +71,7 @@ pub use staking::address::Address as RawAddress;
 
 use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
+use version::RuntimeVersion;
 
 #[cfg(feature = "std")]
 pub use runtime_primitives::BuildStorage;
@@ -101,6 +104,22 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Concrete;
+
+/// Polkadot runtime version.
+pub const VERSION: RuntimeVersion = RuntimeVersion {
+	spec_name: ver_str!("polkadot"),
+	impl_name: ver_str!("parity-polkadot"),
+	authoring_version: 1,
+	spec_version: 1,
+	impl_version: 0,
+};
+
+impl version::Trait for Concrete {
+	const VERSION: RuntimeVersion = VERSION;
+}
+
+/// Version module for this concrete runtime.
+pub type Version = version::Module<Concrete>;
 
 impl HasPublicAux for Concrete {
 	type PublicAux = AccountId;	// TODO: Option<AccountId>
@@ -136,7 +155,7 @@ pub type Timestamp = timestamp::Module<Concrete>;
 pub struct SessionKeyConversion;
 impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 	fn convert(a: AccountId) -> SessionKey {
-		a.0
+		a.0.into()
 	}
 }
 
@@ -199,6 +218,7 @@ impl_outer_dispatch! {
 		Democracy = 5,
 		Council = 6,
 		CouncilVoting = 7,
+		Parachains = 8,
 	}
 }
 
@@ -221,6 +241,7 @@ impl_outer_config! {
 
 pub mod api {
 	impl_stubs!(
+		version => |()| super::Version::version(),
 		authorities => |()| super::Consensus::authorities(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
@@ -236,7 +257,7 @@ pub mod api {
 mod tests {
 	use super::*;
 	use substrate_primitives as primitives;
-	use ::codec::Slicable;
+	use codec::{Encode, Decode};
 	use substrate_primitives::hexdisplay::HexDisplay;
 	use substrate_serializer as ser;
 	use runtime_primitives::traits::{Digest as DigestT, Header as HeaderT};
@@ -355,7 +376,7 @@ mod tests {
 		// df0f0200
 		// 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
-		let v = Slicable::encode(&tx);
+		let v = Encode::encode(&tx);
 		assert_eq!(&v[..], &hex!["6f000000ff0101010101010101010101010101010101010101010101010101010101010101e70300000300df0f02000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"][..]);
 		println!("{}", HexDisplay::from(&v));
 		assert_eq!(UncheckedExtrinsic::decode(&mut &v[..]).unwrap(), tx);
@@ -372,7 +393,13 @@ mod tests {
 				))
 			))),
 		};
-		let v = Slicable::encode(&xt);
+		let v = Encode::encode(&xt);
 		assert_eq!(Extrinsic::decode(&mut &v[..]).unwrap(), xt);
+	}
+
+	#[test]
+	fn parachain_calls_are_privcall() {
+		let _register = PrivCall::Parachains(parachains::PrivCall::register_parachain(0.into(), vec![1, 2, 3], vec![]));
+		let _deregister = PrivCall::Parachains(parachains::PrivCall::deregister_parachain(0.into()));
 	}
 }

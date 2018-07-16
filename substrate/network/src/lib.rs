@@ -16,21 +16,19 @@
 
 #![warn(missing_docs)]
 
-//! Implements polkadot protocol version as specified here:
-//! https://github.com/paritytech/polkadot/wiki/Network-protocol
+//! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
+//! Allows attachment of an optional subprotocol for chain-specific requests.
 
-extern crate ethcore_network_devp2p as network_devp2p;
-extern crate ethcore_network as network;
 extern crate ethcore_io as core_io;
 extern crate linked_hash_map;
 extern crate rand;
 extern crate parking_lot;
 extern crate substrate_primitives as primitives;
-extern crate substrate_state_machine as state_machine;
 extern crate substrate_serializer as ser;
 extern crate substrate_client as client;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_network_libp2p as network_libp2p;
 extern crate substrate_bft;
 extern crate substrate_codec as codec;
 extern crate serde;
@@ -50,23 +48,25 @@ mod service;
 mod sync;
 mod protocol;
 mod io;
-mod message;
 mod config;
 mod chain;
 mod blocks;
-mod consensus;
 mod on_demand;
 mod import_queue;
+pub mod consensus_gossip;
 pub mod error;
+pub mod message;
+pub mod specialization;
 
 #[cfg(test)] mod test;
 
+pub use chain::Client as ClientHandle;
 pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
 	TransactionPool, Params, ManageNetwork, SyncProvider};
-pub use protocol::{ProtocolStatus};
+pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
-pub use network::{NonReservedPeerMode, NetworkConfiguration, ConnectionFilter, ConnectionDirection};
-pub use message::{generic as generic_message, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal};
+pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, PeerId, ProtocolId, ConnectionFilter, ConnectionDirection};
+pub use message::{generic as generic_message, RequestId, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal, Status as StatusMessage};
 pub use error::Error;
 pub use config::{Role, ProtocolConfig};
-pub use on_demand::{OnDemand, OnDemandService, Response as OnDemandResponse};
+pub use on_demand::{OnDemand, OnDemandService, RemoteCallResponse};

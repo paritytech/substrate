@@ -60,7 +60,7 @@ impl Trait for Test {
 }
 
 pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool, reward: u64) -> runtime_io::TestExternalities {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage();
+	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let balance_factor = if ext_deposit > 0 {
 		256
 	} else {
@@ -69,12 +69,12 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 	t.extend(consensus::GenesisConfig::<Test>{
 		code: vec![],
 		authorities: vec![],
-	}.build_storage());
+	}.build_storage().unwrap());
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
 		validators: vec![10, 20],
 		broken_percent_late: 30,
-	}.build_storage());
+	}.build_storage().unwrap());
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,
 		current_era,
@@ -99,10 +99,10 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		reclaim_rebate: 0,
 		session_reward: reward,
 		early_era_slash: if monied { 20 } else { 0 },
-	}.build_storage());
+	}.build_storage().unwrap());
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5
-	}.build_storage());
+	}.build_storage().unwrap());
 	t
 }
 

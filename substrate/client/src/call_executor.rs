@@ -15,18 +15,18 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
-use futures::{IntoFuture, Future};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use state_machine::{self, OverlayedChanges, Backend as StateBackend, CodeExecutor};
+use runtime_primitives::traits::Block as BlockT;
+use state_machine::{self, OverlayedChanges, Ext, 
+	CodeExecutor, ExecutionManager, native_when_possible};
+use runtime_io::Externalities;
+use executor::{RuntimeVersion, RuntimeInfo};
 
 use backend;
-use blockchain::Backend as ChainBackend;
 use error;
-use light::{Fetcher, RemoteCallRequest};
 
 /// Information regarding the result of a call.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallResult {
 	/// The data that was returned from the call.
 	pub return_data: Vec<u8>,
@@ -42,17 +42,43 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of state in a block of given hash.
 	///
 	/// No changes are made.
-	fn call(&self, id: &BlockId<B>, method: &str, call_data: &[u8]) -> Result<CallResult, error::Error>;
+	fn call(&self,
+		id: &BlockId<B>,
+		method: &str,
+		call_data: &[u8],
+	) -> Result<CallResult, error::Error>;
+
+	/// Extract RuntimeVersion of given block
+	///
+	/// No changes are made.
+	fn runtime_version(&self, id: &BlockId<B>) -> Result<RuntimeVersion, error::Error>;
 
 	/// Execute a call to a contract on top of given state.
 	///
 	/// No changes are made.
-	fn call_at_state<S: state_machine::Backend>(&self, state: &S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, S::Transaction), error::Error>;
+	fn call_at_state<
+		S: state_machine::Backend,
+		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+	>(&self,
+		state: &S,
+		overlay: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8],
+		manager: ExecutionManager<F>
+	) -> Result<(Vec<u8>, S::Transaction), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: state_machine::Backend>(&self, state: S, overlay: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
+	fn prove_at_state<S: state_machine::Backend>(&self,
+		state: S,
+		overlay: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8]
+	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
+
+	/// Get runtime version if supported.
+	fn native_runtime_version(&self) -> Option<RuntimeVersion>;
 }
 
 /// Call executor that executes methods locally, querying all required
@@ -60,13 +86,6 @@ pub trait CallExecutor<B: BlockT> {
 pub struct LocalCallExecutor<B, E> {
 	backend: Arc<B>,
 	executor: E,
-}
-
-/// Call executor that executes methods on remote node, querying execution proof
-/// and checking proof by re-executing locally.
-pub struct RemoteCallExecutor<B, F> {
-	backend: Arc<B>,
-	fetcher: Arc<F>,
 }
 
 impl<B, E> LocalCallExecutor<B, E> {
@@ -88,30 +107,65 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 	where
 		B: backend::LocalBackend<Block>,
-		E: CodeExecutor,
+		E: CodeExecutor + RuntimeInfo,
 		Block: BlockT,
-		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
 {
 	type Error = E::Error;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
+	fn call(&self,
+		id: &BlockId<Block>,
+		method: &str,
+		call_data: &[u8],
+	) -> error::Result<CallResult> {
 		let mut changes = OverlayedChanges::default();
-		let (return_data, _) = self.call_at_state(&self.backend.state_at(*id)?, &mut changes, method, call_data)?;
+		let (return_data, _) = self.call_at_state(
+			&self.backend.state_at(*id)?,
+			&mut changes,
+			method,
+			call_data,
+			native_when_possible(),
+		)?;
 		Ok(CallResult{ return_data, changes })
 	}
 
-	fn call_at_state<S: state_machine::Backend>(&self, state: &S, changes: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, S::Transaction)> {
-		state_machine::execute(
+	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+		let mut overlay = OverlayedChanges::default();
+		let state = self.backend.state_at(*id)?;
+		let mut externalities = Ext::new(&mut overlay, &state);
+		let code = externalities.storage(b":code").ok_or(error::ErrorKind::VersionInvalid)?
+			.to_vec();
+
+		self.executor.runtime_version(&mut externalities, &code)
+			.ok_or(error::ErrorKind::VersionInvalid.into())
+	}
+
+	fn call_at_state<
+		S: state_machine::Backend,
+		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
+	>(&self,
+		state: &S,
+		changes: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8],
+		manager: ExecutionManager<F>,
+	) -> error::Result<(Vec<u8>, S::Transaction)> {
+		state_machine::execute_using_consensus_failure_handler(
 			state,
 			changes,
 			&self.executor,
 			method,
 			call_data,
+			manager,
 		).map_err(Into::into)
 	}
 
-	fn prove_at_state<S: state_machine::Backend>(&self, state: S, changes: &mut OverlayedChanges, method: &str, call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
-		state_machine::prove(
+	fn prove_at_state<S: state_machine::Backend>(&self,
+		state: S,
+		changes: &mut OverlayedChanges,
+		method: &str,
+		call_data: &[u8]
+	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
+		state_machine::prove_execution(
 			state,
 			changes,
 			&self.executor,
@@ -121,105 +175,8 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 		.map(|(result, proof, _)| (result, proof))
 		.map_err(Into::into)
 	}
-}
 
-impl<B, F> RemoteCallExecutor<B, F> {
-	/// Creates new instance of remote call executor.
-	pub fn new(backend: Arc<B>, fetcher: Arc<F>) -> Self {
-		RemoteCallExecutor { backend, fetcher }
-	}
-}
-
-impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
-	where
-		B: backend::RemoteBackend<Block>,
-		F: Fetcher<Block>,
-		Block: BlockT,
-		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
-{
-	type Error = error::Error;
-
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<CallResult> {
-		let block_hash = match *id {
-			BlockId::Hash(hash) => hash,
-			BlockId::Number(number) => self.backend.blockchain().hash(number)?
-				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", number)))?,
-		};
-
-		self.fetcher.remote_call(RemoteCallRequest {
-			block: block_hash,
-			method: method.into(),
-			call_data: call_data.to_vec(),
-		}).into_future().wait()
-	}
-
-	fn call_at_state<S: state_machine::Backend>(&self, _state: &S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> error::Result<(Vec<u8>, S::Transaction)> {
-		Err(error::ErrorKind::NotAvailableOnLightClient.into())
-	}
-
-	fn prove_at_state<S: state_machine::Backend>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error> {
-		Err(error::ErrorKind::NotAvailableOnLightClient.into())
-	}
-}
-
-/// Check remote execution proof using given backend.
-pub fn check_execution_proof<B, E, Block>(backend: &B, executor: &E, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> Result<CallResult, error::Error>
-	where
-		B: backend::RemoteBackend<Block>,
-		E: CodeExecutor,
-		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
-		error::Error: From<<<B as backend::Backend<Block>>::State as StateBackend>::Error>,
-{
-	let local_header = backend.blockchain().header(BlockId::Hash(request.block))?;
-	let local_header = local_header.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", request.block)))?;
-	let local_state_root = local_header.state_root().clone();
-	do_check_execution_proof(local_state_root, executor, request, remote_proof)
-}
-
-/// Check remote execution proof using given state root.
-fn do_check_execution_proof<E, H>(local_state_root: H, executor: &E, request: &RemoteCallRequest<H>, remote_proof: Vec<Vec<u8>>) -> Result<CallResult, error::Error>
-	where
-		E: CodeExecutor,
-		H: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
-{
-	let mut changes = OverlayedChanges::default();
-	let (local_result, _) = state_machine::proof_check(
-		local_state_root.into(),
-		remote_proof,
-		&mut changes,
-		executor,
-		&request.method,
-		&request.call_data)?;
-
-	Ok(CallResult { return_data: local_result, changes })
-}
-
-#[cfg(test)]
-mod tests {
-	use runtime_primitives::generic::BlockId;
-	use state_machine::Backend;
-	use test_client;
-	use light::RemoteCallRequest;
-	use super::do_check_execution_proof;
-
-	#[test]
-	fn execution_proof_is_generated_and_checked() {
-		// prepare remote client
-		let remote_client = test_client::new();
-		let remote_block_id = BlockId::Number(0);
-		let remote_block_storage_root = remote_client.state_at(&remote_block_id)
-			.unwrap().storage_root(::std::iter::empty()).0;
-
-		// 'fetch' execution proof from remote node
-		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
-
-		// check remote execution proof locally
-		let local_executor = test_client::NativeExecutor::new();
-		do_check_execution_proof(remote_block_storage_root, &local_executor, &RemoteCallRequest {
-			block: Default::default(),
-			method: "authorities".into(),
-			call_data: vec![],
-		}, remote_execution_proof).unwrap();
+	fn native_runtime_version(&self) -> Option<RuntimeVersion> {
+		<E as RuntimeInfo>::NATIVE_VERSION
 	}
 }

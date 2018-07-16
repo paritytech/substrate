@@ -43,17 +43,33 @@ extern crate substrate_keyring as keyring;
 extern crate substrate_primitives as primitives;
 #[macro_use]
 extern crate substrate_runtime_io as runtime_io;
+#[macro_use]
+extern crate substrate_runtime_version as runtime_version;
 
 
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 
 use rstd::prelude::*;
-use codec::Slicable;
+use codec::{Encode, Decode};
 
 use runtime_primitives::traits::{BlindCheckable, BlakeTwo256};
 use runtime_primitives::Ed25519Signature;
+use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
+
+/// Test runtime version.
+pub const VERSION: RuntimeVersion = RuntimeVersion {
+	spec_name: ver_str!("test"),
+	impl_name: ver_str!("parity-test"),
+	authoring_version: 1,
+	spec_version: 1,
+	impl_version: 1,
+};
+
+fn version() -> RuntimeVersion {
+	VERSION
+}
 
 /// Calls in transactions.
 #[derive(Clone, PartialEq, Eq)]
@@ -65,18 +81,18 @@ pub struct Transfer {
 	pub nonce: u64,
 }
 
-impl Slicable for Transfer {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		self.from.using_encoded(|s| v.extend(s));
-		self.to.using_encoded(|s| v.extend(s));
-		self.amount.using_encoded(|s| v.extend(s));
-		self.nonce.using_encoded(|s| v.extend(s));
-		v
+impl Encode for Transfer {
+	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
+		self.from.encode_to(dest);
+		self.to.encode_to(dest);
+		self.amount.encode_to(dest);
+		self.nonce.encode_to(dest);
 	}
+}
 
+impl Decode for Transfer {
 	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Slicable::decode(input).map(|(from, to, amount, nonce)| Transfer { from, to, amount, nonce })
+		Decode::decode(input).map(|(from, to, amount, nonce)| Transfer { from, to, amount, nonce })
 	}
 }
 
@@ -88,26 +104,22 @@ pub struct Extrinsic {
 	pub signature: Ed25519Signature,
 }
 
-impl Slicable for Extrinsic {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		self.transfer.using_encoded(|s| v.extend(s));
-		self.signature.using_encoded(|s| v.extend(s));
-		v
+impl Encode for Extrinsic {
+	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
+		self.transfer.encode_to(dest);
+		self.signature.encode_to(dest);
 	}
+}
 
+impl Decode for Extrinsic {
 	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Slicable::decode(input).map(|(transfer, signature)| Extrinsic { transfer, signature })
+		Decode::decode(input).map(|(transfer, signature)| Extrinsic { transfer, signature })
 	}
 }
 
 impl BlindCheckable for Extrinsic {
 	type Checked = Self;
-	type Address = AccountId;
 
-	fn sender(&self) -> &Self::Address {
-		&self.transfer.from
-	}
 	fn check(self) -> Result<Self, &'static str> {
 		if ::runtime_primitives::verify_encoded_lazy(&self.signature, &self.transfer, &self.transfer.from) {
 			Ok(self)
@@ -139,15 +151,15 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	print("run_tests...");
 	let block = Block::decode(&mut input).unwrap();
 	print("deserialised block.");
-	let stxs = block.extrinsics.iter().map(Slicable::encode).collect::<Vec<_>>();
+	let stxs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	print("reserialised transactions.");
 	[stxs.len() as u8].encode()
 }
 
 pub mod api {
 	use system;
-
 	impl_stubs!(
+		version => |()| super::version(),
 		authorities => |()| system::authorities(),
 		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),

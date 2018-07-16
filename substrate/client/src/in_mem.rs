@@ -17,9 +17,11 @@
 //! In memory client backend
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use parking_lot::RwLock;
 use error;
 use backend;
+use light;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero};
 use runtime_primitives::bft::Justification;
@@ -86,16 +88,9 @@ struct BlockchainStorage<Block: BlockT> {
 }
 
 /// In-memory blockchain. Supports concurrent reads.
+#[derive(Clone)]
 pub struct Blockchain<Block: BlockT> {
-	storage: RwLock<BlockchainStorage<Block>>,
-}
-
-impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
-	fn clone(&self) -> Self {
-		Blockchain {
-			storage: RwLock::new(self.storage.read().clone()),
-		}
-	}
+	storage: Arc<RwLock<BlockchainStorage<Block>>>,
 }
 
 impl<Block: BlockT> Blockchain<Block> {
@@ -108,16 +103,17 @@ impl<Block: BlockT> Blockchain<Block> {
 	}
 
 	/// Create new in-memory blockchain storage.
-	pub fn new() -> Self {
+	pub fn new() -> Blockchain<Block> {
+		let storage = Arc::new(RwLock::new(
+			BlockchainStorage {
+				blocks: HashMap::new(),
+				hashes: HashMap::new(),
+				best_hash: Default::default(),
+				best_number: Zero::zero(),
+				genesis_hash: Default::default(),
+			}));
 		Blockchain {
-			storage: RwLock::new(
-				BlockchainStorage {
-					blocks: HashMap::new(),
-					hashes: HashMap::new(),
-					best_hash: Default::default(),
-					best_number: Zero::zero(),
-					genesis_hash: Default::default(),
-				})
+			storage: storage,
 		}
 	}
 
@@ -159,24 +155,11 @@ impl<Block: BlockT> Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
+impl<Block: BlockT> blockchain::HeaderBackend<Block> for Blockchain<Block> {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash).map(|b| b.header().clone())
 		}))
-	}
-
-	fn body(&self, id: BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
-		Ok(self.id(id).and_then(|hash| {
-			self.storage.read().blocks.get(&hash)
-				.and_then(|b| b.extrinsics().map(|x| x.to_vec()))
-		}))
-	}
-
-	fn justification(&self, id: BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
-		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
-			b.justification().map(|x| x.clone()))
-		))
 	}
 
 	fn info(&self) -> error::Result<blockchain::Info<Block>> {
@@ -197,6 +180,30 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
 		Ok(self.id(BlockId::Number(number)))
+	}
+}
+
+
+impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
+	fn body(&self, id: BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
+		Ok(self.id(id).and_then(|hash| {
+			self.storage.read().blocks.get(&hash)
+				.and_then(|b| b.extrinsics().map(|x| x.to_vec()))
+		}))
+	}
+
+	fn justification(&self, id: BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
+		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
+			b.justification().map(|x| x.clone()))
+		))
+	}
+}
+
+impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block> {
+	fn import_header(&self, is_new_best: bool, header: Block::Header) -> error::Result<()> {
+		let hash = header.hash();
+		self.insert(hash, header, None, None, is_new_best);
+		Ok(())
 	}
 }
 

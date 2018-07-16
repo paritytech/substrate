@@ -42,14 +42,14 @@ use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{RefInto, MaybeEmpty};
+use primitives::traits::{RefInto, MaybeSerializeDebug, MaybeEmpty};
 use primitives::bft::MisbehaviorReport;
 
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
 
-struct AuthorityStorageVec<S: codec::Slicable + Default>(rstd::marker::PhantomData<S>);
-impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
+struct AuthorityStorageVec<S: codec::Codec + Default>(rstd::marker::PhantomData<S>);
+impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
 	type Item = S;
 	const PREFIX: &'static [u8] = AUTHORITY_AT;
 }
@@ -60,7 +60,7 @@ pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 pub trait Trait: system::Trait {
 	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;		// MaybeEmpty is for Timestamp's usage.
-	type SessionKey: Parameter + Default;
+	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 }
 
 decl_module! {
@@ -69,6 +69,7 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result = 0;
+		fn remark(aux, remark: Vec<u8>) -> Result = 1;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -104,6 +105,11 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
+	/// Make some on-chain remark.
+	fn remark(_aux: &T::PublicAux, _remark: Vec<u8>) -> Result {
+		Ok(())
+	}
+
 	/// Set the current set of authorities' session keys.
 	///
 	/// Called by `next_session` only.
@@ -118,8 +124,12 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
 	pub authorities: Vec<T::SessionKey>,
+	#[serde(with = "substrate_primitives::bytes")]
 	pub code: Vec<u8>,
 }
 
@@ -136,14 +146,14 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> runtime_io::TestExternalities {
-		use codec::{Slicable, KeyedVec};
+	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+		use codec::{Encode, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
 		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|
 			((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode())
 		).collect();
 		r.insert(AUTHORITY_COUNT.to_vec(), auth_count.encode());
 		r.insert(CODE.to_vec(), self.code);
-		r
+		Ok(r)
 	}
 }

@@ -22,7 +22,7 @@ use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 use substrate_primitives;
-use codec::Slicable;
+use codec::{Codec, Encode};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
@@ -32,11 +32,15 @@ pub trait Lazy<T: ?Sized> {
 	fn get(&mut self) -> &T;
 }
 
+impl<'a> Lazy<[u8]> for &'a [u8] {
+	fn get(&mut self) -> &[u8] { &**self }
+}
+
 /// Means of signature verification.
 pub trait Verify {
 	/// Type of the signer.
 	type Signer;
-	/// Verify a signature.
+	/// Verify a signature. Return `true` if signature is valid for the value.
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
@@ -181,7 +185,7 @@ impl<A: Executable, B: Executable> Executable for (A, B) {
 }
 
 /// Abstraction around hashing
-pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
+pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
 	type Output: Member + AsRef<[u8]>;
@@ -190,8 +194,8 @@ pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// S
 	fn hash(s: &[u8]) -> Self::Output;
 
 	/// Produce the hash of some codec-encodable value.
-	fn hash_of<S: Slicable>(s: &S) -> Self::Output {
-		Slicable::using_encoded(s, Self::hash)
+	fn hash_of<S: Codec>(s: &S) -> Self::Output {
+		Encode::using_encoded(s, Self::hash)
 	}
 
 	/// Produce the patricia-trie root of a mapping from indices to byte slices.
@@ -214,12 +218,12 @@ pub trait Hashing: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// S
 	fn storage_root() -> Self::Output;
 }
 
-/// Blake2-256 Hashing implementation.
+/// Blake2-256 Hash implementation.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct BlakeTwo256;
 
-impl Hashing for BlakeTwo256 {
+impl Hash for BlakeTwo256 {
 	type Output = substrate_primitives::H256;
 	fn hash(s: &[u8]) -> Self::Output {
 		runtime_io::blake2_256(s).into()
@@ -303,7 +307,7 @@ pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + C
 impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
-/// each `Slicable`.
+/// each `Codec`.
 pub trait Digest {
 	type Item: Member;
 	fn push(&mut self, item: Self::Item);
@@ -314,10 +318,10 @@ pub trait Digest {
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'static {
-	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Slicable;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
-	type Hashing: Hashing<Output = Self::Hash>;
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>;
+	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Member + Default;
 
 	fn new(
@@ -344,7 +348,7 @@ pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 's
 	fn set_digest(&mut self, Self::Digest);
 
 	fn hash(&self) -> Self::Hash {
-		<Self::Hashing as Hashing>::hash_of(self)
+		<Self::Hashing as Hash>::hash_of(self)
 	}
 }
 
@@ -352,50 +356,53 @@ pub trait Header: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 's
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Slicable + Eq + MaybeSerializeDebug + 'static {
-	type Extrinsic: Member + Slicable;
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+	type Extrinsic: Member + Codec;
 	type Header: Header<Hash=Self::Hash>;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Slicable + AsRef<[u8]>;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>;
 
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
 	fn deconstruct(self) -> (Self::Header, Vec<Self::Extrinsic>);
 	fn new(header: Self::Header, extrinsics: Vec<Self::Extrinsic>) -> Self;
 	fn hash(&self) -> Self::Hash {
-		<<Self::Header as Header>::Hashing as Hashing>::hash_of(self.header())
+		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
 }
 
 /// Extract the hashing type for a block.
-pub type HashingFor<B> = <<B as Block>::Header as Header>::Hashing;
+pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
+/// Extract the number type for a block.
+pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-pub trait Checkable: Sized + Send + Sync {
-	type Address: Member + MaybeDisplay;
-	type AccountId: Member + MaybeDisplay;
-	type Checked: Member;
-	fn sender(&self) -> &Self::Address;
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str>;
+/// Implement for pieces of information that require some additional context `Context` in order to be
+/// checked.
+pub trait Checkable<Context>: Sized {
+	/// Returned if `check_with` succeeds.
+	type Checked;
+
+	fn check_with(self, context: Context) -> Result<Self::Checked, &'static str>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-///
-/// This does that checking without requiring a lookup argument.
-pub trait BlindCheckable: Sized + Send + Sync {
-	type Address: Member + MaybeDisplay;
-	type Checked: Member;
-	fn sender(&self) -> &Self::Address;
+/// Implement for pieces of information that don't require additional context in order to be
+/// checked.
+pub trait BlindCheckable: Sized {
+	/// Returned if `check` succeeds.
+	type Checked;
+
 	fn check(self) -> Result<Self::Checked, &'static str>;
 }
 
-impl<T: BlindCheckable> Checkable for T {
-	type Address = <Self as BlindCheckable>::Address;
-	type AccountId = <Self as BlindCheckable>::Address;
+// Every `BlindCheckable` is also a `Checkable` for arbitrary `Context`.
+impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
-	fn sender(&self) -> &Self::Address { BlindCheckable::sender(self) }
-	fn check<ThisLookup: FnOnce(Self::Address) -> Result<Self::AccountId, &'static str>>(self, _: ThisLookup) -> Result<Self::Checked, &'static str> { BlindCheckable::check(self) }
+	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> {
+		BlindCheckable::check(self)
+	}
 }
 
 /// An "executable" piece of information, used by the standard Substrate Executive in order to

@@ -190,33 +190,36 @@ macro_rules! environmental {
 			}
 		}
 	};
-	($name:ident : trait $t:ident) => {
-		#[allow(non_camel_case_types)]
+	($name:ident : trait @$t:ident [$($args:ty,)*]) => {
+		#[allow(non_camel_case_types, dead_code)]
 		struct $name { __private_field: () }
 
-		thread_local_impl!(static GLOBAL: $crate::imp::RefCell<Option<*mut ($t + 'static)>>
+		thread_local_impl!(static GLOBAL: $crate::imp::RefCell<Option<*mut ($t<$($args),*> + 'static)>>
 			= $crate::imp::RefCell::new(None));
 
 		impl $name {
-			#[allow(unused_imports)]
+		#[allow(unused_imports)]
 
 			pub fn using<R, F: FnOnce() -> R>(
-				protected: &mut $t,
+				protected: &mut $t<$($args),*>,
 				f: F
 			) -> R {
 				let lifetime_extended = unsafe {
-					$crate::imp::transmute::<&mut $t, &mut ($t + 'static)>(protected)
+					$crate::imp::transmute::<&mut $t<$($args),*>, &mut ($t<$($args),*> + 'static)>(protected)
 				};
 				$crate::using(&GLOBAL, lifetime_extended, f)
 			}
 
-			pub fn with<R, F: for<'a> FnOnce(&'a mut ($t + 'a)) -> R>(
+			pub fn with<R, F: for<'a> FnOnce(&'a mut ($t<$($args),*> + 'a)) -> R>(
 				f: F
 			) -> Option<R> {
 				$crate::with(&GLOBAL, |x| f(x))
 			}
 		}
-	}
+	};
+	($name:ident : trait $t:ident <>) => { environmental! { $name : trait @$t [] } };
+	($name:ident : trait $t:ident < $($args:ty),* $(,)* >) => { environmental! { $name : trait @$t [$($args,)*] } };
+	($name:ident : trait $t:ident) => { environmental! { $name : trait @$t [] } };
 }
 
 #[cfg(test)]
@@ -321,5 +324,29 @@ mod tests {
 		}).unwrap();
 
 		assert_eq!(got_sum, 15);
+	}
+
+	#[test]
+	fn use_generic_trait() {
+		trait Plus { fn plus42() -> usize; }
+		struct ConcretePlus;
+		impl Plus for ConcretePlus {
+			fn plus42() -> usize { 42 }
+		}
+		trait Multiplier<T: Plus> { fn mul_and_add(&self) -> usize; }
+		impl<'a, P: Plus> Multiplier<P> for &'a [usize] {
+			fn mul_and_add(&self) -> usize {
+				self.iter().fold(1, |a, c| a * c) + P::plus42()
+			}
+		}
+
+		let numbers = vec![1, 2, 3];
+		let mut numbers = &numbers[..];
+		let out = foo::using(&mut numbers, || {
+			foo::with(|x| x.mul_and_add() )
+		}).unwrap();
+
+		assert_eq!(out, 6 + 42);
+		environmental!(foo: trait Multiplier<ConcretePlus>);
 	}
 }

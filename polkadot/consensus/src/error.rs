@@ -37,7 +37,7 @@ error_chain! {
 			description("Proposer destroyed before finishing proposing or evaluating"),
 			display("Proposer destroyed before finishing proposing or evaluating"),
 		}
-		Timer(e: String) {
+		Timer(e: ::tokio::timer::Error) {
 			description("Failed to register or resolve async timer."),
 			display("Timer failed: {}", e),
 		}

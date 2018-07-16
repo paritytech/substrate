@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Network packet message types. These get serialized and put into the lower level protocol payload.
 
@@ -21,6 +21,7 @@ use service::Role as RoleFlags;
 
 pub use self::generic::{BlockAnnounce, RemoteCallRequest, ConsensusVote, SignedConsensusVote, FromBlock, Body};
 
+/// A unique ID of a request.
 pub type RequestId = u64;
 
 /// Type alias for using the message type using block type parameters.
@@ -88,14 +89,14 @@ pub type Transactions<E> = Vec<E>;
 /// Configured node role.
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub enum Role {
-	/// Full relay chain client with no additional responsibilities.
+	/// Full node with no additional responsibilities.
 	Full,
-	/// Relay chain light client.
+	/// Light client.
 	Light,
 	/// Parachain validator.
+	Authority,
+	/// Same as `Authority`
 	Validator,
-	/// Parachain collator.
-	Collator,
 }
 
 impl Role {
@@ -106,8 +107,7 @@ impl Role {
 			match *r {
 				Role::Full => flags = flags | RoleFlags::FULL,
 				Role::Light => flags = flags | RoleFlags::LIGHT,
-				Role::Validator => flags = flags | RoleFlags::VALIDATOR,
-				Role::Collator => flags = flags | RoleFlags::COLLATOR,
+				Role::Authority | Role::Validator => flags = flags | RoleFlags::AUTHORITY,
 			}
 		}
 		flags
@@ -123,11 +123,8 @@ impl From<RoleFlags> for Vec<Role> where {
 		if !(flags & RoleFlags::LIGHT).is_empty() {
 			roles.push(Role::Light);
 		}
-		if !(flags & RoleFlags::VALIDATOR).is_empty() {
+		if !(flags & RoleFlags::AUTHORITY).is_empty() {
 			roles.push(Role::Validator);
-		}
-		if !(flags & RoleFlags::COLLATOR).is_empty() {
-			roles.push(Role::Collator);
 		}
 		roles
 	}
@@ -157,8 +154,8 @@ pub enum Direction {
 	Descending,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 /// Remote call response.
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct RemoteCallResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
@@ -169,9 +166,10 @@ pub struct RemoteCallResponse {
 /// Generic types.
 pub mod generic {
 	use primitives::AuthorityId;
-	use codec::Slicable;
+	use codec::{Codec, Decode, Encode};
 	use runtime_primitives::bft::Justification;
 	use ed25519;
+	use primitives::Signature;
 
 	use super::{Role, BlockAttribute, RemoteCallResponse, RequestId, Transactions, Direction};
 
@@ -192,7 +190,7 @@ pub mod generic {
 		Extrinsics(Vec<Extrinsic>),
 	}
 
-	impl<Extrinsic> Body<Extrinsic> where Extrinsic: Slicable {
+	impl<Extrinsic> Body<Extrinsic> where Extrinsic: Codec {
 		/// Extracts extrinsic from the body.
 		pub fn to_extrinsics(self) -> Vec<Extrinsic> {
 			match self {
@@ -200,8 +198,46 @@ pub mod generic {
 				Body::V1(e) => {
 					e.into_iter().filter_map(|bytes| {
 						let bytes = bytes.0.encode();
-						Slicable::decode(&mut bytes.as_slice())
+						Decode::decode(&mut bytes.as_slice())
 					}).collect()
+				}
+			}
+		}
+	}
+
+	/// Emulates Poc-1 justification format.
+	#[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
+	pub struct V1Justification<H> {
+		/// The round consensus was reached in.
+		pub round_number: u32,
+		/// The hash of the header justified.
+		pub hash: H,
+		/// The signatures and signers of the hash.
+		pub signatures: Vec<([u8; 32], Signature)>
+	}
+
+	// TODO: remove this after poc-2
+	/// Justification back compat
+	#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+	#[serde(untagged)]
+	pub enum BlockJustification<H> {
+		/// Poc-1 format.
+		V1(V1Justification<H>),
+		/// Poc-2 format.
+		V2(Justification<H>),
+	}
+
+	impl<H> BlockJustification<H> {
+		/// Convert to PoC-2 justification format.
+		pub fn to_justification(self) -> Justification<H> {
+			match self {
+				BlockJustification::V2(j) => j,
+				BlockJustification::V1(j) => {
+					Justification {
+						round_number: j.round_number,
+						hash: j.hash,
+						signatures: j.signatures.into_iter().map(|(a, s)| (a.into(), s)).collect(),
+					}
 				}
 			}
 		}
@@ -221,7 +257,7 @@ pub mod generic {
 		/// Block message queue if requested.
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
-		pub justification: Option<Justification<Hash>>,
+		pub justification: Option<BlockJustification<Hash>>,
 	}
 
 	/// Identifies starting point of a block sequence.
@@ -319,6 +355,8 @@ pub mod generic {
 		RemoteCallRequest(RemoteCallRequest<Hash>),
 		/// Remote method call response.
 		RemoteCallResponse(RemoteCallResponse),
+		/// Chain-specific message
+		ChainSpecific(Vec<u8>),
 	}
 
 	/// Status sent on connection.
@@ -334,6 +372,9 @@ pub mod generic {
 		pub best_hash: Hash,
 		/// Genesis block hash.
 		pub genesis_hash: Hash,
+		/// Chain-specific status.
+		#[serde(skip)]
+		pub chain_status: Vec<u8>,
 		/// Signatue of `best_hash` made with validator address. Required for the validator role.
 		pub validator_signature: Option<ed25519::Signature>,
 		/// Validator address. Required for the validator role.

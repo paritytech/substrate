@@ -77,12 +77,6 @@ impl From<client::error::Error> for Error {
 	}
 }
 
-/// A checked block identifier.
-pub trait CheckedBlockId: Clone + 'static {
-	/// Yield the underlying block ID.
-	fn block_id(&self) -> &BlockId;
-}
-
 /// Build new blocks.
 pub trait BlockBuilder {
 	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
@@ -96,57 +90,49 @@ pub trait BlockBuilder {
 ///
 /// All calls should fail when the exact runtime is unknown.
 pub trait PolkadotApi {
-	/// A checked block ID. Used to avoid redundancy of code check.
-	type CheckedBlockId: CheckedBlockId;
 	/// The block builder for this API type.
 	type BlockBuilder: BlockBuilder;
 
-	/// Check whether requests at the given block ID can be served.
-	///
-	/// It should not be possible to instantiate this type without going
-	/// through this function.
-	fn check_id(&self, id: BlockId) -> Result<Self::CheckedBlockId>;
-
 	/// Get session keys at a given block.
-	fn session_keys(&self, at: &Self::CheckedBlockId) -> Result<Vec<SessionKey>>;
+	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>>;
 
 	/// Get validators at a given block.
-	fn validators(&self, at: &Self::CheckedBlockId) -> Result<Vec<AccountId>>;
+	fn validators(&self, at: &BlockId) -> Result<Vec<AccountId>>;
 
 	/// Get the value of the randomness beacon at a given block.
-	fn random_seed(&self, at: &Self::CheckedBlockId) -> Result<Hash>;
+	fn random_seed(&self, at: &BlockId) -> Result<Hash>;
 
 	/// Get the authority duty roster at a block.
-	fn duty_roster(&self, at: &Self::CheckedBlockId) -> Result<DutyRoster>;
+	fn duty_roster(&self, at: &BlockId) -> Result<DutyRoster>;
 
 	/// Get the timestamp registered at a block.
-	fn timestamp(&self, at: &Self::CheckedBlockId) -> Result<Timestamp>;
+	fn timestamp(&self, at: &BlockId) -> Result<Timestamp>;
 
 	/// Get the nonce (né index) of an account at a block.
-	fn index(&self, at: &Self::CheckedBlockId, account: AccountId) -> Result<Index>;
+	fn index(&self, at: &BlockId, account: AccountId) -> Result<Index>;
 
 	/// Get the account id of an address at a block.
-	fn lookup(&self, at: &Self::CheckedBlockId, address: Address) -> Result<Option<AccountId>>;
+	fn lookup(&self, at: &BlockId, address: Address) -> Result<Option<AccountId>>;
 
 	/// Get the active parachains at a block.
-	fn active_parachains(&self, at: &Self::CheckedBlockId) -> Result<Vec<ParaId>>;
+	fn active_parachains(&self, at: &BlockId) -> Result<Vec<ParaId>>;
 
 	/// Get the validation code of a parachain at a block. If the parachain is active, this will always return `Some`.
-	fn parachain_code(&self, at: &Self::CheckedBlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
+	fn parachain_code(&self, at: &BlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
 
 	/// Get the chain head of a parachain. If the parachain is active, this will always return `Some`.
-	fn parachain_head(&self, at: &Self::CheckedBlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
+	fn parachain_head(&self, at: &BlockId, parachain: ParaId) -> Result<Option<Vec<u8>>>;
 
 	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
 	/// and an error if we can't evaluate for some reason.
-	fn evaluate_block(&self, at: &Self::CheckedBlockId, block: Block) -> Result<bool>;
+	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool>;
 
 	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
-	fn build_block(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
+	fn build_block(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
 
 	/// Attempt to produce the (encoded) inherent extrinsics for a block being built upon the given.
 	/// This may vary by runtime and will fail if a runtime doesn't follow the same API.
-	fn inherent_extrinsics(&self, at: &Self::CheckedBlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>>;
+	fn inherent_extrinsics(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>>;
 }
 
 /// Mark for all Polkadot API implementations, that are making use of state data, stored locally.

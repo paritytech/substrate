@@ -23,7 +23,7 @@ substrate-runtime-session = { path = "../session", default_features = false }
 substrate-runtime-timestamp = { path = "../timestamp", default_features = false }
 
 [dev-dependencies]
-wabt = "0.1.7"
+wabt = "0.4"
 
 [features]
 default = ["std"]

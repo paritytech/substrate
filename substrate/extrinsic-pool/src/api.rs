@@ -17,6 +17,7 @@
 //! External API for extrinsic pool.
 
 use txpool;
+use futures::sync::mpsc;
 
 /// Extrinsic pool error.
 pub trait Error: ::std::error::Error + Send + Sized {
@@ -32,6 +33,9 @@ impl Error for txpool::Error {
 	fn into_pool_error(self) -> Result<txpool::Error, Self> { Ok(self) }
 }
 
+/// Modification notification event stream type;
+pub type EventStream = mpsc::UnboundedReceiver<()>;
+
 /// Extrinsic pool.
 pub trait ExtrinsicPool<Ex, BlockId, Hash>: Send + Sync + 'static {
 	/// Error type
@@ -39,4 +43,10 @@ pub trait ExtrinsicPool<Ex, BlockId, Hash>: Send + Sync + 'static {
 
 	/// Submit a collection of extrinsics to the pool.
 	fn submit(&self, block: BlockId, xt: Vec<Ex>) -> Result<Vec<Hash>, Self::Error>;
+
+	/// Returns light status of the pool.
+	fn light_status(&self) -> txpool::LightStatus;
+
+	/// Return an event stream of transactions imported to the pool.
+	fn import_notification_stream(&self) -> EventStream;
 }

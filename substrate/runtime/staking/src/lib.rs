@@ -50,19 +50,21 @@ use account_db::State;
 use rstd::prelude::*;
 use rstd::{cmp, result};
 use rstd::collections::btree_map::BTreeMap;
-use codec::{Input, Slicable};
+use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, AuxLookup, Hashing as HashingT, Member};
+	As, AuxLookup, Hash as HashT, Member};
 use address::Address as RawAddress;
+use double_map::StorageDoubleMap;
 
 pub mod address;
 mod mock;
 mod tests;
 mod genesis_config;
 mod account_db;
+mod double_map;
 
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
@@ -106,26 +108,26 @@ impl ContractAddressFor<u64> for DummyContractAddressFor {
 	}
 }
 
-impl<Hashing, AccountId> ContractAddressFor<AccountId> for Hashing where
-	Hashing: HashingT,
-	AccountId: Sized + Slicable + From<Hashing::Output>,
-	Hashing::Output: Slicable
+impl<Hash, AccountId> ContractAddressFor<AccountId> for Hash where
+	Hash: HashT,
+	AccountId: Sized + Codec + From<Hash::Output>,
+	Hash::Output: Codec
 {
 	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId {
-		let mut dest_pre = Hashing::hash(code).encode();
+		let mut dest_pre = Hash::hash(code).encode();
 		origin.using_encoded(|s| dest_pre.extend(s));
-		AccountId::from(Hashing::hash(&dest_pre))
+		AccountId::from(Hash::hash(&dest_pre))
 	}
 }
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
+	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
 }
 
 decl_module! {
@@ -232,16 +234,17 @@ decl_storage! {
 
 	// The code associated with an account.
 	pub CodeOf: b"sta:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+}
 
-	// The storage items associated with an account/key.
-	// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
-	// TODO: This will need to be stored as a double-map, with `T::AccountId` using the usual XX hash
-	// function, and then the output of this concatenated onto a separate blake2 hash of the `Vec<u8>`
-	// key. We will then need a `remove_prefix` in addition to `set_storage` which removes all
-	// storage items with a particular prefix otherwise we'll suffer leakage with the removal
-	// of smart contracts.
-//	pub StorageOf: b"sta:sto:" => map [ T::AccountId => map(blake2) Vec<u8> => Vec<u8> ];
-	pub StorageOf: b"sta:sto:" => map [ (T::AccountId, Vec<u8>) => Vec<u8> ];
+/// The storage items associated with an account/key.
+///
+/// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
+pub(crate) struct StorageOf<T>(::rstd::marker::PhantomData<T>);
+impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
+	type Key1 = T::AccountId;
+	type Key2 = Vec<u8>;
+	type Value = Vec<u8>;
+	const PREFIX: &'static [u8] = b"sta:sto:";
 }
 
 enum NewAccountOutcome {
@@ -623,7 +626,7 @@ impl<T: Trait> Module<T> {
 			.map(|v| (Self::voting_balance(&v) + Self::nomination_balance(&v), v))
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
-		
+
 		<StakeThreshold<T>>::put(
 			if intentions.len() > 0 {
 				let i = (<ValidatorCount<T>>::get() as usize).min(intentions.len() - 1);
@@ -736,7 +739,7 @@ impl<T: Trait> Module<T> {
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
 		<CodeOf<T>>::remove(who);
-		// TODO: <StorageOf<T>>::remove_prefix(address.clone());
+		<StorageOf<T>>::remove_prefix(who.clone());
 
 		if Self::reserved_balance(who).is_zero() {
 			<system::AccountNonce<T>>::remove(who);
@@ -873,7 +876,7 @@ impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let b = Self::free_balance(transactor);
 		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
-		if b < transaction_fee {
+		if b < transaction_fee + Self::existential_deposit() {
 			return Err("not enough funds for transaction fee");
 		}
 		<FreeBalance<T>>::insert(transactor, b - transaction_fee);

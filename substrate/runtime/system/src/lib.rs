@@ -39,25 +39,25 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hashing, Member, MaybeDisplay};
+	Hash, Member, MaybeDisplay};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
 #[cfg(any(feature = "std", test))]
 use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))]
-use codec::Slicable;
+use codec::Encode;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities};
 
 /// Compute the extrinsics root of a list of extrinsics.
-pub fn extrinsics_root<H: Hashing, E: codec::Slicable>(extrinsics: &[E]) -> H::Output {
-	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Slicable::encode).collect())
+pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
 }
 
 /// Compute the extrinsics root of a list of extrinsics.
-pub fn extrinsics_data_root<H: Hashing>(xts: Vec<Vec<u8>>) -> H::Output {
+pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 	let xts = xts.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	H::enumerated_trie_root(&xts)
 }
@@ -66,12 +66,11 @@ pub trait Trait: Eq + Clone {
 	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
 	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
-	type Hashing: Hashing<Output = Self::Hash>;
+	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Parameter + Member + Default + traits::Digest;
 	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
-		Hashing = Self::Hashing,
 		Hash = Self::Hash,
 		Digest = Self::Digest
 	>;
@@ -193,6 +192,9 @@ impl<T: Trait> Module<T> {
 }
 
 #[cfg(any(feature = "std", test))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait>(PhantomData<T>);
 
 #[cfg(any(feature = "std", test))]
@@ -205,16 +207,15 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> runtime_io::TestExternalities {
-		use runtime_io::twox_128;
-		use codec::Slicable;
+	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
+		use codec::Encode;
 
-		map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
-			twox_128(<Number<T>>::key()).to_vec() => 1u64.encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
-			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
-			twox_128(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
-		]
+		Ok(map![
+			Self::hash(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
+			Self::hash(<Number<T>>::key()).to_vec() => 1u64.encode(),
+			Self::hash(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
+			Self::hash(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
+			Self::hash(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
+		])
 	}
 }

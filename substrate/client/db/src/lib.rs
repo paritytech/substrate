@@ -27,6 +27,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_codec as codec;
+extern crate substrate_executor as executor;
 extern crate substrate_state_db as state_db;
 
 #[macro_use]
@@ -35,21 +36,26 @@ extern crate log;
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
+pub mod light;
+
+mod utils;
+
 use std::sync::Arc;
 use std::path::PathBuf;
 
-use codec::Slicable;
-use kvdb_rocksdb::{Database, DatabaseConfig};
+use codec::{Decode, Encode};
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
 use primitives::H256;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing, HashingFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, Zero};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
-use state_machine::{CodeExecutor, TrieH256, DBValue};
+use executor::RuntimeInfo;
+use state_machine::{CodeExecutor, TrieH256, DBValue, ExecutionStrategy};
+use utils::{Meta, db_err, meta_keys, number_to_db_key, open_database, read_db, read_id, read_meta};
 use state_db::StateDb;
 pub use state_db::PruningMode;
 
@@ -73,17 +79,16 @@ pub fn new_client<E, S, Block>(
 	settings: DatabaseSettings,
 	executor: E,
 	genesis_storage: S,
+	execution_strategy: ExecutionStrategy,
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
-		<Block::Header as HeaderT>::Number: As<u32>,
-		Block::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
-		E: CodeExecutor,
+		E: CodeExecutor + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
-	Ok(client::Client::new(backend, executor, genesis_storage)?)
+	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategy)?)
 }
 
 mod columns {
@@ -94,11 +99,6 @@ mod columns {
 	pub const HEADER: Option<u32> = Some(4);
 	pub const BODY: Option<u32> = Some(5);
 	pub const JUSTIFICATION: Option<u32> = Some(6);
-	pub const NUM_COLUMNS: u32 = 7;
-}
-
-mod meta {
-	pub const BEST_BLOCK: &[u8; 4] = b"best";
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -106,37 +106,6 @@ struct PendingBlock<Block: BlockT> {
 	justification: Option<Justification<Block::Hash>>,
 	body: Option<Vec<Block::Extrinsic>>,
 	is_best: bool,
-}
-
-#[derive(Clone)]
-struct Meta<N, H> {
-	best_hash: H,
-	best_number: N,
-	genesis_hash: H,
-}
-
-type BlockKey = [u8; 4];
-
-// Little endian
-fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u32> {
-	let n: u32 = n.as_();
-
-	[
-		(n >> 24) as u8,
-		((n >> 16) & 0xff) as u8,
-		((n >> 8) & 0xff) as u8,
-		(n & 0xff) as u8
-	]
-}
-
-// Maps database error to client error
-fn db_err(err: kvdb::Error) -> client::error::Error {
-	use std::error::Error;
-	match err.kind() {
-		&kvdb::ErrorKind::Io(ref err) => client::error::ErrorKind::Backend(err.description().into()).into(),
-		&kvdb::ErrorKind::Msg(ref m) => client::error::ErrorKind::Backend(m.clone()).into(),
-		_ => client::error::ErrorKind::Backend("Unknown backend error".into()).into(),
-	}
 }
 
 // wrapper that implements trait required for state_db
@@ -156,58 +125,13 @@ pub struct BlockchainDb<Block: BlockT> {
 	meta: RwLock<Meta<<Block::Header as HeaderT>::Number, Block::Hash>>,
 }
 
-impl<Block: BlockT> BlockchainDb<Block> where <Block::Header as HeaderT>::Number: As<u32> {
-	fn id(&self, id: BlockId<Block>) -> Result<Option<BlockKey>, client::error::Error> {
-		match id {
-			BlockId::Hash(h) => {
-				{
-					let meta = self.meta.read();
-					if meta.best_hash == h {
-						return Ok(Some(number_to_db_key(meta.best_number)));
-					}
-				}
-				self.db.get(columns::BLOCK_INDEX, h.as_ref()).map(|v| v.map(|v| {
-					let mut key: [u8; 4] = [0; 4];
-					key.copy_from_slice(&v);
-					key
-				})).map_err(db_err)
-			},
-			BlockId::Number(n) => Ok(Some(number_to_db_key(n))),
-		}
-	}
-
+impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
-		let (best_hash, best_number) = if let Some(Some(header)) = db.get(columns::META, meta::BEST_BLOCK).and_then(|id|
-			match id {
-				Some(id) => db.get(columns::HEADER, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]))),
-				None => Ok(None),
-			}).map_err(db_err)?
-		{
-			let hash = header.hash();
-			debug!("DB Opened blockchain db, best {:?} ({})", hash, header.number());
-			(hash, header.number().clone())
-		} else {
-			(Default::default(), Zero::zero())
-		};
-		let genesis_hash = db.get(columns::HEADER, &number_to_db_key(<Block::Header as HeaderT>::Number::zero())).map_err(db_err)?
-			.map(|b| HashingFor::<Block>::hash(&b)).unwrap_or_default().into();
-
+		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		Ok(BlockchainDb {
 			db,
-			meta: RwLock::new(Meta {
-				best_hash,
-				best_number,
-				genesis_hash,
-			})
+			meta: RwLock::new(meta)
 		})
-	}
-
-	fn read_db(&self, id: BlockId<Block>, column: Option<u32>) -> Result<Option<DBValue>, client::error::Error> {
-		self.id(id).and_then(|key|
-		 match key {
-			 Some(key) => self.db.get(column, &key).map_err(db_err),
-			 None => Ok(None),
-		 })
 	}
 
 	fn update_meta(&self, hash: Block::Hash, number: <Block::Header as HeaderT>::Number, is_best: bool) {
@@ -222,32 +146,12 @@ impl<Block: BlockT> BlockchainDb<Block> where <Block::Header as HeaderT>::Number
 	}
 }
 
-impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> where <Block::Header as HeaderT>::Number: As<u32> {
+impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>, client::error::Error> {
-		match self.read_db(id, columns::HEADER)? {
+		match read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, id)? {
 			Some(header) => match Block::Header::decode(&mut &header[..]) {
 				Some(header) => Ok(Some(header)),
 				None => return Err(client::error::ErrorKind::Backend("Error decoding header".into()).into()),
-			}
-			None => Ok(None),
-		}
-	}
-
-	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, client::error::Error> {
-		match self.read_db(id, columns::BODY)? {
-			Some(body) => match Slicable::decode(&mut &body[..]) {
-				Some(body) => Ok(Some(body)),
-				None => return Err(client::error::ErrorKind::Backend("Error decoding body".into()).into()),
-			}
-			None => Ok(None),
-		}
-	}
-
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, client::error::Error> {
-		match self.read_db(id, columns::JUSTIFICATION)? {
-			Some(justification) => match Slicable::decode(&mut &justification[..]) {
-				Some(justification) => Ok(Some(justification)),
-				None => return Err(client::error::ErrorKind::Backend("Error decoding justification".into()).into()),
 			}
 			None => Ok(None),
 		}
@@ -264,7 +168,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> w
 
 	fn status(&self, id: BlockId<Block>) -> Result<client::blockchain::BlockStatus, client::error::Error> {
 		let exists = match id {
-			BlockId::Hash(_) => self.id(id)?.is_some(),
+			BlockId::Hash(_) => read_id(&*self.db, columns::BLOCK_INDEX, id)?.is_some(),
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
@@ -274,9 +178,31 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> w
 	}
 
 	fn hash(&self, number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, client::error::Error> {
-		self.read_db(BlockId::Number(number), columns::HEADER).map(|x|
-			x.map(|raw| HashingFor::<Block>::hash(&raw[..])).map(Into::into)
+		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
+			x.map(|raw| HashFor::<Block>::hash(&raw[..])).map(Into::into)
 		)
+	}
+}
+
+impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
+	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, client::error::Error> {
+		match read_db(&*self.db, columns::BLOCK_INDEX, columns::BODY, id)? {
+			Some(body) => match Decode::decode(&mut &body[..]) {
+				Some(body) => Ok(Some(body)),
+				None => return Err(client::error::ErrorKind::Backend("Error decoding body".into()).into()),
+			}
+			None => Ok(None),
+		}
+	}
+
+	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, client::error::Error> {
+		match read_db(&*self.db, columns::BLOCK_INDEX, columns::JUSTIFICATION, id)? {
+			Some(justification) => match Decode::decode(&mut &justification[..]) {
+				Some(justification) => Ok(Some(justification)),
+				None => return Err(client::error::ErrorKind::Backend("Error decoding justification".into()).into()),
+			}
+			None => Ok(None),
+		}
 	}
 }
 
@@ -348,21 +274,19 @@ pub struct Backend<Block: BlockT> {
 	finalization_window: u64,
 }
 
-impl<Block: BlockT> Backend<Block> where <Block::Header as HeaderT>::Number: As<u32> {
+impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	pub fn new(config: DatabaseSettings, finalization_window: u64) -> Result<Self, client::error::Error> {
-		let mut db_config = DatabaseConfig::with_columns(Some(columns::NUM_COLUMNS));
-		db_config.memory_budget = config.cache_size;
-		db_config.wal = true;
-		let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
-		let db = Arc::new(Database::open(&db_config, &path).map_err(db_err)?);
+		let db = open_database(&config, "full")?;
 
 		Backend::from_kvdb(db as Arc<_>, config.pruning, finalization_window)
 	}
 
 	#[cfg(test)]
 	fn new_test() -> Self {
-		let db = Arc::new(::kvdb_memorydb::create(columns::NUM_COLUMNS));
+		use utils::NUM_COLUMNS;
+
+		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
 
 		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(0), 0).expect("failed to create test-db")
 	}
@@ -399,10 +323,7 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
-	<Block::Header as HeaderT>::Number: As<u32>,
-	Block::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
-{
+impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 	type BlockImportOperation = BlockImportOperation<Block>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
@@ -417,12 +338,12 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 	}
 
 	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> Result<(), client::error::Error> {
-		use client::blockchain::Backend;
+		use client::blockchain::HeaderBackend;
 		let mut transaction = DBTransaction::new();
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
 			let number = pending_block.header.number().clone();
-			let key = number_to_db_key(pending_block.header.number().clone());
+			let key = number_to_db_key(number.clone());
 			transaction.put(columns::HEADER, &key, &pending_block.header.encode());
 			if let Some(body) = pending_block.body {
 				transaction.put(columns::BODY, &key, &body.encode());
@@ -432,7 +353,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 			}
 			transaction.put(columns::BLOCK_INDEX, hash.as_ref(), &key);
 			if pending_block.is_best {
-				transaction.put(columns::META, meta::BEST_BLOCK, &key);
+				transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 			}
 			let mut changeset: state_db::ChangeSet<H256> = state_db::ChangeSet::default();
 			for (key, (val, rc)) in operation.updates.drain() {
@@ -451,7 +372,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 				let finalizing_hash = if self.finalization_window == 0 {
 					Some(hash)
 				} else {
-					self.blockchain.hash(As::sa((number_u64 - self.finalization_window) as u32))?
+					self.blockchain.hash(As::sa((number_u64 - self.finalization_window) as u64))?
 				};
 				if let Some(finalizing_hash) = finalizing_hash {
 					trace!("Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
@@ -472,7 +393,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> Result<Self::State, client::error::Error> {
-		use client::blockchain::Backend as BcBackend;
+		use client::blockchain::HeaderBackend as BcHeaderBackend;
 
 		// special case for genesis initialization
 		match block {
@@ -482,15 +403,13 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> where
 		}
 
 		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
-			let root: [u8; 32] = hdr.state_root().clone().into();
-			DbState::with_storage(self.storage.clone(), root.into())
+			let root: TrieH256  = TrieH256::from_slice(hdr.state_root().as_ref());
+			DbState::with_storage(self.storage.clone(), root)
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
 	}
 }
 
-impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block> where
-	<Block::Header as HeaderT>::Number: As<u32>,
-	Block::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
+impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block> 
 {}
 
 #[cfg(test)]
@@ -499,7 +418,7 @@ mod tests {
 	use super::*;
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;
-	use client::blockchain::Backend as BCTrait;
+	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use runtime_primitives::testing::{Header, Block as RawBlock};
 
 	type Block = RawBlock<u64>;
