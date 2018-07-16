@@ -224,6 +224,22 @@ pub struct Collation {
 	pub receipt: CandidateReceipt,
 }
 
+impl Decode for Collation {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(Collation {
+			block_data: Decode::decode(input)?,
+			receipt: Decode::decode(input)?,
+		})
+	}
+}
+
+impl Encode for Collation {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.block_data);
+		dest.push(&self.receipt);
+	}
+}
+
 /// Parachain ingress queue message.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -250,6 +266,18 @@ impl BlockData {
 	pub fn hash(&self) -> Hash {
 		use runtime_primitives::traits::{BlakeTwo256, Hash};
 		BlakeTwo256::hash(&self.0[..])
+	}
+}
+
+impl Decode for BlockData {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(BlockData(Decode::decode(input)?))
+	}
+}
+
+impl Encode for BlockData {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.0);
 	}
 }
 

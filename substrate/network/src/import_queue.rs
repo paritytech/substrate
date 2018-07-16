@@ -121,6 +121,8 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 	}
 
 	fn import_blocks(&self, _sync: &mut ChainSync<B>, _protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>)) {
+		trace!(target:"sync", "Scheduling {} blocks for import", blocks.1.len());
+
 		let mut queue = self.data.queue.lock();
 		let mut queue_blocks = self.data.queue_blocks.write();
 		let mut best_importing_number = self.data.best_importing_number.write();
@@ -145,6 +147,8 @@ impl<B: BlockT> Drop for AsyncImportQueue<B> {
 
 /// Blocks import thread.
 fn import_thread<B: BlockT, E: ExecuteInContext<B>>(sync: Weak<RwLock<ChainSync<B>>>, service: Weak<E>, chain: Weak<Client<B>>, qdata: Arc<AsyncImportQueueData<B>>) {
+	trace!(target: "sync", "Starting import thread");
+
 	loop {
 		let new_blocks = {
 			let mut queue_lock = qdata.queue.lock();
@@ -157,7 +161,6 @@ fn import_thread<B: BlockT, E: ExecuteInContext<B>>(sync: Weak<RwLock<ChainSync<
 				None => break,
 			}
 		};
-
 		if qdata.is_stopping.load(Ordering::SeqCst) {
 			break;
 		}
@@ -238,6 +241,7 @@ fn import_many_blocks<'a, B: BlockT>(
 	let (blocks_origin, blocks) = blocks;
 	let count = blocks.len();
 	let mut imported = 0;
+
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
 		let import_result = import_single_block(link.chain(), blocks_origin.clone(), block);
@@ -286,8 +290,8 @@ fn import_single_block<B: BlockT>(
 			let result = chain.import(
 				block_origin,
 				header,
-				justification.to_justification(),
-				block.body.map(|b| b.to_extrinsics()),
+				justification,
+				block.body,
 			);
 			match result {
 				Ok(ImportResult::AlreadyInChain) => {
@@ -487,8 +491,7 @@ pub mod tests {
 			body: None,
 			receipt: None,
 			message_queue: None,
-			justification: Some(::message::generic::BlockJustification::V2(
-				client.justification(&BlockId::Number(1)).unwrap().unwrap())),
+			justification: client.justification(&BlockId::Number(1)).unwrap(),
 		};
 
 		(client, hash, number, BlockData { block, origin: 0 })

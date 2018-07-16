@@ -1,6 +1,6 @@
 # Polkadot
 
-Implementation of a https://polkadot.io node in Rust.
+Implementation of a https://polkadot.network node in Rust.
 
 ## To play
 
