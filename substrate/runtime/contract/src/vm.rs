@@ -4,7 +4,7 @@ use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
 use sandbox;
-use {GasMeter, GasMeterResult};
+use gas::{GasMeter, GasMeterResult};
 
 pub struct CreateReceipt<Address> {
 	pub address: Address,
@@ -604,7 +604,7 @@ mod tests {
 	use std::collections::HashMap;
 	use std::fmt;
 	use wabt;
-	use GasMeter;
+	use gas::GasMeter;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
@@ -651,7 +651,7 @@ mod tests {
 
 			Ok(CreateReceipt {
 				address,
-				gas_left: gas_meter.gas_left,
+				gas_left: gas_meter.gas_left(),
 			})
 		}
 		fn call(
@@ -665,7 +665,7 @@ mod tests {
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
 			Ok(ExecutionResult {
-				gas_left: gas_meter.gas_left,
+				gas_left: gas_meter.gas_left(),
 				return_data: Vec::new(),
 			})
 		}
@@ -750,7 +750,7 @@ mod tests {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
 		let mut mock_ext = MockExt::default();
-		execute(&code_transfer, &mut mock_ext, &mut GasMeter::new(50_000)).unwrap();
+		execute(&code_transfer, &mut mock_ext, &mut GasMeter::with_limit(50_000)).unwrap();
 
 		assert_eq!(&mock_ext.transfers, &[TransferEntry { to: 2, value: 6 }]);
 	}
@@ -773,7 +773,7 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 
 		assert_matches!(
-			execute(&code_mem, &mut mock_ext, &mut GasMeter::new(100_000)),
+			execute(&code_mem, &mut mock_ext, &mut GasMeter::with_limit(100_000)),
 			Err(_)
 		);
 	}

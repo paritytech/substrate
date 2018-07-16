@@ -16,13 +16,14 @@
 
 use super::{CodeOf, ContractAddressFor, Trait};
 use account_db::{AccountDb, OverlayAccountDb};
+use vm;
+use gas::GasMeter;
+
 use rstd::prelude::*;
 use runtime_primitives::traits::Zero;
 use runtime_support::StorageMap;
 use staking;
 use system;
-use vm;
-use {GasMeter};
 
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
@@ -78,7 +79,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 				// that was a plain transfer
 				vm::ExecutionResult {
 					// TODO: Check this
-					gas_left: gas_meter.gas_left,
+					gas_left: gas_meter.gas_left(),
 					return_data: Vec::new(),
 				}
 			};
@@ -98,8 +99,6 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		ctor: &[u8],
 		_data: &[u8],
 	) -> Result<CreateReceipt<T>, ()> {
-		let dest = T::DetermineContractAddress::contract_address_for(ctor, &self.self_account);
-
 		// TODO: What if the address already exists?
 		// TODO: check the new depth
 
@@ -107,6 +106,8 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 		// TODO: We settled on charging with DOTs.
 		// fee / gas_price = some amount of gas. Substract from the gas meter.
+
+		let dest = T::DetermineContractAddress::contract_address_for(ctor, &self.self_account);
 
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
