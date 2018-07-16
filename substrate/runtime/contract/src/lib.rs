@@ -166,13 +166,11 @@ impl<T: Trait> Module<T> {
 
 		let result = {
 			let mut ctx = ExecutionContext {
-				// TODO: avoid this
-				_caller: aux.clone(),
 				self_account: aux.clone(),
 				depth: 0,
 				account_db: &mut overlay,
 			};
-			ctx.call(dest, value, &mut gas_meter, data)
+			ctx.call(aux.clone(), dest, value, &mut gas_meter, data)
 		};
 
 		if let Ok(_) = result {
@@ -208,14 +206,12 @@ impl<T: Trait> Module<T> {
 
 		let result = {
 			let mut ctx = ExecutionContext {
-				// TODO: avoid this
-				_caller: aux.clone(),
 				self_account: aux.clone(),
 				depth: 0,
 				account_db: &mut overlay,
 			};
 
-			ctx.create(endownment, &mut gas_meter, &ctor_code, &data)
+			ctx.create(aux.clone(), endownment, &mut gas_meter, &ctor_code, &data)
 		};
 
 		if let Ok(_) = result {

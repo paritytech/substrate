@@ -31,8 +31,6 @@ pub struct CreateReceipt<T: Trait> {
 }
 
 pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
-	// aux for the first transaction.
-	pub _caller: T::AccountId,
 	// typically should be dest
 	pub self_account: T::AccountId,
 	pub account_db: &'a mut OverlayAccountDb<'b, T>,
@@ -43,6 +41,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 	/// Make a call to the specified address.
 	pub fn call(
 		&mut self,
+		caller: T::AccountId,
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
@@ -74,13 +73,18 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			let exec_result = if !dest_code.is_empty() {
 				let mut nested = ExecutionContext {
 					account_db: &mut overlay,
-					_caller: self.self_account.clone(),
 					self_account: dest.clone(),
 					depth: self.depth + 1,
 				};
 
-				vm::execute(&dest_code, &mut nested, gas_meter)
-					.map_err(|_| "vm execute returned error while call")?
+				vm::execute(
+					&dest_code,
+					&mut CallContext {
+						ctx: &mut nested,
+						_caller: caller,
+					},
+					gas_meter,
+				).map_err(|_| "vm execute returned error while call")?
 			} else {
 				// that was a plain transfer
 				vm::ExecutionResult {
@@ -98,6 +102,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 	pub fn create(
 		&mut self,
+		caller: T::AccountId,
 		endownment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		ctor: &[u8],
@@ -133,12 +138,17 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			let exec_result = {
 				let mut nested = ExecutionContext {
 					account_db: &mut overlay,
-					_caller: self.self_account.clone(),
 					self_account: dest.clone(),
 					depth: self.depth + 1,
 				};
-				vm::execute(ctor, &mut nested, gas_meter)
-					.map_err(|_| "vm execute returned error while create")?
+				vm::execute(
+					ctor,
+					&mut CallContext {
+						ctx: &mut nested,
+						_caller: caller,
+					},
+					gas_meter,
+				).map_err(|_| "vm execute returned error while create")?
 			};
 
 			overlay.set_code(&dest, exec_result.return_data().to_vec());
@@ -203,14 +213,20 @@ fn transfer<T: Trait>(
 	Ok(())
 }
 
-impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for ExecutionContext<'a, 'b, T> {
+struct CallContext<'a, 'b: 'a, T: Trait + 'b> {
+	ctx: &'a mut ExecutionContext<'a, 'b, T>,
+	_caller: T::AccountId,
+}
+
+impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.account_db.get_storage(&self.self_account, key)
+		self.ctx.account_db.get_storage(&self.ctx.self_account, key)
 	}
 
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>) {
-		self.account_db
-			.set_storage(&self.self_account, key.to_vec(), value)
+		self.ctx
+			.account_db
+			.set_storage(&self.ctx.self_account, key.to_vec(), value)
 	}
 
 	fn create(
@@ -220,8 +236,10 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for ExecutionContext<'a, 'b, T> {
 		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
 	) -> Result<vm::CreateReceipt<T::AccountId, T::Gas>, ()> {
+		let caller = self.ctx.self_account.clone();
 		let receipt = self
-			.create(endownment, gas_meter, code, &data)
+			.ctx
+			.create(caller, endownment, gas_meter, code, &data)
 			.map_err(|_| ())?;
 		Ok(vm::CreateReceipt {
 			address: receipt.address,
@@ -236,7 +254,9 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for ExecutionContext<'a, 'b, T> {
 		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
 	) -> Result<vm::ExecutionResult, ()> {
-		self.call(to.clone(), value, gas_meter, data)
+		let caller = self.ctx.self_account.clone();
+		self.ctx
+			.call(caller, to.clone(), value, gas_meter, data)
 			.map_err(|_| ())
 	}
 }
