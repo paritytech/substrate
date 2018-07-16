@@ -66,7 +66,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
-				let still_alive = staking::Module::<T>::commit_free_balance(&address, balance);
+				let still_alive = staking::Module::<T>::set_free_balance_creating(&address, balance);
 				if !still_alive {
 					continue
 				}

@@ -286,8 +286,8 @@ impl<T: Trait> Module<T> {
 		}
 
 		if transactor != &dest {
-			Self::commit_free_balance(transactor, from_balance - liability);
-			Self::commit_free_balance(&dest, to_balance + value);
+			Self::set_free_balance(transactor, from_balance - liability);
+			Self::set_free_balance_creating(&dest, to_balance + value);
 		}
 
 		Ok(())
@@ -430,8 +430,12 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// TODO: Document
-	pub fn commit_free_balance(who: &T::AccountId, balance: T::Balance) -> bool {
+	/// Set the free balance on an account to some new value.
+	///
+	/// Same as [`set_free_balance`], but will create a new account.
+	///
+	/// [`set_free_balance`]: #method.set_free_balance
+	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> bool {
 		let ed = <Module<T>>::existential_deposit();
 		// If the balance is too low, then the account is reaped.
 		// NOTE: There are two balances for every account: `reserved_balance` and
