@@ -38,7 +38,7 @@ use error;
 const REQUEST_TIMEOUT_SEC: u64 = 40;
 
 /// Current protocol version.
-pub (crate) const CURRENT_VERSION: u32 = 0;
+pub (crate) const CURRENT_VERSION: u32 = 1;
 /// Current packet count.
 pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 
