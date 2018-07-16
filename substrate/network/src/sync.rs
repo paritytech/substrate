@@ -22,7 +22,7 @@ use blocks::{self, BlockCollection};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
 use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
-use service::Role;
+use service::Roles;
 
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
@@ -50,7 +50,7 @@ pub struct ChainSync<B: BlockT> {
 	blocks: BlockCollection<B>,
 	best_queued_number: NumberFor<B>,
 	best_queued_hash: B::Hash,
-	required_block_attributes: Vec<message::BlockAttribute>,
+	required_block_attributes: message::BlockAttributes,
 }
 
 /// Reported sync state.
@@ -73,13 +73,10 @@ pub struct Status<B: BlockT> {
 
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
-	pub(crate) fn new(role: Role, info: &ClientInfo<B>) -> Self {
-		let mut required_block_attributes = vec![
-			message::BlockAttribute::Header,
-			message::BlockAttribute::Justification
-		];
-		if role.intersects(Role::FULL) {
-			required_block_attributes.push(message::BlockAttribute::Body);
+	pub(crate) fn new(role: Roles, info: &ClientInfo<B>) -> Self {
+		let mut required_block_attributes = message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
+		if role.intersects(Roles::FULL) {
+			required_block_attributes |= message::BlockAttributes::BODY;
 		}
 
 		ChainSync {
@@ -88,7 +85,7 @@ impl<B: BlockT> ChainSync<B> {
 			blocks: BlockCollection::new(),
 			best_queued_hash: info.best_queued_hash.unwrap_or(info.chain.best_hash),
 			best_queued_number: info.best_queued_number.unwrap_or(info.chain.best_number),
-			required_block_attributes: required_block_attributes,
+			required_block_attributes,
 		}
 	}
 
@@ -253,8 +250,8 @@ impl<B: BlockT> ChainSync<B> {
 					let result = protocol.client().import(
 						is_best,
 						header,
-						justification.to_justification(),
-						block.body.map(|b| b.to_extrinsics()),
+						justification,
+						block.body,
 					);
 					match result {
 						Ok(ImportResult::AlreadyInChain) => {
@@ -447,7 +444,7 @@ impl<B: BlockT> ChainSync<B> {
 		trace!(target: "sync", "Requesting ancestry block #{} from {}", block, peer_id);
 		let request = message::generic::BlockRequest {
 			id: 0,
-			fields: vec![message::BlockAttribute::Header, message::BlockAttribute::Justification],
+			fields: message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION,
 			from: message::FromBlock::Number(block),
 			to: None,
 			direction: message::Direction::Ascending,

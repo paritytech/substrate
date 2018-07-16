@@ -7,5 +7,3 @@ authors = ["Parity Technologies <admin@parity.io>"]
 substrate-codec = { path = "../../substrate/codec" }
 substrate-primitives = { path = "../../substrate/primitives" }
 polkadot-primitives = { path = "../primitives" }
-serde = "1.0"
-serde_derive = "1.0"

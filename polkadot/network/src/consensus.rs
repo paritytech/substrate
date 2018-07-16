@@ -26,6 +26,7 @@ use polkadot_api::{PolkadotApi, LocalPolkadotApi};
 use polkadot_consensus::{Network, SharedTable, Collators};
 use polkadot_primitives::{AccountId, Block, Hash, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, Collation};
+use codec::Decode;
 
 use futures::prelude::*;
 use futures::sync::mpsc;
@@ -175,7 +176,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> MessageProcessTask<P> {
 				}
 			}
 			ConsensusMessage::ChainSpecific(msg, _) => {
-				if let Ok(Message::Statement(parent_hash, statement)) = ::serde_json::from_slice(&msg) {
+				if let Some(Message::Statement(parent_hash, statement)) = Decode::decode(&mut msg.as_slice()) {
 					if ::polkadot_consensus::check_statement(&statement.statement, &statement.signature, statement.sender, &parent_hash) {
 						self.table_router.import_statement(statement);
 					}

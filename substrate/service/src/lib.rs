@@ -59,7 +59,7 @@ use exit_future::Signal;
 use tokio::runtime::TaskExecutor;
 
 pub use self::error::{ErrorKind, Error};
-pub use config::{Configuration, Role, PruningMode};
+pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::ChainSpec;
 pub use extrinsic_pool::txpool::{Options as ExtrinsicPoolOptions};
 pub use extrinsic_pool::api::{ExtrinsicPool as ExtrinsicPoolApi};
