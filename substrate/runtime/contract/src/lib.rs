@@ -174,8 +174,6 @@ impl<T: Trait> Module<T> {
 				depth: 0,
 				account_db: &mut overlay,
 			};
-
-			// TODO: Can we return early or we always need to do some finalization steps?
 			ctx.call(dest, value, &mut gas_meter, data)?;
 		}
 
@@ -219,8 +217,6 @@ impl<T: Trait> Module<T> {
 				depth: 0,
 				account_db: &mut overlay,
 			};
-
-			// TODO: Can we return early or do we always need to do some finalization steps?
 			ctx.create(endownment, &mut gas_meter, &ctor_code, &data)
 				.map_err(|_| "create failed")?;
 		}
@@ -493,8 +489,9 @@ mod tests {
 
 			// 11 - value sent with the transaction
 			// 2 * 128 - gas spent by the deployer contract (128) multiplied by gas price (2)
-			// 2 * 135 - base gas fee for call
-			let expected_gas_after_create = 100_000_000 - 11 - (2 * 128) - (2 * 135);
+			// 2 * 135 - base gas fee for call (top level)
+			// 2 * 175 - base gas fee for create (by contract)
+			let expected_gas_after_create = 100_000_000 - 11 - (2 * 128) - (2 * 135) - (2 * 175);
 			assert_eq!(Staking::free_balance(&0), expected_gas_after_create);
 			assert_eq!(Staking::free_balance(&1), 8);
 			assert_eq!(Staking::free_balance(&derived_address), 3);
@@ -513,8 +510,8 @@ mod tests {
 				Staking::free_balance(&0),
 				// 22 - value sent with the transaction
 				// 6 - value transfered by the deployed contract
-				// 135 - base gas fee call (by the transaction)
-				// 135 - base gas fee for
+				// 135 - base gas fee for call (top level)
+				// 135 - base gas fee for call (by transfer contract)
 				expected_gas_after_create - 22 - 6 - 135 - 135,
 			);
 			assert_eq!(Staking::free_balance(&derived_address), 22 - 3);
@@ -539,13 +536,16 @@ mod tests {
 			assert_ok!(Contract::create(
 				&0,
 				11,
-				2,
+				3,
 				100_000,
 				code_ctor_transfer.clone(),
 				Vec::new(),
 			));
 
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - 244);
+			// 11 - value sent with the transaction
+			// (3 * 122) - gas spent by the ctor
+			// (3 * 175) - base gas fee for create (175) (top level) multipled by gas price (3)
+			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - (3 * 122) - (3 * 175));
 			assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
 
 			assert_eq!(<CodeOf<Test>>::get(&derived_address), code_transfer);
@@ -630,7 +630,9 @@ r#"
 			// that this transfer is basically free (apart from base transaction fee).
 			assert_eq!(
 				Staking::free_balance(&0),
-				100_000_000 - 4, // -4 for the gas spent by the constructor
+				// 4 - for the gas spent by the constructor
+				// 2 * 175 - base gas fee for create (175) multiplied by gas price (2) (top level)
+				100_000_000 - 4 - (2 * 175),
 			);
 		});
 	}

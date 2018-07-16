@@ -59,8 +59,8 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 
 		// TODO: Get the base call fee from the storage
-		let call_fee = 135;
-		if gas_meter.charge(call_fee) != GasMeterResult::Proceed {
+		let call_base_fee = 135;
+		if gas_meter.charge(call_base_fee) != GasMeterResult::Proceed {
 			return Err("not enough gas to pay base call fee");
 		}
 
@@ -81,7 +81,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 				};
 
 				vm::execute(&dest_code, &mut nested, gas_meter)
-					.map_err(|_| "vm execute returned error")?
+					.map_err(|_| "vm execute returned error while call")?
 			} else {
 				// that was a plain transfer
 				vm::ExecutionResult {
@@ -105,7 +105,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		gas_meter: &mut GasMeter,
 		ctor: &[u8],
 		_data: &[u8],
-	) -> Result<CreateReceipt<T>, ()> {
+	) -> Result<CreateReceipt<T>, &'static str> {
 		// TODO: check the new depth
 
 		// TODO: Charge here the base price for create
@@ -113,6 +113,10 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		// TODO: We settled on charging with DOTs.
 		// fee / gas_price = some amount of gas. Substract from the gas meter.
 
+		let create_base_fee = 175;
+		if gas_meter.charge(create_base_fee) != GasMeterResult::Proceed {
+			return Err("not enough gas to pay base create fee");
+		}
 
 		// TODO: What if the address already exists?
 		let dest = T::DetermineContractAddress::contract_address_for(ctor, &self.self_account);
@@ -121,7 +125,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
 
 			if endownment > T::Balance::zero() {
-				transfer(&self.self_account, &dest, endownment, &mut overlay).map_err(|_| ())?;
+				transfer(&self.self_account, &dest, endownment, &mut overlay)?;
 			}
 
 			let exec_result = {
@@ -132,7 +136,8 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 					gas_price: self.gas_price,
 					depth: self.depth + 1,
 				};
-				vm::execute(ctor, &mut nested, gas_meter).map_err(|_| ())?
+				vm::execute(ctor, &mut nested, gas_meter)
+					.map_err(|_| "vm execute returned error while call")?
 			};
 
 			overlay.set_code(&dest, exec_result.return_data().to_vec());
@@ -201,7 +206,7 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 		gas_meter: &mut GasMeter,
 		data: Vec<u8>,
 	) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
-		let receipt = self.create(endownment, gas_meter, code, &data)?;
+		let receipt = self.create(endownment, gas_meter, code, &data).map_err(|_| ())?;
 		Ok(vm::CreateReceipt {
 			address: receipt.address,
 			gas_left: receipt.gas_left,
