@@ -16,8 +16,8 @@
 
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
-use futures::{future, Future, Stream, sync::mpsc};
-use libp2p::core::{Multiaddr, AddrComponent, Endpoint};
+use futures::{future, sync::mpsc};
+use libp2p::core::{Multiaddr, AddrComponent, Endpoint, UniqueConnec};
 use libp2p::core::{PeerId as PeerstorePeerId, PublicKey};
 use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
@@ -96,20 +96,8 @@ struct PeerConnectionInfo {
 	/// Closing the sender will drop the substream of this protocol.
 	senders: Vec<(ProtocolId, mpsc::UnboundedSender<Bytes>, u8)>,
 
-	/// True if we dialed a Kad connection towards this peer.
-	/// This indicates that `kad_connec` should eventually resolve, even
-	/// without doing anything.
-	opened_kad: bool,
-
-	/// When a Kad connection is received, we send it on this channel so that
-	/// it will be received by `kad_connec`.
-	incoming_kad_channel: mpsc::UnboundedSender<KadConnecController>,
-
 	/// The Kademlia connection to this node.
-	/// Contains the receiving end of `incoming_kad_channel`. If `opened_kad`
-	/// is true, we are guaranteed to finish.
-	/// TODO: proper error handling if a kad connection is closed
-	kad_connec: future::Shared<Box<Future<Item = KadConnecController, Error = IoError>>>,
+	kad_connec: UniqueConnec<KadConnecController>,
 
 	/// Id of the peer.
 	id: PeerstorePeerId,
@@ -434,9 +422,11 @@ impl NetworkState {
 		}
 	}
 
-	/// Call this when a Kademlia connection has been opened from a remote.
-	pub fn incoming_kad_connection(&self, node_id: PeerstorePeerId,
-		ctrl: KadConnecController) -> Result<PeerId, IoError> {
+	/// Obtains the `UniqueConnec` corresponding to the Kademlia connect to a peer.
+	pub fn kad_connection(
+		&self,
+		node_id: PeerstorePeerId
+	) -> Result<(PeerId, UniqueConnec<KadConnecController>), IoError> {
 		// TODO: check that the peer is disabled? should disabling a peer also prevent
 		//		 kad from working?
 		let mut connections = self.connections.write();
@@ -444,61 +434,8 @@ impl NetworkState {
 			node_id, Endpoint::Listener)?;
 		let infos = connections.info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
-		let _ = infos.incoming_kad_channel.unbounded_send(ctrl);
-		Ok(peer_id)
-	}
-
-	/// Obtain a Kademlia connection to the given peer.
-	pub fn obtain_kad_connection<F, Fut>(&self, node_id: PeerstorePeerId, opener: F)
-		-> Result<(PeerId, impl Future<Item = KadConnecController, Error = IoError>), IoError>
-		where F: FnOnce() -> Fut, Fut: Future<Item = KadConnecController, Error = IoError>
-	{
-		let mut connections = self.connections.write();
-		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
-			node_id, Endpoint::Dialer)?;
-		let infos = connections.info_by_peer.get_mut(&peer_id)
-			.expect("Newly-created peer id is always valid");
-
-		let future_to_process = if !infos.opened_kad {
-			let tx = infos.incoming_kad_channel.clone();
-			let new_kad = opener().and_then(move |ctrl| {
-				tx.unbounded_send(ctrl.clone())
-					.map_err(|err| IoError::new(IoErrorKind::ConnectionAborted, err))?;
-				Ok(ctrl)
-			});
-			infos.opened_kad = true;
-			future::Either::A(new_kad)
-		} else {
-			future::Either::B(future::empty())
-		};
-
-		let fut = infos.kad_connec
-			.clone()
-			.map(|ctrl| (*ctrl).clone())
-			.map_err(|err| IoError::new(IoErrorKind::ConnectionAborted, err))
-			.select(future_to_process)
-			.map(|(item, _)| item)
-			.map_err(|(err, _)| err);
-
-		Ok((peer_id, fut))
-	}
-
-	/// Disconnect the Kademlia controller with the peer.
-	pub fn disconnect_kademlia(&self, peer_id: PeerId) {
-		let mut connections = self.connections.write();
-		if let Some(peer) = connections.info_by_peer.get_mut(&peer_id) {
-			// TODO: that's code duplication
-			let (tx, rx) = mpsc::unbounded();
-			let rx = rx.into_future()
-				.map_err(|_| -> IoError { unreachable!("an `UnboundedReceiver` can never produce an error") })
-				.and_then(|i| i.0.ok_or(IoError::new(
-					IoErrorKind::ConnectionAborted, "kad aborted")));
-			let kad_connec = Box::new(rx) as Box<Future<Item = _, Error = _>>;
-
-			peer.incoming_kad_channel = tx;
-			peer.kad_connec = kad_connec.shared();
-			peer.opened_kad = false;
-		}
+		let connec = infos.kad_connec.clone();
+		Ok((peer_id, connec))
 	}
 
 	/// Try to add a new connection to a node in the list.
@@ -683,18 +620,9 @@ fn accept_connection(
 	let peer_id = *peer_by_nodeid.entry(node_id.clone()).or_insert_with(|| {
 		let new_id = next_peer_id.fetch_add(1, atomic::Ordering::Relaxed);
 
-		let (tx, rx) = mpsc::unbounded();
-		let rx = rx
-			.into_future()
-			.map_err(|_| -> IoError { unreachable!("an `UnboundedReceiver` can never produce an error") })
-			.and_then(|i| i.0.ok_or(IoError::new(IoErrorKind::ConnectionAborted, "kad aborted")));
-		let kad_connec = Box::new(rx) as Box<Future<Item = _, Error = _>>;
-
 		info_by_peer.insert(new_id, PeerConnectionInfo {
 			senders: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
-			opened_kad: false,
-			incoming_kad_channel: tx,
-			kad_connec: kad_connec.shared(),
+			kad_connec: UniqueConnec::empty(),
 			id: node_id.clone(),
 			originated: endpoint == Endpoint::Dialer,
 			ping: Mutex::new(None),

@@ -586,16 +586,9 @@ fn handle_kademlia_connection(
 	controller: KadConnecController,
 	kademlia_stream: Box<Stream<Item = KadIncomingRequest, Error = IoError>>
 ) -> Result<impl Future<Item = (), Error = IoError>, IoError> {
-	// We add the Kademlia controller to the network state, and use a guard to remove
-	// it later.
-	struct KadDisconnectGuard(Arc<Shared>, PeerId);
-	impl Drop for KadDisconnectGuard {
-		fn drop(&mut self) { self.0.network_state.disconnect_kademlia(self.1); }
-	}
-
 	let node_id = p2p_multiaddr_to_node_id(client_addr);
-	let peer_id = shared.network_state.incoming_kad_connection(node_id.clone(), controller)?;
-	let kad_live_guard = KadDisconnectGuard(shared.clone(), peer_id);
+	let (_peer_id, kad_connec) = shared.network_state
+		.kad_connection(node_id.clone())?;
 
 	let future = kademlia_stream.for_each({
 		let shared = shared.clone();
@@ -609,13 +602,9 @@ fn handle_kademlia_connection(
 			}
 			Ok(())
 		}
-	}).then(move |val| {
-		// Makes sure that `kad_live_guard` is kept alive until here.
-		drop(kad_live_guard);
-		val
 	});
 
-	Ok(future)
+	Ok(kad_connec.set_until(controller, future))
 }
 
 /// When a remote performs a `FIND_NODE` Kademlia request for `searched`,
@@ -934,7 +923,7 @@ fn dial_peer_custom_proto<T, To, St, C>(
 	addr: Multiaddr,
 	expected_peer_id: PeerstorePeerId,
 	swarm_controller: &SwarmController<St>
-) -> Result<(), IoError>
+) -> Result<impl Future<Item = (), Error = IoError>, IoError>
 	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
@@ -985,33 +974,21 @@ fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
 		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
 		C: 'static {
 	let kad_upgrade = shared.kad_upgrade.clone();
-	let final_future = shared.network_state
-		.obtain_kad_connection(peer_id.clone(), move || {
-			let addr: Multiaddr = AddrComponent::P2P(peer_id.clone().into_bytes()).into();
-			trace!(target: "sub-libp2p", "Opening new kademlia connection to {}", addr);
-			let (tx, rx) = oneshot::channel();
-			let tx = Arc::new(Mutex::new(Some(tx)));
-			swarm_controller.dial(addr, 
-				transport
-					.and_then(move |out, endpoint, client_addr|
-						upgrade::apply(out.socket, kad_upgrade.clone(),
-							endpoint, client_addr)
-					)
-					.map(move |(kad_ctrl, stream), _| {
-						if let Some(tx) = tx.lock().take() {
-							let _ = tx.send(kad_ctrl.clone());
-						}
-						(FinalUpgrade::Kad((kad_ctrl, stream)), Endpoint::Dialer)
-					})
-				)
-				.expect("cannot dial");
-			rx.map_err(|err| IoError::new(IoErrorKind::ConnectionAborted, err))
-		})
+	let addr: Multiaddr = AddrComponent::P2P(peer_id.clone().into_bytes()).into();
+	let transport = transport
+		.and_then(move |out, endpoint, client_addr|
+			upgrade::apply(out.socket, kad_upgrade.clone(),
+				endpoint, client_addr)
+		)
+		.map(move |(kad_ctrl, stream), _|
+			(FinalUpgrade::Kad((kad_ctrl, stream)), Endpoint::Dialer)
+		);
+	
+	shared.network_state
+		.kad_connection(peer_id.clone())
 		.into_future()
-		.and_then(|(_peer_id, kad_ctrl)| kad_ctrl);
-
-	// Note that we use a Box in order to speed compilation time.
-	Box::new(final_future) as Box<Future<Item = _, Error = _>>
+		.map(move |(_, k)| k.get_or_dial(&swarm_controller, &addr, transport))
+		.flatten()
 }
 
 /// Processes the information about a node.
