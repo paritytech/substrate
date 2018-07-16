@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeOf, ContractAddressFor, Trait};
+use super::{CodeOf, ContractAddressFor, Module, Trait};
 use account_db::{AccountDb, OverlayAccountDb};
+use gas::GasMeter;
 use vm;
-use gas::{GasMeter, GasMeterResult};
 
 use rstd::prelude::*;
-use runtime_primitives::traits::Zero;
+use runtime_primitives::traits::{Zero, As};
 use runtime_support::StorageMap;
 use staking;
 use system;
@@ -36,7 +36,7 @@ pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
 	// typically should be dest
 	pub self_account: T::AccountId,
 	pub account_db: &'a mut OverlayAccountDb<'b, T>,
-	pub gas_price: u64,
+	pub gas_price: u64, // TODO: Change T::Balance
 	pub depth: usize,
 }
 
@@ -53,14 +53,9 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 		// TODO: check the new depth
 
-
-		// TODO: We settled on charging with DOTs.
-		// fee / gas_price = some amount of gas. Substract from the gas meter.
-
-
 		// TODO: Get the base call fee from the storage
 		let call_base_fee = 135;
-		if gas_meter.charge(call_base_fee) != GasMeterResult::Proceed {
+		if gas_meter.charge(call_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base call fee");
 		}
 
@@ -68,7 +63,15 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
 
 			if value > T::Balance::zero() {
-				transfer(&self.self_account, &dest, value, &mut overlay)?;
+				transfer(
+					gas_meter,
+					self.gas_price,
+					false,
+					&self.self_account,
+					&dest,
+					value,
+					&mut overlay,
+				)?;
 			}
 
 			let exec_result = if !dest_code.is_empty() {
@@ -112,7 +115,7 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 		// fee / gas_price = some amount of gas. Substract from the gas meter.
 
 		let create_base_fee = 175;
-		if gas_meter.charge(create_base_fee) != GasMeterResult::Proceed {
+		if gas_meter.charge(create_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base create fee");
 		}
 
@@ -123,7 +126,15 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 			let mut overlay = OverlayAccountDb::new(self.account_db);
 
 			if endownment > T::Balance::zero() {
-				transfer(&self.self_account, &dest, endownment, &mut overlay)?;
+				transfer(
+					gas_meter,
+					self.gas_price,
+					true,
+					&self.self_account,
+					&dest,
+					endownment,
+					&mut overlay,
+				)?;
 			}
 
 			let exec_result = {
@@ -153,12 +164,31 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 }
 
 fn transfer<T: Trait>(
+	gas_meter: &mut GasMeter,
+	gas_price: u64,
+	contract_create: bool,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
 	value: T::Balance,
 	overlay: &mut OverlayAccountDb<T>,
 ) -> Result<(), &'static str> {
 	let would_create = overlay.get_balance(transactor).is_zero();
+
+	let fee: T::Balance = if contract_create {
+		<Module<T>>::contract_fee()
+	} else {
+		if would_create {
+			<staking::Module<T>>::creation_fee()
+		} else {
+			<staking::Module<T>>::transfer_fee()
+		}
+	};
+
+	// Convert fee into gas units and charge it from gas meter.
+	let gas_fee = T::Balance::as_(fee) / gas_price;
+	if gas_meter.charge(gas_fee).is_out_of_gas() {
+		return Err("not enough gas to pay transfer fee");
+	}
 
 	let from_balance = overlay.get_balance(transactor);
 	if from_balance < value {
@@ -204,7 +234,9 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 		gas_meter: &mut GasMeter,
 		data: Vec<u8>,
 	) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
-		let receipt = self.create(endownment, gas_meter, code, &data).map_err(|_| ())?;
+		let receipt = self
+			.create(endownment, gas_meter, code, &data)
+			.map_err(|_| ())?;
 		Ok(vm::CreateReceipt {
 			address: receipt.address,
 			gas_left: receipt.gas_left,
@@ -218,6 +250,7 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for ExecutionContext<'a, 'b, T> {
 		gas_meter: &mut GasMeter,
 		data: Vec<u8>,
 	) -> Result<vm::ExecutionResult, ()> {
-		self.call(to.clone(), value, gas_meter, data).map_err(|_| ())
+		self.call(to.clone(), value, gas_meter, data)
+			.map_err(|_| ())
 	}
 }

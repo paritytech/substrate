@@ -25,6 +25,15 @@ pub enum GasMeterResult {
 	OutOfGas,
 }
 
+impl GasMeterResult {
+	pub fn is_out_of_gas(&self) -> bool {
+		match *self {
+			GasMeterResult::OutOfGas => true,
+			GasMeterResult::Proceed => false,
+		}
+	}
+}
+
 pub struct GasMeter {
 	gas_left: u64,
 }
@@ -52,7 +61,8 @@ impl GasMeter {
 	}
 
 	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter>) -> R>(&mut self, amount: u64, f: F) -> R {
-		// NOTE that it is ok to allocate all available gas.
+		// NOTE that it is ok to allocate all available gas since it still ensured
+		// by `charge` that it doesn't reach zero.
 		if self.gas_left < amount {
 			f(None)
 		} else {

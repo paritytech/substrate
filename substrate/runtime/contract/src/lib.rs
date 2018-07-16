@@ -39,6 +39,8 @@ extern crate pwasm_utils;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_sandbox as sandbox;
+
+#[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_runtime_consensus as consensus;
@@ -52,7 +54,6 @@ extern crate substrate_runtime_session as session;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
-
 
 extern crate substrate_runtime_primitives as runtime_primitives;
 
@@ -68,10 +69,13 @@ mod double_map;
 mod exec;
 mod vm;
 mod gas;
+mod genesis_config;
 
 use exec::ExecutionContext;
 
 use account_db::{AccountDb, OverlayAccountDb};
+
+pub use genesis_config::GenesisConfig;
 
 use double_map::StorageDoubleMap;
 use runtime_primitives::traits::RefInto;
@@ -118,7 +122,7 @@ decl_storage! {
 	trait Store for Module<T: Trait>;
 
 	// The fee required to create a contract. At least as big as staking ReclaimRebate.
-	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
+	pub ContractFee get(contract_fee): b"con:contract_fee" => required T::Balance;
 
 	// The code associated with an account.
 	pub CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
@@ -239,8 +243,8 @@ impl<T: Trait> staking::OnAccountKill<T::AccountId> for Module<T> {
 #[cfg(test)]
 mod tests {
 	use {
-		StorageOf, CodeOf, ContractAddressFor, Module, Trait, staking,
-		system, session, consensus, timestamp, runtime_io,
+		StorageOf, CodeOf, ContractAddressFor, Module, Trait,
+		GenesisConfig, staking, system, session, consensus, timestamp, runtime_io,
 	};
 	use runtime_io::with_externalities;
 	use runtime_support::StorageMap;
@@ -323,6 +327,9 @@ mod tests {
 			session_reward: 0,
 		}.build_storage().unwrap());
 		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
+		t.extend(GenesisConfig::<Test> {
+			contract_fee: 21,
+		}.build_storage().unwrap());
 		t
 	}
 
@@ -486,7 +493,8 @@ mod tests {
 			// 2 * 128 - gas spent by the deployer contract (128) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (top level)
 			// 2 * 175 - base gas fee for create (by contract)
-			let expected_gas_after_create = 100_000_000 - 11 - (2 * 128) - (2 * 135) - (2 * 175);
+			// ((21 / 2) * 2) - price per account creation
+			let expected_gas_after_create = 100_000_000 - 11 - (2 * 128) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
 			assert_eq!(Staking::free_balance(&0), expected_gas_after_create);
 			assert_eq!(Staking::free_balance(&1), 8);
 			assert_eq!(Staking::free_balance(&derived_address), 3);
@@ -540,7 +548,8 @@ mod tests {
 			// 11 - value sent with the transaction
 			// (3 * 122) - gas spent by the ctor
 			// (3 * 175) - base gas fee for create (175) (top level) multipled by gas price (3)
-			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - (3 * 122) - (3 * 175));
+			// ((21 / 3) * 3) - price for contract creation
+			assert_eq!(Staking::free_balance(&0), 100_000_000 - 11 - (3 * 122) - (3 * 175) - ((21 / 3) * 3));
 			assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
 
 			assert_eq!(<CodeOf<Test>>::get(&derived_address), code_transfer);
