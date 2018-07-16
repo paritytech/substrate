@@ -168,6 +168,44 @@ fn contract_transfer() {
 	});
 }
 
+#[test]
+fn contract_transfer_oog() {
+	const CONTRACT_SHOULD_TRANSFER_TO: u64 = 9;
+
+	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+	with_externalities(&mut new_test_ext(0, 2), || {
+		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+		Staking::set_free_balance(&0, 100_000_000);
+		Staking::set_free_balance(&1, 11);
+
+		assert_err!(
+			Contract::call(&0, 1, 3, 276, Vec::new()),
+			"vm execute returned error while call"
+		);
+
+		assert_eq!(
+			Staking::free_balance(&0),
+			// 3 - value sent with the transaction
+			// 2 * 6 - gas used by the contract (6) multiplied by gas price (2)
+			// 2 * 135 - base gas fee for call (by transaction)
+			// NOTE that there is no (2 * 135) subtraction as with non-oog test. It
+			// is because there is not enough gas for the last (2 * 135) substraction.
+			100_000_000 - (2 * 6) - (2 * 135),
+		);
+		assert_eq!(
+			Staking::free_balance(&1),
+			11,
+		);
+		assert_eq!(
+			Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
+			0,
+		);
+	});
+
+}
+
 /// Convert a byte slice to a string with hex values.
 ///
 /// Each value is preceeded with a `\` character.
@@ -431,13 +469,10 @@ fn top_level_call_refunds_even_if_fails() {
 		Staking::set_free_balance(&0, 100_000_000);
 
 		assert_err!(
-			Contract::call(&0, 1, 0, 100_000, Vec::new(),),
+			Contract::call(&0, 1, 0, 100_000, Vec::new()),
 			"vm execute returned error while call"
 		);
 
 		assert_eq!(Staking::free_balance(&0), 100_000_000 - (4 * 3) - (4 * 135),);
 	});
 }
-
-// TODO: Storage tests
-// TODO: Test revert on panic
