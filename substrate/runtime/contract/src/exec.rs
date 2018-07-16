@@ -27,7 +27,6 @@ use system;
 
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
-	pub gas_left: T::Gas,
 }
 
 pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
@@ -160,7 +159,6 @@ impl<'a, 'b: 'a, T: Trait> ExecutionContext<'a, 'b, T> {
 
 		Ok(CreateReceipt {
 			address: dest,
-			gas_left: gas_meter.gas_left(),
 		})
 	}
 }
@@ -235,7 +233,7 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
 		endownment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
-	) -> Result<vm::CreateReceipt<T::AccountId, T::Gas>, ()> {
+	) -> Result<vm::CreateReceipt<T::AccountId>, ()> {
 		let caller = self.ctx.self_account.clone();
 		let receipt = self
 			.ctx
@@ -243,7 +241,6 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
 			.map_err(|_| ())?;
 		Ok(vm::CreateReceipt {
 			address: receipt.address,
-			gas_left: receipt.gas_left,
 		})
 	}
 

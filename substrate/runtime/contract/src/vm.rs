@@ -8,9 +8,8 @@ use gas::{GasMeter, GasMeterResult};
 use runtime_primitives::traits::{As, CheckedMul};
 use {Trait};
 
-pub struct CreateReceipt<Address, Gas> {
+pub struct CreateReceipt<Address> {
 	pub address: Address,
-	pub gas_left: Gas,
 }
 
 /// An interface that provides an access to the external environment in which the
@@ -36,7 +35,7 @@ pub trait Ext<T: Trait> {
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
-	) -> Result<CreateReceipt<T::AccountId, T::Gas>, ()>;
+	) -> Result<CreateReceipt<T::AccountId>, ()>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
 	fn call(
@@ -628,9 +627,9 @@ mod tests {
 			&mut self,
 			code: &[u8],
 			endownment: u64,
-			gas_meter: &mut GasMeter<Test>,
+			_gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
-		) -> Result<CreateReceipt<u64, u64>, ()> {
+		) -> Result<CreateReceipt<u64>, ()> {
 			self.creates.push(CreateEntry {
 				code: code.to_vec(),
 				endownment,
@@ -641,7 +640,6 @@ mod tests {
 
 			Ok(CreateReceipt {
 				address,
-				gas_left: gas_meter.gas_left(),
 			})
 		}
 		fn call(
