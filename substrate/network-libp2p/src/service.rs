@@ -464,7 +464,6 @@ fn init_thread(
 		match swarm_controller.listen_on(listen_addr.clone()) {
 			Ok(new_addr) => {
 				*shared.original_listened_addr.write() = Some(new_addr.clone());
-				shared.listened_addrs.write().push(new_addr);
 			},
 			Err(_) => {
 				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not \
