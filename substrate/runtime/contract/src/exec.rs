@@ -20,7 +20,7 @@ use gas::GasMeter;
 use vm;
 
 use rstd::prelude::*;
-use runtime_primitives::traits::{Zero, As};
+use runtime_primitives::traits::{As, Zero};
 use runtime_support::StorageMap;
 use staking;
 use system;

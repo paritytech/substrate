@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use {Trait};
+use runtime_primitives::traits::{As, CheckedMul, SimpleArithmetic};
 use staking;
-use runtime_primitives::traits::{As, SimpleArithmetic, CheckedMul};
+use Trait;
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -60,16 +60,18 @@ impl<U: SimpleArithmetic + Copy> GasMeter<U> {
 		}
 	}
 
-	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter<U>>) -> R>(&mut self, amount: U, f: F) -> R {
+	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter<U>>) -> R>(
+		&mut self,
+		amount: U,
+		f: F,
+	) -> R {
 		// NOTE that it is ok to allocate all available gas since it still ensured
 		// by `charge` that it doesn't reach zero.
 		if self.gas_left < amount {
 			f(None)
 		} else {
 			self.gas_left = self.gas_left - amount;
-			let mut nested = GasMeter {
-				gas_left: amount,
-			};
+			let mut nested = GasMeter { gas_left: amount };
 
 			let r = f(Some(&mut nested));
 
@@ -85,7 +87,11 @@ impl<U: SimpleArithmetic + Copy> GasMeter<U> {
 	}
 }
 
-pub fn pay_for_gas<T: Trait>(transactor: &T::AccountId, gas_limit: T::Gas, gas_price: T::Balance) -> Result<GasMeter<T::Gas>, &'static str> {
+pub fn pay_for_gas<T: Trait>(
+	transactor: &T::AccountId,
+	gas_limit: T::Gas,
+	gas_price: T::Balance,
+) -> Result<GasMeter<T::Gas>, &'static str> {
 	let b = <staking::Module<T>>::free_balance(transactor);
 	let cost = <T::Gas as As<T::Balance>>::as_(gas_limit.clone())
 		.checked_mul(&gas_price)
@@ -99,7 +105,11 @@ pub fn pay_for_gas<T: Trait>(transactor: &T::AccountId, gas_limit: T::Gas, gas_p
 	})
 }
 
-pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T::Gas>, gas_price: T::Balance) {
+pub fn refund_unused_gas<T: Trait>(
+	transactor: &T::AccountId,
+	gas_meter: GasMeter<T::Gas>,
+	gas_price: T::Balance,
+) {
 	let b = <staking::Module<T>>::free_balance(transactor);
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_price;
 	<staking::Module<T>>::set_free_balance(transactor, b + refund);
