@@ -18,6 +18,8 @@
 
 use txpool;
 
+use watcher::Watcher;
+
 /// Extrinsic pool error.
 pub trait Error: ::std::error::Error + Send + Sized {
 	/// Try to extract original `txpool::Error`
@@ -39,4 +41,7 @@ pub trait ExtrinsicPool<Ex, BlockId, Hash>: Send + Sync + 'static {
 
 	/// Submit a collection of extrinsics to the pool.
 	fn submit(&self, block: BlockId, xt: Vec<Ex>) -> Result<Vec<Hash>, Self::Error>;
+
+	/// Submit an extrinsic to the pool and start watching it's progress.
+	fn submit_and_watch(&self, block: BlockId, xt: Ex) -> Result<Watcher<Hash>, Self::Error>;
 }

@@ -440,7 +440,7 @@ fn run_until_exit<C, W>(
 
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(service.client(), executor.clone());
-			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
+			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool(), executor.clone());
 			rpc::rpc_handler::<Block, _, _, _, _>(
 				service.client(),
 				chain,
