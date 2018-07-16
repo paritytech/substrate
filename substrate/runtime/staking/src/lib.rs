@@ -155,10 +155,6 @@ decl_storage! {
 	pub TransferFee get(transfer_fee): b"sta:transfer_fee" => required T::Balance;
 	// The fee required to create an account. At least as big as ReclaimRebate.
 	pub CreationFee get(creation_fee): b"sta:creation_fee" => required T::Balance;
-	// TODO: Move it to contract module. (Gav confirmed it)
-	// TODO: Take in gas, 
-	// The fee required to create a contract. At least as big as ReclaimRebate.
-	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
 	// Maximum reward, per validator, that is provided per acceptable session.
 	pub SessionReward get(session_reward): b"sta:session_reward" => required T::Balance;
 	// Slash, per validator that is taken per abnormal era end.

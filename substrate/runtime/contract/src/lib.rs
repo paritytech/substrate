@@ -121,6 +121,9 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait>;
 
+	// The fee required to create a contract. At least as big as staking ReclaimRebate.
+	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
+
 	// The code associated with an account.
 	pub CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
 }
@@ -339,7 +342,6 @@ mod tests {
 			existential_deposit: existential_deposit,
 			transfer_fee: 0,
 			creation_fee: 0,
-			contract_fee: 0,
 			reclaim_rebate: 0,
 			early_era_slash: 0,
 			session_reward: 0,

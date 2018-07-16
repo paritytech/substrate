@@ -25,7 +25,7 @@ use runtime_support::{StorageValue, StorageMap};
 use primitives::traits::{Zero, As};
 use {runtime_io, primitives};
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
-	BondingDuration, ContractFee, CreationFee, TransferFee, ReclaimRebate,
+	BondingDuration, CreationFee, TransferFee, ReclaimRebate,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
 	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash};
 
@@ -43,7 +43,6 @@ pub struct GenesisConfig<T: Trait> {
 	pub transaction_byte_fee: T::Balance,
 	pub transfer_fee: T::Balance,
 	pub creation_fee: T::Balance,
-	pub contract_fee: T::Balance,
 	pub reclaim_rebate: T::Balance,
 	pub existential_deposit: T::Balance,
 	pub session_reward: T::Balance,
@@ -63,7 +62,6 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			transaction_byte_fee: T::Balance::sa(0),
 			transfer_fee: T::Balance::sa(0),
 			creation_fee: T::Balance::sa(0),
-			contract_fee: T::Balance::sa(0),
 			existential_deposit: T::Balance::sa(0),
 			reclaim_rebate: T::Balance::sa(0),
 			session_reward: T::Balance::sa(0),
@@ -91,7 +89,6 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			transaction_byte_fee: T::Balance::sa(0),
 			transfer_fee: T::Balance::sa(0),
 			creation_fee: T::Balance::sa(0),
-			contract_fee: T::Balance::sa(0),
 			existential_deposit: T::Balance::sa(0),
 			reclaim_rebate: T::Balance::sa(0),
 			session_reward: T::Balance::sa(0),
@@ -113,7 +110,6 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			transaction_byte_fee: T::Balance::sa(0),
 			transfer_fee: T::Balance::sa(0),
 			creation_fee: T::Balance::sa(0),
-			contract_fee: T::Balance::sa(0),
 			existential_deposit: T::Balance::sa(0),
 			reclaim_rebate: T::Balance::sa(0),
 			session_reward: T::Balance::sa(0),
@@ -136,7 +132,6 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			twox_128(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
 			twox_128(<TransferFee<T>>::key()).to_vec() => self.transfer_fee.encode(),
 			twox_128(<CreationFee<T>>::key()).to_vec() => self.creation_fee.encode(),
-			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
 			twox_128(<ExistentialDeposit<T>>::key()).to_vec() => self.existential_deposit.encode(),
 			twox_128(<ReclaimRebate<T>>::key()).to_vec() => self.reclaim_rebate.encode(),
 			twox_128(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
