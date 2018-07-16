@@ -465,8 +465,6 @@ mod tests {
 		)
 	}
 
-	// TODO: Rename somehow to emphasize this test exercises `ext_create` rather
-	// than top level create.
 	#[test]
 	fn contract_create() {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
