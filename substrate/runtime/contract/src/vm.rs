@@ -308,7 +308,7 @@ pub fn execute<'a, T: Trait, E: Ext<T>>(
 				Ok(sandbox::ReturnValue::Unit)
 			}
 			Err(_) => {
-				// TODO: Return a status code value that can be handled by the caller.
+				// TODO: Return a status code value that can be handled by the caller instead of a trap.
 				Err(sandbox::HostError)
 			}
 		}
@@ -355,7 +355,7 @@ pub fn execute<'a, T: Trait, E: Ext<T>>(
 				Ok(sandbox::ReturnValue::Unit)
 			}
 			Err(_) => {
-				// TODO: Return a status code value that can be handled by the caller
+				// TODO: Return a status code value that can be handled by the caller instead of a trap.
 				Err(sandbox::HostError)
 			}
 		}

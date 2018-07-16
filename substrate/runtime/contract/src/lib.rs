@@ -173,6 +173,8 @@ impl<T: Trait> Module<T> {
 				account_db: &mut overlay,
 			};
 			ctx.call(dest, value, &mut gas_meter, data)?;
+
+			// TODO: Most of the value should be returned even if it is returned an error
 		}
 
 		// Commit all changes that made it thus far into the persistant storage.
@@ -214,6 +216,8 @@ impl<T: Trait> Module<T> {
 			};
 			ctx.create(endownment, &mut gas_meter, &ctor_code, &data)
 				.map_err(|_| "create failed")?;
+
+			// TODO: Most of the value should be returned even if it is returned an error
 		}
 
 		// Commit all changes that made it thus far into the persistant storage.
