@@ -20,9 +20,10 @@ use client::{self, Client};
 use keyring::Keyring;
 use runtime_primitives::StorageMap;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+use executor::NativeExecutor;
 use runtime;
 use bft;
-use {Backend, Executor, NativeExecutor};
+use {Backend, Executor};
 
 /// Extension trait for a test client.
 pub trait TestClient {
