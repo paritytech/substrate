@@ -576,7 +576,7 @@ impl WasmExecutor {
 
 		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
-		memory.set(offset, &data).expect("heap always gives a sensible offset to write");
+		memory.set(offset, &data).map_err(|_| ErrorKind::PleaseRetry.into())?;
 
 		let result = instance.invoke_export(
 			method,
