@@ -15,9 +15,9 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
 use futures::{future, Future, stream, Stream, sync::mpsc};
-use std::io::Error as IoError;
+use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::time::Instant;
-use tokio_core::reactor::{Handle, Timeout};
+use tokio_timer::Delay;
 
 /// Builds the timeouts system.
 ///
@@ -26,7 +26,6 @@ use tokio_core::reactor::{Handle, Timeout};
 /// `T` can be anything you want, as it is transparently passed from the input
 /// to the output.
 pub fn build_timeouts_stream<T>(
-	core: Handle,
 	timeouts_rx: mpsc::UnboundedReceiver<(Instant, T)>
 ) -> impl Stream<Item = T, Error = IoError> {
 	let next_timeout = next_in_timeouts_stream(timeouts_rx);
@@ -37,31 +36,30 @@ pub fn build_timeouts_stream<T>(
 	stream::unfold(vec![future::Either::A(next_timeout)], move |timeouts| {
 		// `timeouts` is a `Vec` of futures that produce an `Out`.
 
-		let core = core.clone();
-
 		// `select_ok` panics if `timeouts` is empty anyway.
 		if timeouts.is_empty() {
 			return None
 		}
 
 		Some(future::select_ok(timeouts.into_iter())
-			.and_then(move |(item, mut timeouts)|
+			.map(move |(item, mut timeouts)|
 				match item {
 					Out::NewTimeout((Some((at, item)), next_timeouts)) => {
 						// Received a new timeout request on the channel.
 						let next_timeout = next_in_timeouts_stream(next_timeouts);
-						let timeout = Timeout::new_at(at, &core)?
-							.map(move |()| Out::Timeout(item));
+						let timeout = Delay::new(at)
+							.map(move |()| Out::Timeout(item))
+							.map_err(|err| IoError::new(IoErrorKind::Other, err));
 						timeouts.push(future::Either::B(timeout));
 						timeouts.push(future::Either::A(next_timeout));
-						Ok((None, timeouts))
+						(None, timeouts)
 					},
 					Out::NewTimeout((None, _)) =>
 						// The channel has been closed.
-						Ok((None, timeouts)),
+						(None, timeouts),
 					Out::Timeout(item) =>
 						// A timeout has happened.
-						Ok((Some(item), timeouts)),
+						(Some(item), timeouts),
 				}
 			)
 		)

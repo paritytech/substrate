@@ -20,7 +20,8 @@
 extern crate parking_lot;
 extern crate fnv;
 extern crate futures;
-extern crate tokio_core;
+extern crate tokio;
+extern crate tokio_codec;
 extern crate tokio_io;
 extern crate tokio_timer;
 extern crate ethkey;

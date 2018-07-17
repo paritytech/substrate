@@ -14,18 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use libp2p::{self, Transport, secio};
+use libp2p::{self, Transport, mplex, secio, yamux};
 use libp2p::core::{MuxedTransport, either, upgrade};
-use tokio_core::reactor::Handle;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Builds the transport that serves as a common ground for all connections.
 pub fn build_transport(
-	core: Handle,
 	unencrypted_allowed: UnencryptedAllowed,
 	local_private_key: secio::SecioKeyPair
 ) -> impl MuxedTransport<Output = impl AsyncRead + AsyncWrite> + Clone {
-	libp2p::CommonTransport::new(core)
+	libp2p::CommonTransport::new()
 		.with_upgrade({
 			let secio = secio::SecioConfig {
 				key: local_private_key,
@@ -33,8 +31,8 @@ pub fn build_transport(
 
 			let mut plaintext = upgrade::toggleable(upgrade::PlainTextConfig);
 			match unencrypted_allowed {
-				UnencryptedAllowed::Allowed => plaintext.disable(),
-				UnencryptedAllowed::Denied => (),
+				UnencryptedAllowed::Allowed => (),
+				UnencryptedAllowed::Denied => plaintext.disable(),
 			};
 
 			// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
@@ -50,7 +48,13 @@ pub fn build_transport(
 		})
 		// TODO: check that the public key matches what is reported by identify
 		.map(|(socket, _key), _| socket)
-		.with_upgrade(libp2p::mplex::MultiplexConfig::new())
+		.with_upgrade(
+			// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
+			upgrade::or(
+				upgrade::map(yamux::Config::default(), either::EitherOutput::First),
+				upgrade::map(mplex::MplexConfig::new(), either::EitherOutput::Second),
+			)
+		)
 		.into_connection_reuse()
 }
 

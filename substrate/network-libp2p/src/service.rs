@@ -40,7 +40,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use futures::{future, Future, Stream, IntoFuture};
 use futures::sync::{mpsc, oneshot};
-use tokio_core::reactor::{Core, Handle};
+use tokio::runtime::current_thread::Runtime;
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer;
 
@@ -117,7 +117,7 @@ impl NetworkService {
 			local_peer_id: local_peer_id.clone(),
 			kbuckets_timeout: Duration::from_secs(10),
 			request_timeout: Duration::from_secs(10),
-			known_initial_peers: network_state.known_peers().collect(),
+			known_initial_peers: network_state.known_peers(),
 		});
 
 		let shared = Arc::new(Shared {
@@ -194,17 +194,11 @@ impl NetworkService {
 		let (timeouts_register_tx, timeouts_register_rx) = mpsc::unbounded();
 		let shared = self.shared.clone();
 		let join_handle = thread::spawn(move || {
-			// Tokio core that is going to run everything in this thread.
-			let mut core = match Core::new() {
-				Ok(c) => c,
-				Err(err) => {
-					let _ = init_tx.send(Err(err.into()));
-					return
-				}
-			};
-
-			let fut = match init_thread(core.handle(), shared,
-				timeouts_register_rx, close_rx) {
+			let fut = match init_thread(
+				shared,
+				timeouts_register_rx,
+				close_rx
+			) {
 				Ok(future) => {
 					debug!(target: "sub-libp2p", "Successfully started \
 						networking service");
@@ -217,7 +211,15 @@ impl NetworkService {
 				}
 			};
 
-			match core.run(fut) {
+			let mut core = match Runtime::new() {
+				Ok(core) => core,
+				Err(err) => {
+					let _ = init_tx.send(Err(err.into()));
+					return
+				}
+			};
+
+			match core.block_on(fut) {
 				Ok(()) => debug!(target: "sub-libp2p", "libp2p future finished"),
 				Err(err) => error!(target: "sub-libp2p", "error while running \
 					libp2p: {:?}", err),
@@ -390,7 +392,6 @@ impl NetworkContext for NetworkContextImpl {
 /// - `timeouts_register_rx` should receive newly-registered timeouts.
 /// - `close_rx` should be triggered when we want to close the network.
 fn init_thread(
-	core: Handle,
 	shared: Arc<Shared>,
 	timeouts_register_rx: mpsc::UnboundedReceiver<(Instant, (Arc<NetworkProtocolHandler + Send + Sync + 'static>, ProtocolId, TimerToken))>,
 	close_rx: oneshot::Receiver<()>
@@ -398,7 +399,6 @@ fn init_thread(
 	// Build the transport layer.
 	let transport = {
 		let base = transport::build_transport(
-			core.clone(),
 			transport::UnencryptedAllowed::Denied,
 			shared.network_state.local_private_key().clone()
 		);
@@ -479,7 +479,7 @@ fn init_thread(
 
 	// Build the timeouts system for the `register_timeout` function.
 	// (note: this has nothing to do with socket timeouts)
-	let timeouts = timeouts::build_timeouts_stream(core.clone(), timeouts_register_rx)
+	let timeouts = timeouts::build_timeouts_stream(timeouts_register_rx)
 		.for_each({
 			let shared = shared.clone();
 			move |(handler, protocol_id, timer_token)| {
