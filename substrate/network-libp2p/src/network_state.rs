@@ -94,7 +94,7 @@ struct PeerConnectionInfo {
 	/// The sender can be used to transmit data for the remote. Note that the
 	/// packet_id has to be inside the `Bytes`.
 	/// Closing the sender will drop the substream of this protocol.
-	senders: Vec<(ProtocolId, mpsc::UnboundedSender<Bytes>, u8)>,
+	senders: Vec<(ProtocolId, UniqueConnec<(mpsc::UnboundedSender<Bytes>, u8)>)>,
 
 	/// The Kademlia connection to this node.
 	kad_connec: UniqueConnec<KadConnecController>,
@@ -245,8 +245,13 @@ impl NetworkState {
 			None => return None,
 		};
 
-		let protocol_version = match info.senders.iter().find(|&(ref p, _, _)| p == &protocol) {
-			Some(&(_, _, version)) => version as u32,
+		let protocol_version = match info.senders.iter().find(|&(ref p, _)| p == &protocol) {
+			Some(&(_, ref unique_connec)) =>
+				if let Some(val) = unique_connec.poll() {
+					val.1 as u32
+				} else {
+					return None
+				}
 			None => return None,
 		};
 
@@ -277,7 +282,10 @@ impl NetworkState {
 			None => return None,
 		};
 
-		peer.senders.iter().find(|p| p.0 == protocol).map(|p| p.2)
+		peer.senders.iter()
+			.find(|p| p.0 == protocol)
+			.and_then(|p| p.1.poll())
+			.map(|(_, version)| version)
 	}
 
 	/// Equivalent to `session_info(peer).map(|info| info.client_version)`.
@@ -407,21 +415,6 @@ impl NetworkState {
 		connections.peer_by_nodeid.contains_key(node_id)
 	}
 
-	/// Returns true if we are connected to the given node with the given protocol.
-	pub fn has_protocol_connection(&self, node_id: &PeerstorePeerId,
-		protocol_id: ProtocolId) -> bool {
-		let connections = self.connections.read();
-		if let Some(peer) = connections.peer_by_nodeid.get(node_id) {
-			let info = match connections.info_by_peer.get(&peer) {
-				Some(peer) => peer,
-				None => return false,
-			};
-			info.senders.iter().any(|p| p.0 == protocol_id)
-		} else {
-			false
-		}
-	}
-
 	/// Obtains the `UniqueConnec` corresponding to the Kademlia connect to a peer.
 	pub fn kad_connection(
 		&self,
@@ -450,14 +443,13 @@ impl NetworkState {
 	///
 	/// The various methods of the `NetworkState` that close a connection do 
 	/// so by dropping this sender.
-	pub fn accept_custom_proto(
+	pub fn custom_proto(
 		&self,
 		node_id: PeerstorePeerId,
 		protocol_id: ProtocolId,
-		protocol_version: u8,
 		endpoint: Endpoint,
-		msg_tx: mpsc::UnboundedSender<Bytes>
-	) -> Result<PeerId, IoError> {
+	) -> Result<(PeerId, UniqueConnec<(mpsc::UnboundedSender<Bytes>, u8)>), IoError> {
+		// TODO: optimize by not calling tons of functions all the time
 		let mut connections = self.connections.write();
 
 		if is_peer_disabled(&self.disabled_peers, &node_id) {
@@ -488,20 +480,23 @@ impl NetworkState {
 			}
 		}
 
-		if !infos.senders.iter().any(|&(prot, _, _)| prot == protocol_id) {
-			infos.senders.push((protocol_id.clone(), msg_tx, protocol_version));
+		if let Some((_, ref uconn)) = infos.senders.iter().find(|&(prot, _)| prot == &protocol_id) {
+			return Ok((peer_id, uconn.clone()))
 		}
 
-		Ok(peer_id)
+		let unique_connec = UniqueConnec::empty();
+		infos.senders.push((protocol_id.clone(), unique_connec.clone()));
+		Ok((peer_id, unique_connec))
 	}
 
 	/// Sends some data to the given peer, using the sender that was passed
-	/// to `accept_custom_proto`.
+	/// to the `UniqueConnec` of `custom_proto`.
 	pub fn send(&self, protocol: ProtocolId, peer_id: PeerId, message: Bytes)
 		-> Result<(), Error> {
 		if let Some(peer) = self.connections.read().info_by_peer.get(&peer_id) {
 			let sender = peer.senders.iter().find(|elem| elem.0 == protocol)
-				.map(|e| &e.1);
+				.and_then(|e| e.1.poll())
+				.map(|e| e.0);
 			if let Some(sender) = sender {
 				sender.unbounded_send(message)
 					.map_err(|err| ErrorKind::Io(IoError::new(IoErrorKind::Other, err)))?;
@@ -522,7 +517,8 @@ impl NetworkState {
 	}
 
 	/// Disconnects a peer, if a connection exists (ie. drops the Kademlia
-	/// controller, and the senders that were passed to `accept_custom_proto`).
+	/// controller, and the senders that were stored in the `UniqueConnec` of
+	/// `custom_proto`).
 	pub fn disconnect_peer(&self, peer_id: PeerId) {
 		let mut connections = self.connections.write();
 		if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
@@ -533,7 +529,7 @@ impl NetworkState {
 
 	/// Disconnects all the peers.
 	/// This destroys all the Kademlia controllers and the senders that were
-	/// passed to `accept_custom_proto`.
+	/// stored in the `UniqueConnec` of `custom_proto`.
 	pub fn disconnect_all(&self) {
 		let mut connec = self.connections.write();
 		*connec = Connections {
@@ -546,8 +542,8 @@ impl NetworkState {
 
 	/// Disables a peer for `PEER_DISABLE_DURATION`. This adds the peer to the
 	/// list of disabled peers, and  drops any existing connections if
-	/// necessary (ie. drops the sender that was passed to
-	/// `accept_custom_proto`).
+	/// necessary (ie. drops the sender that was stored in the `UniqueConnec`
+	/// of `custom_proto`).
 	pub fn disable_peer(&self, peer_id: PeerId, reason: &str) {
 		// TODO: what do we do if the peer is reserved?
 		let mut connections = self.connections.write();
@@ -796,22 +792,18 @@ mod tests {
 		let state = NetworkState::new(&Default::default()).unwrap();
 		let example_peer = PublicKey::Rsa(vec![1, 2, 3, 4]).into_peer_id();
 
-		let peer_id = state.accept_custom_proto(
+		let (peer_id, _) = state.custom_proto(
 			example_peer.clone(),
 			[1, 2, 3],
-			1,
-			Endpoint::Dialer,
-			mpsc::unbounded().0
+			Endpoint::Dialer
 		).unwrap();
 
 		state.disable_peer(peer_id, "Just a test");
 
-		assert!(state.accept_custom_proto(
+		assert!(state.custom_proto(
 			example_peer.clone(),
 			[1, 2, 3],
-			1,
-			Endpoint::Dialer,
-			mpsc::unbounded().0
+			Endpoint::Dialer
 		).is_err());
 	}
 }
