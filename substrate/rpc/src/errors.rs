@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -14,30 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use client;
 use rpc;
 
-use errors;
-
-error_chain! {
-	links {
-		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
-	}
-
-	errors {
-		/// Not implemented yet
-		Unimplemented {
-			description("not implemented yet"),
-			display("Method Not Implemented"),
-		}
+pub fn unimplemented() -> rpc::Error {
+	rpc::Error {
+		code: rpc::ErrorCode::ServerError(1),
+		message: "Not implemented yet".into(),
+		data: None,
 	}
 }
 
-impl From<Error> for rpc::Error {
-	fn from(e: Error) -> Self {
-		match e {
-			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
-			e => errors::internal(e),
-		}
+pub fn internal<E: ::std::fmt::Debug>(e: E) -> rpc::Error {
+	warn!("Unknown error: {:?}", e);
+	rpc::Error {
+		code: rpc::ErrorCode::InternalError,
+		message: "Unknown error occured".into(),
+		data: Some(format!("{:?}", e).into()),
 	}
 }
