@@ -20,7 +20,7 @@ use std::cmp::Ordering;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use wasmi::{
-	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder, self
+	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder
 };
 use wasmi::RuntimeValue::{I32, I64};
 use wasmi::memory_units::{Pages, Bytes};
@@ -557,7 +557,12 @@ impl WasmExecutor {
 
 		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
-		memory.set(offset, &data).map_err(|_: wasmi::Error| Error::from(ErrorKind::PleaseRetry))?;
+		if let Err(_) = memory.set(offset, &data) {
+			let old = try_heap_pages.0;
+			*try_heap_pages = ((old * 2).min(self.max_heap_pages), DECAY_TIMEOUT);
+			trace!(target: "wasm-executor", "Shrunk heap size too small at {} pages. Retrying with {}", old, try_heap_pages.0);
+			return Err(ErrorKind::PleaseRetry.into())
+		}
 
 		let result = instance.invoke_export(
 			method,
