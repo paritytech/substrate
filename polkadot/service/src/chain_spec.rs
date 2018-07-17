@@ -23,7 +23,7 @@ use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyC
 use service::ChainSpec;
 
 pub fn poc_1_testnet_config() -> Result<ChainSpec<GenesisConfig>, String> {
-	ChainSpec::from_embedded(include_bytes!("../res/poc-1.json"))
+	ChainSpec::from_embedded(include_bytes!("../res/krummelanke.json"))
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
