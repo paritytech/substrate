@@ -574,32 +574,31 @@ fn prepare_contract<T: Trait>(original_code: &[u8], config: &Config<T>) -> Resul
 	contract_module.inject_stack_height_metering()?;
 
 	// Inspect the module to extract the initial and maximum page count.
-	let memory = match contract_module.find_mem_import() {
-		Some(memory_type) => {
-			let limits = memory_type.limits();
-			match (limits.initial(), limits.maximum()) {
-				(initial, Some(maximum)) if initial > maximum => {
-					// Requested initial number of pages should not exceed the requested maximum.
-					return Err(Error::Memory);
-				}
-				(_, Some(maximum)) if maximum > config.max_memory_pages => {
-					// Maximum number of pages should not exceed the configured maximum.
-					return Err(Error::Memory);
-				}
-				(_, None) => {
-					// Maximum number of pages should be always declared.
-					// This isn't a hard requirement and can be treated as a maxiumum set
-					// to configured maximum.
-					return Err(Error::Memory);
-				}
-				(initial, maximum) => sandbox::Memory::new(initial, maximum),
+	let memory = if let Some(memory_type) = contract_module.find_mem_import() {
+		let limits = memory_type.limits();
+		match (limits.initial(), limits.maximum()) {
+			(initial, Some(maximum)) if initial > maximum => {
+				// Requested initial number of pages should not exceed the requested maximum.
+				return Err(Error::Memory);
 			}
+			(_, Some(maximum)) if maximum > config.max_memory_pages => {
+				// Maximum number of pages should not exceed the configured maximum.
+				return Err(Error::Memory);
+			}
+			(_, None) => {
+				// Maximum number of pages should be always declared.
+				// This isn't a hard requirement and can be treated as a maxiumum set
+				// to configured maximum.
+				return Err(Error::Memory);
+			}
+			(initial, maximum) => sandbox::Memory::new(initial, maximum),
 		}
-
+	} else {
 		// If none memory imported then just crate an empty placeholder.
 		// Any access to it will lead to out of bounds trap.
-		None => sandbox::Memory::new(0, Some(0)),
-	}.map_err(|_| Error::Memory)?;
+		sandbox::Memory::new(0, Some(0))
+	};
+	let memory = memory.map_err(|_| Error::Memory)?;
 
 	Ok(PreparedContract {
 		instrumented_code: contract_module.into_wasm_code()?,
