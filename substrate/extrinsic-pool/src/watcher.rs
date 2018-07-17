@@ -23,6 +23,7 @@ use futures::{
 
 /// Possible extrinsic status events
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Status<H> {
 	/// Extrinsic has been finalised in block with given hash.
 	Finalised(H),

@@ -29,7 +29,6 @@ use jsonrpc_pubsub::SubscriptionId;
 use primitives::Bytes;
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
-use state_machine;
 use subscriptions::Subscriptions;
 use tokio::runtime::TaskExecutor;
 
@@ -98,8 +97,8 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 	type Metadata = ::metadata::Metadata;
 
 	fn submit_extrinsic(&self, xt: Bytes) -> Result<Hash> {
-		let xt = Ex::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
-		self.submit_rich_extrinsic(xt)
+		let dxt = Ex::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
+		self.submit_rich_extrinsic(dxt)
 	}
 
 	fn submit_rich_extrinsic(&self, xt: Ex) -> Result<Hash> {
@@ -119,9 +118,9 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 		let best_block_hash = self.client.info().unwrap().chain.best_hash;
 
 		let submit = || -> Result<_> {
-			let xt = Ex::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
+			let dxt = Ex::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
 			self.pool
-				.submit_and_watch(generic::BlockId::hash(best_block_hash), xt)
+				.submit_and_watch(generic::BlockId::hash(best_block_hash), dxt)
 				.map_err(|e| e.into_pool_error()
 					.map(Into::into)
 					.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
