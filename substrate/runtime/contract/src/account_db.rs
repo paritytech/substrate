@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
+//! Auxilliaries to help with managing partial changes to accounts state.
+
 use super::{Trait, StorageOf, CodeOf};
 use staking;
 use system;
@@ -49,8 +51,6 @@ pub trait AccountDb<T: Trait> {
 
 	fn commit(&mut self, change_set: ChangeSet<T>);
 }
-
-// TODO: Remove suffix `AccountDb` from `DirectAccountDb` and `OverlayAccountDb`.
 
 pub struct DirectAccountDb;
 impl<T: Trait> AccountDb<T> for DirectAccountDb {

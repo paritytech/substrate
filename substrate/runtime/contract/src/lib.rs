@@ -14,17 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-// TODO: rewrite docs.
-
-//! Crate for executing smart-contracts.
+//! Smart-contract module for runtime; Allows deployment and execution of smart-contracts
+//! expressed in WebAssembly.
 //!
-//! It provides an means for executing contracts represented in WebAssembly (Wasm for short).
-//! Contracts are able to create other contracts, transfer funds to each other and operate on a simple key-value storage.
+//! This module provides an ability to create smart-contract accounts and send them messages.
+//! A smart-contract is an account with associated code and storage. When such an account receives a message,
+//! the code associated with that account gets executed.
+//!
+//! The code is allowed to alter the storage entries of the associated account,
+//! create smart-contracts or send messages to existing smart-contracts.
+//!
+//! For any actions invoked by the smart-contracts fee must be paid. The fee is paid in gas.
+//! Gas is bought upfront. Any unused is refunded after the transaction (regardless of the
+//! execution outcome). If all gas is used, then changes made for the specific call or create
+//! are reverted (including balance transfers).
+//!
+//! Failures are typically not cascading. That, for example, means that if contract A calls B and B errors
+//! somehow, then A can decide if it should proceed or error.
+//! TODO: That is not the case now, since call/create externalities traps on any error now.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-
-// TODO: Disable for now
-// #![warn(missing_docs)]
+#![warn(missing_docs)]
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -124,11 +134,15 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait>;
 
-	// The fee required to create a contract. At least as big as staking ReclaimRebate.
+	// The fee required to create a contract. At least as big as staking's ReclaimRebate.
 	ContractFee get(contract_fee): b"con:contract_fee" => required T::Balance;
+	// The fee charged for a call into a contract.
 	CallBaseFee get(call_base_fee): b"con:base_call_fee" => required T::Gas;
+	// The fee charged for a create of a contract.
 	CreateBaseFee get(create_base_fee): b"con:base_create_fee" => required T::Gas;
+	// The price of one unit of gas.
 	GasPrice get(gas_price): b"con:gas_price" => required T::Balance;
+	// The maximum nesting level of a call/create stack.
 	MaxDepth get(max_depth): b"con:max_depth" => required u32;
 
 	// The code associated with an account.
@@ -150,6 +164,7 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 }
 
 impl<T: Trait> Module<T> {
+	/// Make a call to a specified account, optionally transferring some balance.
 	fn call(
 		aux: &<T as consensus::Trait>::PublicAux,
 		dest: T::AccountId,
@@ -186,6 +201,15 @@ impl<T: Trait> Module<T> {
 		result.map(|_| ())
 	}
 
+	/// Create a new contract, optionally transfering some balance to the created account.
+	///
+	/// Creation is executed as follows:ExecutionContext
+	///
+	/// - the destination address is computed based on the sender and hash of the code.
+	/// - account is created at the computed address.
+	/// - the `ctor_code` is executed in the context of the newly created account. Buffer returned
+	///   after the execution is saved as the `code` of the account. That code will be invoked
+	///   upon any message received by this account.
 	fn create(
 		aux: &<T as consensus::Trait>::PublicAux,
 		endownment: T::Balance,
