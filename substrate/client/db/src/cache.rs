@@ -23,7 +23,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 
 use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
-use codec::{Slicable, Input};
+use codec::{Codec, Encode, Decode, Input, Output};
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
@@ -39,7 +39,7 @@ pub struct DbCache<Block: BlockT> {
 impl<Block> DbCache<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u64>,
 {
 	/// Create new cache.
 	pub fn new(db: Arc<KeyValueDB>, block_index_column: Option<u32>, authorities_column: Option<u32>) -> ClientResult<Self> {
@@ -59,7 +59,7 @@ impl<Block> DbCache<Block>
 impl<Block> BlockchainCache<Block> for DbCache<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u64>,
 {
 	fn authorities_at(&self, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
 		let authorities_at = read_id(&*self.db, self.block_index_column, at).and_then(|at| match at {
@@ -111,8 +111,8 @@ struct StorageEntry<N, T> {
 impl<Block, T> DbCacheList<Block, T>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
-		T: Clone + PartialEq + Slicable,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u64>,
+		T: Clone + PartialEq + Codec,
 {
 	/// Creates new cache list.
 	fn new(db: Arc<KeyValueDB>, meta_key: &'static [u8], column: Option<u32>) -> ClientResult<Self> {
@@ -268,8 +268,8 @@ impl<Block, T> DbCacheList<Block, T>
 fn read_storage_entry<Block, T>(db: &KeyValueDB, column: Option<u32>, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<StorageEntry<<<Block as BlockT>::Header as HeaderT>::Number, T>>>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
-		T: Slicable,
+		<<Block as BlockT>::Header as HeaderT>::Number: As<u64>,
+		T: Codec,
 {
 	db.get(column, &number_to_db_key(number))
 		.and_then(|entry| match entry {
@@ -279,20 +279,18 @@ fn read_storage_entry<Block, T>(db: &KeyValueDB, column: Option<u32>, number: <<
 	.map_err(db_err)
 }
 
-impl<N: Slicable, T: Slicable> Slicable for StorageEntry<N, T> {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.prev_valid_from.using_encoded(|s| v.extend(s));
-		self.value.using_encoded(|s| v.extend(s));
-
-		v
+impl<N: Encode, T: Encode> Encode for StorageEntry<N, T> {
+	fn encode_to<O: Output>(&self, dest: &mut O) {
+		dest.push(&self.prev_valid_from);
+		dest.push(&self.value);
 	}
+}
 
+impl<N: Decode, T: Decode> Decode for StorageEntry<N, T> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(StorageEntry {
-			prev_valid_from: Slicable::decode(input)?,
-			value: Slicable::decode(input)?,
+			prev_valid_from: Decode::decode(input)?,
+			value: Decode::decode(input)?,
 		})
 	}
 }
@@ -309,8 +307,8 @@ mod tests {
 	#[test]
 	fn authorities_storage_entry_serialized() {
 		let test_cases: Vec<StorageEntry<u64, Vec<AuthorityId>>> = vec![
-			StorageEntry { prev_valid_from: Some(42), value: Some(vec![[1u8; 32]]) },
-			StorageEntry { prev_valid_from: None, value: Some(vec![[1u8; 32], [2u8; 32]]) },
+			StorageEntry { prev_valid_from: Some(42), value: Some(vec![[1u8; 32].into()]) },
+			StorageEntry { prev_valid_from: None, value: Some(vec![[1u8; 32].into(), [2u8; 32].into()]) },
 			StorageEntry { prev_valid_from: None, value: None },
 		];
 
@@ -327,10 +325,10 @@ mod tests {
 		let authorities_at: Vec<(usize, Option<Entry<u64, Vec<AuthorityId>>>)> = vec![
 			(0, None),
 			(0, None),
-			(1, Some(Entry { valid_from: 1, value: Some(vec![[2u8; 32]]) })),
-			(1, Some(Entry { valid_from: 1, value: Some(vec![[2u8; 32]]) })),
-			(2, Some(Entry { valid_from: 3, value: Some(vec![[4u8; 32]]) })),
-			(2, Some(Entry { valid_from: 3, value: Some(vec![[4u8; 32]]) })),
+			(1, Some(Entry { valid_from: 1, value: Some(vec![[2u8; 32].into()]) })),
+			(1, Some(Entry { valid_from: 1, value: Some(vec![[2u8; 32].into()]) })),
+			(2, Some(Entry { valid_from: 3, value: Some(vec![[4u8; 32].into()]) })),
+			(2, Some(Entry { valid_from: 3, value: Some(vec![[4u8; 32].into()]) })),
 			(3, Some(Entry { valid_from: 5, value: None })),
 			(3, Some(Entry { valid_from: 5, value: None })),
 		];
@@ -343,7 +341,7 @@ mod tests {
 		let mut prev_hash = Default::default();
 		for number in 0..authorities_at.len() {
 			let authorities_at_number = authorities_at[number].1.clone().and_then(|e| e.value);
-			prev_hash = insert_block(&db, &prev_hash, number as u32, authorities_at_number);
+			prev_hash = insert_block(&db, &prev_hash, number as u64, authorities_at_number);
 			assert_eq!(db.cache().authorities_at_cache().best_entry(), authorities_at[number].1);
 			assert_eq!(db.db().iter(columns::AUTHORITIES).count(), authorities_at[number].0);
 		}
@@ -360,7 +358,7 @@ mod tests {
 		let mut current_entries_count = authorities_at.last().unwrap().0;
 		let pruning_starts_at = AUTHORITIES_ENTRIES_TO_KEEP as usize;
 		for number in authorities_at.len()..authorities_at.len() + pruning_starts_at {
-			prev_hash = insert_block(&db, &prev_hash, number as u32, None);
+			prev_hash = insert_block(&db, &prev_hash, number as u64, None);
 			if number > pruning_starts_at {
 				let prev_entries_count = authorities_at[number - pruning_starts_at].0;
 				let entries_count = authorities_at.get(number - pruning_starts_at + 1).map(|e| e.0)
@@ -377,7 +375,7 @@ mod tests {
 		let db = LightStorage::<Block>::new_test();
 		let mut transaction = DBTransaction::new();
 		db.cache().authorities_at_cache().update_best_entry(
-			db.cache().authorities_at_cache().commit_best_entry(&mut transaction, 100, Some(vec![[1u8; 32]])));
+			db.cache().authorities_at_cache().commit_best_entry(&mut transaction, 100, Some(vec![[1u8; 32].into()])));
 		db.db().write(transaction).unwrap();
 
 		let mut transaction = DBTransaction::new();
@@ -387,7 +385,7 @@ mod tests {
 
 		let mut transaction = DBTransaction::new();
 		db.cache().authorities_at_cache().update_best_entry(
-			db.cache().authorities_at_cache().commit_best_entry(&mut transaction, 200, Some(vec![[2u8; 32]])));
+			db.cache().authorities_at_cache().commit_best_entry(&mut transaction, 200, Some(vec![[2u8; 32].into()])));
 		db.db().write(transaction).unwrap();
 
 		let mut transaction = DBTransaction::new();
@@ -401,12 +399,12 @@ mod tests {
 		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap(), (1, false));
 		db.db().write(transaction).unwrap();
 
-		assert_eq!(db.cache().authorities_at_cache().best_entry().unwrap().value, Some(vec![[2u8; 32]]));
+		assert_eq!(db.cache().authorities_at_cache().best_entry().unwrap().value, Some(vec![[2u8; 32].into()]));
 		assert_eq!(db.cache().authorities_at(BlockId::Number(50)), None);
 		assert_eq!(db.cache().authorities_at(BlockId::Number(100)), None);
 		assert_eq!(db.cache().authorities_at(BlockId::Number(150)), None);
-		assert_eq!(db.cache().authorities_at(BlockId::Number(200)), Some(vec![[2u8; 32]]));
-		assert_eq!(db.cache().authorities_at(BlockId::Number(250)), Some(vec![[2u8; 32]]));
+		assert_eq!(db.cache().authorities_at(BlockId::Number(200)), Some(vec![[2u8; 32].into()]));
+		assert_eq!(db.cache().authorities_at(BlockId::Number(250)), Some(vec![[2u8; 32].into()]));
 
 		let mut transaction = DBTransaction::new();
 		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 300).unwrap(), (1, true));

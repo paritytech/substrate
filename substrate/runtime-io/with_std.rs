@@ -68,6 +68,20 @@ pub fn clear_storage(key: &[u8]) {
 	);
 }
 
+/// Clear the storage of some particular key.
+pub fn exists_storage(key: &[u8]) {
+	ext::with(|ext|
+		ext.exists_storage(key)
+	);
+}
+
+/// Clear the storage entries key of which starts with the given prefix.
+pub fn clear_prefix(prefix: &[u8]) {
+	ext::with(|ext|
+		ext.clear_prefix(prefix)
+	);
+}
+
 /// The current relay chain identifier.
 pub fn chain_id() -> u64 {
 	ext::with(|ext|
@@ -161,13 +175,13 @@ macro_rules! impl_stubs {
 	};
 	(@METHOD $data: ident $new_name: ident => $invoke:expr) => {{
 		let mut data = $data;
-		let input = match $crate::codec::Slicable::decode(&mut data) {
+		let input = match $crate::codec::Decode::decode(&mut data) {
 			Some(input) => input,
 			None => panic!("Bad input data provided to {}", stringify!($new_name)),
 		};
 
 		let output = $invoke(input);
-		Some($crate::codec::Slicable::encode(&output))
+		Some($crate::codec::Encode::encode(&output))
 	}}
 }
 
@@ -209,6 +223,25 @@ mod std_tests {
 			let mut w = [0u8; 11];
 			assert!(read_storage(b":test", &mut w[..], 4).unwrap() >= 11);
 			assert_eq!(&w, b"Hello world");
+		});
+	}
+
+	#[test]
+	fn clear_prefix_works() {
+		let mut t: TestExternalities = map![
+			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
+			b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
+		];
+
+		with_externalities(&mut t, || {
+			clear_prefix(b":abc");
+
+			assert!(storage(b":a").is_some());
+			assert!(storage(b":abdd").is_some());
+			assert!(storage(b":abcd").is_none());
+			assert!(storage(b":abc").is_none());
 		});
 	}
 }

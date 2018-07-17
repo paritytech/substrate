@@ -54,8 +54,8 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
-	MakePayment, Hashing, AuxLookup};
-use codec::Slicable;
+	MakePayment, Hash, AuxLookup};
+use codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
 
@@ -82,14 +82,15 @@ pub struct Executive<
 >(PhantomData<(System, Block, Lookup, Payment, Finalisation)>);
 
 impl<
+	Address,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Lookup: AuxLookup<Source=<Block::Extrinsic as Checkable>::Address, Target=System::AccountId>,
+	Lookup: AuxLookup<Source=Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
-	Block::Extrinsic: Checkable<AccountId=System::AccountId> + Slicable,
-	<Block::Extrinsic as Checkable>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
+	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Codec,
+	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
 {
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
@@ -172,7 +173,7 @@ impl<
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
-		let xt = uxt.check(Lookup::lookup).map_err(internal::ApplyError::BadSignature)?;
+		let xt = uxt.check_with(Lookup::lookup).map_err(internal::ApplyError::BadSignature)?;
 
 		if xt.sender() != &Default::default() {
 			// check index
@@ -269,7 +270,7 @@ mod tests {
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(staking::GenesisConfig::<Test> {
 			sessions_per_era: 0,
 			current_era: 0,
@@ -286,7 +287,7 @@ mod tests {
 			reclaim_rebate: 0,
 			early_era_slash: 0,
 			session_reward: 0,
-		}.build_storage());
+		}.build_storage().unwrap());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
@@ -297,11 +298,11 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage();
-		t.extend(consensus::GenesisConfig::<Test>::default().build_storage());
-		t.extend(session::GenesisConfig::<Test>::default().build_storage());
-		t.extend(staking::GenesisConfig::<Test>::default().build_storage());
-		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		t.extend(consensus::GenesisConfig::<Test>::default().build_storage().unwrap());
+		t.extend(session::GenesisConfig::<Test>::default().build_storage().unwrap());
+		t.extend(staking::GenesisConfig::<Test>::default().build_storage().unwrap());
+		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t
 	}
 

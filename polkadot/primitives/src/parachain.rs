@@ -16,7 +16,7 @@
 
 //! Polkadot parachain types.
 
-use codec::{Slicable, Input};
+use codec::{Encode, Decode, Input, Output};
 use rstd::prelude::*;
 use rstd::cmp::Ordering;
 use super::Hash;
@@ -47,11 +47,13 @@ impl Id {
 	}
 }
 
-impl Slicable for Id {
+impl Decode for Id {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		u32::decode(input).map(Id)
 	}
+}
 
+impl Encode for Id {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		self.0.using_encoded(f)
 	}
@@ -67,30 +69,26 @@ pub enum Chain {
 	Parachain(Id),
 }
 
-impl Slicable for Chain {
+impl Decode for Chain {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let disc = input.read_byte()?;
 		match disc {
 			0 => Some(Chain::Relay),
-			1 => Some(Chain::Parachain(Slicable::decode(input)?)),
+			1 => Some(Chain::Parachain(Decode::decode(input)?)),
 			_ => None,
 		}
 	}
+}
 
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
+impl Encode for Chain {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
-			Chain::Relay => { v.push(0); }
+			Chain::Relay => { dest.push_byte(0); }
 			Chain::Parachain(id) => {
-				v.push(1u8);
-				id.using_encoded(|s| v.extend(s));
+				dest.push_byte(1u8);
+				dest.push(&id);
 			}
 		}
-		v
-	}
-
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.encode().as_slice())
 	}
 }
 
@@ -105,25 +103,19 @@ pub struct DutyRoster {
 	pub guarantor_duty: Vec<Chain>,
 }
 
-impl Slicable for DutyRoster {
+impl Decode for DutyRoster {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(DutyRoster {
-			validator_duty: Slicable::decode(input)?,
-			guarantor_duty: Slicable::decode(input)?,
+			validator_duty: Decode::decode(input)?,
+			guarantor_duty: Decode::decode(input)?,
 		})
 	}
+}
 
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		v.extend(self.validator_duty.encode());
-		v.extend(self.guarantor_duty.encode());
-
-		v
-	}
-
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&self.encode().as_slice())
+impl Encode for DutyRoster {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.validator_duty);
+		dest.push(&self.guarantor_duty);
 	}
 }
 
@@ -133,26 +125,6 @@ impl Slicable for DutyRoster {
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
 pub struct Extrinsic;
-
-/// Candidate parachain block.
-///
-/// https://github.com/w3f/polkadot-spec/blob/master/spec.md#candidate-para-chain-block
-#[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
-#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Candidate {
-	/// The ID of the parachain this is a proposal for.
-	pub parachain_index: Id,
-	/// Collator's signature
-	pub collator_signature: CandidateSignature,
-	/// Unprocessed ingress queue.
-	///
-	/// Ordered by parachain ID and block number.
-	pub unprocessed_ingress: ConsolidatedIngress,
-	/// Block data
-	pub block: BlockData,
-}
 
 /// Candidate receipt type.
 #[derive(PartialEq, Eq, Clone)]
@@ -164,6 +136,8 @@ pub struct CandidateReceipt {
 	pub parachain_index: Id,
 	/// The collator's relay-chain account ID
 	pub collator: super::AccountId,
+	/// Signature on blake2-256 of the block data by collator.
+	pub signature: CandidateSignature,
 	/// The head-data
 	pub head_data: HeadData,
 	/// Balance uploads to the relay chain.
@@ -172,30 +146,34 @@ pub struct CandidateReceipt {
 	pub egress_queue_roots: Vec<(Id, Hash)>,
 	/// Fees paid from the chain to the relay chain validators
 	pub fees: u64,
+	/// blake2-256 Hash of block data.
+	pub block_data_hash: Hash,
 }
 
-impl Slicable for CandidateReceipt {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.parachain_index.using_encoded(|s| v.extend(s));
-		self.collator.using_encoded(|s| v.extend(s));
-		self.head_data.0.using_encoded(|s| v.extend(s));
-		self.balance_uploads.using_encoded(|s| v.extend(s));
-		self.egress_queue_roots.using_encoded(|s| v.extend(s));
-		self.fees.using_encoded(|s| v.extend(s));
-
-		v
+impl Encode for CandidateReceipt {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.parachain_index);
+		dest.push(&self.collator);
+		dest.push(&self.signature);
+		dest.push(&self.head_data.0);
+		dest.push(&self.balance_uploads);
+		dest.push(&self.egress_queue_roots);
+		dest.push(&self.fees);
+		dest.push(&self.block_data_hash);
 	}
+}
 
+impl Decode for CandidateReceipt {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(CandidateReceipt {
-			parachain_index: Slicable::decode(input)?,
-			collator: Slicable::decode(input)?,
-			head_data: Slicable::decode(input).map(HeadData)?,
-			balance_uploads: Slicable::decode(input)?,
-			egress_queue_roots: Slicable::decode(input)?,
-			fees: Slicable::decode(input)?,
+			parachain_index: Decode::decode(input)?,
+			collator: Decode::decode(input)?,
+			signature: Decode::decode(input)?,
+			head_data: Decode::decode(input).map(HeadData)?,
+			balance_uploads: Decode::decode(input)?,
+			egress_queue_roots: Decode::decode(input)?,
+			fees: Decode::decode(input)?,
+			block_data_hash: Decode::decode(input)?,
 		})
 	}
 }
@@ -204,8 +182,19 @@ impl CandidateReceipt {
 	/// Get the blake2_256 hash
 	#[cfg(feature = "std")]
 	pub fn hash(&self) -> Hash {
-		use runtime_primitives::traits::{BlakeTwo256, Hashing};
+		use runtime_primitives::traits::{BlakeTwo256, Hash};
 		BlakeTwo256::hash_of(self)
+	}
+
+	/// Check integrity vs. provided block data.
+	pub fn check_signature(&self) -> Result<(), ()> {
+		use runtime_primitives::traits::Verify;
+
+		if self.signature.verify(&self.block_data_hash.0[..], &self.collator) {
+			Ok(())
+		} else {
+			Err(())
+		}
 	}
 }
 
@@ -220,6 +209,34 @@ impl Ord for CandidateReceipt {
 		// TODO: compare signatures or something more sane
 		self.parachain_index.cmp(&other.parachain_index)
 			.then_with(|| self.head_data.cmp(&other.head_data))
+	}
+}
+
+/// A full collation.
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub struct Collation {
+	/// Block data.
+	pub block_data: BlockData,
+	/// Candidate receipt itself.
+	pub receipt: CandidateReceipt,
+}
+
+impl Decode for Collation {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(Collation {
+			block_data: Decode::decode(input)?,
+			receipt: Decode::decode(input)?,
+		})
+	}
+}
+
+impl Encode for Collation {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.block_data);
+		dest.push(&self.receipt);
 	}
 }
 
@@ -243,6 +260,27 @@ pub struct ConsolidatedIngress(pub Vec<(Id, Vec<Message>)>);
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct BlockData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
+impl BlockData {
+	/// Compute hash of block data.
+	#[cfg(feature = "std")]
+	pub fn hash(&self) -> Hash {
+		use runtime_primitives::traits::{BlakeTwo256, Hash};
+		BlakeTwo256::hash(&self.0[..])
+	}
+}
+
+impl Decode for BlockData {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(BlockData(Decode::decode(input)?))
+	}
+}
+
+impl Encode for BlockData {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.0);
+	}
+}
+
 /// Parachain header raw bytes wrapper type.
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
@@ -263,29 +301,21 @@ pub struct ValidationCode(#[cfg_attr(feature = "std", serde(with="bytes"))] pub 
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Activity(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-impl Slicable for Activity {
+impl Decode for Activity {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Vec::<u8>::decode(input).map(Activity)
 	}
-
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.using_encoded(f)
-	}
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(u8)]
-enum StatementKind {
-	Candidate = 1,
-	Valid = 2,
-	Invalid = 3,
-	Available = 4,
+impl Encode for Activity {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		self.0.encode_to(dest)
+	}
 }
 
 /// Statements which can be made about parachain candidates.
 #[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum Statement {
 	/// Proposal of a parachain candidate.
 	Candidate(CandidateReceipt),
@@ -295,48 +325,4 @@ pub enum Statement {
 	Invalid(Hash),
 	/// Vote to advance round after inactive primary.
 	Available(Hash),
-}
-
-impl Slicable for Statement {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		match *self {
-			Statement::Candidate(ref candidate) => {
-				v.push(StatementKind::Candidate as u8);
-				candidate.using_encoded(|s| v.extend(s));
-			}
-			Statement::Valid(ref hash) => {
-				v.push(StatementKind::Valid as u8);
-				hash.using_encoded(|s| v.extend(s));
-			}
-			Statement::Invalid(ref hash) => {
-				v.push(StatementKind::Invalid as u8);
-				hash.using_encoded(|s| v.extend(s));
-			}
-			Statement::Available(ref hash) => {
-				v.push(StatementKind::Available as u8);
-				hash.using_encoded(|s| v.extend(s));
-			}
-		}
-
-		v
-	}
-
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		match value.read_byte() {
-			Some(x) if x == StatementKind::Candidate as u8 => {
-				Slicable::decode(value).map(Statement::Candidate)
-			}
-			Some(x) if x == StatementKind::Valid as u8 => {
-				Slicable::decode(value).map(Statement::Valid)
-			}
-			Some(x) if x == StatementKind::Invalid as u8 => {
-				Slicable::decode(value).map(Statement::Invalid)
-			}
-			Some(x) if x == StatementKind::Available as u8 => {
-				Slicable::decode(value).map(Statement::Available)
-			}
-			_ => None,
-		}
-	}
 }

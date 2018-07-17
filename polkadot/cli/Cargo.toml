@@ -15,23 +15,25 @@ time = "0.1"
 slog = "^2"
 ansi_term = "0.10"
 lazy_static = "1.0"
-hex-literal = "0.1"
 triehash = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
 app_dirs = "1.2"
-tokio-core = "0.1.12"
+tokio = "0.1.7"
 futures = "0.1.17"
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 fdlimit = "0.1"
 parking_lot = "0.4"
 serde_json = "1.0"
 serde = "1.0"
+exit-future = "0.1"
 substrate-client = { path = "../../substrate/client" }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-network = { path = "../../substrate/network" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-rpc = { path = "../../substrate/rpc" }
 substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
+substrate-service = { path = "../../substrate/service" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-telemetry = { path = "../../substrate/telemetry" }
 polkadot-primitives = { path = "../primitives" }

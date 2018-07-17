@@ -35,6 +35,15 @@ pub trait Backend: TryIntoTrieBackend {
 	/// Get keyed storage associated with specific address, or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
 
+	/// true if a key exists in storage.
+	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		Ok(self.storage(key)?.is_some())
+	}
+
+	/// Retrieve all entries keys of which start with the given prefix and
+	/// call `f` for each of those keys.
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F);
+
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
 	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
@@ -97,12 +106,22 @@ impl From<HashMap<Vec<u8>, Vec<u8>>> for InMemory {
 	}
 }
 
+impl super::Error for Void {}
+
 impl Backend for InMemory {
 	type Error = Void;
 	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(key).map(Clone::clone))
+	}
+
+	fn exists_storage(&self, key: &[u8]) -> Result<bool, Self::Error> {
+		Ok(self.inner.get(key).is_some())
+	}
+
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		self.inner.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
 	}
 
 	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)

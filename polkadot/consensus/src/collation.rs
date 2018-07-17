@@ -22,18 +22,10 @@
 use std::sync::Arc;
 
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Hash, AccountId};
-use polkadot_primitives::parachain::{Id as ParaId, Chain, BlockData, Extrinsic, CandidateReceipt};
+use polkadot_primitives::{Hash, AccountId, BlockId};
+use polkadot_primitives::parachain::{Id as ParaId, Collation, Extrinsic};
 
 use futures::prelude::*;
-
-/// A full collation.
-pub struct Collation {
-	/// Block data.
-	pub block_data: BlockData,
-	/// The candidate receipt itself.
-	pub receipt: CandidateReceipt,
-}
 
 /// Encapsulates connections to collators and allows collation on any parachain.
 ///
@@ -45,6 +37,12 @@ pub trait Collators: Clone {
 	type Collation: IntoFuture<Item=Collation,Error=Self::Error>;
 
 	/// Collate on a specific parachain, building on a given relay chain parent hash.
+	///
+	/// The returned collation should be checked for basic validity in the signature
+	/// and will be checked for state-transition validity by the consumer of this trait.
+	///
+	/// This does not have to guarantee local availability, as a valid collation
+	/// will be passed to the `TableRouter` instance.
 	fn collate(&self, parachain: ParaId, relay_parent: Hash) -> Self::Collation;
 
 	/// Note a bad collator. TODO: take proof
@@ -55,9 +53,9 @@ pub trait Collators: Clone {
 ///
 /// This future is fused.
 pub struct CollationFetch<C: Collators, P: PolkadotApi> {
-	parachain: Option<ParaId>,
+	parachain: ParaId,
 	relay_parent_hash: Hash,
-	relay_parent: P::CheckedBlockId,
+	relay_parent: BlockId,
 	collators: C,
 	live_fetch: Option<<C::Collation as IntoFuture>::Future>,
 	client: Arc<P>,
@@ -65,16 +63,13 @@ pub struct CollationFetch<C: Collators, P: PolkadotApi> {
 
 impl<C: Collators, P: PolkadotApi> CollationFetch<C, P> {
 	/// Create a new collation fetcher for the given chain.
-	pub fn new(parachain: Chain, relay_parent: P::CheckedBlockId, relay_parent_hash: Hash, collators: C, client: Arc<P>) -> Self {
+	pub fn new(parachain: ParaId, relay_parent: BlockId, relay_parent_hash: Hash, collators: C, client: Arc<P>) -> Self {
 		CollationFetch {
 			relay_parent_hash,
 			relay_parent,
 			collators,
 			client,
-			parachain: match parachain {
-				Chain::Parachain(id) => Some(id),
-				Chain::Relay => None,
-			},
+			parachain,
 			live_fetch: None,
 		}
 	}
@@ -85,26 +80,19 @@ impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {
 	type Error = C::Error;
 
 	fn poll(&mut self) -> Poll<(Collation, Extrinsic), C::Error> {
-		let parachain = match self.parachain.as_ref() {
-			Some(p) => p.clone(),
-			None => return Ok(Async::NotReady),
-		};
-
 		loop {
 			let x = {
+				let parachain = self.parachain.clone();
 				let (r, c)  = (self.relay_parent_hash, &self.collators);
 				let poll = self.live_fetch
 					.get_or_insert_with(move || c.collate(parachain, r).into_future())
 					.poll();
 
-				if let Err(_) = poll { self.parachain = None }
 				try_ready!(poll)
 			};
 
 			match validate_collation(&*self.client, &self.relay_parent, &x) {
 				Ok(()) => {
-					self.parachain = None;
-
 					// TODO: generate extrinsic while verifying.
 					return Ok(Async::Ready((x, Extrinsic)));
 				}
@@ -145,7 +133,7 @@ error_chain! {
 }
 
 /// Check whether a given collation is valid. Returns `Ok`  on success, error otherwise.
-pub fn validate_collation<P: PolkadotApi>(client: &P, relay_parent: &P::CheckedBlockId, collation: &Collation) -> Result<(), Error> {
+pub fn validate_collation<P: PolkadotApi>(client: &P, relay_parent: &BlockId, collation: &Collation) -> Result<(), Error> {
 	use parachain::{self, ValidationParams};
 
 	let para_id = collation.receipt.parachain_index;

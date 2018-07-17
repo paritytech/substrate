@@ -27,14 +27,16 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_bft;
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
+#[cfg(test)]
+extern crate rhododendron;
 
-use codec::Slicable;
+use codec::{Codec, Encode};
 use primitives::{AuthorityId, Signature};
 
 use runtime_primitives::bft::{Action, Message, MisbehaviorKind};
 
 // check a message signature. returns true if signed by that authority.
-fn check_message_sig<B: Slicable, H: Slicable>(
+fn check_message_sig<B: Codec, H: Codec>(
 	message: Message<B, H>,
 	signature: &Signature,
 	from: &AuthorityId
@@ -62,7 +64,7 @@ fn commit<B, H>(parent: H, round_number: u32, hash: H) -> Message<B, H> {
 /// Doesn't check that the header hash in question is
 /// valid or whether the misbehaving authority was part of
 /// the set at that block.
-pub fn evaluate_misbehavior<B: Slicable, H: Slicable + Copy>(
+pub fn evaluate_misbehavior<B: Codec, H: Codec + Copy>(
 	misbehaved: &AuthorityId,
 	parent_hash: H,
 	kind: &MisbehaviorKind<H>,
@@ -85,7 +87,6 @@ pub fn evaluate_misbehavior<B: Slicable, H: Slicable + Copy>(
 mod tests {
 	use super::*;
 
-	use substrate_bft::generic;
 	use keyring::ed25519;
 	use keyring::Keyring;
 
@@ -95,26 +96,26 @@ mod tests {
 
 	fn sign_prepare(key: &ed25519::Pair, round: u32, hash: H256, parent_hash: H256) -> (H256, Signature) {
 		let msg = substrate_bft::sign_message::<Block>(
-			generic::Message::Vote(generic::Vote::Prepare(round as _, hash)),
+			rhododendron::Message::Vote(rhododendron::Vote::Prepare(round as _, hash)),
 			key,
 			parent_hash
 		);
 
 		match msg {
-			generic::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
+			rhododendron::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
 			_ => panic!("signing vote leads to signed vote"),
 		}
 	}
 
 	fn sign_commit(key: &ed25519::Pair, round: u32, hash: H256, parent_hash: H256) -> (H256, Signature) {
 		let msg = substrate_bft::sign_message::<Block>(
-			generic::Message::Vote(generic::Vote::Commit(round as _, hash)),
+			rhododendron::Message::Vote(rhododendron::Vote::Commit(round as _, hash)),
 			key,
 			parent_hash
 		);
 
 		match msg {
-			generic::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
+			rhododendron::LocalizedMessage::Vote(vote) => (hash, vote.signature.signature),
 			_ => panic!("signing vote leads to signed vote"),
 		}
 	}
@@ -127,7 +128,7 @@ mod tests {
 		let hash_2 = [1; 32].into();
 
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&key.public().0,
+			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
 				1,
@@ -139,7 +140,7 @@ mod tests {
 		// same signature twice is not misbehavior.
 		let signed = sign_prepare(&key, 1, hash_1, parent_hash);
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&key.public().0,
+			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
 				1,
@@ -150,7 +151,7 @@ mod tests {
 
 		// misbehavior has wrong target.
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&Keyring::Two.to_raw_public(),
+			&Keyring::Two.to_raw_public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoublePrepare(
 				1,
@@ -168,7 +169,7 @@ mod tests {
 		let hash_2 = [1; 32].into();
 
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&key.public().0,
+			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
 				1,
@@ -180,7 +181,7 @@ mod tests {
 		// same signature twice is not misbehavior.
 		let signed = sign_commit(&key, 1, hash_1, parent_hash);
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&key.public().0,
+			&key.public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
 				1,
@@ -191,7 +192,7 @@ mod tests {
 
 		// misbehavior has wrong target.
 		assert!(evaluate_misbehavior::<Block, H256>(
-			&Keyring::Two.to_raw_public(),
+			&Keyring::Two.to_raw_public().into(),
 			parent_hash,
 			&MisbehaviorKind::BftDoubleCommit(
 				1,

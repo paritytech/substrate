@@ -17,7 +17,13 @@
 //! Basic parachain that adds a number as part of its state.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(alloc, core_intrinsics, lang_items, panic_implementation, core_panic_info))]
+#![cfg_attr(
+	not(feature = "std"),
+	feature(
+		alloc, core_intrinsics, lang_items, panic_implementation, core_panic_info,
+		alloc_error_handler
+	)
+)]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -27,16 +33,13 @@ extern crate wee_alloc;
 extern crate tiny_keccak;
 extern crate pwasm_libc;
 
-use parachain::codec::{Slicable, Input};
+use parachain::codec::{Decode, Encode, Input, Output};
 
 #[cfg(not(feature = "std"))]
 mod wasm;
 
 #[cfg(not(feature = "std"))]
 pub use wasm::*;
-
-#[cfg(not(feature = "std"))]
-use alloc::vec::Vec;
 
 // Define global allocator.
 #[cfg(not(feature = "std"))]
@@ -54,22 +57,20 @@ struct HeadData {
 	post_state: [u8; 32],
 }
 
-impl Slicable for HeadData {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.number.using_encoded(|s| v.extend(s));
-		self.parent_hash.using_encoded(|s| v.extend(s));
-		self.post_state.using_encoded(|s| v.extend(s));
-
-		v
+impl Encode for HeadData {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.number);
+		dest.push(&self.parent_hash);
+		dest.push(&self.post_state);
 	}
+}
 
+impl Decode for HeadData {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(HeadData {
-			number: Slicable::decode(input)?,
-			parent_hash: Slicable::decode(input)?,
-			post_state: Slicable::decode(input)?,
+			number: Decode::decode(input)?,
+			parent_hash: Decode::decode(input)?,
+			post_state: Decode::decode(input)?,
 		})
 	}
 }
@@ -83,20 +84,18 @@ struct BlockData {
 	add: u64,
 }
 
-impl Slicable for BlockData {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.state.using_encoded(|s| v.extend(s));
-		self.add.using_encoded(|s| v.extend(s));
-
-		v
+impl Encode for BlockData {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.state);
+		dest.push(&self.add);
 	}
+}
 
+impl Decode for BlockData {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(BlockData {
-			state: Slicable::decode(input)?,
-			add: Slicable::decode(input)?,
+			state: Decode::decode(input)?,
+			add: Decode::decode(input)?,
 		})
 	}
 }

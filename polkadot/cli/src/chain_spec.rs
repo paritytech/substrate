@@ -16,6 +16,9 @@
 
 //! Predefined chains.
 
+use service;
+use std::path::PathBuf;
+
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
 #[derive(Clone, Debug)]
@@ -26,10 +29,23 @@ pub enum ChainSpec {
 	LocalTestnet,
 	/// The PoC-1 testnet.
 	PoC1Testnet,
-	/// The PoC-2 testnet.
-	PoC2Testnet,
+	/// Whatever the current runtime is with the "global testnet" defaults.
+	StagingTestnet,
 	/// Custom Genesis file.
 	Custom(String),
+}
+
+/// Get a chain config from a spec setting.
+impl ChainSpec {
+	pub(crate) fn load(self) -> Result<service::ChainSpec, String> {
+		Ok(match self {
+			ChainSpec::PoC1Testnet => service::chain_spec::poc_1_testnet_config()?,
+			ChainSpec::Development => service::chain_spec::development_config(),
+			ChainSpec::LocalTestnet => service::chain_spec::local_testnet_config(),
+			ChainSpec::StagingTestnet => service::chain_spec::staging_testnet_config(),
+			ChainSpec::Custom(f) => service::ChainSpec::from_json_file(PathBuf::from(f))?,
+		})
+	}
 }
 
 impl<'a> From<&'a str> for ChainSpec {
@@ -38,7 +54,7 @@ impl<'a> From<&'a str> for ChainSpec {
 			"dev" => ChainSpec::Development,
 			"local" => ChainSpec::LocalTestnet,
 			"poc-1" => ChainSpec::PoC1Testnet,
-			"poc-2" => ChainSpec::PoC2Testnet,
+			"staging" => ChainSpec::StagingTestnet,
 			s => ChainSpec::Custom(s.into()),
 		}
 	}
@@ -50,24 +66,8 @@ impl From<ChainSpec> for String {
 			ChainSpec::Development => "dev".into(),
 			ChainSpec::LocalTestnet => "local".into(),
 			ChainSpec::PoC1Testnet => "poc-1".into(),
-			ChainSpec::PoC2Testnet => "poc-2".into(),
+			ChainSpec::StagingTestnet => "staging".into(),
 			ChainSpec::Custom(f) => format!("custom ({})", f),
-		}
-	}
-}
-
-impl ::std::fmt::Display for ChainSpec {
-	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		if let ChainSpec::Custom(n) = self {
-			write!(f, "Custom ({})", n)
-		} else {
-			write!(f, "{}", match *self {
-				ChainSpec::Development => "Development",
-				ChainSpec::LocalTestnet => "Local Testnet",
-				ChainSpec::PoC1Testnet => "PoC-1 Testnet",
-				ChainSpec::PoC2Testnet => "PoC-2 Testnet",
-				_ => unreachable!(),
-			})
 		}
 	}
 }

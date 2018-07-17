@@ -4,16 +4,13 @@ version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-futures = "0.1.17"
 parking_lot = "0.4"
-tokio-timer = "0.1.2"
 error-chain = "0.12"
 lazy_static = "1.0"
 log = "0.3"
 slog = "^2"
-clap = "2.27"
-tokio-core = "0.1.12"
-exit-future = "0.1"
+tokio = "0.1.7"
+hex-literal = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
@@ -21,14 +18,11 @@ polkadot-consensus = { path = "../consensus" }
 polkadot-executor = { path = "../executor" }
 polkadot-api = { path = "../api" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
-substrate-keystore = { path = "../../substrate/keystore" }
+polkadot-network = { path = "../network" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
-substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-network = { path = "../../substrate/network" }
 substrate-client = { path = "../../substrate/client" }
-substrate-client-db = { path = "../../substrate/client/db" }
 substrate-codec = { path = "../../substrate/codec" }
-substrate-executor = { path = "../../substrate/executor" }
-substrate-state-machine = { path = "../../substrate/state-machine" }
+substrate-service = { path = "../../substrate/service" }
 substrate-telemetry = { path = "../../substrate/telemetry" }

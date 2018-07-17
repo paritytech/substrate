@@ -23,10 +23,10 @@ use kvdb::{self, KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 
 use client;
-use codec::Slicable;
+use codec::Decode;
 use hashdb::DBValue;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hashing, HashingFor, Zero};
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hash, HashFor, Zero};
 use DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
@@ -60,8 +60,9 @@ pub struct Meta<N, H> {
 pub type BlockKey = [u8; 4];
 
 /// Convert block number into key (LE representation).
-pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u32> {
-	let n: u32 = n.as_();
+pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u64> {
+	let n: u64 = n.as_();
+	assert!(n & 0xffffffff00000000 == 0);
 
 	[
 		(n >> 24) as u8,
@@ -72,12 +73,12 @@ pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u32> {
 }
 
 /// Convert block key into block number.
-pub fn db_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u32> {
+pub fn db_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u64> {
 	match key.len() {
-		4 => Ok((key[0] as u32) << 24
-			| (key[1] as u32) << 16
-			| (key[2] as u32) << 8
-			| (key[3] as u32)).map(As::sa),
+		4 => Ok((key[0] as u64) << 24
+			| (key[1] as u64) << 16
+			| (key[2] as u64) << 8
+			| (key[3] as u64)).map(As::sa),
 		_ => Err(client::error::ErrorKind::Backend("Invalid block key".into()).into()),
 	}
 }
@@ -122,7 +123,6 @@ pub fn open_database(config: &DatabaseSettings, db_type: &str) -> client::error:
 pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block>) -> Result<Option<BlockKey>, client::error::Error>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	match id {
 		BlockId::Hash(h) => db.get(col_index, h.as_ref())
@@ -139,7 +139,6 @@ pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block
 pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>, id: BlockId<Block>) -> client::error::Result<Option<DBValue>>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	read_id(db, col_index, id).and_then(|key| match key {
 		Some(key) => db.get(col, &key).map_err(db_err),
@@ -151,7 +150,6 @@ pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>,
 pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>, client::error::Error>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	let genesis_number = <<Block as BlockT>::Header as HeaderT>::Number::zero();
 	let (best_hash, best_number) = if let Some(Some(header)) = db.get(COLUMN_META, meta_keys::BEST_BLOCK).and_then(|id|
@@ -169,7 +167,7 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<Meta
 
 	let genesis_hash = db.get(col_header, &number_to_db_key(genesis_number))
 		.map_err(db_err)?
-		.map(|raw| HashingFor::<Block>::hash(&raw[..]))
+		.map(|raw| HashFor::<Block>::hash(&raw[..]))
 		.unwrap_or_default()
 		.into();
 

@@ -20,9 +20,10 @@ use client::{self, Client};
 use keyring::Keyring;
 use runtime_primitives::StorageMap;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+use executor::NativeExecutor;
 use runtime;
 use bft;
-use {Backend, Executor, NativeExecutor};
+use {Backend, Executor};
 
 /// Extension trait for a test client.
 pub trait TestClient {
@@ -38,7 +39,7 @@ pub trait TestClient {
 
 impl TestClient for Client<Backend, Executor, runtime::Block> {
 	fn new_for_tests() -> Self {
-		client::new_in_mem(NativeExecutor::new(), genesis_storage()).unwrap()
+		client::new_in_mem(NativeExecutor::with_heap_pages(8, 8), genesis_storage()).unwrap()
 	}
 
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
@@ -68,29 +69,29 @@ fn fake_justify(header: &runtime::Header) -> bft::UncheckedJustification<runtime
 		Keyring::Charlie.into(),
 	];
 
-	bft::UncheckedJustification {
-		digest: hash,
-		signatures: authorities.iter().map(|key| {
+	bft::UncheckedJustification::new(
+		hash,
+		authorities.iter().map(|key| {
 			let msg = bft::sign_message::<runtime::Block>(
-				bft::generic::Vote::Commit(1, hash).into(),
+				::rhododendron::Vote::Commit(1, hash).into(),
 				key,
 				header.parent_hash
 			);
 
 			match msg {
-				bft::generic::LocalizedMessage::Vote(vote) => vote.signature,
+				::rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
 				_ => panic!("signing vote leads to signed vote"),
 			}
 		}).collect(),
-		round_number: 1,
-	}
+		1,
+	)
 }
 
 fn genesis_config() -> GenesisConfig {
 	GenesisConfig::new_simple(vec![
-		Keyring::Alice.to_raw_public(),
-		Keyring::Bob.to_raw_public(),
-		Keyring::Charlie.to_raw_public()
+		Keyring::Alice.to_raw_public().into(),
+		Keyring::Bob.to_raw_public().into(),
+		Keyring::Charlie.to_raw_public().into(),
 	], 1000)
 }
 

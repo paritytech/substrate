@@ -77,15 +77,14 @@ pub mod hash;
 pub mod sandbox;
 pub mod storage;
 pub mod uint;
+mod authority_id;
 
 #[cfg(test)]
 mod tests;
 
 pub use self::hash::{H160, H256, H512};
 pub use self::uint::{U256, U512};
-
-/// An identifier for an authority in the consensus algorithm. The same as ed25519::Public.
-pub type AuthorityId = [u8; 32];
+pub use authority_id::AuthorityId;
 
 /// A 512-bit value interpreted as a signature.
 pub type Signature = hash::H512;

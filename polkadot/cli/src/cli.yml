@@ -45,10 +45,6 @@ args:
       long: dev
       help: Run in development mode; implies --chain=dev --validator --key Alice
       takes_value: false
-  - build-genesis:
-      long: build-genesis
-      help: Build a genesis.json file, outputing to stdout
-      takes_value: false
   - port:
       long: port
       value_name: PORT
@@ -73,12 +69,12 @@ args:
   - chain:
       long: chain
       value_name: CHAIN_SPEC
-      help: Specify the chain specification (one of dev, local or poc-2)
+      help: Specify the chain specification (one of poc-1, dev, local or staging)
       takes_value: true
   - pruning:
       long: pruning
       value_name: PRUNING_MODE
-      help: Specify the pruning mode. (a number of blocks to keep or "archive"). Default is 256.
+      help: Specify the pruning mode, a number of blocks to keep or "archive". Default is 256.
       takes_value: true
   - name:
       long: name
@@ -88,11 +84,101 @@ args:
   - telemetry:
       short: t
       long: telemetry
-      help: Should connect to the Polkadot telemetry server (off by default)
+      help: Should connect to the Polkadot telemetry server (telemetry is off by default on local chains)
+      takes_value: false
+  - no-telemetry:
+      long: no-telemetry
+      help: Should not connect to the Polkadot telemetry server (telemetry is on by default on global chains)
       takes_value: false
   - telemetry-url:
       long: telemetry-url
       value_name: TELEMETRY_URL
       help: The URL of the telemetry server. Implies --telemetry
       takes_value: true
+  - execution:
+      long: execution
+      value_name: STRATEGY
+      help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
+  - min-heap-pages:
+      long: min-heap-pages
+      value_name: COUNT
+      help: The number of 64KB pages to allocate for Wasm execution initially.
+  - max-heap-pages:
+      long: max-heap-pages
+      value_name: COUNT
+      help: The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
 subcommands:
+  - build-spec:
+      about: Build a spec.json file, outputing to stdout
+      args:
+        - raw:
+            long: raw
+            help: Force raw genesis storage output.
+            takes_value: false
+        - chain:
+            long: chain
+            value_name: CHAIN_SPEC
+            help: Specify the chain specification (one of poc-1, dev, local or staging)
+            takes_value: true
+  - export-blocks:
+      about: Export blocks to a file
+      args:
+          - OUTPUT:
+              index: 1
+              help: Output file name or stdout if unspecified.
+              required: false
+          - chain:
+              long: chain
+              value_name: CHAIN_SPEC
+              help: Specify the chain specification.
+              takes_value: true
+          - base-path:
+              long: base-path
+              short: d
+              value_name: PATH
+              help: Specify custom base path.
+              takes_value: true
+          - from:
+              long: from
+              value_name: BLOCK
+              help: Specify starting block number. 1 by default.
+              takes_value: true
+          - to:
+              long: to
+              value_name: BLOCK
+              help: Specify last block number. Best block by default.
+              takes_value: true
+          - json:
+              long: json
+              help: Use JSON output rather than binary.
+              takes_value: false
+  - import-blocks:
+      about: Import blocks from file.
+      args:
+          - INPUT:
+              index: 1
+              help: Input file or stdin if unspecified.
+              required: false
+          - chain:
+              long: chain
+              value_name: CHAIN_SPEC
+              help: Specify the chain specification.
+              takes_value: true
+          - base-path:
+              long: base-path
+              short: d
+              value_name: PATH
+              help: Specify custom base path.
+              takes_value: true
+          - execution:
+              long: execution
+              value_name: STRATEGY
+              help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
+          - min-heap-pages:
+              long: min-heap-pages
+              value_name: COUNT
+              help: The number of 64KB pages to allocate for Wasm execution initially.
+          - max-heap-pages:
+              long: max-heap-pages
+              value_name: COUNT
+              help: The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.

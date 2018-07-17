@@ -28,6 +28,8 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_test_client as test_client;
+#[macro_use] extern crate substrate_telemetry;
+#[macro_use] extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 
 extern crate ed25519;
 extern crate futures;
@@ -36,7 +38,7 @@ extern crate triehash;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
-#[cfg(test)] #[macro_use] extern crate substrate_executor as executor;
+#[cfg_attr(test, macro_use)] extern crate substrate_executor as executor;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
 pub mod error;
@@ -53,7 +55,8 @@ pub use client::{
 	new_in_mem,
 	BlockStatus, BlockOrigin, BlockchainEventStream, BlockchainEvents,
 	Client, ClientInfo, ChainHead,
-	ImportResult,
+	ImportResult, JustifiedHeader,
 };
 pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
+pub use state_machine::ExecutionStrategy;

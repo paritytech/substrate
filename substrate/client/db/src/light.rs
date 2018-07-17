@@ -25,10 +25,10 @@ use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
-use codec::Slicable;
+use codec::{Decode, Encode};
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hashing, HashingFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, Zero, As};
 use cache::DbCache;
 use utils::{meta_keys, Meta, db_err, number_to_db_key, open_database, read_db, read_id, read_meta};
 use DatabaseSettings;
@@ -41,7 +41,7 @@ pub(crate) mod columns {
 }
 
 /// Keep authorities for last 'AUTHORITIES_ENTRIES_TO_KEEP' blocks.
-pub(crate) const AUTHORITIES_ENTRIES_TO_KEEP: u32 = 2048;
+pub(crate) const AUTHORITIES_ENTRIES_TO_KEEP: u64 = 2048;
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 pub struct LightStorage<Block: BlockT> {
@@ -61,7 +61,6 @@ struct BestAuthorities<N> {
 impl<Block> LightStorage<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
@@ -116,7 +115,6 @@ impl<Block> LightStorage<Block>
 impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
 {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, id)? {
@@ -150,7 +148,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
 		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
-			x.map(|raw| HashingFor::<Block>::hash(&raw[..])).map(Into::into)
+			x.map(|raw| HashFor::<Block>::hash(&raw[..])).map(Into::into)
 		)
 	}
 }
@@ -158,8 +156,6 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u32>,
-		<Block as BlockT>::Hash: From<[u8; 32]> + Into<[u8; 32]>,
 {
 	fn import_header(&self, is_new_best: bool, header: Block::Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();
@@ -175,7 +171,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 
 			// cache authorities for previous block
-			let number: u32 = number.as_();
+			let number: u64 = number.as_();
 			let previous_number = number.checked_sub(1);
 			let mut best_authorities = previous_number
 				.and_then(|previous_number| self.cache.authorities_at_cache()
@@ -218,7 +214,7 @@ pub(crate) mod tests {
 
 	type Block = RawBlock<u32>;
 
-	pub fn insert_block(db: &LightStorage<Block>, parent: &Hash, number: u32, authorities: Option<Vec<AuthorityId>>) -> Hash {
+	pub fn insert_block(db: &LightStorage<Block>, parent: &Hash, number: u64, authorities: Option<Vec<AuthorityId>>) -> Hash {
 		let header = Header {
 			number: number.into(),
 			parent_hash: *parent,

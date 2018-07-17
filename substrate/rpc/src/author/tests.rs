@@ -17,9 +17,10 @@
 use super::*;
 
 use std::{fmt, sync::Arc};
-use extrinsic_pool::api;
+use extrinsic_pool::{api, txpool};
 use test_client;
 use parking_lot::Mutex;
+use codec::Encode;
 
 type Extrinsic = u64;
 type Hash = u64;
@@ -54,6 +55,14 @@ impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 		} else {
 			Err(Error)
 		}
+	}
+
+	fn light_status(&self) -> txpool::LightStatus {
+		unreachable!()
+	}
+
+	fn import_notification_stream(&self) -> api::EventStream {
+		unreachable!()
 	}
 }
 

@@ -22,7 +22,7 @@ extern crate ctrlc;
 extern crate ed25519;
 extern crate env_logger;
 extern crate futures;
-extern crate tokio_core;
+extern crate tokio;
 extern crate triehash;
 extern crate substrate_client as client;
 extern crate substrate_codec as codec;
@@ -49,10 +49,12 @@ pub mod error;
 
 use std::sync::Arc;
 use demo_primitives::Hash;
-use demo_runtime::{Block, BlockId, UncheckedExtrinsic, BuildStorage, GenesisConfig,
+use demo_runtime::{Block, BlockId, UncheckedExtrinsic, GenesisConfig,
 	ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
 	TimestampConfig};
 use futures::{Future, Sink, Stream};
+use tokio::runtime::Runtime;
+use demo_executor::NativeExecutor;
 
 struct DummyPool;
 impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for DummyPool {
@@ -62,6 +64,14 @@ impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for D
 		-> Result<Vec<Hash>, Self::Error>
 	{
 		Err("unimplemented".into())
+	}
+
+	fn light_status(&self) -> extrinsic_pool::txpool::LightStatus {
+		unreachable!()
+	}
+
+	fn import_notification_stream(&self) -> extrinsic_pool::api::EventStream {
+		unreachable!()
 	}
 }
 
@@ -98,13 +108,13 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 
 	// Create client
-	let executor = demo_executor::Executor::new();
+	let executor = NativeExecutor::with_heap_pages(8, 8);
 
 	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
-	let genesis_storage = GenesisConfig {
+	let genesis_config = GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: vec![],	// TODO
-			authorities: vec![god_key.clone()],
+			authorities: vec![god_key.clone().into()],
 		}),
 		system: None,
 		session: Some(SessionConfig {
@@ -152,14 +162,13 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		timestamp: Some(TimestampConfig {
 			period: 5,					// 5 second block time.
 		}),
-	}.build_storage();
+	};
 
-	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_storage)?);
-	let mut core = ::tokio_core::reactor::Core::new().expect("Unable to spawn event loop.");
-
+	let client = Arc::new(client::new_in_mem::<NativeExecutor<demo_executor::Executor>, Block, _>(executor, genesis_config)?);
+	let mut runtime = Runtime::new()?;
 	let _rpc_servers = {
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(client.clone(), core.remote());
+			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
 			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool));
 			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, author, DummySystem)
 		};
@@ -178,7 +187,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		ctrlc::CtrlC::set_handler(move || {
 			exit_send.clone().send(()).wait().expect("Error sending exit notification");
 		});
-		core.run(exit.into_future()).expect("Error running informant event loop");
+
+		runtime.block_on(exit.into_future()).expect("Error running informant event loop");
 		return Ok(())
 	}
 

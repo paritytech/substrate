@@ -70,6 +70,12 @@ error_chain! {
 			display("Current state of blockchain has invalid authority count value"),
 		}
 
+		/// Cound not get runtime version.
+		VersionInvalid {
+			description("Runtime version error"),
+			display("On-chain runtime does not specify version"),
+		}
+
 		/// Invalid state data.
 		AuthInvalid(i: u32) {
 			description("authority value state error"),
@@ -126,4 +132,11 @@ impl Error {
 	pub fn from_blockchain(e: Box<std::error::Error + Send>) -> Self {
 		ErrorKind::Blockchain(e).into()
 	}
+
+	/// Chain a state error.
+	pub fn from_state(e: Box<state_machine::Error + Send>) -> Self {
+		ErrorKind::Execution(e).into()
+	}
 }
+
+impl state_machine::Error for Error {}

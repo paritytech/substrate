@@ -16,7 +16,7 @@
 
 //! Serialiser and prepender.
 
-use slicable::Slicable;
+use Codec;
 use core::iter::Extend;
 use alloc::vec::Vec;
 
@@ -25,7 +25,7 @@ pub trait KeyedVec {
 	fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8>;
 }
 
-impl<T: Slicable> KeyedVec for T {
+impl<T: Codec> KeyedVec for T {
 	fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8> {
 		self.using_encoded(|slice| {
 			let mut r = prepend_key.to_vec();

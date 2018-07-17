@@ -24,10 +24,9 @@ extern crate atty;
 extern crate ansi_term;
 extern crate regex;
 extern crate time;
-extern crate futures;
-extern crate tokio_core;
-extern crate ctrlc;
 extern crate fdlimit;
+extern crate futures;
+extern crate tokio;
 extern crate ed25519;
 extern crate triehash;
 extern crate parking_lot;
@@ -36,11 +35,14 @@ extern crate serde_json;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_extrinsic_pool;
+extern crate substrate_service;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_service as service;
@@ -49,6 +51,7 @@ extern crate slog;	// needed until we can reexport `slog_info` from `substrate_t
 #[macro_use]
 extern crate substrate_telemetry;
 extern crate polkadot_transaction_pool as txpool;
+extern crate exit_future;
 
 #[macro_use]
 extern crate lazy_static;
@@ -58,31 +61,30 @@ extern crate clap;
 extern crate error_chain;
 #[macro_use]
 extern crate log;
-#[macro_use]
-extern crate hex_literal;
 
 pub mod error;
 mod informant;
 mod chain_spec;
-mod preset_config;
 
 pub use chain_spec::ChainSpec;
-pub use preset_config::PresetConfig;
+pub use client::error::Error as ClientError;
+pub use client::backend::Backend as ClientBackend;
+pub use state_machine::Backend as StateMachineBackend;
+pub use polkadot_primitives::Block as PolkadotBlock;
+pub use service::{Components as ServiceComponents, Service};
 
-use std::io;
+use std::io::{self, Write, Read, stdin, stdout};
 use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::collections::HashMap;
-use substrate_primitives::hexdisplay::HexDisplay;
-use substrate_primitives::storage::{StorageData, StorageKey};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use runtime_primitives::StorageMap;
-use polkadot_primitives::Block;
+use polkadot_primitives::BlockId;
+use codec::{Decode, Encode};
+use client::BlockOrigin;
+use runtime_primitives::generic::SignedBlock;
 
-use futures::sync::mpsc;
-use futures::{Sink, Future, Stream};
-use tokio_core::reactor;
+use futures::Future;
+use tokio::runtime::Runtime;
 use service::PruningMode;
 
 const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
@@ -106,10 +108,42 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 	}
 }
 
-fn read_storage_json(filename: &str) -> Option<StorageMap> {
-	let file = File::open(PathBuf::from(filename)).ok()?;
-	let h: HashMap<StorageKey, StorageData> = ::serde_json::from_reader(&file).ok()?;
-	Some(h.into_iter().map(|(k, v)| (k.0, v.0)).collect())
+fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), String> {
+	let chain_spec = matches.value_of("chain")
+		.map(ChainSpec::from)
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::StagingTestnet });
+	let is_global = match chain_spec {
+		ChainSpec::PoC1Testnet | ChainSpec::StagingTestnet => true,
+		_ => false,
+	};
+	let spec = chain_spec.load()?;
+	info!("Chain specification: {}", spec.name());
+	Ok((spec, is_global))
+}
+
+fn base_path(matches: &clap::ArgMatches) -> PathBuf {
+	matches.value_of("base-path")
+		.map(|x| Path::new(x).to_owned())
+		.unwrap_or_else(default_base_path)
+}
+
+/// Additional worker making use of the node, to run asynchronously before shutdown.
+///
+/// This will be invoked with the service and spawn a future that resolves
+/// when complete.
+pub trait Worker {
+	/// A future that resolves when the work is done or the node should exit.
+	/// This will be run on a tokio runtime.
+	type Work: Future<Item=(),Error=()>;
+
+	/// An exit scheduled for the future.
+	type Exit: Future<Item=(),Error=()> + Send + 'static;
+
+	/// Don't work, but schedule an exit.
+	fn exit_only(self) -> Self::Exit;
+
+	/// Do work and schedule exit.
+	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work;
 }
 
 /// Parse command line arguments and start the node.
@@ -120,21 +154,20 @@ fn read_storage_json(filename: &str) -> Option<StorageMap> {
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T>(args: I) -> error::Result<()> where
+pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
+	W: Worker,
 {
-	let core = reactor::Core::new().expect("tokio::Core could not be created");
-
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
 		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
 		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed => {
-			let _ = clap::App::from_yaml(yaml).print_long_help();
+			print!("{}", e);
 			return Ok(())
 		}
-		Err(e) => return Err(e.into()),
+		Err(e) => e.exit(),
 	};
 
 	// TODO [ToDr] Split parameters parsing from actual execution.
@@ -146,31 +179,36 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	info!("  version {}", crate_version!());
 	info!("  by Parity Technologies, 2017, 2018");
 
-	let mut config = service::Configuration::default();
+	if let Some(matches) = matches.subcommand_matches("build-spec") {
+		return build_spec(matches);
+	}
+
+	if let Some(matches) = matches.subcommand_matches("export-blocks") {
+		return export_blocks(matches, worker.exit_only());
+	}
+
+	if let Some(matches) = matches.subcommand_matches("import-blocks") {
+		return import_blocks(matches, worker.exit_only());
+	}
+
+	let (spec, is_global) = load_spec(&matches)?;
+	let mut config = service::Configuration::default_with_spec(spec);
 
 	if let Some(name) = matches.value_of("name") {
 		config.name = name.into();
 		info!("Node name: {}", config.name);
 	}
 
-	let chain_spec = matches.value_of("chain")
-		.map(ChainSpec::from)
-		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::PoC2Testnet });
-	info!("Chain specification: {}", chain_spec);
-
-	config.chain_name = chain_spec.clone().into();
-
-	let base_path = matches.value_of("base-path")
-		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(default_base_path);
+	let base_path = base_path(&matches);
 
 	config.keystore_path = matches.value_of("keystore")
 		.map(|x| Path::new(x).to_owned())
-		.unwrap_or_else(|| keystore_path(&base_path))
+		.unwrap_or_else(|| keystore_path(&base_path, config.chain_spec.id()))
 		.to_string_lossy()
 		.into();
 
-	config.database_path = db_path(&base_path).to_string_lossy().into();
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+
 	config.pruning = match matches.value_of("pruning") {
 		Some("archive") => PruningMode::ArchiveAll,
 		None => PruningMode::keep_blocks(256),
@@ -178,47 +216,49 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
 	};
 
-	let (mut genesis_storage, boot_nodes) = PresetConfig::from_spec(chain_spec)
-		.map(PresetConfig::deconstruct)
-		.unwrap_or_else(|f| (Box::new(move ||
-			read_storage_json(&f)
-				.map(|s| { info!("{} storage items read from {}", s.len(), f); s })
-				.unwrap_or_else(|| panic!("Bad genesis state file: {}", f))
-		), vec![]));
-
-	if matches.is_present("build-genesis") {
-		info!("Building genesis");
-		for (i, (k, v)) in genesis_storage().iter().enumerate() {
-			print!("{}\n\"0x{}\": \"0x{}\"", if i > 0 {','} else {'{'}, HexDisplay::from(k), HexDisplay::from(v));
-		}
-		println!("\n}}");
-		return Ok(())
-	}
-
-	config.genesis_storage = genesis_storage;
-
 	let role =
 		if matches.is_present("collator") {
 			info!("Starting collator");
-			service::Role::COLLATOR
+			// TODO [rob]: collation node implementation
+			// This isn't a thing. Different parachains will have their own collator executables and
+			// maybe link to libpolkadot to get a light-client. 
+			service::Roles::LIGHT
 		} else if matches.is_present("light") {
 			info!("Starting (light)");
-			service::Role::LIGHT
+			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			service::Roles::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
 			info!("Starting validator");
-			service::Role::VALIDATOR
+			config.execution_strategy = service::ExecutionStrategy::Both;
+			service::Roles::AUTHORITY
 		} else {
 			info!("Starting (heavy)");
-			service::Role::FULL
+			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			service::Roles::FULL
 		};
+
+	if let Some(v) = matches.value_of("min-heap-pages") {
+		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
+	}
+	if let Some(v) = matches.value_of("max-heap-pages") {
+		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
+	}
+
+	if let Some(s) = matches.value_of("execution") {
+		config.execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+		};
+	}
 
 	config.roles = role;
 	{
-		config.network.boot_nodes = matches
+		config.network.boot_nodes.extend(matches
 			.values_of("bootnodes")
-			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect());
-		config.network.boot_nodes.extend(boot_nodes);
-		config.network.config_path = Some(network_path(&base_path).to_string_lossy().into());
+			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
+		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
 
 		let port = match matches.value_of("port") {
@@ -241,12 +281,19 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	}
 
 	let sys_conf = SystemConfiguration {
-		chain_name: config.chain_name.clone(),
+		chain_name: config.chain_spec.name().to_owned(),
 	};
 
-	let _guard = if matches.is_present("telemetry") || matches.value_of("telemetry-url").is_some() {
+	let mut runtime = Runtime::new()?;
+	let executor = runtime.executor();
+
+	let telemetry_enabled =
+		matches.is_present("telemetry")
+		|| matches.value_of("telemetry-url").is_some()
+		|| (is_global && !matches.is_present("no-telemetry"));
+	let _guard = if telemetry_enabled {
 		let name = config.name.clone();
-		let chain_name = config.chain_name.clone();
+		let chain_name = config.chain_spec.name().to_owned();
 		Some(init_telemetry(TelemetryConfig {
 			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
 			on_connect: Box::new(move || {
@@ -263,38 +310,179 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		None
 	};
 
-	match role == service::Role::LIGHT {
-		true => run_until_exit(core, service::new_light(config)?, &matches, sys_conf),
-		false => run_until_exit(core, service::new_full(config)?, &matches, sys_conf),
+	match role == service::Roles::LIGHT {
+		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, &matches, sys_conf, worker)?,
+		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, &matches, sys_conf, worker)?,
 	}
+
+	// TODO: hard exit if this stalls?
+	runtime.shutdown_on_idle().wait().expect("failed to shut down event loop");
+	Ok(())
 }
 
-fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matches: &clap::ArgMatches, sys_conf: SystemConfiguration) -> error::Result<()>
-	where
-		C: service::Components,
-		client::error::Error: From<<<<C as service::Components>::Backend as client::backend::Backend<Block>>::State as state_machine::Backend>::Error>,
-{
-	let exit = {
-		// can't use signal directly here because CtrlC takes only `Fn`.
-		let (exit_send, exit) = mpsc::channel(1);
-		ctrlc::CtrlC::set_handler(move || {
-			exit_send.clone().send(()).wait().expect("Error sending exit notification");
-		});
+fn build_spec(matches: &clap::ArgMatches) -> error::Result<()> {
+	let (spec, _) = load_spec(&matches)?;
+	info!("Building chain spec");
+	let json = spec.to_json(matches.is_present("raw"))?;
+	print!("{}", json);
+	Ok(())
+}
 
-		exit
+fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
+	where E: Future<Item=(),Error=()> + Send + 'static
+{
+	let base_path = base_path(matches);
+	let (spec, _) = load_spec(&matches)?;
+	let mut config = service::Configuration::default_with_spec(spec);
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+	info!("DB path: {}", config.database_path);
+	let client = service::new_client(config)?;
+	let (exit_send, exit_recv) = std::sync::mpsc::channel();
+	::std::thread::spawn(move || {
+		let _ = exit.wait();
+		let _ = exit_send.send(());
+	});
+	info!("Exporting blocks");
+	let mut block: u32 = match matches.value_of("from") {
+		Some(v) => v.parse().map_err(|_| "Invalid --from argument")?,
+		None => 1,
 	};
 
-	informant::start(&service, core.handle());
+	let last = match matches.value_of("to") {
+		Some(v) => v.parse().map_err(|_| "Invalid --to argument")?,
+		None => client.info()?.chain.best_number as u32,
+	};
+
+	if last < block {
+		return Err("Invalid block range specified".into());
+	}
+
+	let json = matches.is_present("json");
+
+	let mut file: Box<Write> = match matches.value_of("OUTPUT") {
+		Some(filename) => Box::new(File::open(filename)?),
+		None => Box::new(stdout()),
+	};
+
+	if !json {
+		file.write(&(last - block + 1).encode())?;
+	}
+
+	loop {
+		if exit_recv.try_recv().is_ok() {
+			break;
+		}
+		match client.block(&BlockId::number(block as u64))? {
+			Some(block) => {
+				if json {
+					serde_json::to_writer(&mut *file, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
+				} else {
+					file.write(&block.encode())?;
+				}
+			},
+			None => break,
+		}
+		if block % 10000 == 0 {
+			info!("#{}", block);
+		}
+		if block == last {
+			break;
+		}
+		block += 1;
+	}
+	Ok(())
+}
+
+fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
+	where E: Future<Item=(),Error=()> + Send + 'static
+{
+	let (spec, _) = load_spec(&matches)?;
+	let base_path = base_path(matches);
+	let mut config = service::Configuration::default_with_spec(spec);
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+
+	if let Some(v) = matches.value_of("min-heap-pages") {
+		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
+	}
+	if let Some(v) = matches.value_of("max-heap-pages") {
+		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
+	}
+
+	if let Some(s) = matches.value_of("execution") {
+		config.execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+		};
+	}
+
+	let client = service::new_client(config)?;
+	let (exit_send, exit_recv) = std::sync::mpsc::channel();
+
+	::std::thread::spawn(move || {
+		let _ = exit.wait();
+		let _ = exit_send.send(());
+	});
+
+	let mut file: Box<Read> = match matches.value_of("INPUT") {
+		Some(filename) => Box::new(File::open(filename)?),
+		None => Box::new(stdin()),
+	};
+
+	info!("Importing blocks");
+	let count: u32 = Decode::decode(&mut file).ok_or("Error reading file")?;
+	let mut block = 0;
+	for _ in 0 .. count {
+		if exit_recv.try_recv().is_ok() {
+			break;
+		}
+		match SignedBlock::decode(&mut file) {
+			Some(block) => {
+				let header = client.check_justification(block.block.header, block.justification.into())?;
+				client.import_block(BlockOrigin::File, header, Some(block.block.extrinsics))?;
+			},
+			None => {
+				warn!("Error reading block data.");
+				break;
+			}
+		}
+		block += 1;
+		if block % 10000 == 0 {
+			info!("#{}", block);
+		}
+	}
+	info!("Imported {} blocks. Best: #{}", block, client.info()?.chain.best_number);
+
+	Ok(())
+}
+
+fn run_until_exit<C, W>(
+	runtime: &mut Runtime,
+	service: service::Service<C>,
+	matches: &clap::ArgMatches,
+	sys_conf: SystemConfiguration,
+	worker: W,
+) -> error::Result<()>
+	where
+		C: service::Components,
+		W: Worker,
+{
+	let (exit_send, exit) = exit_future::signal();
+
+	let executor = runtime.executor();
+	informant::start(&service, exit.clone(), executor.clone());
 
 	let _rpc_servers = {
 		let http_address = parse_address("127.0.0.1:9933", "rpc-port", matches)?;
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", matches)?;
 
 		let handler = || {
-			let chain = rpc::apis::chain::Chain::new(service.client(), core.remote());
-			let author = rpc::apis::author::Author::new(service.client(), service.transaction_pool());
-			rpc::rpc_handler::<Block, _, _, _, _>(
-				service.client(),
+			let client = (&service as &substrate_service::Service<C>).client();
+			let chain = rpc::apis::chain::Chain::new(client.clone(), executor.clone());
+			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool());
+			rpc::rpc_handler::<service::ComponentBlock<C>, _, _, _, _>(
+				client,
 				chain,
 				author,
 				sys_conf.clone(),
@@ -306,7 +494,8 @@ fn run_until_exit<C>(mut core: reactor::Core, service: service::Service<C>, matc
 		)
 	};
 
-	core.run(exit.into_future()).expect("Error running informant event loop");
+	let _ = worker.work(&service).wait();
+	exit_send.fire();
 	Ok(())
 }
 
@@ -335,20 +524,26 @@ fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) ->
 	Ok(address)
 }
 
-fn keystore_path(base_path: &Path) -> PathBuf {
+fn keystore_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(chain_id);
 	path.push("keystore");
 	path
 }
 
-fn db_path(base_path: &Path) -> PathBuf {
+fn db_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(chain_id);
 	path.push("db");
 	path
 }
 
-fn network_path(base_path: &Path) -> PathBuf {
+fn network_path(base_path: &Path, chain_id: &str) -> PathBuf {
 	let mut path = base_path.to_owned();
+	path.push("chains");
+	path.push(chain_id);
 	path.push("network");
 	path
 }
