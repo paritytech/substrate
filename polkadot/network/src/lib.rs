@@ -44,7 +44,7 @@ extern crate rhododendron;
 extern crate log;
 
 mod collator_pool;
-//mod local_collations;
+mod local_collations;
 mod router;
 pub mod consensus;
 
