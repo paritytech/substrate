@@ -28,7 +28,7 @@ use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256};
-use primitives::::primitives::hexdisplay::HexDisplay;
+use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use triehash::ordered_trie_root;
 use sandbox;
