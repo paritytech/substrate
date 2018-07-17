@@ -140,6 +140,8 @@ impl<B: BlockT> Drop for AsyncImportQueue<B> {
 	fn drop(&mut self) {
 		if let Some(handle) = self.handle.lock().take() {
 			self.data.is_stopping.store(true, Ordering::SeqCst);
+			self.data.signal.notify_one();
+
 			let _ = handle.join();
 		}
 	}
@@ -148,8 +150,11 @@ impl<B: BlockT> Drop for AsyncImportQueue<B> {
 /// Blocks import thread.
 fn import_thread<B: BlockT, E: ExecuteInContext<B>>(sync: Weak<RwLock<ChainSync<B>>>, service: Weak<E>, chain: Weak<Client<B>>, qdata: Arc<AsyncImportQueueData<B>>) {
 	trace!(target: "sync", "Starting import thread");
-
 	loop {
+		if qdata.is_stopping.load(Ordering::SeqCst) {
+			break;
+		}
+
 		let new_blocks = {
 			let mut queue_lock = qdata.queue.lock();
 			if queue_lock.is_empty() {
@@ -161,9 +166,6 @@ fn import_thread<B: BlockT, E: ExecuteInContext<B>>(sync: Weak<RwLock<ChainSync<
 				None => break,
 			}
 		};
-		if qdata.is_stopping.load(Ordering::SeqCst) {
-			break;
-		}
 
 		match (sync.upgrade(), service.upgrade(), chain.upgrade()) {
 			(Some(sync), Some(service), Some(chain)) => {
@@ -417,6 +419,7 @@ pub mod tests {
 	use message;
 	use test_client::{self, TestClient};
 	use test_client::runtime::{Block, Hash};
+	use on_demand::tests::DummyExecutor;
 	use super::*;
 
 	/// Blocks import queue that is importing blocks in the same thread.
@@ -562,5 +565,14 @@ pub mod tests {
 		let qdata = AsyncImportQueueData::new();
 		qdata.is_stopping.store(true, Ordering::SeqCst);
 		assert!(!import_many_blocks(&mut TestLink::new(), Some(&qdata), (BlockOrigin::File, vec![block.clone(), block])));
+	}
+
+	#[test]
+	fn async_import_queue_drops() {
+		let queue = AsyncImportQueue::new();
+		let service = Arc::new(DummyExecutor);
+		let chain = Arc::new(test_client::new());
+		queue.start(Weak::new(), Arc::downgrade(&service), Arc::downgrade(&chain) as Weak<Client<Block>>).unwrap();
+		drop(queue);
 	}
 }
