@@ -49,6 +49,7 @@ extern crate substrate_client as client;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate ed25519;
+extern crate tokio;
 
 extern crate polkadot_api;
 extern crate polkadot_cli;
@@ -58,16 +59,20 @@ extern crate polkadot_primitives;
 #[macro_use]
 extern crate log;
 
-use std::collections::{BTreeSet, BTreeMap};
+use std::collections::{BTreeSet, BTreeMap, HashSet};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use futures::{future, stream, Stream, Future, IntoFuture};
 use client::BlockchainEvents;
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::BlockId;
-use polkadot_primitives::parachain::{self, BlockData, HeadData, ConsolidatedIngress, Collation, Message, Id as ParaId};
+use polkadot_primitives::{BlockId, SessionKey};
+use polkadot_primitives::parachain::{self, BlockData, DutyRoster, HeadData, ConsolidatedIngress, Message, Id as ParaId};
 use polkadot_cli::{ServiceComponents, Service};
 use polkadot_cli::Worker;
+use tokio::timer::Deadline;
+
+const COLLATION_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Parachain context needed for collation.
 ///
@@ -183,7 +188,7 @@ pub fn collate<'a, R, P>(
 struct ApiContext;
 
 impl RelayChainContext for ApiContext {
-	type Error = ();
+	type Error = ::polkadot_api::Error;
 	type FutureEgress = Result<Vec<Vec<Message>>, Self::Error>;
 
 	fn routing_parachains(&self) -> BTreeSet<ParaId> {
@@ -217,41 +222,63 @@ impl<P, E> Worker for CollationNode<P, E> where
 		let CollationNode { parachain_context, exit, para_id, key } = self;
 		let client = service.client();
 		let api = service.api();
+		let network = service.network();
 
 		let work = client.import_notification_stream()
-			.and_then(move |notification| {
-				let id = BlockId::hash(notification.hash);
+			.for_each(move |notification| {
+				let relay_parent = notification.hash;
+				let id = BlockId::hash(relay_parent);
 
-				match api.parachain_head(&id, para_id) {
-					Ok(Some(last_head)) => {
-						let collation_work = collate(
-							para_id,
-							HeadData(last_head),
-							ApiContext,
-							parachain_context.clone(),
-							key.clone(),
-						).map(Some);
+				let network = network.clone();
+				let api = api.clone();
+				let key = key.clone();
+				let parachain_context = parachain_context.clone();
 
-						future::Either::A(collation_work)
-					}
-					Ok(None) => {
-						info!("Parachain {:?} appears to be inactive. Cannot collate.", id);
-						future::Either::B(future::ok(None))
-					}
-					Err(e) => {
-						warn!("Could not collate for parachain {:?}: {:?}", id, e);
-						future::Either::B(future::ok(None)) // returning error would shut down the collation node
-					}
-				}
-			})
-			.for_each(|_collation: Option<Collation>| {
-				// TODO: import into network.
+				let work = future::lazy(move || {
+					let last_head = match api.parachain_head(&id, para_id)? {
+						Some(last_head) => last_head,
+						None => return Ok(()),
+					};
+
+					let targets = compute_targets(
+						para_id,
+						api.session_keys(&id)?.as_slice(),
+						api.duty_roster(&id)?,
+					);
+
+					collate(
+						para_id,
+						HeadData(last_head),
+						ApiContext,
+						parachain_context,
+						key,
+					).map(|collation| {
+						network.with_spec(|spec, ctx| spec.add_local_collation(
+							ctx,
+							relay_parent,
+							targets,
+							collation,
+						))
+					})
+				});
+				let deadlined = Deadline::new(work, Instant::now() + COLLATION_TIMEOUT);
+
+				tokio::spawn(deadlined.map_err(|e| warn!("Collation failure: {}", e)));
 				Ok(())
 			});
 
 		let work_and_exit = work.select(exit).then(|_| Ok(()));
 		Box::new(work_and_exit) as Box<_>
 	}
+}
+
+fn compute_targets(para_id: ParaId, session_keys: &[SessionKey], roster: DutyRoster) -> HashSet<SessionKey> {
+	use polkadot_primitives::parachain::Chain;
+
+	roster.validator_duty.iter().enumerate()
+		.filter(|&(_, ref c)| c == &Chain::Parachain(para_id))
+		.filter_map(|(i, _)| session_keys.get(i))
+		.collect()
 }
 
 /// Run a collator node with the given `RelayChainContext` and `ParachainContext` and
