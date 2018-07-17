@@ -75,7 +75,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, peer_id: PeerId, roles: Roles) {
-		if roles.contains(Roles::AUTHORITY) {
+		if roles.intersects(Roles::AUTHORITY | Roles::FULL) {
 			trace!(target:"gossip", "Registering authority {}", peer_id);
 			// Send out all known messages.
 			// TODO: limit by size
