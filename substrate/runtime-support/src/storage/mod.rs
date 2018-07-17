@@ -41,11 +41,11 @@ impl<'a> Input for IncrementalInput<'a> {
 
 // TODO: only introduce this wrapper for types where it makes sense, ideally have it within the module declaration.
 
-struct AppendZeroes<'a> {
-	input: &'a mut Input,
+struct AppendZeroes<'a, I: Input + 'a> {
+	input: &'a mut I,
 }
 
-impl<'a> Input for AppendZeroes<'a> {
+impl<'a, I: Input + 'a> Input for AppendZeroes<'a, I> {
 	fn read(&mut self, into: &mut [u8]) -> usize {
 		let r = self.input.read(into);
 		for z in &mut into[r..] {
