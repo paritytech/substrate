@@ -82,6 +82,8 @@ impl TrieBackend {
 	}
 }
 
+impl super::Error for String {}
+
 impl Backend for TrieBackend {
 	type Error = String;
 	type Transaction = MemoryDB;

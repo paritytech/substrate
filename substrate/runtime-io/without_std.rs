@@ -56,6 +56,7 @@ extern "C" {
 	fn ext_print_num(value: u64);
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
+	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
@@ -97,6 +98,15 @@ pub fn clear_storage(key: &[u8]) {
 		ext_clear_storage(
 			key.as_ptr(), key.len() as u32
 		);
+	}
+}
+
+/// Clear the storage of some particular key.
+pub fn exists_storage(key: &[u8]) {
+	unsafe {
+		ext_exists_storage(
+			key.as_ptr(), key.len() as u32
+		) != 0;
 	}
 }
 

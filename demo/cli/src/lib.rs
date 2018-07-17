@@ -54,6 +54,7 @@ use demo_runtime::{Block, BlockId, UncheckedExtrinsic, GenesisConfig,
 	TimestampConfig};
 use futures::{Future, Sink, Stream};
 use tokio::runtime::Runtime;
+use demo_executor::NativeExecutor;
 
 struct DummyPool;
 impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for DummyPool {
@@ -107,7 +108,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 
 	// Create client
-	let executor = demo_executor::Executor::with_heap_pages(8);
+	let executor = NativeExecutor::with_heap_pages(8, 8);
 
 	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
 	let genesis_config = GenesisConfig {
@@ -163,7 +164,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		}),
 	};
 
-	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_config)?);
+	let client = Arc::new(client::new_in_mem::<NativeExecutor<demo_executor::Executor>, Block, _>(executor, genesis_config)?);
 	let mut runtime = Runtime::new()?;
 	let _rpc_servers = {
 		let handler = || {
