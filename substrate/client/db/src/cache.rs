@@ -178,13 +178,12 @@ impl<Block, T> DbCacheList<Block, T>
 	}
 
 	/// Prune all entries from the beginning up to the block (including entry at the number). Returns
-	/// the number of pruned entries and the flag if the cache is clear after pruning (i.e.
-	/// update_best_entry(None) is required).
-	pub fn prune_entries(&self, transaction: &mut DBTransaction, last_to_prune: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<(usize, bool)> {
+	/// the number of pruned entries. Pruning never deletes the latest entry in the cache.
+	pub fn prune_entries(&self, transaction: &mut DBTransaction, last_to_prune: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<usize> {
 		// find the last entry we want to keep
 		let mut last_entry_to_keep = match self.best_entry() {
 			Some(best_entry) => best_entry.valid_from,
-			None => return Ok((0, false)),
+			None => return Ok(0),
 		};
 		let mut first_entry_to_remove = last_entry_to_keep;
 		while first_entry_to_remove > last_to_prune {
@@ -194,7 +193,7 @@ impl<Block, T> DbCacheList<Block, T>
 				.expect("entry referenced from the next entry; entry exists when referenced; qed");
 			first_entry_to_remove = match entry.prev_valid_from {
 				Some(prev_valid_from) => prev_valid_from,
-				None => return Ok((0, false)),
+				None => return Ok(0),
 			}
 		}
 
@@ -210,20 +209,12 @@ impl<Block, T> DbCacheList<Block, T>
 			pruned += 1;
 		}
 
-		// update last entry to keep if required
-		let clear_cache = match last_entry_to_keep <= first_entry_to_remove {
-			true => true,
-			false => {
-				let mut entry = read_storage_entry::<Block, T>(&*self.db, self.column, last_entry_to_keep)?
-					.expect("last_entry_to_keep > first_entry_to_remove; that means that we're leaving this entry in the db; qed");
-				entry.prev_valid_from = None;
-				transaction.put(self.column, &number_to_db_key(last_entry_to_keep), &entry.encode());
+		let mut entry = read_storage_entry::<Block, T>(&*self.db, self.column, last_entry_to_keep)?
+			.expect("last_entry_to_keep > first_entry_to_remove; that means that we're leaving this entry in the db; qed");
+		entry.prev_valid_from = None;
+		transaction.put(self.column, &number_to_db_key(last_entry_to_keep), &entry.encode());
 
-				false
-			}
-		};
-
-		Ok((pruned, clear_cache))
+		Ok(pruned)
 	}
 
 	/// Reads the cached value, actual at given block. Returns None if the value was not cached
@@ -366,7 +357,8 @@ mod tests {
 				current_entries_count -= entries_count - prev_entries_count;
 			}
 
-			assert_eq!(db.db().iter(columns::AUTHORITIES).count(), current_entries_count);
+			// there's always at least 1 entry in the cache (after first insertion)
+			assert_eq!(db.db().iter(columns::AUTHORITIES).count(), ::std::cmp::max(current_entries_count, 1));
 		}
 	}
 
@@ -379,9 +371,9 @@ mod tests {
 		db.db().write(transaction).unwrap();
 
 		let mut transaction = DBTransaction::new();
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 50).unwrap().0, 0);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 100).unwrap().0, 1);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap().0, 1);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 50).unwrap(), 0);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 100).unwrap(), 1);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap(), 1);
 
 		let mut transaction = DBTransaction::new();
 		db.cache().authorities_at_cache().update_best_entry(
@@ -389,14 +381,14 @@ mod tests {
 		db.db().write(transaction).unwrap();
 
 		let mut transaction = DBTransaction::new();
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 50).unwrap().0, 0);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 100).unwrap().0, 1);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap().0, 1);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 200).unwrap().0, 2);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 250).unwrap().0, 2);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 50).unwrap(), 0);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 100).unwrap(), 1);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap(), 1);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 200).unwrap(), 2);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 250).unwrap(), 2);
 
 		let mut transaction = DBTransaction::new();
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap(), (1, false));
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap(), 1);
 		db.db().write(transaction).unwrap();
 
 		assert_eq!(db.cache().authorities_at_cache().best_entry().unwrap().value, Some(vec![[2u8; 32].into()]));
@@ -407,15 +399,14 @@ mod tests {
 		assert_eq!(db.cache().authorities_at(BlockId::Number(250)), Some(vec![[2u8; 32].into()]));
 
 		let mut transaction = DBTransaction::new();
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 300).unwrap(), (1, true));
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 300).unwrap(), 1);
 		db.db().write(transaction).unwrap();
-		db.cache().authorities_at_cache().update_best_entry(None);
 
-		assert_eq!(db.cache().authorities_at_cache().best_entry(), None);
+		assert_eq!(db.cache().authorities_at_cache().best_entry().unwrap().value, Some(vec![[2u8; 32].into()]));
 		assert_eq!(db.cache().authorities_at(BlockId::Number(50)), None);
 		assert_eq!(db.cache().authorities_at(BlockId::Number(100)), None);
 		assert_eq!(db.cache().authorities_at(BlockId::Number(150)), None);
-		assert_eq!(db.cache().authorities_at(BlockId::Number(200)), None);
-		assert_eq!(db.cache().authorities_at(BlockId::Number(250)), None);
+		assert_eq!(db.cache().authorities_at(BlockId::Number(200)), Some(vec![[2u8; 32].into()]));
+		assert_eq!(db.cache().authorities_at(BlockId::Number(250)), Some(vec![[2u8; 32].into()]));
 	}
 }

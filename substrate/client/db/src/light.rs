@@ -167,36 +167,31 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		transaction.put(columns::HEADER, &key, &header.encode());
 		transaction.put(columns::BLOCK_INDEX, hash.as_ref(), &key);
 
-		let (update_best_authorities, best_authorities) = if is_new_best {
+		let best_authorities = if is_new_best {
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
 
 			// cache authorities for previous block
 			let number: u64 = number.as_();
 			let previous_number = number.checked_sub(1);
-			let mut best_authorities = previous_number
+			let best_authorities = previous_number
 				.and_then(|previous_number| self.cache.authorities_at_cache()
 					.commit_best_entry(&mut transaction, As::sa(previous_number), authorities));
 
 			// prune authorities from 'ancient' blocks
-			let mut update_best_authorities = best_authorities.is_some();
 			if let Some(ancient_number) = number.checked_sub(AUTHORITIES_ENTRIES_TO_KEEP) {
-				let (_, clear_best_entry) = self.cache.authorities_at_cache().prune_entries(&mut transaction, As::sa(ancient_number))?;
-				if clear_best_entry {
-					update_best_authorities = true;
-					best_authorities = None;
-				}
+				self.cache.authorities_at_cache().prune_entries(&mut transaction, As::sa(ancient_number))?;
 			}
 
-			(update_best_authorities, best_authorities)
+			best_authorities
 		} else {
-			(false, None)
+			None
 		};
 
 		debug!("Light DB Commit {:?} ({})", hash, number);
 		self.db.write(transaction).map_err(db_err)?;
 		self.update_meta(hash, number, is_new_best);
-		if update_best_authorities {
-			self.cache.authorities_at_cache().update_best_entry(best_authorities);
+		if let Some(best_authorities) = best_authorities {
+			self.cache.authorities_at_cache().update_best_entry(Some(best_authorities));
 		}
 
 		Ok(())
