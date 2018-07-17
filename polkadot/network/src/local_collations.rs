@@ -42,7 +42,7 @@ pub struct LocalCollations<C> {
 
 impl<C: Clone> LocalCollations<C> {
 	/// Create a new `LocalCollations` tracker.
-	fn new() -> Self {
+	pub fn new() -> Self {
 		LocalCollations {
 			primary_for: HashSet::new(),
 			local_collations: HashMap::new(),
@@ -51,7 +51,7 @@ impl<C: Clone> LocalCollations<C> {
 
 	/// Validator gave us a new role. If the new role is "primary", this function might return
 	/// a set of collations to send to that validator.
-	pub fn note_validator_role(&mut self, key: SessionKey, role: Role) -> Vec<C> {
+	pub fn note_validator_role(&mut self, key: SessionKey, role: Role) -> Vec<(Hash, C)> {
 		match role {
 			Role::Backup => {
 				self.primary_for.remove(&key);
@@ -70,7 +70,7 @@ impl<C: Clone> LocalCollations<C> {
 
 	/// Fresh session key from a validator. Returns a vector of collations to send
 	/// to the validator.
-	pub fn fresh_key(&mut self, old_key: &SessionKey, new_key: &SessionKey) -> Vec<C> {
+	pub fn fresh_key(&mut self, old_key: &SessionKey, new_key: &SessionKey) -> Vec<(Hash, C)> {
 		if self.primary_for.remove(old_key) {
 			self.primary_for.insert(*new_key);
 
@@ -86,8 +86,10 @@ impl<C: Clone> LocalCollations<C> {
 	}
 
 	/// Mark collations relevant to the given parent hash as obsolete.
-	pub fn mark_obsolete(&mut self, relay_parent: &Hash) {
-		self.local_collations.remove(relay_parent);
+	pub fn collect_garbage(&mut self, relay_parent: Option<&Hash>) {
+		if let Some(relay_parent) = relay_parent {
+			self.local_collations.remove(relay_parent);
+		}
 
 		let now = Instant::now();
 		self.local_collations.retain(|_, v| v.live_since + LIVE_FOR > now);
@@ -107,10 +109,10 @@ impl<C: Clone> LocalCollations<C> {
 		local.targets.intersection(&self.primary_for).cloned()
 	}
 
-	fn collations_targeting(&self, key: &SessionKey) -> Vec<C> {
-		self.local_collations.values()
-			.filter(|v| v.targets.contains(key))
-			.map(|v| v.collation.clone())
+	fn collations_targeting(&self, key: &SessionKey) -> Vec<(Hash, C)> {
+		self.local_collations.iter()
+			.filter(|&(_, ref v)| v.targets.contains(key))
+			.map(|(h, v)| (*h, v.collation.clone()))
 			.collect()
 	}
 }
@@ -131,7 +133,7 @@ mod tests {
 
 		let mut tracker = LocalCollations::new();
 		assert!(tracker.add_collation(relay_parent, targets, 5).next().is_none());
-		assert_eq!(tracker.note_validator_role(key, Role::Primary), vec![5]);
+		assert_eq!(tracker.note_validator_role(key, Role::Primary), vec![(relay_parent, 5)]);
 	}
 
 	#[test]
@@ -145,9 +147,27 @@ mod tests {
 			set
 		};
 
-		let mut tracker = LocalCollations::new();
+		let mut tracker: LocalCollations<u8> = LocalCollations::new();
 		assert!(tracker.add_collation(relay_parent, targets, 5).next().is_none());
-		assert_eq!(tracker.note_validator_role(orig_key, Role::Primary), vec![]);
-		assert_eq!(tracker.fresh_key(&orig_key, &new_key), vec![5]);
+		assert_eq!(tracker.note_validator_role(orig_key, Role::Primary), Vec::<(Hash, u8)>::new());
+		assert_eq!(tracker.fresh_key(&orig_key, &new_key), vec![(relay_parent, 5u8)]);
+	}
+
+	#[test]
+	fn collecting_garbage() {
+		let relay_parent_a = [255; 32].into();
+		let relay_parent_b = [222; 32].into();
+
+		let mut tracker: LocalCollations<u8> = LocalCollations::new();
+		assert!(tracker.add_collation(relay_parent_a, HashSet::new(), 5).next().is_none());
+		assert!(tracker.add_collation(relay_parent_b, HashSet::new(), 69).next().is_none());
+
+		let live_since = Instant::now() - LIVE_FOR - Duration::from_secs(10);
+		tracker.local_collations.get_mut(&relay_parent_b).unwrap().live_since = live_since;
+
+		tracker.collect_garbage(Some(&relay_parent_a));
+
+		// first one pruned because of relay parent, other because of time.
+		assert!(tracker.local_collations.is_empty());
 	}
 }
