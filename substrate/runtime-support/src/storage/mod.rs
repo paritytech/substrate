@@ -39,6 +39,22 @@ impl<'a> Input for IncrementalInput<'a> {
 	}
 }
 
+// TODO: only introduce this wrapper for types where it makes sense, ideally have it within the module declaration.
+
+struct AppendZeroes<'a, I: Input + 'a> {
+	input: &'a mut I,
+}
+
+impl<'a, I: Input + 'a> Input for AppendZeroes<'a, I> {
+	fn read(&mut self, into: &mut [u8]) -> usize {
+		let r = self.input.read(into);
+		for z in &mut into[r..] {
+			*z = 0;
+		};
+		into.len()
+	}
+}
+
  /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 	let key = twox_128(key);
@@ -47,7 +63,7 @@ pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 			key: &key[..],
 			pos: 0,
 		};
-		Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
+		Decode::decode(&mut AppendZeroes { input: &mut input } ).expect("storage is not null, therefore must be a valid type")
 	})
 }
 
@@ -103,8 +119,7 @@ pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(key: &[u8], default_valu
 
 /// Check to see if `key` has an explicit entry in storage.
 pub fn exists(key: &[u8]) -> bool {
-	let mut x = [0u8; 0];
-	runtime_io::read_storage(&twox_128(key)[..], &mut x[..], 0).is_some()
+	runtime_io::exists_storage(&twox_128(key)[..])
 }
 
 /// Ensure `key` has no explicit entry in storage.

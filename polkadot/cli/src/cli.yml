@@ -69,7 +69,7 @@ args:
   - chain:
       long: chain
       value_name: CHAIN_SPEC
-      help: Specify the chain specification (one of poc-1, dev, local or staging)
+      help: Specify the chain specification (one of krummelanke, dev, local or staging)
       takes_value: true
   - pruning:
       long: pruning
@@ -118,7 +118,7 @@ subcommands:
         - chain:
             long: chain
             value_name: CHAIN_SPEC
-            help: Specify the chain specification (one of poc-1, dev, local or staging)
+            help: Specify the chain specification (one of krummelanke, dev, local or staging)
             takes_value: true
   - export-blocks:
       about: Export blocks to a file
