@@ -391,7 +391,7 @@ pub fn execute<'a, T: Trait, E: Ext<T>>(
 			.map_err(|_| sandbox::HostError)?;
 
 		// The trap mechanism is used to immediately terminate the execution.
-		// This trap should be handled appropriate before returning the result
+		// This trap should be handled appropriately before returning the result
 		// to the user of this crate.
 		Err(sandbox::HostError)
 	}
