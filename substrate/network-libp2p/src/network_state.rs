@@ -90,11 +90,11 @@ struct Connections {
 }
 
 struct PeerConnectionInfo {
-	/// A list of message senders per protocol, and the protocol version.
+	/// A list of protocols, and the potential corresponding connection.
+	/// The `UniqueConnec` contains a sender and the protocol version.
 	/// The sender can be used to transmit data for the remote. Note that the
 	/// packet_id has to be inside the `Bytes`.
-	/// Closing the sender will drop the substream of this protocol.
-	senders: Vec<(ProtocolId, UniqueConnec<(mpsc::UnboundedSender<Bytes>, u8)>)>,
+	protocols: Vec<(ProtocolId, UniqueConnec<(mpsc::UnboundedSender<Bytes>, u8)>)>,
 
 	/// The Kademlia connection to this node.
 	kad_connec: UniqueConnec<KadConnecController>,
@@ -245,7 +245,7 @@ impl NetworkState {
 			None => return None,
 		};
 
-		let protocol_version = match info.senders.iter().find(|&(ref p, _)| p == &protocol) {
+		let protocol_version = match info.protocols.iter().find(|&(ref p, _)| p == &protocol) {
 			Some(&(_, ref unique_connec)) =>
 				if let Some(val) = unique_connec.poll() {
 					val.1 as u32
@@ -282,7 +282,7 @@ impl NetworkState {
 			None => return None,
 		};
 
-		peer.senders.iter()
+		peer.protocols.iter()
 			.find(|p| p.0 == protocol)
 			.and_then(|p| p.1.poll())
 			.map(|(_, version)| version)
@@ -449,7 +449,6 @@ impl NetworkState {
 		protocol_id: ProtocolId,
 		endpoint: Endpoint,
 	) -> Result<(PeerId, UniqueConnec<(mpsc::UnboundedSender<Bytes>, u8)>), IoError> {
-		// TODO: optimize by not calling tons of functions all the time
 		let mut connections = self.connections.write();
 
 		if is_peer_disabled(&self.disabled_peers, &node_id) {
@@ -480,12 +479,12 @@ impl NetworkState {
 			}
 		}
 
-		if let Some((_, ref uconn)) = infos.senders.iter().find(|&(prot, _)| prot == &protocol_id) {
+		if let Some((_, ref uconn)) = infos.protocols.iter().find(|&(prot, _)| prot == &protocol_id) {
 			return Ok((peer_id, uconn.clone()))
 		}
 
 		let unique_connec = UniqueConnec::empty();
-		infos.senders.push((protocol_id.clone(), unique_connec.clone()));
+		infos.protocols.push((protocol_id.clone(), unique_connec.clone()));
 		Ok((peer_id, unique_connec))
 	}
 
@@ -494,7 +493,7 @@ impl NetworkState {
 	pub fn send(&self, protocol: ProtocolId, peer_id: PeerId, message: Bytes)
 		-> Result<(), Error> {
 		if let Some(peer) = self.connections.read().info_by_peer.get(&peer_id) {
-			let sender = peer.senders.iter().find(|elem| elem.0 == protocol)
+			let sender = peer.protocols.iter().find(|elem| elem.0 == protocol)
 				.and_then(|e| e.1.poll())
 				.map(|e| e.0);
 			if let Some(sender) = sender {
@@ -617,7 +616,7 @@ fn accept_connection(
 		let new_id = next_peer_id.fetch_add(1, atomic::Ordering::Relaxed);
 
 		info_by_peer.insert(new_id, PeerConnectionInfo {
-			senders: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
+			protocols: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
 			kad_connec: UniqueConnec::empty(),
 			id: node_id.clone(),
 			originated: endpoint == Endpoint::Dialer,

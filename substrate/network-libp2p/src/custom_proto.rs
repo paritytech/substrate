@@ -55,8 +55,7 @@ pub struct RegisteredProtocolOutput<T> {
 	/// Version of the protocol that was negotiated.
 	pub protocol_version: u8,
 
-	/// Channel to sender outgoing messages to. Closing this channel closes the
-	/// connection.
+	/// Channel to sender outgoing messages to.
 	// TODO: consider assembling packet_id here
 	pub outgoing: mpsc::UnboundedSender<Bytes>,
 
@@ -156,7 +155,6 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 		let (sink, stream) = {
 			let framed = AsyncRead::framed(socket, VarintCodec::default());
 			let msg_rx = msg_rx.map(Message::SendReq)
-				.chain(stream::once(Ok(Message::Finished)))
 				.map_err(|()| unreachable!("mpsc::UnboundedReceiver never errors"));
 			let (sink, stream) = framed.split();
 			let stream = stream.map(Message::RecvSocket)
