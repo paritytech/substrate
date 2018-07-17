@@ -202,9 +202,8 @@ impl Encode for Message {
 				dest.push(h);
 				dest.push(s);
 			}
-			Message::SessionKey(ref h, ref k) => {
+			Message::SessionKey(ref k) => {
 				dest.push_byte(1);
-				dest.push(h);
 				dest.push(k);
 			}
 			Message::RequestBlockData(ref id, ref d) => {
@@ -234,7 +233,7 @@ impl Decode for Message {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			0 => Some(Message::Statement(Decode::decode(input)?, Decode::decode(input)?)),
-			1 => Some(Message::SessionKey(Decode::decode(input)?, Decode::decode(input)?)),
+			1 => Some(Message::SessionKey(Decode::decode(input)?)),
 			2 => Some(Message::RequestBlockData(Decode::decode(input)?, Decode::decode(input)?)),
 			3 => Some(Message::BlockData(Decode::decode(input)?, Decode::decode(input)?)),
 			4 => Some(Message::CollatorRole(Decode::decode(input)?)),

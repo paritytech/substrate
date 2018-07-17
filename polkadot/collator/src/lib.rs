@@ -208,10 +208,10 @@ struct CollationNode<P, E> {
 }
 
 impl<P, E> Worker for CollationNode<P, E> where
-	P: ParachainContext + 'static,
+	P: ParachainContext + Send + 'static,
 	E: Future<Item=(),Error=()> + Send + 'static
 {
-	type Work = Box<Future<Item=(),Error=()>>;
+	type Work = Box<Future<Item=(),Error=()> + Send>;
 	type Exit = E;
 
 	fn exit_only(self) -> Self::Exit {
@@ -226,6 +226,15 @@ impl<P, E> Worker for CollationNode<P, E> where
 
 		let work = client.import_notification_stream()
 			.for_each(move |notification| {
+				macro_rules! try_fr {
+					($e:expr) => {
+						match $e {
+							Ok(x) => x,
+							Err(e) => return future::Either::A(future::err(e)),
+						}
+					}
+				}
+
 				let relay_parent = notification.hash;
 				let id = BlockId::hash(relay_parent);
 
@@ -235,35 +244,44 @@ impl<P, E> Worker for CollationNode<P, E> where
 				let parachain_context = parachain_context.clone();
 
 				let work = future::lazy(move || {
-					let last_head = match api.parachain_head(&id, para_id)? {
+					let last_head = match try_fr!(api.parachain_head(&id, para_id)) {
 						Some(last_head) => last_head,
-						None => return Ok(()),
+						None => return future::Either::A(future::ok(())),
 					};
 
 					let targets = compute_targets(
 						para_id,
-						api.session_keys(&id)?.as_slice(),
-						api.duty_roster(&id)?,
+						try_fr!(api.session_keys(&id)).as_slice(),
+						try_fr!(api.duty_roster(&id)),
 					);
 
-					collate(
+					let collation_work = collate(
 						para_id,
 						HeadData(last_head),
 						ApiContext,
 						parachain_context,
 						key,
-					).map(|collation| {
+					).map(move |collation| {
 						network.with_spec(|spec, ctx| spec.add_local_collation(
 							ctx,
 							relay_parent,
 							targets,
 							collation,
-						))
-					})
+						));
+					});
+
+					future::Either::B(collation_work)
 				});
 				let deadlined = Deadline::new(work, Instant::now() + COLLATION_TIMEOUT);
+				let silenced = deadlined.then(|res| match res {
+					Ok(()) => Ok(()),
+					Err(e) => {
+						warn!("Collation failure: {}", e);
+						Ok(())
+					}
+				});
 
-				tokio::spawn(deadlined.map_err(|e| warn!("Collation failure: {}", e)));
+				tokio::spawn(silenced);
 				Ok(())
 			});
 
@@ -276,8 +294,9 @@ fn compute_targets(para_id: ParaId, session_keys: &[SessionKey], roster: DutyRos
 	use polkadot_primitives::parachain::Chain;
 
 	roster.validator_duty.iter().enumerate()
-		.filter(|&(_, ref c)| c == &Chain::Parachain(para_id))
+		.filter(|&(_, c)| c == &Chain::Parachain(para_id))
 		.filter_map(|(i, _)| session_keys.get(i))
+		.cloned()
 		.collect()
 }
 
@@ -293,7 +312,7 @@ pub fn run_collator<P, E>(
 	key: Arc<ed25519::Pair>,
 	args: Vec<::std::ffi::OsString>
 ) -> polkadot_cli::error::Result<()> where
-	P: ParachainContext + 'static,
+	P: ParachainContext + Send + 'static,
 	E: IntoFuture<Item=(),Error=()>,
 	E::Future: Send + 'static,
 {

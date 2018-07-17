@@ -134,7 +134,7 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 pub trait Worker {
 	/// A future that resolves when the work is done or the node should exit.
 	/// This will be run on a tokio runtime.
-	type Work: Future<Item=(),Error=()>;
+	type Work: Future<Item=(),Error=()> + Send + 'static;
 
 	/// An exit scheduled for the future.
 	type Exit: Future<Item=(),Error=()> + Send + 'static;
@@ -221,7 +221,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			info!("Starting collator");
 			// TODO [rob]: collation node implementation
 			// This isn't a thing. Different parachains will have their own collator executables and
-			// maybe link to libpolkadot to get a light-client. 
+			// maybe link to libpolkadot to get a light-client.
 			service::Roles::LIGHT
 		} else if matches.is_present("light") {
 			info!("Starting (light)");
@@ -494,7 +494,7 @@ fn run_until_exit<C, W>(
 		)
 	};
 
-	let _ = worker.work(&service).wait();
+	let _ = runtime.block_on(worker.work(&service));
 	exit_send.fire();
 	Ok(())
 }
