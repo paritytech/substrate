@@ -60,6 +60,7 @@ pub use client::ExecutionStrategy;
 pub type ChainSpec = service::ChainSpec<GenesisConfig>;
 /// Polkadot client type for specialised `Components`.
 pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, Block>;
+pub type NetworkService = network::Service<Block, <Factory as service::ServiceFactory>::NetworkProtocol>;
 
 /// A collection of type to generalise Polkadot specific components over full / light client.
 pub trait Components: service::Components {
@@ -134,6 +135,7 @@ impl service::ServiceFactory for Factory {
 pub struct Service<C: Components> {
 	inner: service::Service<C>,
 	client: Arc<ComponentClient<C>>,
+	network: Arc<NetworkService>,
 	api: Arc<<C as Components>::Api>,
 	_consensus: Option<consensus::Service>,
 }
@@ -141,6 +143,10 @@ pub struct Service<C: Components> {
 impl <C: Components> Service<C> {
 	pub fn client(&self) -> Arc<ComponentClient<C>> {
 		self.client.clone()
+	}
+
+	pub fn network(&self) -> Arc<NetworkService> {
+		self.network.clone()
 	}
 
 	pub fn api(&self) -> Arc<<C as Components>::Api> {
@@ -156,6 +162,7 @@ pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 	let api = Arc::new(RemotePolkadotApiWrapper(service.client()));
 	Ok(Service {
 		client: service.client(),
+		network: service.network(),
 		api: api,
 		inner: service,
 		_consensus: None,
@@ -192,6 +199,7 @@ pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 
 	Ok(Service {
 		client: service.client(),
+		network: service.network(),
 		api: service.client(),
 		inner: service,
 		_consensus: consensus,
