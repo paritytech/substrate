@@ -727,7 +727,7 @@ fn handle_custom_connection(
 			drop(dc_guard);
 			val
 		});
-	
+
 	debug!(target: "sub-libp2p", "Successfully connected to {:?} (peer id \
 		{}) with protocol {:?} version {}", node_id, peer_id, protocol_id,
 		custom_proto_out.protocol_version);
