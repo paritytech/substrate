@@ -611,3 +611,26 @@ impl PolkadotProtocol {
 		}
 	}
 }
+
+impl PolkadotProtocol {
+	/// Add a local collation and broadcast it to the necessary peers.
+	pub fn add_local_collation(
+		&mut self,
+		ctx: &mut Context<Block>,
+		relay_parent: Hash,
+		targets: HashSet<SessionKey>,
+		collation: Collation,
+	) {
+		for (primary, cloned_collation) in self.local_collations.add_collation(relay_parent, targets, collation.clone()) {
+			match self.validators.get(&primary) {
+				Some(peer_id) => send_polkadot_message(
+					ctx,
+					*peer_id,
+					Message::Collation(relay_parent, cloned_collation),
+				),
+				None =>
+					warn!(target: "polkadot_network", "Encountered tracked but disconnected validator {:?}", primary),
+			}
+		}
+	}
+}

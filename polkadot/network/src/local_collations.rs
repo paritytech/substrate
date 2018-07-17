@@ -95,8 +95,8 @@ impl<C: Clone> LocalCollations<C> {
 		self.local_collations.retain(|_, v| v.live_since + LIVE_FOR > now);
 	}
 
-	/// Add a collation. Returns a vector of validators to send the collation to.
-	pub fn add_collation<'a>(&'a mut self, relay_parent: Hash, targets: HashSet<SessionKey>, collation: C) -> impl Iterator<Item=SessionKey> + 'a {
+	/// Add a collation. Returns an iterator of session keys to send to and lazy copies of the collation.
+	pub fn add_collation<'a>(&'a mut self, relay_parent: Hash, targets: HashSet<SessionKey>, collation: C) -> impl Iterator<Item=(SessionKey, C)> + 'a {
 		self.local_collations.insert(relay_parent, LocalCollation {
 			targets,
 			collation,
@@ -106,7 +106,10 @@ impl<C: Clone> LocalCollations<C> {
 		let local = self.local_collations.get(&relay_parent)
 			.expect("just inserted to this key; qed");
 
-		local.targets.intersection(&self.primary_for).cloned()
+		let borrowed_collation = &local.collation;
+		local.targets
+			.intersection(&self.primary_for)
+			.map(move |k| (*k, borrowed_collation.clone()))
 	}
 
 	fn collations_targeting(&self, key: &SessionKey) -> Vec<(Hash, C)> {
@@ -149,7 +152,7 @@ mod tests {
 
 		let mut tracker: LocalCollations<u8> = LocalCollations::new();
 		assert!(tracker.add_collation(relay_parent, targets, 5).next().is_none());
-		assert_eq!(tracker.note_validator_role(orig_key, Role::Primary), Vec::<(Hash, u8)>::new());
+		assert!(tracker.note_validator_role(orig_key, Role::Primary).is_empty());
 		assert_eq!(tracker.fresh_key(&orig_key, &new_key), vec![(relay_parent, 5u8)]);
 	}
 
@@ -169,5 +172,21 @@ mod tests {
 
 		// first one pruned because of relay parent, other because of time.
 		assert!(tracker.local_collations.is_empty());
+	}
+
+	#[test]
+	fn add_collation_with_connected_target() {
+		let key = [1; 32].into();
+		let relay_parent = [2; 32].into();
+		let targets = {
+			let mut set = HashSet::new();
+			set.insert(key);
+			set
+		};
+
+		let mut tracker = LocalCollations::new();
+		assert!(tracker.note_validator_role(key, Role::Primary).is_empty());
+		assert_eq!(tracker.add_collation(relay_parent, targets, 5).next(), Some((key, 5)));
+
 	}
 }
