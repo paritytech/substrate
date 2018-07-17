@@ -53,8 +53,9 @@ impl<H> Watcher<H> {
 	}
 }
 
+/// Sender part of the watcher. Exposed only for testing purposes.
 #[derive(Debug, Default)]
-pub(crate) struct Sender<H> {
+pub struct Sender<H> {
 	receivers: Vec<mpsc::UnboundedSender<Status<H>>>,
 	finalised: bool,
 }
