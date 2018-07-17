@@ -21,7 +21,6 @@ use std::sync::Arc;
 use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 use client::{self, Client, BlockchainEvents};
-use state_machine;
 
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
@@ -84,7 +83,6 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> wh
 	Block: BlockT + 'static,
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
 	E: client::CallExecutor<Block> + Send + Sync + 'static,
-	client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	type Metadata = ::metadata::Metadata;
 

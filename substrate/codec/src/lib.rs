@@ -34,10 +34,10 @@ pub mod alloc {
 	pub use std::vec;
 }
 
-mod slicable;
+mod codec;
 mod joiner;
 mod keyedvec;
 
-pub use self::slicable::{Input, Slicable, encode_slice};
+pub use self::codec::{Input, Output, Encode, Decode, Codec};
 pub use self::joiner::Joiner;
 pub use self::keyedvec::KeyedVec;

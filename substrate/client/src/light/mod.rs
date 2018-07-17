@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use runtime_primitives::BuildStorage;
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::CodeExecutor;
+use state_machine::{CodeExecutor, ExecutionStrategy};
 
 use client::Client;
 use error::Result as ClientResult;
@@ -58,7 +58,7 @@ pub fn new_light<B, S, F, GS>(
 		GS: BuildStorage,
 {
 	let executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
-	Client::new(backend, executor, genesis_storage)
+	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
 }
 
 /// Create an instance of fetch data checker.

@@ -28,9 +28,9 @@ use io::SyncIo;
 use protocol::{Context, Protocol};
 use config::ProtocolConfig;
 use service::TransactionPool;
-use network::{PeerId, SessionInfo, Error as NetworkError};
+use network_libp2p::{PeerId, SessionInfo, Error as NetworkError};
 use keyring::Keyring;
-use codec::Slicable;
+use codec::Encode;
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 use specialization::Specialization;
@@ -80,7 +80,7 @@ impl<'p> Drop for TestIo<'p> {
 }
 
 impl<'p> SyncIo for TestIo<'p> {
-	fn disable_peer(&mut self, peer_id: PeerId) {
+	fn disable_peer(&mut self, peer_id: PeerId, _reason: &str) {
 		self.disconnect_peer(peer_id);
 	}
 

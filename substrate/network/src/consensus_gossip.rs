@@ -20,7 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use std::time::{Instant, Duration};
-use network::PeerId;
+use network_libp2p::PeerId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
@@ -74,7 +74,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, peer_id: PeerId, roles: &[message::Role]) {
-		if roles.iter().any(|r| *r == message::Role::Authority) {
+		if roles.iter().any(|r| *r == message::Role::Validator) {
 			trace!(target:"gossip", "Registering authority {}", peer_id);
 			// Send out all known messages.
 			// TODO: limit by size

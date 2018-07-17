@@ -21,13 +21,13 @@ use wasmi::nan_preserving_float::{F32, F64};
 use std::fmt;
 
 #[derive(Debug)]
-pub struct DummyUserError;
-impl fmt::Display for DummyUserError {
+pub struct UserError(pub &'static str);
+impl fmt::Display for UserError {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "DummyUserError")
+		write!(f, "UserError: {}", self.0)
 	}
 }
-impl HostError for DummyUserError {
+impl HostError for UserError {
 }
 
 pub trait ConvertibleToWasm { const VALUE_TYPE: ValueType; type NativeType; fn to_runtime_value(self) -> RuntimeValue; }

@@ -23,7 +23,7 @@
 //! The changes are journaled in the DB.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use codec::{Slicable, self};
+use codec::{Decode, Encode, self};
 use {CommitSet, Error, MetaDb, to_meta_key, Hash};
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
@@ -49,20 +49,20 @@ struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	deleted: Vec<Key>,
 }
 
-impl<BlockHash: Hash, Key: Hash> Slicable for JournalRecord<BlockHash, Key> {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::with_capacity(4096);
-		self.hash.using_encoded(|s| v.extend(s));
-		self.inserted.using_encoded(|s| v.extend(s));
-		self.deleted.using_encoded(|s| v.extend(s));
-		v
+impl<BlockHash: Hash, Key: Hash> Encode for JournalRecord<BlockHash, Key> {
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		dest.push(&self.hash);
+		dest.push(&self.inserted);
+		dest.push(&self.deleted);
 	}
+}
 
+impl<BlockHash: Hash, Key: Hash> Decode for JournalRecord<BlockHash, Key> {
 	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
 		Some(JournalRecord {
-			hash: Slicable::decode(input)?,
-			inserted: Slicable::decode(input)?,
-			deleted: Slicable::decode(input)?,
+			hash: Decode::decode(input)?,
+			inserted: Decode::decode(input)?,
+			deleted: Decode::decode(input)?,
 		})
 	}
 }
@@ -91,7 +91,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			let journal_key = to_journal_key(block);
 			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
 				Some(record) => {
-					let record: JournalRecord<BlockHash, Key> = Slicable::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
+					let record: JournalRecord<BlockHash, Key> = Decode::decode(&mut record.as_slice()).ok_or(Error::Decoding)?;
 					trace!(target: "state-db", "Pruning journal entry {} ({} inserted, {} deleted)", block, record.inserted.len(), record.deleted.len());
 					pruning.import(&record.hash, journal_key, record.inserted.into_iter(), record.deleted);
 				},

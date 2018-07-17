@@ -198,7 +198,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Future for MessageProcessTask<
 					return Ok(async);
 				},
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
-				Ok(Async::NotReady) => (),
+				Ok(Async::NotReady) => return Ok(Async::NotReady),
 				Err(e) => debug!(target: "p_net", "Error getting consensus message: {:?}", e),
 			}
 		}

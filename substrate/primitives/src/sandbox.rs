@@ -16,24 +16,26 @@
 
 //! Definition of a sandbox environment.
 
-use codec::{Slicable, Input};
+use codec::{Encode, Decode, Input, Output};
 use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct HostError;
 
-impl Slicable for HostError {
-	fn decode<I: Input>(_: &mut I) -> Option<Self> {
-		Some(HostError)
-	}
-
+impl Encode for HostError {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[])
 	}
 
 	fn encode(&self) -> Vec<u8> {
 		Vec::new()
+	}
+}
+
+impl Decode for HostError {
+	fn decode<I: Input>(_: &mut I) -> Option<Self> {
+		Some(HostError)
 	}
 }
 
@@ -101,31 +103,30 @@ impl From<TypedValue> for ::wasmi::RuntimeValue {
 	}
 }
 
-impl Slicable for TypedValue {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
+impl Encode for TypedValue {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			TypedValue::I32(i) => {
-				v.push(ValueType::I32 as u8);
-				i.using_encoded(|s| v.extend(s));
+				dest.push_byte(ValueType::I32 as u8);
+				dest.push(&i);
 			}
 			TypedValue::I64(i) => {
-				v.push(ValueType::I64 as u8);
-				i.using_encoded(|s| v.extend(s));
+				dest.push_byte(ValueType::I64 as u8);
+				dest.push(&i);
 			}
 			TypedValue::F32(f_bits) => {
-				v.push(ValueType::F32 as u8);
-				f_bits.using_encoded(|s| v.extend(s));
+				dest.push_byte(ValueType::F32 as u8);
+				dest.push(&f_bits);
 			}
 			TypedValue::F64(f_bits) => {
-				v.push(ValueType::F64 as u8);
-				f_bits.using_encoded(|s| v.extend(s));
+				dest.push_byte(ValueType::F64 as u8);
+				dest.push(&f_bits);
 			}
 		}
-
-		v
 	}
+}
 
+impl Decode for TypedValue {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		let typed_value = match i8::decode(value) {
 			Some(x) if x == ValueType::I32 as i8 => TypedValue::I32(i32::decode(value)?),
@@ -157,21 +158,21 @@ impl From<TypedValue> for ReturnValue {
 	}
 }
 
-impl Slicable for ReturnValue {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
+impl Encode for ReturnValue {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			ReturnValue::Unit => {
-				v.push(0);
+				dest.push_byte(0);
 			}
 			ReturnValue::Value(ref val) => {
-				v.push(1);
-				val.using_encoded(|s| v.extend(s));
+				dest.push_byte(1);
+				dest.push(val);
 			}
 		}
-		v
 	}
+}
 
+impl Decode for ReturnValue {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match i8::decode(value) {
 			Some(0) => Some(ReturnValue::Unit),
@@ -183,7 +184,7 @@ impl Slicable for ReturnValue {
 
 impl ReturnValue {
 	/// Maximum number of bytes `ReturnValue` might occupy when serialized with
-	/// `Slicable`.
+	/// `Codec`.
 	///
 	/// Breakdown:
 	///  1 byte for encoding unit/value variant
@@ -219,23 +220,22 @@ pub enum ExternEntity {
 	Memory(u32),
 }
 
-impl Slicable for ExternEntity {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
+impl Encode for ExternEntity {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			ExternEntity::Function(ref index) => {
-				v.push(ExternEntityKind::Function as u8);
-				index.using_encoded(|s| v.extend(s));
+				dest.push_byte(ExternEntityKind::Function as u8);
+				dest.push(index);
 			}
 			ExternEntity::Memory(ref mem_id) => {
-				v.push(ExternEntityKind::Memory as u8);
-				mem_id.using_encoded(|s| v.extend(s));
+				dest.push_byte(ExternEntityKind::Memory as u8);
+				dest.push(mem_id);
 			}
 		}
-
-		v
 	}
+}
 
+impl Decode for ExternEntity {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match i8::decode(value) {
 			Some(x) if x == ExternEntityKind::Function as i8 => {
@@ -266,16 +266,15 @@ pub struct Entry {
 	pub entity: ExternEntity,
 }
 
-impl Slicable for Entry {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-		self.module_name.using_encoded(|s| v.extend(s));
-		self.field_name.using_encoded(|s| v.extend(s));
-		self.entity.using_encoded(|s| v.extend(s));
-
-		v
+impl Encode for Entry {
+	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
+		dest.push(&self.module_name);
+		dest.push(&self.field_name);
+		dest.push(&self.entity);
 	}
+}
 
+impl Decode for Entry {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		let module_name = Vec::decode(value)?;
 		let field_name = Vec::decode(value)?;
@@ -297,11 +296,13 @@ pub struct EnvironmentDefinition {
 	pub entries: Vec<Entry>,
 }
 
-impl Slicable for EnvironmentDefinition {
-	fn encode(&self) -> Vec<u8> {
-		self.entries.encode()
+impl Encode for EnvironmentDefinition {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		self.entries.encode_to(dest)
 	}
+}
 
+impl Decode for EnvironmentDefinition {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		let entries = Vec::decode(value)?;
 
@@ -340,8 +341,9 @@ pub const ERR_EXECUTION: u32 = -3i32 as u32;
 mod tests {
 	use super::*;
 	use std::fmt;
+	use codec::Codec;
 
-	fn roundtrip<S: Slicable + PartialEq + fmt::Debug>(s: S) {
+	fn roundtrip<S: Codec + PartialEq + fmt::Debug>(s: S) {
 		let encoded = s.encode();
 		assert_eq!(S::decode(&mut &encoded[..]).unwrap(), s);
 	}

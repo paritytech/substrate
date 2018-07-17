@@ -44,11 +44,11 @@ extern crate rhododendron;
 extern crate log;
 
 mod collator_pool;
-mod local_collations;
+//mod local_collations;
 mod router;
 pub mod consensus;
 
-use codec::Slicable;
+use codec::{Decode, Encode};
 use futures::sync::oneshot;
 use parking_lot::Mutex;
 use polkadot_consensus::{Statement, SignedStatement, GenericStatement};
@@ -63,6 +63,7 @@ use self::collator_pool::{CollatorPool, Role, Action};
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+
 
 #[cfg(test)]
 mod tests;
@@ -81,23 +82,25 @@ pub struct Status {
 	collating_for: Option<(AccountId, ParaId)>,
 }
 
-impl Slicable for Status {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
+impl Encode for Status {
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
 		match self.collating_for {
 			Some(ref details) => {
-				v.push(1);
-				details.using_encoded(|s| v.extend(s));
+				dest.push_byte(1);
+				dest.push(details);
 			}
-			None => v.push(0),
+			None => {
+				dest.push_byte(0);
+			}
 		}
-		v
 	}
+}
 
-	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+impl Decode for Status {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
 		let collating_for = match input.read_byte()? {
 			0 => None,
-			1 => Some(Slicable::decode(input)?),
+			1 => Some(Decode::decode(input)?),
 			_ => return None,
 		};
 		Some(Status { collating_for })
@@ -211,6 +214,12 @@ pub struct PolkadotProtocol {
 	in_flight: HashMap<(RequestId, PeerId), BlockDataRequest>,
 	pending: Vec<BlockDataRequest>,
 	next_req_id: u64,
+}
+
+impl Default for PolkadotProtocol {
+	fn default() -> Self {
+		Self::new()
+	}
 }
 
 impl PolkadotProtocol {
@@ -335,8 +344,8 @@ impl PolkadotProtocol {
 					};
 
 					if !info.claimed_validator {
-						ctx.disable_peer(peer_id);
-						return
+						ctx.disable_peer(peer_id, "Session key broadcasted without setting authority role");
+						return;
 					}
 
 					if let Some(old_key) = ::std::mem::replace(&mut info.validator_key, Some(key)) {
@@ -372,7 +381,7 @@ impl PolkadotProtocol {
 				self.pending.push(req);
 				self.dispatch_pending_requests(ctx);
 			}
-			None => ctx.disable_peer(peer_id),
+			None => ctx.disable_peer(peer_id, "Unexpected block data response"),
 		}
 	}
 }
@@ -392,7 +401,7 @@ impl Specialization<Block> for PolkadotProtocol {
 
 		if let Some((ref acc_id, ref para_id)) = local_status.collating_for {
 			if self.collator_peer_id(acc_id.clone()).is_some() {
-				ctx.disable_peer(peer_id);
+				ctx.disconnect_peer(peer_id);
 				return
 			}
 
@@ -478,7 +487,7 @@ impl Specialization<Block> for PolkadotProtocol {
 					Ok(msg) => self.on_polkadot_message(ctx, peer_id, raw, msg),
 					Err(e) => {
 						trace!(target: "p_net", "Bad message from {}: {}", peer_id, e);
-						ctx.disable_peer(peer_id);
+						ctx.disable_peer(peer_id, "Unknown Polkadot-protocol reason");
 					}
 				}
 			}
@@ -523,10 +532,15 @@ impl PolkadotProtocol {
 		match self.peers.get(&from) {
 			None => ctx.disconnect_peer(from),
 			Some(peer_info) => match peer_info.collating_for {
-				None => ctx.disable_peer(from),
-				Some((ref acc_id, ref para_id))
-					if para_id != &collation_para || acc_id != &collated_acc || collation.receipt.check_signature().is_err() => ctx.disable_peer(from),
-				Some((ref acc_id, _)) => self.collators.on_collation(acc_id.clone(), relay_parent, collation),
+				None => ctx.disable_peer(from, "Sent collation without registering collator intent"),
+				Some((ref acc_id, ref para_id)) => {
+					let structurally_valid = para_id == &collation_para && acc_id == &collated_acc;
+					if structurally_valid && collation.receipt.check_signature().is_ok() {
+						self.collators.on_collation(acc_id.clone(), relay_parent, collation)
+					} else {
+						ctx.disable_peer(from, "Sent malformed collation")
+					};
+				}
 			},
 		}
 	}
@@ -539,9 +553,14 @@ impl PolkadotProtocol {
 
 	// get connected peer with given account ID for collation.
 	fn collator_peer_id(&self, account_id: AccountId) -> Option<PeerId> {
+		let check_info = |info: &PeerInfo| info
+			.collating_for
+			.as_ref()
+			.map_or(false, |&(ref acc_id, _)| acc_id == &account_id);
+
 		self.peers
 			.iter()
-			.filter(|&(_, info)| info.collating_for.as_ref().map_or(false, |&(ref acc_id, _)| acc_id == &account_id))
+			.filter(|&(_, info)| check_info(info))
 			.map(|(peer_id, _)| *peer_id)
 			.next()
 	}
@@ -549,7 +568,7 @@ impl PolkadotProtocol {
 	// disconnect a collator by account-id.
 	fn disconnect_bad_collator(&self, ctx: &mut Context<Block>, account_id: AccountId) {
 		if let Some(peer_id) = self.collator_peer_id(account_id) {
-			ctx.disable_peer(peer_id)
+			ctx.disable_peer(peer_id, "Consensus layer determined the given collator misbehaved")
 		}
 	}
 }

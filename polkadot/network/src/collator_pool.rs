@@ -168,6 +168,10 @@ impl CollatorPool {
 						Some(collators.primary)
 					}
 				} else {
+					let pos = occ.get().backup.iter().position(|a| a == &account_id)
+						.expect("registered collator always present in backup if not primary; qed");
+
+					occ.get_mut().backup.remove(pos);
 					None
 				}
 			}
@@ -230,6 +234,19 @@ mod tests {
 		assert_eq!(pool.on_new_collator(good_backup, para_id.clone()), Role::Backup);
 		assert_eq!(pool.on_disconnect(bad_primary), Some(good_backup));
 		assert_eq!(pool.on_disconnect(good_backup), None);
+	}
+
+	#[test]
+	fn disconnect_backup_removes_from_pool() {
+		let mut pool = CollatorPool::new();
+		let para_id: ParaId = 5.into();
+		let primary = [0; 32].into();
+		let backup = [1; 32].into();
+
+		assert_eq!(pool.on_new_collator(primary, para_id.clone()), Role::Primary);
+		assert_eq!(pool.on_new_collator(backup, para_id.clone()), Role::Backup);
+		assert_eq!(pool.on_disconnect(backup), None);
+		assert!(pool.parachain_collators.get(&para_id).unwrap().backup.is_empty());
 	}
 
 	#[test]

@@ -28,7 +28,7 @@ use client;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 use io::SyncIo;
 use message;
-use network::PeerId;
+use network_libp2p::PeerId;
 use service;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
@@ -102,7 +102,7 @@ impl Future for RemoteCallResponse {
 
 impl<B: BlockT, E> OnDemand<B, E> where
 	E: service::ExecuteInContext<B>,
-	B::Header: HeaderT<Number=u64>,
+	B::Header: HeaderT,
 {
 	/// Creates new on-demand service.
 	pub fn new(checker: Arc<FetchChecker<B>>) -> Self {
@@ -166,7 +166,7 @@ impl<B: BlockT, E> OnDemand<B, E> where
 impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 	B: BlockT,
 	E: service::ExecuteInContext<B>,
-	B::Header: HeaderT<Number=u64>,
+	B::Header: HeaderT,
 {
 	fn on_connect(&self, peer: PeerId, role: service::Role) {
 		if !role.intersects(service::Role::FULL | service::Role::AUTHORITY) { // TODO: correct?
@@ -210,7 +210,7 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 impl<B, E> Fetcher<B> for OnDemand<B, E> where
 	B: BlockT,
 	E: service::ExecuteInContext<B>,
-	B::Header: HeaderT<Number=u64>,
+	B::Header: HeaderT,
 {
 	type RemoteCallResult = RemoteCallResponse;
 
@@ -223,8 +223,8 @@ impl<B, E> Fetcher<B> for OnDemand<B, E> where
 
 impl<B, E> OnDemandCore<B, E> where
 	B: BlockT,
-	E: service::ExecuteInContext<B> ,
-	B::Header: HeaderT<Number=u64>
+	E: service::ExecuteInContext<B>,
+	B::Header: HeaderT,
 {
 	pub fn add_peer(&mut self, peer: PeerId) {
 		self.idle_peers.push_back(peer);
@@ -325,7 +325,7 @@ mod tests {
 	use client;
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 	use message;
-	use network::PeerId;
+	use network_libp2p::PeerId;
 	use service::{Role, ExecuteInContext};
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};

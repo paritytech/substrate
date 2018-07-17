@@ -16,7 +16,7 @@
 
 //! Polkadot service possible errors.
 
-use network::Error as NetworkError;
+use network_libp2p::Error as NetworkError;
 use client;
 
 error_chain! {
