@@ -101,12 +101,12 @@ pub fn clear_storage(key: &[u8]) {
 	}
 }
 
-/// Clear the storage of some particular key.
-pub fn exists_storage(key: &[u8]) {
+/// Determine whether a particular key exists in storage.
+pub fn exists_storage(key: &[u8]) -> bool {
 	unsafe {
 		ext_exists_storage(
 			key.as_ptr(), key.len() as u32
-		) != 0;
+		) != 0
 	}
 }
 
