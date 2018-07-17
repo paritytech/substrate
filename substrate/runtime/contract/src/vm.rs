@@ -161,14 +161,10 @@ fn to_execution_result<T: Trait, E: Ext<T>>(
 		// Special case. The trap was the result of the execution `return` host function.
 		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(rd))) => return_data = rd,
 		// Any other kind of a trap should result in a failure.
-		(Some(_), _) => {
-			return Err(Error::Invoke);
-		}
-		_ => {
-			// All possible cases should have been handled.
-			// If the control flow reached here, then it is a logic error.
-			unreachable!();
-		}
+		(Some(_), _) => return Err(Error::Invoke),
+		// Any other case (such as special trap flag without actual trap) signifies
+		// a logic error.
+		_ => unreachable!(),
 	}
 
 	Ok(ExecutionResult {
