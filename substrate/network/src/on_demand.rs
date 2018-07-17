@@ -316,7 +316,7 @@ impl<Block: BlockT> Request<Block> {
 }
 
 #[cfg(test)]
-mod tests {
+pub mod tests {
 	use std::collections::VecDeque;
 	use std::sync::Arc;
 	use std::time::Instant;
@@ -331,7 +331,7 @@ mod tests {
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 	use test_client::runtime::{Block, Hash};
 
-	struct DummyExecutor;
+	pub struct DummyExecutor;
 	struct DummyFetchChecker { ok: bool }
 
 	impl ExecuteInContext<Block> for DummyExecutor {
