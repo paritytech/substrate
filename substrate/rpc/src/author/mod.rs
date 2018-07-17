@@ -102,8 +102,7 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 	}
 
 	fn submit_rich_extrinsic(&self, xt: Ex) -> Result<Hash> {
-		// TODO [ToDr] No unwrap here
-		let best_block_hash = self.client.info().unwrap().chain.best_hash;
+		let best_block_hash = self.client.info()?.chain.best_hash;
 		self.pool
 			.submit(generic::BlockId::hash(best_block_hash), vec![xt])
 			.map(|mut res| res.pop().expect("One extrinsic passed; one result back; qed"))
@@ -114,10 +113,9 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 	}
 
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<Hash>>, xt: Bytes) {
-		// TODO [ToDr] no unwrap
-		let best_block_hash = self.client.info().unwrap().chain.best_hash;
 
 		let submit = || -> Result<_> {
+			let best_block_hash = self.client.info()?.chain.best_hash;
 			let dxt = Ex::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
 			self.pool
 				.submit_and_watch(generic::BlockId::hash(best_block_hash), dxt)

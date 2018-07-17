@@ -16,6 +16,7 @@
 
 //! Authoring RPC module errors.
 
+use client;
 use extrinsic_pool::txpool;
 use rpc;
 
@@ -25,6 +26,7 @@ use errors;
 error_chain! {
 	links {
 		Pool(txpool::Error, txpool::ErrorKind) #[doc = "Pool error"];
+		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
 	}
 	errors {
 		/// Not implemented yet
