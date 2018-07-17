@@ -19,7 +19,7 @@
 use extrinsic_pool;
 use chain_spec::ChainSpec;
 pub use client::ExecutionStrategy;
-pub use network::Role;
+pub use network::Roles;
 pub use network::NetworkConfiguration;
 pub use client_db::PruningMode;
 use runtime_primitives::BuildStorage;
@@ -28,7 +28,7 @@ use serde::{Serialize, de::DeserializeOwned};
 /// Service configuration.
 pub struct Configuration<G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Node roles.
-	pub roles: Role,
+	pub roles: Roles,
 	/// Extrinsic pool configuration.
 	pub extrinsic_pool: extrinsic_pool::txpool::Options,
 	/// Network configuration.
@@ -49,6 +49,10 @@ pub struct Configuration<G: Serialize + DeserializeOwned + BuildStorage> {
 	pub name: String,
 	/// Execution strategy.
 	pub execution_strategy: ExecutionStrategy,
+	/// Minimum number of heap pages to allocate for Wasm execution.
+	pub min_heap_pages: usize,
+	/// Maximum number of heap pages to allocate for Wasm execution.
+	pub max_heap_pages: usize,
 }
 
 impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
@@ -57,7 +61,7 @@ impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
 		let mut configuration = Configuration {
 			chain_spec,
 			name: Default::default(),
-			roles: Role::FULL,
+			roles: Roles::FULL,
 			extrinsic_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
@@ -66,6 +70,8 @@ impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
 			telemetry: Default::default(),
 			pruning: PruningMode::ArchiveAll,
 			execution_strategy: ExecutionStrategy::Both,
+			min_heap_pages: 8,
+			max_heap_pages: 1024,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 		configuration

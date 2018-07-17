@@ -97,16 +97,20 @@ struct Shared {
 
 impl NetworkService {
 	/// Starts IO event loop
-	pub fn new(config: NetworkConfiguration, filter: Option<Arc<ConnectionFilter>>)
-		-> Result<NetworkService, Error> {
+	pub fn new(
+		config: NetworkConfiguration,
+		filter: Option<Arc<ConnectionFilter>>
+	) -> Result<NetworkService, Error> {
 		// TODO: for now `filter` is always `None` ; remove it from the code or implement it
 		assert!(filter.is_none());
 
 		let network_state = NetworkState::new(&config)?;
 
-		let local_peer_id = network_state.local_public_key().clone().into_peer_id();
-		// TODO: debug! instead?
-		info!(target: "sub-libp2p", "Local node id = {:?}", local_peer_id);
+		let local_peer_id = network_state.local_public_key().clone()
+			.into_peer_id();
+		let mut listen_addr = config_to_listen_addr(&config);
+		listen_addr.append(AddrComponent::P2P(local_peer_id.clone().into_bytes()));
+		info!(target: "sub-libp2p", "Local node address is: {}", listen_addr);
 
 		let kad_system = KadSystem::without_init(KadSystemConfig {
 			parallelism: 3,
@@ -464,7 +468,6 @@ fn init_thread(
 		match swarm_controller.listen_on(listen_addr.clone()) {
 			Ok(new_addr) => {
 				*shared.original_listened_addr.write() = Some(new_addr.clone());
-				shared.listened_addrs.write().push(new_addr);
 			},
 			Err(_) => {
 				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not \
@@ -583,16 +586,9 @@ fn handle_kademlia_connection(
 	controller: KadConnecController,
 	kademlia_stream: Box<Stream<Item = KadIncomingRequest, Error = IoError>>
 ) -> Result<impl Future<Item = (), Error = IoError>, IoError> {
-	// We add the Kademlia controller to the network state, and use a guard to remove
-	// it later.
-	struct KadDisconnectGuard(Arc<Shared>, PeerId);
-	impl Drop for KadDisconnectGuard {
-		fn drop(&mut self) { self.0.network_state.disconnect_kademlia(self.1); }
-	}
-
 	let node_id = p2p_multiaddr_to_node_id(client_addr);
-	let peer_id = shared.network_state.incoming_kad_connection(node_id.clone(), controller)?;
-	let kad_live_guard = KadDisconnectGuard(shared.clone(), peer_id);
+	let (_peer_id, kad_connec) = shared.network_state
+		.kad_connection(node_id.clone())?;
 
 	let future = kademlia_stream.for_each({
 		let shared = shared.clone();
@@ -606,13 +602,9 @@ fn handle_kademlia_connection(
 			}
 			Ok(())
 		}
-	}).then(move |val| {
-		// Makes sure that `kad_live_guard` is kept alive until here.
-		drop(kad_live_guard);
-		val
 	});
 
-	Ok(future)
+	Ok(kad_connec.set_until(controller, future))
 }
 
 /// When a remote performs a `FIND_NODE` Kademlia request for `searched`,
@@ -623,19 +615,27 @@ fn build_kademlia_response(shared: &Arc<Shared>, searched: &PeerstorePeerId)
 		// TODO the iter of `known_closest_peers` should be infinite
 		.known_closest_peers(searched)
 		.map(move |peer_id| {
-			let addrs = shared.network_state.addrs_of_peer(&peer_id);
-			let connec_ty = if shared.network_state.has_connection(&peer_id) {
-				// TODO: this only checks connections with substrate ; but what
-				//       if we're connected through Kademlia only?
-				KadConnectionType::Connected
+			if peer_id == *shared.kad_system.local_peer_id() {
+				KadPeer {
+					node_id: peer_id.clone(),
+					multiaddrs: shared.listened_addrs.read().clone(),
+					connection_ty: KadConnectionType::Connected,
+				}
 			} else {
-				KadConnectionType::NotConnected
-			};
+				let addrs = shared.network_state.addrs_of_peer(&peer_id);
+				let connec_ty = if shared.network_state.has_connection(&peer_id) {
+					// TODO: this only checks connections with substrate ; but what
+					//       if we're connected through Kademlia only?
+					KadConnectionType::Connected
+				} else {
+					KadConnectionType::NotConnected
+				};
 
-			KadPeer {
-				node_id: peer_id.clone(),
-				multiaddrs: addrs,
-				connection_ty: connec_ty,
+				KadPeer {
+					node_id: peer_id.clone(),
+					multiaddrs: addrs,
+					connection_ty: connec_ty,
+				}
 			}
 		})
 		.collect::<Vec<_>>()
@@ -662,27 +662,16 @@ fn handle_custom_connection(
 	// TODO: is there a better way to refuse connections than to drop the
 	//		 newly-opened substream? should we refuse the connection
 	//		 beforehand?
-	let peer_id = match shared.network_state.accept_custom_proto(
+	let (peer_id, unique_connec) = match shared.network_state.custom_proto(
 		node_id.clone(),
 		protocol_id,
-		custom_proto_out.protocol_version,
 		endpoint,
-		custom_proto_out.outgoing
 	) {
-		Ok(peer_id) => peer_id,
+		Ok(a) => a,
 		Err(err) => return future::Either::A(future::err(err.into())),
 	};
 
-	debug!(target: "sub-libp2p", "Successfully connected to {:?} (peer id \
-		{}) with protocol {:?} version {}", node_id, peer_id, protocol_id,
-		custom_proto_out.protocol_version);
-	handler.connected(&NetworkContextImpl {
-		inner: shared.clone(),
-		protocol: protocol_id,
-		current_peer: Some(peer_id),
-	}, &peer_id);
-
-	struct KadDisconnectGuard {
+	struct ProtoDisconnectGuard {
 		inner: Arc<Shared>,
 		peer_id: PeerId,
 		node_id: PeerstorePeerId,
@@ -690,7 +679,7 @@ fn handle_custom_connection(
 		protocol: ProtocolId
 	}
 
-	impl Drop for KadDisconnectGuard {
+	impl Drop for ProtoDisconnectGuard {
 		fn drop(&mut self) {
 			debug!(target: "sub-libp2p", "Node {:?} with peer ID {} \
 				through protocol {:?} disconnected", self.node_id, self.peer_id,
@@ -707,7 +696,7 @@ fn handle_custom_connection(
 		}
 	}
 
-	let dc_guard = KadDisconnectGuard {
+	let dc_guard = ProtoDisconnectGuard {
 		inner: shared.clone(),
 		peer_id,
 		node_id: node_id.clone(),
@@ -715,22 +704,41 @@ fn handle_custom_connection(
 		protocol: protocol_id,
 	};
 
-	future::Either::B(custom_proto_out
-		.incoming
-		.for_each(move |(packet_id, data)| {
-			shared.kad_system.update_kbuckets(node_id.clone());
-			handler.read(&NetworkContextImpl {
-				inner: shared.clone(),
-				protocol: protocol_id,
-				current_peer: Some(peer_id.clone()),
-			}, &peer_id, packet_id, &data);
-			Ok(())
-		})
+	let fut = custom_proto_out.incoming
+		.for_each({
+			let shared = shared.clone();
+			let handler = handler.clone();
+			let node_id = node_id.clone();
+			move |(packet_id, data)| {
+				shared.kad_system.update_kbuckets(node_id.clone());
+				handler.read(&NetworkContextImpl {
+					inner: shared.clone(),
+					protocol: protocol_id,
+					current_peer: Some(peer_id.clone()),
+				}, &peer_id, packet_id, &data);
+				Ok(())
+			}
+		});
+
+	let val = (custom_proto_out.outgoing, custom_proto_out.protocol_version);
+	let final_fut = unique_connec.set_until(val, fut)
 		.then(move |val| {
 			// Makes sure that `dc_guard` is kept alive until here.
 			drop(dc_guard);
 			val
-		}))
+		});
+
+	debug!(target: "sub-libp2p", "Successfully connected to {:?} (peer id \
+		{}) with protocol {:?} version {}", node_id, peer_id, protocol_id,
+		custom_proto_out.protocol_version);
+
+	handler.connected(&NetworkContextImpl {
+		inner: shared.clone(),
+		protocol: protocol_id,
+		current_peer: Some(peer_id),
+	}, &peer_id);
+
+	future::Either::B(final_fut)
 }
 
 /// Builds the multiaddress corresponding to the address we need to listen to
@@ -895,35 +903,30 @@ fn process_kad_results<T, To, St, C>(shared: Arc<Shared>, transport: T,
 		let addr: Multiaddr = AddrComponent::P2P(discovered_peer.clone().into_bytes()).into();
 		trace!(target: "sub-libp2p", "Dialing discovered node {:?} for each protocol", addr);
 		for proto in shared.protocols.read().0.clone().into_iter() {
-			if shared.network_state.has_protocol_connection(&discovered_peer, proto.id()) {
-				continue
-			}
-
-			// TODO: check that the secio key matches the id given by kademlia
-			if let Err(err) = dial_peer_custom_proto(
+			open_peer_custom_proto(
 				shared.clone(),
 				transport.clone(),
-				proto, addr.clone(),
+				proto,
+				addr.clone(),
 				discovered_peer.clone(),
 				&swarm_controller
-			) {
-				warn!(target: "sub-libp2p", "Error while dialing {}: {:?}", addr, err);
-			}
+			);
 		}
 	}
 }
 
-/// Dials the given address for the given protocol and using the
-/// given `swarm_controller`.
+/// If necessary, dials the given address for the given protocol and using the
+/// given `swarm_controller`. Has no effect if we already dialed earlier.
 /// Checks that the peer ID matches `expected_peer_id`.
-fn dial_peer_custom_proto<T, To, St, C>(
+// TODO: check that the secio key matches the id given by kademlia
+fn open_peer_custom_proto<T, To, St, C>(
 	shared: Arc<Shared>,
 	base_transport: T,
 	proto: RegisteredProtocol<Arc<NetworkProtocolHandler + Send + Sync>>,
 	addr: Multiaddr,
 	expected_peer_id: PeerstorePeerId,
 	swarm_controller: &SwarmController<St>
-) -> Result<(), IoError>
+)
 	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
@@ -931,6 +934,8 @@ fn dial_peer_custom_proto<T, To, St, C>(
 		C: 'static,
 {
 	let proto_id = proto.id();
+	let peer_id = expected_peer_id.clone();
+	let shared2 = shared.clone();
 
 	// TODO: check that the secio key matches the id given by kademlia
 	let with_proto = base_transport
@@ -944,11 +949,12 @@ fn dial_peer_custom_proto<T, To, St, C>(
 						Ok(socket)
 					} else {
 						debug!(target: "sub-libp2p", "Public key mismatch for \
-							node {:?} with  proto {:?}", expected_peer_id, proto_id);
+							node {:?} with proto {:?}", expected_peer_id, proto_id);
 						trace!(target: "sub-libp2p", "Removing addr {} for {:?}",
 							original_addr, expected_peer_id);
 						shared.network_state.set_invalid_kad_address(&expected_peer_id, &original_addr);
-						Err(IoErrorKind::InvalidData.into())		// TODO: correct err
+						Err(IoError::new(IoErrorKind::InvalidData, "public \
+							key mismatch when identifyed peer"))
 					}
 				)
 				.and_then(move |socket|
@@ -959,8 +965,10 @@ fn dial_peer_custom_proto<T, To, St, C>(
 			future::ok(((FinalUpgrade::Custom(out), endpoint), client_addr))
 		);
 
-	swarm_controller.dial(addr, with_proto)
-		.map_err(|_| IoError::new(IoErrorKind::Other, "multiaddr not supported"))
+	if let Ok(unique_connec) = shared2.network_state
+		.custom_proto(peer_id, proto_id, Endpoint::Dialer) {
+		let _ = unique_connec.1.get_or_dial(&swarm_controller, &addr, with_proto);
+	}
 }
 
 /// Obtain a Kademlia connection to the given peer.
@@ -973,33 +981,21 @@ fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
 		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
 		C: 'static {
 	let kad_upgrade = shared.kad_upgrade.clone();
-	let final_future = shared.network_state
-		.obtain_kad_connection(peer_id.clone(), move || {
-			let addr: Multiaddr = AddrComponent::P2P(peer_id.clone().into_bytes()).into();
-			trace!(target: "sub-libp2p", "Opening new kademlia connection to {}", addr);
-			let (tx, rx) = oneshot::channel();
-			let tx = Arc::new(Mutex::new(Some(tx)));
-			swarm_controller.dial(addr, 
-				transport
-					.and_then(move |out, endpoint, client_addr|
-						upgrade::apply(out.socket, kad_upgrade.clone(),
-							endpoint, client_addr)
-					)
-					.map(move |(kad_ctrl, stream), _| {
-						if let Some(tx) = tx.lock().take() {
-							let _ = tx.send(kad_ctrl.clone());
-						}
-						(FinalUpgrade::Kad((kad_ctrl, stream)), Endpoint::Dialer)
-					})
-				)
-				.expect("cannot dial");
-			rx.map_err(|err| IoError::new(IoErrorKind::ConnectionAborted, err))
-		})
+	let addr: Multiaddr = AddrComponent::P2P(peer_id.clone().into_bytes()).into();
+	let transport = transport
+		.and_then(move |out, endpoint, client_addr|
+			upgrade::apply(out.socket, kad_upgrade.clone(),
+				endpoint, client_addr)
+		)
+		.map(move |(kad_ctrl, stream), _|
+			(FinalUpgrade::Kad((kad_ctrl, stream)), Endpoint::Dialer)
+		);
+	
+	shared.network_state
+		.kad_connection(peer_id.clone())
 		.into_future()
-		.and_then(|(_peer_id, kad_ctrl)| kad_ctrl);
-
-	// Note that we use a Box in order to speed compilation time.
-	Box::new(final_future) as Box<Future<Item = _, Error = _>>
+		.map(move |(_, k)| k.get_or_dial(&swarm_controller, &addr, transport))
+		.flatten()
 }
 
 /// Processes the information about a node.
@@ -1022,13 +1018,17 @@ fn process_identify_info(
 		original_addr.clone())?;	// TODO: wrong local addr
 
 	if let Some(ref original_listened_addr) = *shared.original_listened_addr.read() {
-		if let Some(ext_addr) = transport.nat_traversal(original_listened_addr, &info.observed_addr) {
+		if let Some(mut ext_addr) = transport.nat_traversal(original_listened_addr, &info.observed_addr) {
 			let mut listened_addrs = shared.listened_addrs.write();
 			if !listened_addrs.iter().any(|a| a == &ext_addr) {
 				trace!(target: "sub-libp2p", "NAT traversal: remote observes us as \
 					{} ; registering {} as one of our own addresses",
 					info.observed_addr, ext_addr);
-				listened_addrs.push(ext_addr);
+				listened_addrs.push(ext_addr.clone());
+				ext_addr.append(AddrComponent::P2P(shared.kad_system
+					.local_peer_id().clone().into_bytes()));
+				info!(target: "sub-libp2p", "New external node address: {}",
+					ext_addr);
 			}
 		}
 	}

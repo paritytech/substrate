@@ -25,6 +25,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
 use protocol::Context;
+use service::Roles;
 
 // TODO: Add additional spam/DoS attack protection.
 const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
@@ -73,8 +74,8 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, protocol: &mut Context<B>, peer_id: PeerId, roles: &[message::Role]) {
-		if roles.iter().any(|r| *r == message::Role::Validator) {
+	pub fn new_peer(&mut self, protocol: &mut Context<B>, peer_id: PeerId, roles: Roles) {
+		if roles.contains(Roles::AUTHORITY) {
 			trace!(target:"gossip", "Registering authority {}", peer_id);
 			// Send out all known messages.
 			// TODO: limit by size

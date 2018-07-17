@@ -111,9 +111,9 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), String> {
 	let chain_spec = matches.value_of("chain")
 		.map(ChainSpec::from)
-		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::StagingTestnet });
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::KrummeLanke });
 	let is_global = match chain_spec {
-		ChainSpec::PoC1Testnet | ChainSpec::StagingTestnet => true,
+		ChainSpec::KrummeLanke | ChainSpec::StagingTestnet => true,
 		_ => false,
 	};
 	let spec = chain_spec.load()?;
@@ -222,20 +222,27 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			// TODO [rob]: collation node implementation
 			// This isn't a thing. Different parachains will have their own collator executables and
 			// maybe link to libpolkadot to get a light-client. 
-			service::Role::LIGHT
+			service::Roles::LIGHT
 		} else if matches.is_present("light") {
 			info!("Starting (light)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
-			service::Role::LIGHT
+			service::Roles::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
 			info!("Starting validator");
 			config.execution_strategy = service::ExecutionStrategy::Both;
-			service::Role::AUTHORITY
+			service::Roles::AUTHORITY
 		} else {
 			info!("Starting (heavy)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
-			service::Role::FULL
+			service::Roles::FULL
 		};
+
+	if let Some(v) = matches.value_of("min-heap-pages") {
+		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
+	}
+	if let Some(v) = matches.value_of("max-heap-pages") {
+		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
+	}
 
 	if let Some(s) = matches.value_of("execution") {
 		config.execution_strategy = match s {
@@ -303,7 +310,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		None
 	};
 
-	match role == service::Role::LIGHT {
+	match role == service::Roles::LIGHT {
 		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, &matches, sys_conf, worker)?,
 		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, &matches, sys_conf, worker)?,
 	}
@@ -393,6 +400,23 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+
+	if let Some(v) = matches.value_of("min-heap-pages") {
+		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
+	}
+	if let Some(v) = matches.value_of("max-heap-pages") {
+		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
+	}
+
+	if let Some(s) = matches.value_of("execution") {
+		config.execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+		};
+	}
+
 	let client = service::new_client(config)?;
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 
