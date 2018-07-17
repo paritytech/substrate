@@ -206,9 +206,8 @@ fn contract_transfer_oog() {
 			// 3 - value sent with the transaction
 			// 2 * 6 - gas used by the contract (6) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
-			// NOTE that there is no (2 * 135) subtraction as with non-oog test. It
-			// is because there is not enough gas for the last (2 * 135) substraction.
-			100_000_000 - (2 * 6) - (2 * 135),
+			// 2 * 135 - base gas fee for call (by contract)
+			100_000_000 - (2 * 6) - (2 * 135) - (2 * 135),
 		);
 		assert_eq!(
 			Staking::free_balance(&1),

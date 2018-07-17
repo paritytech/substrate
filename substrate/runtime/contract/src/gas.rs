@@ -51,14 +51,22 @@ impl<T: Trait> GasMeter<T> {
 	///
 	/// Returns `OutOfGas` if there is not enough gas or addition of the specified
 	/// amount of gas has lead to overflow. On success returns `Proceed`.
+	///
+	/// NOTE that `amount` is always consumed, i.e. if there is not enough gas
+	/// the will be set to zero.
 	pub fn charge(&mut self, amount: T::Gas) -> GasMeterResult {
-		match self.gas_left.checked_sub(&amount) {
+		let new_value = match self.gas_left.checked_sub(&amount) {
+			None => None,
+			Some(val) if val.is_zero() => None,
+			Some(val) => Some(val),
+		};
+
+		// We always consume the gas even if there is not enough gas.
+		self.gas_left = new_value.unwrap_or_else(Zero::zero);
+
+		match new_value {
+			Some(_) => GasMeterResult::Proceed,
 			None => GasMeterResult::OutOfGas,
-			Some(val) if val.is_zero() => GasMeterResult::OutOfGas,
-			Some(val) => {
-				self.gas_left = val;
-				GasMeterResult::Proceed
-			}
 		}
 	}
 
