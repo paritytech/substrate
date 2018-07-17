@@ -360,7 +360,7 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let json = matches.is_present("json");
 
 	let mut file: Box<Write> = match matches.value_of("OUTPUT") {
-		Some(filename) => Box::new(File::open(filename)?),
+		Some(filename) => Box::new(File::create(filename)?),
 		None => Box::new(stdout()),
 	};
 
