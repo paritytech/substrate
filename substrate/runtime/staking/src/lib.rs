@@ -219,6 +219,14 @@ enum NewAccountOutcome {
 	BadHint,
 }
 
+/// Outcome of a balance update.
+pub enum UpdateBalanceOutcome {
+	/// Account balance was simply updated.
+	Updated,
+	/// The update has led to killing of the account.
+	AccountKilled,
+}
+
 impl<T: Trait> Module<T> {
 
 	// PUBLIC IMMUTABLES
@@ -401,15 +409,17 @@ impl<T: Trait> Module<T> {
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
-	/// Set the free balance of an account to some new value. Will enforce ExistentialDeposit law,
-	/// anulling the account as needed.
-	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> bool {
+	/// Set the free balance of an account to some new value.
+	///
+	/// Will enforce ExistentialDeposit law, anulling the account as needed.
+	/// In that case it will return `AccountKilled`.
+	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		if balance < Self::existential_deposit() {
 			Self::on_reserved_too_low(who);
-			false
+			UpdateBalanceOutcome::AccountKilled
 		} else {
 			<ReservedBalance<T>>::insert(who, balance);
-			true
+			UpdateBalanceOutcome::Updated
 		}
 	}
 
@@ -418,15 +428,17 @@ impl<T: Trait> Module<T> {
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
-	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> bool {
+	///
+	/// Returns if the account was successfully updated or update has led to killing of the account.
+	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for no - but consider it instructive.
 //		assert!(!Self::voting_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
 			Self::on_free_too_low(who);
-			false
+			UpdateBalanceOutcome::AccountKilled
 		} else {
 			<FreeBalance<T>>::insert(who, balance);
-			true
+			UpdateBalanceOutcome::Updated
 		}
 	}
 
@@ -434,8 +446,10 @@ impl<T: Trait> Module<T> {
 	///
 	/// Same as [`set_free_balance`], but will create a new account.
 	///
+	/// Returns if the account was successfully updated or update has led to killing of the account.
+	///
 	/// [`set_free_balance`]: #method.set_free_balance
-	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> bool {
+	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		let ed = <Module<T>>::existential_deposit();
 		// If the balance is too low, then the account is reaped.
 		// NOTE: There are two balances for every account: `reserved_balance` and
@@ -450,7 +464,7 @@ impl<T: Trait> Module<T> {
 		// TODO: enforce this for the other balance-altering functions.
 		if balance < ed {
 			Self::on_free_too_low(who);
-			false
+			UpdateBalanceOutcome::AccountKilled
 		} else {
 			if !<FreeBalance<T>>::exists(who) {
 				let outcome = Self::new_account(&who, balance);
@@ -462,7 +476,7 @@ impl<T: Trait> Module<T> {
 			} else {
 				<FreeBalance<T>>::insert(who, balance);
 			}
-			true
+			UpdateBalanceOutcome::Updated
 		}
 	}
 

@@ -16,14 +16,14 @@
 
 //! Auxilliaries to help with managing partial changes to accounts state.
 
-use super::{Trait, StorageOf, CodeOf};
-use staking;
-use system;
+use super::{CodeOf, StorageOf, Trait};
 use double_map::StorageDoubleMap;
-use runtime_support::StorageMap;
-use rstd::prelude::*;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
+use rstd::prelude::*;
+use runtime_support::StorageMap;
+use staking;
+use system;
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -66,9 +66,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
-				let still_alive = staking::Module::<T>::set_free_balance_creating(&address, balance);
-				if !still_alive {
-					continue
+				if let staking::UpdateBalanceOutcome::AccountKilled =
+					staking::Module::<T>::set_free_balance_creating(&address, balance)
+				{
+					// Account killed. This will ultimately lead to calling `OnAccountKill` callback
+					// which will make removal of CodeOf and StorageOf for this account.
+					// In order to avoid writing over the deleted properties we `continue` here.
+					continue;
 				}
 			}
 			if let Some(code) = changed.code {
@@ -101,7 +105,12 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		self.local.into_inner()
 	}
 
-	pub fn set_storage(&mut self, account: &T::AccountId, location: Vec<u8>, value: Option<Vec<u8>>) {
+	pub fn set_storage(
+		&mut self,
+		account: &T::AccountId,
+		location: Vec<u8>,
+		value: Option<Vec<u8>>,
+	) {
 		self.local
 			.borrow_mut()
 			.entry(account.clone())
