@@ -35,7 +35,6 @@ fn build_completion(shell: &Shell) {
 
     fs::create_dir(&path).ok();
 
-    // println!("{:?}", path);
     let mut app = clap::App::from_yaml(&yml);
     app.gen_completions(
     	"polkadot",
