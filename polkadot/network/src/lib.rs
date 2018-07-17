@@ -183,6 +183,7 @@ impl CurrentConsensus {
 }
 
 /// Polkadot-specific messages.
+#[derive(Debug)]
 pub enum Message {
 	/// signed statement and localized parent hash.
 	Statement(Hash, SignedStatement),
@@ -250,6 +251,7 @@ impl Decode for Message {
 }
 
 fn send_polkadot_message(ctx: &mut Context<Block>, to: PeerId, message: Message) {
+	trace!(target: "p_net", "Sending polkadot message to {}: {:?}", to, message);
 	let encoded = message.encode();
 	ctx.send_message(to, generic_message::Message::ChainSpecific(encoded))
 }
@@ -386,6 +388,7 @@ impl PolkadotProtocol {
 	}
 
 	fn on_polkadot_message(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, raw: Vec<u8>, msg: Message) {
+		trace!(target: "p_net", "Polkadot message from {}: {:?}", peer_id, msg);
 		match msg {
 			Message::Statement(parent_hash, _statement) =>
 				self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash),
@@ -535,6 +538,7 @@ impl Specialization<Block> for PolkadotProtocol {
 	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, message: message::Message<Block>) {
 		match message {
 			generic_message::Message::BftMessage(msg) => {
+				trace!(target: "p_net", "Polkadot BFT message from {}: {:?}", peer_id, msg);
 				// TODO: check signature here? what if relevant block is unknown?
 				self.consensus_gossip.on_bft_message(ctx, peer_id, msg)
 			}

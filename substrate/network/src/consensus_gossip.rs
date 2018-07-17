@@ -98,6 +98,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	fn propagate(&mut self, protocol: &mut Context<B>, message: message::Message<B>, hash: B::Hash) {
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.known_messages.insert(hash.clone()) {
+				trace!(target:"gossip", "Propagating to{}: {:?}", id, message);
 				protocol.send_message(*id, message.clone());
 			}
 		}
