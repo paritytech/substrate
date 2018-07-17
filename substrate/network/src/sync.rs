@@ -81,7 +81,7 @@ impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
 	pub(crate) fn new(role: Roles, info: &ClientInfo<B>, import_queue: Arc<ImportQueue<B>>) -> Self {
 		let mut required_block_attributes = message::BlockAttributes::HEADER | message::BlockAttributes::JUSTIFICATION;
-		if role.intersects(Roles::FULL) {
+		if role.intersects(Roles::FULL | Roles::AUTHORITY) {
 			required_block_attributes |= message::BlockAttributes::BODY;
 		}
 
