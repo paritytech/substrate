@@ -29,5 +29,5 @@ assert_matches = "1.1"
 wabt = "0.4"
 
 [features]
-default = []
+default = ["wasm-extern-trace"]
 wasm-extern-trace = []
