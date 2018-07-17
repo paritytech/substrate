@@ -15,8 +15,8 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
 use bytes::Bytes;
-use network::{Error, ErrorKind, NetworkConfiguration, NetworkProtocolHandler};
-use network::{NonReservedPeerMode, NetworkContext, PeerId, ProtocolId};
+use {Error, ErrorKind, NetworkConfiguration, NetworkProtocolHandler};
+use {NonReservedPeerMode, NetworkContext, PeerId, ProtocolId};
 use parking_lot::{Mutex, RwLock};
 use libp2p;
 use libp2p::multiaddr::{AddrComponent, Multiaddr};
@@ -29,7 +29,7 @@ use libp2p::core::{upgrade, Transport, MuxedTransport, ConnectionUpgrade};
 use libp2p::core::{Endpoint, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::core::SwarmController;
 use libp2p::ping;
-use network::{PacketId, SessionInfo, ConnectionFilter, TimerToken};
+use {PacketId, SessionInfo, ConnectionFilter, TimerToken};
 use rand;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::iter;
@@ -97,16 +97,20 @@ struct Shared {
 
 impl NetworkService {
 	/// Starts IO event loop
-	pub fn new(config: NetworkConfiguration, filter: Option<Arc<ConnectionFilter>>)
-		-> Result<NetworkService, Error> {
+	pub fn new(
+		config: NetworkConfiguration,
+		filter: Option<Arc<ConnectionFilter>>
+	) -> Result<NetworkService, Error> {
 		// TODO: for now `filter` is always `None` ; remove it from the code or implement it
 		assert!(filter.is_none());
 
 		let network_state = NetworkState::new(&config)?;
 
-		let local_peer_id = network_state.local_public_key().clone().into_peer_id();
-		// TODO: debug! instead?
-		info!(target: "sub-libp2p", "Local node id = {:?}", local_peer_id);
+		let local_peer_id = network_state.local_public_key().clone()
+			.into_peer_id();
+		let mut listen_addr = config_to_listen_addr(&config);
+		listen_addr.append(AddrComponent::P2P(local_peer_id.clone().into_bytes()));
+		info!(target: "sub-libp2p", "Local node address is: {}", listen_addr);
 
 		let kad_system = KadSystem::without_init(KadSystemConfig {
 			parallelism: 3,
@@ -328,9 +332,9 @@ impl NetworkContext for NetworkContextImpl {
 		}
 	}
 
-	fn disable_peer(&self, peer: PeerId) {
-		debug!(target: "sub-libp2p", "Request to disable peer {}", peer);
-		self.inner.network_state.disable_peer(peer);
+	fn disable_peer(&self, peer: PeerId, reason: &str) {
+		debug!(target: "sub-libp2p", "Request to disable peer {} for reason {}", peer, reason);
+		self.inner.network_state.disable_peer(peer, reason);
 	}
 
 	fn disconnect_peer(&self, peer: PeerId) {
@@ -464,7 +468,6 @@ fn init_thread(
 		match swarm_controller.listen_on(listen_addr.clone()) {
 			Ok(new_addr) => {
 				*shared.original_listened_addr.write() = Some(new_addr.clone());
-				shared.listened_addrs.write().push(new_addr);
 			},
 			Err(_) => {
 				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not \
@@ -623,19 +626,27 @@ fn build_kademlia_response(shared: &Arc<Shared>, searched: &PeerstorePeerId)
 		// TODO the iter of `known_closest_peers` should be infinite
 		.known_closest_peers(searched)
 		.map(move |peer_id| {
-			let addrs = shared.network_state.addrs_of_peer(&peer_id);
-			let connec_ty = if shared.network_state.has_connection(&peer_id) {
-				// TODO: this only checks connections with substrate ; but what
-				//       if we're connected through Kademlia only?
-				KadConnectionType::Connected
+			if peer_id == *shared.kad_system.local_peer_id() {
+				KadPeer {
+					node_id: peer_id.clone(),
+					multiaddrs: shared.listened_addrs.read().clone(),
+					connection_ty: KadConnectionType::Connected,
+				}
 			} else {
-				KadConnectionType::NotConnected
-			};
+				let addrs = shared.network_state.addrs_of_peer(&peer_id);
+				let connec_ty = if shared.network_state.has_connection(&peer_id) {
+					// TODO: this only checks connections with substrate ; but what
+					//       if we're connected through Kademlia only?
+					KadConnectionType::Connected
+				} else {
+					KadConnectionType::NotConnected
+				};
 
-			KadPeer {
-				node_id: peer_id.clone(),
-				multiaddrs: addrs,
-				connection_ty: connec_ty,
+				KadPeer {
+					node_id: peer_id.clone(),
+					multiaddrs: addrs,
+					connection_ty: connec_ty,
+				}
 			}
 		})
 		.collect::<Vec<_>>()
@@ -944,11 +955,12 @@ fn dial_peer_custom_proto<T, To, St, C>(
 						Ok(socket)
 					} else {
 						debug!(target: "sub-libp2p", "Public key mismatch for \
-							node {:?} with  proto {:?}", expected_peer_id, proto_id);
+							node {:?} with proto {:?}", expected_peer_id, proto_id);
 						trace!(target: "sub-libp2p", "Removing addr {} for {:?}",
 							original_addr, expected_peer_id);
 						shared.network_state.set_invalid_kad_address(&expected_peer_id, &original_addr);
-						Err(IoErrorKind::InvalidData.into())		// TODO: correct err
+						Err(IoError::new(IoErrorKind::InvalidData, "public \
+							key mismatch when identifyed peer"))
 					}
 				)
 				.and_then(move |socket|
@@ -1022,13 +1034,17 @@ fn process_identify_info(
 		original_addr.clone())?;	// TODO: wrong local addr
 
 	if let Some(ref original_listened_addr) = *shared.original_listened_addr.read() {
-		if let Some(ext_addr) = transport.nat_traversal(original_listened_addr, &info.observed_addr) {
+		if let Some(mut ext_addr) = transport.nat_traversal(original_listened_addr, &info.observed_addr) {
 			let mut listened_addrs = shared.listened_addrs.write();
 			if !listened_addrs.iter().any(|a| a == &ext_addr) {
 				trace!(target: "sub-libp2p", "NAT traversal: remote observes us as \
 					{} ; registering {} as one of our own addresses",
 					info.observed_addr, ext_addr);
-				listened_addrs.push(ext_addr);
+				listened_addrs.push(ext_addr.clone());
+				ext_addr.append(AddrComponent::P2P(shared.kad_system
+					.local_peer_id().clone().into_bytes()));
+				info!(target: "sub-libp2p", "New external node address: {}",
+					ext_addr);
 			}
 		}
 	}

@@ -43,7 +43,7 @@ pub mod chain_spec;
 use std::sync::Arc;
 use std::collections::HashMap;
 
-use codec::Slicable;
+use codec::Encode;
 use transaction_pool::TransactionPool;
 use polkadot_api::{PolkadotApi, light::RemotePolkadotApiWrapper};
 use polkadot_primitives::{Block, BlockId, Hash};
@@ -52,7 +52,7 @@ use client::Client;
 use polkadot_network::{PolkadotProtocol, consensus::ConsensusNetwork};
 use tokio::runtime::TaskExecutor;
 
-pub use service::{Configuration, Role, PruningMode, ExtrinsicPoolOptions,
+pub use service::{Configuration, Roles, PruningMode, ExtrinsicPoolOptions,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 pub use client::ExecutionStrategy;
 
@@ -166,7 +166,7 @@ pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 	-> Result<Service<FullComponents<Factory>>, Error>
 {
-	let is_validator = (config.roles & Role::AUTHORITY) == Role::AUTHORITY;
+	let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
 	let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
 	// Spin consensus service if configured
 	let consensus = if is_validator {
@@ -265,7 +265,7 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 		}
 
 		let encoded = transaction.encode();
-		if let Some(uxt) = codec::Slicable::decode(&mut &encoded[..]) {
+		if let Some(uxt) = codec::Decode::decode(&mut &encoded[..]) {
 			let best_block_id = self.best_block_id()?;
 			match self.pool.import_unchecked_extrinsic(best_block_id, uxt) {
 				Ok(xt) => Some(*xt.hash()),

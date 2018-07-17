@@ -34,7 +34,6 @@
 //! TODO: That is not the case now, since call/create externalities traps on any error now.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![warn(missing_docs)]
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -89,7 +88,7 @@ use exec::ExecutionContext;
 use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
-use codec::Slicable;
+use codec::Codec;
 use runtime_primitives::traits::{As, RefInto, SimpleArithmetic};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap};
@@ -99,7 +98,7 @@ pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 
 	// As<u32> is needed for wasm-utils
-	type Gas: Parameter + Slicable + SimpleArithmetic + Copy + As<Self::Balance> + As<u64> + As<u32>;
+	type Gas: Parameter + Codec + SimpleArithmetic + Copy + As<Self::Balance> + As<u64> + As<u32>;
 }
 
 pub trait ContractAddressFor<AccountId: Sized> {

@@ -24,7 +24,7 @@ use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Blo
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As};
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
-use codec::Slicable;
+use codec::Decode;
 use state_machine::{Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor, ExecutionStrategy, ExecutionManager};
 
 use backend::{self, BlockImportOperation};
@@ -523,7 +523,7 @@ impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Slicable;
+	use codec::Encode;
 	use keyring::Keyring;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;

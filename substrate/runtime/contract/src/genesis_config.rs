@@ -21,7 +21,7 @@ use {Trait, ContractFee, CallBaseFee, CreateBaseFee, GasPrice, MaxDepth};
 use runtime_primitives;
 use runtime_io::{self, twox_128};
 use runtime_support::StorageValue;
-use codec::Slicable;
+use codec::Encode;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

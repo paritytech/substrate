@@ -30,13 +30,13 @@ extern crate substrate_keyring as keyring;
 #[cfg(test)]
 extern crate rhododendron;
 
-use codec::Slicable;
+use codec::{Codec, Encode};
 use primitives::{AuthorityId, Signature};
 
 use runtime_primitives::bft::{Action, Message, MisbehaviorKind};
 
 // check a message signature. returns true if signed by that authority.
-fn check_message_sig<B: Slicable, H: Slicable>(
+fn check_message_sig<B: Codec, H: Codec>(
 	message: Message<B, H>,
 	signature: &Signature,
 	from: &AuthorityId
@@ -64,7 +64,7 @@ fn commit<B, H>(parent: H, round_number: u32, hash: H) -> Message<B, H> {
 /// Doesn't check that the header hash in question is
 /// valid or whether the misbehaving authority was part of
 /// the set at that block.
-pub fn evaluate_misbehavior<B: Slicable, H: Slicable + Copy>(
+pub fn evaluate_misbehavior<B: Codec, H: Codec + Copy>(
 	misbehaved: &AuthorityId,
 	parent_hash: H,
 	kind: &MisbehaviorKind<H>,

@@ -48,8 +48,8 @@ use primitives::bft::MisbehaviorReport;
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
 
-struct AuthorityStorageVec<S: codec::Slicable + Default>(rstd::marker::PhantomData<S>);
-impl<S: codec::Slicable + Default> StorageVec for AuthorityStorageVec<S> {
+struct AuthorityStorageVec<S: codec::Codec + Default>(rstd::marker::PhantomData<S>);
+impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
 	type Item = S;
 	const PREFIX: &'static [u8] = AUTHORITY_AT;
 }
@@ -147,7 +147,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use codec::{Slicable, KeyedVec};
+		use codec::{Encode, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
 		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|
 			((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode())

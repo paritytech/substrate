@@ -31,7 +31,7 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::hash::Hash;
 use std::fmt::Debug;
 
-use codec::{Slicable, Input};
+use codec::{Decode, Encode, Input, Output};
 
 /// Context for the statement table.
 pub trait Context {
@@ -70,7 +70,7 @@ pub trait Context {
 }
 
 /// Statements circulated among peers.
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub enum Statement<C, D> {
 	/// Broadcast by a authority to indicate that this is his candidate for
 	/// inclusion.
@@ -97,44 +97,43 @@ enum StatementKind {
 	Available = 4,
 }
 
-impl<C: Slicable, D: Slicable> Slicable for Statement<C, D> {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
+impl<C: Encode, D: Encode> Encode for Statement<C, D> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
 			Statement::Candidate(ref candidate) => {
-				v.push(StatementKind::Candidate as u8);
-				candidate.using_encoded(|s| v.extend(s));
+				dest.push_byte(StatementKind::Candidate as u8);
+				dest.push(candidate);
 			}
 			Statement::Valid(ref digest) => {
-				v.push(StatementKind::Valid as u8);
-				digest.using_encoded(|s| v.extend(s));
+				dest.push_byte(StatementKind::Valid as u8);
+				dest.push(digest);
 			}
 			Statement::Invalid(ref digest) => {
-				v.push(StatementKind::Invalid as u8);
-				digest.using_encoded(|s| v.extend(s));
+				dest.push_byte(StatementKind::Invalid as u8);
+				dest.push(digest);
 			}
 			Statement::Available(ref digest) => {
-				v.push(StatementKind::Available as u8);
-				digest.using_encoded(|s| v.extend(s));
+				dest.push_byte(StatementKind::Available as u8);
+				dest.push(digest);
 			}
 		}
-
-		v
 	}
+}
 
+impl<C: Decode, D: Decode> Decode for Statement<C, D> {
 	fn decode<I: Input>(value: &mut I) -> Option<Self> {
 		match value.read_byte() {
 			Some(x) if x == StatementKind::Candidate as u8 => {
-				Slicable::decode(value).map(Statement::Candidate)
+				Decode::decode(value).map(Statement::Candidate)
 			}
 			Some(x) if x == StatementKind::Valid as u8 => {
-				Slicable::decode(value).map(Statement::Valid)
+				Decode::decode(value).map(Statement::Valid)
 			}
 			Some(x) if x == StatementKind::Invalid as u8 => {
-				Slicable::decode(value).map(Statement::Invalid)
+				Decode::decode(value).map(Statement::Invalid)
 			}
 			Some(x) if x == StatementKind::Available as u8 => {
-				Slicable::decode(value).map(Statement::Available)
+				Decode::decode(value).map(Statement::Available)
 			}
 			_ => None,
 		}
@@ -142,7 +141,7 @@ impl<C: Slicable, D: Slicable> Slicable for Statement<C, D> {
 }
 
 /// A signed statement.
-#[derive(PartialEq, Eq, Debug, Clone, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Debug, Clone)]
 pub struct SignedStatement<C, D, V, S> {
 	/// The statement.
 	pub statement: Statement<C, D>,
@@ -152,6 +151,23 @@ pub struct SignedStatement<C, D, V, S> {
 	pub sender: V,
 }
 
+impl<C: Encode, D: Encode, V: Encode, S: Encode> Encode for SignedStatement<C, D, V, S> {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.statement);
+		dest.push(&self.signature);
+		dest.push(&self.sender);
+	}
+}
+
+impl<C: Decode, D: Decode, V: Decode, S: Decode> Decode for SignedStatement<C, D, V, S> {
+	fn decode<I: Input>(value: &mut I) -> Option<Self> {
+		Some(SignedStatement {
+			statement: Decode::decode(value)?,
+			signature: Decode::decode(value)?,
+			sender: Decode::decode(value)?,
+		})
+	}
+}
 /// Misbehavior: voting more than one way on candidate validity.
 ///
 /// Since there are three possible ways to vote, a double vote is possible in

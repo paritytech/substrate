@@ -19,7 +19,7 @@
 use std::sync::Arc;
 use client::backend::{Backend, RemoteBackend};
 use client::{Client, CallExecutor};
-use codec::Slicable;
+use codec::Decode;
 use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
 use runtime::Address;
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};

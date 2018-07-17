@@ -30,7 +30,7 @@ use call_executor::{CallExecutor, CallResult};
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
-use codec::Slicable;
+use codec::Decode;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -140,6 +140,7 @@ fn do_check_execution_proof<Hash, E>(
 #[cfg(test)]
 mod tests {
 	use test_client;
+	use executor::NativeExecutionDispatch;
 	use super::*;
 
 	#[test]
@@ -152,9 +153,9 @@ mod tests {
 
 		// 'fetch' execution proof from remote node
 		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
-
+		
 		// check remote execution proof locally
-		let local_executor = test_client::NativeExecutor::with_heap_pages(8);
+		let local_executor = test_client::LocalExecutor::with_heap_pages(8, 8);
 		do_check_execution_proof(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
 			method: "authorities".into(),

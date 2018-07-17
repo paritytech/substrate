@@ -95,8 +95,12 @@ impl OverlayedChanges {
 /// State Machine Error bound.
 ///
 /// This should reflect WASM error type bound for future compatibility.
-pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
-impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
+pub trait Error: 'static + fmt::Debug + fmt::Display + Send {
+	/// Error implies execution should be retried.
+	fn needs_retry(&self) -> bool { false }
+}
+
+impl Error for ExecutionError {}
 
 /// Externalities Error.
 ///
@@ -130,6 +134,11 @@ pub trait Externalities {
 	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn clear_storage(&mut self, key: &[u8]) {
 		self.place_storage(key.to_vec(), None);
+	}
+
+	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
+	fn exists_storage(&self, key: &[u8]) -> bool {
+		self.storage(key).is_some()
 	}
 
 	/// Clear storage entries which keys are start with the given prefix.
@@ -257,46 +266,65 @@ pub fn execute_using_consensus_failure_handler<
 	manager: ExecutionManager<Handler>,
 ) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
 	let strategy: ExecutionStrategy = (&manager).into();
+
+	// make a copy.
+	let code = ext::Ext::new(overlay, backend).storage(b":code")
+		.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
+		.to_vec();
+
 	let result = {
-		let maybe_orig_prospective =
-			if let &ExecutionManager::Both(_) = &manager { Some(overlay.prospective.clone()) } else { None };
+		let mut orig_prospective = overlay.prospective.clone();
 
-		let ((result, was_native), code, delta) = {
-			let mut externalities = ext::Ext::new(overlay, backend);
-			// make a copy.
-			let code = externalities.storage(b":code")
-				.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
-				.to_vec();
+		let (result, was_native, delta) = loop {
+			let ((result, was_native), delta) = {
+				let mut externalities = ext::Ext::new(overlay, backend);
+				(
+					exec.call(
+						&mut externalities,
+						&code,
+						method,
+						call_data,
+						// attempt to run native first, if we're not directed to run wasm only
+						strategy != ExecutionStrategy::AlwaysWasm,
+					),
+					externalities.transaction()
+				)
+			};
 
-			(
-				exec.call(
-					&mut externalities,
-					&code,
-					method,
-					call_data,
-					// attempt to run native first, if we're not directed to run wasm only
-					strategy != ExecutionStrategy::AlwaysWasm,
-				),
-				code,
-				externalities.transaction()
-			)
+			if result.as_ref().err().map_or(false, |e| e.needs_retry()) {
+				overlay.prospective = orig_prospective.clone();
+			} else {
+				break (result, was_native, delta)
+			}
 		};
-		
-		// run wasm separately if we did run native the first time and we're meant to run both
-		let (result, delta) = if let (true, ExecutionManager::Both(on_consensus_failure), Some(mut orig_prospective)) =
-			(was_native, manager, maybe_orig_prospective)
-		{
-			::std::mem::swap(&mut orig_prospective, &mut overlay.prospective);
-			let mut externalities = ext::Ext::new(overlay, backend);
 
-			let (wasm_result, _) = exec.call(
-				&mut externalities,
-				&code,
-				method,
-				call_data,
-				false
-			);
-			let wasm_delta = externalities.transaction();
+		// run wasm separately if we did run native the first time and we're meant to run both
+		let (result, delta) = if let (true, ExecutionManager::Both(on_consensus_failure)) =
+			(was_native, manager)
+		{
+			overlay.prospective = orig_prospective.clone();
+
+			let (wasm_result, wasm_delta) = loop {
+				let ((result, _), delta) = {
+					let mut externalities = ext::Ext::new(overlay, backend);
+					(
+						exec.call(
+							&mut externalities,
+							&code,
+							method,
+							call_data,
+							false,
+						),
+						externalities.transaction()
+					)
+				};
+
+				if result.as_ref().err().map_or(false, |e| e.needs_retry()) {
+					overlay.prospective = orig_prospective.clone();
+				} else {
+					break (result, delta)
+				}
+			};
 
 			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
 				|| (result.is_err() && wasm_result.is_err() && format!("{}", result.as_ref().unwrap_err()) == format!("{}", wasm_result.as_ref().unwrap_err()))
@@ -392,6 +420,8 @@ mod tests {
 			}
 		}
 	}
+
+	impl Error for u8 {}
 
 	#[test]
 	fn overlayed_storage_works() {

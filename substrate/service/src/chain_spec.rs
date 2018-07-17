@@ -73,6 +73,7 @@ enum Genesis<G> {
 #[serde(rename_all = "camelCase")]
 struct ChainSpecFile {
 	pub name: String,
+	pub id: String,
 	pub boot_nodes: Vec<String>,
 }
 
@@ -89,6 +90,10 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 
 	pub fn name(&self) -> &str {
 		&self.spec.name
+	}
+
+	pub fn id(&self) -> &str {
+		&self.spec.id
 	}
 
 	/// Parse json content into a `ChainSpec`
@@ -111,9 +116,10 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 	}
 
 	/// Create hardcoded spec.
-	pub fn from_genesis(name: &str, constructor: fn() -> G, boot_nodes: Vec<String>) -> Self {
+	pub fn from_genesis(name: &str, id: &str, constructor: fn() -> G, boot_nodes: Vec<String>) -> Self {
 		let spec = ChainSpecFile {
 			name: name.to_owned(),
+			id: id.to_owned(),
 			boot_nodes: boot_nodes,
 		};
 		ChainSpec {

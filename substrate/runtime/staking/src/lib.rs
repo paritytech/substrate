@@ -47,7 +47,7 @@ extern crate substrate_runtime_timestamp as timestamp;
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use codec::{Input, Slicable};
+use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
@@ -100,10 +100,10 @@ impl<Address> OnAccountKill<Address> for () {
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Slicable + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
+	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Slicable + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
 	/// A function which is invoked when the given account is dead.
 	///
 	/// Gives a chance to clean up resources associated with the given account.

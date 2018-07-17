@@ -19,7 +19,7 @@
 //! It provides an means for executing contracts represented in WebAssembly (Wasm for short).
 //! Contracts are able to create other contracts, transfer funds to each other and operate on a simple key-value storage.
 
-use codec::Slicable;
+use codec::Decode;
 use parity_wasm::elements::{self, External, MemoryType};
 use pwasm_utils;
 use pwasm_utils::rules;

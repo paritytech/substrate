@@ -19,7 +19,7 @@ use std::cmp;
 use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
-use network::PeerId;
+use network_libp2p::PeerId;
 use runtime_primitives::traits::{Block as BlockT, NumberFor, As};
 use message;
 

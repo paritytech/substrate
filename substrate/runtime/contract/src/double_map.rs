@@ -19,7 +19,7 @@
 //! This implementation is somewhat specialized to the tracking of the storage of accounts.
 
 use rstd::prelude::*;
-use codec::Slicable;
+use codec::{Codec, Encode};
 use runtime_support::storage::unhashed;
 use runtime_io::{blake2_256, twox_128};
 
@@ -29,7 +29,7 @@ use runtime_io::{blake2_256, twox_128};
 fn first_part_of_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1) -> [u8; 16] {
 	let mut raw_prefix = Vec::new();
 	raw_prefix.extend(M::PREFIX);
-	raw_prefix.extend(Slicable::encode(&k1));
+	raw_prefix.extend(Encode::encode(&k1));
 	twox_128(&raw_prefix)
 }
 
@@ -38,7 +38,7 @@ fn first_part_of_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1) -> [u8; 16] {
 /// The first part is hased by XX and then concatenated with a blake2 hash of `k2`.
 fn full_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1, k2: M::Key2) -> Vec<u8> {
 	let first_part = first_part_of_key::<M>(k1);
-	let second_part = blake2_256(&Slicable::encode(&k2));
+	let second_part = blake2_256(&Encode::encode(&k2));
 
 	let mut k = Vec::new();
 	k.extend(&first_part);
@@ -60,9 +60,9 @@ fn full_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1, k2: M::Key2) -> Vec<u8> {
 /// Blake2 is used for `Key2` is because it will be used as a for a key for contract's storage and
 /// thus will be susceptible for a untrusted input.
 pub trait StorageDoubleMap {
-	type Key1: Slicable;
-	type Key2: Slicable;
-	type Value: Slicable + Default;
+	type Key1: Codec;
+	type Key2: Codec;
+	type Value: Codec + Default;
 
 	const PREFIX: &'static [u8];
 

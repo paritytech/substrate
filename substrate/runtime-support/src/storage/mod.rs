@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use runtime_io::{self, twox_128};
-use codec::{Slicable, KeyedVec, Input};
+use codec::{Codec, Decode, KeyedVec, Input};
 
 pub mod generator;
 
@@ -40,42 +40,42 @@ impl<'a> Input for IncrementalInput<'a> {
 }
 
  /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
+pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 	let key = twox_128(key);
 	runtime_io::read_storage(&key[..], &mut [0; 0][..], 0).map(|_| {
 		let mut input = IncrementalInput {
 			key: &key[..],
 			pos: 0,
 		};
-		Slicable::decode(&mut input).expect("storage is not null, therefore must be a valid type")
+		Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
 	})
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no
 /// explicit entry.
-pub fn get_or_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
+pub fn get_or_default<T: Codec + Sized + Default>(key: &[u8]) -> T {
 	get(key).unwrap_or_else(Default::default)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry.
-pub fn get_or<T: Slicable + Sized>(key: &[u8], default_value: T) -> T {
+pub fn get_or<T: Codec + Sized>(key: &[u8], default_value: T) -> T {
 	get(key).unwrap_or(default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry.
-pub fn get_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
+pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
 	get(key).unwrap_or_else(default_value)
 }
 
 /// Put `value` in storage under `key`.
-pub fn put<T: Slicable>(key: &[u8], value: &T) {
+pub fn put<T: Codec>(key: &[u8], value: &T) {
 	value.using_encoded(|slice| runtime_io::set_storage(&twox_128(key)[..], slice));
 }
 
 /// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
-pub fn take<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
+pub fn take<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 	let r = get(key);
 	if r.is_some() {
 		kill(key);
@@ -85,19 +85,19 @@ pub fn take<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
 
 /// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 /// the default for its type.
-pub fn take_or_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
+pub fn take_or_default<T: Codec + Sized + Default>(key: &[u8]) -> T {
 	take(key).unwrap_or_else(Default::default)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or<T: Slicable + Sized>(key: &[u8], default_value: T) -> T {
+pub fn take_or<T: Codec + Sized>(key: &[u8], default_value: T) -> T {
 	take(key).unwrap_or(default_value)
 }
 
 /// Return the value of the item in storage under `key`, or `default_value()` if there is no
 /// explicit entry. Ensure there is no explicit entry on return.
-pub fn take_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
+pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
 	take(key).unwrap_or_else(default_value)
 }
 
@@ -131,12 +131,12 @@ impl ::GenericStorage for RuntimeStorage {
 	}
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: Slicable>(&self, key: &[u8]) -> Option<T> {
+	fn get<T: Codec>(&self, key: &[u8]) -> Option<T> {
 		super::storage::get(key)
 	}
 
 	/// Put a value in under a key.
-	fn put<T: Slicable>(&self, key: &[u8], val: &T) {
+	fn put<T: Codec>(&self, key: &[u8], val: &T) {
 		super::storage::put(key, val)
 	}
 
@@ -146,13 +146,13 @@ impl ::GenericStorage for RuntimeStorage {
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take<T: Slicable>(&self, key: &[u8]) -> Option<T> {
+	fn take<T: Codec>(&self, key: &[u8]) -> Option<T> {
 		super::storage::take(key)
 	}
 }
 
 /// A trait for working with macro-generated storage values under the substrate storage API.
-pub trait StorageValue<T: Slicable> {
+pub trait StorageValue<T: Codec> {
 	/// The type that get/take return.
 	type Query;
 
@@ -175,7 +175,7 @@ pub trait StorageValue<T: Slicable> {
 	fn take() -> Self::Query;
 }
 
-impl<T: Slicable, U> StorageValue<T> for U where U: generator::StorageValue<T> {
+impl<T: Codec, U> StorageValue<T> for U where U: generator::StorageValue<T> {
 	type Query = U::Query;
 
 	fn key() -> &'static [u8] {
@@ -199,7 +199,7 @@ impl<T: Slicable, U> StorageValue<T> for U where U: generator::StorageValue<T> {
 }
 
 /// A strongly-typed list in storage.
-pub trait StorageList<T: Slicable> {
+pub trait StorageList<T: Codec> {
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 
@@ -228,7 +228,7 @@ pub trait StorageList<T: Slicable> {
 	fn clear();
 }
 
-impl<T: Slicable, U> StorageList<T> for U where U: generator::StorageList<T> {
+impl<T: Codec, U> StorageList<T> for U where U: generator::StorageList<T> {
 	fn prefix() -> &'static [u8] {
 		<U as generator::StorageList<T>>::prefix()
 	}
@@ -267,7 +267,7 @@ impl<T: Slicable, U> StorageList<T> for U where U: generator::StorageList<T> {
 }
 
 /// A strongly-typed map in storage.
-pub trait StorageMap<K: Slicable, V: Slicable> {
+pub trait StorageMap<K: Codec, V: Codec> {
 	/// The type that get/take return.
 	type Query;
 
@@ -293,7 +293,7 @@ pub trait StorageMap<K: Slicable, V: Slicable> {
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 }
 
-impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::StorageMap<K, V> {
+impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: generator::StorageMap<K, V> {
 	type Query = U::Query;
 
 	fn prefix() -> &'static [u8] {
@@ -327,7 +327,7 @@ impl<K: Slicable, V: Slicable, U> StorageMap<K, V> for U where U: generator::Sto
 
 /// A trait to conveniently store a vector of storable data.
 pub trait StorageVec {
-	type Item: Default + Sized + Slicable;
+	type Item: Default + Sized + Codec;
 	const PREFIX: &'static [u8];
 
 	/// Get the current set of items.
@@ -386,44 +386,44 @@ pub trait StorageVec {
 
 pub mod unhashed {
 	use rstd::borrow::Borrow;
-	use super::{runtime_io, Slicable, KeyedVec, Vec, IncrementalInput};
+	use super::{runtime_io, Codec, Decode, KeyedVec, Vec, IncrementalInput};
 
 	/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
-	pub fn get<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
+	pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 		runtime_io::read_storage(key, &mut [0; 0][..], 0).map(|_| {
 			let mut input = IncrementalInput {
 				key,
 				pos: 0,
 			};
-			Slicable::decode(&mut input).expect("stroage is not null, therefore must be a valid type")
+			Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
 		})
 	}
 
 	/// Return the value of the item in storage under `key`, or the type's default if there is no
 	/// explicit entry.
-	pub fn get_or_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
+	pub fn get_or_default<T: Codec + Sized + Default>(key: &[u8]) -> T {
 		get(key).unwrap_or_else(Default::default)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value` if there is no
 	/// explicit entry.
-	pub fn get_or<T: Slicable + Sized>(key: &[u8], default_value: T) -> T {
+	pub fn get_or<T: Codec + Sized>(key: &[u8], default_value: T) -> T {
 		get(key).unwrap_or(default_value)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
 	/// explicit entry.
-	pub fn get_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
+	pub fn get_or_else<T: Codec + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
 		get(key).unwrap_or_else(default_value)
 	}
 
 	/// Put `value` in storage under `key`.
-	pub fn put<T: Slicable>(key: &[u8], value: &T) {
+	pub fn put<T: Codec>(key: &[u8], value: &T) {
 		value.using_encoded(|slice| runtime_io::set_storage(key, slice));
 	}
 
 	/// Remove `key` from storage, returning its value if it had an explicit entry or `None` otherwise.
-	pub fn take<T: Slicable + Sized>(key: &[u8]) -> Option<T> {
+	pub fn take<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 		let r = get(key);
 		if r.is_some() {
 			kill(key);
@@ -433,19 +433,19 @@ pub mod unhashed {
 
 	/// Remove `key` from storage, returning its value, or, if there was no explicit entry in storage,
 	/// the default for its type.
-	pub fn take_or_default<T: Slicable + Sized + Default>(key: &[u8]) -> T {
+	pub fn take_or_default<T: Codec + Sized + Default>(key: &[u8]) -> T {
 		take(key).unwrap_or_else(Default::default)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value` if there is no
 	/// explicit entry. Ensure there is no explicit entry on return.
-	pub fn take_or<T: Slicable + Sized>(key: &[u8], default_value: T) -> T {
+	pub fn take_or<T: Codec + Sized>(key: &[u8], default_value: T) -> T {
 		take(key).unwrap_or(default_value)
 	}
 
 	/// Return the value of the item in storage under `key`, or `default_value()` if there is no
 	/// explicit entry. Ensure there is no explicit entry on return.
-	pub fn take_or_else<T: Slicable + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
+	pub fn take_or_else<T: Codec + Sized, F: FnOnce() -> T>(key: &[u8], default_value: F) -> T {
 		take(key).unwrap_or_else(default_value)
 	}
 
@@ -476,7 +476,7 @@ pub mod unhashed {
 
 	/// A trait to conveniently store a vector of storable data.
 	pub trait StorageVec {
-		type Item: Default + Sized + Slicable;
+		type Item: Default + Sized + Codec;
 		const PREFIX: &'static [u8];
 
 		/// Get the current set of items.
