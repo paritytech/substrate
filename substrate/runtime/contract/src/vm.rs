@@ -309,22 +309,16 @@ pub fn execute<'a, T: Trait, E: Ext<T>>(
 		let call_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
 				Some(nested_meter) => ext.call(&transfer_to, value, nested_meter, input_data),
-				None => {
-					// there is not enough gas to allocate for the nested call.
-					Err(())
-				}
+				// there is not enough gas to allocate for the nested call.
+				None => Err(()),
 			}
 		});
 
 		match call_outcome {
-			Ok(CallReceipt { .. }) => {
-				// TODO: Find a way how to pass return_data back to the this sandbox.
-				Ok(sandbox::ReturnValue::Unit)
-			}
-			Err(_) => {
-				// TODO: Return a status code value that can be handled by the caller instead of a trap.
-				Err(sandbox::HostError)
-			}
+			// TODO: Find a way how to pass return_data back to the this sandbox.
+			Ok(CallReceipt { .. }) => Ok(sandbox::ReturnValue::Unit),
+			// TODO: Return a status code value that can be handled by the caller instead of a trap.
+			Err(_) => Err(sandbox::HostError),
 		}
 	}
 
@@ -356,22 +350,16 @@ pub fn execute<'a, T: Trait, E: Ext<T>>(
 		let create_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
 				Some(nested_meter) => ext.create(&code, value, nested_meter, input_data),
-				None => {
-					// there is not enough gas to allocate for the nested call.
-					Err(())
-				}
+				// there is not enough gas to allocate for the nested call.
+				None => Err(()),
 			}
 		});
 
 		match create_outcome {
-			Ok(CreateReceipt { .. }) => {
-				// TODO: Copy an address of the created contract in the sandbox.
-				Ok(sandbox::ReturnValue::Unit)
-			}
-			Err(_) => {
-				// TODO: Return a status code value that can be handled by the caller instead of a trap.
-				Err(sandbox::HostError)
-			}
+			// TODO: Copy an address of the created contract in the sandbox.
+			Ok(CreateReceipt { .. }) => Ok(sandbox::ReturnValue::Unit),
+			// TODO: Return a status code value that can be handled by the caller instead of a trap.
+			Err(_) => Err(sandbox::HostError),
 		}
 	}
 
