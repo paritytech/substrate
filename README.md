@@ -15,7 +15,7 @@ sudo apt install make clang
 Then, install Polkadot PoC-2:
 
 ```
-cargo install --git https://github.com/paritytech/polkadot.git --branch v0.2
+cargo install --git https://github.com/paritytech/polkadot.git --branch v0.2 polkadot
 ```
 
 You'll now have a `polkadot` binary installed to your `PATH`. You can drop the
