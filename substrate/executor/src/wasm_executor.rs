@@ -20,7 +20,7 @@ use std::cmp::Ordering;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use wasmi::{
-	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder,
+	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder, self
 };
 use wasmi::RuntimeValue::{I32, I64};
 use wasmi::memory_units::{Pages, Bytes};
@@ -576,7 +576,7 @@ impl WasmExecutor {
 
 		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
-		memory.set(offset, &data).map_err(|_| ErrorKind::PleaseRetry.into())?;
+		memory.set(offset, &data).map_err(|_: wasmi::Error| Error::from(ErrorKind::PleaseRetry))?;
 
 		let result = instance.invoke_export(
 			method,
