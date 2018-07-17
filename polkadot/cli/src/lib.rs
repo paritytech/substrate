@@ -111,9 +111,9 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), String> {
 	let chain_spec = matches.value_of("chain")
 		.map(ChainSpec::from)
-		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::StagingTestnet });
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::KrummeLanke });
 	let is_global = match chain_spec {
-		ChainSpec::PoC1Testnet | ChainSpec::StagingTestnet => true,
+		ChainSpec::KrummeLanke | ChainSpec::StagingTestnet => true,
 		_ => false,
 	};
 	let spec = chain_spec.load()?;
@@ -360,7 +360,7 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let json = matches.is_present("json");
 
 	let mut file: Box<Write> = match matches.value_of("OUTPUT") {
-		Some(filename) => Box::new(File::open(filename)?),
+		Some(filename) => Box::new(File::create(filename)?),
 		None => Box::new(stdout()),
 	};
 
