@@ -11,7 +11,7 @@ bytes = "0.4"
 error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
-libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "77b1c445807e53b8c5e4e5e2da751222da15b8cc", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
+libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "2fb5ef1d40f2565e592248abbd21b7ca2da992e0", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ethkey = { git = "https://github.com/paritytech/parity.git" }
 ethereum-types = "0.3"

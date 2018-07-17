@@ -68,11 +68,11 @@ pub fn clear_storage(key: &[u8]) {
 	);
 }
 
-/// Clear the storage of some particular key.
-pub fn exists_storage(key: &[u8]) {
+/// Check whether a given `key` exists in storage.
+pub fn exists_storage(key: &[u8]) -> bool {
 	ext::with(|ext|
 		ext.exists_storage(key)
-	);
+	).unwrap_or(false)
 }
 
 /// Clear the storage entries key of which starts with the given prefix.
