@@ -71,7 +71,7 @@ impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
 			pruning: PruningMode::ArchiveAll,
 			execution_strategy: ExecutionStrategy::Both,
 			min_heap_pages: 8,
-			max_heap_pages: 512,
+			max_heap_pages: 1024,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 		configuration
