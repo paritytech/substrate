@@ -51,8 +51,8 @@ pub fn build_transport(
 		.with_upgrade(
 			// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
 			upgrade::or(
-				upgrade::map(yamux::Config::default(), either::EitherOutput::First),
 				upgrade::map(mplex::MplexConfig::new(), either::EitherOutput::Second),
+				upgrade::map(yamux::Config::default(), either::EitherOutput::First),
 			)
 		)
 		.into_connection_reuse()
