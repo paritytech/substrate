@@ -15,3 +15,4 @@ polkadot-primitives = { path = "../primitives", version = "0.1" }
 polkadot-cli = { path = "../cli" }
 log = "0.4"
 ed25519 = { path = "../../substrate/ed25519" }
+tokio = "0.1.7"

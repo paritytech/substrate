@@ -34,21 +34,21 @@ mod client_ext;
 
 pub use client_ext::TestClient;
 
-mod native_executor {
+mod local_executor {
 	#![allow(missing_docs)]
 	use super::runtime;
 
-	native_executor_instance!(pub NativeExecutor, runtime::api::dispatch, runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+	native_executor_instance!(pub LocalExecutor, runtime::api::dispatch, runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 }
 
 /// Native executor used for tests.
-pub use self::native_executor::NativeExecutor;
+pub use local_executor::LocalExecutor;
 
 /// Test client database backend.
 pub type Backend = client::in_mem::Backend<runtime::Block>;
 
 /// Test client executor.
-pub type Executor = client::LocalCallExecutor<Backend, executor::NativeExecutor<NativeExecutor>>;
+pub type Executor = client::LocalCallExecutor<Backend, executor::NativeExecutor<LocalExecutor>>;
 
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
