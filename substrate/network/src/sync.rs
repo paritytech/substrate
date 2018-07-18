@@ -100,7 +100,12 @@ impl<B: BlockT> ChainSync<B> {
 		self.peers.values().max_by_key(|p| p.best_number).map(|p| p.best_number)
 	}
 
-	/// Returns sync status
+	/// Returns import queue reference.
+	pub(crate) fn import_queue(&self) -> Arc<ImportQueue<B>> {
+		self.import_queue.clone()
+	}
+
+	/// Returns sync status.
 	pub(crate) fn status(&self) -> Status<B> {
 		let best_seen = self.best_seen_block();
 		let state = match &best_seen {

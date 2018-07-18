@@ -37,6 +37,8 @@ use sync::ChainSync;
 pub trait ImportQueue<B: BlockT>: Send + Sync {
 	/// Clear the queue when sync is restarting.
 	fn clear(&self);
+	/// Clears the import queue and stops importing.
+	fn stop(&self);
 	/// Get queue status.
 	fn status(&self) -> ImportQueueStatus<B>;
 	/// Is block with given hash is currently in the queue.
@@ -109,6 +111,16 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 		*best_importing_number = Zero::zero();
 	}
 
+	fn stop(&self) {
+		self.clear();
+		if let Some(handle) = self.handle.lock().take() {
+			self.data.is_stopping.store(true, Ordering::SeqCst);
+			self.data.signal.notify_one();
+
+			let _ = handle.join();
+		}
+	}
+
 	fn status(&self) -> ImportQueueStatus<B> {
 		ImportQueueStatus {
 			importing_count: self.data.queue_blocks.read().len(),
@@ -138,12 +150,7 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 
 impl<B: BlockT> Drop for AsyncImportQueue<B> {
 	fn drop(&mut self) {
-		if let Some(handle) = self.handle.lock().take() {
-			self.data.is_stopping.store(true, Ordering::SeqCst);
-			self.data.signal.notify_one();
-
-			let _ = handle.join();
-		}
+		self.stop();
 	}
 }
 
@@ -432,6 +439,8 @@ pub mod tests {
 
 	impl<B: 'static + BlockT> ImportQueue<B> for SyncImportQueue {
 		fn clear(&self) { }
+
+		fn stop(&self) { }
 
 		fn status(&self) -> ImportQueueStatus<B> {
 			ImportQueueStatus {
