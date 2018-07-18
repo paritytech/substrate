@@ -495,8 +495,13 @@ fn init_thread(
 
 		trace!(target: "sub-libp2p", "Dialing bootnode {:?}", peer_id);
 		for proto in shared.protocols.read().0.clone().into_iter() {
-			open_peer_custom_proto(shared.clone(), transport.clone(),
-				proto, peer_id.clone(), &swarm_controller)
+			open_peer_custom_proto(
+				shared.clone(),
+				transport.clone(),
+				proto,
+				peer_id.clone(),
+				&swarm_controller
+			)
 		}
 	}
 
@@ -843,8 +848,7 @@ fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 		.for_each({
 			let shared = shared.clone();
 			move |_| {
-				connect_to_nodes(shared.clone(), transport.clone(),
-					&swarm_controller);
+				connect_to_nodes(shared.clone(), transport.clone(), &swarm_controller);
 				Ok(())
 			}
 		});
@@ -940,8 +944,13 @@ fn connect_to_nodes<T, To, St, C>(
 		// should automatically open multiple substreams.
 		trace!(target: "sub-libp2p", "Ensuring connection to {:?}", peer);
 		for proto in shared.protocols.read().0.clone().into_iter() {
-			open_peer_custom_proto(shared.clone(), base_transport.clone(),
-				proto, peer.clone(), swarm_controller)
+			open_peer_custom_proto(
+				shared.clone(),
+				base_transport.clone(),
+				proto,
+				peer.clone(),
+				swarm_controller
+			)
 		}
 	}
 }

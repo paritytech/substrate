@@ -57,8 +57,7 @@ pub fn build_transport(
 
 	TransportTimeout::new(base, Duration::from_secs(20))
 		.map_err(|err| {
-			debug!(target: "sub-libp2p", "Error in base transport \
-				layer: {:?}", err);
+			debug!(target: "sub-libp2p", "Error in base transport layer: {:?}", err);
 			err
 		})
 }
