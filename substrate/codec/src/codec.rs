@@ -49,7 +49,10 @@ impl<'a> Input for &'a [u8] {
 #[cfg(feature = "std")]
 impl<R: ::std::io::Read> Input for R {
 	fn read(&mut self, into: &mut [u8]) -> usize {
-		(self as &mut ::std::io::Read).read(into).unwrap_or(0)
+		match (self as &mut ::std::io::Read).read_exact(into) {
+			Ok(()) => into.len(),
+			Err(_) => 0,
+		}
 	}
 }
 
