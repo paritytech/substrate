@@ -16,9 +16,9 @@
 
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
-use futures::{future, sync::mpsc};
+use futures::sync::mpsc;
 use libp2p::core::{Multiaddr, AddrComponent, Endpoint, UniqueConnec};
-use libp2p::core::{PeerId as PeerstorePeerId, PublicKey};
+use libp2p::core::{UniqueConnecState, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
 use libp2p::peerstore::json_peerstore::JsonPeerstore;
@@ -192,7 +192,28 @@ impl NetworkState {
 		&self.local_public_key
 	}
 
-	/// Returns all the IDs of the peer we have knowledge of.
+	/// Returns the ID of a random peer of the network.
+	///
+	/// Returns `None` if we don't know any peer.
+	pub fn random_peer(&self) -> Option<PeerstorePeerId> {
+		// TODO: optimize by putting the operation directly in the peerstore
+		// https://github.com/libp2p/rust-libp2p/issues/316
+		let peers = match self.peerstore {
+			PeersStorage::Memory(ref mem) =>
+				mem.peers().collect::<Vec<_>>(),
+			PeersStorage::Json(ref json) =>
+				json.peers().collect::<Vec<_>>(),
+		};
+
+		if peers.is_empty() {
+			return None
+		}
+
+		let nth = rand::random::<usize>() % peers.len();
+		Some(peers[nth].clone())
+	}
+
+	/// Returns all the IDs of the peers on the network we have knowledge of.
 	///
 	/// This includes peers we are not connected to.
 	pub fn known_peers(&self) -> impl Iterator<Item = PeerstorePeerId> {
@@ -402,11 +423,32 @@ impl NetworkState {
 		}
 	}
 
-	/// Returns true if we should open a new outgoing connection to a peer.
-	/// This takes into account the number of active peers.
-	pub fn should_open_outgoing_connections(&self) -> bool {
-		!self.reserved_only.load(atomic::Ordering::Relaxed) &&
-			self.connections.read().peer_by_nodeid.len() < self.min_peers as usize
+	/// Returns the number of open and pending connections with
+	/// custom protocols.
+	pub fn num_open_custom_connections(&self) -> u32 {
+		self.connections
+			.read()
+			.info_by_peer
+			.values()
+			.filter(|info|
+				info.protocols.iter().any(|&(_, ref connec)|
+					match connec.state() {
+						UniqueConnecState::Pending | UniqueConnecState::Full => true,
+						_ => false
+					}
+				)
+			)
+			.count() as u32
+	}
+
+	/// Returns the number of new outgoing custom connections to peers to
+	/// open. This takes into account the number of active peers.
+	pub fn should_open_outgoing_custom_connections(&self) -> u32 {
+		if self.reserved_only.load(atomic::Ordering::Relaxed) {
+			0
+		} else {
+			self.min_peers.saturating_sub(self.num_open_custom_connections())
+		}
 	}
 
 	/// Returns true if we are connected to the given node.

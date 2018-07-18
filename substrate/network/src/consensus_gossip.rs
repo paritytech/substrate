@@ -75,8 +75,8 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, peer_id: PeerId, roles: Roles) {
-		if roles.contains(Roles::AUTHORITY) {
-			trace!(target:"gossip", "Registering authority {}", peer_id);
+		if roles.intersects(Roles::AUTHORITY | Roles::FULL) {
+			trace!(target:"gossip", "Registering {:?} {}", roles, peer_id);
 			// Send out all known messages.
 			// TODO: limit by size
 			let mut known_messages = HashSet::new();
@@ -98,6 +98,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	fn propagate(&mut self, protocol: &mut Context<B>, message: message::Message<B>, hash: B::Hash) {
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.known_messages.insert(hash.clone()) {
+				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
 				protocol.send_message(*id, message.clone());
 			}
 		}
