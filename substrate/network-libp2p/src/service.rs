@@ -86,7 +86,7 @@ struct Shared {
 	/// `NetworkProtocolHandler`. This can be closed if the background thread
 	/// is not running. The sender will be overwritten every time we start
 	/// the service.
-	timeouts_register_tx: RwLock<mpsc::UnboundedSender<(Instant, (Arc<NetworkProtocolHandler + Send + Sync>, ProtocolId, TimerToken))>>,
+	timeouts_register_tx: RwLock<mpsc::UnboundedSender<(Duration, (Arc<NetworkProtocolHandler + Send + Sync>, ProtocolId, TimerToken))>>,
 
 	/// Original address from the configuration, after being adjusted by the `Transport`.
 	/// Contains `None` if the network hasn't started yet.
@@ -360,9 +360,8 @@ impl NetworkContext for NetworkContextImpl {
 			.ok_or(ErrorKind::BadProtocol)?
 			.custom_data()
 			.clone();
-		let at = Instant::now() + duration;
 		self.inner.timeouts_register_tx.read()
-			.unbounded_send((at, (handler, self.protocol, token)))
+			.unbounded_send((duration, (handler, self.protocol, token)))
 			.map_err(|err| ErrorKind::Io(IoError::new(IoErrorKind::Other, err)))?;
 		Ok(())
 	}
@@ -393,7 +392,7 @@ impl NetworkContext for NetworkContextImpl {
 fn init_thread(
 	core: Handle,
 	shared: Arc<Shared>,
-	timeouts_register_rx: mpsc::UnboundedReceiver<(Instant, (Arc<NetworkProtocolHandler + Send + Sync + 'static>, ProtocolId, TimerToken))>,
+	timeouts_register_rx: mpsc::UnboundedReceiver<(Duration, (Arc<NetworkProtocolHandler + Send + Sync + 'static>, ProtocolId, TimerToken))>,
 	close_rx: oneshot::Receiver<()>
 ) -> Result<impl Future<Item = (), Error = IoError>, Error> {
 	// Build the transport layer.
