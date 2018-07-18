@@ -71,7 +71,7 @@ pub use client::error::Error as ClientError;
 pub use client::backend::Backend as ClientBackend;
 pub use state_machine::Backend as StateMachineBackend;
 pub use polkadot_primitives::Block as PolkadotBlock;
-pub use service::{Components as ServiceComponents, Service};
+pub use service::{Components as ServiceComponents, Service, CustomConfiguration};
 
 use std::io::{self, Write, Read, stdin, stdout};
 use std::fs::File;
@@ -111,9 +111,9 @@ impl substrate_rpc::system::SystemApi for SystemConfiguration {
 fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), String> {
 	let chain_spec = matches.value_of("chain")
 		.map(ChainSpec::from)
-		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::StagingTestnet });
+		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::KrummeLanke });
 	let is_global = match chain_spec {
-		ChainSpec::PoC1Testnet | ChainSpec::StagingTestnet => true,
+		ChainSpec::KrummeLanke | ChainSpec::StagingTestnet => true,
 		_ => false,
 	};
 	let spec = chain_spec.load()?;
@@ -134,10 +134,15 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 pub trait Worker {
 	/// A future that resolves when the work is done or the node should exit.
 	/// This will be run on a tokio runtime.
-	type Work: Future<Item=(),Error=()>;
+	type Work: Future<Item=(),Error=()> + Send + 'static;
 
 	/// An exit scheduled for the future.
 	type Exit: Future<Item=(),Error=()> + Send + 'static;
+
+	/// Return configuration for the polkadot node.
+	// TODO: make this the full configuration, so embedded nodes don't need
+	// string CLI args
+	fn configuration(&self) -> CustomConfiguration { Default::default() }
 
 	/// Don't work, but schedule an exit.
 	fn exit_only(self) -> Self::Exit;
@@ -217,13 +222,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	};
 
 	let role =
-		if matches.is_present("collator") {
-			info!("Starting collator");
-			// TODO [rob]: collation node implementation
-			// This isn't a thing. Different parachains will have their own collator executables and
-			// maybe link to libpolkadot to get a light-client.
-			service::Roles::LIGHT
-		} else if matches.is_present("light") {
+		if matches.is_present("light") {
 			info!("Starting (light)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::LIGHT
@@ -236,6 +235,13 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::FULL
 		};
+
+	if let Some(v) = matches.value_of("min-heap-pages") {
+		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
+	}
+	if let Some(v) = matches.value_of("max-heap-pages") {
+		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
+	}
 
 	if let Some(s) = matches.value_of("execution") {
 		config.execution_strategy = match s {
@@ -255,9 +261,10 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		config.network.net_config_path = config.network.config_path.clone();
 
 		let port = match matches.value_of("port") {
-			Some(port) => port.parse().expect("Invalid p2p port value specified."),
+			Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
 			None => 30333,
 		};
+
 		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
 		config.network.public_address = None;
 		config.network.client_version = format!("parity-polkadot/{}", crate_version!());
@@ -267,6 +274,8 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			None => None,
 		};
 	}
+
+	config.custom = worker.configuration();
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 	if matches.is_present("dev") {
@@ -353,7 +362,7 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let json = matches.is_present("json");
 
 	let mut file: Box<Write> = match matches.value_of("OUTPUT") {
-		Some(filename) => Box::new(File::open(filename)?),
+		Some(filename) => Box::new(File::create(filename)?),
 		None => Box::new(stdout()),
 	};
 
@@ -393,6 +402,23 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let base_path = base_path(matches);
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+
+	if let Some(v) = matches.value_of("min-heap-pages") {
+		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
+	}
+	if let Some(v) = matches.value_of("max-heap-pages") {
+		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
+	}
+
+	if let Some(s) = matches.value_of("execution") {
+		config.execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+		};
+	}
+
 	let client = service::new_client(config)?;
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 
@@ -406,8 +432,8 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 		None => Box::new(stdin()),
 	};
 
-	info!("Importing blocks");
 	let count: u32 = Decode::decode(&mut file).ok_or("Error reading file")?;
+	info!("Importing {} blocks", count);
 	let mut block = 0;
 	for _ in 0 .. count {
 		if exit_recv.try_recv().is_ok() {
@@ -424,7 +450,7 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 			}
 		}
 		block += 1;
-		if block % 10000 == 0 {
+		if block % 1000 == 0 {
 			info!("#{}", block);
 		}
 	}
@@ -454,9 +480,9 @@ fn run_until_exit<C, W>(
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", matches)?;
 
 		let handler = || {
-			let client = (&service as &substrate_service::Service<C>).client();
+			let client = substrate_service::Service::client(&service);
 			let chain = rpc::apis::chain::Chain::new(client.clone(), executor.clone());
-			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool());
+			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool(), executor.clone());
 			rpc::rpc_handler::<service::ComponentBlock<C>, _, _, _, _>(
 				client,
 				chain,
@@ -470,7 +496,7 @@ fn run_until_exit<C, W>(
 		)
 	};
 
-	let _ = worker.work(&service).wait();
+	let _ = runtime.block_on(worker.work(&service));
 	exit_send.fire();
 	Ok(())
 }

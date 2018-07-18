@@ -506,7 +506,7 @@ pub mod generic {
 				3 => Some(Message::BlockAnnounce(Decode::decode(input)?)),
 				4 => Some(Message::Transactions(Decode::decode(input)?)),
 				5 => Some(Message::BftMessage(Decode::decode(input)?)),
-				6 => Some(Message::RemoteCallResponse(Decode::decode(input)?)),
+				6 => Some(Message::RemoteCallRequest(Decode::decode(input)?)),
 				7 => Some(Message::RemoteCallResponse(Decode::decode(input)?)),
 				255 => Some(Message::ChainSpecific(Decode::decode(input)?)),
 				_ => None,

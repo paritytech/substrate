@@ -44,8 +44,13 @@ use std::{
 };
 
 use codec::{Decode, Encode};
-use extrinsic_pool::{Pool, Listener, txpool::{self, Readiness, scoring::{Change, Choice}}};
-use extrinsic_pool::api::{ExtrinsicPool, EventStream};
+use extrinsic_pool::{
+	api::{ExtrinsicPool, EventStream},
+	txpool::{self, Readiness, scoring::{Change, Choice}},
+	watcher::Watcher,
+	Pool,
+	Listener,
+};
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use runtime::{Address, UncheckedExtrinsic};
@@ -385,6 +390,8 @@ impl<A> Deref for TransactionPool<A> {
 	}
 }
 
+// TODO: more general transaction pool, which can handle more kinds of vec-encoded transactions,
+// even when runtime is out of date.
 impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for TransactionPool<A> where
 	A: Send + Sync + 'static,
 	A: PolkadotApi,
@@ -392,8 +399,6 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 	type Error = Error;
 
 	fn submit(&self, block: BlockId, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
-		// TODO: more general transaction pool, which can handle more kinds of vec-encoded transactions,
-		// even when runtime is out of date.
 		xts.into_iter()
 			.map(|xt| xt.encode())
 			.map(|encoded| {
@@ -402,6 +407,18 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 				Ok(*tx.hash())
 			})
 			.collect()
+	}
+
+	fn submit_and_watch(&self, block: BlockId, xt: FutureProofUncheckedExtrinsic) -> Result<Watcher<Hash>> {
+		let encoded = xt.encode();
+		let decoded = UncheckedExtrinsic::decode(&mut &encoded[..]).ok_or(ErrorKind::InvalidExtrinsicFormat)?;
+
+		let verifier = Verifier {
+			api: &*self.api,
+			at_block: block,
+		};
+
+		self.inner.submit_and_watch(verifier, decoded)
 	}
 
 	fn light_status(&self) -> LightStatus {

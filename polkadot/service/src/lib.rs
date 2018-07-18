@@ -46,13 +46,14 @@ use std::collections::HashMap;
 use codec::Encode;
 use transaction_pool::TransactionPool;
 use polkadot_api::{PolkadotApi, light::RemotePolkadotApiWrapper};
-use polkadot_primitives::{Block, BlockId, Hash};
+use polkadot_primitives::{parachain, AccountId, Block, BlockId, Hash};
 use polkadot_runtime::GenesisConfig;
 use client::Client;
 use polkadot_network::{PolkadotProtocol, consensus::ConsensusNetwork};
 use tokio::runtime::TaskExecutor;
+use service::FactoryFullConfiguration;
 
-pub use service::{Configuration, Roles, PruningMode, ExtrinsicPoolOptions,
+pub use service::{Roles, PruningMode, ExtrinsicPoolOptions,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 pub use client::ExecutionStrategy;
 
@@ -60,6 +61,7 @@ pub use client::ExecutionStrategy;
 pub type ChainSpec = service::ChainSpec<GenesisConfig>;
 /// Polkadot client type for specialised `Components`.
 pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, Block>;
+pub type NetworkService = network::Service<Block, <Factory as service::ServiceFactory>::NetworkProtocol>;
 
 /// A collection of type to generalise Polkadot specific components over full / light client.
 pub trait Components: service::Components {
@@ -86,6 +88,17 @@ impl Components for service::FullComponents<Factory> {
 	type Backend = service::FullBackend<Factory>;
 }
 
+/// All configuration for the polkadot node.
+pub type Configuration = FactoryFullConfiguration<Factory>;
+
+/// Polkadot-specific configuration.
+#[derive(Default)]
+pub struct CustomConfiguration {
+	/// Set to `Some` with a collator `AccountId` and desired parachain
+	/// if the network protocol should be started in collator mode.
+	pub collating_for: Option<(AccountId, parachain::Id)>,
+}
+
 /// Polkadot config for the substrate service.
 pub struct Factory;
 
@@ -104,6 +117,7 @@ impl service::ServiceFactory for Factory {
 		RemotePolkadotApiWrapper<service::LightBackend<Self>, service::LightExecutor<Self>>
 	>;
 	type Genesis = GenesisConfig;
+	type Configuration = CustomConfiguration;
 
 	const NETWORK_PROTOCOL_ID: network::ProtocolId = ::polkadot_network::DOT_PROTOCOL_ID;
 
@@ -128,12 +142,22 @@ impl service::ServiceFactory for Factory {
 			imports_external_transactions: false,
 		})
 	}
+
+	fn build_network_protocol(config: &Configuration)
+		-> Result<PolkadotProtocol, Error>
+	{
+		if let Some((_, ref para_id)) = config.custom.collating_for {
+			info!("Starting network in Collator mode for parachain {:?}", para_id);
+		}
+		Ok(PolkadotProtocol::new(config.custom.collating_for))
+	}
 }
 
 /// Polkadot service.
 pub struct Service<C: Components> {
 	inner: service::Service<C>,
 	client: Arc<ComponentClient<C>>,
+	network: Arc<NetworkService>,
 	api: Arc<<C as Components>::Api>,
 	_consensus: Option<consensus::Service>,
 }
@@ -143,19 +167,24 @@ impl <C: Components> Service<C> {
 		self.client.clone()
 	}
 
+	pub fn network(&self) -> Arc<NetworkService> {
+		self.network.clone()
+	}
+
 	pub fn api(&self) -> Arc<<C as Components>::Api> {
 		self.api.clone()
 	}
 }
 
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor)
+pub fn new_light(config: Configuration, executor: TaskExecutor)
 	-> Result<Service<LightComponents<Factory>>, Error>
 {
 	let service = service::Service::<LightComponents<Factory>>::new(config, executor)?;
 	let api = Arc::new(RemotePolkadotApiWrapper(service.client()));
 	Ok(Service {
 		client: service.client(),
+		network: service.network(),
 		api: api,
 		inner: service,
 		_consensus: None,
@@ -163,7 +192,7 @@ pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 }
 
 /// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor)
+pub fn new_full(config: Configuration, executor: TaskExecutor)
 	-> Result<Service<FullComponents<Factory>>, Error>
 {
 	let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
@@ -192,6 +221,7 @@ pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 
 	Ok(Service {
 		client: service.client(),
+		network: service.network(),
 		api: service.client(),
 		inner: service,
 		_consensus: consensus,
@@ -199,7 +229,7 @@ pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 }
 
 /// Creates bare client without any networking.
-pub fn new_client(config: Configuration<GenesisConfig>)
+pub fn new_client(config: Configuration)
 -> Result<Arc<service::ComponentClient<FullComponents<Factory>>>, Error>
 {
 	service::new_client::<Factory>(config)

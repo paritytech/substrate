@@ -138,3 +138,5 @@ impl Error {
 		ErrorKind::Execution(e).into()
 	}
 }
+
+impl state_machine::Error for Error {}

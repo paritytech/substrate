@@ -68,6 +68,13 @@ pub fn clear_storage(key: &[u8]) {
 	);
 }
 
+/// Check whether a given `key` exists in storage.
+pub fn exists_storage(key: &[u8]) -> bool {
+	ext::with(|ext|
+		ext.exists_storage(key)
+	).unwrap_or(false)
+}
+
 /// Clear the storage entries key of which starts with the given prefix.
 pub fn clear_prefix(prefix: &[u8]) {
 	ext::with(|ext|

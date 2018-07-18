@@ -42,6 +42,7 @@ extern crate assert_matches;
 #[cfg(test)]
 extern crate substrate_test_client as test_client;
 
+mod errors;
 mod subscriptions;
 
 pub mod author;
