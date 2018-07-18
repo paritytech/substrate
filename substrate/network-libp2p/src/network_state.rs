@@ -447,7 +447,7 @@ impl NetworkState {
 		if self.reserved_only.load(atomic::Ordering::Relaxed) {
 			0
 		} else {
-			self.min_peers - self.num_open_custom_connections()
+			self.min_peers.saturating_sub(self.num_open_custom_connections())
 		}
 	}
 
