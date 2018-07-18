@@ -481,16 +481,7 @@ fn init_thread(
 
 	// Explicitely connect to the boostrap nodes as a temporary measure.
 	for bootnode in shared.config.boot_nodes.iter() {
-		// TODO: this code is copy-pasted from `network_state`, but it is
-		// temporary anyway
-		let mut addr: Multiaddr = bootnode.parse()
-			.map_err(|_| ErrorKind::AddressParse)?;
-		let p2p_component = addr.pop().ok_or(ErrorKind::AddressParse)?;
-		let peer_id = match p2p_component {
-			AddrComponent::P2P(key) | AddrComponent::IPFS(key) =>
-				PeerstorePeerId::from_bytes(key).map_err(|_| ErrorKind::AddressParse)?,
-			_ => return Err(ErrorKind::BadProtocol.into()),
-		};
+		let peer_id = shared.network_state.add_peer(bootnode)?;
 
 		trace!(target: "sub-libp2p", "Dialing bootnode {:?}", peer_id);
 		for proto in shared.protocols.read().0.clone().into_iter() {
