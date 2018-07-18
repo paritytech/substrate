@@ -16,7 +16,7 @@
 
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
-use futures::{future, sync::mpsc};
+use futures::sync::mpsc;
 use libp2p::core::{Multiaddr, AddrComponent, Endpoint, UniqueConnec};
 use libp2p::core::{PeerId as PeerstorePeerId, PublicKey};
 use libp2p::kad::KadConnecController;

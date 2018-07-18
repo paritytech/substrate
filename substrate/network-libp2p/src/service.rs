@@ -609,10 +609,11 @@ fn handle_kademlia_connection(
 
 /// When a remote performs a `FIND_NODE` Kademlia request for `searched`,
 /// this function builds the response to send back.
-fn build_kademlia_response(shared: &Arc<Shared>, searched: &PeerstorePeerId)
-	-> Vec<KadPeer> {
+fn build_kademlia_response(
+	shared: &Arc<Shared>,
+	searched: &PeerstorePeerId
+) -> Vec<KadPeer> {
 	shared.kad_system
-		// TODO the iter of `known_closest_peers` should be infinite
 		.known_closest_peers(searched)
 		.map(move |peer_id| {
 			if peer_id == *shared.kad_system.local_peer_id() {
@@ -638,6 +639,8 @@ fn build_kademlia_response(shared: &Arc<Shared>, searched: &PeerstorePeerId)
 				}
 			}
 		})
+		.filter(|p| !p.multiaddrs.is_empty())
+		.take(20)
 		.collect::<Vec<_>>()
 }
 
