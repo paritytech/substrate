@@ -362,7 +362,7 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let json = matches.is_present("json");
 
 	let mut file: Box<Write> = match matches.value_of("OUTPUT") {
-		Some(filename) => Box::new(File::open(filename)?),
+		Some(filename) => Box::new(File::create(filename)?),
 		None => Box::new(stdout()),
 	};
 
@@ -480,9 +480,9 @@ fn run_until_exit<C, W>(
 		let ws_address = parse_address("127.0.0.1:9944", "ws-port", matches)?;
 
 		let handler = || {
-			let client = (&service as &substrate_service::Service<C>).client();
+			let client = substrate_service::Service::client(&service);
 			let chain = rpc::apis::chain::Chain::new(client.clone(), executor.clone());
-			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool());
+			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool(), executor.clone());
 			rpc::rpc_handler::<service::ComponentBlock<C>, _, _, _, _>(
 				client,
 				chain,

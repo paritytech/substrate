@@ -14,10 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use futures::sync::mpsc;
+//! Extrinsics status updates.
+
+use futures::{
+	Stream,
+	sync::mpsc,
+};
 
 /// Possible extrinsic status events
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Status<H> {
 	/// Extrinsic has been finalised in block with given hash.
 	Finalised(H),
@@ -37,8 +43,19 @@ pub struct Watcher<H> {
 	receiver: mpsc::UnboundedReceiver<Status<H>>,
 }
 
+impl<H> Watcher<H> {
+	/// Pipe the notifications to given sink.
+	///
+	/// Make sure to drive the future to completion.
+	pub fn into_stream(self) -> impl Stream<Item=Status<H>, Error=()> {
+		// we can safely ignore the error here, `UnboundedReceiver` never fails.
+		self.receiver.map_err(|_| ())
+	}
+}
+
+/// Sender part of the watcher. Exposed only for testing purposes.
 #[derive(Debug, Default)]
-pub(crate) struct Sender<H> {
+pub struct Sender<H> {
 	receivers: Vec<mpsc::UnboundedSender<Status<H>>>,
 	finalised: bool,
 }
@@ -73,6 +90,7 @@ impl<H: Clone> Sender<H> {
 	pub fn broadcast(&mut self, peers: Vec<String>) {
 		self.send(Status::Broadcast(peers))
 	}
+
 
 	/// Returns true if the are no more listeners for this extrinsic or it was finalised.
 	pub fn is_done(&self) -> bool {

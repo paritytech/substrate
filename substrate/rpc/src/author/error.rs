@@ -16,23 +16,28 @@
 
 //! Authoring RPC module errors.
 
+use client;
 use extrinsic_pool::txpool;
 use rpc;
+
+use errors;
+
 
 error_chain! {
 	links {
 		Pool(txpool::Error, txpool::ErrorKind) #[doc = "Pool error"];
+		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
 	}
 	errors {
-		/// Incorrect transaction format.
-		BadFormat {
-			description("bad format"),
-			display("Invalid transaction format"),
-		}
 		/// Not implemented yet
 		Unimplemented {
 			description("not yet implemented"),
 			display("Method Not Implemented"),
+		}
+		/// Incorrect extrinsic format.
+		BadFormat {
+			description("bad format"),
+			display("Invalid extrinsic format"),
 		}
 		/// Verification error
 		Verification(e: Box<::std::error::Error + Send>) {
@@ -42,16 +47,23 @@ error_chain! {
 	}
 }
 
+const ERROR: i64 = 1000;
+
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error(ErrorKind::Unimplemented, _) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(-1),
-				message: "Not implemented yet".into(),
+			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
+			Error(ErrorKind::BadFormat, _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 1),
+				message: "Extrinsic has invalid format.".into(),
 				data: None,
 			},
-			// TODO [ToDr] Unwrap Pool errors.
-			_ => rpc::Error::internal_error(),
+			Error(ErrorKind::Verification(e), _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 2),
+				message: e.description().into(),
+				data: Some(format!("{:?}", e).into()),
+			},
+			e => errors::internal(e),
 		}
 	}
 }
