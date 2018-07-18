@@ -430,8 +430,8 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 		None => Box::new(stdin()),
 	};
 
-	info!("Importing blocks");
 	let count: u32 = Decode::decode(&mut file).ok_or("Error reading file")?;
+	info!("Importing {} blocks", count);
 	let mut block = 0;
 	for _ in 0 .. count {
 		if exit_recv.try_recv().is_ok() {
@@ -448,7 +448,7 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 			}
 		}
 		block += 1;
-		if block % 10000 == 0 {
+		if block % 1000 == 0 {
 			info!("#{}", block);
 		}
 	}
