@@ -251,6 +251,7 @@ fn send_polkadot_message(ctx: &mut Context<Block>, to: PeerId, message: Message)
 /// Polkadot protocol attachment for substrate.
 pub struct PolkadotProtocol {
 	peers: HashMap<PeerId, PeerInfo>,
+	collating_for: Option<(AccountId, ParaId)>,
 	consensus_gossip: ConsensusGossip<Block>,
 	collators: CollatorPool,
 	validators: HashMap<SessionKey, PeerId>,
@@ -261,19 +262,14 @@ pub struct PolkadotProtocol {
 	next_req_id: u64,
 }
 
-impl Default for PolkadotProtocol {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
 impl PolkadotProtocol {
 	/// Instantiate a polkadot protocol handler.
-	pub fn new() -> Self {
+	pub fn new(collating_for: Option<(AccountId, ParaId)>) -> Self {
 		PolkadotProtocol {
 			peers: HashMap::new(),
 			consensus_gossip: ConsensusGossip::new(),
 			collators: CollatorPool::new(),
+			collating_for,
 			validators: HashMap::new(),
 			local_collations: LocalCollations::new(),
 			live_consensus: None,
@@ -471,7 +467,7 @@ impl PolkadotProtocol {
 
 impl Specialization<Block> for PolkadotProtocol {
 	fn status(&self) -> Vec<u8> {
-		Status { collating_for: None }.encode()
+		Status { collating_for: self.collating_for.clone() }.encode()
 	}
 
 	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, status: FullStatus) {

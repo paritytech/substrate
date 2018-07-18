@@ -105,7 +105,7 @@ pub trait ServiceFactory {
 	/// Block type.
 	type Block: BlockT;
 	/// Network protocol extensions.
-	type NetworkProtocol: network::specialization::Specialization<Self::Block> + Default;
+	type NetworkProtocol: network::specialization::Specialization<Self::Block>;
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool type for the full client.

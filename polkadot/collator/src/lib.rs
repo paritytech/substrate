@@ -66,9 +66,9 @@ use std::time::{Duration, Instant};
 use futures::{future, stream, Stream, Future, IntoFuture};
 use client::BlockchainEvents;
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{BlockId, SessionKey};
+use polkadot_primitives::{AccountId, BlockId, SessionKey};
 use polkadot_primitives::parachain::{self, BlockData, DutyRoster, HeadData, ConsolidatedIngress, Message, Id as ParaId};
-use polkadot_cli::{ServiceComponents, Service};
+use polkadot_cli::{ServiceComponents, Service, CustomConfiguration};
 use polkadot_cli::Worker;
 use tokio::timer::Deadline;
 
@@ -102,6 +102,11 @@ pub trait RelayChainContext {
 
 	/// Get un-routed egress queues from a parachain to the local parachain.
 	fn unrouted_egress(&self, id: ParaId) -> Self::FutureEgress;
+}
+
+fn key_to_account_id(key: &ed25519::Pair) -> AccountId {
+	let pubkey_bytes: [u8; 32] = key.public().into();
+	pubkey_bytes.into()
 }
 
 /// Collate the necessary ingress queue using the given context.
@@ -164,11 +169,10 @@ pub fn collate<'a, R, P>(
 
 		let block_data_hash = block_data.hash();
 		let signature = key.sign(&block_data_hash.0[..]).into();
-		let pubkey_bytes: [u8; 32] = key.public().into();
 
 		let receipt = parachain::CandidateReceipt {
 			parachain_index: local_id,
-			collator: pubkey_bytes.into(),
+			collator: key_to_account_id(&*key),
 			signature,
 			head_data,
 			balance_uploads: Vec::new(),
@@ -213,6 +217,15 @@ impl<P, E> Worker for CollationNode<P, E> where
 {
 	type Work = Box<Future<Item=(),Error=()> + Send>;
 	type Exit = E;
+
+	fn configuration(&self) -> CustomConfiguration {
+		let mut config = CustomConfiguration::default();
+		config.collating_for = Some((
+			key_to_account_id(&*self.key),
+			self.para_id.clone(),
+		));
+		config
+	}
 
 	fn exit_only(self) -> Self::Exit {
 		self.exit

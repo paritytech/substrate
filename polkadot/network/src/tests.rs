@@ -99,7 +99,7 @@ fn on_message(protocol: &mut PolkadotProtocol, ctx: &mut TestContext, from: Peer
 
 #[test]
 fn sends_session_key() {
-	let mut protocol = PolkadotProtocol::new();
+	let mut protocol = PolkadotProtocol::new(None);
 
 	let peer_a = 1;
 	let peer_b = 2;
@@ -131,7 +131,7 @@ fn sends_session_key() {
 
 #[test]
 fn fetches_from_those_with_knowledge() {
-	let mut protocol = PolkadotProtocol::new();
+	let mut protocol = PolkadotProtocol::new(None);
 
 	let peer_a = 1;
 	let peer_b = 2;
@@ -208,7 +208,7 @@ fn fetches_from_those_with_knowledge() {
 
 #[test]
 fn remove_bad_collator() {
-	let mut protocol = PolkadotProtocol::new();
+	let mut protocol = PolkadotProtocol::new(None);
 
 	let peer_id = 1;
 	let account_id = [2; 32].into();
