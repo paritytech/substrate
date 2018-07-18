@@ -29,10 +29,11 @@ args:
       value_name: KEY
       help: Specify node secret key (64-character hex string)
       takes_value: true
-  - collator:
-      long: collator
-      help: Enable collator mode
-      takes_value: false
+  - collator-for:
+      long: collator-for
+      value_name: CHAIN
+      help: Enable collator mode on given chain ID (8-character hex string)
+      takes_value: true
   - validator:
       long: validator
       help: Enable validator mode

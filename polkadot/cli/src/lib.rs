@@ -217,13 +217,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	};
 
 	let role =
-		if matches.is_present("collator") {
-			info!("Starting collator");
-			// TODO [rob]: collation node implementation
-			// This isn't a thing. Different parachains will have their own collator executables and
-			// maybe link to libpolkadot to get a light-client.
-			service::Roles::LIGHT
-		} else if matches.is_present("light") {
+		if matches.is_present("light") {
 			info!("Starting (light)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::LIGHT
@@ -265,6 +259,8 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			Some(port) => port.parse().expect("Invalid p2p port value specified."),
 			None => 30333,
 		};
+
+		let
 		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
 		config.network.public_address = None;
 		config.network.client_version = format!("parity-polkadot/{}", crate_version!());
