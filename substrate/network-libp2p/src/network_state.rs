@@ -23,6 +23,7 @@ use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
 use libp2p::peerstore::json_peerstore::JsonPeerstore;
 use libp2p::peerstore::memory_peerstore::MemoryPeerstore;
+use libp2p::ping::Pinger;
 use libp2p::secio;
 use {Error, ErrorKind, NetworkConfiguration, NonReservedPeerMode};
 use {PeerId, ProtocolId, SessionInfo};
@@ -98,6 +99,9 @@ struct PeerConnectionInfo {
 
 	/// The Kademlia connection to this node.
 	kad_connec: UniqueConnec<KadConnecController>,
+
+	/// The ping connection to this node.
+	ping_connec: UniqueConnec<Pinger>,
 
 	/// Id of the peer.
 	id: PeerstorePeerId,
@@ -245,8 +249,7 @@ impl NetworkState {
 
 	/// Reports the ping of the peer. Returned later by `session_info()`.
 	/// No-op if the `peer_id` is not valid/expired.
-	#[allow(dead_code)]
-	pub fn report_ping(&self, peer_id: PeerId, ping: Duration) {
+	pub fn report_ping_duration(&self, peer_id: PeerId, ping: Duration) {
 		let connections = self.connections.read();
 		let info = match connections.info_by_peer.get(&peer_id) {
 			Some(info) => info,
@@ -307,6 +310,15 @@ impl NetworkState {
 			.find(|p| p.0 == protocol)
 			.and_then(|p| p.1.poll())
 			.map(|(_, version)| version)
+	}
+
+	/// Returns the ID of a connected peer. `None` if the `PeerId` is invalid.
+	pub fn id_of_peer(&self, peer: PeerId) -> Option<PeerstorePeerId> {
+		let connections = self.connections.read();
+		match connections.info_by_peer.get(&peer) {
+			Some(peer) => Some(peer.id.clone()),
+			None => None,
+		}
 	}
 
 	/// Equivalent to `session_info(peer).map(|info| info.client_version)`.
@@ -457,7 +469,7 @@ impl NetworkState {
 		connections.peer_by_nodeid.contains_key(node_id)
 	}
 
-	/// Obtains the `UniqueConnec` corresponding to the Kademlia connect to a peer.
+	/// Obtains the `UniqueConnec` corresponding to the Kademlia connection to a peer.
 	pub fn kad_connection(
 		&self,
 		node_id: PeerstorePeerId
@@ -471,6 +483,34 @@ impl NetworkState {
 			.expect("Newly-created peer id is always valid");
 		let connec = infos.kad_connec.clone();
 		Ok((peer_id, connec))
+	}
+
+	/// Obtains the `UniqueConnec` corresponding to the Ping connection to a peer.
+	pub fn ping_connection_by_nodeid(
+		&self,
+		node_id: PeerstorePeerId
+	) -> Result<(PeerId, UniqueConnec<Pinger>), IoError> {
+		let mut connections = self.connections.write();
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
+			node_id, Endpoint::Listener)?;
+		let infos = connections.info_by_peer.get_mut(&peer_id)
+			.expect("Newly-created peer id is always valid");
+		let connec = infos.ping_connec.clone();
+		Ok((peer_id, connec))
+	}
+
+	/// Obtains the `UniqueConnec` corresponding to the Ping connection to a peer.
+	///
+	/// Returns `None` if the `PeerId` is not valid.
+	pub fn ping_connection_by_peerid(
+		&self,
+		peer_id: PeerId
+	) -> Option<UniqueConnec<Pinger>> {
+		let connections = self.connections.read();
+		match connections.info_by_peer.get(&peer_id) {
+			Some(i) => Some(i.ping_connec.clone()),
+			None => None,
+		}
 	}
 
 	/// Try to add a new connection to a node in the list.
@@ -660,6 +700,7 @@ fn accept_connection(
 		info_by_peer.insert(new_id, PeerConnectionInfo {
 			protocols: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
 			kad_connec: UniqueConnec::empty(),
+			ping_connec: UniqueConnec::empty(),
 			id: node_id.clone(),
 			originated: endpoint == Endpoint::Dialer,
 			ping: Mutex::new(None),

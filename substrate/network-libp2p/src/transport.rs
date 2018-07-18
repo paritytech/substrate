@@ -35,7 +35,7 @@ pub fn build_transport(
 
 			let mut plaintext = upgrade::toggleable(upgrade::PlainTextConfig);
 			match unencrypted_allowed {
-				UnencryptedAllowed::Allowed => plaintext.disable(),
+				UnencryptedAllowed::Allowed => (),//plaintext.disable(),
 				UnencryptedAllowed::Denied => (),
 			};
 

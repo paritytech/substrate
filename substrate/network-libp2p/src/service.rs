@@ -448,7 +448,7 @@ fn init_thread(
 					let listener_upgrade = upgrade::or(upgrade::or(upgrade::or(
 						upgrade::map(shared.kad_upgrade.clone(), FinalUpgrade::Kad),
 						upgrade::map(IdentifyProtocolConfig, |id| FinalUpgrade::Identify(id, original_addr))),
-						upgrade::map(ping::Ping, |(p, f)| FinalUpgrade::Ping(p, f))),
+						upgrade::map_with_addr(ping::Ping, |(p, f), addr| FinalUpgrade::Ping(p, f, addr.clone()))),
 						upgrade::map(DelayedProtosList(shared), FinalUpgrade::Custom));
 					upgrade::apply(out.socket, listener_upgrade, endpoint, client_addr)
 				}
@@ -519,12 +519,16 @@ fn init_thread(
 		});
 
 	// Start the process of periodically discovering nodes to connect to.
-	let discovery = start_kademlia_discovery(shared.clone(), transport,
-		swarm_controller);
+	let discovery = start_kademlia_discovery(shared.clone(),
+		transport.clone(), swarm_controller.clone());
+
+	// Start the process of pinging the active nodes on the network.
+	let pinger = start_pinger(shared.clone(), transport, swarm_controller);
 
 	// Merge all the futures into one!
 	Ok(swarm_future
 		.select(discovery).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
+		.select(pinger).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
 		.select(timeouts).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
 		.select(close_rx.then(|_| Ok(()))).map(|_| ()).map_err(|(err, _)| err)
 
@@ -548,7 +552,7 @@ enum FinalUpgrade<C> {
 	Kad((KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>)),
 	/// The remote identification system, and the multiaddress we see the remote as.
 	Identify(IdentifyOutput<C>, Multiaddr),
-	Ping(ping::Pinger, Box<Future<Item = (), Error = IoError>>),
+	Ping(ping::Pinger, Box<Future<Item = (), Error = IoError>>, Multiaddr),
 	/// `Custom` means anything not in the core libp2p and is handled
 	/// by `CustomProtoConnectionUpgrade`.
 	Custom(RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>),
@@ -593,7 +597,18 @@ fn listener_handle<'a, C, F>(
 		FinalUpgrade::Identify(IdentifyOutput::RemoteInfo { .. }, _) =>
 			unreachable!("We are never dialing with the identify protocol"),
 
-		FinalUpgrade::Ping(_pinger, future) => future,
+		FinalUpgrade::Ping(pinger, future, client_addr) => {
+			let node_id = p2p_multiaddr_to_node_id(client_addr);
+			match shared.network_state.ping_connection_by_nodeid(node_id.clone()) {
+				Ok((_, ping_connec)) => {
+					trace!(target: "sub-libp2p", "Successfully opened ping \
+						substream with {:?}", node_id);
+					let fut = ping_connec.set_until(pinger, future);
+					Box::new(fut) as Box<_>
+				},
+				Err(err) => Box::new(future::err(err)) as Box<_>
+			}
+		},
 
 		FinalUpgrade::Custom(custom_proto_out) => {
 			// A "custom" protocol is one that is part of substrate and not part of libp2p.
@@ -1093,6 +1108,110 @@ fn process_identify_info(
 	}
 
 	Ok(())
+}
+
+/// Returns a future that regularly pings every peer we're connected to.
+/// If a peer doesn't respond after a while, we disconnect it.
+fn start_pinger<T, To, St, C>(
+	shared: Arc<Shared>,
+	transport: T,
+	swarm_controller: SwarmController<St>
+) -> impl Future<Item = (), Error = IoError>
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
+		T::MultiaddrFuture: 'static,
+		To: AsyncRead + AsyncWrite + 'static,
+		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		C: 'static {
+	let transport = transport
+		.and_then(move |out, endpoint, client_addr|
+			upgrade::apply(out.socket, ping::Ping, endpoint, client_addr)
+		)
+		.and_then(move |(ctrl, fut), _, client_addr| {
+			client_addr.map(|client_addr| {
+				let out = FinalUpgrade::Ping(ctrl, fut, client_addr.clone());
+				((out, Endpoint::Dialer), future::ok(client_addr))
+			})
+		});
+
+	let fut = tokio_timer::Interval::new(Instant::now(), Duration::from_secs(30))
+		.map_err(|err| IoError::new(IoErrorKind::Other, err))
+		.for_each(move |_|
+			ping_all(shared.clone(), transport.clone(), &swarm_controller))
+		.then(|val| {
+			warn!(target: "sub-libp2p", "Pinging stream has stopped: {:?}", val);
+			val
+		});
+
+	// Note that we use a Box in order to speed compilation time.
+	Box::new(fut) as Box<Future<Item = _, Error = _>>
+}
+
+/// Pings all the nodes we're connected to and disconnects any node that
+/// doesn't respond. Returns a `Future` when all the pings have either
+/// suceeded or timed out.
+fn ping_all<T, St, C>(
+	shared: Arc<Shared>,
+	transport: T,
+	swarm_controller: &SwarmController<St>
+) -> impl Future<Item = (), Error = IoError>
+	where T: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		T::MultiaddrFuture: 'static,
+		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		C: 'static {
+	let mut ping_futures = Vec::new();
+
+	for peer in shared.network_state.connected_peers() {
+		let shared = shared.clone();
+
+		// TODO: optimize to avoid calling multiple functions from `network_state`
+		let pinger = match shared.network_state.ping_connection_by_peerid(peer) {
+			Some(p) => p,
+			None => continue
+		};
+
+		let peer_id = match shared.network_state.id_of_peer(peer) {
+			Some(p) => p,
+			None => continue
+		};
+
+		let addr = Multiaddr::from(AddrComponent::P2P(peer_id.clone().into_bytes()));
+		let fut = pinger
+			.get_or_dial(&swarm_controller, &addr, transport.clone())
+			.and_then(move |mut p| {
+				trace!(target: "sub-libp2p",
+					"Pinging active connection with #{} {:?}", peer, peer_id);
+				p.ping().map_err(|err| IoError::new(IoErrorKind::Other, err))
+			});
+		let ping_start_time = Instant::now();
+		let fut = tokio_timer::Deadline::new(fut, ping_start_time + Duration::from_secs(30))
+			.then(move |val| {
+				if let Err(err) = val {
+					trace!(target: "sub-libp2p",
+						"Error while pinging #{:?} => {:?}", peer, err);
+					shared.network_state.disconnect_peer(peer);
+				} else {
+					let elapsed = ping_start_time.elapsed();
+					trace!(target: "sub-libp2p", "Pong from #{:?} in {:?}",
+						peer, elapsed);
+					shared.network_state.report_ping_duration(peer, elapsed);
+					// TODO: update kbuckets
+				}
+				Ok(())
+			});
+		ping_futures.push(fut);
+	}
+
+	future::loop_fn(ping_futures, |ping_futures| {
+		if ping_futures.is_empty() {
+			let fut = future::ok(future::Loop::Break(()));
+			return future::Either::A(fut)
+		}
+
+		let fut = future::select_all(ping_futures)
+			.map(|((), _, rest)| future::Loop::Continue(rest))
+			.map_err(|(err, _, _)| err);
+		future::Either::B(fut)
+	})
 }
 
 /// Expects a multiaddr of the format `/p2p/<node_id>` and returns the node ID.
