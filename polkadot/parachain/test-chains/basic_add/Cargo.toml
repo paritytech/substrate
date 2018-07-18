@@ -9,13 +9,15 @@ crate-type = ["cdylib"]
 
 [dependencies]
 polkadot-parachain = { path = "../../", default-features = false }
-wee_alloc = "0.4.1"
+polkadot-collator = { path = "../../../collator", optional = true }
+wee_alloc = { version = "0.4.1", optional = true }
 tiny-keccak = "1.4"
-pwasm-libc = "0.2"
+pwasm-libc = { version = "0.2", optional = true }
 
 [features]
 default = ["std"]
-std = ["polkadot-parachain/std"]
+std = ["polkadot-parachain/std", "polkadot-collator"]
+wasm = ["wee_alloc", "pwasm-libc"]
 
 [profile.release]
 panic = "abort"
@@ -23,3 +25,8 @@ lto = true
 
 [workspace]
 members = []
+
+[[bin]]
+name = "collator"
+path = "src/collator/main.rs"
+required-features = ["std"]

@@ -4,7 +4,7 @@ set -e
 # Make LLD produce a binary that imports memory from the outside environment.
 export RUSTFLAGS="-C link-arg=--import-memory"
 
-cargo +nightly build --target=wasm32-unknown-unknown --release --no-default-features
+cargo +nightly build --target=wasm32-unknown-unknown --release --no-default-features --features wasm
 
 for i in basic_add
 do

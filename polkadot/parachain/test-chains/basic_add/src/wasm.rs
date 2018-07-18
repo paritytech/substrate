@@ -39,8 +39,6 @@ pub fn oom(_: alloc::Layout) -> ! {
 
 #[no_mangle]
 pub extern fn validate(offset: usize, len: usize) -> usize {
-	let hash_state = |state: u64| ::tiny_keccak::keccak256(state.encode().as_slice());
-
 	let params = unsafe { ::parachain::load_params(offset, len) };
 	let parent_head = HeadData::decode(&mut &params.parent_head[..])
 		.expect("invalid parent head format.");
@@ -48,14 +46,11 @@ pub extern fn validate(offset: usize, len: usize) -> usize {
 	let block_data = BlockData::decode(&mut &params.block_data[..])
 		.expect("invalid block data format.");
 
-	assert_eq!(hash_state(block_data.state), parent_head.post_state, "wrong post-state proof");
-	let new_state = block_data.state.saturating_add(block_data.add);
+	let parent_hash = ::tiny_keccak::keccak256(&params.parent_head[..]);
 
-	let new_head = HeadData {
-		number: parent_head.number + 1,
-		parent_hash: ::tiny_keccak::keccak256(&params.parent_head[..]),
-		post_state: hash_state(new_state),
-	};
+	match ::common::execute(parent_hash, parent_head, &block_data) {
+		Ok(new_head) => parachain::write_result(ValidationResult { head_data: new_head.encode() }),
+		Err(_) => panic!("execution failure"),
+	}
 
-	parachain::write_result(ValidationResult { head_data: new_head.encode() })
 }
