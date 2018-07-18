@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use futures::{future, Future, stream, Stream, sync::mpsc};
+use futures::{Async, future, Future, Poll, stream, Stream, sync::mpsc};
 use std::io::Error as IoError;
-use std::time::Instant;
+use std::marker::PhantomData;
+use std::time::{Duration, Instant};
 use tokio_core::reactor::{Handle, Timeout};
 
 /// Builds the timeouts system.
@@ -24,11 +25,13 @@ use tokio_core::reactor::{Handle, Timeout};
 /// The `timeouts_rx` should be a stream receiving newly-created timeout
 /// requests. Returns a stream that produces items as their timeout elapses.
 /// `T` can be anything you want, as it is transparently passed from the input
-/// to the output.
+/// to the output. Timeouts continue to fire forever, as there is no way to
+/// unregister them.
 pub fn build_timeouts_stream<T>(
 	core: Handle,
-	timeouts_rx: mpsc::UnboundedReceiver<(Instant, T)>
-) -> impl Stream<Item = T, Error = IoError> {
+	timeouts_rx: mpsc::UnboundedReceiver<(Duration, T)>
+) -> impl Stream<Item = T, Error = IoError>
+	where T: Clone {
 	let next_timeout = next_in_timeouts_stream(timeouts_rx);
 
 	// The `unfold` function is essentially a loop turned into a stream. The
@@ -47,11 +50,12 @@ pub fn build_timeouts_stream<T>(
 		Some(future::select_ok(timeouts.into_iter())
 			.and_then(move |(item, mut timeouts)|
 				match item {
-					Out::NewTimeout((Some((at, item)), next_timeouts)) => {
+					Out::NewTimeout((Some((duration, item)), next_timeouts)) => {
 						// Received a new timeout request on the channel.
 						let next_timeout = next_in_timeouts_stream(next_timeouts);
-						let timeout = Timeout::new_at(at, &core)?
-							.map(move |()| Out::Timeout(item));
+						let at = Instant::now() + duration;
+						let timeout = Timeout::new_at(at, &core)?;
+						let timeout = TimeoutWrapper(timeout, duration, Some(item), PhantomData);
 						timeouts.push(future::Either::B(timeout));
 						timeouts.push(future::Either::A(next_timeout));
 						Ok((None, timeouts))
@@ -59,9 +63,15 @@ pub fn build_timeouts_stream<T>(
 					Out::NewTimeout((None, _)) =>
 						// The channel has been closed.
 						Ok((None, timeouts)),
-					Out::Timeout(item) =>
+					Out::Timeout(duration, item) => {
 						// A timeout has happened.
-						Ok((Some(item), timeouts)),
+						let returned = item.clone();
+						let at = Instant::now() + duration;
+						let timeout = Timeout::new_at(at, &core)?;
+						let timeout = TimeoutWrapper(timeout, duration, Some(item), PhantomData);
+						timeouts.push(future::Either::B(timeout));
+						Ok((Some(returned), timeouts))
+					},
 				}
 			)
 		)
@@ -71,17 +81,32 @@ pub fn build_timeouts_stream<T>(
 /// Local enum representing the output of the selection.
 enum Out<A, B> {
 	NewTimeout(A),
-	Timeout(B),
+	Timeout(Duration, B),
 }
 
 /// Convenience function that calls `.into_future()` on the timeouts stream,
 /// and applies some modifiers.
 /// This function is necessary. Otherwise if we copy-paste its content we run
 /// into errors because the type of the copy-pasted closures differs.
-fn next_in_timeouts_stream<T, B>(stream: mpsc::UnboundedReceiver<T>)
-	-> impl Future<Item = Out<(Option<T>, mpsc::UnboundedReceiver<T>), B>, Error = IoError> {
+fn next_in_timeouts_stream<T, B>(
+	stream: mpsc::UnboundedReceiver<T>
+) -> impl Future<Item = Out<(Option<T>, mpsc::UnboundedReceiver<T>), B>, Error = IoError> {
 	stream
 		.into_future()
 		.map(Out::NewTimeout)
 		.map_err(|_| unreachable!("an UnboundedReceiver can never error"))
+}
+
+/// Does the equivalent to `future.map(move |()| (duration, item))`.
+struct TimeoutWrapper<A, F, T>(F, Duration, Option<T>, PhantomData<A>);
+impl<A, F, T> Future for TimeoutWrapper<A, F, T>
+	where F: Future<Item = ()> {
+	type Item = Out<A, T>;
+	type Error = F::Error;
+
+	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
+		let _ready: () = try_ready!(self.0.poll());
+		let out = Out::Timeout(self.1, self.2.take().expect("poll() called again after success"));
+		Ok(Async::Ready(out))
+	}
 }
