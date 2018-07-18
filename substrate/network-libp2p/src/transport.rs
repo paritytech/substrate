@@ -16,6 +16,8 @@
 
 use libp2p::{self, Transport, secio};
 use libp2p::core::{MuxedTransport, either, upgrade};
+use libp2p::transport_timeout::TransportTimeout;
+use std::time::Duration;
 use tokio_core::reactor::Handle;
 use tokio_io::{AsyncRead, AsyncWrite};
 
@@ -25,7 +27,7 @@ pub fn build_transport(
 	unencrypted_allowed: UnencryptedAllowed,
 	local_private_key: secio::SecioKeyPair
 ) -> impl MuxedTransport<Output = impl AsyncRead + AsyncWrite> + Clone {
-	libp2p::CommonTransport::new(core)
+	let base = libp2p::CommonTransport::new(core)
 		.with_upgrade({
 			let secio = secio::SecioConfig {
 				key: local_private_key,
@@ -51,7 +53,14 @@ pub fn build_transport(
 		// TODO: check that the public key matches what is reported by identify
 		.map(|(socket, _key), _| socket)
 		.with_upgrade(libp2p::mplex::MultiplexConfig::new())
-		.into_connection_reuse()
+		.into_connection_reuse();
+
+	TransportTimeout::new(base, Duration::from_secs(20))
+		.map_err(|err| {
+			debug!(target: "sub-libp2p", "Error in base transport \
+				layer: {:?}", err);
+			err
+		})
 }
 
 /// Specifies whether unencrypted communications are allowed or denied.
