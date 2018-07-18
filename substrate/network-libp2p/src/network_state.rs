@@ -18,7 +18,7 @@ use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::sync::mpsc;
 use libp2p::core::{Multiaddr, AddrComponent, Endpoint, UniqueConnec};
-use libp2p::core::{PeerId as PeerstorePeerId, PublicKey};
+use libp2p::core::{UniqueConnecState, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
 use libp2p::peerstore::json_peerstore::JsonPeerstore;
@@ -402,11 +402,32 @@ impl NetworkState {
 		}
 	}
 
-	/// Returns true if we should open a new outgoing connection to a peer.
-	/// This takes into account the number of active peers.
-	pub fn should_open_outgoing_connections(&self) -> bool {
-		!self.reserved_only.load(atomic::Ordering::Relaxed) &&
-			self.connections.read().peer_by_nodeid.len() < self.min_peers as usize
+	/// Returns the number of open and pending connections with
+	/// custom protocols.
+	pub fn num_open_custom_connections(&self) -> u32 {
+		self.connections
+			.read()
+			.info_by_peer
+			.values()
+			.filter(|info|
+				info.protocols.iter().any(|&(_, ref connec)|
+					match connec.state() {
+						UniqueConnecState::Pending | UniqueConnecState::Full => true,
+						_ => false
+					}
+				)
+			)
+			.count() as u32
+	}
+
+	/// Returns the number of new outgoing custom connections to peers to
+	/// open. This takes into account the number of active peers.
+	pub fn should_open_outgoing_custom_connections(&self) -> u32 {
+		if self.reserved_only.load(atomic::Ordering::Relaxed) {
+			0
+		} else {
+			self.min_peers - self.num_open_custom_connections()
+		}
 	}
 
 	/// Returns true if we are connected to the given node.

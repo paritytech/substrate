@@ -799,7 +799,7 @@ fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 				// that we don't need to run a timer just for flushing.
 				let _ = shared.network_state.flush_caches_to_disk();
 
-				if shared.network_state.should_open_outgoing_connections() {
+				if shared.network_state.should_open_outgoing_custom_connections() != 0 {
 					future::Either::A(perform_kademlia_query(shared.clone(),
 						transport.clone(), swarm_controller.clone()))
 				} else {
@@ -892,7 +892,7 @@ fn process_kad_results<T, To, St, C>(shared: Arc<Shared>, transport: T,
 		// Skip if we reach `min_peers`.
 		// Also skip nodes we are already connected to, in order to not connect twice.
 		// TODO: better API in network_state
-		if !shared.network_state.should_open_outgoing_connections() ||
+		if shared.network_state.should_open_outgoing_custom_connections() == 0 ||
 			discovered_peer == *local_peer_id ||
 			shared.network_state.is_peer_disabled(&discovered_peer)
 		{
