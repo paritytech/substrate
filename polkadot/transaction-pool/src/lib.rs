@@ -287,7 +287,7 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 		let encoded = uxt.encode();
 		let (encoded_size, hash) = (encoded.len(), BlakeTwo256::hash(&encoded));
 		
-		debug!("Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
+		debug!(target: "transaction-pool", "Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
 
 		let inner = match uxt.clone().check_with(|a| self.lookup(a)) {
 			Ok(xt) => Some(xt),
@@ -298,9 +298,9 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 		let sender = inner.as_ref().map(|x| x.signed.clone());
 
 		if encoded_size < 1024 {
-			info!("Transaction verified: {} => {:?}", hash, uxt);
+			info!(target: "transaction-pool", "Transaction verified: {} => {:?}", hash, uxt);
 		} else {
-			info!("Transaction verified: {} ({} bytes is too large to display)", hash, encoded_size);
+			info!(target: "transaction-pool", "Transaction verified: {} ({} bytes is too large to display)", hash, encoded_size);
 		}
 
 		Ok(VerifiedTransaction {

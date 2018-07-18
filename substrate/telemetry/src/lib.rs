@@ -82,7 +82,7 @@ struct TelemetryWriter {
 
 /// Every two minutes we reconnect to the telemetry server otherwise we don't get notified
 /// of a flakey connection that has been dropped and needs to be reconnected. We can remove
-/// this oncenwe introduce a keepalive ping/pong.
+/// this once we introduce a keepalive ping/pong.
 const RECONNECT_PERIOD: u64 = 120;
 
 impl TelemetryWriter {
@@ -92,7 +92,9 @@ impl TelemetryWriter {
 		let controlled_disconnect = if let Some(t) = self.last_time {
 			if t.elapsed().as_secs() > RECONNECT_PERIOD && client.is_some() {
 				trace!(target: "telemetry", "Performing controlled drop of the telemetry connection.");
-				let _ = client.as_mut().and_then(|socket| socket.send_message(&ws::Message::text("{\"msg\":\"system.reconnect\"}")).ok());
+				let _ = client.as_mut().and_then(|socket|
+					socket.send_message(&ws::Message::text("{\"msg\":\"system.reconnect\"}")).ok()
+				);
 				*client = None;
 				true
 			} else {
