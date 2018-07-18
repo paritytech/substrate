@@ -192,7 +192,28 @@ impl NetworkState {
 		&self.local_public_key
 	}
 
-	/// Returns all the IDs of the peer we have knowledge of.
+	/// Returns the ID of a random peer of the network.
+	///
+	/// Returns `None` if we don't know any peer.
+	pub fn random_peer(&self) -> Option<PeerstorePeerId> {
+		// TODO: optimize by putting the operation directly in the peerstore
+		// https://github.com/libp2p/rust-libp2p/issues/316
+		let peers = match self.peerstore {
+			PeersStorage::Memory(ref mem) =>
+				mem.peers().collect::<Vec<_>>(),
+			PeersStorage::Json(ref json) =>
+				json.peers().collect::<Vec<_>>(),
+		};
+
+		if peers.is_empty() {
+			return None
+		}
+
+		let nth = rand::random::<usize>() % peers.len();
+		Some(peers[nth].clone())
+	}
+
+	/// Returns all the IDs of the peers on the network we have knowledge of.
 	///
 	/// This includes peers we are not connected to.
 	pub fn known_peers(&self) -> impl Iterator<Item = PeerstorePeerId> {
