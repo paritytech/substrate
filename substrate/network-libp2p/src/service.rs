@@ -116,7 +116,7 @@ impl NetworkService {
 		let kad_system = KadSystem::without_init(KadSystemConfig {
 			parallelism: 3,
 			local_peer_id: local_peer_id.clone(),
-			kbuckets_timeout: Duration::from_secs(10),
+			kbuckets_timeout: Duration::from_secs(600),
 			request_timeout: Duration::from_secs(10),
 			known_initial_peers: network_state.known_peers().collect(),
 		});
@@ -645,7 +645,12 @@ fn build_kademlia_response(
 				}
 			}
 		})
-		.filter(|p| !p.multiaddrs.is_empty())
+		// TODO: we really want to remove nodes with no multiaddress from
+		// the results, but a flew in the Kad protocol of libp2p makes it
+		// impossible to return no result at all ; therefore we must at least
+		// return ourselves
+		.filter(|p| p.node_id == *shared.kad_system.local_peer_id() ||
+			!p.multiaddrs.is_empty())
 		.take(20)
 		.collect::<Vec<_>>()
 }
@@ -983,11 +988,19 @@ fn open_peer_custom_proto<T, To, St, C>(
 	
 	let with_timeout = TransportTimeout::new(with_proto,
 		Duration::from_secs(20));
+	let with_err = with_timeout
+		.map_err({
+			let peer_id = peer_id.clone();
+			move |err| {
+				debug!(target: "sub-libp2p", "Error while dialing \
+					{:?} with custom proto: {:?}", peer_id, err);
+				err
+			}
+		});
 
 	if let Ok(unique_connec) = shared2.network_state
 		.custom_proto(peer_id, proto_id, Endpoint::Dialer) {
-		let _ = unique_connec.1.get_or_dial(&swarm_controller, &addr,
-			with_timeout);
+		let _ = unique_connec.1.get_or_dial(&swarm_controller, &addr, with_err);
 	}
 }
 
