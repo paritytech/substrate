@@ -646,8 +646,8 @@ fn build_kademlia_response(
 			}
 		})
 		// TODO: we really want to remove nodes with no multiaddress from
-		// the results, but a flew in the Kad protocol of libp2p makes it
-		// impossible to return no result at all ; therefore we must at least
+		// the results, but a flaw in the Kad protocol of libp2p makes it
+		// impossible to return empty results ; therefore we must at least
 		// return ourselves
 		.filter(|p| p.node_id == *shared.kad_system.local_peer_id() ||
 			!p.multiaddrs.is_empty())
