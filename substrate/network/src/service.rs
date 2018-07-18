@@ -213,7 +213,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 	}
 
 	fn stop(&self) {
-		self.handler.protocol.abort();
+		self.handler.protocol.stop();
 		self.network.stop();
 	}
 }
