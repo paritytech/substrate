@@ -397,7 +397,10 @@ impl PolkadotProtocol {
 		{
 			let info = match self.peers.get_mut(&peer_id) {
 				Some(peer) => peer,
-				None => return,
+				None => {
+					trace!(target: "p_net", "Network inconsistency: message received from unconnected peer {}", peer_id);
+					return
+				}
 			};
 
 			if !info.claimed_validator {
@@ -444,14 +447,17 @@ impl PolkadotProtocol {
 	fn on_new_role(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, role: Role) {
 		let info = match self.peers.get(&peer_id) {
 			Some(peer) => peer,
-			None => return,
+			None => {
+				trace!(target: "p_net", "Network inconsistency: message received from unconnected peer {}", peer_id);
+				return
+			}
 		};
 
 		match info.validator_key {
-			None => {
-				ctx.disable_peer(peer_id, "Sent collator role without registering first as validator");
-				return;
-			}
+			None => ctx.disable_peer(
+				peer_id,
+				"Sent collator role without registering first as validator",
+			),
 			Some(key) => for (relay_parent, collation) in self.local_collations.note_validator_role(key, role) {
 				send_polkadot_message(
 					ctx,

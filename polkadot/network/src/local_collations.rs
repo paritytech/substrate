@@ -96,7 +96,14 @@ impl<C: Clone> LocalCollations<C> {
 	}
 
 	/// Add a collation. Returns an iterator of session keys to send to and lazy copies of the collation.
-	pub fn add_collation<'a>(&'a mut self, relay_parent: Hash, targets: HashSet<SessionKey>, collation: C) -> impl Iterator<Item=(SessionKey, C)> + 'a {
+	pub fn add_collation<'a>(
+		&'a mut self,
+		relay_parent: Hash,
+		targets: HashSet<SessionKey>,
+		collation: C
+	)
+		-> impl Iterator<Item=(SessionKey, C)> + 'a
+	{
 		self.local_collations.insert(relay_parent, LocalCollation {
 			targets,
 			collation,
