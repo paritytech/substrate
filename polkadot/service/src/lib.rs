@@ -46,13 +46,14 @@ use std::collections::HashMap;
 use codec::Encode;
 use transaction_pool::TransactionPool;
 use polkadot_api::{PolkadotApi, light::RemotePolkadotApiWrapper};
-use polkadot_primitives::{Block, BlockId, Hash};
+use polkadot_primitives::{parachain, AccountId, Block, BlockId, Hash};
 use polkadot_runtime::GenesisConfig;
 use client::Client;
 use polkadot_network::{PolkadotProtocol, consensus::ConsensusNetwork};
 use tokio::runtime::TaskExecutor;
+use service::FactoryFullConfiguration;
 
-pub use service::{Configuration, Roles, PruningMode, ExtrinsicPoolOptions,
+pub use service::{Roles, PruningMode, ExtrinsicPoolOptions,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 pub use client::ExecutionStrategy;
 
@@ -87,6 +88,17 @@ impl Components for service::FullComponents<Factory> {
 	type Backend = service::FullBackend<Factory>;
 }
 
+/// All configuration for the polkadot node.
+pub type Configuration = FactoryFullConfiguration<Factory>;
+
+/// Polkadot-specific configuration.
+#[derive(Default)]
+pub struct CustomConfiguration {
+	/// Set to `Some` with a collator `AccountId` and desired parachain
+	/// if the network protocol should be started in collator mode.
+	pub collating_for: Option<(AccountId, parachain::Id)>,
+}
+
 /// Polkadot config for the substrate service.
 pub struct Factory;
 
@@ -105,6 +117,7 @@ impl service::ServiceFactory for Factory {
 		RemotePolkadotApiWrapper<service::LightBackend<Self>, service::LightExecutor<Self>>
 	>;
 	type Genesis = GenesisConfig;
+	type Configuration = CustomConfiguration;
 
 	const NETWORK_PROTOCOL_ID: network::ProtocolId = ::polkadot_network::DOT_PROTOCOL_ID;
 
@@ -128,6 +141,15 @@ impl service::ServiceFactory for Factory {
 			client: client,
 			imports_external_transactions: false,
 		})
+	}
+
+	fn build_network_protocol(config: &Configuration)
+		-> Result<PolkadotProtocol, Error>
+	{
+		if let Some((_, ref para_id)) = config.custom.collating_for {
+			info!("Starting network in Collator mode for parachain {:?}", para_id);
+		}
+		Ok(PolkadotProtocol::new(config.custom.collating_for))
 	}
 }
 
@@ -155,7 +177,7 @@ impl <C: Components> Service<C> {
 }
 
 /// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor)
+pub fn new_light(config: Configuration, executor: TaskExecutor)
 	-> Result<Service<LightComponents<Factory>>, Error>
 {
 	let service = service::Service::<LightComponents<Factory>>::new(config, executor)?;
@@ -170,7 +192,7 @@ pub fn new_light(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 }
 
 /// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor)
+pub fn new_full(config: Configuration, executor: TaskExecutor)
 	-> Result<Service<FullComponents<Factory>>, Error>
 {
 	let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
@@ -207,7 +229,7 @@ pub fn new_full(config: Configuration<GenesisConfig>, executor: TaskExecutor)
 }
 
 /// Creates bare client without any networking.
-pub fn new_client(config: Configuration<GenesisConfig>)
+pub fn new_client(config: Configuration)
 -> Result<Arc<service::ComponentClient<FullComponents<Factory>>>, Error>
 {
 	service::new_client::<Factory>(config)

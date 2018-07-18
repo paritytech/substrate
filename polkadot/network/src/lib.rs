@@ -39,6 +39,7 @@ extern crate rhododendron;
 extern crate log;
 
 mod collator_pool;
+mod local_collations;
 mod router;
 pub mod consensus;
 
@@ -54,6 +55,7 @@ use substrate_network::{message, generic_message};
 use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
 use self::collator_pool::{CollatorPool, Role, Action};
+use self::local_collations::LocalCollations;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -110,9 +112,9 @@ struct BlockDataRequest {
 }
 
 struct PeerInfo {
-	status: Status,
-	validator: bool,
-	session_keys: HashMap<Hash, SessionKey>,
+	collating_for: Option<(AccountId, ParaId)>,
+	validator_key: Option<SessionKey>,
+	claimed_validator: bool,
 }
 
 #[derive(Default)]
@@ -164,7 +166,6 @@ impl Knowledge {
 struct CurrentConsensus {
 	knowledge: Arc<Mutex<Knowledge>>,
 	parent_hash: Hash,
-	session_keys: HashMap<SessionKey, PeerId>,
 	local_session_key: SessionKey,
 }
 
@@ -174,12 +175,6 @@ impl CurrentConsensus {
 		self.knowledge.lock().candidates.get(hash)
 			.and_then(|entry| entry.block_data.clone())
 	}
-
-	fn peer_disconnected(&mut self, peer: &PeerInfo) {
-		if let Some(key) = peer.session_keys.get(&self.parent_hash) {
-			self.session_keys.remove(key);
-		}
-	}
 }
 
 /// Polkadot-specific messages.
@@ -187,9 +182,9 @@ impl CurrentConsensus {
 pub enum Message {
 	/// signed statement and localized parent hash.
 	Statement(Hash, SignedStatement),
-	/// Tell the peer your session key for the current block.
-	// TODO: do this with a random challenge protocol
-	SessionKey(Hash, SessionKey),
+	/// As a validator, tell the peer your current session key.
+	// TODO: do this with a cryptographic proof of some kind
+	SessionKey(SessionKey),
 	/// Requesting parachain block data by candidate hash.
 	RequestBlockData(RequestId, Hash),
 	/// Provide block data by candidate hash or nothing if unknown.
@@ -208,9 +203,8 @@ impl Encode for Message {
 				dest.push(h);
 				dest.push(s);
 			}
-			Message::SessionKey(ref h, ref k) => {
+			Message::SessionKey(ref k) => {
 				dest.push_byte(1);
-				dest.push(h);
 				dest.push(k);
 			}
 			Message::RequestBlockData(ref id, ref d) => {
@@ -240,7 +234,7 @@ impl Decode for Message {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		match input.read_byte()? {
 			0 => Some(Message::Statement(Decode::decode(input)?, Decode::decode(input)?)),
-			1 => Some(Message::SessionKey(Decode::decode(input)?, Decode::decode(input)?)),
+			1 => Some(Message::SessionKey(Decode::decode(input)?)),
 			2 => Some(Message::RequestBlockData(Decode::decode(input)?, Decode::decode(input)?)),
 			3 => Some(Message::BlockData(Decode::decode(input)?, Decode::decode(input)?)),
 			4 => Some(Message::CollatorRole(Decode::decode(input)?)),
@@ -259,27 +253,27 @@ fn send_polkadot_message(ctx: &mut Context<Block>, to: PeerId, message: Message)
 /// Polkadot protocol attachment for substrate.
 pub struct PolkadotProtocol {
 	peers: HashMap<PeerId, PeerInfo>,
+	collating_for: Option<(AccountId, ParaId)>,
 	consensus_gossip: ConsensusGossip<Block>,
 	collators: CollatorPool,
+	validators: HashMap<SessionKey, PeerId>,
+	local_collations: LocalCollations<Collation>,
 	live_consensus: Option<CurrentConsensus>,
 	in_flight: HashMap<(RequestId, PeerId), BlockDataRequest>,
 	pending: Vec<BlockDataRequest>,
 	next_req_id: u64,
 }
 
-impl Default for PolkadotProtocol {
-	fn default() -> Self {
-		Self::new()
-	}
-}
-
 impl PolkadotProtocol {
 	/// Instantiate a polkadot protocol handler.
-	pub fn new() -> Self {
+	pub fn new(collating_for: Option<(AccountId, ParaId)>) -> Self {
 		PolkadotProtocol {
 			peers: HashMap::new(),
 			consensus_gossip: ConsensusGossip::new(),
 			collators: CollatorPool::new(),
+			collating_for,
+			validators: HashMap::new(),
+			local_collations: LocalCollations::new(),
 			live_consensus: None,
 			in_flight: HashMap::new(),
 			pending: Vec::new(),
@@ -311,31 +305,23 @@ impl PolkadotProtocol {
 	}
 
 	/// Note new consensus session.
-	fn new_consensus(&mut self, ctx: &mut Context<Block>, mut consensus: CurrentConsensus) {
-		let parent_hash = consensus.parent_hash;
-		let old_parent = self.live_consensus.as_ref().map(|c| c.parent_hash);
+	fn new_consensus(&mut self, ctx: &mut Context<Block>, consensus: CurrentConsensus) {
+		let old_data = self.live_consensus.as_ref().map(|c| (c.parent_hash, c.local_session_key));
 
-		// TODO: optimize for when session key changes and only send to collators who are relevant in next few blocks.
-		for (id, info) in self.peers.iter_mut()
-			.filter(|&(_, ref info)| info.validator || info.status.collating_for.is_some())
-		{
-			send_polkadot_message(
-				ctx,
-				*id,
-				Message::SessionKey(parent_hash, consensus.local_session_key)
-			);
-
-			if let Some(key) = info.session_keys.get(&parent_hash) {
-				consensus.session_keys.insert(*key, *id);
-			}
-
-			if let Some(ref old_parent) = old_parent {
-				info.session_keys.remove(old_parent);
+		if Some(&consensus.local_session_key) != old_data.as_ref().map(|&(_, ref key)| key) {
+			for (id, _) in self.peers.iter()
+				.filter(|&(_, ref info)| info.claimed_validator || info.collating_for.is_some())
+			{
+				send_polkadot_message(
+					ctx,
+					*id,
+					Message::SessionKey(consensus.local_session_key)
+				);
 			}
 		}
 
 		self.live_consensus = Some(consensus);
-		self.consensus_gossip.collect_garbage(old_parent.as_ref());
+		self.consensus_gossip.collect_garbage(old_data.as_ref().map(|&(ref hash, _)| hash));
 	}
 
 	fn dispatch_pending_requests(&mut self, ctx: &mut Context<Block>) {
@@ -359,8 +345,9 @@ impl PolkadotProtocol {
 					continue;
 				}
 
+				let validator_keys = &mut self.validators;
 				let next_peer = entry.knows_block_data.iter()
-					.filter_map(|x| consensus.session_keys.get(x).map(|id| (*x, *id)))
+					.filter_map(|x| validator_keys.get(x).map(|id| (*x, *id)))
 					.find(|&(ref key, _)| pending.attempted_peers.insert(*key))
 					.map(|(_, id)| id);
 
@@ -392,29 +379,7 @@ impl PolkadotProtocol {
 		match msg {
 			Message::Statement(parent_hash, _statement) =>
 				self.consensus_gossip.on_chain_specific(ctx, peer_id, raw, parent_hash),
-			Message::SessionKey(parent_hash, key) => {
-				{
-					let info = match self.peers.get_mut(&peer_id) {
-						Some(peer) => peer,
-						None => return,
-					};
-
-					if !info.validator {
-						ctx.disable_peer(peer_id, "Unknown Polkadot-protocol reason");
-						return;
-					}
-
-					match self.live_consensus {
-						Some(ref mut consensus) if consensus.parent_hash == parent_hash => {
-							consensus.session_keys.insert(key, peer_id);
-						}
-						_ => {}
-					}
-
-					info.session_keys.insert(parent_hash, key);
-				}
-				self.dispatch_pending_requests(ctx);
-			}
+			Message::SessionKey(key) => self.on_session_key(ctx, peer_id, key),
 			Message::RequestBlockData(req_id, hash) => {
 				let block_data = self.live_consensus.as_ref()
 					.and_then(|c| c.block_data(&hash));
@@ -423,8 +388,41 @@ impl PolkadotProtocol {
 			}
 			Message::BlockData(req_id, data) => self.on_block_data(ctx, peer_id, req_id, data),
 			Message::Collation(relay_parent, collation) => self.on_collation(ctx, peer_id, relay_parent, collation),
-			Message::CollatorRole(_) => {},
+			Message::CollatorRole(role) => self.on_new_role(ctx, peer_id, role),
 		}
+	}
+
+	fn on_session_key(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, key: SessionKey) {
+		{
+			let info = match self.peers.get_mut(&peer_id) {
+				Some(peer) => peer,
+				None => {
+					trace!(target: "p_net", "Network inconsistency: message received from unconnected peer {}", peer_id);
+					return
+				}
+			};
+
+			if !info.claimed_validator {
+				ctx.disable_peer(peer_id, "Session key broadcasted without setting authority role");
+				return;
+			}
+
+			if let Some(old_key) = ::std::mem::replace(&mut info.validator_key, Some(key)) {
+				self.validators.remove(&old_key);
+
+				for (relay_parent, collation) in self.local_collations.fresh_key(&old_key, &key) {
+					send_polkadot_message(
+						ctx,
+						peer_id,
+						Message::Collation(relay_parent, collation),
+					)
+				}
+
+			}
+			self.validators.insert(key, peer_id);
+		}
+
+		self.dispatch_pending_requests(ctx);
 	}
 
 	fn on_block_data(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, req_id: RequestId, data: Option<BlockData>) {
@@ -440,14 +438,39 @@ impl PolkadotProtocol {
 				self.pending.push(req);
 				self.dispatch_pending_requests(ctx);
 			}
-			None => ctx.disable_peer(peer_id, "Unknown Polkadot-protocol reason"),
+			None => ctx.disable_peer(peer_id, "Unexpected block data response"),
+		}
+	}
+
+	// when a validator sends us (a collator) a new role.
+	fn on_new_role(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, role: Role) {
+		let info = match self.peers.get(&peer_id) {
+			Some(peer) => peer,
+			None => {
+				trace!(target: "p_net", "Network inconsistency: message received from unconnected peer {}", peer_id);
+				return
+			}
+		};
+
+		match info.validator_key {
+			None => ctx.disable_peer(
+				peer_id,
+				"Sent collator role without registering first as validator",
+			),
+			Some(key) => for (relay_parent, collation) in self.local_collations.note_validator_role(key, role) {
+				send_polkadot_message(
+					ctx,
+					peer_id,
+					Message::Collation(relay_parent, collation),
+				)
+			},
 		}
 	}
 }
 
 impl Specialization<Block> for PolkadotProtocol {
 	fn status(&self) -> Vec<u8> {
-		Status { collating_for: None }.encode()
+		Status { collating_for: self.collating_for.clone() }.encode()
 	}
 
 	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, status: FullStatus) {
@@ -460,7 +483,7 @@ impl Specialization<Block> for PolkadotProtocol {
 
 		if let Some((ref acc_id, ref para_id)) = local_status.collating_for {
 			if self.collator_peer_id(acc_id.clone()).is_some() {
-				ctx.disable_peer(peer_id, "Unknown Polkadot-protocol reason");
+				ctx.disconnect_peer(peer_id);
 				return
 			}
 
@@ -476,9 +499,9 @@ impl Specialization<Block> for PolkadotProtocol {
 		let send_key = validator || local_status.collating_for.is_some();
 
 		self.peers.insert(peer_id, PeerInfo {
-			status: local_status,
-			session_keys: Default::default(),
-			validator,
+			collating_for: local_status.collating_for,
+			validator_key: None,
+			claimed_validator: validator,
 		});
 
 		self.consensus_gossip.new_peer(ctx, peer_id, status.roles);
@@ -486,7 +509,7 @@ impl Specialization<Block> for PolkadotProtocol {
 			send_polkadot_message(
 				ctx,
 				peer_id,
-				Message::SessionKey(consensus.parent_hash, consensus.local_session_key)
+				Message::SessionKey(consensus.local_session_key)
 			);
 		}
 
@@ -495,7 +518,7 @@ impl Specialization<Block> for PolkadotProtocol {
 
 	fn on_disconnect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId) {
 		if let Some(info) = self.peers.remove(&peer_id) {
-			if let Some((acc_id, _)) = info.status.collating_for {
+			if let Some((acc_id, _)) = info.collating_for {
 				let new_primary = self.collators.on_disconnect(acc_id)
 					.and_then(|new_primary| self.collator_peer_id(new_primary));
 
@@ -508,8 +531,9 @@ impl Specialization<Block> for PolkadotProtocol {
 				}
 			}
 
-			if let (true, &mut Some(ref mut consensus)) = (info.validator, &mut self.live_consensus) {
-				consensus.peer_disconnected(&info);
+			if let Some(validator_key) = info.validator_key {
+				self.validators.remove(&validator_key);
+				self.local_collations.on_disconnect(&validator_key);
 			}
 
 			{
@@ -562,6 +586,7 @@ impl Specialization<Block> for PolkadotProtocol {
 	fn maintain_peers(&mut self, ctx: &mut Context<Block>) {
 		self.consensus_gossip.collect_garbage(None);
 		self.collators.collect_garbage(None);
+		self.local_collations.collect_garbage(None);
 		self.dispatch_pending_requests(ctx);
 
 		for collator_action in self.collators.maintain_peers() {
@@ -578,8 +603,9 @@ impl Specialization<Block> for PolkadotProtocol {
 		}
 	}
 
-	fn on_block_imported(&mut self, _ctx: &mut Context<Block>, hash: Hash, _header: &Header) {
+	fn on_block_imported(&mut self, _ctx: &mut Context<Block>, hash: Hash, header: &Header) {
 		self.collators.collect_garbage(Some(&hash));
+		self.local_collations.collect_garbage(Some(&header.parent_hash));
 	}
 }
 
@@ -591,14 +617,14 @@ impl PolkadotProtocol {
 
 		match self.peers.get(&from) {
 			None => ctx.disconnect_peer(from),
-			Some(peer_info) => match peer_info.status.collating_for {
-				None => ctx.disable_peer(from, "Unknown Polkadot-protocol reason"),
+			Some(peer_info) => match peer_info.collating_for {
+				None => ctx.disable_peer(from, "Sent collation without registering collator intent"),
 				Some((ref acc_id, ref para_id)) => {
 					let structurally_valid = para_id == &collation_para && acc_id == &collated_acc;
 					if structurally_valid && collation.receipt.check_signature().is_ok() {
 						self.collators.on_collation(acc_id.clone(), relay_parent, collation)
 					} else {
-						ctx.disable_peer(from, "Unknown Polkadot-protocol reason")
+						ctx.disable_peer(from, "Sent malformed collation")
 					};
 				}
 			},
@@ -614,7 +640,6 @@ impl PolkadotProtocol {
 	// get connected peer with given account ID for collation.
 	fn collator_peer_id(&self, account_id: AccountId) -> Option<PeerId> {
 		let check_info = |info: &PeerInfo| info
-			.status
 			.collating_for
 			.as_ref()
 			.map_or(false, |&(ref acc_id, _)| acc_id == &account_id);
@@ -629,7 +654,30 @@ impl PolkadotProtocol {
 	// disconnect a collator by account-id.
 	fn disconnect_bad_collator(&self, ctx: &mut Context<Block>, account_id: AccountId) {
 		if let Some(peer_id) = self.collator_peer_id(account_id) {
-			ctx.disable_peer(peer_id, "Unknown Polkadot-protocol reason")
+			ctx.disable_peer(peer_id, "Consensus layer determined the given collator misbehaved")
+		}
+	}
+}
+
+impl PolkadotProtocol {
+	/// Add a local collation and broadcast it to the necessary peers.
+	pub fn add_local_collation(
+		&mut self,
+		ctx: &mut Context<Block>,
+		relay_parent: Hash,
+		targets: HashSet<SessionKey>,
+		collation: Collation,
+	) {
+		for (primary, cloned_collation) in self.local_collations.add_collation(relay_parent, targets, collation.clone()) {
+			match self.validators.get(&primary) {
+				Some(peer_id) => send_polkadot_message(
+					ctx,
+					*peer_id,
+					Message::Collation(relay_parent, cloned_collation),
+				),
+				None =>
+					warn!(target: "polkadot_network", "Encountered tracked but disconnected validator {:?}", primary),
+			}
 		}
 	}
 }
