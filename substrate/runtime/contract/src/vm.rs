@@ -603,7 +603,7 @@ mod tests {
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
 		code: Vec<u8>,
-		endownment: u64,
+		endowment: u64,
 		data: Vec<u8>,
 	}
 	#[derive(Debug, PartialEq, Eq)]
@@ -628,13 +628,13 @@ mod tests {
 		fn create(
 			&mut self,
 			code: &[u8],
-			endownment: u64,
+			endowment: u64,
 			_gas_meter: &mut GasMeter<Test>,
 			data: Vec<u8>,
 		) -> Result<CreateReceipt<Test>, ()> {
 			self.creates.push(CreateEntry {
 				code: code.to_vec(),
-				endownment,
+				endowment,
 				data,
 			});
 			let address = self.next_account_id;

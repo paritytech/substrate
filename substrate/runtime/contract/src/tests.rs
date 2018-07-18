@@ -411,7 +411,7 @@ fn call_with_zero_value() {
 }
 
 #[test]
-fn create_with_zero_endownment() {
+fn create_with_zero_endowment() {
 	let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
 
 	with_externalities(&mut new_test_ext(0, 2), || {

@@ -211,7 +211,7 @@ impl<T: Trait> Module<T> {
 	///   upon any message received by this account.
 	fn create(
 		aux: &<T as consensus::Trait>::PublicAux,
-		endownment: T::Balance,
+		endowment: T::Balance,
 		gas_limit: T::Gas,
 		ctor_code: Vec<u8>,
 		data: Vec<u8>,
@@ -229,7 +229,7 @@ impl<T: Trait> Module<T> {
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
-		let result = ctx.create(aux.clone(), endownment, &mut gas_meter, &ctor_code, &data);
+		let result = ctx.create(aux.clone(), endowment, &mut gas_meter, &ctor_code, &data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.

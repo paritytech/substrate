@@ -107,7 +107,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 	pub fn create(
 		&mut self,
 		caller: T::AccountId,
-		endownment: T::Balance,
+		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		ctor: &[u8],
 		_data: &[u8],
@@ -126,13 +126,13 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		let change_set = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 
-			if endownment > T::Balance::zero() {
+			if endowment > T::Balance::zero() {
 				transfer(
 					gas_meter,
 					true,
 					&self.self_account,
 					&dest,
-					endownment,
+					endowment,
 					&mut overlay,
 				)?;
 			}
@@ -232,13 +232,13 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
 	fn create(
 		&mut self,
 		code: &[u8],
-		endownment: T::Balance,
+		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: Vec<u8>,
 	) -> Result<CreateReceipt<T>, ()> {
 		let caller = self.ctx.self_account.clone();
 		self.ctx
-			.create(caller, endownment, gas_meter, code, &data)
+			.create(caller, endowment, gas_meter, code, &data)
 			.map_err(|_| ())
 	}
 
