@@ -391,6 +391,12 @@ impl NetworkState {
 		Ok(peer_id)
 	}
 
+	/// Adds a peer to the internal peer store.
+	/// Returns an error if the peer address is invalid.
+	pub fn add_peer(&self, peer: &str) -> Result<PeerstorePeerId, Error> {
+		parse_and_add_to_peerstore(peer, &self.peerstore)
+	}
+
 	/// Adds a reserved peer to the list of reserved peers.
 	/// Returns an error if the peer address is invalid.
 	pub fn add_reserved_peer(&self, peer: &str) -> Result<(), Error> {
