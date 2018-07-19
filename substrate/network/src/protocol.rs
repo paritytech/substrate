@@ -536,6 +536,15 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 		handshaking_peers.clear();
 	}
 
+	pub fn stop(&self) {
+		// stop processing import requests first (without holding a sync lock)
+		let import_queue = self.sync.read().import_queue();
+		import_queue.stop();
+
+		// and then clear all the sync data
+		self.abort();
+	}
+
 	pub fn on_block_announce(&self, io: &mut SyncIo, peer_id: PeerId, announce: message::BlockAnnounce<B::Header>) {
 		let header = announce.header;
 		let hash = header.hash();

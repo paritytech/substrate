@@ -72,7 +72,7 @@ pub use client::error::Error as ClientError;
 pub use client::backend::Backend as ClientBackend;
 pub use state_machine::Backend as StateMachineBackend;
 pub use polkadot_primitives::Block as PolkadotBlock;
-pub use service::{Components as ServiceComponents, Service};
+pub use service::{Components as ServiceComponents, Service, CustomConfiguration};
 
 use std::io::{self, Write, Read, stdin, stdout};
 use std::fs::File;
@@ -136,10 +136,15 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 pub trait Worker {
 	/// A future that resolves when the work is done or the node should exit.
 	/// This will be run on a tokio runtime.
-	type Work: Future<Item=(),Error=()>;
+	type Work: Future<Item=(),Error=()> + Send + 'static;
 
 	/// An exit scheduled for the future.
 	type Exit: Future<Item=(),Error=()> + Send + 'static;
+
+	/// Return configuration for the polkadot node.
+	// TODO: make this the full configuration, so embedded nodes don't need
+	// string CLI args
+	fn configuration(&self) -> CustomConfiguration { Default::default() }
 
 	/// Don't work, but schedule an exit.
 	fn exit_only(self) -> Self::Exit;
@@ -220,13 +225,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	};
 
 	let role =
-		if matches.is_present("collator") {
-			info!("Starting collator");
-			// TODO [rob]: collation node implementation
-			// This isn't a thing. Different parachains will have their own collator executables and
-			// maybe link to libpolkadot to get a light-client.
-			service::Roles::LIGHT
-		} else if matches.is_present("light") {
+		if matches.is_present("light") {
 			info!("Starting (light)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::LIGHT
@@ -265,9 +264,10 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		config.network.net_config_path = config.network.config_path.clone();
 
 		let port = match matches.value_of("port") {
-			Some(port) => port.parse().expect("Invalid p2p port value specified."),
+			Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
 			None => 30333,
 		};
+
 		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
 		config.network.public_address = None;
 		config.network.client_version = format!("parity-polkadot/{}", crate_version!());
@@ -277,6 +277,8 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			None => None,
 		};
 	}
+
+	config.custom = worker.configuration();
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 	if matches.is_present("dev") {
@@ -433,8 +435,8 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 		None => Box::new(stdin()),
 	};
 
-	info!("Importing blocks");
 	let count: u32 = Decode::decode(&mut file).ok_or("Error reading file")?;
+	info!("Importing {} blocks", count);
 	let mut block = 0;
 	for _ in 0 .. count {
 		if exit_recv.try_recv().is_ok() {
@@ -451,7 +453,7 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 			}
 		}
 		block += 1;
-		if block % 10000 == 0 {
+		if block % 1000 == 0 {
 			info!("#{}", block);
 		}
 	}
@@ -497,7 +499,7 @@ fn run_until_exit<C, W>(
 		)
 	};
 
-	let _ = worker.work(&service).wait();
+	let _ = runtime.block_on(worker.work(&service));
 	exit_send.fire();
 	Ok(())
 }
