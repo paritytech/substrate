@@ -479,19 +479,22 @@ fn init_thread(
 		}
 	}
 
-	// Explicitely connect to the boostrap nodes as a temporary measure.
+	// Explicitely connect to _all_ the boostrap nodes as a temporary measure.
 	for bootnode in shared.config.boot_nodes.iter() {
-		let peer_id = shared.network_state.add_peer(bootnode)?;
-
-		trace!(target: "sub-libp2p", "Dialing bootnode {:?}", peer_id);
-		for proto in shared.protocols.read().0.clone().into_iter() {
-			open_peer_custom_proto(
-				shared.clone(),
-				transport.clone(),
-				proto,
-				peer_id.clone(),
-				&swarm_controller
-			)
+		match shared.network_state.add_peer(bootnode) {
+			Ok(peer_id) => {
+				trace!(target: "sub-libp2p", "Dialing bootnode {:?}", peer_id);
+				for proto in shared.protocols.read().0.clone().into_iter() {
+					open_peer_custom_proto(
+						shared.clone(),
+						transport.clone(),
+						proto,
+						peer_id.clone(),
+						&swarm_controller
+					)
+				}
+			},
+			Err(err) => warn!(target:"sub-libp2p", "Couldn't parse Bootnode Address: {}", err),
 		}
 	}
 

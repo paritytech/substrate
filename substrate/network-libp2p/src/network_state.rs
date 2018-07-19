@@ -17,7 +17,7 @@
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::sync::mpsc;
-use libp2p::core::{Multiaddr, AddrComponent, Endpoint, UniqueConnec};
+use libp2p::core::{multiaddr::ToMultiaddr, Multiaddr, AddrComponent, Endpoint, UniqueConnec};
 use libp2p::core::{UniqueConnecState, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
@@ -34,6 +34,8 @@ use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
 use std::path::Path;
 use std::sync::atomic;
 use std::time::{Duration, Instant};
+use url::{Url, ParseError as UrlParseError};
+use std::net::IpAddr;
 
 // File where the peers are stored.
 const NODES_FILE: &str = "nodes.json";
@@ -145,10 +147,6 @@ impl NetworkState {
 				won't be saved");
 			PeersStorage::Memory(MemoryPeerstore::empty())
 		};
-
-		for bootnode in config.boot_nodes.iter() {
-			parse_and_add_to_peerstore(bootnode, &peerstore)?;
-		}
 
 		let reserved_peers = {
 			let mut reserved_peers = FnvHashSet::with_capacity_and_hasher(
@@ -697,17 +695,68 @@ fn is_peer_disabled(
 	}
 }
 
-/// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
-/// to the given peerstore. Returns the corresponding peer ID.
+/// Parses an address of the form `/ip4/x.x.x.x/tcp/PORT/p2p/NODE_ID` or
+/// `[enode://|p2p://]NODE_ID@IP:PORT`, and adds it to the given peerstore.
+/// Returns the corresponding peer ID.
 fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 	-> Result<PeerstorePeerId, Error> {
-	let mut addr: Multiaddr = addr_str.parse()
-		.map_err(|_| ErrorKind::AddressParse)?;
-	let p2p_component = addr.pop().ok_or(ErrorKind::AddressParse)?;
-	let peer_id = match p2p_component {
-		AddrComponent::P2P(key) | AddrComponent::IPFS(key) =>
+
+	let addr = match addr_str.to_multiaddr() {
+		Ok(addr) => addr,
+		Err(_) => {
+			// converting a regular URL into Multiaddr format:
+			let mut addr = Multiaddr::from_bytes(vec![]).expect("Creating empty Multiaddr doesn't fail");
+			let url = match Url::parse(addr_str) {
+				Ok(url) => Ok(url),
+				Err(UrlParseError::RelativeUrlWithoutBase) =>
+					// trying with a schema for fallback of ID@IP:PORT formats
+					Url::parse(&("p2p://".to_owned() + addr_str)),
+				Err(err) => Err(err)
+			}?;
+
+			let scheme = url.scheme();
+			if scheme != "enode" &&  scheme != "p2p" {
+				return Err(ErrorKind::UrlProtocolUnsupported(scheme.to_string()).into());
+			}
+
+			match url.host_str() {
+				Some(host) => match host.parse::<IpAddr>()? {
+					IpAddr::V4(ip) => addr.append(AddrComponent::IP4(ip)),
+					IpAddr::V6(ip) => addr.append(AddrComponent::IP6(ip)),
+				},
+				_ => return Err(ErrorKind::GenericUrlParseError("Please specify a host IP.").into())
+			}
+
+			if let Some(port) = url.port() {
+				addr.append(AddrComponent::TCP(port))
+			} else {
+				return Err(ErrorKind::GenericUrlParseError("Please specify a Port").into())
+			}
+			
+			let username = url.username();
+			if username.is_empty() {
+				return Err(ErrorKind::GenericUrlParseError("Please specify the peer ID \
+					(as username)").into())	
+			}
+
+			// addr.append(AddrComponent::P2P(username.as_bytes().to_vec()));
+			// FIXME: currently libp2p allows us to put non-CID as parts of the P2P component,
+			//        which it shouldn't. However, until this is fixed, we can only confirm
+			//        the validity by having the entire string parsed (again)
+			//        ref https://github.com/libp2p/rust-libp2p/issues/131
+
+			let full_addr = format!("{:}", addr) + "/p2p/" + &username;
+
+			full_addr.parse::<Multiaddr>()
+				// we can be almost certain any error happening here is because of the username
+				.map_err(|_| ErrorKind::InvalidPeerId(username.to_owned()))?
+		}
+	};
+
+	let peer_id = match addr.iter().collect::<Vec<_>>().pop() {
+		Some(AddrComponent::P2P(key)) | Some(AddrComponent::IPFS(key)) =>
 			PeerstorePeerId::from_bytes(key).map_err(|_| ErrorKind::AddressParse)?,
-		_ => return Err(ErrorKind::BadProtocol.into()),
+		_ => return Err(ErrorKind::AddressMissingPeerId(addr).into()),
 	};
 
 	// Registering the bootstrap node with a TTL of 100000 years   TODO: wrong
