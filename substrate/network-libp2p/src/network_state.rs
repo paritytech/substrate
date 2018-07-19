@@ -882,7 +882,6 @@ fn open_priv_key_file<P>(path: P) -> Result<fs::File, IoError>
 
 #[cfg(test)]
 mod tests {
-	use futures::sync::mpsc;
 	use libp2p::core::{Endpoint, PublicKey};
 	use network_state::NetworkState;
 

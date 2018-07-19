@@ -1294,6 +1294,6 @@ mod tests {
 	fn builds_and_finishes_in_finite_time() {
 		// Checks that merely starting the network doesn't end up in an infinite loop.
 		let service = NetworkService::new(Default::default(), None).unwrap();
-		service.start().map_err(|(err, _)| err).unwrap();
+		service.start(vec![]).map_err(|(err, _)| err).unwrap();
 	}
 }
