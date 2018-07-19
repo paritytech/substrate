@@ -40,3 +40,4 @@ polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
 polkadot-service = { path = "../service" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
+names = "0.11.0"
