@@ -91,7 +91,7 @@ use futures::Future;
 use tokio::runtime::Runtime;
 use service::PruningMode;
 
-const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
+const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
 #[derive(Clone)]
 struct SystemConfiguration {
