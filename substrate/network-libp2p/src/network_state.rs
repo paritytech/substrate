@@ -23,6 +23,7 @@ use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
 use libp2p::peerstore::json_peerstore::JsonPeerstore;
 use libp2p::peerstore::memory_peerstore::MemoryPeerstore;
+use libp2p::ping::Pinger;
 use libp2p::secio;
 use {Error, ErrorKind, NetworkConfiguration, NonReservedPeerMode};
 use {PeerId, ProtocolId, SessionInfo};
@@ -98,6 +99,9 @@ struct PeerConnectionInfo {
 
 	/// The Kademlia connection to this node.
 	kad_connec: UniqueConnec<KadConnecController>,
+
+	/// The ping connection to this node.
+	ping_connec: UniqueConnec<Pinger>,
 
 	/// Id of the peer.
 	id: PeerstorePeerId,
@@ -245,8 +249,7 @@ impl NetworkState {
 
 	/// Reports the ping of the peer. Returned later by `session_info()`.
 	/// No-op if the `peer_id` is not valid/expired.
-	#[allow(dead_code)]
-	pub fn report_ping(&self, peer_id: PeerId, ping: Duration) {
+	pub fn report_ping_duration(&self, peer_id: PeerId, ping: Duration) {
 		let connections = self.connections.read();
 		let info = match connections.info_by_peer.get(&peer_id) {
 			Some(info) => info,
@@ -426,19 +429,7 @@ impl NetworkState {
 	/// Returns the number of open and pending connections with
 	/// custom protocols.
 	pub fn num_open_custom_connections(&self) -> u32 {
-		self.connections
-			.read()
-			.info_by_peer
-			.values()
-			.filter(|info|
-				info.protocols.iter().any(|&(_, ref connec)|
-					match connec.state() {
-						UniqueConnecState::Pending | UniqueConnecState::Full => true,
-						_ => false
-					}
-				)
-			)
-			.count() as u32
+		num_open_custom_connections(&self.connections.read())
 	}
 
 	/// Returns the number of new outgoing custom connections to peers to
@@ -457,7 +448,7 @@ impl NetworkState {
 		connections.peer_by_nodeid.contains_key(node_id)
 	}
 
-	/// Obtains the `UniqueConnec` corresponding to the Kademlia connect to a peer.
+	/// Obtains the `UniqueConnec` corresponding to the Kademlia connection to a peer.
 	pub fn kad_connection(
 		&self,
 		node_id: PeerstorePeerId
@@ -471,6 +462,46 @@ impl NetworkState {
 			.expect("Newly-created peer id is always valid");
 		let connec = infos.kad_connec.clone();
 		Ok((peer_id, connec))
+	}
+
+	/// Obtains the `UniqueConnec` corresponding to the Ping connection to a peer.
+	pub fn ping_connection(
+		&self,
+		node_id: PeerstorePeerId
+	) -> Result<(PeerId, UniqueConnec<Pinger>), IoError> {
+		let mut connections = self.connections.write();
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
+			node_id, Endpoint::Listener)?;
+		let infos = connections.info_by_peer.get_mut(&peer_id)
+			.expect("Newly-created peer id is always valid");
+		let connec = infos.ping_connec.clone();
+		Ok((peer_id, connec))
+	}
+
+	/// Cleans up inactive connections and returns a list of
+	/// connections to ping.
+	pub fn cleanup_and_prepare_ping(
+		&self
+	) -> Vec<(PeerId, PeerstorePeerId, UniqueConnec<Pinger>)> {
+		let mut connections = self.connections.write();
+		let connections = &mut *connections;
+		let peer_by_nodeid = &mut connections.peer_by_nodeid;
+		let info_by_peer = &mut connections.info_by_peer;
+
+		let mut ret = Vec::with_capacity(info_by_peer.len());
+		info_by_peer.retain(|&peer_id, infos| {
+			// Remove the peer if neither Kad nor any protocol is alive.
+			if !infos.kad_connec.is_alive() &&
+				!infos.protocols.iter().any(|(_, conn)| conn.is_alive())
+			{
+				peer_by_nodeid.remove(&infos.id);
+				return false;
+			}
+
+			ret.push((peer_id, infos.id.clone(), infos.ping_connec.clone()));
+			true
+		});
+		ret
 	}
 
 	/// Try to add a new connection to a node in the list.
@@ -503,16 +534,15 @@ impl NetworkState {
 		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
 			node_id.clone(), endpoint)?;
 
-		let connections = &mut *connections;
-		let info_by_peer = &mut connections.info_by_peer;
-		let peer_by_nodeid = &mut connections.peer_by_nodeid;
-		let infos = info_by_peer.get_mut(&peer_id)
+		let num_open_connections = num_open_custom_connections(&connections);
+
+		let infos = connections.info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
 
 		let node_is_reserved = self.reserved_peers.read().contains(&infos.id);
 		if !node_is_reserved {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
-				peer_by_nodeid.len() >= self.max_peers as usize
+				num_open_connections >= self.max_peers
 			{
 				debug!(target: "sub-libp2p", "Refusing node {:?} because we \
 					reached the max number of peers", node_id);
@@ -660,6 +690,7 @@ fn accept_connection(
 		info_by_peer.insert(new_id, PeerConnectionInfo {
 			protocols: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
 			kad_connec: UniqueConnec::empty(),
+			ping_connec: UniqueConnec::empty(),
 			id: node_id.clone(),
 			originated: endpoint == Endpoint::Dialer,
 			ping: Mutex::new(None),
@@ -689,6 +720,23 @@ fn is_peer_disabled(
 	} else {
 		false
 	}
+}
+
+/// Returns the number of open and pending connections with
+/// custom protocols.
+fn num_open_custom_connections(connections: &Connections) -> u32 {
+	connections
+		.info_by_peer
+		.values()
+		.filter(|info|
+			info.protocols.iter().any(|&(_, ref connec)|
+				match connec.state() {
+					UniqueConnecState::Pending | UniqueConnecState::Full => true,
+					_ => false
+				}
+			)
+		)
+		.count() as u32
 }
 
 /// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
