@@ -32,6 +32,8 @@ extern crate triehash;
 extern crate parking_lot;
 extern crate serde;
 extern crate serde_json;
+extern crate names;
+extern crate backtrace;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
@@ -65,13 +67,14 @@ extern crate log;
 pub mod error;
 mod informant;
 mod chain_spec;
+mod panic_hook;
 
 pub use chain_spec::ChainSpec;
 pub use client::error::Error as ClientError;
 pub use client::backend::Backend as ClientBackend;
 pub use state_machine::Backend as StateMachineBackend;
 pub use polkadot_primitives::Block as PolkadotBlock;
-pub use service::{Components as ServiceComponents, Service};
+pub use service::{Components as ServiceComponents, Service, CustomConfiguration};
 
 use std::io::{self, Write, Read, stdin, stdout};
 use std::fs::File;
@@ -82,12 +85,13 @@ use polkadot_primitives::BlockId;
 use codec::{Decode, Encode};
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
+use names::{Generator, Name};
 
 use futures::Future;
 use tokio::runtime::Runtime;
 use service::PruningMode;
 
-const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
+const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
 #[derive(Clone)]
 struct SystemConfiguration {
@@ -113,7 +117,7 @@ fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), S
 		.map(ChainSpec::from)
 		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::KrummeLanke });
 	let is_global = match chain_spec {
-		ChainSpec::KrummeLanke | ChainSpec::StagingTestnet => true,
+		ChainSpec::KrummeLanke => true,
 		_ => false,
 	};
 	let spec = chain_spec.load()?;
@@ -134,10 +138,15 @@ fn base_path(matches: &clap::ArgMatches) -> PathBuf {
 pub trait Worker {
 	/// A future that resolves when the work is done or the node should exit.
 	/// This will be run on a tokio runtime.
-	type Work: Future<Item=(),Error=()>;
+	type Work: Future<Item=(),Error=()> + Send + 'static;
 
 	/// An exit scheduled for the future.
 	type Exit: Future<Item=(),Error=()> + Send + 'static;
+
+	/// Return configuration for the polkadot node.
+	// TODO: make this the full configuration, so embedded nodes don't need
+	// string CLI args
+	fn configuration(&self) -> CustomConfiguration { Default::default() }
 
 	/// Don't work, but schedule an exit.
 	fn exit_only(self) -> Self::Exit;
@@ -159,6 +168,8 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	T: Into<std::ffi::OsString> + Clone,
 	W: Worker,
 {
+	panic_hook::set();
+
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
@@ -194,10 +205,11 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	let (spec, is_global) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 
-	if let Some(name) = matches.value_of("name") {
-		config.name = name.into();
-		info!("Node name: {}", config.name);
-	}
+	config.name = match matches.value_of("name") {
+		None => Generator::with_naming(Name::Numbered).next().unwrap(),
+		Some(name) => name.into(),
+	};
+	info!("Node name: {}", config.name);
 
 	let base_path = base_path(&matches);
 
@@ -217,13 +229,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	};
 
 	let role =
-		if matches.is_present("collator") {
-			info!("Starting collator");
-			// TODO [rob]: collation node implementation
-			// This isn't a thing. Different parachains will have their own collator executables and
-			// maybe link to libpolkadot to get a light-client.
-			service::Roles::LIGHT
-		} else if matches.is_present("light") {
+		if matches.is_present("light") {
 			info!("Starting (light)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::LIGHT
@@ -262,9 +268,10 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		config.network.net_config_path = config.network.config_path.clone();
 
 		let port = match matches.value_of("port") {
-			Some(port) => port.parse().expect("Invalid p2p port value specified."),
+			Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
 			None => 30333,
 		};
+
 		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
 		config.network.public_address = None;
 		config.network.client_version = format!("parity-polkadot/{}", crate_version!());
@@ -274,6 +281,8 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 			None => None,
 		};
 	}
+
+	config.custom = worker.configuration();
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 	if matches.is_present("dev") {
@@ -430,8 +439,8 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 		None => Box::new(stdin()),
 	};
 
-	info!("Importing blocks");
 	let count: u32 = Decode::decode(&mut file).ok_or("Error reading file")?;
+	info!("Importing {} blocks", count);
 	let mut block = 0;
 	for _ in 0 .. count {
 		if exit_recv.try_recv().is_ok() {
@@ -448,7 +457,7 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 			}
 		}
 		block += 1;
-		if block % 10000 == 0 {
+		if block % 1000 == 0 {
 			info!("#{}", block);
 		}
 	}
@@ -494,7 +503,7 @@ fn run_until_exit<C, W>(
 		)
 	};
 
-	let _ = worker.work(&service).wait();
+	let _ = runtime.block_on(worker.work(&service));
 	exit_send.fire();
 	Ok(())
 }

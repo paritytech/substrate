@@ -393,7 +393,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 
 		self.specialization.write().maintain_peers(&mut ProtocolContext::new(&self.context_data, io));
 		for p in aborting {
-			self.on_peer_disconnected(io, p);
+			io.disconnect_peer(p);
 		}
 	}
 

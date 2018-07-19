@@ -35,7 +35,7 @@ pub fn build_transport(
 
 			let mut plaintext = upgrade::toggleable(upgrade::PlainTextConfig);
 			match unencrypted_allowed {
-				UnencryptedAllowed::Allowed => plaintext.disable(),
+				UnencryptedAllowed::Allowed => (),//plaintext.disable(),
 				UnencryptedAllowed::Denied => (),
 			};
 
@@ -56,10 +56,6 @@ pub fn build_transport(
 		.into_connection_reuse();
 
 	TransportTimeout::new(base, Duration::from_secs(20))
-		.map_err(|err| {
-			debug!(target: "sub-libp2p", "Error in base transport layer: {:?}", err);
-			err
-		})
 }
 
 /// Specifies whether unencrypted communications are allowed or denied.

@@ -26,7 +26,7 @@ use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
 
 /// Service configuration.
-pub struct Configuration<G: Serialize + DeserializeOwned + BuildStorage> {
+pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
@@ -43,6 +43,8 @@ pub struct Configuration<G: Serialize + DeserializeOwned + BuildStorage> {
 	pub keys: Vec<String>,
 	/// Chain configuration.
 	pub chain_spec: ChainSpec<G>,
+	/// Custom configuration.
+	pub custom: C,
 	/// Telemetry server URL, optional - only `Some` if telemetry reporting is enabled
 	pub telemetry: Option<String>,
 	/// Node name.
@@ -55,9 +57,9 @@ pub struct Configuration<G: Serialize + DeserializeOwned + BuildStorage> {
 	pub max_heap_pages: usize,
 }
 
-impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
+impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
 	/// Create default config for given chain spec.
-	pub fn default_with_spec(chain_spec: ChainSpec<G>) -> Configuration<G> {
+	pub fn default_with_spec(chain_spec: ChainSpec<G>) -> Self {
 		let mut configuration = Configuration {
 			chain_spec,
 			name: Default::default(),
@@ -67,6 +69,7 @@ impl<G: Serialize + DeserializeOwned + BuildStorage> Configuration<G> {
 			keystore_path: Default::default(),
 			database_path: Default::default(),
 			keys: Default::default(),
+			custom: Default::default(),
 			telemetry: Default::default(),
 			pruning: PruningMode::ArchiveAll,
 			execution_strategy: ExecutionStrategy::Both,
