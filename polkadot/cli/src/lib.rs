@@ -115,7 +115,7 @@ fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), S
 		.map(ChainSpec::from)
 		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::KrummeLanke });
 	let is_global = match chain_spec {
-		ChainSpec::KrummeLanke | ChainSpec::StagingTestnet => true,
+		ChainSpec::KrummeLanke => true,
 		_ => false,
 	};
 	let spec = chain_spec.load()?;
