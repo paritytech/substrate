@@ -52,6 +52,9 @@ pub struct RegisteredProtocolOutput<T> {
 	/// Id of the protocol.
 	pub protocol_id: ProtocolId,
 
+	/// Endpoint of the connection.
+	pub endpoint: Endpoint,
+
 	/// Version of the protocol that was negotiated.
 	pub protocol_version: u8,
 
@@ -123,7 +126,7 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 		self,
 		socket: C,
 		protocol_version: Self::UpgradeIdentifier,
-		_endpoint: Endpoint,
+		endpoint: Endpoint,
 		remote_addr: Maf
 	) -> Self::Future {
 		let packet_count = self.supported_versions
@@ -214,6 +217,7 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 		let out = RegisteredProtocolOutput {
 			custom_data: self.custom_data,
 			protocol_id: self.id,
+			endpoint,
 			protocol_version: protocol_version,
 			outgoing: msg_tx,
 			incoming: Box::new(incoming),

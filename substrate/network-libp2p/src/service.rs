@@ -451,14 +451,13 @@ fn init_thread(
 						upgrade::map_with_addr(DelayedProtosList(shared), |c, a| FinalUpgrade::Custom(c, a.clone())));
 					upgrade::apply(out.socket, listener_upgrade, endpoint, client_addr)
 				}
-			})
-			.map(|out, _| (out, Endpoint::Listener));
+			});
 		let shared = shared.clone();
 
 		libp2p::core::swarm(
 			upgraded_transport,
-			move |(upgrade, endpoint), _client_addr|
-				listener_handle(shared.clone(), upgrade, endpoint)
+			move |upgrade, _client_addr|
+				listener_handle(shared.clone(), upgrade)
 		)
 	};
 
@@ -566,13 +565,12 @@ enum FinalUpgrade<C> {
 fn listener_handle<'a, C>(
 	shared: Arc<Shared>,
 	upgrade: FinalUpgrade<C>,
-	endpoint: Endpoint,
 ) -> Box<Future<Item = (), Error = IoError> + 'a>
 	where C: AsyncRead + AsyncWrite + 'a {
 	match upgrade {
 		FinalUpgrade::Kad(controller, kademlia_stream, client_addr) => {
-			trace!(target: "sub-libp2p", "Opened kademlia substream with \
-				{:?} as {:?}", client_addr, endpoint);
+			trace!(target: "sub-libp2p", "Opened kademlia substream with {:?}",
+				client_addr);
 			match handle_kademlia_connection(shared, client_addr, controller, kademlia_stream) {
 				Ok(fut) => Box::new(fut) as Box<_>,
 				Err(err) => Box::new(future::err(err)) as Box<_>,
@@ -614,7 +612,7 @@ fn listener_handle<'a, C>(
 		FinalUpgrade::Custom(custom_proto_out, client_addr) => {
 			// A "custom" protocol is one that is part of substrate and not part of libp2p.
 			let shared = shared.clone();
-			let fut = handle_custom_connection(shared, client_addr, endpoint, custom_proto_out);
+			let fut = handle_custom_connection(shared, client_addr, custom_proto_out);
 			Box::new(fut) as Box<_>
 		},
 	}
@@ -713,7 +711,6 @@ fn build_kademlia_response(
 fn handle_custom_connection(
 	shared: Arc<Shared>,
 	client_addr: Multiaddr,
-	endpoint: Endpoint,
 	custom_proto_out: RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>
 ) -> impl Future<Item = (), Error = IoError> {
 	let handler = custom_proto_out.custom_data;
@@ -731,7 +728,7 @@ fn handle_custom_connection(
 	let (peer_id, unique_connec) = match shared.network_state.custom_proto(
 		node_id.clone(),
 		protocol_id,
-		endpoint,
+		custom_proto_out.endpoint,
 	) {
 		Ok(a) => a,
 		Err(err) => return future::Either::A(future::err(err.into())),
@@ -839,7 +836,7 @@ fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
 	let kad_init = shared.kad_system.perform_initialization({
 		let shared = shared.clone();
@@ -906,7 +903,7 @@ fn perform_kademlia_query<T, To, St, C>(
 	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
 	// Query the node IDs that are closest to a random ID.
 	// Note that the randomness doesn't have to be secure, as this only
@@ -953,7 +950,7 @@ fn connect_to_nodes<T, To, St, C>(
 	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
 	let num_slots = shared.network_state.should_open_outgoing_custom_connections();
 	debug!(target: "sub-libp2p", "Outgoing connections cycle ; opening up to \
@@ -999,7 +996,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static,
 {
 	// Don't connect to ourselves.
@@ -1042,10 +1039,10 @@ fn open_peer_custom_proto<T, To, St, C>(
 					upgrade::apply(socket, proto, endpoint, client_addr)
 				)
 		})
-		.and_then(move |out, endpoint, client_addr|
+		.and_then(move |out, _endpoint, client_addr|
 			client_addr.map(move |client_addr| {
 				let out = FinalUpgrade::Custom(out, client_addr.clone());
-				((out, endpoint), future::ok(client_addr))
+				(out, future::ok(client_addr))
 			})
 		);
 	
@@ -1080,7 +1077,7 @@ fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
 	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
 	let kad_upgrade = shared.kad_upgrade.clone();
 	let addr: Multiaddr = AddrComponent::P2P(peer_id.clone().into_bytes()).into();
@@ -1092,7 +1089,7 @@ fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
 		.and_then(move |(ctrl, fut), _, client_addr| {
 			client_addr.map(|client_addr| {
 				let out = FinalUpgrade::Kad(ctrl, fut, client_addr.clone());
-				((out, Endpoint::Dialer), future::ok(client_addr))
+				(out, future::ok(client_addr))
 			})
 		});
 	
@@ -1155,7 +1152,7 @@ fn start_pinger<T, To, St, C>(
 	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
 	let transport = transport
 		.and_then(move |out, endpoint, client_addr|
@@ -1164,7 +1161,7 @@ fn start_pinger<T, To, St, C>(
 		.and_then(move |(ctrl, fut), _, client_addr| {
 			client_addr.map(|client_addr| {
 				let out = FinalUpgrade::Ping(ctrl, fut, client_addr.clone());
-				((out, Endpoint::Dialer), future::ok(client_addr))
+				(out, future::ok(client_addr))
 			})
 		});
 
@@ -1189,9 +1186,9 @@ fn ping_all<T, St, C>(
 	transport: T,
 	swarm_controller: &SwarmController<St>
 ) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+	where T: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
-		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
 	let mut ping_futures = Vec::new();
 
