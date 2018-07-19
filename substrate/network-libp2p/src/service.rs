@@ -854,7 +854,7 @@ fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 			)
 	});
 
-	let discovery = Interval::new(Instant::now(), Duration::from_secs(30))
+	let discovery = Interval::new(Instant::now(), Duration::from_secs(32))
 		// TODO: add a timeout to the lookups
 		.map_err(|err| IoError::new(IoErrorKind::Other, err))
 		.and_then({
