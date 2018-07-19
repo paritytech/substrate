@@ -27,7 +27,7 @@ use libp2p::identify::{IdentifyInfo, IdentifyOutput, IdentifyTransportOutcome};
 use libp2p::identify::{IdentifyProtocolConfig, PeerIdTransport};
 use libp2p::core::{upgrade, Transport, MuxedTransport, ConnectionUpgrade};
 use libp2p::core::{Endpoint, PeerId as PeerstorePeerId, PublicKey};
-use libp2p::core::SwarmController;
+use libp2p::core::{SwarmController, UniqueConnecState};
 use libp2p::ping;
 use libp2p::transport_timeout::TransportTimeout;
 use {PacketId, SessionInfo, ConnectionFilter, TimerToken};
@@ -719,6 +719,12 @@ fn handle_custom_connection(
 		Ok(a) => a,
 		Err(err) => return future::Either::A(future::err(err.into())),
 	};
+
+	if let UniqueConnecState::Full = unique_connec.state() {
+		debug!(target: "sub-libp2p", "Interrupting connection attempt to {:?} \
+			with {:?} because we're already connected", node_id, custom_proto_out.protocol_id);
+		return future::Either::A(future::ok(()))
+	}
 
 	struct ProtoDisconnectGuard {
 		inner: Arc<Shared>,
