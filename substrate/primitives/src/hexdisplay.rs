@@ -26,7 +26,7 @@ impl<'a> HexDisplay<'a> {
 
 impl<'a> ::core::fmt::Display for HexDisplay<'a> {
 	fn fmt(&self, fmtr: &mut ::core::fmt::Formatter) -> Result<(), ::core::fmt::Error> {
-		if self.0.len() < 1028 {
+		if self.0.len() < 1027 {
 			for byte in self.0 {
 				fmtr.write_fmt(format_args!("{:02x}", byte))?;
 			}
