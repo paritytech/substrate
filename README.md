@@ -2,6 +2,15 @@
 
 Implementation of a https://polkadot.network node in Rust.
 
+## Press start
+
+To get up and running with the smallest footprint on your system, you may use the Polkadot Docker image.
+You can either build it yourself or use the latest published one:
+
+```
+docker run --rm -it polkadot:0.2.0 /polkadot/target/debug/polkadot --name "PolkaDocker"
+```
+
 ## To play
 
 If you'd like to play with Polkadot, you'll need to install a client like this
@@ -73,7 +82,7 @@ rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
 rustup update stable
 cargo install --git https://github.com/alexcrichton/wasm-gc
-sudo apt install cmake pkg-config libssl-dev
+sudo apt install cmake pkg-config libssl-dev git
 ```
 
 Then, grab the Polkadot source code:
