@@ -323,6 +323,8 @@ impl NetworkState {
 	/// Adds an address discovered by Kademlia.
 	/// Note that we don't have to be connected to a peer to add an address.
 	pub fn add_kad_discovered_addr(&self, node_id: &PeerstorePeerId, addr: Multiaddr) {
+		trace!(target: "sub-libp2p", "Peer store: adding address {} for {:?}",
+			addr, node_id);
 		match self.peerstore {
 			PeersStorage::Memory(ref mem) =>
 				mem.peer_or_create(node_id)
@@ -495,6 +497,8 @@ impl NetworkState {
 				!infos.protocols.iter().any(|(_, conn)| conn.is_alive())
 			{
 				peer_by_nodeid.remove(&infos.id);
+				trace!(target: "sub-libp2p", "Cleaning up expired peer \
+					#{:?} ({:?})", peer_id, infos.id);
 				return false;
 			}
 
@@ -593,6 +597,14 @@ impl NetworkState {
 	pub fn disconnect_peer(&self, peer_id: PeerId) {
 		let mut connections = self.connections.write();
 		if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
+			trace!(target: "sub-libp2p", "Destroying peer #{} {:?} ; \
+				kademlia = {:?} ; num_protos = {:?}", peer_id, peer_info.id,
+				peer_info.kad_connec.is_alive(),
+				peer_info.protocols.iter().filter(|c| c.1.is_alive()).count());
+			// TODO: we manually clear the connections as a work-around for
+			// networking bugs ; normally it should automatically drop
+			for c in peer_info.protocols.iter() { c.1.clear(); }
+			peer_info.kad_connec.clear();
 			let old = connections.peer_by_nodeid.remove(&peer_info.id);
 			debug_assert_eq!(old, Some(peer_id));
 		}
@@ -617,6 +629,7 @@ impl NetworkState {
 	/// of `custom_proto`).
 	pub fn disable_peer(&self, peer_id: PeerId, reason: &str) {
 		// TODO: what do we do if the peer is reserved?
+		// TODO: same logging as in disconnect_peer
 		let mut connections = self.connections.write();
 		let peer_info = if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
 			if let (&Some(ref client_version), &Some(ref remote_address)) = (&peer_info.client_version, &peer_info.remote_address) {
@@ -686,6 +699,8 @@ fn accept_connection(
 
 	let peer_id = *peer_by_nodeid.entry(node_id.clone()).or_insert_with(|| {
 		let new_id = next_peer_id.fetch_add(1, atomic::Ordering::Relaxed);
+		trace!(target: "sub-libp2p", "Creating new peer #{:?} for {:?}",
+			new_id, node_id);
 
 		info_by_peer.insert(new_id, PeerConnectionInfo {
 			protocols: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
