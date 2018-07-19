@@ -34,6 +34,7 @@ extern crate varint;
 extern crate ethcore_io as io;
 extern crate ethereum_types;
 extern crate ipnetwork;
+extern crate url;
 
 #[macro_use]
 extern crate error_chain;

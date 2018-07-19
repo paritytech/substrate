@@ -24,6 +24,7 @@ tokio-core = "0.1"
 tokio-io = "0.1"
 tokio-timer = "0.2"
 varint = { git = "https://github.com/libp2p/rust-libp2p" }
+url = "1.7.1"
 
 [dev-dependencies]
 assert_matches = "1.2"

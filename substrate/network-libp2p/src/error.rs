@@ -15,6 +15,8 @@
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{io, net, fmt};
+use libp2p::core::Multiaddr;
+use url::ParseError as UrlParseError;
 use libc::{ENFILE, EMFILE};
 use io::IoError;
 use ethkey;
@@ -83,7 +85,8 @@ impl fmt::Display for DisconnectReason {
 
 error_chain! {
 	foreign_links {
-		SocketIo(IoError) #[doc = "Socket IO error."];
+		SocketIo(IoError)           #[doc = "Socket IO error."];
+		UrlParsing(UrlParseError)   #[doc = "Error Parsing the URL"];
 	}
 
 	errors {
@@ -91,6 +94,30 @@ error_chain! {
 		AddressParse {
 			description("Failed to parse network address"),
 			display("Failed to parse network address"),
+		}
+
+		#[doc = "Error: the given URL references an unsupported Protocol."]
+		UrlProtocolUnsupported(scheme: String) {
+			description("Protocol not supported"),
+			display("URL Protocol {:?} not supported", scheme),
+		}
+
+		#[doc = "Error: the given URL doesn't contain all information we need"]
+		GenericUrlParseError(details: &'static str) {
+			description("URL not supported"),
+			display("URL not supported: {}", details),
+		}
+
+		#[doc = "Error: the given Address doesn't contain any peer Id."]
+		AddressMissingPeerId(addr: Multiaddr) {
+			description("PeerId missing in address"),
+			display("Address {:?} doesn't contain PeerId", addr),
+		}
+
+		#[doc = "Error: the given PeerID is invalid."]
+		InvalidPeerId(peer_id: String) {
+			description("PeerId is invalid"),
+			display("PeerId {:?} is not valid", peer_id),
 		}
 
 		#[doc = "Error concerning the network address resolution subsystem."]

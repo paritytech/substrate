@@ -171,14 +171,11 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	panic_hook::set();
 
 	let yaml = load_yaml!("./cli.yml");
-	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
-		Ok(m) => m,
-		Err(ref e) if e.kind == clap::ErrorKind::VersionDisplayed => return Ok(()),
-		Err(ref e) if e.kind == clap::ErrorKind::HelpDisplayed => {
-			print!("{}", e);
-			return Ok(())
-		}
-		Err(e) => e.exit(),
+	let matches = match clap::App::from_yaml(yaml)
+		.version(&(crate_version!().to_owned() + "\n")[..])
+		.get_matches_from_safe(args) {
+			Ok(m) => m,
+			Err(e) => e.exit(),
 	};
 
 	// TODO [ToDr] Split parameters parsing from actual execution.
