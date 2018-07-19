@@ -473,29 +473,51 @@ fn init_thread(
 			},
 		}
 	}
-
-	// Explicitely connect to the boostrap nodes as a temporary measure.
-	trace!(target: "sub-libp2p", "Dialing bootnodes");
+	// Explicitely connect to _all_ the boostrap nodes as a temporary measure.
 	for bootnode in shared.config.boot_nodes.iter() {
-		// TODO: this code is copy-pasted from `network_state`, but it is
-		// temporary anyway
-		let mut addr: Multiaddr = bootnode.parse()
-			.map_err(|_| ErrorKind::AddressParse)?;
-		let p2p_component = addr.pop().ok_or(ErrorKind::AddressParse)?;
-		let peer_id = match p2p_component {
-			AddrComponent::P2P(key) | AddrComponent::IPFS(key) =>
-				PeerstorePeerId::from_bytes(key).map_err(|_| ErrorKind::AddressParse)?,
-			_ => return Err(ErrorKind::BadProtocol.into()),
-		};
+		match shared.network_state.add_peer(bootnode) {
+			Ok(peer_id) => {
+				trace!(target: "sub-libp2p", "Dialing bootnode {:?}", peer_id);
+				for proto in shared.protocols.read().0.clone().into_iter() {
+					open_peer_custom_proto(
+						shared.clone(),
+						transport.clone(),
+						proto,
+						peer_id.clone(),
+						&swarm_controller
+					)
+				}
+			},
+			Err(Error(ErrorKind::AddressParse, _)) => {
+				// fallback: trying with IP:Port
+				let multi = match bootnode.parse::<SocketAddr>() { 
+					Ok(SocketAddr::V4(socket)) =>
+						format!("/ip4/{}/tcp/{}", socket.ip(), socket.port()).parse::<Multiaddr>(),
+					Ok(SocketAddr::V6(socket)) =>
+						format!("/ip6/{}/tcp/{}", socket.ip(), socket.port()).parse::<Multiaddr>(),
+					_ => {
+						warn!(target: "sub-libp2p", "Not a valid Bootnode Address {:}", bootnode);
+						continue;
+					}
+				};
 
-		for proto in shared.protocols.read().0.clone().into_iter() {
-			open_peer_custom_proto(
-				shared.clone(),
-				transport.clone(),
-				proto,
-				peer_id.clone(),
-				&swarm_controller
-			)
+				if let Ok(addr) = multi {
+					trace!(target: "sub-libp2p", "Missing PeerId for Bootnode {:}. Querying", bootnode);
+					for proto in shared.protocols.read().0.clone().into_iter() {
+						connect_with_query_peer_id(
+							shared.clone(),
+							transport.clone(),
+							proto,
+							addr.clone(),
+							&swarm_controller
+						)
+					}
+				} else {
+					warn!(target: "sub-libp2p", "Not a valid Bootnode Address {:}", bootnode);
+						continue;
+				}
+			},
+			Err(err) => warn!(target:"sub-libp2p", "Couldn't parse Bootnode Address: {}", err),
 		}
 	}
 
@@ -976,6 +998,58 @@ fn connect_to_nodes<T, To, St, C>(
 			)
 		}
 	}
+}
+
+
+fn connect_with_query_peer_id<T, To, St, C>(
+	shared: Arc<Shared>,
+	base_transport: T,
+	proto: RegisteredProtocol<Arc<NetworkProtocolHandler + Send + Sync>>,
+	addr: Multiaddr,
+	swarm_controller: &SwarmController<St>
+)
+	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+		T::MultiaddrFuture: 'static,
+		To: AsyncRead + AsyncWrite + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
+		C: 'static,
+{
+	let addr2 = addr.clone();
+	let with_proto = base_transport
+		.clone()
+		.and_then(move |out, endpoint, client_addr| {
+			trace!(target: "sub-libp2p", "in");
+			let socket = out.socket;
+			let original_addr = out.original_addr;
+			out.info
+				.and_then(move |info| {
+					let _ = process_identify_info(shared, &info, original_addr,
+						endpoint, &base_transport);
+					trace!(target: "sub-libp2p", "Bootnode {:} found with peer id: {:?}",
+						addr2, info.info.public_key.into_peer_id());
+					upgrade::apply(socket, proto, endpoint, client_addr)
+				})
+		})
+		.and_then(move |out, _endpoint, client_addr|
+			client_addr.map(move |client_addr|
+				(FinalUpgrade::Custom(out, client_addr.clone()), future::ok(client_addr))
+			)
+		);
+	
+	let with_timeout = TransportTimeout::new(with_proto, Duration::from_secs(10));
+	let with_err = with_timeout
+		.map_err({
+			let addr = addr.clone();
+			move |err| {
+				warn!(target: "sub-libp2p", "Error while dialing {:?} to query peer id: {:?}",
+					addr, err);
+				err
+			}
+		});
+
+    let _ = swarm_controller.dial(addr.clone(), with_err)
+        .map_err( move |err| warn!(target: "sub-libp2p",
+				"Error when querying peer node info {:} of {:}", err, addr));
 }
 
 /// If necessary, dials the given address for the given protocol and using the
