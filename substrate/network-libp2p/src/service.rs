@@ -445,10 +445,10 @@ fn init_thread(
 				move |out, endpoint, client_addr| {
 					let original_addr = out.original_addr;
 					let listener_upgrade = upgrade::or(upgrade::or(upgrade::or(
-						upgrade::map(shared.kad_upgrade.clone(), FinalUpgrade::Kad),
+						upgrade::map_with_addr(shared.kad_upgrade.clone(), |(c, f), a| FinalUpgrade::Kad(c, f, a.clone())),
 						upgrade::map(IdentifyProtocolConfig, |id| FinalUpgrade::Identify(id, original_addr))),
 						upgrade::map_with_addr(ping::Ping, |(p, f), addr| FinalUpgrade::Ping(p, f, addr.clone()))),
-						upgrade::map(DelayedProtosList(shared), FinalUpgrade::Custom));
+						upgrade::map_with_addr(DelayedProtosList(shared), |c, a| FinalUpgrade::Custom(c, a.clone())));
 					upgrade::apply(out.socket, listener_upgrade, endpoint, client_addr)
 				}
 			})
@@ -457,8 +457,8 @@ fn init_thread(
 
 		libp2p::core::swarm(
 			upgraded_transport,
-			move |(upgrade, endpoint), client_addr|
-				listener_handle(shared.clone(), upgrade, endpoint, client_addr)
+			move |(upgrade, endpoint), _client_addr|
+				listener_handle(shared.clone(), upgrade, endpoint)
 		)
 	};
 
@@ -553,33 +553,30 @@ struct TransportOutput<S> {
 
 /// Enum of all the possible protocols our service handles.
 enum FinalUpgrade<C> {
-	Kad((KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>)),
+	Kad(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>, Multiaddr),
 	/// The remote identification system, and the multiaddress we see the remote as.
 	Identify(IdentifyOutput<C>, Multiaddr),
 	Ping(ping::Pinger, Box<Future<Item = (), Error = IoError>>, Multiaddr),
 	/// `Custom` means anything not in the core libp2p and is handled
 	/// by `CustomProtoConnectionUpgrade`.
-	Custom(RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>),
+	Custom(RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>, Multiaddr),
 }
 
 /// Called whenever we successfully open a multistream with a remote.
-fn listener_handle<'a, C, F>(
+fn listener_handle<'a, C>(
 	shared: Arc<Shared>,
 	upgrade: FinalUpgrade<C>,
 	endpoint: Endpoint,
-	client_addr: F,
 ) -> Box<Future<Item = (), Error = IoError> + 'a>
-	where C: AsyncRead + AsyncWrite + 'a,
-		F: Future<Item = Multiaddr, Error = IoError> + 'a {
+	where C: AsyncRead + AsyncWrite + 'a {
 	match upgrade {
-		FinalUpgrade::Kad((controller, kademlia_stream)) => {
+		FinalUpgrade::Kad(controller, kademlia_stream, client_addr) => {
 			trace!(target: "sub-libp2p", "Opened kademlia substream with \
-				remote as {:?}", endpoint);
-
-			let shared = shared.clone();
-			Box::new(client_addr.and_then(move |client_addr|
-				handle_kademlia_connection(shared, client_addr, controller, kademlia_stream)
-			).flatten())
+				{:?} as {:?}", client_addr, endpoint);
+			match handle_kademlia_connection(shared, client_addr, controller, kademlia_stream) {
+				Ok(fut) => Box::new(fut) as Box<_>,
+				Err(err) => Box::new(future::err(err)) as Box<_>,
+			}
 		},
 
 		FinalUpgrade::Identify(IdentifyOutput::Sender { sender }, original_addr) => {
@@ -614,11 +611,10 @@ fn listener_handle<'a, C, F>(
 			}
 		},
 
-		FinalUpgrade::Custom(custom_proto_out) => {
+		FinalUpgrade::Custom(custom_proto_out, client_addr) => {
 			// A "custom" protocol is one that is part of substrate and not part of libp2p.
 			let shared = shared.clone();
-			let fut = client_addr.and_then(move |client_addr|
-				handle_custom_connection(shared, client_addr, endpoint, custom_proto_out));
+			let fut = handle_custom_connection(shared, client_addr, endpoint, custom_proto_out);
 			Box::new(fut) as Box<_>
 		},
 	}
@@ -1032,7 +1028,10 @@ fn open_peer_custom_proto<T, To, St, C>(
 				)
 		})
 		.and_then(move |out, endpoint, client_addr|
-			future::ok(((FinalUpgrade::Custom(out), endpoint), client_addr))
+			client_addr.map(move |client_addr| {
+				let out = FinalUpgrade::Custom(out, client_addr.clone());
+				((out, endpoint), future::ok(client_addr))
+			})
 		);
 	
 	let with_timeout = TransportTimeout::new(with_proto,
@@ -1069,9 +1068,12 @@ fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
 			upgrade::apply(out.socket, kad_upgrade.clone(),
 				endpoint, client_addr)
 		)
-		.map(move |(kad_ctrl, stream), _|
-			(FinalUpgrade::Kad((kad_ctrl, stream)), Endpoint::Dialer)
-		);
+		.and_then(move |(ctrl, fut), _, client_addr| {
+			client_addr.map(|client_addr| {
+				let out = FinalUpgrade::Kad(ctrl, fut, client_addr.clone());
+				((out, Endpoint::Dialer), future::ok(client_addr))
+			})
+		});
 	
 	shared.network_state
 		.kad_connection(peer_id.clone())
