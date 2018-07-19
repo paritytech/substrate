@@ -17,7 +17,7 @@
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::sync::mpsc;
-use libp2p::core::{Multiaddr, AddrComponent, Endpoint, UniqueConnec};
+use libp2p::core::{multiaddr::ToMultiaddr, Multiaddr, AddrComponent, Endpoint, UniqueConnec};
 use libp2p::core::{UniqueConnecState, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
@@ -149,10 +149,6 @@ impl NetworkState {
 				won't be saved");
 			PeersStorage::Memory(MemoryPeerstore::empty())
 		};
-
-		for bootnode in config.boot_nodes.iter() {
-			parse_and_add_to_peerstore(bootnode, &peerstore)?;
-		}
 
 		let reserved_peers = {
 			let mut reserved_peers = FnvHashSet::with_capacity_and_hasher(
@@ -389,6 +385,12 @@ impl NetworkState {
 		infos.local_address = Some(local_addr);
 
 		Ok(peer_id)
+	}
+
+	/// Adds a peer to the internal peer store.
+	/// Returns an error if the peer address is invalid.
+	pub fn add_peer(&self, peer: &str) -> Result<PeerstorePeerId, Error> {
+		parse_and_add_to_peerstore(peer, &self.peerstore)
 	}
 
 	/// Adds a reserved peer to the list of reserved peers.
@@ -753,13 +755,12 @@ fn num_open_custom_connections(connections: &Connections) -> u32 {
 /// to the given peerstore. Returns the corresponding peer ID.
 fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 	-> Result<PeerstorePeerId, Error> {
-	let mut addr: Multiaddr = addr_str.parse()
-		.map_err(|_| ErrorKind::AddressParse)?;
-	let p2p_component = addr.pop().ok_or(ErrorKind::AddressParse)?;
-	let peer_id = match p2p_component {
-		AddrComponent::P2P(key) | AddrComponent::IPFS(key) =>
+
+	let mut addr = addr_str.to_multiaddr().map_err(|_| ErrorKind::AddressParse)?;
+	let peer_id = match addr.pop() {
+		Some(AddrComponent::P2P(key)) | Some(AddrComponent::IPFS(key)) =>
 			PeerstorePeerId::from_bytes(key).map_err(|_| ErrorKind::AddressParse)?,
-		_ => return Err(ErrorKind::BadProtocol.into()),
+		_ => return Err(ErrorKind::AddressParse.into()),
 	};
 
 	// Registering the bootstrap node with a TTL of 100000 years   TODO: wrong
