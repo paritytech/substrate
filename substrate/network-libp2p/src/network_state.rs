@@ -312,15 +312,6 @@ impl NetworkState {
 			.map(|(_, version)| version)
 	}
 
-	/// Returns the ID of a connected peer. `None` if the `PeerId` is invalid.
-	pub fn id_of_peer(&self, peer: PeerId) -> Option<PeerstorePeerId> {
-		let connections = self.connections.read();
-		match connections.info_by_peer.get(&peer) {
-			Some(peer) => Some(peer.id.clone()),
-			None => None,
-		}
-	}
-
 	/// Equivalent to `session_info(peer).map(|info| info.client_version)`.
 	pub fn peer_client_version(&self, peer: PeerId, protocol: ProtocolId)
 		-> Option<String> {
@@ -474,7 +465,7 @@ impl NetworkState {
 	}
 
 	/// Obtains the `UniqueConnec` corresponding to the Ping connection to a peer.
-	pub fn ping_connection_by_nodeid(
+	pub fn ping_connection(
 		&self,
 		node_id: PeerstorePeerId
 	) -> Result<(PeerId, UniqueConnec<Pinger>), IoError> {
@@ -487,18 +478,30 @@ impl NetworkState {
 		Ok((peer_id, connec))
 	}
 
-	/// Obtains the `UniqueConnec` corresponding to the Ping connection to a peer.
-	///
-	/// Returns `None` if the `PeerId` is not valid.
-	pub fn ping_connection_by_peerid(
-		&self,
-		peer_id: PeerId
-	) -> Option<UniqueConnec<Pinger>> {
-		let connections = self.connections.read();
-		match connections.info_by_peer.get(&peer_id) {
-			Some(i) => Some(i.ping_connec.clone()),
-			None => None,
-		}
+	/// Cleans up inactive connections and returns a list of
+	/// connections to ping.
+	pub fn cleanup_and_prepare_ping(
+		&self
+	) -> Vec<(PeerId, PeerstorePeerId, UniqueConnec<Pinger>)> {
+		let mut connections = self.connections.write();
+		let connections = &mut *connections;
+		let peer_by_nodeid = &mut connections.peer_by_nodeid;
+		let info_by_peer = &mut connections.info_by_peer;
+
+		let mut ret = Vec::with_capacity(info_by_peer.len());
+		info_by_peer.retain(|&peer_id, infos| {
+			// Remove the peer if neither Kad nor any protocol is alive.
+			if !infos.kad_connec.is_alive() &&
+				!infos.protocols.iter().any(|(_, conn)| conn.is_alive())
+			{
+				peer_by_nodeid.remove(&infos.id);
+				return false;
+			}
+
+			ret.push((peer_id, infos.id.clone(), infos.ping_connec.clone()));
+			true
+		});
+		ret
 	}
 
 	/// Try to add a new connection to a node in the list.

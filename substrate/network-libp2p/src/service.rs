@@ -600,7 +600,7 @@ fn listener_handle<'a, C>(
 
 		FinalUpgrade::Ping(pinger, future, client_addr) => {
 			let node_id = p2p_multiaddr_to_node_id(client_addr);
-			match shared.network_state.ping_connection_by_nodeid(node_id.clone()) {
+			match shared.network_state.ping_connection(node_id.clone()) {
 				Ok((_, ping_connec)) => {
 					trace!(target: "sub-libp2p", "Successfully opened ping \
 						substream with {:?}", node_id);
@@ -1176,19 +1176,8 @@ fn ping_all<T, St, C>(
 		C: 'static {
 	let mut ping_futures = Vec::new();
 
-	for peer in shared.network_state.connected_peers() {
+	for (peer, peer_id, pinger) in shared.network_state.cleanup_and_prepare_ping() {
 		let shared = shared.clone();
-
-		// TODO: optimize to avoid calling multiple functions from `network_state`
-		let pinger = match shared.network_state.ping_connection_by_peerid(peer) {
-			Some(p) => p,
-			None => continue
-		};
-
-		let peer_id = match shared.network_state.id_of_peer(peer) {
-			Some(p) => p,
-			None => continue
-		};
 
 		let addr = Multiaddr::from(AddrComponent::P2P(peer_id.clone().into_bytes()));
 		let fut = pinger
