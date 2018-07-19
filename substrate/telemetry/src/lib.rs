@@ -115,9 +115,11 @@ impl TelemetryWriter {
 		};
 
 		drop(client);
-		if just_connected && !controlled_disconnect {
+		if just_connected {
+			if !controlled_disconnect {
+				info!("Reconnected to telemetry server: {}", self.config.url);
+			}
 			self.last_time = Some(time::Instant::now());
-			info!("Reconnected to telemetry server: {}", self.config.url);
 			(self.config.on_connect)();
 		}
 	}
