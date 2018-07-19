@@ -29,10 +29,6 @@ args:
       value_name: KEY
       help: Specify node secret key (64-character hex string)
       takes_value: true
-  - collator:
-      long: collator
-      help: Enable collator mode
-      takes_value: false
   - validator:
       long: validator
       help: Enable validator mode
