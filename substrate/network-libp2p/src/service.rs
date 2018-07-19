@@ -628,9 +628,10 @@ fn handle_kademlia_connection(
 	kademlia_stream: Box<Stream<Item = KadIncomingRequest, Error = IoError>>
 ) -> Result<impl Future<Item = (), Error = IoError>, IoError> {
 	let node_id = p2p_multiaddr_to_node_id(client_addr);
-	let (_peer_id, kad_connec) = shared.network_state
+	let (peer_id, kad_connec) = shared.network_state
 		.kad_connection(node_id.clone())?;
 	
+	let node_id2 = node_id.clone();
 	let future = future::loop_fn(kademlia_stream, move |kademlia_stream| {
 		let shared = shared.clone();
 		let node_id = node_id.clone();
@@ -655,6 +656,10 @@ fn handle_kademlia_connection(
 				}
 				Ok(future::Loop::Continue(rest))
 			})
+	}).then(move |val| {
+		trace!(target: "sub-libp2p", "Closed Kademlia connection \
+			with #{} {:?} => {:?}", peer_id, node_id2, val);
+		val
 	});
 
 	Ok(kad_connec.set_until(controller, future))
@@ -925,8 +930,6 @@ fn perform_kademlia_query<T, To, St, C>(
 			match event {
 				KadQueryEvent::NewKnownMultiaddrs(peers) => {
 					for (peer, addrs) in peers {
-						trace!(target: "sub-libp2p", "Peer store: adding \
-							addresses {:?} for {:?}", addrs, peer);
 						for addr in addrs {
 							shared.network_state.add_kad_discovered_addr(&peer, addr);
 						}
@@ -953,8 +956,8 @@ fn connect_to_nodes<T, To, St, C>(
 		St: MuxedTransport<Output = (FinalUpgrade<C>, Endpoint)> + Clone + 'static,
 		C: 'static {
 	let num_slots = shared.network_state.should_open_outgoing_custom_connections();
-	debug!(target: "sub-libp2p", "Opening up to {} outgoing connections",
-		num_slots);
+	debug!(target: "sub-libp2p", "Outgoing connections cycle ; opening up to \
+		{} outgoing connections", num_slots);
 
 	for _ in 0 .. num_slots {
 		// Choose a random peer. We are potentially already connected to
@@ -970,7 +973,6 @@ fn connect_to_nodes<T, To, St, C>(
 		// Try to dial that node for each registered protocol. Since dialing
 		// upgrades the connection to use multiplexing, dialing multiple times
 		// should automatically open multiple substreams.
-		trace!(target: "sub-libp2p", "Ensuring connection to {:?}", peer);
 		for proto in shared.protocols.read().0.clone().into_iter() {
 			open_peer_custom_proto(
 				shared.clone(),
@@ -1001,6 +1003,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 		C: 'static,
 {
 	// Don't connect to ourselves.
+	// TODO: remove this eventually
 	if &expected_peer_id == shared.kad_system.local_peer_id() {
 		return
 	}
@@ -1011,7 +1014,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 	}
 
 	let proto_id = proto.id();
-	let peer_id = expected_peer_id.clone();
+	let node_id = expected_peer_id.clone();
 	let shared2 = shared.clone();
 	let addr: Multiaddr = AddrComponent::P2P(expected_peer_id.clone().into_bytes()).into();
 
@@ -1050,17 +1053,23 @@ fn open_peer_custom_proto<T, To, St, C>(
 		Duration::from_secs(20));
 	let with_err = with_timeout
 		.map_err({
-			let peer_id = peer_id.clone();
+			let node_id = node_id.clone();
 			move |err| {
 				debug!(target: "sub-libp2p", "Error while dialing \
-					{:?} with custom proto: {:?}", peer_id, err);
+					{:?} with custom proto: {:?}", node_id, err);
 				err
 			}
 		});
 
-	if let Ok(unique_connec) = shared2.network_state
-		.custom_proto(peer_id, proto_id, Endpoint::Dialer) {
-		let _ = unique_connec.1.get_or_dial(&swarm_controller, &addr, with_err);
+	if let Ok((peer_id, unique_connec)) = shared2.network_state
+		.custom_proto(node_id.clone(), proto_id, Endpoint::Dialer) {
+		if !unique_connec.is_alive() {
+			trace!(target: "sub-libp2p", "Opening connection to #{} {:?} with \
+				proto {:?}", peer_id, node_id, proto_id);
+		}
+
+		// TODO: this future should be used
+		let _ = unique_connec.get_or_dial(&swarm_controller, &addr, with_err);
 	}
 }
 
@@ -1130,8 +1139,6 @@ fn process_identify_info(
 	}
 
 	for addr in info.info.listen_addrs.iter() {
-		trace!(target: "sub-libp2p", "Peer store: adding address {} for {:?}",
-			addr, node_id);
 		shared.network_state.add_kad_discovered_addr(&node_id, addr.clone());
 	}
 
@@ -1196,7 +1203,7 @@ fn ping_all<T, St, C>(
 			.get_or_dial(&swarm_controller, &addr, transport.clone())
 			.and_then(move |mut p| {
 				trace!(target: "sub-libp2p",
-					"Pinging active connection with #{} {:?}", peer, peer_id);
+					"Pinging peer #{} aka. {:?}", peer, peer_id);
 				p.ping()
 					.map(|()| peer_id)
 					.map_err(|err| IoError::new(IoErrorKind::Other, err))
