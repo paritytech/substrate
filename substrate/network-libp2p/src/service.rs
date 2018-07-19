@@ -43,7 +43,7 @@ use futures::{future, Future, Stream, IntoFuture};
 use futures::sync::{mpsc, oneshot};
 use tokio_core::reactor::{Core, Handle};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer;
+use tokio_timer::{Interval, Deadline};
 
 use custom_proto::{RegisteredProtocol, RegisteredProtocols};
 use custom_proto::RegisteredProtocolOutput;
@@ -630,19 +630,31 @@ fn handle_kademlia_connection(
 	let node_id = p2p_multiaddr_to_node_id(client_addr);
 	let (_peer_id, kad_connec) = shared.network_state
 		.kad_connection(node_id.clone())?;
-
-	let future = kademlia_stream.for_each({
+	
+	let future = future::loop_fn(kademlia_stream, move |kademlia_stream| {
 		let shared = shared.clone();
-		move |req| {
-			let shared = shared.clone();
-			shared.kad_system.update_kbuckets(node_id.clone());
-			match req {
-				KadIncomingRequest::FindNode { searched, responder } =>
-					responder.respond(build_kademlia_response(&shared, &searched)),
-				KadIncomingRequest::PingPong => (),
-			}
-			Ok(())
-		}
+		let node_id = node_id.clone();
+
+		let next = kademlia_stream
+			.into_future()
+			.map_err(|(err, _)| err);
+		let deadline = Instant::now() + Duration::from_secs(20);
+
+		Deadline::new(next, deadline)
+			.map_err(|err|
+				// TODO: improve the error reporting here, but tokio-timer's API is bad
+				IoError::new(IoErrorKind::Other, err)
+			)
+			.and_then(move |(req, rest)| {
+				shared.kad_system.update_kbuckets(node_id);
+				match req {
+					Some(KadIncomingRequest::FindNode { searched, responder }) =>
+						responder.respond(build_kademlia_response(&shared, &searched)),
+					Some(KadIncomingRequest::PingPong) => (),
+					None => return Ok(future::Loop::Break(()))
+				}
+				Ok(future::Loop::Continue(rest))
+			})
 	});
 
 	Ok(kad_connec.set_until(controller, future))
@@ -837,7 +849,7 @@ fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 			)
 	});
 
-	let discovery = tokio_timer::Interval::new(Instant::now(), Duration::from_secs(30))
+	let discovery = Interval::new(Instant::now(), Duration::from_secs(30))
 		// TODO: add a timeout to the lookups
 		.map_err(|err| IoError::new(IoErrorKind::Other, err))
 		.and_then({
@@ -1149,7 +1161,7 @@ fn start_pinger<T, To, St, C>(
 			})
 		});
 
-	let fut = tokio_timer::Interval::new(Instant::now(), Duration::from_secs(30))
+	let fut = Interval::new(Instant::now(), Duration::from_secs(30))
 		.map_err(|err| IoError::new(IoErrorKind::Other, err))
 		.for_each(move |_|
 			ping_all(shared.clone(), transport.clone(), &swarm_controller))
@@ -1185,24 +1197,31 @@ fn ping_all<T, St, C>(
 			.and_then(move |mut p| {
 				trace!(target: "sub-libp2p",
 					"Pinging active connection with #{} {:?}", peer, peer_id);
-				p.ping().map_err(|err| IoError::new(IoErrorKind::Other, err))
+				p.ping()
+					.map(|()| peer_id)
+					.map_err(|err| IoError::new(IoErrorKind::Other, err))
 			});
 		let ping_start_time = Instant::now();
-		let fut = tokio_timer::Deadline::new(fut, ping_start_time + Duration::from_secs(30))
-			.then(move |val| {
-				if let Err(err) = val {
-					trace!(target: "sub-libp2p",
-						"Error while pinging #{:?} => {:?}", peer, err);
-					shared.network_state.disconnect_peer(peer);
-				} else {
-					let elapsed = ping_start_time.elapsed();
-					trace!(target: "sub-libp2p", "Pong from #{:?} in {:?}",
-						peer, elapsed);
-					shared.network_state.report_ping_duration(peer, elapsed);
-					// TODO: update kbuckets
+		let fut = Deadline::new(fut, ping_start_time + Duration::from_secs(30))
+			.then(move |val|
+				match val {
+					Err(err) => {
+						trace!(target: "sub-libp2p",
+							"Error while pinging #{:?} => {:?}", peer, err);
+						shared.network_state.disconnect_peer(peer);
+						// Return Ok, otherwise we would close the ping service
+						Ok(())
+					},
+					Ok(peer_id) => {
+						let elapsed = ping_start_time.elapsed();
+						trace!(target: "sub-libp2p", "Pong from #{:?} in {:?}",
+							peer, elapsed);
+						shared.network_state.report_ping_duration(peer, elapsed);
+						shared.kad_system.update_kbuckets(peer_id);
+						Ok(())
+					}
 				}
-				Ok(())
-			});
+			);
 		ping_futures.push(fut);
 	}
 
