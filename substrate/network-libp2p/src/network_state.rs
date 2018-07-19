@@ -438,19 +438,7 @@ impl NetworkState {
 	/// Returns the number of open and pending connections with
 	/// custom protocols.
 	pub fn num_open_custom_connections(&self) -> u32 {
-		self.connections
-			.read()
-			.info_by_peer
-			.values()
-			.filter(|info|
-				info.protocols.iter().any(|&(_, ref connec)|
-					match connec.state() {
-						UniqueConnecState::Pending | UniqueConnecState::Full => true,
-						_ => false
-					}
-				)
-			)
-			.count() as u32
+		num_open_custom_connections(&self.connections.read())
 	}
 
 	/// Returns the number of new outgoing custom connections to peers to
@@ -543,16 +531,15 @@ impl NetworkState {
 		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
 			node_id.clone(), endpoint)?;
 
-		let connections = &mut *connections;
-		let info_by_peer = &mut connections.info_by_peer;
-		let peer_by_nodeid = &mut connections.peer_by_nodeid;
-		let infos = info_by_peer.get_mut(&peer_id)
+		let num_open_connections = num_open_custom_connections(&connections);
+
+		let infos = connections.info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
 
 		let node_is_reserved = self.reserved_peers.read().contains(&infos.id);
 		if !node_is_reserved {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
-				peer_by_nodeid.len() >= self.max_peers as usize
+				num_open_connections >= self.max_peers
 			{
 				debug!(target: "sub-libp2p", "Refusing node {:?} because we \
 					reached the max number of peers", node_id);
@@ -730,6 +717,23 @@ fn is_peer_disabled(
 	} else {
 		false
 	}
+}
+
+/// Returns the number of open and pending connections with
+/// custom protocols.
+fn num_open_custom_connections(connections: &Connections) -> u32 {
+	connections
+		.info_by_peer
+		.values()
+		.filter(|info|
+			info.protocols.iter().any(|&(_, ref connec)|
+				match connec.state() {
+					UniqueConnecState::Pending | UniqueConnecState::Full => true,
+					_ => false
+				}
+			)
+		)
+		.count() as u32
 }
 
 /// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
