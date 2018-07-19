@@ -47,12 +47,6 @@ impl TestProtocol {
 			drop_session: drop_session,
 		}
 	}
-	/// Creates and register protocol with the network service
-	pub fn register(service: &mut NetworkService, drop_session: bool) -> Arc<TestProtocol> {
-		let handler = Arc::new(TestProtocol::new(drop_session));
-		service.register_protocol(handler.clone(), *b"tst", &[(42u8, 1), (43u8, 1)]);
-		handler
-	}
 
 	pub fn got_packet(&self) -> bool {
 		self.packet.lock()[..] == b"hello"[..]
@@ -100,17 +94,16 @@ impl NetworkProtocolHandler for TestProtocol {
 #[test]
 fn net_service() {
 	let service = NetworkService::new(NetworkConfiguration::new_local(), None).expect("Error creating network service");
-	service.start().unwrap();
-	service.register_protocol(Arc::new(TestProtocol::new(false)), *b"myp", &[(1u8, 1)]);
+	service.start(vec![(Arc::new(TestProtocol::new(false)), *b"myp", &[(1u8, 1)])]).unwrap();
 }
 
 #[test]
 fn net_start_stop() {
 	let config = NetworkConfiguration::new_local();
 	let service = NetworkService::new(config, None).unwrap();
-	service.start().unwrap();
+	service.start(vec![]).unwrap();
 	service.stop();
-	service.start().unwrap();
+	service.start(vec![]).unwrap();
 }
 
 #[test]
@@ -120,14 +113,14 @@ fn net_disconnect() {
 	let mut config1 = NetworkConfiguration::new_local();
 	config1.use_secret = Some(key1.secret().clone());
 	config1.boot_nodes = vec![ ];
-	let mut service1 = NetworkService::new(config1, None).unwrap();
-	service1.start().unwrap();
-	let handler1 = TestProtocol::register(&mut service1, false);
+	let service1 = NetworkService::new(config1, None).unwrap();
+	let handler1 = Arc::new(TestProtocol::new(false));
+	service1.start(vec![(handler1.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])]).unwrap();
 	let mut config2 = NetworkConfiguration::new_local();
 	config2.boot_nodes = vec![ service1.external_url().unwrap() ];
-	let mut service2 = NetworkService::new(config2, None).unwrap();
-	service2.start().unwrap();
-	let handler2 = TestProtocol::register(&mut service2, true);
+	let service2 = NetworkService::new(config2, None).unwrap();
+	let handler2 = Arc::new(TestProtocol::new(true));
+	service2.start(vec![(handler2.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])]).unwrap();
 	while !(handler1.got_disconnect() && handler2.got_disconnect()) {
 		thread::sleep(Duration::from_millis(50));
 	}
@@ -138,9 +131,9 @@ fn net_disconnect() {
 #[test]
 fn net_timeout() {
 	let config = NetworkConfiguration::new_local();
-	let mut service = NetworkService::new(config, None).unwrap();
-	service.start().unwrap();
-	let handler = TestProtocol::register(&mut service, false);
+	let service = NetworkService::new(config, None).unwrap();
+	let handler = Arc::new(TestProtocol::new(false));
+	service.start(vec![(handler.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])]).unwrap();
 	while !handler.got_timeout() {
 		thread::sleep(Duration::from_millis(50));
 	}
