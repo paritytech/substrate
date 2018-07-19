@@ -203,13 +203,14 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 	}
 
 	fn start(&self) {
-		match self.network.start().map_err(|e| e.0.into()) {
+		let versions = [(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)];
+		let protocols = vec![(self.handler.clone() as Arc<_>, self.protocol_id, &versions[..])];
+		match self.network.start(protocols).map_err(|e| e.0.into()) {
 			Err(ErrorKind::Io(ref e)) if  e.kind() == io::ErrorKind::AddrInUse =>
 				warn!("Network port is already in use, make sure that another instance of Polkadot client is not running or change the port using the --port option."),
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), self.protocol_id, &[(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)]);
 	}
 
 	fn stop(&self) {
