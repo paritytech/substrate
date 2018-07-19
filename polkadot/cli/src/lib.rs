@@ -32,6 +32,7 @@ extern crate triehash;
 extern crate parking_lot;
 extern crate serde;
 extern crate serde_json;
+extern crate names;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
@@ -82,6 +83,7 @@ use polkadot_primitives::BlockId;
 use codec::{Decode, Encode};
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
+use names::{Generator, Name};
 
 use futures::Future;
 use tokio::runtime::Runtime;
@@ -199,10 +201,11 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	let (spec, is_global) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 
-	if let Some(name) = matches.value_of("name") {
-		config.name = name.into();
-		info!("Node name: {}", config.name);
-	}
+	config.name = match matches.value_of("name") {
+		None => Generator::with_naming(Name::Numbered).next().unwrap(),
+		Some(name) => name.into(),
+	};
+	info!("Node name: {}", config.name);
 
 	let base_path = base_path(&matches);
 
