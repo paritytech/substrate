@@ -33,6 +33,7 @@ extern crate parking_lot;
 extern crate serde;
 extern crate serde_json;
 extern crate names;
+extern crate backtrace;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
@@ -66,6 +67,7 @@ extern crate log;
 pub mod error;
 mod informant;
 mod chain_spec;
+mod panic_hook;
 
 pub use chain_spec::ChainSpec;
 pub use client::error::Error as ClientError;
@@ -166,6 +168,8 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	T: Into<std::ffi::OsString> + Clone,
 	W: Worker,
 {
+	panic_hook::set();
+
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
