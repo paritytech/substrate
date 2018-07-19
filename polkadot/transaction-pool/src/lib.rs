@@ -18,7 +18,7 @@ extern crate ed25519;
 extern crate substrate_client as client;
 extern crate substrate_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
-extern crate substrate_primitives as substrate_primitives;
+extern crate substrate_primitives;
 extern crate substrate_runtime_primitives;
 extern crate polkadot_runtime as runtime;
 extern crate polkadot_primitives as primitives;
@@ -279,13 +279,16 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 	type Error = Error;
 
 	fn verify_transaction(&self, uxt: UncheckedExtrinsic) -> Result<Self::VerifiedTransaction> {
-		info!("Extrinsic Submitted: {:?}", uxt);
 
 		if !uxt.is_signed() {
 			bail!(ErrorKind::IsInherent(uxt))
 		}
 
-		let (encoded_size, hash) = uxt.using_encoded(|e| (e.len(), BlakeTwo256::hash(e)));
+		let encoded = uxt.encode();
+		let (encoded_size, hash) = (encoded.len(), BlakeTwo256::hash(&encoded));
+		
+		debug!(target: "transaction-pool", "Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
+
 		let inner = match uxt.clone().check_with(|a| self.lookup(a)) {
 			Ok(xt) => Some(xt),
 			// keep the transaction around in the future pool and attempt to promote it later.
@@ -293,6 +296,12 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 			Err(e) => bail!(e),
 		};
 		let sender = inner.as_ref().map(|x| x.signed.clone());
+
+		if encoded_size < 1024 {
+			info!(target: "transaction-pool", "Transaction verified: {} => {:?}", hash, uxt);
+		} else {
+			info!(target: "transaction-pool", "Transaction verified: {} ({} bytes is too large to display)", hash, encoded_size);
+		}
 
 		Ok(VerifiedTransaction {
 			original: uxt,

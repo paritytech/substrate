@@ -9,7 +9,7 @@ one. First, get Rust (1.26.1 or later) and the support software if you don't alr
 
 ```
 curl https://sh.rustup.rs -sSf | sh
-sudo apt install make clang
+sudo apt install make clang pkg-config libssl-dev
 ```
 
 Then, install Polkadot PoC-2:

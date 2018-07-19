@@ -31,7 +31,7 @@ extern crate log;
 extern crate slog;
 extern crate slog_scope;
 
-use std::io;
+use std::{io, time};
 use parking_lot::Mutex;
 use slog::Drain;
 pub use slog_scope::with_logger;
@@ -49,16 +49,15 @@ const CHANNEL_SIZE: usize = 262144;
 
 /// Initialise telemetry.
 pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard {
+	let client = ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok());
 	let log = slog::Logger::root(
 		slog_async::Async::new(
 			slog_json::Json::default(
 				TelemetryWriter {
 					buffer: vec![],
-					out: Mutex::new(
-						ws::ClientBuilder::new(&config.url).ok().and_then(|mut x| x.connect(None).ok())
-					),
+					out: Mutex::new(client),
 					config,
-					first_time: true,	// ensures that on_connect will be called.
+					last_time: None,	// ensures that on_connect will be called.
 				}
 			).fuse()
 		).chan_size(CHANNEL_SIZE)
@@ -78,20 +77,47 @@ struct TelemetryWriter {
 	buffer: Vec<u8>,
 	out: Mutex<Option<ws::sync::Client<Box<ws::stream::sync::NetworkStream + Send>>>>,
 	config: TelemetryConfig,
-	first_time: bool,
+	last_time: Option<time::Instant>,
 }
+
+/// Every two minutes we reconnect to the telemetry server otherwise we don't get notified
+/// of a flakey connection that has been dropped and needs to be reconnected. We can remove
+/// this once we introduce a keepalive ping/pong.
+const RECONNECT_PERIOD: u64 = 120;
 
 impl TelemetryWriter {
 	fn ensure_connected(&mut self) {
-		if self.first_time {
-			info!("Connected to telemetry server: {}", self.config.url);
-			(self.config.on_connect)();
-			self.first_time = false;
-		}
 		let mut client = self.out.lock();
-		if client.is_none() {
+
+		let controlled_disconnect = if let Some(t) = self.last_time {
+			if t.elapsed().as_secs() > RECONNECT_PERIOD && client.is_some() {
+				trace!(target: "telemetry", "Performing controlled drop of the telemetry connection.");
+				let _ = client.as_mut().and_then(|socket|
+					socket.send_message(&ws::Message::text("{\"msg\":\"system.reconnect\"}")).ok()
+				);
+				*client = None;
+				true
+			} else {
+				false
+			}
+		} else {
+			false
+		};
+
+		let just_connected = if client.is_none() {
+			if !controlled_disconnect {
+				info!(target: "telemetry", "Connection dropped unexpectedly. Reconnecting to telemetry server...");
+			}
 			*client = ws::ClientBuilder::new(&self.config.url).ok().and_then(|mut x| x.connect(None).ok());
-			drop(client);
+			client.is_some()
+		} else {
+			self.last_time.is_none()
+		};
+
+		drop(client);
+		if just_connected && !controlled_disconnect {
+			self.last_time = Some(time::Instant::now());
+			info!("Reconnected to telemetry server: {}", self.config.url);
 			(self.config.on_connect)();
 		}
 	}
@@ -113,7 +139,9 @@ impl io::Write for TelemetryWriter {
 		let mut l = self.out.lock();
 		let socket_closed = if let Some(ref mut socket) = *l {
 			if let Ok(s) = ::std::str::from_utf8(&self.buffer[..]) {
-				socket.send_message(&ws::Message::text(s)).is_err()
+				let r = socket.send_message(&ws::Message::text(s));
+				trace!(target: "telemetry", "Sent to telemetry: {} -> {:?}", s, r);
+				r.is_err()
 			} else { false }
 		} else { false };
 		if socket_closed {

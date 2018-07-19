@@ -32,6 +32,8 @@ extern crate triehash;
 extern crate parking_lot;
 extern crate serde;
 extern crate serde_json;
+extern crate names;
+extern crate backtrace;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
@@ -65,6 +67,7 @@ extern crate log;
 pub mod error;
 mod informant;
 mod chain_spec;
+mod panic_hook;
 
 pub use chain_spec::ChainSpec;
 pub use client::error::Error as ClientError;
@@ -82,12 +85,13 @@ use polkadot_primitives::BlockId;
 use codec::{Decode, Encode};
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
+use names::{Generator, Name};
 
 use futures::Future;
 use tokio::runtime::Runtime;
 use service::PruningMode;
 
-const DEFAULT_TELEMETRY_URL: &str = "ws://telemetry.polkadot.io:1024";
+const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
 #[derive(Clone)]
 struct SystemConfiguration {
@@ -113,7 +117,7 @@ fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), S
 		.map(ChainSpec::from)
 		.unwrap_or_else(|| if matches.is_present("dev") { ChainSpec::Development } else { ChainSpec::KrummeLanke });
 	let is_global = match chain_spec {
-		ChainSpec::KrummeLanke | ChainSpec::StagingTestnet => true,
+		ChainSpec::KrummeLanke => true,
 		_ => false,
 	};
 	let spec = chain_spec.load()?;
@@ -164,6 +168,8 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	T: Into<std::ffi::OsString> + Clone,
 	W: Worker,
 {
+	panic_hook::set();
+
 	let yaml = load_yaml!("./cli.yml");
 	let matches = match clap::App::from_yaml(yaml).version(&(crate_version!().to_owned() + "\n")[..]).get_matches_from_safe(args) {
 		Ok(m) => m,
@@ -199,10 +205,11 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	let (spec, is_global) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 
-	if let Some(name) = matches.value_of("name") {
-		config.name = name.into();
-		info!("Node name: {}", config.name);
-	}
+	config.name = match matches.value_of("name") {
+		None => Generator::with_naming(Name::Numbered).next().unwrap(),
+		Some(name) => name.into(),
+	};
+	info!("Node name: {}", config.name);
 
 	let base_path = base_path(&matches);
 
