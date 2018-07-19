@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use libp2p::{self, Transport, secio};
+use libp2p::{self, Transport, mplex, secio, yamux};
 use libp2p::core::{MuxedTransport, either, upgrade};
 use libp2p::transport_timeout::TransportTimeout;
 use std::time::Duration;
@@ -52,7 +52,11 @@ pub fn build_transport(
 		})
 		// TODO: check that the public key matches what is reported by identify
 		.map(|(socket, _key), _| socket)
-		.with_upgrade(libp2p::mplex::MultiplexConfig::new())
+		// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
+		.with_upgrade(upgrade::or(
+			upgrade::map(mplex::MultiplexConfig::new(), either::EitherOutput::First),
+			upgrade::map(yamux::Config::default(), either::EitherOutput::Second),
+		))
 		.into_connection_reuse();
 
 	TransportTimeout::new(base, Duration::from_secs(20))
