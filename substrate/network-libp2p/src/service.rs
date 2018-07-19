@@ -500,9 +500,9 @@ fn init_thread(
 						continue;
 					}
 				};
-				println!("{:?}", multi);
+
 				if let Ok(addr) = multi {
-					warn!(target: "sub-libp2p", "Missing PeerId for Bootnode {:}. Querying", bootnode);
+					trace!(target: "sub-libp2p", "Missing PeerId for Bootnode {:}. Querying", bootnode);
 					for proto in shared.protocols.read().0.clone().into_iter() {
 						connect_with_query_peer_id(
 							shared.clone(),
@@ -1025,7 +1025,7 @@ fn connect_with_query_peer_id<T, To, St, C>(
 				.and_then(move |info| {
 					let _ = process_identify_info(shared, &info, original_addr,
 						endpoint, &base_transport);
-					warn!(target: "sub-libp2p", "Bootnode {:} found with peer id: {:?}",
+					trace!(target: "sub-libp2p", "Bootnode {:} found with peer id: {:?}",
 						addr2, info.info.public_key.into_peer_id());
 					upgrade::apply(socket, proto, endpoint, client_addr)
 				})
