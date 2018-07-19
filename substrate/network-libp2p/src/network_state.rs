@@ -649,11 +649,6 @@ impl NetworkState {
 		self.disabled_peers.lock().insert(peer_info.id.clone(), timeout);
 	}
 
-	/// Returns true if a peer is disabled.
-	pub fn is_peer_disabled(&self, node_id: &PeerstorePeerId) -> bool {
-		is_peer_disabled(&self.disabled_peers, node_id)
-	}
-
 	/// Flushes the caches to the disk.
 	///
 	/// This is done in an atomical way, so that an error doesn't corrupt
@@ -887,7 +882,6 @@ fn open_priv_key_file<P>(path: P) -> Result<fs::File, IoError>
 
 #[cfg(test)]
 mod tests {
-	use futures::sync::mpsc;
 	use libp2p::core::{Endpoint, PublicKey};
 	use network_state::NetworkState;
 
