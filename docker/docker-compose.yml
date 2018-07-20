@@ -1,0 +1,14 @@
+version: '3'
+services:
+  sandbox:
+    build:
+      context: .
+    ports:
+      - "127.0.0.1:30333:30344/tcp"
+      - "127.0.0.1:9933:9944/tcp"
+    image: polkadot_sandbox:tag
+    volumes:
+      - polkadot-data:/root/.local/share/Polkadot
+    command: tail -f /dev/null
+    environment:
+      - CARGO_POLKADOT_VERSION_FOR_DOCKERFILE=$CARGO_POLKADOT_VERSION_FOR_DOCKERFILE

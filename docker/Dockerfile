@@ -3,9 +3,13 @@ LABEL maintainer "chevdor@gmail.com"
 
 ARG PROFILE=release
 
-RUN apt-get update && \
+RUN mkdir -p polkadot && \
+	apt-get update && \
 	apt-get upgrade -y && \
-	apt-get install -y cmake pkg-config libssl-dev git
+	apt-get install -y cmake pkg-config libssl-dev git && \
+	apt-get clean && \
+	mkdir -p /root/.local/share/Polkadot && \
+	ln -s /root/.local/share/Polkadot /data
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 	export PATH=$PATH:$HOME/.cargo/bin && \
@@ -17,7 +21,13 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 	cd polkadot && \
 	./build.sh && \
 	cargo build --$PROFILE && \
-	export PATH=$PATH:/polkadot/target/$PROFILE
+	mv target/$PROFILE/polkadot /usr/local/bin && \
+	cargo clean && \
+	rm -rf /root/.cargo /root/.rustup /tmp/*
 
+COPY version /polkadot
 WORKDIR /polkadot
+EXPOSE 30333 9933
+VOLUME ["/data"]
+
 CMD ["/bin/sh", "polkadot"]
