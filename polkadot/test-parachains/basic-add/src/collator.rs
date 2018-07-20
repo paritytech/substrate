@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
 // Polkadot is free software: you can redistribute it and/or modify
@@ -14,39 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Basic parachain that adds a number as part of its state.
-
-#![cfg_attr(feature = "wasm", no_std)]
-#![cfg_attr(
-	feature = "wasm",
-	feature(
-		alloc, core_intrinsics, lang_items, panic_implementation, core_panic_info,
-		alloc_error_handler
-	)
-)]
-
-#[cfg(feature = "wasm")]
-extern crate alloc;
-
-#[cfg(feature = "wasm")]
-extern crate wee_alloc;
-
-#[cfg(feature = "wasm")]
-extern crate pwasm_libc;
+//! Collator for polkadot
 
 extern crate polkadot_parachain as parachain;
+extern crate polkadot_collator as collator;
 extern crate tiny_keccak;
 
+use collator::ParachainContext;
+
 mod common;
-pub use common::{execute, HeadData, BlockData};
 
-#[cfg(feature = "wasm")]
-mod wasm;
+fn main() {
+	::collator::run_collator(
 
-#[cfg(feature = "wasm")]
-pub use wasm::*;
-
-// Define global allocator.
-#[cfg(feature = "wasm")]
-#[global_allocator]
-static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+	)
+}

@@ -1,4 +1,4 @@
-// Copyright 2018 Parity Technologies (UK) Ltd.
+// Copyright 2017 Parity Technologies (UK) Ltd.
 // This file is part of Polkadot.
 
 // Polkadot is free software: you can redistribute it and/or modify
@@ -14,7 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Data definitions for the basic_add parachain.
+//! Basic parachain that adds a number as part of its state.
+
+#![no_std]
+
+extern crate polkadot_parachain as parachain;
+extern crate tiny_keccak;
 
 use parachain::codec::{Decode, Encode, Input, Output};
 

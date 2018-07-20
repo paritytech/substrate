@@ -14,12 +14,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Defines WASM module logic.
+//! WASM validation for basic-add parachain.
 
-use core::{intrinsics, panic, alloc};
-use parachain::{self, ValidationResult};
+#![no_std]
+
+#![feature(
+	alloc, core_intrinsics, lang_items, panic_implementation, core_panic_info,
+	alloc_error_handler
+)]
+
+extern crate alloc;
+extern crate wee_alloc;
+extern crate pwasm_libc;
+extern crate basic_add;
+extern crate polkadot_parachain as parachain;
+extern crate tiny_keccak;
+
+// Define global allocator.
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
+use core::{intrinsics, panic};
+use parachain::ValidationResult;
 use parachain::codec::{Encode, Decode};
-use super::{HeadData, BlockData};
+use basic_add::{HeadData, BlockData};
 
 #[panic_implementation]
 #[no_mangle]
@@ -31,7 +49,7 @@ pub fn panic(_info: &panic::PanicInfo) -> ! {
 
 #[alloc_error_handler]
 #[no_mangle]
-pub fn oom(_: alloc::Layout) -> ! {
+pub fn oom(_: ::core::alloc::Layout) -> ! {
 	unsafe {
 		intrinsics::abort();
 	}
@@ -48,9 +66,8 @@ pub extern fn validate(offset: usize, len: usize) -> usize {
 
 	let parent_hash = ::tiny_keccak::keccak256(&params.parent_head[..]);
 
-	match ::common::execute(parent_hash, parent_head, &block_data) {
+	match ::basic_add::execute(parent_hash, parent_head, &block_data) {
 		Ok(new_head) => parachain::write_result(ValidationResult { head_data: new_head.encode() }),
 		Err(_) => panic!("execution failure"),
 	}
-
 }

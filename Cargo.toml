@@ -28,6 +28,9 @@ members = [
 	"polkadot/transaction-pool",
 	"polkadot/service",
 
+	"polkadot/test-parachains/basic-add",
+	"polkadot/test-parachains/basic-add/wasm",
+
 	"substrate/bft",
 	"substrate/client",
 	"substrate/client/db",
@@ -78,6 +81,10 @@ exclude = [
 	"substrate/pwasm-libc",
 	"substrate/test-runtime/wasm",
 ]
+
+[profile.release]
+panic = "abort"
+lto = true
 
 [badges]
 travis-ci = { repository = "paritytech/polkadot", branch = "master" }
