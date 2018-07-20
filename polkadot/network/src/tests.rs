@@ -41,9 +41,9 @@ impl Context<Block> for TestContext {
 		unimplemented!()
 	}
 
-	fn report_peer(&mut self, peer: PeerId, _reason: Severity) {
-		match severity {
-			Severity::Bad => self.disabled.push(peer),
+	fn report_peer(&mut self, peer: PeerId, reason: Severity) {
+		match reason {
+			Severity::Bad(_) => self.disabled.push(peer),
 			_ => self.disconnected.push(peer),
 		}
 	}
