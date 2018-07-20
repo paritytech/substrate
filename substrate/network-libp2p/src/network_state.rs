@@ -55,6 +55,8 @@ pub struct NetworkState {
 	min_peers: u32,
 	/// `max_peers` taken from the configuration.
 	max_peers: u32,
+	/// `max_incoming_peers` calculated as `max_peers / max_incoming_peers_factor` from the configuration.
+	max_incoming_peers: u32,
 
 	/// If true, only reserved peers can connect.
 	reserved_only: atomic::AtomicBool,
@@ -169,6 +171,7 @@ impl NetworkState {
 			peerstore,
 			min_peers: config.min_peers,
 			max_peers: config.max_peers,
+			max_incoming_peers: config.max_peers / config.max_incoming_peers_factor,
 			connections: RwLock::new(Connections {
 				peer_by_nodeid: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
 				info_by_peer: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
@@ -433,7 +436,7 @@ impl NetworkState {
 	/// Returns the number of open and pending connections with
 	/// custom protocols.
 	pub fn num_open_custom_connections(&self) -> u32 {
-		num_open_custom_connections(&self.connections.read())
+		num_open_custom_connections(&self.connections.read()).total
 	}
 
 	/// Returns the number of new outgoing custom connections to peers to
@@ -520,7 +523,7 @@ impl NetworkState {
 	/// You must pass an `UnboundedSender` which will be used by the `send`
 	/// method. Actually sending the data is not covered by this code.
 	///
-	/// The various methods of the `NetworkState` that close a connection do 
+	/// The various methods of the `NetworkState` that close a connection do
 	/// so by dropping this sender.
 	pub fn custom_proto(
 		&self,
@@ -548,7 +551,8 @@ impl NetworkState {
 		let node_is_reserved = self.reserved_peers.read().contains(&infos.id);
 		if !node_is_reserved {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
-				num_open_connections >= self.max_peers
+				num_open_connections.total >= self.max_peers ||
+				num_open_connections.incoming >= self.max_incoming_peers
 			{
 				debug!(target: "sub-libp2p", "Refusing node {:?} because we \
 					reached the max number of peers", node_id);
@@ -734,10 +738,17 @@ fn is_peer_disabled(
 	}
 }
 
+struct OpenCustomConnectionsNumbers {
+	/// Total number of open and pending connections.
+	pub total: u32,
+	/// Incoming number of open and pending connections.
+	pub incoming: u32,
+}
+
 /// Returns the number of open and pending connections with
 /// custom protocols.
-fn num_open_custom_connections(connections: &Connections) -> u32 {
-	connections
+fn num_open_custom_connections(connections: &Connections) -> OpenCustomConnectionsNumbers {
+	let filtered = connections
 		.info_by_peer
 		.values()
 		.filter(|info|
@@ -747,8 +758,18 @@ fn num_open_custom_connections(connections: &Connections) -> u32 {
 					_ => false
 				}
 			)
-		)
-		.count() as u32
+		);
+
+	let mut total: u32 = 0;
+	let mut incoming: u32 = 0;
+	for info in filtered {
+		total += 1;
+		if !info.originated {
+			incoming += 1;
+		}
+	}
+
+	OpenCustomConnectionsNumbers { total, incoming }
 }
 
 /// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
@@ -774,7 +795,7 @@ fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 				.peer_or_create(&peer_id)
 				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 	}
-	
+
 	Ok(peer_id)
 }
 
