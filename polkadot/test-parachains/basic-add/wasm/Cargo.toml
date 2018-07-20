@@ -10,9 +10,5 @@ wee_alloc = { version = "0.4.1" }
 pwasm-libc = { version = "0.2" }
 tiny-keccak = "1.4"
 
-[profile.release]
-panic = "abort"
-lto = true
-
 [lib]
 crate-type = ["cdylib"]
