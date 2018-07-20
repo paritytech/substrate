@@ -1,18 +1,18 @@
 // Copyright 2018 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
 
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
@@ -581,14 +581,14 @@ impl NetworkState {
 			} else {
 				// We are connected to this peer, but not with the current
 				// protocol.
-				debug!(target: "sub-libp2p", "Tried to send message to peer {} \
-					for which we aren't connected with the requested protocol",
-					peer_id);
+				debug!(target: "sub-libp2p",
+					"Tried to send message to peer {} for which we aren't connected with the requested protocol",
+					peer_id
+				);
 				return Err(ErrorKind::PeerNotFound.into())
 			}
 		} else {
-			debug!(target: "sub-libp2p", "Tried to send message to invalid \
-				peer ID {}", peer_id);
+			debug!(target: "sub-libp2p", "Tried to send message to invalid peer ID {}", peer_id);
 			return Err(ErrorKind::PeerNotFound.into())
 		}
 	}
@@ -596,9 +596,15 @@ impl NetworkState {
 	/// Disconnects a peer, if a connection exists (ie. drops the Kademlia
 	/// controller, and the senders that were stored in the `UniqueConnec` of
 	/// `custom_proto`).
-	pub fn disconnect_peer(&self, peer_id: PeerId) {
+	pub fn disconnect_peer(&self, peer_id: PeerId, reason: &str) {
 		let mut connections = self.connections.write();
 		if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
+			if let (&Some(ref client_version), &Some(ref remote_address)) = (&peer_info.client_version, &peer_info.remote_address) {
+				info!(target: "network", "Disconnected peer {} (version: {}, address: {}). {}", peer_id, client_version, remote_address, reason);
+			} else {
+				info!(target: "network", "Disconnected peer {}. {}", peer_id, reason);
+			}
+
 			trace!(target: "sub-libp2p", "Destroying peer #{} {:?} ; \
 				kademlia = {:?} ; num_protos = {:?}", peer_id, peer_info.id,
 				peer_info.kad_connec.is_alive(),
