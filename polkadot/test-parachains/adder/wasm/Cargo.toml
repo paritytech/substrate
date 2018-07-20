@@ -1,10 +1,10 @@
 [package]
-name = "basic-add-wasm"
+name = "adder-wasm"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-basic-add = { path = ".." }
+adder = { path = ".." }
 polkadot-parachain = { path = "../../../parachain", default-features = false }
 wee_alloc = { version = "0.4.1" }
 pwasm-libc = { version = "0.2" }

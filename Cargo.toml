@@ -28,8 +28,8 @@ members = [
 	"polkadot/transaction-pool",
 	"polkadot/service",
 
-	"polkadot/test-parachains/basic-add",
-	"polkadot/test-parachains/basic-add/wasm",
+	"polkadot/test-parachains/adder",
+	"polkadot/test-parachains/adder/wasm",
 
 	"substrate/bft",
 	"substrate/client",

@@ -26,7 +26,7 @@
 extern crate alloc;
 extern crate wee_alloc;
 extern crate pwasm_libc;
-extern crate basic_add;
+extern crate adder;
 extern crate polkadot_parachain as parachain;
 extern crate tiny_keccak;
 
@@ -37,7 +37,7 @@ static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
 use core::{intrinsics, panic};
 use parachain::ValidationResult;
 use parachain::codec::{Encode, Decode};
-use basic_add::{HeadData, BlockData};
+use adder::{HeadData, BlockData};
 
 #[panic_implementation]
 #[no_mangle]
@@ -66,7 +66,7 @@ pub extern fn validate(offset: usize, len: usize) -> usize {
 
 	let parent_hash = ::tiny_keccak::keccak256(&params.parent_head[..]);
 
-	match ::basic_add::execute(parent_hash, parent_head, &block_data) {
+	match ::adder::execute(parent_hash, parent_head, &block_data) {
 		Ok(new_head) => parachain::write_result(ValidationResult { head_data: new_head.encode() }),
 		Err(_) => panic!("execution failure"),
 	}
