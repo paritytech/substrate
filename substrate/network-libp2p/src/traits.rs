@@ -190,7 +190,7 @@ impl NetworkConfiguration {
 			use_secret: None,
 			min_peers: 25,
 			max_peers: 50,
-			incoming_peers_factor: 3,
+			incoming_peers_factor: 2,
 			max_handshakes: 64,
 			reserved_protocols: HashMap::new(),
 			ip_filter: IpFilter::default(),
