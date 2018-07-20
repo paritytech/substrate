@@ -439,14 +439,12 @@ impl NetworkState {
 	/// Returns the number of new outgoing custom connections to peers to
 	/// open. This takes into account the number of active peers.
 	pub fn should_open_outgoing_custom_connections(&self) -> u32 {
-		use std::cmp::max;
-
 		if self.reserved_only.load(atomic::Ordering::Relaxed) {
 			0
 		} else {
 			let num_open_custom_connections = num_open_custom_connections(&self.connections.read());
 			let min_outgoing_peers = num_open_custom_connections.incoming * self.incoming_peers_factor.saturating_sub(1);
-			max(min_outgoing_peers.saturating_sub(num_open_custom_connections.outgoing),
+			cmp::max(min_outgoing_peers.saturating_sub(num_open_custom_connections.outgoing),
 				self.min_peers.saturating_sub(num_open_custom_connections.total))
 		}
 	}
