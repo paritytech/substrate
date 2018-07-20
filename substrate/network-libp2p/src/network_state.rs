@@ -552,7 +552,8 @@ impl NetworkState {
 		if !node_is_reserved {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
 				num_open_connections.total >= self.max_peers ||
-				num_open_connections.incoming >= self.max_incoming_peers
+				(endpoint == Endpoint::Listener &&
+				 num_open_connections.incoming >= self.max_incoming_peers)
 			{
 				debug!(target: "sub-libp2p", "Refusing node {:?} because we \
 					reached the max number of peers", node_id);
