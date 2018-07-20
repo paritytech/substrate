@@ -153,8 +153,8 @@ pub struct NetworkConfiguration {
 	pub min_peers: u32,
 	/// Maximum allowed number of peers
 	pub max_peers: u32,
-	/// Maximum incoming peers factor. The maximum allowed number of incoming peers is calculated as `max_peers / max_incoming_peers_factor`.
-	pub max_incoming_peers_factor: u32,
+	/// At most `1 / incoming_peers_factor` of incoming connections are allowed.
+	pub incoming_peers_factor: u32,
 	/// Maximum handshakes
 	pub max_handshakes: u32,
 	/// Reserved protocols. Peers with <key> protocol get additional <value> connection slots.
@@ -190,7 +190,7 @@ impl NetworkConfiguration {
 			use_secret: None,
 			min_peers: 25,
 			max_peers: 50,
-			max_incoming_peers_factor: 3,
+			incoming_peers_factor: 3,
 			max_handshakes: 64,
 			reserved_protocols: HashMap::new(),
 			ip_filter: IpFilter::default(),

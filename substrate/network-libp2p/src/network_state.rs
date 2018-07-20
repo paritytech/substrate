@@ -55,6 +55,8 @@ pub struct NetworkState {
 	min_peers: u32,
 	/// `max_peers` taken from the configuration.
 	max_peers: u32,
+	/// `incoming_peers_factor` taken from the configuration.
+	incoming_peers_factor: u32,
 	/// `max_incoming_peers` calculated as `max_peers / max_incoming_peers_factor` from the configuration.
 	max_incoming_peers: u32,
 
@@ -171,7 +173,8 @@ impl NetworkState {
 			peerstore,
 			min_peers: config.min_peers,
 			max_peers: config.max_peers,
-			max_incoming_peers: config.max_peers / config.max_incoming_peers_factor,
+			incoming_peers_factor: config.incoming_peers_factor,
+			max_incoming_peers: config.max_peers / config.incoming_peers_factor,
 			connections: RwLock::new(Connections {
 				peer_by_nodeid: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
 				info_by_peer: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
@@ -433,19 +436,18 @@ impl NetworkState {
 		}
 	}
 
-	/// Returns the number of open and pending connections with
-	/// custom protocols.
-	pub fn num_open_custom_connections(&self) -> u32 {
-		num_open_custom_connections(&self.connections.read()).total
-	}
-
 	/// Returns the number of new outgoing custom connections to peers to
 	/// open. This takes into account the number of active peers.
 	pub fn should_open_outgoing_custom_connections(&self) -> u32 {
+		use std::cmp::max;
+
 		if self.reserved_only.load(atomic::Ordering::Relaxed) {
 			0
 		} else {
-			self.min_peers.saturating_sub(self.num_open_custom_connections())
+			let num_open_custom_connections = num_open_custom_connections(&self.connections.read());
+			let min_outgoing_peers = num_open_custom_connections.incoming * self.incoming_peers_factor.saturating_sub(1);
+			max(min_outgoing_peers.saturating_sub(num_open_custom_connections.outgoing),
+				self.min_peers.saturating_sub(num_open_custom_connections.total))
 		}
 	}
 
@@ -744,6 +746,8 @@ struct OpenCustomConnectionsNumbers {
 	pub total: u32,
 	/// Incoming number of open and pending connections.
 	pub incoming: u32,
+	/// Outgoing number of open and pending connections.
+	pub outgoing: u32,
 }
 
 /// Returns the number of open and pending connections with
@@ -770,7 +774,11 @@ fn num_open_custom_connections(connections: &Connections) -> OpenCustomConnectio
 		}
 	}
 
-	OpenCustomConnectionsNumbers { total, incoming }
+	OpenCustomConnectionsNumbers {
+		total,
+		incoming,
+		outgoing: total - incoming,
+	}
 }
 
 /// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
