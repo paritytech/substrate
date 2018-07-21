@@ -318,7 +318,7 @@ impl NetworkContext for NetworkContextImpl {
 		message.extend_from_slice(&[packet_id]);
 		message.extend_from_slice(&data);
 		if self.inner.network_state.send(protocol, peer, message).is_err() {
-			self.inner.network_state.disconnect_peer(peer, "Sending to peer failed");
+			self.inner.network_state.drop_peer(peer, Some("Sending to peer failed"));
 		}
 	}
 
@@ -331,11 +331,17 @@ impl NetworkContext for NetworkContextImpl {
 	}
 
 	fn report_peer(&self, peer: PeerId, reason: Severity) {
-		debug!(target: "sub-libp2p", "Peer {} reported by client: {}", peer, reason);
+		if let Some(info) = self.inner.network_state.peer_info(peer) {
+			if let (Some(client_version), Some(remote_address)) = (info.client_version, info.remote_address) {
+				info!(target: "sub-libp2p", "Peer {} ({} {}) reported by client: {}", peer, remote_address, client_version, reason);
+			} else {
+				info!(target: "sub-libp2p", "Peer {} reported by client: {}", peer, reason);
+			}
+		}
 		match reason {
 			Severity::Bad(reason) => self.inner.network_state.disable_peer(peer, reason),
-			Severity::Useless(reason) => self.inner.network_state.disconnect_peer(peer, reason),
-			Severity::Timeout => self.inner.network_state.disconnect_peer(peer, "Timeout waiting for response"),
+			Severity::Useless(reason) => self.inner.network_state.drop_peer(peer, Some(reason)),
+			Severity::Timeout => self.inner.network_state.drop_peer(peer, Some("Timeout waiting for response")),
 		}
 	}
 
@@ -782,7 +788,7 @@ fn handle_custom_connection(
 
 			// When any custom protocol drops, we drop the peer entirely.
 			// TODO: is this correct?
-			self.inner.network_state.disconnect_peer(self.peer_id, "Remote end disconnected");
+			self.inner.network_state.drop_peer(self.peer_id, Some("Remote end disconnected"));
 		}
 	}
 
@@ -1285,7 +1291,7 @@ fn ping_all<T, St, C>(
 				match val {
 					Err(err) => {
 						trace!(target: "sub-libp2p", "Error while pinging #{:?} => {:?}", peer, err);
-						shared.network_state.disconnect_peer(peer, "libp2p ping timeout");
+						shared.network_state.drop_peer(peer, None);	// None so that we don't print messages on such low-level issues.
 						// Return Ok, otherwise we would close the ping service
 						Ok(())
 					},
