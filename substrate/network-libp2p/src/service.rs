@@ -1,22 +1,22 @@
 // Copyright 2018 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
 
 use bytes::Bytes;
 use {Error, ErrorKind, NetworkConfiguration, NetworkProtocolHandler};
-use {NonReservedPeerMode, NetworkContext, PeerId, ProtocolId};
+use {NonReservedPeerMode, NetworkContext, Severity, PeerId, ProtocolId};
 use parking_lot::{Mutex, RwLock};
 use libp2p;
 use libp2p::multiaddr::{AddrComponent, Multiaddr};
@@ -299,8 +299,7 @@ struct NetworkContextImpl {
 }
 
 impl NetworkContext for NetworkContextImpl {
-	fn send(&self, peer: PeerId, packet_id: PacketId, data: Vec<u8>)
-		-> Result<(), Error> {
+	fn send(&self, peer: PeerId, packet_id: PacketId, data: Vec<u8>) {
 		self.send_protocol(self.protocol, peer, packet_id, data)
 	}
 
@@ -310,7 +309,7 @@ impl NetworkContext for NetworkContextImpl {
 		peer: PeerId,
 		packet_id: PacketId,
 		data: Vec<u8>
-	) -> Result<(), Error> {
+	) {
 		debug_assert!(self.inner.protocols.read().has_protocol(protocol),
 			"invalid protocol id requested in the API of the libp2p networking");
 		// TODO: could be "optimized" by building `message` only after checking the validity of
@@ -318,10 +317,12 @@ impl NetworkContext for NetworkContextImpl {
 		let mut message = Bytes::with_capacity(1 + data.len());
 		message.extend_from_slice(&[packet_id]);
 		message.extend_from_slice(&data);
-		self.inner.network_state.send(protocol, peer, message)
+		if self.inner.network_state.send(protocol, peer, message).is_err() {
+			self.inner.network_state.drop_peer(peer, Some("Sending to peer failed"));
+		}
 	}
 
-	fn respond(&self, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error> {
+	fn respond(&self, packet_id: PacketId, data: Vec<u8>) {
 		if let Some(peer) = self.current_peer {
 			self.send_protocol(self.protocol, peer, packet_id, data)
 		} else {
@@ -329,14 +330,19 @@ impl NetworkContext for NetworkContextImpl {
 		}
 	}
 
-	fn disable_peer(&self, peer: PeerId, reason: &str) {
-		debug!(target: "sub-libp2p", "Request to disable peer {} for reason {}", peer, reason);
-		self.inner.network_state.disable_peer(peer, reason);
-	}
-
-	fn disconnect_peer(&self, peer: PeerId) {
-		debug!(target: "sub-libp2p", "Request to disconnect peer {}", peer);
-		self.inner.network_state.disconnect_peer(peer);
+	fn report_peer(&self, peer: PeerId, reason: Severity) {
+		if let Some(info) = self.inner.network_state.peer_info(peer) {
+			if let (Some(client_version), Some(remote_address)) = (info.client_version, info.remote_address) {
+				info!(target: "sub-libp2p", "Peer {} ({} {}) reported by client: {}", peer, remote_address, client_version, reason);
+			} else {
+				info!(target: "sub-libp2p", "Peer {} reported by client: {}", peer, reason);
+			}
+		}
+		match reason {
+			Severity::Bad(reason) => self.inner.network_state.disable_peer(peer, reason),
+			Severity::Useless(reason) => self.inner.network_state.drop_peer(peer, Some(reason)),
+			Severity::Timeout => self.inner.network_state.drop_peer(peer, Some("Timeout waiting for response")),
+		}
 	}
 
 	fn is_expired(&self) -> bool {
@@ -768,9 +774,12 @@ fn handle_custom_connection(
 
 	impl Drop for ProtoDisconnectGuard {
 		fn drop(&mut self) {
-			debug!(target: "sub-libp2p", "Node {:?} with peer ID {} \
-				through protocol {:?} disconnected", self.node_id, self.peer_id,
-				self.protocol);
+			debug!(target: "sub-libp2p",
+				"Node {:?} with peer ID {} through protocol {:?} disconnected",
+				self.node_id,
+				self.peer_id,
+				self.protocol
+			);
 			self.handler.disconnected(&NetworkContextImpl {
 				inner: self.inner.clone(),
 				protocol: self.protocol,
@@ -779,7 +788,7 @@ fn handle_custom_connection(
 
 			// When any custom protocol drops, we drop the peer entirely.
 			// TODO: is this correct?
-			self.inner.network_state.disconnect_peer(self.peer_id);
+			self.inner.network_state.drop_peer(self.peer_id, Some("Remote end disconnected"));
 		}
 	}
 
@@ -1271,8 +1280,7 @@ fn ping_all<T, St, C>(
 		let fut = pinger
 			.get_or_dial(&swarm_controller, &addr, transport.clone())
 			.and_then(move |mut p| {
-				trace!(target: "sub-libp2p",
-					"Pinging peer #{} aka. {:?}", peer, peer_id);
+				trace!(target: "sub-libp2p", "Pinging peer #{} aka. {:?}", peer, peer_id);
 				p.ping()
 					.map(|()| peer_id)
 					.map_err(|err| IoError::new(IoErrorKind::Other, err))
@@ -1282,16 +1290,14 @@ fn ping_all<T, St, C>(
 			.then(move |val|
 				match val {
 					Err(err) => {
-						trace!(target: "sub-libp2p",
-							"Error while pinging #{:?} => {:?}", peer, err);
-						shared.network_state.disconnect_peer(peer);
+						trace!(target: "sub-libp2p", "Error while pinging #{:?} => {:?}", peer, err);
+						shared.network_state.drop_peer(peer, None);	// None so that we don't print messages on such low-level issues.
 						// Return Ok, otherwise we would close the ping service
 						Ok(())
 					},
 					Ok(peer_id) => {
 						let elapsed = ping_start_time.elapsed();
-						trace!(target: "sub-libp2p", "Pong from #{:?} in {:?}",
-							peer, elapsed);
+						trace!(target: "sub-libp2p", "Pong from #{:?} in {:?}", peer, elapsed);
 						shared.network_state.report_ping_duration(peer, elapsed);
 						shared.kad_system.update_kbuckets(peer_id);
 						Ok(())
