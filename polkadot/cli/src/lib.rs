@@ -86,6 +86,7 @@ use codec::{Decode, Encode};
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
 use names::{Generator, Name};
+use regex::Regex;
 
 use futures::Future;
 use tokio::runtime::Runtime;
@@ -155,6 +156,29 @@ pub trait Worker {
 	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work;
 }
 
+/// Check whether a node name is considered as valid
+fn is_node_name_valid(_name: &str) -> Result<(), &str> {
+	const MAX_NODE_NAME_LENGTH: usize = 32;
+	let name = _name.to_string();
+	if name.chars().count() >= MAX_NODE_NAME_LENGTH {
+		return Err("Node name too long");
+}
+
+	let invalid_chars = r"[\\.@]";
+	let re = Regex::new(invalid_chars).unwrap();
+	if re.is_match(&name) {
+		return Err("Node name should not contain invalid chars such as '.' and '@'");
+	}
+
+	let invalid_patterns = r"(https?:\\/+)?(www)+";
+	let re = Regex::new(invalid_patterns).unwrap();
+	if re.is_match(&name) {
+		return Err("Node name should not contain urls");
+	}
+
+	Ok(())
+}
+
 /// Parse command line arguments and start the node.
 ///
 /// IANA unassigned port ranges that we could use:
@@ -206,7 +230,11 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		None => Generator::with_naming(Name::Numbered).next().unwrap(),
 		Some(name) => name.into(),
 	};
-	info!("Node name: {}", config.name);
+	match is_node_name_valid(&config.name) {
+		Ok(_) => info!("Node name: {}", config.name),
+		Err(msg) => return Err(error::ErrorKind::Input(
+			format!("Invalid node name '{}'. Reason: {}. If unsure, use none.", config.name, msg)).into())
+	}
 
 	let base_path = base_path(&matches);
 
@@ -613,7 +641,27 @@ fn init_logger(pattern: &str) {
 
 fn kill_color(s: &str) -> String {
 	lazy_static! {
-		static ref RE: regex::Regex = regex::Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
+		static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
 	}
 	RE.replace_all(s, "").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+    #[test]
+    fn tests_node_name_good() {
+        assert!(is_node_name_valid("short name").is_ok());
+    }
+
+    #[test]
+	fn tests_node_name_bad() {
+        assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
+        assert!(is_node_name_valid("Dots.not.Ok").is_err());
+        assert!(is_node_name_valid("http://visit.me").is_err());
+        assert!(is_node_name_valid("https://visit.me").is_err());
+        assert!(is_node_name_valid("www.visit.me").is_err());
+        assert!(is_node_name_valid("email@domain").is_err());
+    }
 }
