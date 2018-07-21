@@ -14,17 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
 
-use network_libp2p::{NetworkContext, PeerId, Error as NetworkError, SessionInfo};
+use network_libp2p::{NetworkContext, Severity, PeerId, SessionInfo};
 
 /// IO interface for the syncing handler.
 /// Provides peer connection management and an interface to the blockchain client.
 pub trait SyncIo {
-	/// Disable a peer
-	fn disable_peer(&mut self, peer_id: PeerId, reason: &str);
-	/// Disconnect peer
-	fn disconnect_peer(&mut self, peer_id: PeerId);
+	/// Report a peer for misbehaviour.
+	fn report_peer(&mut self, peer_id: PeerId, reason: Severity);
 	/// Send a packet to a peer.
-	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) -> Result<(), NetworkError>;
+	fn send(&mut self, peer_id: PeerId, data: Vec<u8>);
 	/// Returns peer identifier string
 	fn peer_info(&self, peer_id: PeerId) -> String {
 		peer_id.to_string()
@@ -50,15 +48,11 @@ impl<'s> NetSyncIo<'s> {
 }
 
 impl<'s> SyncIo for NetSyncIo<'s> {
-	fn disable_peer(&mut self, peer_id: PeerId, reason: &str) {
-		self.network.disable_peer(peer_id, reason);
+	fn report_peer(&mut self, peer_id: PeerId, reason: Severity) {
+		self.network.report_peer(peer_id, reason);
 	}
 
-	fn disconnect_peer(&mut self, peer_id: PeerId) {
-		self.network.disconnect_peer(peer_id);
-	}
-
-	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) -> Result<(), NetworkError>{
+	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) {
 		self.network.send(peer_id, 0, data)
 	}
 

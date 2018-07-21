@@ -21,7 +21,7 @@ use std::time;
 use parking_lot::RwLock;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, As};
 use runtime_primitives::generic::BlockId;
-use network_libp2p::PeerId;
+use network_libp2p::{PeerId, Severity};
 use codec::{Encode, Decode};
 
 use message::{self, Message};
@@ -42,7 +42,6 @@ const REQUEST_TIMEOUT_SEC: u64 = 40;
 pub (crate) const CURRENT_VERSION: u32 = 1;
 /// Current packet count.
 pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
-
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
@@ -110,11 +109,8 @@ pub trait Context<B: BlockT> {
 	/// Get a reference to the client.
 	fn client(&self) -> &::chain::Client<B>;
 
-	/// Disable a peer
-	fn disable_peer(&mut self, peer_id: PeerId, reason: &str);
-
-	/// Disconnect peer
-	fn disconnect_peer(&mut self, peer_id: PeerId);
+	/// Point out that a peer has been malign or irresponsible or appeared lazy.
+	fn report_peer(&mut self, peer_id: PeerId, reason: Severity);
 
 	/// Get peer info.
 	fn peer_info(&self, peer: PeerId) -> Option<PeerInfo<B>>;
@@ -142,12 +138,9 @@ impl<'a, B: BlockT + 'a> ProtocolContext<'a, B> {
 		send_message(&self.context_data.peers, self.io, peer_id, message)
 	}
 
-	pub fn disable_peer(&mut self, peer_id: PeerId, reason: &str) {
-		self.io.disable_peer(peer_id, reason);
-	}
-
-	pub fn disconnect_peer(&mut self, peer_id: PeerId) {
-		self.io.disconnect_peer(peer_id)
+	/// Point out that a peer has been malign or irresponsible or appeared lazy.
+	pub fn report_peer(&mut self, peer_id: PeerId, reason: Severity) {
+		self.io.report_peer(peer_id, reason);
 	}
 
 	/// Get peer info.
@@ -168,12 +161,8 @@ impl<'a, B: BlockT + 'a> Context<B> for ProtocolContext<'a, B> {
 		ProtocolContext::send_message(self, peer_id, message);
 	}
 
-	fn disable_peer(&mut self, peer_id: PeerId, reason: &str) {
-		ProtocolContext::disable_peer(self, peer_id, reason);
-	}
-
-	fn disconnect_peer(&mut self, peer_id: PeerId) {
-		ProtocolContext::disconnect_peer(self, peer_id);
+	fn report_peer(&mut self, peer_id: PeerId, reason: Severity) {
+		ProtocolContext::report_peer(self, peer_id, reason);
 	}
 
 	fn peer_info(&self, peer_id: PeerId) -> Option<PeerInfo<B>> {
@@ -244,7 +233,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 			Some(m) => m,
 			None => {
 				trace!(target: "sync", "Invalid packet from {}", peer_id);
-				io.disable_peer(peer_id, "Peer sent us a packet with invalid format");
+				io.report_peer(peer_id, Severity::Bad("Peer sent us a packet with invalid format"));
 				return;
 			}
 		};
@@ -260,12 +249,12 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 						match mem::replace(&mut peer.block_request, None) {
 							Some(r) => r,
 							None => {
-								io.disable_peer(peer_id, "Unexpected response packet received from peer");
+								io.report_peer(peer_id, Severity::Bad("Unexpected response packet received from peer"));
 								return;
 							}
 						}
 					} else {
-						io.disable_peer(peer_id, "Unexpected packet received from peer");
+						io.report_peer(peer_id, Severity::Bad("Unexpected packet received from peer"));
 						return;
 					}
 				};
@@ -385,7 +374,6 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 				.chain(handshaking_peers.iter()) {
 				if (tick - *timestamp).as_secs() > REQUEST_TIMEOUT_SEC {
 					trace!(target: "sync", "Timeout {}", peer_id);
-					io.disconnect_peer(*peer_id);
 					aborting.push(*peer_id);
 				}
 			}
@@ -393,7 +381,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 
 		self.specialization.write().maintain_peers(&mut ProtocolContext::new(&self.context_data, io));
 		for p in aborting {
-			io.disconnect_peer(p);
+			io.report_peer(p, Severity::Timeout);
 		}
 	}
 
@@ -424,11 +412,11 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 				return;
 			}
 			if status.genesis_hash != self.genesis_hash {
-				io.disable_peer(peer_id, &format!("Peer is on different chain (our genesis: {} theirs: {})", self.genesis_hash, status.genesis_hash));
+				io.report_peer(peer_id, Severity::Bad(&format!("Peer is on different chain (our genesis: {} theirs: {})", self.genesis_hash, status.genesis_hash)));
 				return;
 			}
 			if status.version != CURRENT_VERSION {
-				io.disable_peer(peer_id, &format!("Peer using unsupported protocol version {}", status.version));
+				io.report_peer(peer_id, Severity::Bad(&format!("Peer using unsupported protocol version {}", status.version)));
 				return;
 			}
 
@@ -625,11 +613,7 @@ fn send_message<B: BlockT>(peers: &RwLock<HashMap<PeerId, Peer<B>>>, io: &mut Sy
 		},
 		_ => (),
 	}
-	let data = message.encode();
-	if let Err(e) = io.send(peer_id, data) {
-		debug!(target:"sync", "Error sending message: {:?}", e);
-		io.disconnect_peer(peer_id);
-	}
+	io.send(peer_id, message.encode());
 }
 
 /// Hash a message.
