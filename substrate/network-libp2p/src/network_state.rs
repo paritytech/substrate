@@ -46,7 +46,7 @@ const PEER_DISABLE_DURATION: Duration = Duration::from_secs(5 * 60);
 // Common struct shared throughout all the components of the service.
 pub struct NetworkState {
 	/// Contains the information about the network.
-	node_store: NodesStore,
+	node_store: NodeStore,
 
 	/// Active connections.
 	connections: RwLock<Connections>,
@@ -74,7 +74,7 @@ pub struct NetworkState {
 	local_public_key: PublicKey,
 }
 
-enum NodesStore {
+enum NodeStore {
 	/// Peers are stored in memory. Nothing is stored on disk.
 	Memory(MemoryPeerstore),
 	/// Peers are stored in a JSON file on the disk.
@@ -177,16 +177,16 @@ impl NetworkState {
 			if let Ok(node_store) = JsonPeerstore::new(path.clone()) {
 				debug!(target: "sub-libp2p", "Initialized peer store for JSON \
 					file {:?}", path);
-				NodesStore::Json(node_store)
+				NodeStore::Json(node_store)
 			} else {
 				warn!(target: "sub-libp2p", "Failed to open peer storage {:?} \
 					; peers won't be saved", path);
-				NodesStore::Memory(MemoryPeerstore::empty())
+				NodeStore::Memory(MemoryPeerstore::empty())
 			}
 		} else {
 			debug!(target: "sub-libp2p", "No peers file configured ; peers \
 				won't be saved");
-			NodesStore::Memory(MemoryPeerstore::empty())
+			NodeStore::Memory(MemoryPeerstore::empty())
 		};
 
 		let reserved_peers = {
@@ -238,9 +238,9 @@ impl NetworkState {
 		// TODO: optimize by putting the operation directly in the node_store
 		// https://github.com/libp2p/rust-libp2p/issues/316
 		let peers = match self.node_store {
-			NodesStore::Memory(ref mem) =>
+			NodeStore::Memory(ref mem) =>
 				mem.peers().collect::<Vec<_>>(),
-			NodesStore::Json(ref json) =>
+			NodeStore::Json(ref json) =>
 				json.peers().collect::<Vec<_>>(),
 		};
 
@@ -257,9 +257,9 @@ impl NetworkState {
 	/// This includes peers we are not connected to.
 	pub fn known_peers(&self) -> impl Iterator<Item = PeerId> {
 		match self.node_store {
-			NodesStore::Memory(ref mem) =>
+			NodeStore::Memory(ref mem) =>
 				mem.peers().collect::<Vec<_>>().into_iter(),
-			NodesStore::Json(ref json) =>
+			NodeStore::Json(ref json) =>
 				json.peers().collect::<Vec<_>>().into_iter(),
 		}
 	}
@@ -358,10 +358,10 @@ impl NetworkState {
 		trace!(target: "sub-libp2p", "Peer store: adding address {} for {:?}",
 			addr, node_id);
 		match self.node_store {
-			NodesStore::Memory(ref mem) =>
+			NodeStore::Memory(ref mem) =>
 				mem.peer_or_create(node_id)
 					.add_addr(addr, Duration::from_secs(3600)),
-			NodesStore::Json(ref json) =>
+			NodeStore::Json(ref json) =>
 				json.peer_or_create(node_id)
 					.add_addr(addr, Duration::from_secs(3600)),
 		}
@@ -373,11 +373,11 @@ impl NetworkState {
 	pub fn set_invalid_kad_address(&self, node_id: &PeerId, addr: &Multiaddr) {
 		// TODO: blacklist the address?
 		match self.node_store {
-			NodesStore::Memory(ref mem) =>
+			NodeStore::Memory(ref mem) =>
 				if let Some(mut peer) = mem.peer(node_id) {
 					peer.rm_addr(addr.clone())		// TODO: cloning necessary?
 				},
-			NodesStore::Json(ref json) =>
+			NodeStore::Json(ref json) =>
 				if let Some(mut peer) = json.peer(node_id) {
 					peer.rm_addr(addr.clone())		// TODO: cloning necessary?
 				},
@@ -387,12 +387,12 @@ impl NetworkState {
 	/// Returns the known multiaddresses of a peer.
 	pub fn addrs_of_peer(&self, node_id: &PeerId) -> Vec<Multiaddr> {
 		match self.node_store {
-			NodesStore::Memory(ref mem) =>
+			NodeStore::Memory(ref mem) =>
 				mem.peer(node_id)
 					.into_iter()
 					.flat_map(|p| p.addrs())
 					.collect::<Vec<_>>(),
-			NodesStore::Json(ref json) =>
+			NodeStore::Json(ref json) =>
 				json.peer(node_id)
 					.into_iter()
 					.flat_map(|p| p.addrs())
@@ -717,8 +717,8 @@ impl NetworkState {
 	/// anything.
 	pub fn flush_caches_to_disk(&self) -> Result<(), IoError> {
 		match self.node_store {
-			NodesStore::Memory(_) => Ok(()),
-			NodesStore::Json(ref json) =>
+			NodeStore::Memory(_) => Ok(()),
+			NodeStore::Json(ref json) =>
 				match json.flush() {
 					Ok(()) => {
 						debug!(target: "sub-libp2p", "Flushed JSON peer store to disk");
@@ -812,7 +812,7 @@ fn num_open_custom_connections(connections: &Connections) -> u32 {
 /// to the given node_store. Returns the corresponding peer ID.
 fn parse_and_add_to_node_store(
 	addr_str: &str,
-	node_store: &NodesStore
+	node_store: &NodeStore
 ) -> Result<PeerId, Error> {
 
 	let mut addr = addr_str.to_multiaddr().map_err(|_| ErrorKind::AddressParse)?;
@@ -824,11 +824,11 @@ fn parse_and_add_to_node_store(
 
 	// Registering the bootstrap node with a TTL of 100000 years   TODO: wrong
 	match node_store {
-		NodesStore::Memory(ref node_store) =>
+		NodeStore::Memory(ref node_store) =>
 			node_store
 				.peer_or_create(&who)
 				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
-		NodesStore::Json(ref node_store) =>
+		NodeStore::Json(ref node_store) =>
 			node_store
 				.peer_or_create(&who)
 				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
