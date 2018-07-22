@@ -329,7 +329,13 @@ impl NetworkContext for NetworkContextImpl {
 	fn report_peer(&self, peer: PeerId, reason: Severity) {
 		if let Some(info) = self.inner.network_state.peer_info(peer) {
 			if let (Some(client_version), Some(remote_address)) = (info.client_version, info.remote_address) {
-				info!(target: "sub-libp2p", "Peer {} ({} {}) reported by client: {}", peer, remote_address, client_version, reason);
+				info!(target: "sub-libp2p",
+					"Peer {} ({} {}) reported by client: {}",
+					peer,
+					remote_address,
+					client_version,
+					reason
+				);
 			} else {
 				info!(target: "sub-libp2p", "Peer {} reported by client: {}", peer, reason);
 			}
@@ -390,7 +396,9 @@ impl NetworkContext for NetworkContextImpl {
 fn init_thread(
 	core: Handle,
 	shared: Arc<Shared>,
-	timeouts_register_rx: mpsc::UnboundedReceiver<(Duration, (Arc<NetworkProtocolHandler + Send + Sync + 'static>, ProtocolId, TimerToken))>,
+	timeouts_register_rx: mpsc::UnboundedReceiver<
+		(Duration, (Arc<NetworkProtocolHandler + Send + Sync + 'static>, ProtocolId, TimerToken))
+	>,
 	close_rx: oneshot::Receiver<()>
 ) -> Result<impl Future<Item = (), Error = IoError>, Error> {
 	// Build the transport layer.
