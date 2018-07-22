@@ -776,7 +776,7 @@ fn handle_custom_connection(
 
 	impl Drop for ProtoDisconnectGuard {
 		fn drop(&mut self) {
-			debug!(target: "sub-libp2p",
+			info!(target: "sub-libp2p",
 				"Node {:?} with peer ID {} through protocol {:?} disconnected",
 				self.node_id,
 				self.who,
