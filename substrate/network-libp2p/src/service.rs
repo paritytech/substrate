@@ -204,8 +204,7 @@ impl NetworkService {
 			let fut = match init_thread(core.handle(), shared,
 				timeouts_register_rx, close_rx) {
 				Ok(future) => {
-					debug!(target: "sub-libp2p", "Successfully started \
-						networking service");
+					debug!(target: "sub-libp2p", "Successfully started networking service");
 					let _ = init_tx.send(Ok(()));
 					future
 				},
@@ -217,8 +216,7 @@ impl NetworkService {
 
 			match core.run(fut) {
 				Ok(()) => debug!(target: "sub-libp2p", "libp2p future finished"),
-				Err(err) => error!(target: "sub-libp2p", "error while running \
-					libp2p: {:?}", err),
+				Err(err) => error!(target: "sub-libp2p", "error while running libp2p: {:?}", err),
 			}
 		});
 
@@ -234,8 +232,7 @@ impl NetworkService {
 		if let Some((close_tx, join)) = self.bg_thread.lock().take() {
 			let _ = close_tx.send(());
 			if let Err(e) = join.join() {
-				warn!(target: "sub-libp2p", "error while waiting on libp2p \
-					background thread: {:?}", e);
+				warn!(target: "sub-libp2p", "error while waiting on libp2p background thread: {:?}", e);
 			}
 		}
 
@@ -559,8 +556,7 @@ fn init_thread(
 		.select(close_rx.then(|_| Ok(()))).map(|_| ()).map_err(|(err, _)| err)
 
 		.and_then(move |_| {
-			debug!(target: "sub-libp2p", "Networking ended ; disconnecting \
-				all peers");
+			debug!(target: "sub-libp2p", "Networking ended ; disconnecting all peers");
 			shared.network_state.disconnect_all();
 			Ok(())
 		}))
@@ -623,8 +619,7 @@ fn listener_handle<'a, C>(
 			let node_id = p2p_multiaddr_to_node_id(client_addr);
 			match shared.network_state.ping_connection(node_id.clone()) {
 				Ok((_, ping_connec)) => {
-					trace!(target: "sub-libp2p", "Successfully opened ping \
-						substream with {:?}", node_id);
+					trace!(target: "sub-libp2p", "Successfully opened ping substream with {:?}", node_id);
 					let fut = ping_connec.set_until(pinger, future);
 					Box::new(fut) as Box<_>
 				},
@@ -823,9 +818,13 @@ fn handle_custom_connection(
 			val
 		});
 
-	debug!(target: "sub-libp2p", "Successfully connected to {:?} (peer id \
-		{}) with protocol {:?} version {}", node_id, peer_id, protocol_id,
-		custom_proto_out.protocol_version);
+	debug!(target: "sub-libp2p",
+		"Successfully connected to {:?} (peer id {}) with protocol {:?} version {}",
+		node_id,
+		peer_id,
+		protocol_id,
+		custom_proto_out.protocol_version
+	);
 
 	handler.connected(&NetworkContextImpl {
 		inner: shared.clone(),
@@ -937,8 +936,7 @@ fn perform_kademlia_query<T, To, St, C>(
 	let random_key = PublicKey::Ed25519((0 .. 32)
 		.map(|_| -> u8 { rand::random() }).collect());
 	let random_peer_id = random_key.into_peer_id();
-	trace!(target: "sub-libp2p", "Start kademlia discovery for {:?}",
-		random_peer_id);
+	trace!(target: "sub-libp2p", "Start kademlia discovery for {:?}", random_peer_id);
 
 	shared.clone()
 		.kad_system
@@ -979,8 +977,10 @@ fn connect_to_nodes<T, To, St, C>(
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
 	let num_slots = shared.network_state.should_open_outgoing_custom_connections();
-	debug!(target: "sub-libp2p", "Outgoing connections cycle ; opening up to \
-		{} outgoing connections", num_slots);
+	debug!(target: "sub-libp2p",
+		"Outgoing connections cycle ; opening up to {} outgoing connections",
+		num_slots
+	);
 
 	for _ in 0 .. num_slots {
 		// Choose a random peer. We are potentially already connected to
@@ -1033,8 +1033,11 @@ fn connect_with_query_peer_id<T, To, St, C>(
 				.and_then(move |info| {
 					let _ = process_identify_info(shared, &info, original_addr,
 						endpoint, &base_transport);
-					trace!(target: "sub-libp2p", "Bootnode {:} found with peer id: {:?}",
-						addr2, info.info.public_key.into_peer_id());
+					trace!(target: "sub-libp2p",
+						"Bootnode {:} found with peer id: {:?}",
+						addr2,
+						info.info.public_key.into_peer_id()
+					);
 					upgrade::apply(socket, proto, endpoint, client_addr)
 				})
 		})
@@ -1049,15 +1052,19 @@ fn connect_with_query_peer_id<T, To, St, C>(
 		.map_err({
 			let addr = addr.clone();
 			move |err| {
-				warn!(target: "sub-libp2p", "Error while dialing {:?} to query peer id: {:?}",
-					addr, err);
+				warn!(target: "sub-libp2p",
+					"Error while dialing {:?} to query peer id: {:?}",
+					addr,
+					err
+				);
 				err
 			}
 		});
 
-    let _ = swarm_controller.dial(addr.clone(), with_err)
-        .map_err( move |err| warn!(target: "sub-libp2p",
-				"Error when querying peer node info {:} of {:}", err, addr));
+	let _ = swarm_controller.dial(addr.clone(), with_err)
+		.map_err(move |err|
+			warn!(target: "sub-libp2p", "Error when querying peer node info {:} of {:}", err, addr)
+		);
 }
 
 /// If necessary, dials the given address for the given protocol and using the
@@ -1080,8 +1087,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 	// Don't connect to ourselves.
 	// TODO: remove this eventually
 	if &expected_peer_id == shared.kad_system.local_peer_id() {
-		trace!(target: "sub-libp2p", "Skipped connecting to {:?} because \
-			it is ourselves", expected_peer_id);
+		trace!(target: "sub-libp2p", "Skipped connecting to {:?} because it is ourselves", expected_peer_id);
 		return
 	}
 
@@ -1101,13 +1107,14 @@ fn open_peer_custom_proto<T, To, St, C>(
 					if info.info.public_key.into_peer_id() == expected_peer_id {
 						Ok(socket)
 					} else {
-						debug!(target: "sub-libp2p", "Public key mismatch for \
-							node {:?} with proto {:?}", expected_peer_id, proto_id);
-						trace!(target: "sub-libp2p", "Removing addr {} for {:?}",
-							original_addr, expected_peer_id);
+						debug!(target: "sub-libp2p",
+							"Public key mismatch for node {:?} with proto {:?}",
+							expected_peer_id,
+							proto_id
+						);
+						trace!(target: "sub-libp2p", "Removing addr {} for {:?}", original_addr, expected_peer_id);
 						shared.network_state.set_invalid_kad_address(&expected_peer_id, &original_addr);
-						Err(IoError::new(IoErrorKind::InvalidData, "public \
-							key mismatch when identifyed peer"))
+						Err(IoError::new(IoErrorKind::InvalidData, "public key mismatch when identifyed peer"))
 					}
 				)
 				.and_then(move |socket|
@@ -1127,8 +1134,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 		.map_err({
 			let node_id = node_id.clone();
 			move |err| {
-				debug!(target: "sub-libp2p", "Error while dialing \
-					{:?} with custom proto: {:?}", node_id, err);
+				debug!(target: "sub-libp2p", "Error while dialing {:?} with custom proto: {:?}", node_id, err);
 				err
 			}
 		});
@@ -1136,16 +1142,24 @@ fn open_peer_custom_proto<T, To, St, C>(
 	match shared2.network_state.custom_proto(node_id.clone(), proto_id, Endpoint::Dialer) {
 		Ok((peer_id, unique_connec)) => {
 			if !unique_connec.is_alive() {
-				trace!(target: "sub-libp2p", "Opening connection to #{} {:?} with \
-					proto {:?}", peer_id, node_id, proto_id);
+				trace!(target: "sub-libp2p",
+					"Opening connection to #{} {:?} with proto {:?}",
+					peer_id,
+					node_id,
+					proto_id
+				);
 			}
 
 			// TODO: this future should be used
 			let _ = unique_connec.get_or_dial(&swarm_controller, &addr, with_err);
 		},
 		Err(err) => {
-			trace!(target: "sub-libp2p", "Error while opening connection to
-				{:?} with proto {:?} => {:?}", node_id, proto_id, err);
+			trace!(target: "sub-libp2p",
+				"Error while opening connection to {:?} with proto {:?} => {:?}",
+				node_id,
+				proto_id,
+				err
+			);
 		},
 	}
 }
@@ -1203,14 +1217,15 @@ fn process_identify_info(
 		if let Some(mut ext_addr) = transport.nat_traversal(original_listened_addr, &info.observed_addr) {
 			let mut listened_addrs = shared.listened_addrs.write();
 			if !listened_addrs.iter().any(|a| a == &ext_addr) {
-				trace!(target: "sub-libp2p", "NAT traversal: remote observes us as \
-					{} ; registering {} as one of our own addresses",
-					info.observed_addr, ext_addr);
+				trace!(target: "sub-libp2p",
+					"NAT traversal: remote observes us as {}; registering {} as one of our own addresses",
+					info.observed_addr,
+					ext_addr
+				);
 				listened_addrs.push(ext_addr.clone());
 				ext_addr.append(AddrComponent::P2P(shared.kad_system
 					.local_peer_id().clone().into_bytes()));
-				info!(target: "sub-libp2p", "New external node address: {}",
-					ext_addr);
+				info!(target: "sub-libp2p", "New external node address: {}", ext_addr);
 			}
 		}
 	}
