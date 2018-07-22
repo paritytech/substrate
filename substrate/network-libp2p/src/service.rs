@@ -314,7 +314,8 @@ impl NetworkContext for NetworkContextImpl {
 		message.extend_from_slice(&[packet_id]);
 		message.extend_from_slice(&data);
 		if self.inner.network_state.send(protocol, peer, message).is_err() {
-			self.inner.network_state.drop_peer(peer, Some("Sending to peer failed"));
+			debug!(target: "sub-libp2p", "Sending to peer {} failed. Dropping.", peer);
+			self.inner.network_state.drop_peer(peer);
 		}
 	}
 
@@ -342,8 +343,8 @@ impl NetworkContext for NetworkContextImpl {
 		}
 		match reason {
 			Severity::Bad(reason) => self.inner.network_state.ban_peer(peer, reason),
-			Severity::Useless(reason) => self.inner.network_state.drop_peer(peer, Some(reason)),
-			Severity::Timeout => self.inner.network_state.drop_peer(peer, Some("Timeout waiting for response")),
+			Severity::Useless(_) => self.inner.network_state.drop_peer(peer),
+			Severity::Timeout => self.inner.network_state.drop_peer(peer),
 		}
 	}
 
@@ -414,8 +415,7 @@ fn init_thread(
 			move |who| {
 				let addrs = shared.network_state.addrs_of_peer(&who);
 				for addr in &addrs {
-					trace!(target: "sub-libp2p", "{:?} resolved as {}",
-						who, addr);
+					trace!(target: "sub-libp2p", "{:?} resolved as {}", who, addr);
 				}
 				addrs.into_iter()
 			}
@@ -595,8 +595,7 @@ fn listener_handle<'a, C>(
 	where C: AsyncRead + AsyncWrite + 'a {
 	match upgrade {
 		FinalUpgrade::Kad(controller, kademlia_stream, client_addr) => {
-			trace!(target: "sub-libp2p", "Opened kademlia substream with {:?}",
-				client_addr);
+			trace!(target: "sub-libp2p", "Opened kademlia substream with {:?}", client_addr);
 			match handle_kademlia_connection(shared, client_addr, controller, kademlia_stream) {
 				Ok(fut) => Box::new(fut) as Box<_>,
 				Err(err) => Box::new(future::err(err)) as Box<_>,
@@ -680,8 +679,7 @@ fn handle_kademlia_connection(
 				Ok(future::Loop::Continue(rest))
 			})
 	}).then(move |val| {
-		trace!(target: "sub-libp2p", "Closed Kademlia connection \
-			with #{} {:?} => {:?}", who, node_id2, val);
+		trace!(target: "sub-libp2p", "Closed Kademlia connection with #{} {:?} => {:?}", who, node_id2, val);
 		val
 	});
 
@@ -760,8 +758,11 @@ fn handle_custom_connection(
 	};
 
 	if let UniqueConnecState::Full = unique_connec.state() {
-		debug!(target: "sub-libp2p", "Interrupting connection attempt to {:?} \
-			with {:?} because we're already connected", node_id, custom_proto_out.protocol_id);
+		debug!(target: "sub-libp2p",
+			"Interrupting connection attempt to {:?} with {:?} because we're already connected",
+			node_id,
+			custom_proto_out.protocol_id
+		);
 		return future::Either::A(future::ok(()))
 	}
 
@@ -789,7 +790,7 @@ fn handle_custom_connection(
 
 			// When any custom protocol drops, we drop the peer entirely.
 			// TODO: is this correct?
-			self.inner.network_state.drop_peer(self.who, Some("Remote end disconnected"));
+			self.inner.network_state.drop_peer(self.who);
 		}
 	}
 

@@ -46,7 +46,7 @@ const PEER_DISABLE_DURATION: Duration = Duration::from_secs(5 * 60);
 // Common struct shared throughout all the components of the service.
 pub struct NetworkState {
 	/// Contains the information about the network.
-	peerstore: PeersStorage,
+	node_store: NodesStore,
 
 	/// Active connections.
 	connections: RwLock<Connections>,
@@ -74,7 +74,7 @@ pub struct NetworkState {
 	local_public_key: PublicKey,
 }
 
-enum PeersStorage {
+enum NodesStore {
 	/// Peers are stored in memory. Nothing is stored on disk.
 	Memory(MemoryPeerstore),
 	/// Peers are stored in a JSON file on the disk.
@@ -172,21 +172,21 @@ impl NetworkState {
 		let local_public_key = local_private_key.to_public_key();
 
 		// Build the storage for peers, including the bootstrap nodes.
-		let peerstore = if let Some(ref path) = config.net_config_path {
+		let node_store = if let Some(ref path) = config.net_config_path {
 			let path = Path::new(path).join(NODES_FILE);
-			if let Ok(peerstore) = JsonPeerstore::new(path.clone()) {
+			if let Ok(node_store) = JsonPeerstore::new(path.clone()) {
 				debug!(target: "sub-libp2p", "Initialized peer store for JSON \
 					file {:?}", path);
-				PeersStorage::Json(peerstore)
+				NodesStore::Json(node_store)
 			} else {
 				warn!(target: "sub-libp2p", "Failed to open peer storage {:?} \
 					; peers won't be saved", path);
-				PeersStorage::Memory(MemoryPeerstore::empty())
+				NodesStore::Memory(MemoryPeerstore::empty())
 			}
 		} else {
 			debug!(target: "sub-libp2p", "No peers file configured ; peers \
 				won't be saved");
-			PeersStorage::Memory(MemoryPeerstore::empty())
+			NodesStore::Memory(MemoryPeerstore::empty())
 		};
 
 		let reserved_peers = {
@@ -195,7 +195,7 @@ impl NetworkState {
 				Default::default()
 			);
 			for peer in config.reserved_nodes.iter() {
-				let id = parse_and_add_to_peerstore(peer, &peerstore)?;
+				let id = parse_and_add_to_node_store(peer, &node_store)?;
 				reserved_peers.insert(id);
 			}
 			RwLock::new(reserved_peers)
@@ -205,7 +205,7 @@ impl NetworkState {
 			config.reserved_nodes.len());
 
 		Ok(NetworkState {
-			peerstore,
+			node_store,
 			min_peers: config.min_peers,
 			max_peers: config.max_peers,
 			connections: RwLock::new(Connections {
@@ -235,12 +235,12 @@ impl NetworkState {
 	///
 	/// Returns `None` if we don't know any peer.
 	pub fn random_peer(&self) -> Option<PeerId> {
-		// TODO: optimize by putting the operation directly in the peerstore
+		// TODO: optimize by putting the operation directly in the node_store
 		// https://github.com/libp2p/rust-libp2p/issues/316
-		let peers = match self.peerstore {
-			PeersStorage::Memory(ref mem) =>
+		let peers = match self.node_store {
+			NodesStore::Memory(ref mem) =>
 				mem.peers().collect::<Vec<_>>(),
-			PeersStorage::Json(ref json) =>
+			NodesStore::Json(ref json) =>
 				json.peers().collect::<Vec<_>>(),
 		};
 
@@ -256,10 +256,10 @@ impl NetworkState {
 	///
 	/// This includes peers we are not connected to.
 	pub fn known_peers(&self) -> impl Iterator<Item = PeerId> {
-		match self.peerstore {
-			PeersStorage::Memory(ref mem) =>
+		match self.node_store {
+			NodesStore::Memory(ref mem) =>
 				mem.peers().collect::<Vec<_>>().into_iter(),
-			PeersStorage::Json(ref json) =>
+			NodesStore::Json(ref json) =>
 				json.peers().collect::<Vec<_>>().into_iter(),
 		}
 	}
@@ -357,11 +357,11 @@ impl NetworkState {
 	pub fn add_kad_discovered_addr(&self, node_id: &PeerId, addr: Multiaddr) {
 		trace!(target: "sub-libp2p", "Peer store: adding address {} for {:?}",
 			addr, node_id);
-		match self.peerstore {
-			PeersStorage::Memory(ref mem) =>
+		match self.node_store {
+			NodesStore::Memory(ref mem) =>
 				mem.peer_or_create(node_id)
 					.add_addr(addr, Duration::from_secs(3600)),
-			PeersStorage::Json(ref json) =>
+			NodesStore::Json(ref json) =>
 				json.peer_or_create(node_id)
 					.add_addr(addr, Duration::from_secs(3600)),
 		}
@@ -370,15 +370,14 @@ impl NetworkState {
 	/// Signals that an address doesn't match the corresponding node ID.
 	/// This removes the address from the peer store, so that it is not
 	/// returned by `addrs_of_peer` again in the future.
-	pub fn set_invalid_kad_address(&self, node_id: &PeerId,
-		addr: &Multiaddr) {
+	pub fn set_invalid_kad_address(&self, node_id: &PeerId, addr: &Multiaddr) {
 		// TODO: blacklist the address?
-		match self.peerstore {
-			PeersStorage::Memory(ref mem) =>
+		match self.node_store {
+			NodesStore::Memory(ref mem) =>
 				if let Some(mut peer) = mem.peer(node_id) {
 					peer.rm_addr(addr.clone())		// TODO: cloning necessary?
 				},
-			PeersStorage::Json(ref json) =>
+			NodesStore::Json(ref json) =>
 				if let Some(mut peer) = json.peer(node_id) {
 					peer.rm_addr(addr.clone())		// TODO: cloning necessary?
 				},
@@ -387,13 +386,13 @@ impl NetworkState {
 
 	/// Returns the known multiaddresses of a peer.
 	pub fn addrs_of_peer(&self, node_id: &PeerId) -> Vec<Multiaddr> {
-		match self.peerstore {
-			PeersStorage::Memory(ref mem) =>
+		match self.node_store {
+			NodesStore::Memory(ref mem) =>
 				mem.peer(node_id)
 					.into_iter()
 					.flat_map(|p| p.addrs())
 					.collect::<Vec<_>>(),
-			PeersStorage::Json(ref json) =>
+			NodesStore::Json(ref json) =>
 				json.peer(node_id)
 					.into_iter()
 					.flat_map(|p| p.addrs())
@@ -426,13 +425,13 @@ impl NetworkState {
 	/// Adds a peer to the internal peer store.
 	/// Returns an error if the peer address is invalid.
 	pub fn add_peer(&self, peer: &str) -> Result<PeerId, Error> {
-		parse_and_add_to_peerstore(peer, &self.peerstore)
+		parse_and_add_to_node_store(peer, &self.node_store)
 	}
 
 	/// Adds a reserved peer to the list of reserved peers.
 	/// Returns an error if the peer address is invalid.
 	pub fn add_reserved_peer(&self, peer: &str) -> Result<(), Error> {
-		let id = parse_and_add_to_peerstore(peer, &self.peerstore)?;
+		let id = parse_and_add_to_node_store(peer, &self.node_store)?;
 		self.reserved_peers.write().insert(id);
 		Ok(())
 	}
@@ -441,7 +440,7 @@ impl NetworkState {
 	/// active connection to this peer.
 	/// Returns an error if the peer address is invalid.
 	pub fn remove_reserved_peer(&self, peer: &str) -> Result<(), Error> {
-		let id = parse_and_add_to_peerstore(peer, &self.peerstore)?;
+		let id = parse_and_add_to_node_store(peer, &self.node_store)?;
 		self.reserved_peers.write().remove(&id);
 
 		// Dropping the peer if we're in reserved mode.
@@ -604,8 +603,7 @@ impl NetworkState {
 
 	/// Sends some data to the given peer, using the sender that was passed
 	/// to the `UniqueConnec` of `custom_proto`.
-	pub fn send(&self, protocol: ProtocolId, who: NodeIndex, message: Bytes)
-		-> Result<(), Error> {
+	pub fn send(&self, protocol: ProtocolId, who: NodeIndex, message: Bytes) -> Result<(), Error> {
 		if let Some(peer) = self.connections.read().info_by_peer.get(&who) {
 			let sender = peer.protocols.iter().find(|elem| elem.0 == protocol)
 				.and_then(|e| e.1.poll())
@@ -650,14 +648,14 @@ impl NetworkState {
 			);
 		if alive_protocols == 0 {
 			// No reason to give if there's nothing happening on this peer.
-			self.drop_peer(who, None);
+			self.drop_peer(who);
 		}
 	}
 
 	/// Disconnects a peer, if a connection exists (ie. drops the Kademlia
 	/// controller, and the senders that were stored in the `UniqueConnec` of
 	/// `custom_proto`).
-	pub fn drop_peer(&self, who: NodeIndex, reason: Option<&str>) {
+	pub fn drop_peer(&self, who: NodeIndex) {
 		let mut connections = self.connections.write();
 		if let Some(peer_info) = connections.info_by_peer.remove(&who) {
 			trace!(target: "sub-libp2p", "Destroying peer #{} {:?} ; kademlia = {:?} ; num_protos = {:?}",
@@ -718,9 +716,9 @@ impl NetworkState {
 	/// This is done in an atomical way, so that an error doesn't corrupt
 	/// anything.
 	pub fn flush_caches_to_disk(&self) -> Result<(), IoError> {
-		match self.peerstore {
-			PeersStorage::Memory(_) => Ok(()),
-			PeersStorage::Json(ref json) =>
+		match self.node_store {
+			NodesStore::Memory(_) => Ok(()),
+			NodesStore::Json(ref json) =>
 				match json.flush() {
 					Ok(()) => {
 						debug!(target: "sub-libp2p", "Flushed JSON peer store to disk");
@@ -811,9 +809,11 @@ fn num_open_custom_connections(connections: &Connections) -> u32 {
 }
 
 /// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
-/// to the given peerstore. Returns the corresponding peer ID.
-fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
-	-> Result<PeerId, Error> {
+/// to the given node_store. Returns the corresponding peer ID.
+fn parse_and_add_to_node_store(
+	addr_str: &str,
+	node_store: &NodesStore
+) -> Result<PeerId, Error> {
 
 	let mut addr = addr_str.to_multiaddr().map_err(|_| ErrorKind::AddressParse)?;
 	let who = match addr.pop() {
@@ -823,13 +823,13 @@ fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 	};
 
 	// Registering the bootstrap node with a TTL of 100000 years   TODO: wrong
-	match peerstore {
-		PeersStorage::Memory(ref peerstore) =>
-			peerstore
+	match node_store {
+		NodesStore::Memory(ref node_store) =>
+			node_store
 				.peer_or_create(&who)
 				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
-		PeersStorage::Json(ref peerstore) =>
-			peerstore
+		NodesStore::Json(ref node_store) =>
+			node_store
 				.peer_or_create(&who)
 				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 	}
