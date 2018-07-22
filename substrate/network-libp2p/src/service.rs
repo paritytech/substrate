@@ -473,8 +473,7 @@ fn init_thread(
 				*shared.original_listened_addr.write() = Some(new_addr.clone());
 			},
 			Err(_) => {
-				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not \
-					supported", listen_addr);
+				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported", listen_addr);
 				return Err(ErrorKind::BadProtocol.into())
 			},
 		}
