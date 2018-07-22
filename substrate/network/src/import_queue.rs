@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
 
 use client::{BlockOrigin, BlockStatus, ImportResult};
-use network_libp2p::{PeerId, Severity};
+use network_libp2p::{NodeIndex, Severity};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
@@ -202,9 +202,9 @@ trait SyncLinkApi<B: BlockT> {
 	/// Maintain sync.
 	fn maintain_sync(&mut self);
 	/// Disconnect from peer.
-	fn useless_peer(&mut self, peer_id: PeerId, reason: &str);
+	fn useless_peer(&mut self, who: NodeIndex, reason: &str);
 	/// Disconnect from peer and restart sync.
-	fn note_useless_and_restart_sync(&mut self, peer_id: PeerId, reason: &str);
+	fn note_useless_and_restart_sync(&mut self, who: NodeIndex, reason: &str);
 	/// Restart sync.
 	fn restart(&mut self);
 }
@@ -233,9 +233,9 @@ enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debug + 
 #[derive(Debug, PartialEq)]
 enum BlockImportError {
 	/// Disconnect from peer and continue import of next bunch of blocks.
-	Disconnect(PeerId),
+	Disconnect(NodeIndex),
 	/// Disconnect from peer and restart sync.
-	DisconnectAndRestart(PeerId),
+	DisconnectAndRestart(NodeIndex),
 	/// Restart sync.
 	Restart,
 }
@@ -356,16 +356,16 @@ fn process_import_result<'a, B: BlockT>(
 			link.block_imported(&hash, number);
 			1
 		},
-		Err(BlockImportError::Disconnect(peer_id)) => {
+		Err(BlockImportError::Disconnect(who)) => {
 			// TODO: FIXME: @arkpar BlockImport shouldn't be trying to manage the peer set.
 			// This should contain an actual reason.
-			link.useless_peer(peer_id, "Import result was stated Disconnect");
+			link.useless_peer(who, "Import result was stated Disconnect");
 			0
 		},
-		Err(BlockImportError::DisconnectAndRestart(peer_id)) => {
+		Err(BlockImportError::DisconnectAndRestart(who)) => {
 			// TODO: FIXME: @arkpar BlockImport shouldn't be trying to manage the peer set.
 			// This should contain an actual reason.
-			link.note_useless_and_restart_sync(peer_id, "Import result was stated DisconnectAndRestart");
+			link.note_useless_and_restart_sync(who, "Import result was stated DisconnectAndRestart");
 			0
 		},
 		Err(BlockImportError::Restart) => {
@@ -408,13 +408,13 @@ impl<'a, B: 'static + BlockT, E: ExecuteInContext<B>> SyncLinkApi<B> for SyncLin
 		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
 	}
 
-	fn useless_peer(&mut self, peer_id: PeerId, reason: &str) {
-		self.with_sync(|_, protocol| protocol.report_peer(peer_id, Severity::Useless(reason)))
+	fn useless_peer(&mut self, who: NodeIndex, reason: &str) {
+		self.with_sync(|_, protocol| protocol.report_peer(who, Severity::Useless(reason)))
 	}
 
-	fn note_useless_and_restart_sync(&mut self, peer_id: PeerId, reason: &str) {
+	fn note_useless_and_restart_sync(&mut self, who: NodeIndex, reason: &str) {
 		self.with_sync(|sync, protocol| {
-			protocol.report_peer(peer_id, Severity::Useless(reason));	// is this actually malign or just useless?
+			protocol.report_peer(who, Severity::Useless(reason));	// is this actually malign or just useless?
 			sync.restart(protocol);
 		})
 	}
@@ -490,8 +490,8 @@ pub mod tests {
 		fn chain(&self) -> &Client<Block> { &*self.chain }
 		fn block_imported(&mut self, _hash: &Hash, _number: NumberFor<Block>) { self.imported += 1; }
 		fn maintain_sync(&mut self) { self.maintains += 1; }
-		fn useless_peer(&mut self, _: PeerId, _: &str) { self.disconnects += 1; }
-		fn note_useless_and_restart_sync(&mut self, _: PeerId, _: &str) { self.disconnects += 1; self.restarts += 1; }
+		fn useless_peer(&mut self, _: NodeIndex, _: &str) { self.disconnects += 1; }
+		fn note_useless_and_restart_sync(&mut self, _: NodeIndex, _: &str) { self.disconnects += 1; self.restarts += 1; }
 		fn restart(&mut self) { self.restarts += 1; }
 	}
 
