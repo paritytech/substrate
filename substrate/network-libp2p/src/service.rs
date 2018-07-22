@@ -149,8 +149,7 @@ impl NetworkService {
 		// reach us
 		self.shared.original_listened_addr.read().as_ref()
 			.map(|addr|
-				format!("{}/p2p/{}", addr,
-					self.shared.kad_system.local_peer_id().to_base58())
+				format!("{}/p2p/{}", addr, self.shared.kad_system.local_peer_id().to_base58())
 			)
 	}
 
