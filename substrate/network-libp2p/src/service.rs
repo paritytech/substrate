@@ -523,7 +523,7 @@ fn init_thread(
 					}
 				} else {
 					warn!(target: "sub-libp2p", "Not a valid Bootnode Address {:}", bootnode);
-						continue;
+					continue;
 				}
 			},
 			Err(err) => warn!(target:"sub-libp2p", "Couldn't parse Bootnode Address: {}", err),
