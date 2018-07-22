@@ -637,6 +637,26 @@ impl NetworkState {
 		self.connections.read().info_by_peer.get(&who).map(Into::into)
 	}
 
+	/// Reports that an attempt to make a low-level ping of the peer failed.
+	/// This might be spurious, so we don't drop the peer immediately if we
+	/// have high-level protocols running atop it.
+	/// TODO: 3-strikes and you're out mechanisn.
+	pub fn report_ping_failed(&self, who: PeerId) {
+		let alive_protocols = self.connections.read()
+			.info_by_peer
+			.get(&who)
+			.map_or(0, |peer_info| peer_info
+				.protocols
+				.iter()
+				.filter(|c| c.1.is_alive())
+				.count()
+			);
+		if alive_protocols == 0 {
+			// No reason to give if there's nothing happening on this peer.
+			self.drop_peer(who, None);
+		}
+	}
+
 	/// Disconnects a peer, if a connection exists (ie. drops the Kademlia
 	/// controller, and the senders that were stored in the `UniqueConnec` of
 	/// `custom_proto`).

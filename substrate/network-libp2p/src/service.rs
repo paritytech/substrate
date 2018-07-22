@@ -1291,7 +1291,7 @@ fn ping_all<T, St, C>(
 				match val {
 					Err(err) => {
 						trace!(target: "sub-libp2p", "Error while pinging #{:?} => {:?}", peer, err);
-						shared.network_state.drop_peer(peer, None);	// None so that we don't print messages on such low-level issues.
+						shared.network_state.report_ping_failed(peer);
 						// Return Ok, otherwise we would close the ping service
 						Ok(())
 					},
