@@ -663,16 +663,9 @@ impl NetworkState {
 	pub fn drop_peer(&self, peer_id: PeerId, reason: Option<&str>) {
 		let mut connections = self.connections.write();
 		if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
-			if let Some(reason) = reason {
-				if let (&Some(ref client_version), &Some(ref remote_address)) = (&peer_info.client_version, &peer_info.remote_address) {
-					debug!(target: "sub-libp2p", "Disconnected peer {} (version: {}, address: {}). {}", peer_id, client_version, remote_address, reason);
-				} else {
-					debug!(target: "sub-libp2p", "Disconnected peer {}. {}", peer_id, reason);
-				}
-			}
-
-			trace!(target: "sub-libp2p", "Destroying peer #{} {:?} ; \
-				kademlia = {:?} ; num_protos = {:?}", peer_id, peer_info.id,
+			trace!(target: "sub-libp2p", "Destroying peer #{} {:?} ; kademlia = {:?} ; num_protos = {:?}",
+				peer_id,
+				peer_info.id,
 				peer_info.kad_connec.is_alive(),
 				peer_info.protocols.iter().filter(|c| c.1.is_alive()).count());
 			// TODO: we manually clear the connections as a work-around for
@@ -701,7 +694,7 @@ impl NetworkState {
 	/// list of disabled peers, and  drops any existing connections if
 	/// necessary (ie. drops the sender that was stored in the `UniqueConnec`
 	/// of `custom_proto`).
-	pub fn disable_peer(&self, peer_id: PeerId, reason: &str) {
+	pub fn ban_peer(&self, peer_id: PeerId, reason: &str) {
 		// TODO: what do we do if the peer is reserved?
 		// TODO: same logging as in disconnect_peer
 		let mut connections = self.connections.write();
@@ -733,13 +726,11 @@ impl NetworkState {
 			PeersStorage::Json(ref json) =>
 				match json.flush() {
 					Ok(()) => {
-						debug!(target: "sub-libp2p", "Flushed JSON peer store \
-							to disk");
+						debug!(target: "sub-libp2p", "Flushed JSON peer store to disk");
 						Ok(())
 					}
 					Err(err) => {
-						warn!(target: "sub-libp2p", "Failed to flush changes \
-							to JSON peer store: {}", err);
+						warn!(target: "sub-libp2p", "Failed to flush changes to JSON peer store: {}", err);
 						Err(err)
 					}
 				}
@@ -768,8 +759,7 @@ fn accept_connection(
 
 	let peer_id = *peer_by_nodeid.entry(node_id.clone()).or_insert_with(|| {
 		let new_id = next_peer_id.fetch_add(1, atomic::Ordering::Relaxed);
-		trace!(target: "sub-libp2p", "Creating new peer #{:?} for {:?}",
-			new_id, node_id);
+		trace!(target: "sub-libp2p", "Creating new peer #{:?} for {:?}", new_id, node_id);
 
 		info_by_peer.insert(new_id, PeerConnectionInfo {
 			protocols: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
@@ -868,9 +858,11 @@ fn obtain_private_key(config: &NetworkConfiguration)
 				Ok(s) => Ok(s),
 				Err(err) => {
 					// Failed to fetch existing file ; generate a new key
-					trace!(target: "sub-libp2p", "Failed to load existing \
-						secret key file {:?},  generating new key ; err = {:?}",
-						secret_path, err);
+					trace!(target: "sub-libp2p",
+						"Failed to load existing secret key file {:?},  generating new key ; err = {:?}",
+						secret_path,
+						err
+					);
 					Ok(gen_key_and_try_write_to_file(&secret_path))
 				}
 			}
@@ -881,8 +873,7 @@ fn obtain_private_key(config: &NetworkConfiguration)
 			let mut key: [u8; 32] = [0; 32];
 			rand::rngs::EntropyRng::new().fill(&mut key);
 			Ok(secio::SecioKeyPair::secp256k1_raw_key(&key)
-				.expect("randomly-generated key with correct len should \
-					always be valid"))
+				.expect("randomly-generated key with correct len should always be valid"))
 		}
 	}
 }
@@ -919,12 +910,17 @@ fn gen_key_and_try_write_to_file<P>(path: P) -> secio::SecioKeyPair
 		Ok(mut file) =>
 			match file.write_all(&raw_key) {
 				Ok(()) => (),
-				Err(err) => warn!(target: "sub-libp2p", "Failed to write \
-					secret key in file {:?} ; err = {:?}", path.as_ref(), err),
+				Err(err) => warn!(target: "sub-libp2p",
+					"Failed to write secret key in file {:?} ; err = {:?}",
+					path.as_ref(),
+					err
+				),
 			},
-		Err(err) =>
-			warn!(target: "sub-libp2p", "Failed to store secret key in file \
-				{:?} ; err = {:?}", path.as_ref(), err),
+		Err(err) => warn!(target: "sub-libp2p",
+			"Failed to store secret key in file {:?} ; err = {:?}",
+			path.as_ref(),
+			err
+		),
 	}
 
 	secio_key
@@ -969,7 +965,7 @@ mod tests {
 			Endpoint::Dialer
 		).unwrap();
 
-		state.disable_peer(peer_id, "Just a test");
+		state.ban_peer(peer_id, "Just a test");
 
 		assert!(state.custom_proto(
 			example_peer.clone(),

@@ -339,7 +339,7 @@ impl NetworkContext for NetworkContextImpl {
 			}
 		}
 		match reason {
-			Severity::Bad(reason) => self.inner.network_state.disable_peer(peer, reason),
+			Severity::Bad(reason) => self.inner.network_state.ban_peer(peer, reason),
 			Severity::Useless(reason) => self.inner.network_state.drop_peer(peer, Some(reason)),
 			Severity::Timeout => self.inner.network_state.drop_peer(peer, Some("Timeout waiting for response")),
 		}
