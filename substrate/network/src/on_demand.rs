@@ -28,7 +28,7 @@ use client;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 use io::SyncIo;
 use message;
-use network_libp2p::PeerId;
+use network_libp2p::{Severity, PeerId};
 use service;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
@@ -137,8 +137,7 @@ impl<B: BlockT, E> OnDemand<B, E> where
 		let request = match core.remove(peer, request_id) {
 			Some(request) => request,
 			None => {
-				trace!(target: "sync", "Invalid remote {} response from peer {}", rtype, peer);
-				io.disconnect_peer(peer);
+				io.report_peer(peer, Severity::Bad(&format!("Invalid remote {} response from peer", rtype)));
 				core.remove_peer(peer);
 				return;
 			},
@@ -147,9 +146,7 @@ impl<B: BlockT, E> OnDemand<B, E> where
 		let retry_request_data = match try_accept(request) {
 			Accept::Ok => None,
 			Accept::CheckFailed(error, retry_request_data) => {
-				trace!(target: "sync", "Failed to check remote {} response from peer {}: {}", rtype, peer, error);
-
-				io.disconnect_peer(peer);
+				io.report_peer(peer, Severity::Bad(&format!("Failed to check remote {} response from peer: {}", rtype, error)));
 				core.remove_peer(peer);
 				Some(retry_request_data)
 			},
@@ -187,8 +184,7 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 	fn maintain_peers(&self, io: &mut SyncIo) {
 		let mut core = self.core.lock();
 		for bad_peer in core.maintain_peers() {
-			trace!(target: "sync", "Remote request timeout for peer {}", bad_peer);
-			io.disconnect_peer(bad_peer);
+			io.report_peer(bad_peer, Severity::Timeout);
 		}
 		core.dispatch();
 	}

@@ -73,9 +73,9 @@ impl NetworkProtocolHandler for TestProtocol {
 
 	fn connected(&self, io: &NetworkContext, peer: &PeerId) {
 		if self.drop_session {
-			io.disconnect_peer(*peer)
+			io.report_peer(*peer, Severity::Bad("We are evil and just want to drop"))
 		} else {
-			io.respond(33, "hello".to_owned().into_bytes()).unwrap();
+			io.respond(33, "hello".to_owned().into_bytes());
 		}
 	}
 

@@ -24,7 +24,7 @@ use polkadot_primitives::{Block, Hash, SessionKey};
 use polkadot_primitives::parachain::{CandidateReceipt, HeadData, BlockData};
 use substrate_primitives::H512;
 use codec::Encode;
-use substrate_network::{PeerId, PeerInfo, ClientHandle, Context, Roles, message::Message as SubstrateMessage, specialization::Specialization, generic_message::Message as GenericMessage};
+use substrate_network::{Severity, PeerId, PeerInfo, ClientHandle, Context, Roles, message::Message as SubstrateMessage, specialization::Specialization, generic_message::Message as GenericMessage};
 
 use std::sync::Arc;
 use futures::Future;
@@ -41,12 +41,11 @@ impl Context<Block> for TestContext {
 		unimplemented!()
 	}
 
-	fn disable_peer(&mut self, peer: PeerId, _reason: &str) {
-		self.disabled.push(peer);
-	}
-
-	fn disconnect_peer(&mut self, peer: PeerId) {
-		self.disconnected.push(peer);
+	fn report_peer(&mut self, peer: PeerId, reason: Severity) {
+		match reason {
+			Severity::Bad(_) => self.disabled.push(peer),
+			_ => self.disconnected.push(peer),
+		}
 	}
 
 	fn peer_info(&self, _peer: PeerId) -> Option<PeerInfo<Block>> {

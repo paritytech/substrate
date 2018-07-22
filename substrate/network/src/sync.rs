@@ -17,7 +17,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use protocol::Context;
-use network_libp2p::PeerId;
+use network_libp2p::{Severity, PeerId};
 use client::{BlockStatus, BlockOrigin, ClientInfo};
 use client::error::Error as ClientError;
 use blocks::{self, BlockCollection};
@@ -124,13 +124,13 @@ impl<B: BlockT> ChainSync<B> {
 			match (block_status(&*protocol.client(), &*self.import_queue, info.best_hash), info.best_number) {
 				(Err(e), _) => {
 					debug!(target:"sync", "Error reading blockchain: {:?}", e);
-					protocol.disconnect_peer(peer_id);
+					protocol.report_peer(peer_id, Severity::Useless(&format!("Error legimimately reading blockchain status: {:?}", e)));
 				},
 				(Ok(BlockStatus::KnownBad), _) => {
-					protocol.disable_peer(peer_id, &format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number));
+					protocol.report_peer(peer_id, Severity::Bad(&format!("New peer with known bad best block {} ({}).", info.best_hash, info.best_number)));
 				},
 				(Ok(BlockStatus::Unknown), b) if b == As::sa(0) => {
-					protocol.disable_peer(peer_id, &format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number));
+					protocol.report_peer(peer_id, Severity::Bad(&format!("New peer with unknown genesis hash {} ({}).", info.best_hash, info.best_number)));
 				},
 				(Ok(BlockStatus::Unknown), _) => {
 					let our_best = self.best_queued_number;
@@ -211,19 +211,18 @@ impl<B: BlockT> ChainSync<B> {
 								},
 								Ok(_) => { // genesis mismatch
 									trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", peer_id);
-									protocol.disable_peer(peer_id, "Ancestry search: genesis mismatch for peer");
+									protocol.report_peer(peer_id, Severity::Bad("Ancestry search: genesis mismatch for peer"));
 									return;
 								},
 								Err(e) => {
-									debug!(target:"sync", "Error reading blockchain: {:?}", e);
-									protocol.disconnect_peer(peer_id);
+									protocol.report_peer(peer_id, Severity::Useless(&format!("Error answering legitimate blockchain query: {:?}", e)));
 									return;
 								}
 							}
 						},
 						None => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", peer_id);
-							protocol.disconnect_peer(peer_id);
+							protocol.report_peer(peer_id, Severity::Bad("Invalid response when searching for ancestor"));
 							return;
 						}
 					}
