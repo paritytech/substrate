@@ -77,7 +77,7 @@ struct Shared {
 	kad_upgrade: KadConnecConfig,
 
 	/// List of protocols available on the network. It is a logic error to
-	/// remote protocols from this list, and the code may assume that protocols
+	/// remove protocols from this list, and the code may assume that protocols
 	/// stay at the same index forever.
 	protocols: RwLock<RegisteredProtocols<Arc<NetworkProtocolHandler + Send + Sync>>>,
 
