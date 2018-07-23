@@ -181,7 +181,7 @@ subcommands:
   - revert:
       about: Revert chain to the previous state
       args:
-          - BLOCKS:
+          - NUM:
               index: 1
               help: Number of blocks to revert. Default is 256.
           - chain:

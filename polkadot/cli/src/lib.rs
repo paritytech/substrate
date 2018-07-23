@@ -503,7 +503,7 @@ fn revert_chain(matches: &clap::ArgMatches) -> error::Result<()> {
 
 	let client = service::new_client(config)?;
 
-	let blocks = match matches.value_of("BLOCKS") {
+	let blocks = match matches.value_of("NUM") {
 		Some(v) => v.parse().map_err(|_| "Invalid block count specified")?,
 		None => 256,
 	};
