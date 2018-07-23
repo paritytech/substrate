@@ -66,7 +66,7 @@ pub struct NetworkState {
 
 	/// List of the IDs of the disabled peers. These peers will see their
 	/// connections refused. Includes the time when the disabling expires.
-	disabled_peers: Mutex<FnvHashMap<PeerId, Instant>>,
+	disabled_nodes: Mutex<FnvHashMap<PeerId, Instant>>,
 
 	/// Local private key.
 	local_private_key: secio::SecioKeyPair,
@@ -114,6 +114,12 @@ struct PeerConnectionInfo {
 
 	/// Latest known ping duration.
 	ping: Mutex<Option<Duration>>,
+
+	/// Total number of missed pings this time.
+	missed_pings: usize,
+
+	/// Total number of missed pings in a row.
+	missed_in_a_row: usize,
 
 	/// The client version of the remote, or `None` if not known.
 	client_version: Option<String>,
@@ -215,7 +221,7 @@ impl NetworkState {
 			reserved_only: atomic::AtomicBool::new(false),
 			reserved_peers,
 			next_node_index: atomic::AtomicUsize::new(0),
-			disabled_peers: Mutex::new(Default::default()),
+			disabled_nodes: Mutex::new(Default::default()),
 			local_private_key,
 			local_public_key,
 		})
@@ -285,12 +291,12 @@ impl NetworkState {
 	/// Reports the ping of the peer. Returned later by `session_info()`.
 	/// No-op if the `who` is not valid/expired.
 	pub fn report_ping_duration(&self, who: NodeIndex, ping: Duration) {
-		let connections = self.connections.read();
-		let info = match connections.info_by_peer.get(&who) {
+		let mut connections = self.connections.write();
+		let info = match connections.info_by_peer.get_mut(&who) {
 			Some(info) => info,
 			None => return,
 		};
-
+		info.missed_in_a_row = 0;
 		*info.ping.lock() = Some(ping);
 	}
 
@@ -565,11 +571,9 @@ impl NetworkState {
 	) -> Result<(NodeIndex, UniqueConnec<(mpsc::UnboundedSender<Bytes>, u8)>), IoError> {
 		let mut connections = self.connections.write();
 
-		if is_peer_disabled(&self.disabled_peers, &node_id) {
-			debug!(target: "sub-libp2p", "Refusing node {:?} because it was \
-				disabled", node_id);
-			return Err(IoError::new(IoErrorKind::PermissionDenied,
-				"disabled peer"))
+		if is_peer_disabled(&self.disabled_nodes, &node_id) {
+			debug!(target: "sub-libp2p", "Refusing node {:?} because it was disabled", node_id);
+			return Err(IoError::new(IoErrorKind::PermissionDenied, "disabled peer"))
 		}
 
 		let who = accept_connection(&mut connections, &self.next_node_index,
@@ -585,10 +589,8 @@ impl NetworkState {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
 				num_open_connections >= self.max_peers
 			{
-				debug!(target: "sub-libp2p", "Refusing node {:?} because we \
-					reached the max number of peers", node_id);
-				return Err(IoError::new(IoErrorKind::PermissionDenied,
-					"maximum number of peers reached"))
+				debug!(target: "sub-libp2p", "Refusing node {:?} because we reached the max number of peers", node_id);
+				return Err(IoError::new(IoErrorKind::PermissionDenied, "maximum number of peers reached"))
 			}
 		}
 
@@ -637,16 +639,21 @@ impl NetworkState {
 	/// have high-level protocols running atop it.
 	/// TODO: 3-strikes and you're out mechanisn.
 	pub fn report_ping_failed(&self, who: NodeIndex) {
-		let alive_protocols = self.connections.read()
-			.info_by_peer
-			.get(&who)
-			.map_or(0, |peer_info| peer_info
-				.protocols
+		const MISSED_PONGS_ALLOWED: usize = 3;
+		let should_drop = if let Some(mut peer_info) =
+			self.connections.write().info_by_peer.get_mut(&who)
+		{
+			let alive_connections = peer_info.protocols
 				.iter()
 				.filter(|c| c.1.is_alive())
-				.count()
-			);
-		if alive_protocols == 0 {
+				.count();
+			peer_info.missed_in_a_row += 1;
+			peer_info.missed_pings += 1;
+			alive_connections == 0 || peer_info.missed_in_a_row >= MISSED_PONGS_ALLOWED
+		} else {
+			true
+		};
+		if should_drop {
 			// No reason to give if there's nothing happening on this peer.
 			self.drop_peer(who);
 		}
@@ -708,7 +715,7 @@ impl NetworkState {
 
 		drop(connections);
 		let timeout = Instant::now() + PEER_DISABLE_DURATION;
-		self.disabled_peers.lock().insert(peer_info.id.clone(), timeout);
+		self.disabled_nodes.lock().insert(peer_info.id.clone(), timeout);
 	}
 
 	/// Flushes the caches to the disk.
@@ -766,6 +773,8 @@ fn accept_connection(
 			client_version: None,
 			local_address: None,
 			remote_address: None,
+			missed_in_a_row: 0,
+			missed_pings: 0,
 		});
 		new_id
 	});
