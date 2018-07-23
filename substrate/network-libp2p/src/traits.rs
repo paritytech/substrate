@@ -36,7 +36,8 @@ pub type ProtocolId = [u8; 3];
 pub type NodeId = H512;
 
 /// Local (temporary) peer session ID.
-pub type PeerId = usize;
+/// RENAME TO NodeIndex
+pub type NodeIndex = usize;
 
 /// Messages used to communitate with the event loop from other threads.
 #[derive(Clone)]
@@ -62,9 +63,9 @@ pub enum NetworkIoMessage {
 	/// Initliaze public interface.
 	InitPublicInterface,
 	/// Disconnect a peer.
-	Disconnect(PeerId),
+	Disconnect(NodeIndex),
 	/// Disconnect and temporary disable peer.
-	DisablePeer(PeerId),
+	DisablePeer(NodeIndex),
 	/// Network has been started with the host as the given enode.
 	NetworkStarted(String),
 }
@@ -240,16 +241,16 @@ impl<'a> fmt::Display for Severity<'a> {
 /// IO access point. This is passed to all IO handlers and provides an interface to the IO subsystem.
 pub trait NetworkContext {
 	/// Send a packet over the network to another peer.
-	fn send(&self, peer: PeerId, packet_id: PacketId, data: Vec<u8>);
+	fn send(&self, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>);
 
 	/// Send a packet over the network to another peer using specified protocol.
-	fn send_protocol(&self, protocol: ProtocolId, peer: PeerId, packet_id: PacketId, data: Vec<u8>);
+	fn send_protocol(&self, protocol: ProtocolId, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>);
 
 	/// Respond to a current network message. Panics if no there is no packet in the context. If the session is expired returns nothing.
 	fn respond(&self, packet_id: PacketId, data: Vec<u8>);
 
 	/// Report peer. Depending on the report, peer may be disconnected and possibly banned.
-	fn report_peer(&self, peer: PeerId, reason: Severity);
+	fn report_peer(&self, peer: NodeIndex, reason: Severity);
 
 	/// Check if the session is still active.
 	fn is_expired(&self) -> bool;
@@ -258,24 +259,24 @@ pub trait NetworkContext {
 	fn register_timer(&self, token: TimerToken, delay: Duration) -> Result<(), Error>;
 
 	/// Returns peer identification string
-	fn peer_client_version(&self, peer: PeerId) -> String;
+	fn peer_client_version(&self, peer: NodeIndex) -> String;
 
 	/// Returns information on p2p session
-	fn session_info(&self, peer: PeerId) -> Option<SessionInfo>;
+	fn session_info(&self, peer: NodeIndex) -> Option<SessionInfo>;
 
 	/// Returns max version for a given protocol.
-	fn protocol_version(&self, protocol: ProtocolId, peer: PeerId) -> Option<u8>;
+	fn protocol_version(&self, protocol: ProtocolId, peer: NodeIndex) -> Option<u8>;
 
 	/// Returns this object's subprotocol name.
 	fn subprotocol_name(&self) -> ProtocolId;
 }
 
 impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
-	fn send(&self, peer: PeerId, packet_id: PacketId, data: Vec<u8>) {
+	fn send(&self, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>) {
 		(**self).send(peer, packet_id, data)
 	}
 
-	fn send_protocol(&self, protocol: ProtocolId, peer: PeerId, packet_id: PacketId, data: Vec<u8>) {
+	fn send_protocol(&self, protocol: ProtocolId, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>) {
 		(**self).send_protocol(protocol, peer, packet_id, data)
 	}
 
@@ -283,7 +284,7 @@ impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
 		(**self).respond(packet_id, data)
 	}
 
-	fn report_peer(&self, peer: PeerId, reason: Severity) {
+	fn report_peer(&self, peer: NodeIndex, reason: Severity) {
 		(**self).report_peer(peer, reason)
 	}
 
@@ -295,15 +296,15 @@ impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
 		(**self).register_timer(token, delay)
 	}
 
-	fn peer_client_version(&self, peer: PeerId) -> String {
+	fn peer_client_version(&self, peer: NodeIndex) -> String {
 		(**self).peer_client_version(peer)
 	}
 
-	fn session_info(&self, peer: PeerId) -> Option<SessionInfo> {
+	fn session_info(&self, peer: NodeIndex) -> Option<SessionInfo> {
 		(**self).session_info(peer)
 	}
 
-	fn protocol_version(&self, protocol: ProtocolId, peer: PeerId) -> Option<u8> {
+	fn protocol_version(&self, protocol: ProtocolId, peer: NodeIndex) -> Option<u8> {
 		(**self).protocol_version(protocol, peer)
 	}
 
@@ -319,11 +320,11 @@ pub trait NetworkProtocolHandler: Sync + Send {
 	/// Initialize the handler
 	fn initialize(&self, _io: &NetworkContext) {}
 	/// Called when new network packet received.
-	fn read(&self, io: &NetworkContext, peer: &PeerId, packet_id: u8, data: &[u8]);
+	fn read(&self, io: &NetworkContext, peer: &NodeIndex, packet_id: u8, data: &[u8]);
 	/// Called when new peer is connected. Only called when peer supports the same protocol.
-	fn connected(&self, io: &NetworkContext, peer: &PeerId);
+	fn connected(&self, io: &NetworkContext, peer: &NodeIndex);
 	/// Called when a previously connected peer disconnects.
-	fn disconnected(&self, io: &NetworkContext, peer: &PeerId);
+	fn disconnected(&self, io: &NetworkContext, peer: &NodeIndex);
 	/// Timer function called after a timeout created with `NetworkContext::timeout`.
 	fn timeout(&self, _io: &NetworkContext, _timer: TimerToken) {}
 }
