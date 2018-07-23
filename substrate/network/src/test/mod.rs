@@ -28,7 +28,7 @@ use io::SyncIo;
 use protocol::{Context, Protocol};
 use config::ProtocolConfig;
 use service::TransactionPool;
-use network_libp2p::{PeerId, SessionInfo, Error as NetworkError};
+use network_libp2p::{PeerId, SessionInfo, Severity};
 use keyring::Keyring;
 use codec::Encode;
 use import_queue::tests::SyncImportQueue;
@@ -81,11 +81,7 @@ impl<'p> Drop for TestIo<'p> {
 }
 
 impl<'p> SyncIo for TestIo<'p> {
-	fn disable_peer(&mut self, peer_id: PeerId, _reason: &str) {
-		self.disconnect_peer(peer_id);
-	}
-
-	fn disconnect_peer(&mut self, peer_id: PeerId) {
+	fn report_peer(&mut self, peer_id: PeerId, _reason: Severity) {
 		self.to_disconnect.insert(peer_id);
 	}
 
@@ -93,12 +89,11 @@ impl<'p> SyncIo for TestIo<'p> {
 		false
 	}
 
-	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) -> Result<(), NetworkError> {
+	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) {
 		self.packets.push(TestPacket {
 			data: data,
 			recipient: peer_id,
 		});
-		Ok(())
 	}
 
 	fn peer_info(&self, peer_id: PeerId) -> String {

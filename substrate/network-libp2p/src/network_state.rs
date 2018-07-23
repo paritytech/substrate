@@ -1,28 +1,29 @@
 // Copyright 2018 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
 
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
-use futures::{future, sync::mpsc};
-use libp2p::core::{Multiaddr, AddrComponent, Endpoint, UniqueConnec};
-use libp2p::core::{PeerId as PeerstorePeerId, PublicKey};
+use futures::sync::mpsc;
+use libp2p::core::{multiaddr::ToMultiaddr, Multiaddr, AddrComponent, Endpoint, UniqueConnec};
+use libp2p::core::{UniqueConnecState, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::kad::KadConnecController;
 use libp2p::peerstore::{Peerstore, PeerAccess};
 use libp2p::peerstore::json_peerstore::JsonPeerstore;
 use libp2p::peerstore::memory_peerstore::MemoryPeerstore;
+use libp2p::ping::Pinger;
 use libp2p::secio;
 use {Error, ErrorKind, NetworkConfiguration, NonReservedPeerMode};
 use {PeerId, ProtocolId, SessionInfo};
@@ -99,6 +100,9 @@ struct PeerConnectionInfo {
 	/// The Kademlia connection to this node.
 	kad_connec: UniqueConnec<KadConnecController>,
 
+	/// The ping connection to this node.
+	ping_connec: UniqueConnec<Pinger>,
+
 	/// Id of the peer.
 	id: PeerstorePeerId,
 
@@ -120,6 +124,45 @@ struct PeerConnectionInfo {
 	/// The local multiaddress used to communicate with the remote, or `None`
 	/// if not known.
 	local_address: Option<Multiaddr>,
+}
+
+/// Simplified, POD version of PeerConnectionInfo.
+#[derive(Debug, Clone)]
+pub struct PeerInfo {
+	/// Id of the peer.
+	pub id: PeerstorePeerId,
+
+	/// True if this connection was initiated by us.
+	/// Note that it is theoretically possible that we dial the remote at the
+	/// same time they dial us, in which case the protocols may be dispatched
+	/// between both connections, and in which case the value here will be racy.
+	pub originated: bool,
+
+	/// Latest known ping duration.
+	pub ping: Option<Duration>,
+
+	/// The client version of the remote, or `None` if not known.
+	pub client_version: Option<String>,
+
+	/// The multiaddress of the remote, or `None` if not known.
+	pub remote_address: Option<Multiaddr>,
+
+	/// The local multiaddress used to communicate with the remote, or `None`
+	/// if not known.
+	pub local_address: Option<Multiaddr>,
+}
+
+impl<'a> From<&'a PeerConnectionInfo> for PeerInfo {
+	fn from(i: &'a PeerConnectionInfo) -> PeerInfo {
+		PeerInfo {
+			id: i.id.clone(),
+			originated: i.originated,
+			ping: i.ping.lock().clone(),
+			client_version: i.client_version.clone(),
+			remote_address: i.remote_address.clone(),
+			local_address: i.local_address.clone(),
+		}
+	}
 }
 
 impl NetworkState {
@@ -145,10 +188,6 @@ impl NetworkState {
 				won't be saved");
 			PeersStorage::Memory(MemoryPeerstore::empty())
 		};
-
-		for bootnode in config.boot_nodes.iter() {
-			parse_and_add_to_peerstore(bootnode, &peerstore)?;
-		}
 
 		let reserved_peers = {
 			let mut reserved_peers = FnvHashSet::with_capacity_and_hasher(
@@ -192,7 +231,28 @@ impl NetworkState {
 		&self.local_public_key
 	}
 
-	/// Returns all the IDs of the peer we have knowledge of.
+	/// Returns the ID of a random peer of the network.
+	///
+	/// Returns `None` if we don't know any peer.
+	pub fn random_peer(&self) -> Option<PeerstorePeerId> {
+		// TODO: optimize by putting the operation directly in the peerstore
+		// https://github.com/libp2p/rust-libp2p/issues/316
+		let peers = match self.peerstore {
+			PeersStorage::Memory(ref mem) =>
+				mem.peers().collect::<Vec<_>>(),
+			PeersStorage::Json(ref json) =>
+				json.peers().collect::<Vec<_>>(),
+		};
+
+		if peers.is_empty() {
+			return None
+		}
+
+		let nth = rand::random::<usize>() % peers.len();
+		Some(peers[nth].clone())
+	}
+
+	/// Returns all the IDs of the peers on the network we have knowledge of.
 	///
 	/// This includes peers we are not connected to.
 	pub fn known_peers(&self) -> impl Iterator<Item = PeerstorePeerId> {
@@ -224,8 +284,7 @@ impl NetworkState {
 
 	/// Reports the ping of the peer. Returned later by `session_info()`.
 	/// No-op if the `peer_id` is not valid/expired.
-	#[allow(dead_code)]
-	pub fn report_ping(&self, peer_id: PeerId, ping: Duration) {
+	pub fn report_ping_duration(&self, peer_id: PeerId, ping: Duration) {
 		let connections = self.connections.read();
 		let info = match connections.info_by_peer.get(&peer_id) {
 			Some(info) => info,
@@ -299,6 +358,8 @@ impl NetworkState {
 	/// Adds an address discovered by Kademlia.
 	/// Note that we don't have to be connected to a peer to add an address.
 	pub fn add_kad_discovered_addr(&self, node_id: &PeerstorePeerId, addr: Multiaddr) {
+		trace!(target: "sub-libp2p", "Peer store: adding address {} for {:?}",
+			addr, node_id);
 		match self.peerstore {
 			PeersStorage::Memory(ref mem) =>
 				mem.peer_or_create(node_id)
@@ -365,6 +426,12 @@ impl NetworkState {
 		Ok(peer_id)
 	}
 
+	/// Adds a peer to the internal peer store.
+	/// Returns an error if the peer address is invalid.
+	pub fn add_peer(&self, peer: &str) -> Result<PeerstorePeerId, Error> {
+		parse_and_add_to_peerstore(peer, &self.peerstore)
+	}
+
 	/// Adds a reserved peer to the list of reserved peers.
 	/// Returns an error if the peer address is invalid.
 	pub fn add_reserved_peer(&self, peer: &str) -> Result<(), Error> {
@@ -402,11 +469,20 @@ impl NetworkState {
 		}
 	}
 
-	/// Returns true if we should open a new outgoing connection to a peer.
-	/// This takes into account the number of active peers.
-	pub fn should_open_outgoing_connections(&self) -> bool {
-		!self.reserved_only.load(atomic::Ordering::Relaxed) &&
-			self.connections.read().peer_by_nodeid.len() < self.min_peers as usize
+	/// Returns the number of open and pending connections with
+	/// custom protocols.
+	pub fn num_open_custom_connections(&self) -> u32 {
+		num_open_custom_connections(&self.connections.read())
+	}
+
+	/// Returns the number of new outgoing custom connections to peers to
+	/// open. This takes into account the number of active peers.
+	pub fn should_open_outgoing_custom_connections(&self) -> u32 {
+		if self.reserved_only.load(atomic::Ordering::Relaxed) {
+			0
+		} else {
+			self.min_peers.saturating_sub(self.num_open_custom_connections())
+		}
 	}
 
 	/// Returns true if we are connected to the given node.
@@ -415,7 +491,7 @@ impl NetworkState {
 		connections.peer_by_nodeid.contains_key(node_id)
 	}
 
-	/// Obtains the `UniqueConnec` corresponding to the Kademlia connect to a peer.
+	/// Obtains the `UniqueConnec` corresponding to the Kademlia connection to a peer.
 	pub fn kad_connection(
 		&self,
 		node_id: PeerstorePeerId
@@ -429,6 +505,48 @@ impl NetworkState {
 			.expect("Newly-created peer id is always valid");
 		let connec = infos.kad_connec.clone();
 		Ok((peer_id, connec))
+	}
+
+	/// Obtains the `UniqueConnec` corresponding to the Ping connection to a peer.
+	pub fn ping_connection(
+		&self,
+		node_id: PeerstorePeerId
+	) -> Result<(PeerId, UniqueConnec<Pinger>), IoError> {
+		let mut connections = self.connections.write();
+		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
+			node_id, Endpoint::Listener)?;
+		let infos = connections.info_by_peer.get_mut(&peer_id)
+			.expect("Newly-created peer id is always valid");
+		let connec = infos.ping_connec.clone();
+		Ok((peer_id, connec))
+	}
+
+	/// Cleans up inactive connections and returns a list of
+	/// connections to ping.
+	pub fn cleanup_and_prepare_ping(
+		&self
+	) -> Vec<(PeerId, PeerstorePeerId, UniqueConnec<Pinger>)> {
+		let mut connections = self.connections.write();
+		let connections = &mut *connections;
+		let peer_by_nodeid = &mut connections.peer_by_nodeid;
+		let info_by_peer = &mut connections.info_by_peer;
+
+		let mut ret = Vec::with_capacity(info_by_peer.len());
+		info_by_peer.retain(|&peer_id, infos| {
+			// Remove the peer if neither Kad nor any protocol is alive.
+			if !infos.kad_connec.is_alive() &&
+				!infos.protocols.iter().any(|(_, conn)| conn.is_alive())
+			{
+				peer_by_nodeid.remove(&infos.id);
+				trace!(target: "sub-libp2p", "Cleaning up expired peer \
+					#{:?} ({:?})", peer_id, infos.id);
+				return false;
+			}
+
+			ret.push((peer_id, infos.id.clone(), infos.ping_connec.clone()));
+			true
+		});
+		ret
 	}
 
 	/// Try to add a new connection to a node in the list.
@@ -461,16 +579,15 @@ impl NetworkState {
 		let peer_id = accept_connection(&mut connections, &self.next_peer_id,
 			node_id.clone(), endpoint)?;
 
-		let connections = &mut *connections;
-		let info_by_peer = &mut connections.info_by_peer;
-		let peer_by_nodeid = &mut connections.peer_by_nodeid;
-		let infos = info_by_peer.get_mut(&peer_id)
+		let num_open_connections = num_open_custom_connections(&connections);
+
+		let infos = connections.info_by_peer.get_mut(&peer_id)
 			.expect("Newly-created peer id is always valid");
 
 		let node_is_reserved = self.reserved_peers.read().contains(&infos.id);
 		if !node_is_reserved {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
-				peer_by_nodeid.len() >= self.max_peers as usize
+				num_open_connections >= self.max_peers
 			{
 				debug!(target: "sub-libp2p", "Refusing node {:?} because we \
 					reached the max number of peers", node_id);
@@ -503,24 +620,45 @@ impl NetworkState {
 			} else {
 				// We are connected to this peer, but not with the current
 				// protocol.
-				debug!(target: "sub-libp2p", "Tried to send message to peer {} \
-					for which we aren't connected with the requested protocol",
-					peer_id);
+				debug!(target: "sub-libp2p",
+					"Tried to send message to peer {} for which we aren't connected with the requested protocol",
+					peer_id
+				);
 				return Err(ErrorKind::PeerNotFound.into())
 			}
 		} else {
-			debug!(target: "sub-libp2p", "Tried to send message to invalid \
-				peer ID {}", peer_id);
+			debug!(target: "sub-libp2p", "Tried to send message to invalid peer ID {}", peer_id);
 			return Err(ErrorKind::PeerNotFound.into())
 		}
+	}
+
+	/// Get the info on a peer, if there's an active connection.
+	pub fn peer_info(&self, who: PeerId) -> Option<PeerInfo> {
+		self.connections.read().info_by_peer.get(&who).map(Into::into)
 	}
 
 	/// Disconnects a peer, if a connection exists (ie. drops the Kademlia
 	/// controller, and the senders that were stored in the `UniqueConnec` of
 	/// `custom_proto`).
-	pub fn disconnect_peer(&self, peer_id: PeerId) {
+	pub fn drop_peer(&self, peer_id: PeerId, reason: Option<&str>) {
 		let mut connections = self.connections.write();
 		if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
+			if let Some(reason) = reason {
+				if let (&Some(ref client_version), &Some(ref remote_address)) = (&peer_info.client_version, &peer_info.remote_address) {
+					debug!(target: "sub-libp2p", "Disconnected peer {} (version: {}, address: {}). {}", peer_id, client_version, remote_address, reason);
+				} else {
+					debug!(target: "sub-libp2p", "Disconnected peer {}. {}", peer_id, reason);
+				}
+			}
+
+			trace!(target: "sub-libp2p", "Destroying peer #{} {:?} ; \
+				kademlia = {:?} ; num_protos = {:?}", peer_id, peer_info.id,
+				peer_info.kad_connec.is_alive(),
+				peer_info.protocols.iter().filter(|c| c.1.is_alive()).count());
+			// TODO: we manually clear the connections as a work-around for
+			// networking bugs ; normally it should automatically drop
+			for c in peer_info.protocols.iter() { c.1.clear(); }
+			peer_info.kad_connec.clear();
 			let old = connections.peer_by_nodeid.remove(&peer_info.id);
 			debug_assert_eq!(old, Some(peer_id));
 		}
@@ -545,6 +683,7 @@ impl NetworkState {
 	/// of `custom_proto`).
 	pub fn disable_peer(&self, peer_id: PeerId, reason: &str) {
 		// TODO: what do we do if the peer is reserved?
+		// TODO: same logging as in disconnect_peer
 		let mut connections = self.connections.write();
 		let peer_info = if let Some(peer_info) = connections.info_by_peer.remove(&peer_id) {
 			if let (&Some(ref client_version), &Some(ref remote_address)) = (&peer_info.client_version, &peer_info.remote_address) {
@@ -562,11 +701,6 @@ impl NetworkState {
 		drop(connections);
 		let timeout = Instant::now() + PEER_DISABLE_DURATION;
 		self.disabled_peers.lock().insert(peer_info.id.clone(), timeout);
-	}
-
-	/// Returns true if a peer is disabled.
-	pub fn is_peer_disabled(&self, node_id: &PeerstorePeerId) -> bool {
-		is_peer_disabled(&self.disabled_peers, node_id)
 	}
 
 	/// Flushes the caches to the disk.
@@ -614,10 +748,13 @@ fn accept_connection(
 
 	let peer_id = *peer_by_nodeid.entry(node_id.clone()).or_insert_with(|| {
 		let new_id = next_peer_id.fetch_add(1, atomic::Ordering::Relaxed);
+		trace!(target: "sub-libp2p", "Creating new peer #{:?} for {:?}",
+			new_id, node_id);
 
 		info_by_peer.insert(new_id, PeerConnectionInfo {
 			protocols: Vec::new(),    // TODO: Vec::with_capacity(num_registered_protocols),
 			kad_connec: UniqueConnec::empty(),
+			ping_connec: UniqueConnec::empty(),
 			id: node_id.clone(),
 			originated: endpoint == Endpoint::Dialer,
 			ping: Mutex::new(None),
@@ -649,17 +786,33 @@ fn is_peer_disabled(
 	}
 }
 
+/// Returns the number of open and pending connections with
+/// custom protocols.
+fn num_open_custom_connections(connections: &Connections) -> u32 {
+	connections
+		.info_by_peer
+		.values()
+		.filter(|info|
+			info.protocols.iter().any(|&(_, ref connec)|
+				match connec.state() {
+					UniqueConnecState::Pending | UniqueConnecState::Full => true,
+					_ => false
+				}
+			)
+		)
+		.count() as u32
+}
+
 /// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
 /// to the given peerstore. Returns the corresponding peer ID.
 fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 	-> Result<PeerstorePeerId, Error> {
-	let mut addr: Multiaddr = addr_str.parse()
-		.map_err(|_| ErrorKind::AddressParse)?;
-	let p2p_component = addr.pop().ok_or(ErrorKind::AddressParse)?;
-	let peer_id = match p2p_component {
-		AddrComponent::P2P(key) | AddrComponent::IPFS(key) =>
+
+	let mut addr = addr_str.to_multiaddr().map_err(|_| ErrorKind::AddressParse)?;
+	let peer_id = match addr.pop() {
+		Some(AddrComponent::P2P(key)) | Some(AddrComponent::IPFS(key)) =>
 			PeerstorePeerId::from_bytes(key).map_err(|_| ErrorKind::AddressParse)?,
-		_ => return Err(ErrorKind::BadProtocol.into()),
+		_ => return Err(ErrorKind::AddressParse.into()),
 	};
 
 	// Registering the bootstrap node with a TTL of 100000 years   TODO: wrong
@@ -782,7 +935,6 @@ fn open_priv_key_file<P>(path: P) -> Result<fs::File, IoError>
 
 #[cfg(test)]
 mod tests {
-	use futures::sync::mpsc;
 	use libp2p::core::{Endpoint, PublicKey};
 	use network_state::NetworkState;
 
