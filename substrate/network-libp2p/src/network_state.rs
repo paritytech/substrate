@@ -115,12 +115,6 @@ struct PeerConnectionInfo {
 	/// Latest known ping duration.
 	ping: Mutex<Option<Duration>>,
 
-	/// Total number of missed pings this time.
-	missed_pings: usize,
-
-	/// Total number of missed pings in a row.
-	missed_in_a_row: usize,
-
 	/// The client version of the remote, or `None` if not known.
 	client_version: Option<String>,
 
@@ -296,7 +290,6 @@ impl NetworkState {
 			Some(info) => info,
 			None => return,
 		};
-		info.missed_in_a_row = 0;
 		*info.ping.lock() = Some(ping);
 	}
 
@@ -635,28 +628,8 @@ impl NetworkState {
 	}
 
 	/// Reports that an attempt to make a low-level ping of the peer failed.
-	/// This might be spurious, so we don't drop the peer immediately if we
-	/// have high-level protocols running atop it.
-	/// TODO: 3-strikes and you're out mechanisn.
 	pub fn report_ping_failed(&self, who: NodeIndex) {
-		const MISSED_PONGS_ALLOWED: usize = 3;
-		let should_drop = if let Some(mut peer_info) =
-			self.connections.write().info_by_peer.get_mut(&who)
-		{
-			let alive_connections = peer_info.protocols
-				.iter()
-				.filter(|c| c.1.is_alive())
-				.count();
-			peer_info.missed_in_a_row += 1;
-			peer_info.missed_pings += 1;
-			alive_connections == 0 || peer_info.missed_in_a_row >= MISSED_PONGS_ALLOWED
-		} else {
-			true
-		};
-		if should_drop {
-			// No reason to give if there's nothing happening on this peer.
-			self.drop_peer(who);
-		}
+		self.drop_peer(who);
 	}
 
 	/// Disconnects a peer, if a connection exists (ie. drops the Kademlia
@@ -773,8 +746,6 @@ fn accept_connection(
 			client_version: None,
 			local_address: None,
 			remote_address: None,
-			missed_in_a_row: 0,
-			missed_pings: 0,
 		});
 		new_id
 	});
