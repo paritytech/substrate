@@ -194,8 +194,8 @@ impl<T: Trait> Executable for Module<T> {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
-	/// The initial parachains, mapped to code.
-	pub parachains: Vec<(Id, Vec<u8>)>,
+	/// The initial parachains, mapped to code and initial head data
+	pub parachains: Vec<(Id, Vec<u8>, Vec<u8>)>,
 	/// Phantom data.
 	#[serde(skip)]
 	pub phantom: PhantomData<T>,
@@ -218,18 +218,21 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 		use std::collections::HashMap;
 		use codec::Encode;
 
-		self.parachains.sort_unstable_by_key(|&(ref id, _)| id.clone());
-		self.parachains.dedup_by_key(|&mut (ref id, _)| id.clone());
+		self.parachains.sort_unstable_by_key(|&(ref id, _, _)| id.clone());
+		self.parachains.dedup_by_key(|&mut (ref id, _, _)| id.clone());
 
-		let only_ids: Vec<_> = self.parachains.iter().map(|&(ref id, _)| id).cloned().collect();
+		let only_ids: Vec<_> = self.parachains.iter().map(|&(ref id, _, _)| id).cloned().collect();
 
 		let mut map: HashMap<_, _> = map![
 			Self::hash(<Parachains<T>>::key()).to_vec() => only_ids.encode()
 		];
 
-		for (id, code) in self.parachains {
-			let key = Self::hash(&<Code<T>>::key_for(&id)).to_vec();
-			map.insert(key, code.encode());
+		for (id, code, genesis) in self.parachains {
+			let code_key = Self::hash(&<Code<T>>::key_for(&id)).to_vec();
+			let head_key = Self::hash(&<Heads<T>>::key_for(&id)).to_vec();
+
+			map.insert(code_key, code.encode());
+			map.insert(head_key, genesis.encode());
 		}
 
 		Ok(map.into())
