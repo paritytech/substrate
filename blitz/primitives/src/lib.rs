@@ -39,7 +39,7 @@ extern crate substrate_codec as codec;
 use rstd::prelude::*;
 use runtime_primitives::traits::BlakeTwo256;
 use runtime_primitives::generic;
-use codec::{Input, Slicable};
+use codec::{Input, Output, Encode, Decode};
 
 #[cfg(feature = "std")]
 use primitives::bytes;
@@ -109,12 +109,15 @@ pub type BlockId = generic::BlockId<Block>;
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
-impl Slicable for Log {
+
+impl Decode for Log {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Vec::<u8>::decode(input).map(Log)
 	}
+}
 
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.using_encoded(f)
+impl Encode for Log {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		self.0.encode_to(dest)
 	}
 }
