@@ -47,6 +47,7 @@ extern crate log;
 
 pub mod error;
 
+use blitz_executor::NativeExecutor;
 use std::sync::Arc;
 use blitz_primitives::Hash;
 use blitz_runtime::{Block, BlockId, UncheckedExtrinsic, GenesisConfig,
@@ -113,7 +114,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 
 	// Create client
-	let executor = blitz_executor::Executor::new();
+	let executor = NativeExecutor::with_heap_pages(8, 8);
 
 	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
 	let genesis_config = GenesisConfig {
@@ -170,12 +171,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		}),
 	};
 
-	let client = Arc::new(client::new_in_mem::<_, Block, _>(executor, genesis_config)?);
+	let client = Arc::new(client::new_in_mem::<NativeExecutor<blitz_executor::Executor>, Block, _>(executor, genesis_config)?);
 	let mut runtime = Runtime::new()?;
 	let _rpc_servers = {
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
-			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool));
+			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool), runtime.executor());
 			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, author, DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
