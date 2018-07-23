@@ -81,10 +81,6 @@ use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use substrate_telemetry::{init_telemetry, TelemetryConfig};
-use polkadot_primitives::BlockId;
-use codec::{Decode, Encode};
-use client::BlockOrigin;
-use runtime_primitives::generic::SignedBlock;
 use names::{Generator, Name};
 use regex::Regex;
 
@@ -374,65 +370,25 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 	info!("DB path: {}", config.database_path);
-	let client = service::new_client(config)?;
-	let (exit_send, exit_recv) = std::sync::mpsc::channel();
-	::std::thread::spawn(move || {
-		let _ = exit.wait();
-		let _ = exit_send.send(());
-	});
-	let mut from_block: u32 = match matches.value_of("from") {
+	let from: u64 = match matches.value_of("from") {
 		Some(v) => v.parse().map_err(|_| "Invalid --from argument")?,
 		None => 1,
 	};
 
-	if from_block < 1 {
-		from_block = 1;
-	}
-
-	let to_block = match matches.value_of("to") {
-		Some(v) => v.parse().map_err(|_| "Invalid --to argument")?,
-		None => client.info()?.chain.best_number as u32,
+	let to: Option<u64> = match matches.value_of("to") {
+		Some(v) => Some(v.parse().map_err(|_| "Invalid --to argument")?),
+		None => None,
 	};
 	info!("Exporting blocks from #{} to #{}", from_block, to_block);
 
-	if to_block < from_block {
-		return Err("Invalid block range specified".into());
-	}
-
 	let json = matches.is_present("json");
 
-	let mut file: Box<Write> = match matches.value_of("OUTPUT") {
+	let file: Box<Write> = match matches.value_of("OUTPUT") {
 		Some(filename) => Box::new(File::create(filename)?),
 		None => Box::new(stdout()),
 	};
 
-	if !json {
-		file.write(&(to_block - from_block + 1).encode())?;
-	}
-
-	loop {
-		if exit_recv.try_recv().is_ok() {
-			break;
-		}
-		match client.block(&BlockId::number(from_block as u64))? {
-			Some(from_block) => {
-				if json {
-					serde_json::to_writer(&mut *file, &from_block).map_err(|e| format!("Eror writing JSON: {}", e))?;
-				} else {
-					file.write(&from_block.encode())?;
-				}
-			},
-			None => break,
-		}
-		if from_block % 10000 == 0 {
-			info!("#{}", from_block);
-		}
-		if from_block == to_block {
-			break;
-		}
-		from_block += 1;
-	}
-	Ok(())
+	Ok(substrate_service::chain_ops::export_blocks::<service::Factory, _, _>(config, exit, file, from, to, json)?)
 }
 
 fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
@@ -459,44 +415,12 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 		};
 	}
 
-	let client = service::new_client(config)?;
-	let (exit_send, exit_recv) = std::sync::mpsc::channel();
-
-	::std::thread::spawn(move || {
-		let _ = exit.wait();
-		let _ = exit_send.send(());
-	});
-
-	let mut file: Box<Read> = match matches.value_of("INPUT") {
+	let file: Box<Read> = match matches.value_of("INPUT") {
 		Some(filename) => Box::new(File::open(filename)?),
 		None => Box::new(stdin()),
 	};
 
-	let count: u32 = Decode::decode(&mut file).ok_or("Error reading file")?;
-	info!("Importing {} blocks", count);
-	let mut block = 0;
-	for _ in 0 .. count {
-		if exit_recv.try_recv().is_ok() {
-			break;
-		}
-		match SignedBlock::decode(&mut file) {
-			Some(block) => {
-				let header = client.check_justification(block.block.header, block.justification.into())?;
-				client.import_block(BlockOrigin::File, header, Some(block.block.extrinsics))?;
-			},
-			None => {
-				warn!("Error reading block data.");
-				break;
-			}
-		}
-		block += 1;
-		if block % 1000 == 0 {
-			info!("#{}", block);
-		}
-	}
-	info!("Imported {} blocks. Best: #{}", block, client.info()?.chain.best_number);
-
-	Ok(())
+	Ok(substrate_service::chain_ops::import_blocks::<service::Factory, _, _>(config, exit, file)?)
 }
 
 fn revert_chain(matches: &clap::ArgMatches) -> error::Result<()> {
@@ -505,17 +429,12 @@ fn revert_chain(matches: &clap::ArgMatches) -> error::Result<()> {
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 
-	let client = service::new_client(config)?;
-
 	let blocks = match matches.value_of("NUM") {
 		Some(v) => v.parse().map_err(|_| "Invalid block count specified")?,
 		None => 256,
 	};
 
-	let reverted = client.revert(blocks)?;
-	let info = client.info()?.chain;
-	info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
-	Ok(())
+	Ok(substrate_service::chain_ops::revert_chain::<service::Factory>(config, blocks)?)
 }
 
 fn run_until_exit<C, W>(
