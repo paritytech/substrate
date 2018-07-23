@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::io;
 use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
-use network_libp2p::{NetworkProtocolHandler, NetworkContext, PeerId, ProtocolId,
+use network_libp2p::{NetworkProtocolHandler, NetworkContext, NodeIndex, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_libp2p::{NetworkService};
 use core_io::{TimerToken};
@@ -244,8 +244,8 @@ impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S
 		self.network.with_context_eval(self.protocol_id, |ctx| {
 			let peer_ids = self.network.connected_peers();
 
-			peer_ids.into_iter().filter_map(|peer_id| {
-				let session_info = match ctx.session_info(peer_id) {
+			peer_ids.into_iter().filter_map(|who| {
+				let session_info = match ctx.session_info(who) {
 					None => return None,
 					Some(info) => info,
 				};
@@ -256,7 +256,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S
 					capabilities: session_info.peer_capabilities.into_iter().map(|c| c.to_string()).collect(),
 					remote_address: session_info.remote_address,
 					local_address: session_info.local_address,
-					dot_info: self.handler.protocol.peer_info(peer_id),
+					dot_info: self.handler.protocol.peer_info(who),
 				})
 			}).collect()
 		}).unwrap_or_else(Vec::new)
@@ -276,15 +276,15 @@ impl<B: BlockT + 'static, S: Specialization<B>> NetworkProtocolHandler for Proto
 			.expect("Error registering transaction propagation timer");
 	}
 
-	fn read(&self, io: &NetworkContext, peer: &PeerId, _packet_id: u8, data: &[u8]) {
+	fn read(&self, io: &NetworkContext, peer: &NodeIndex, _packet_id: u8, data: &[u8]) {
 		self.protocol.handle_packet(&mut NetSyncIo::new(io), *peer, data);
 	}
 
-	fn connected(&self, io: &NetworkContext, peer: &PeerId) {
+	fn connected(&self, io: &NetworkContext, peer: &NodeIndex) {
 		self.protocol.on_peer_connected(&mut NetSyncIo::new(io), *peer);
 	}
 
-	fn disconnected(&self, io: &NetworkContext, peer: &PeerId) {
+	fn disconnected(&self, io: &NetworkContext, peer: &NodeIndex) {
 		self.protocol.on_peer_disconnected(&mut NetSyncIo::new(io), *peer);
 	}
 
