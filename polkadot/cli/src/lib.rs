@@ -376,16 +376,20 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 		let _ = exit.wait();
 		let _ = exit_send.send(());
 	});
-	info!("Exporting blocks");
 	let mut from_block: u32 = match matches.value_of("from") {
 		Some(v) => v.parse().map_err(|_| "Invalid --from argument")?,
 		None => 1,
 	};
 
+	if from_block < 1 {
+		from_block = 1;
+	}
+
 	let to_block = match matches.value_of("to") {
 		Some(v) => v.parse().map_err(|_| "Invalid --to argument")?,
 		None => client.info()?.chain.best_number as u32,
 	};
+	info!("Exporting blocks from #{} to #{}", from_block, to_block);
 
 	if to_block < from_block {
 		return Err("Invalid block range specified".into());
