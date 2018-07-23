@@ -111,10 +111,36 @@ struct BlockDataRequest {
 	sender: oneshot::Sender<BlockData>,
 }
 
+// ensures collator-protocol messages are sent in correct order.
+// session key must be sent before collator role.
+enum CollatorState {
+	Fresh,
+	RolePending(Role),
+	Primed,
+}
+
+impl CollatorState {
+	fn send_key<F: FnMut(Message)>(&mut self, key: SessionKey, mut f: F) {
+		f(Message::SessionKey(key));
+		if let CollatorState::RolePending(role) = ::std::mem::replace(self, CollatorState::Primed) {
+			f(Message::CollatorRole(role));
+		}
+	}
+
+	fn set_role<F: FnMut(Message)>(&mut self, role: Role, mut f: F) {
+		if let CollatorState::Primed = *self {
+			f(Message::CollatorRole(role));
+		} else {
+			*self = CollatorState::RolePending(role);
+		}
+	}
+}
+
 struct PeerInfo {
 	collating_for: Option<(AccountId, ParaId)>,
 	validator_key: Option<SessionKey>,
 	claimed_validator: bool,
+	collator_state: CollatorState,
 }
 
 #[derive(Default)]
@@ -309,14 +335,14 @@ impl PolkadotProtocol {
 		let old_data = self.live_consensus.as_ref().map(|c| (c.parent_hash, c.local_session_key));
 
 		if Some(&consensus.local_session_key) != old_data.as_ref().map(|&(_, ref key)| key) {
-			for (id, _) in self.peers.iter()
+			for (id, peer_data) in self.peers.iter_mut()
 				.filter(|&(_, ref info)| info.claimed_validator || info.collating_for.is_some())
 			{
-				send_polkadot_message(
+				peer_data.collator_state.send_key(consensus.local_session_key, |msg| send_polkadot_message(
 					ctx,
 					*id,
-					Message::SessionKey(consensus.local_session_key)
-				);
+					msg
+				));
 			}
 		}
 
@@ -481,38 +507,41 @@ impl Specialization<Block> for PolkadotProtocol {
 			}
 		};
 
+		let validator = status.roles.contains(substrate_network::Roles::AUTHORITY);
+		let send_key = validator || local_status.collating_for.is_some();
+
+		let mut peer_info = PeerInfo {
+			collating_for: local_status.collating_for,
+			validator_key: None,
+			claimed_validator: validator,
+			collator_state: CollatorState::Fresh,
+		};
+
 		if let Some((ref acc_id, ref para_id)) = local_status.collating_for {
-			if self.collator_peer_id(acc_id.clone()).is_some() {
+			if self.collator_peer(acc_id.clone()).is_some() {
 				ctx.disconnect_peer(peer_id);
 				return
 			}
 
 			let collator_role = self.collators.on_new_collator(acc_id.clone(), para_id.clone());
-			send_polkadot_message(
+
+			peer_info.collator_state.set_role(collator_role, |msg| send_polkadot_message(
 				ctx,
 				peer_id,
-				Message::CollatorRole(collator_role),
-			);
+				msg,
+			));
 		}
 
-		let validator = status.roles.contains(substrate_network::Roles::AUTHORITY);
-		let send_key = validator || local_status.collating_for.is_some();
-
-		self.peers.insert(peer_id, PeerInfo {
-			collating_for: local_status.collating_for,
-			validator_key: None,
-			claimed_validator: validator,
-		});
-
-		self.consensus_gossip.new_peer(ctx, peer_id, status.roles);
 		if let (true, &Some(ref consensus)) = (send_key, &self.live_consensus) {
-			send_polkadot_message(
+			peer_info.collator_state.send_key(consensus.local_session_key, |msg| send_polkadot_message(
 				ctx,
 				peer_id,
-				Message::SessionKey(consensus.local_session_key)
-			);
+				msg,
+			));
 		}
 
+		self.peers.insert(peer_id, peer_info);
+		self.consensus_gossip.new_peer(ctx, peer_id, status.roles);
 		self.dispatch_pending_requests(ctx);
 	}
 
@@ -520,14 +549,14 @@ impl Specialization<Block> for PolkadotProtocol {
 		if let Some(info) = self.peers.remove(&peer_id) {
 			if let Some((acc_id, _)) = info.collating_for {
 				let new_primary = self.collators.on_disconnect(acc_id)
-					.and_then(|new_primary| self.collator_peer_id(new_primary));
+					.and_then(|new_primary| self.collator_peer(new_primary));
 
-				if let Some(new_primary) = new_primary {
-					send_polkadot_message(
+				if let Some((new_primary, primary_info)) = new_primary {
+					primary_info.collator_state.set_role(Role::Primary, |msg| send_polkadot_message(
 						ctx,
 						new_primary,
-						Message::CollatorRole(Role::Primary),
-					)
+						msg,
+					));
 				}
 			}
 
@@ -592,12 +621,12 @@ impl Specialization<Block> for PolkadotProtocol {
 		for collator_action in self.collators.maintain_peers() {
 			match collator_action {
 				Action::Disconnect(collator) => self.disconnect_bad_collator(ctx, collator),
-				Action::NewRole(account_id, role) => if let Some(collator) = self.collator_peer_id(account_id) {
-					send_polkadot_message(
+				Action::NewRole(account_id, role) => if let Some((collator, info)) = self.collator_peer(account_id) {
+					info.collator_state.set_role(role, |msg| send_polkadot_message(
 						ctx,
 						collator,
-						Message::CollatorRole(role),
-					)
+						msg,
+					))
 				},
 			}
 		}
@@ -638,22 +667,22 @@ impl PolkadotProtocol {
 	}
 
 	// get connected peer with given account ID for collation.
-	fn collator_peer_id(&self, account_id: AccountId) -> Option<PeerId> {
+	fn collator_peer(&mut self, account_id: AccountId) -> Option<(PeerId, &mut PeerInfo)> {
 		let check_info = |info: &PeerInfo| info
 			.collating_for
 			.as_ref()
 			.map_or(false, |&(ref acc_id, _)| acc_id == &account_id);
 
 		self.peers
-			.iter()
-			.filter(|&(_, info)| check_info(info))
-			.map(|(peer_id, _)| *peer_id)
+			.iter_mut()
+			.filter(|&(_, ref info)| check_info(&**info))
+			.map(|(peer_id, info)| (*peer_id, info))
 			.next()
 	}
 
 	// disconnect a collator by account-id.
-	fn disconnect_bad_collator(&self, ctx: &mut Context<Block>, account_id: AccountId) {
-		if let Some(peer_id) = self.collator_peer_id(account_id) {
+	fn disconnect_bad_collator(&mut self, ctx: &mut Context<Block>, account_id: AccountId) {
+		if let Some((peer_id, _)) = self.collator_peer(account_id) {
 			ctx.disable_peer(peer_id, "Consensus layer determined the given collator misbehaved")
 		}
 	}
