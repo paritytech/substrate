@@ -16,7 +16,7 @@
 
 //! Strongly typed API for full Polkadot client.
 
-use client::backend::{Backend, LocalBackend};
+use client::backend::LocalBackend;
 use client::block_builder::BlockBuilder as ClientBlockBuilder;
 use client::{Client, LocalCallExecutor};
 use polkadot_executor::Executor as LocalDispatch;
@@ -57,9 +57,7 @@ macro_rules! with_runtime {
 	}}
 }
 
-impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
-{
+impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block> {
 	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
 		self.push(extrinsic).map_err(Into::into)
 	}
@@ -70,9 +68,7 @@ impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExe
 	}
 }
 
-impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
-{
+impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block> {
 	type BlockBuilder = ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>;
 
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
@@ -97,7 +93,7 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool> {
 		use substrate_executor::error::ErrorKind as ExecErrorKind;
-		use codec::Slicable;
+		use codec::{Decode, Encode};
 		use runtime::Block as RuntimeBlock;
 
 		let encoded = block.encode();
@@ -146,13 +142,13 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn inherent_extrinsics(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>> {
-		use codec::Slicable;
+		use codec::{Encode, Decode};
 
 		with_runtime!(self, at, || {
 			let extrinsics = ::runtime::inherent_extrinsics(timestamp, new_heads);
 			extrinsics.into_iter()
 				.map(|x| x.encode()) // get encoded representation
-				.map(|x| Slicable::decode(&mut &x[..])) // get byte-vec equivalent to extrinsic
+				.map(|x| Decode::decode(&mut &x[..])) // get byte-vec equivalent to extrinsic
 				.map(|x| x.expect("UncheckedExtrinsic has encoded representation equivalent to Vec<u8>; qed"))
 				.collect()
 		})
@@ -160,7 +156,6 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 }
 
 impl<B: LocalBackend<Block>> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
-	where ::client::error::Error: From<<<B as Backend<Block>>::State as state_machine::backend::Backend>::Error>
 {}
 
 #[cfg(test)]
@@ -205,7 +200,7 @@ mod tests {
 			timestamp: Some(Default::default()),
 		};
 
-		::client::new_in_mem(LocalDispatch::new(), genesis_config).unwrap()
+		::client::new_in_mem(LocalDispatch::with_heap_pages(8, 8), genesis_config).unwrap()
 	}
 
 	#[test]

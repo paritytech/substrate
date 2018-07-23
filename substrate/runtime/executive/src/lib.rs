@@ -55,7 +55,7 @@ use rstd::result;
 use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
 	MakePayment, Hash, AuxLookup};
-use codec::Slicable;
+use codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
 
@@ -89,7 +89,7 @@ impl<
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: Executable,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
-	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Slicable,
+	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Codec,
 	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
 {
 	/// Start the execution of a particular block.

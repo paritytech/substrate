@@ -1,6 +1,6 @@
 # Polkadot
 
-Implementation of a https://polkadot.io node in Rust.
+Implementation of a https://polkadot.network node in Rust.
 
 ## To play
 
@@ -9,18 +9,29 @@ one. First, get Rust (1.26.1 or later) and the support software if you don't alr
 
 ```
 curl https://sh.rustup.rs -sSf | sh
-sudo apt install make clang
+sudo apt install make clang pkg-config libssl-dev
 ```
 
-Then, install Polkadot PoC-1:
+Then, install Polkadot PoC-2:
 
 ```
-cargo install --git https://github.com/paritytech/polkadot.git --branch v0.1
+cargo install --git https://github.com/paritytech/polkadot.git --branch v0.2 polkadot
 ```
 
 You'll now have a `polkadot` binary installed to your `PATH`. You can drop the
-`--branch v0.1` or run `cargo install --git https://github.com/paritytech/polkadot.git polkadot`
-to get the very latest version of Polkadot, but these instructions will not work in that case.
+`--branch v0.2` or run `cargo install --git https://github.com/paritytech/polkadot.git polkadot`
+to get the very latest version of Polkadot, but these instructions might not work in that case.
+
+### Krumme Lanke Testnet
+
+You will connect to the global Krumme Lanke testnet by default. To do this, just use:
+
+```
+polkadot
+```
+
+If you want to do anything on it (not that there's much to do), then you'll need
+to get some Krumme Lanke DOTs. Ask in the Polkadot watercooler.
 
 ### Development
 
@@ -28,21 +39,10 @@ You can run a simple single-node development "network" on your machine by
 running in a terminal:
 
 ```
-polkadot --chain=dev --validator --key Alice
+polkadot --dev
 ```
 
 You can muck around by cloning and building the http://github.com/paritytech/polka-ui and http://github.com/paritytech/polkadot-ui or just heading to https://polkadot.js.org/apps.
-
-### PoC-1 Testnet
-
-You can also connect to the global PoC-1 testnet. To do this, just use:
-
-```
-polkadot --chain=poc-1
-```
-
-If you want to do anything on it (not that there's much to do), then you'll need
-to get some PoC-1 testnet DOTs. Ask in the Polkadot watercooler.
 
 ## Local Two-node Testnet
 
@@ -56,7 +56,7 @@ polkadot --chain=local --validator --key Alice -d /tmp/alice
 and in the other, run:
 
 ```
-polkadot --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes 'enode://ALICE_BOOTNODE_ID_HERE@127.0.0.1:30333'
+polkadot --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes '/ip4/127.0.0.1/tcp/30333/p2p/ALICE_BOOTNODE_ID_HERE'
 ```
 
 Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of
@@ -73,7 +73,6 @@ rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
 rustup update stable
 cargo install --git https://github.com/alexcrichton/wasm-gc
-cargo install --git https://github.com/pepyakin/wasm-export-table.git
 sudo apt install cmake pkg-config libssl-dev
 ```
 
@@ -100,5 +99,41 @@ cargo test --all
 You can start a development chain with:
 
 ```
-cargo run -- --chain=dev --validator --key Alice
+cargo run -- --dev
 ```
+
+## Shell completion
+
+The Polkadot cli command supports shell auto-completion. For this to work, you will need to run the completion script matching you build and system.
+
+Assuming you built a release version using `cargo build --release` and use `bash` run the following:
+```
+source target/release/completion-scripts/polkadot.bash
+```
+
+You can find completion scripts for:
+- bash
+- fish
+- zsh
+- elvish
+- powershell
+
+To make this change persistent, you can proceed as follow:
+### First install
+```
+COMPL_DIR=$HOME/.completion
+mkdir -p $COMPL_DIR
+cp -f target/release/completion-scripts/polkadot.bash $COMPL_DIR/
+echo "source $COMPL_DIR/polkadot.bash" >> $HOME/.bash_profile
+source $HOME/.bash_profile
+```
+
+### Update
+When you build a new version of Polkadot, the following will ensure you auto-completion script matches the current binary:
+```
+COMPL_DIR=$HOME/.completion
+mkdir -p $COMPL_DIR
+cp -f target/release/completion-scripts/polkadot.bash $COMPL_DIR/
+source $HOME/.bash_profile
+```
+

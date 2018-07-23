@@ -18,7 +18,7 @@ extern crate ed25519;
 extern crate substrate_client as client;
 extern crate substrate_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
-extern crate substrate_primitives as substrate_primitives;
+extern crate substrate_primitives;
 extern crate substrate_runtime_primitives;
 extern crate polkadot_runtime as runtime;
 extern crate polkadot_primitives as primitives;
@@ -43,9 +43,14 @@ use std::{
 	sync::Arc,
 };
 
-use codec::Slicable;
-use extrinsic_pool::{Pool, Listener, txpool::{self, Readiness, scoring::{Change, Choice}}};
-use extrinsic_pool::api::ExtrinsicPool;
+use codec::{Decode, Encode};
+use extrinsic_pool::{
+	api::{ExtrinsicPool, EventStream},
+	txpool::{self, Readiness, scoring::{Change, Choice}},
+	watcher::Watcher,
+	Pool,
+	Listener,
+};
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use runtime::{Address, UncheckedExtrinsic};
@@ -75,7 +80,7 @@ impl VerifiedTransaction {
 
 	/// Convert to primitive unchecked extrinsic.
 	pub fn primitive_extrinsic(&self) -> ::primitives::UncheckedExtrinsic {
-		Slicable::decode(&mut self.as_transaction().encode().as_slice())
+		Decode::decode(&mut self.as_transaction().encode().as_slice())
 			.expect("UncheckedExtrinsic shares repr with Vec<u8>; qed")
 	}
 
@@ -274,13 +279,16 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 	type Error = Error;
 
 	fn verify_transaction(&self, uxt: UncheckedExtrinsic) -> Result<Self::VerifiedTransaction> {
-		info!("Extrinsic Submitted: {:?}", uxt);
 
 		if !uxt.is_signed() {
 			bail!(ErrorKind::IsInherent(uxt))
 		}
 
-		let (encoded_size, hash) = uxt.using_encoded(|e| (e.len(), BlakeTwo256::hash(e)));
+		let encoded = uxt.encode();
+		let (encoded_size, hash) = (encoded.len(), BlakeTwo256::hash(&encoded));
+		
+		debug!(target: "transaction-pool", "Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
+
 		let inner = match uxt.clone().check_with(|a| self.lookup(a)) {
 			Ok(xt) => Some(xt),
 			// keep the transaction around in the future pool and attempt to promote it later.
@@ -288,6 +296,12 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 			Err(e) => bail!(e),
 		};
 		let sender = inner.as_ref().map(|x| x.signed.clone());
+
+		if encoded_size < 1024 {
+			info!(target: "transaction-pool", "Transaction verified: {} => {:?}", hash, uxt);
+		} else {
+			info!(target: "transaction-pool", "Transaction verified: {} ({} bytes is too large to display)", hash, encoded_size);
+		}
 
 		Ok(VerifiedTransaction {
 			original: uxt,
@@ -385,6 +399,8 @@ impl<A> Deref for TransactionPool<A> {
 	}
 }
 
+// TODO: more general transaction pool, which can handle more kinds of vec-encoded transactions,
+// even when runtime is out of date.
 impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for TransactionPool<A> where
 	A: Send + Sync + 'static,
 	A: PolkadotApi,
@@ -392,8 +408,6 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 	type Error = Error;
 
 	fn submit(&self, block: BlockId, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
-		// TODO: more general transaction pool, which can handle more kinds of vec-encoded transactions,
-		// even when runtime is out of date.
 		xts.into_iter()
 			.map(|xt| xt.encode())
 			.map(|encoded| {
@@ -403,6 +417,26 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 			})
 			.collect()
 	}
+
+	fn submit_and_watch(&self, block: BlockId, xt: FutureProofUncheckedExtrinsic) -> Result<Watcher<Hash>> {
+		let encoded = xt.encode();
+		let decoded = UncheckedExtrinsic::decode(&mut &encoded[..]).ok_or(ErrorKind::InvalidExtrinsicFormat)?;
+
+		let verifier = Verifier {
+			api: &*self.api,
+			at_block: block,
+		};
+
+		self.inner.submit_and_watch(verifier, decoded)
+	}
+
+	fn light_status(&self) -> LightStatus {
+		self.inner.light_status()
+	}
+
+	fn import_notification_stream(&self) -> EventStream {
+		self.inner.import_notification_stream()
+	}
 }
 
 #[cfg(test)]
@@ -410,7 +444,7 @@ mod tests {
 	use std::sync::{atomic::{self, AtomicBool}, Arc};
 	use super::TransactionPool;
 	use substrate_keyring::Keyring::{self, *};
-	use codec::Slicable;
+	use codec::{Decode, Encode};
 	use polkadot_api::{PolkadotApi, BlockBuilder, Result};
 	use primitives::{AccountId, AccountIndex, Block, BlockId, Hash, Index, SessionKey, Timestamp,
 		UncheckedExtrinsic as FutureProofUncheckedExtrinsic};

@@ -18,7 +18,7 @@
 
 use super::MAX_TRANSACTIONS_SIZE;
 
-use codec::Slicable;
+use codec::{Decode, Encode};
 use polkadot_runtime::{Block as PolkadotGenericBlock, CheckedBlock};
 use polkadot_primitives::{Block, Hash, BlockNumber, Timestamp};
 use polkadot_primitives::parachain::Id as ParaId;
@@ -78,13 +78,13 @@ pub fn evaluate_initial(
 ) -> Result<CheckedBlock> {
 	const MAX_TIMESTAMP_DRIFT: Timestamp = 60;
 
-	let encoded = Slicable::encode(proposal);
+	let encoded = Encode::encode(proposal);
 	let proposal = PolkadotGenericBlock::decode(&mut &encoded[..])
 		.and_then(|b| CheckedBlock::new(b).ok())
 		.ok_or_else(|| ErrorKind::ProposalNotForPolkadot)?;
 
 	let transactions_size = proposal.extrinsics.iter().fold(0, |a, tx| {
-		a + Slicable::encode(tx).len()
+		a + Encode::encode(tx).len()
 	});
 
 	if transactions_size > MAX_TRANSACTIONS_SIZE {

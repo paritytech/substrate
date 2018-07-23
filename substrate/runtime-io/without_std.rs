@@ -56,6 +56,7 @@ extern "C" {
 	fn ext_print_num(value: u64);
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
+	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
@@ -97,6 +98,15 @@ pub fn clear_storage(key: &[u8]) {
 		ext_clear_storage(
 			key.as_ptr(), key.len() as u32
 		);
+	}
+}
+
+/// Determine whether a particular key exists in storage.
+pub fn exists_storage(key: &[u8]) -> bool {
+	unsafe {
+		ext_exists_storage(
+			key.as_ptr(), key.len() as u32
+		) != 0
 	}
 }
 
@@ -282,13 +292,13 @@ macro_rules! impl_stubs {
 				}
 			};
 
-			let input = match $crate::codec::Slicable::decode(&mut input) {
+			let input = match $crate::codec::Decode::decode(&mut input) {
 				Some(input) => input,
 				None => panic!("Bad input data provided to {}", stringify!($name)),
 			};
 
 			let output = ($invoke)(input);
-			let output = $crate::codec::Slicable::encode(&output);
+			let output = $crate::codec::Encode::encode(&output);
 			let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
 
 			// Leak the output vector to avoid it being freed.

@@ -132,4 +132,11 @@ impl Error {
 	pub fn from_blockchain(e: Box<std::error::Error + Send>) -> Self {
 		ErrorKind::Blockchain(e).into()
 	}
+
+	/// Chain a state error.
+	pub fn from_state(e: Box<state_machine::Error + Send>) -> Self {
+		ErrorKind::Execution(e).into()
+	}
 }
+
+impl state_machine::Error for Error {}

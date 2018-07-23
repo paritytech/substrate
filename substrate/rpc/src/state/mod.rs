@@ -28,7 +28,6 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use primitives::storage::{StorageKey, StorageData};
 use primitives::hexdisplay::HexDisplay;
-use state_machine;
 
 use self::error::Result;
 
@@ -73,7 +72,6 @@ impl<B, E, Block> StateApi<Block::Hash> for Arc<Client<B, E, Block>> where
 	Block: BlockT + 'static,
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
-	client::error::Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>,
 {
 	fn storage_at(&self, key: StorageKey, block: Block::Hash) -> Result<StorageData> {
 		trace!(target: "rpc", "Querying storage at {:?} for key {}", block, HexDisplay::from(&key.0));

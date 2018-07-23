@@ -28,9 +28,10 @@ use io::SyncIo;
 use protocol::{Context, Protocol};
 use config::ProtocolConfig;
 use service::TransactionPool;
-use network::{PeerId, SessionInfo, Error as NetworkError};
+use network_libp2p::{PeerId, SessionInfo, Severity};
 use keyring::Keyring;
-use codec::Slicable;
+use codec::Encode;
+use import_queue::tests::SyncImportQueue;
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 use specialization::Specialization;
@@ -80,11 +81,7 @@ impl<'p> Drop for TestIo<'p> {
 }
 
 impl<'p> SyncIo for TestIo<'p> {
-	fn disable_peer(&mut self, peer_id: PeerId) {
-		self.disconnect_peer(peer_id);
-	}
-
-	fn disconnect_peer(&mut self, peer_id: PeerId) {
+	fn report_peer(&mut self, peer_id: PeerId, _reason: Severity) {
 		self.to_disconnect.insert(peer_id);
 	}
 
@@ -92,12 +89,11 @@ impl<'p> SyncIo for TestIo<'p> {
 		false
 	}
 
-	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) -> Result<(), NetworkError> {
+	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) {
 		self.packets.push(TestPacket {
 			data: data,
 			recipient: peer_id,
 		});
-		Ok(())
 	}
 
 	fn peer_info(&self, peer_id: PeerId) -> String {
@@ -247,7 +243,8 @@ impl TestNet {
 	pub fn add_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
-		let sync = Protocol::new(config.clone(), client.clone(), None, tx_pool, DummySpecialization).unwrap();
+		let import_queue = Arc::new(SyncImportQueue);
+		let sync = Protocol::new(config.clone(), client.clone(), import_queue, None, tx_pool, DummySpecialization).unwrap();
 		self.peers.push(Arc::new(Peer {
 			sync: sync,
 			client: client,

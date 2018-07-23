@@ -26,8 +26,9 @@ use polkadot_api::{PolkadotApi, LocalPolkadotApi};
 use polkadot_consensus::{Network, SharedTable, Collators};
 use polkadot_primitives::{AccountId, Block, Hash, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, Collation};
+use codec::Decode;
 
-use futures::{future, prelude::*};
+use futures::prelude::*;
 use futures::sync::mpsc;
 
 use std::sync::Arc;
@@ -175,7 +176,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> MessageProcessTask<P> {
 				}
 			}
 			ConsensusMessage::ChainSpecific(msg, _) => {
-				if let Ok(Message::Statement(parent_hash, statement)) = ::serde_json::from_slice(&msg) {
+				if let Some(Message::Statement(parent_hash, statement)) = Decode::decode(&mut msg.as_slice()) {
 					if ::polkadot_consensus::check_statement(&statement.statement, &statement.signature, statement.sender, &parent_hash) {
 						self.table_router.import_statement(statement);
 					}
@@ -198,7 +199,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Future for MessageProcessTask<
 					return Ok(async);
 				},
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
-				Ok(Async::NotReady) => (),
+				Ok(Async::NotReady) => return Ok(Async::NotReady),
 				Err(e) => debug!(target: "p_net", "Error getting consensus message: {:?}", e),
 			}
 		}
@@ -284,7 +285,6 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 				knowledge,
 				parent_hash,
 				local_session_key,
-				session_keys: Default::default(),
 			});
 
 			MessageProcessTask {
@@ -304,13 +304,38 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Network for ConsensusNetwork<P
 	}
 }
 
-impl<P: LocalPolkadotApi + Send + Sync + 'static> Collators for ConsensusNetwork<P> {
-	type Error = ();
-	type Collation = future::Empty<Collation, ()>;
+/// Error when the network appears to be down.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NetworkDown;
 
-	fn collate(&self, _parachain: ParaId, _relay_parent: Hash) -> Self::Collation {
-		future::empty()
+/// A future that resolves when a collation is received.
+pub struct AwaitingCollation(Option<::futures::sync::oneshot::Receiver<Collation>>);
+
+impl Future for AwaitingCollation {
+	type Item = Collation;
+	type Error = NetworkDown;
+
+	fn poll(&mut self) -> Poll<Collation, NetworkDown> {
+		match self.0.poll().map_err(|_| NetworkDown)? {
+			Async::Ready(None) => Err(NetworkDown),
+			Async::Ready(Some(x)) => Ok(Async::Ready(x)),
+			Async::NotReady => Ok(Async::NotReady),
+		}
+	}
+}
+
+
+impl<P: LocalPolkadotApi + Send + Sync + 'static> Collators for ConsensusNetwork<P> {
+	type Error = NetworkDown;
+	type Collation = AwaitingCollation;
+
+	fn collate(&self, parachain: ParaId, relay_parent: Hash) -> Self::Collation {
+		AwaitingCollation(
+			self.network.with_spec(|spec, _| spec.await_collation(relay_parent, parachain))
+		)
 	}
 
-	fn note_bad_collator(&self, _collator: AccountId) { }
+	fn note_bad_collator(&self, collator: AccountId) {
+		self.network.with_spec(|spec, ctx| spec.disconnect_bad_collator(ctx, collator));
+	}
 }

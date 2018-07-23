@@ -46,14 +46,14 @@ use safe_mix::TripletMix;
 #[cfg(any(feature = "std", test))]
 use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))]
-use codec::Slicable;
+use codec::Encode;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities};
 
 /// Compute the extrinsics root of a list of extrinsics.
-pub fn extrinsics_root<H: Hash, E: codec::Slicable>(extrinsics: &[E]) -> H::Output {
-	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Slicable::encode).collect())
+pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
+	extrinsics_data_root::<H>(extrinsics.iter().map(codec::Encode::encode).collect())
 }
 
 /// Compute the extrinsics root of a list of extrinsics.
@@ -208,15 +208,14 @@ impl<T: Trait> Default for GenesisConfig<T> {
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
-		use runtime_io::twox_128;
-		use codec::Slicable;
+		use codec::Encode;
 
 		Ok(map![
-			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
-			twox_128(<Number<T>>::key()).to_vec() => 1u64.encode(),
-			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
-			twox_128(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
-			twox_128(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
+			Self::hash(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
+			Self::hash(<Number<T>>::key()).to_vec() => 1u64.encode(),
+			Self::hash(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
+			Self::hash(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
+			Self::hash(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
 		])
 	}
 }

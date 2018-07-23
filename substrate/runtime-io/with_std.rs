@@ -68,6 +68,13 @@ pub fn clear_storage(key: &[u8]) {
 	);
 }
 
+/// Check whether a given `key` exists in storage.
+pub fn exists_storage(key: &[u8]) -> bool {
+	ext::with(|ext|
+		ext.exists_storage(key)
+	).unwrap_or(false)
+}
+
 /// Clear the storage entries key of which starts with the given prefix.
 pub fn clear_prefix(prefix: &[u8]) {
 	ext::with(|ext|
@@ -168,13 +175,13 @@ macro_rules! impl_stubs {
 	};
 	(@METHOD $data: ident $new_name: ident => $invoke:expr) => {{
 		let mut data = $data;
-		let input = match $crate::codec::Slicable::decode(&mut data) {
+		let input = match $crate::codec::Decode::decode(&mut data) {
 			Some(input) => input,
 			None => panic!("Bad input data provided to {}", stringify!($new_name)),
 		};
 
 		let output = $invoke(input);
-		Some($crate::codec::Slicable::encode(&output))
+		Some($crate::codec::Encode::encode(&output))
 	}}
 }
 

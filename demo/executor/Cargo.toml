@@ -22,3 +22,4 @@ substrate-keyring = { path = "../../substrate/keyring" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-runtime-staking = { path = "../../substrate/runtime/staking" }
 substrate-runtime-system = { path = "../../substrate/runtime/system" }
+substrate-runtime-consensus = { path = "../../substrate/runtime/consensus" }

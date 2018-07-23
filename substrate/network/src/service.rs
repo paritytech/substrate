@@ -19,9 +19,9 @@ use std::sync::Arc;
 use std::io;
 use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
-use network::{NetworkProtocolHandler, NetworkContext, PeerId, ProtocolId,
+use network_libp2p::{NetworkProtocolHandler, NetworkContext, PeerId, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
-use network_devp2p::{NetworkService};
+use network_libp2p::{NetworkService};
 use core_io::{TimerToken};
 use io::NetSyncIo;
 use protocol::{Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
@@ -31,7 +31,8 @@ use chain::Client;
 use message::LocalizedBftMessage;
 use specialization::Specialization;
 use on_demand::OnDemandService;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use import_queue::AsyncImportQueue;
+use runtime_primitives::traits::{Block as BlockT};
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
@@ -46,7 +47,7 @@ const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 
 bitflags! {
 	/// Node roles bitmask.
-	pub struct Role: u32 {
+	pub struct Roles: u8 {
 		/// No network.
 		const NONE = 0b00000000;
 		/// Full node, does not participate in consensus.
@@ -135,7 +136,7 @@ pub struct Params<B: BlockT, S> {
 }
 
 /// Polkadot network service. Handles network IO and manages connectivity.
-pub struct Service<B: BlockT + 'static, S: Specialization<B>> where B::Header: HeaderT<Number=u64> {
+pub struct Service<B: BlockT + 'static, S: Specialization<B>> {
 	/// Network service
 	network: NetworkService,
 	/// Devp2p protocol handler
@@ -144,23 +145,32 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>> where B::Header: H
 	protocol_id: ProtocolId,
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params<B, S>, protocol_id: ProtocolId) -> Result<Arc<Service<B, S>>, Error> {
+		let chain = params.chain.clone();
 		let service = NetworkService::new(params.network_config.clone(), None)?;
+		let import_queue = Arc::new(AsyncImportQueue::new());
 		let sync = Arc::new(Service {
 			network: service,
 			protocol_id,
 			handler: Arc::new(ProtocolHandler {
 				protocol: Protocol::new(
 					params.config,
-					params.chain.clone(),
+					params.chain,
+					import_queue.clone(),
 					params.on_demand,
 					params.transaction_pool,
-					params.specialization
+					params.specialization,
 				)?,
 			}),
 		});
+
+		import_queue.start(
+			Arc::downgrade(sync.handler.protocol.sync()),
+			Arc::downgrade(&sync),
+			Arc::downgrade(&chain)
+		)?;
 
 		Ok(sync)
 	}
@@ -193,29 +203,29 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> where B::Header: H
 	}
 
 	fn start(&self) {
-		match self.network.start().map_err(|e| e.0.into()) {
+		let versions = [(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)];
+		let protocols = vec![(self.handler.clone() as Arc<_>, self.protocol_id, &versions[..])];
+		match self.network.start(protocols).map_err(|e| e.0.into()) {
 			Err(ErrorKind::Io(ref e)) if  e.kind() == io::ErrorKind::AddrInUse =>
 				warn!("Network port is already in use, make sure that another instance of Polkadot client is not running or change the port using the --port option."),
 			Err(err) => warn!("Error starting network: {}", err),
 			_ => {},
 		};
-		self.network.register_protocol(self.handler.clone(), self.protocol_id, &[(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)])
-			.unwrap_or_else(|e| warn!("Error registering polkadot protocol: {:?}", e));
 	}
 
 	fn stop(&self) {
-		self.handler.protocol.abort();
+		self.handler.protocol.stop();
 		self.network.stop();
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> Drop for Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> Drop for Service<B, S> {
 	fn drop(&mut self) {
 		self.stop();
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> ExecuteInContext<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> ExecuteInContext<B> for Service<B, S> {
 	fn execute_in_context<F: Fn(&mut ::protocol::Context<B>)>(&self, closure: F) {
 		self.network.with_context(self.protocol_id, |context| {
 			closure(&mut ProtocolContext::new(self.handler.protocol.context_data(), &mut NetSyncIo::new(context)))
@@ -223,7 +233,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> ExecuteInContext<B> for Service<
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S> {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.protocol.status()
@@ -257,7 +267,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> SyncProvider<B> for Service<B, S
 	}
 }
 
-impl<B: BlockT + 'static, S: Specialization<B>> NetworkProtocolHandler for ProtocolHandler<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> NetworkProtocolHandler for ProtocolHandler<B, S> {
 	fn initialize(&self, io: &NetworkContext) {
 		io.register_timer(TICK_TOKEN, TICK_TIMEOUT)
 			.expect("Error registering sync timer");
@@ -304,7 +314,7 @@ pub trait ManageNetwork: Send + Sync {
 }
 
 
-impl<B: BlockT + 'static, S: Specialization<B>> ManageNetwork for Service<B, S> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT + 'static, S: Specialization<B>> ManageNetwork for Service<B, S> {
 	fn accept_unreserved_peers(&self) {
 		self.network.set_non_reserved_mode(NonReservedPeerMode::Accept);
 	}

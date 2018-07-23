@@ -17,9 +17,10 @@
 //! Rust implementation of Substrate contracts.
 
 use std::cmp::Ordering;
+use parking_lot::Mutex;
 use std::collections::HashMap;
 use wasmi::{
-	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder,
+	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder
 };
 use wasmi::RuntimeValue::{I32, I64};
 use wasmi::memory_units::{Pages, Bytes};
@@ -37,30 +38,39 @@ struct Heap {
 }
 
 impl Heap {
-	/// Construct new `Heap` struct.
+	/// Construct new `Heap` struct with a given number of pages.
 	///
 	/// Returns `Err` if the heap couldn't allocate required
 	/// number of pages.
 	///
 	/// This could mean that wasm binary specifies memory
 	/// limit and we are trying to allocate beyond that limit.
-	fn new(memory: &MemoryRef) -> Result<Self> {
-		const HEAP_SIZE_IN_PAGES: usize = 1024;
-
+	fn new(memory: &MemoryRef, pages: usize) -> Result<Self> {
 		let prev_page_count = memory
-			.grow(Pages(HEAP_SIZE_IN_PAGES))
+			.grow(Pages(pages))
 			.map_err(|_| Error::from(ErrorKind::Runtime))?;
 		Ok(Heap {
 			end: Bytes::from(prev_page_count).0 as u32,
 		})
 	}
+
 	fn allocate(&mut self, size: u32) -> u32 {
 		let r = self.end;
 		self.end += size;
 		r
 	}
+
 	fn deallocate(&mut self, _offset: u32) {
 	}
+}
+
+#[cfg(feature="wasm-extern-trace")]
+macro_rules! debug_trace {
+	( $( $x:tt )* ) => ( trace!( $( $x )* ) )
+}
+#[cfg(not(feature="wasm-extern-trace"))]
+macro_rules! debug_trace {
+	( $( $x:tt )* ) => ()
 }
 
 struct FunctionExecutor<'e, E: Externalities + 'e> {
@@ -73,10 +83,10 @@ struct FunctionExecutor<'e, E: Externalities + 'e> {
 }
 
 impl<'e, E: Externalities> FunctionExecutor<'e, E> {
-	fn new(m: MemoryRef, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
+	fn new(m: MemoryRef, heap_pages: usize, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
-			heap: Heap::new(&m)?,
+			heap: Heap::new(&m, heap_pages)?,
 			memory: m,
 			table: t,
 			ext: e,
@@ -130,24 +140,6 @@ impl ReadPrimitive<u32> for MemoryInstance {
 	}
 }
 
-fn ascii_format(asciish: &[u8]) -> String {
-	let mut r = String::new();
-	let mut latch = false;
-	for c in asciish {
-		match (latch, *c) {
-			(false, 32...127) => r.push(*c as char),
-			_ => {
-				if !latch {
-					r.push('#');
-					latch = true;
-				}
-				r.push_str(&format!("{:02x}", *c));
-			}
-		}
-	}
-	r
-}
-
 impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
@@ -179,51 +171,56 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize)
 			.map_err(|_| UserError("Invalid attempt to copy_nonoverlapping in ext_memcpy"))?;
-		trace!(target: "runtime-io", "memcpy {} from {}, {} bytes", dest, src, count);
+		debug_trace!(target: "runtime-io", "memcpy {} from {}, {} bytes", dest, src, count);
 		Ok(dest)
 	},
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy(src as usize, dest as usize, count as usize)
 			.map_err(|_| UserError("Invalid attempt to copy in ext_memmove"))?;
-		trace!(target: "runtime-io", "memmove {} from {}, {} bytes", dest, src, count);
+		debug_trace!(target: "runtime-io", "memmove {} from {}, {} bytes", dest, src, count);
 		Ok(dest)
 	},
 	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
-		trace!(target: "runtime-io", "memset {} with {}, {} bytes", dest, val, count);
+		debug_trace!(target: "runtime-io", "memset {} with {}, {} bytes", dest, val, count);
 		this.memory.clear(dest as usize, val as u8, count as usize)
 			.map_err(|_| UserError("Invalid attempt to clear in ext_memset"))?;
 		Ok(dest)
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
 		let r = this.heap.allocate(size);
-		trace!(target: "runtime-io", "malloc {} bytes at {}", size, r);
+		debug_trace!(target: "runtime-io", "malloc {} bytes at {}", size, r);
 		Ok(r)
 	},
 	ext_free(addr: *mut u8) => {
 		this.heap.deallocate(addr);
-		trace!(target: "runtime-io", "free {}", addr);
+		debug_trace!(target: "runtime-io", "free {}", addr);
 		Ok(())
 	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_storage"))?;
-		if let Some(preimage) = this.hash_lookup.get(&key) {
-			trace!(target: "wasm-trace", "*** Setting storage: %{} -> {}   [k={}]", ascii_format(&preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+		if let Some(_preimage) = this.hash_lookup.get(&key) {
+			debug_trace!(target: "wasm-trace", "*** Setting storage: %{} -> {}   [k={}]", ::primitives::hexdisplay::ascii_format(&_preimage), HexDisplay::from(&value), HexDisplay::from(&key));
 		} else {
-			trace!(target: "wasm-trace", "*** Setting storage:  {} -> {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			debug_trace!(target: "wasm-trace", "*** Setting storage:  {} -> {}   [k={}]", ::primitives::hexdisplay::ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
 		}
 		this.ext.set_storage(key, value);
 		Ok(())
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
-		if let Some(preimage) = this.hash_lookup.get(&key) {
-			trace!(target: "wasm-trace", "*** Clearing storage: %{}   [k={}]", ascii_format(&preimage), HexDisplay::from(&key));
-		} else {
-			trace!(target: "wasm-trace", "*** Clearing storage:  {}   [k={}]", ascii_format(&key), HexDisplay::from(&key));
-		}
+		debug_trace!(target: "wasm-trace", "*** Clearing storage: {}   [k={}]", 
+			if let Some(_preimage) = this.hash_lookup.get(&key) {
+				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
+			} else {
+				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
+			}, HexDisplay::from(&key));
 		this.ext.clear_storage(&key);
 		Ok(())
+	},
+	ext_exists_storage(key_data: *const u8, key_len: u32) -> u32 => {
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_storage"))?;
+		Ok(if this.ext.exists_storage(&key) { 1 } else { 0 })
 	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
@@ -235,11 +232,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_storage"))?;
 		let maybe_value = this.ext.storage(&key);
 
-		if let Some(preimage) = this.hash_lookup.get(&key) {
-			trace!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
-		} else {
-			trace!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
-		}
+		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]", 
+			if let Some(_preimage) = this.hash_lookup.get(&key) {
+				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
+			} else {
+				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
+			},
+			if let Some(ref b) = maybe_value {
+				format!("{}", HexDisplay::from(b))
+			} else {
+				"<empty>".to_owned()
+			},
+			HexDisplay::from(&key)
+		);
 
 		if let Some(value) = maybe_value {
 			let offset = this.heap.allocate(value.len() as u32) as u32;
@@ -257,11 +262,20 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_get_storage_into"))?;
 		let maybe_value = this.ext.storage(&key);
-		if let Some(preimage) = this.hash_lookup.get(&key) {
-			trace!(target: "wasm-trace", "    Getting storage: %{} == {}   [k={}]", ascii_format(&preimage), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
-		} else {
-			trace!(target: "wasm-trace", "    Getting storage:  {} == {}   [k={}]", ascii_format(&key), if let Some(ref b) = maybe_value { format!("{}", HexDisplay::from(b)) } else { "<empty>".to_owned() }, HexDisplay::from(&key));
-		}
+		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]", 
+			if let Some(_preimage) = this.hash_lookup.get(&key) {
+				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
+			} else {
+				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
+			},
+			if let Some(ref b) = maybe_value {
+				format!("{}", HexDisplay::from(b))
+			} else {
+				"<empty>".to_owned()
+			},
+			HexDisplay::from(&key)
+		);
+
 		if let Some(value) = maybe_value {
 			let value = &value[value_offset as usize..];
 			let written = ::std::cmp::min(value_len as usize, value.len());
@@ -297,17 +311,20 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_twox_128(data: *const u8, len: u32, out: *mut u8) => {
 		let result = if len == 0 {
 			let hashed = twox_128(&[0u8; 0]);
-			trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
+			debug_trace!(target: "xxhash", "XXhash: '' -> {}", HexDisplay::from(&hashed));
 			this.hash_lookup.insert(hashed.to_vec(), vec![]);
 			hashed
 		} else {
 			let key = this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_twox_128"))?;
 			let hashed_key = twox_128(&key);
-			if let Ok(skey) = ::std::str::from_utf8(&key) {
-				trace!(target: "xxhash", "XXhash: {} -> {}", skey, HexDisplay::from(&hashed_key));
-			} else {
-				trace!(target: "xxhash", "XXhash: {} -> {}", HexDisplay::from(&key), HexDisplay::from(&hashed_key));
-			}
+			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
+				if let Ok(_skey) = ::std::str::from_utf8(&key) {
+					_skey.to_owned()
+				} else {
+					format!("{}", HexDisplay::from(&key))
+				},
+				HexDisplay::from(&hashed_key)
+			);
 			this.hash_lookup.insert(hashed_key.to_vec(), key);
 			hashed_key
 		};
@@ -386,7 +403,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	// TODO: Remove the old 'ext_sandbox_invoke' and rename this to it.
 	ext_sandbox_invoke_poc2(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
-		use codec::Slicable;
+		use codec::{Decode, Encode};
 
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
@@ -467,10 +484,39 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 /// Wasm rust executor for contracts.
 ///
 /// Executes the provided code in a sandboxed wasm runtime.
-#[derive(Debug, Default, Clone)]
-pub struct WasmExecutor;
+#[derive(Debug)]
+pub struct WasmExecutor {
+	/// The min number of pages to allocate for the heap.
+	pub min_heap_pages: usize,
+	/// The max number of pages to allocate for the heap.
+	pub max_heap_pages: usize,
+
+	try_heap_pages: Mutex<(usize, usize)>,
+}
+
+impl Clone for WasmExecutor {
+	fn clone(&self) -> Self {
+		WasmExecutor {
+			min_heap_pages: self.min_heap_pages,
+			max_heap_pages: self.max_heap_pages,
+			try_heap_pages: Mutex::new((self.min_heap_pages, 0)),
+		}
+	}
+}
+
+// Number of executions to continue with the old heap_pages before reducing to the next lowest POT.
+const DECAY_TIMEOUT: usize = 16;
 
 impl WasmExecutor {
+
+	/// Create a new instance.
+	pub fn new(min_heap_pages: usize, max_heap_pages: usize) -> Self {
+		WasmExecutor {
+			min_heap_pages,
+			max_heap_pages,
+			try_heap_pages: Mutex::new((min_heap_pages, 0)),
+		}
+	}
 
 	/// Call a given method in the given wasm-module runtime.
 	pub fn call_in_wasm_module<E: Externalities>(
@@ -500,25 +546,55 @@ impl WasmExecutor {
 			.clone();
 		let table: Option<TableRef> = intermediate_instance
 			.not_started_instance()
-			.export_by_name("table")
+			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
-		let mut fec = FunctionExecutor::new(memory.clone(), table, ext)?;
+
+		let mut try_heap_pages = self.try_heap_pages.lock();
+		let mut fec = FunctionExecutor::new(memory.clone(), try_heap_pages.0, table, ext)?;
 
 		// finish instantiation by running 'start' function (if any).
 		let instance = intermediate_instance.run_start(&mut fec)?;
 
 		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
-		memory.set(offset, &data).expect("heap always gives a sensible offset to write");
+		if let Err(_) = memory.set(offset, &data) {
+			let old = try_heap_pages.0;
+			*try_heap_pages = ((old * 2).min(self.max_heap_pages), DECAY_TIMEOUT);
+			trace!(target: "wasm-executor", "Shrunk heap size too small at {} pages. Retrying with {}", old, try_heap_pages.0);
+			return Err(ErrorKind::PleaseRetry.into())
+		}
 
-		let returned = instance.invoke_export(
+		let result = instance.invoke_export(
 			method,
 			&[
 				I32(offset as i32),
 				I32(size as i32)
 			],
 			&mut fec
-		)?;
+		);
+
+		let returned = match result {
+			Ok(x) => x,
+			Err(_) if try_heap_pages.0 < self.max_heap_pages => {
+				let old = try_heap_pages.0;
+				*try_heap_pages = ((old * 2).min(self.max_heap_pages), DECAY_TIMEOUT);
+				trace!(target: "wasm-executor", "Shrunk heap size too small at {} pages. Retrying with {}", old, try_heap_pages.0);
+				return Err(ErrorKind::PleaseRetry.into())
+			}
+			Err(e) => {
+				trace!(target: "wasm-executor", "Failed to execute code with {} pages", try_heap_pages.0);
+				return Err(e.into())
+			},
+		};
+
+		let decay_timeout = try_heap_pages.1;
+		if decay_timeout == 0 {
+			if try_heap_pages.0 > self.min_heap_pages {
+				*try_heap_pages = (self.min_heap_pages.max(try_heap_pages.0 - 1), DECAY_TIMEOUT);
+			}
+		} else {
+			try_heap_pages.1 -= 1;
+		}
 
 		if let Some(I64(r)) = returned {
 			let offset = r as u32;
@@ -540,9 +616,11 @@ impl CodeExecutor for WasmExecutor {
 		code: &[u8],
 		method: &str,
 		data: &[u8],
-	) -> Result<Vec<u8>> {
-		let module = Module::from_buffer(code)?;
-		self.call_in_wasm_module(ext, &module, method, data)
+		_use_native: bool
+	) -> (Result<Vec<u8>>, bool) {
+		(Module::from_buffer(code).map_err(Into::into).and_then(|module| 
+			self.call_in_wasm_module(ext, &module, method, data)
+		), false)
 	}
 }
 
@@ -550,7 +628,7 @@ impl CodeExecutor for WasmExecutor {
 mod tests {
 	use super::*;
 	use rustc_hex::FromHex;
-	use codec::Slicable;
+	use codec::Encode;
 	use state_machine::TestExternalities;
 
 	// TODO: move into own crate.
@@ -565,7 +643,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_empty_return", &[]).unwrap();
+		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_empty_return", &[], true).0.unwrap();
 		assert_eq!(output, vec![0u8; 0]);
 	}
 
@@ -574,10 +652,10 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_panic", &[]);
+		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_panic", &[], true).0;
 		assert!(output.is_err());
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_conditional_panic", &[2]);
+		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_conditional_panic", &[2], true).0;
 		assert!(output.is_err());
 	}
 
@@ -587,7 +665,7 @@ mod tests {
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_data_in", b"Hello world").unwrap();
+		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_data_in", b"Hello world", true).0.unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -610,7 +688,7 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		// This will clear all entries which prefix is "ab".
-		let output = WasmExecutor.call(&mut ext, &test_code[..], "test_clear_prefix", b"ab").unwrap();
+		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_clear_prefix", b"ab", true).0.unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -627,11 +705,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", &[]).unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_blake2_256", &[], true).0.unwrap(),
 			blake2_256(&b""[..]).encode()
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!", true).0.unwrap(),
 			blake2_256(&b"Hello world!"[..]).encode()
 		);
 	}
@@ -641,11 +719,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", &[]).unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_256", &[], true).0.unwrap(),
 			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a").unwrap()
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!", true).0.unwrap(),
 			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74").unwrap()
 		);
 	}
@@ -655,11 +733,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", &[]).unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_128", &[], true).0.unwrap(),
 			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd5").unwrap()
 		);
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!", true).0.unwrap(),
 			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af").unwrap()
 		);
 	}
@@ -675,7 +753,7 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata, true).0.unwrap(),
 			vec![1]
 		);
 
@@ -685,7 +763,7 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata, true).0.unwrap(),
 			vec![0]
 		);
 	}
@@ -695,7 +773,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor.call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
+			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[], true).0.unwrap(),
 			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
 		);
 	}

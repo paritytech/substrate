@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Error types in the BFT service.
+use runtime_version::RuntimeVersion;
 
 error_chain! {
 	errors {
@@ -55,9 +56,21 @@ error_chain! {
 		}
 
 		/// Authoring interface does not match the runtime.
-		InvalidRuntime {
+		IncompatibleAuthoringRuntime(native: RuntimeVersion, on_chain: RuntimeVersion) {
 			description("Authoring for current runtime is not supported"),
-			display("Authoring for current runtime is not supported."),
+			display("Authoring for current runtime is not supported. Native ({}) cannot author for on-chain ({}).", native, on_chain),
+		}
+
+		/// Authoring interface does not match the runtime.
+		RuntimeVersionMissing {
+			description("Current runtime has no version"),
+			display("Authoring for current runtime is not supported since it has no version."),
+		}
+
+		/// Authoring interface does not match the runtime.
+		NativeRuntimeMissing {
+			description("This build has no native runtime"),
+			display("Authoring in current build is not supported since it has no runtime."),
 		}
 
 		/// Justification requirements not met.

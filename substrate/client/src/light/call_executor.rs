@@ -22,14 +22,15 @@ use futures::{IntoFuture, Future};
 
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges, execution_proof_check};
+use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
+	execution_proof_check, TrieH256, ExecutionManager};
 
 use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
-use codec::Slicable;
+use codec::Decode;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -73,7 +74,16 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
 	}
 
-	fn call_at_state<S: StateBackend>(&self, _state: &S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, S::Transaction)> {
+	fn call_at_state<
+		S: StateBackend,
+		H: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
+	>(&self,
+		_state: &S,
+		_changes: &mut OverlayedChanges,
+		_method: &str,
+		_call_data: &[u8],
+		_m: ExecutionManager<H>
+	) -> ClientResult<(Vec<u8>, S::Transaction)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
@@ -95,7 +105,6 @@ pub fn check_execution_proof<Block, B, E>(
 ) -> ClientResult<CallResult>
 	where
 		Block: BlockT,
-		<Block as BlockT>::Hash: Into<[u8; 32]>, // TODO: remove when patricia_trie generic.
 		B: ChainBackend<Block>,
 		E: CodeExecutor,
 {
@@ -107,18 +116,18 @@ pub fn check_execution_proof<Block, B, E>(
 
 /// Check remote execution proof using given state root.
 fn do_check_execution_proof<Hash, E>(
-	local_state_root: [u8; 32],
+	local_state_root: Hash,
 	executor: &E,
 	request: &RemoteCallRequest<Hash>,
 	remote_proof: Vec<Vec<u8>>,
 ) -> ClientResult<CallResult>
 	where
-		Hash: ::std::fmt::Display,
+		Hash: ::std::fmt::Display + ::std::convert::AsRef<[u8]>,
 		E: CodeExecutor,
 {
 	let mut changes = OverlayedChanges::default();
 	let (local_result, _) = execution_proof_check(
-		local_state_root,
+		TrieH256::from_slice(local_state_root.as_ref()).into(),
 		remote_proof,
 		&mut changes,
 		executor,
@@ -131,6 +140,7 @@ fn do_check_execution_proof<Hash, E>(
 #[cfg(test)]
 mod tests {
 	use test_client;
+	use executor::NativeExecutionDispatch;
 	use super::*;
 
 	#[test]
@@ -143,9 +153,9 @@ mod tests {
 
 		// 'fetch' execution proof from remote node
 		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
-
+		
 		// check remote execution proof locally
-		let local_executor = test_client::NativeExecutor::new();
+		let local_executor = test_client::LocalExecutor::with_heap_pages(8, 8);
 		do_check_execution_proof(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
 			method: "authorities".into(),

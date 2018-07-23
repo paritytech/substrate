@@ -37,6 +37,12 @@ pub trait Collators: Clone {
 	type Collation: IntoFuture<Item=Collation,Error=Self::Error>;
 
 	/// Collate on a specific parachain, building on a given relay chain parent hash.
+	///
+	/// The returned collation should be checked for basic validity in the signature
+	/// and will be checked for state-transition validity by the consumer of this trait.
+	///
+	/// This does not have to guarantee local availability, as a valid collation
+	/// will be passed to the `TableRouter` instance.
 	fn collate(&self, parachain: ParaId, relay_parent: Hash) -> Self::Collation;
 
 	/// Note a bad collator. TODO: take proof

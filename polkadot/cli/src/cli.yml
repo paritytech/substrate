@@ -29,10 +29,6 @@ args:
       value_name: KEY
       help: Specify node secret key (64-character hex string)
       takes_value: true
-  - collator:
-      long: collator
-      help: Enable collator mode
-      takes_value: false
   - validator:
       long: validator
       help: Enable validator mode
@@ -69,12 +65,12 @@ args:
   - chain:
       long: chain
       value_name: CHAIN_SPEC
-      help: Specify the chain specification (one of poc-1, dev, local or staging)
+      help: Specify the chain specification (one of krummelanke, dev, local or staging)
       takes_value: true
   - pruning:
       long: pruning
       value_name: PRUNING_MODE
-      help: Specify the pruning mode. (a number of blocks to keep or "archive"). Default is 256.
+      help: Specify the pruning mode, a number of blocks to keep or "archive". Default is 256.
       takes_value: true
   - name:
       long: name
@@ -95,6 +91,18 @@ args:
       value_name: TELEMETRY_URL
       help: The URL of the telemetry server. Implies --telemetry
       takes_value: true
+  - execution:
+      long: execution
+      value_name: STRATEGY
+      help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
+  - min-heap-pages:
+      long: min-heap-pages
+      value_name: COUNT
+      help: The number of 64KB pages to allocate for Wasm execution initially.
+  - max-heap-pages:
+      long: max-heap-pages
+      value_name: COUNT
+      help: The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
 subcommands:
   - build-spec:
       about: Build a spec.json file, outputing to stdout
@@ -106,7 +114,7 @@ subcommands:
         - chain:
             long: chain
             value_name: CHAIN_SPEC
-            help: Specify the chain specification (one of poc-1, dev, local or staging)
+            help: Specify the chain specification (one of krummelanke, dev, local or staging)
             takes_value: true
   - export-blocks:
       about: Export blocks to a file
@@ -158,3 +166,15 @@ subcommands:
               value_name: PATH
               help: Specify custom base path.
               takes_value: true
+          - execution:
+              long: execution
+              value_name: STRATEGY
+              help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
+          - min-heap-pages:
+              long: min-heap-pages
+              value_name: COUNT
+              help: The number of 64KB pages to allocate for Wasm execution initially.
+          - max-heap-pages:
+              long: max-heap-pages
+              value_name: COUNT
+              help: The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
