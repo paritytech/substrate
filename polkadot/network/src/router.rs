@@ -117,6 +117,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 		};
 
 		// prepend the candidate statement.
+		debug!(target: "consensus", "Importing statements about candidate {:?}", c_hash);
 		statements.insert(0, statement);
 		let producers: Vec<_> = self.table.import_remote_statements(
 			self,
@@ -124,13 +125,12 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 		);
 		// dispatch future work as necessary.
 		for (producer, statement) in producers.into_iter().zip(statements) {
-			let producer = match producer {
-				Some(p) => p,
-				None => continue, // statement redundant
-			};
-
 			self.knowledge.lock().note_statement(statement.sender, &statement.statement);
-			self.dispatch_work(c_hash, producer);
+
+			if let Some(producer) = producer {
+				trace!(target: "consensus", "driving statement work to completion");
+				self.dispatch_work(c_hash, producer);
+			}
 		}
 	}
 
@@ -162,12 +162,12 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 
 			// propagate the statements
 			if let Some(validity) = produced.validity {
-				let signed = table.sign_and_import(validity.clone());
+				let signed = table.sign_and_import(validity.clone()).0;
 				network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
 			}
 
 			if let Some(availability) = produced.availability {
-				let signed = table.sign_and_import(availability);
+				let signed = table.sign_and_import(availability).0;
 				network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
 			}
 		});
@@ -184,10 +184,15 @@ impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> {
 	fn local_candidate(&self, receipt: CandidateReceipt, block_data: BlockData, extrinsic: Extrinsic) {
 		// give to network to make available.
 		let hash = receipt.hash();
-		let signed = self.table.sign_and_import(GenericStatement::Candidate(receipt));
+		let (candidate, availability) = self.table.sign_and_import(GenericStatement::Candidate(receipt));
 
 		self.knowledge.lock().note_candidate(hash, Some(block_data), Some(extrinsic));
-		self.network.with_spec(|spec, ctx| spec.gossip_statement(ctx, self.parent_hash, signed));
+		self.network.with_spec(|spec, ctx| {
+			spec.gossip_statement(ctx, self.parent_hash, candidate);
+			if let Some(availability) = availability {
+				spec.gossip_statement(ctx, self.parent_hash, availability);
+			}
+		});
 	}
 
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> BlockDataReceiver {

@@ -212,7 +212,7 @@ pub fn new_full(config: Configuration, executor: TaskExecutor)
 			consensus_net,
 			service.extrinsic_pool(),
 			executor,
-			::std::time::Duration::from_millis(4000), // TODO: dynamic
+			::std::time::Duration::from_secs(4), // TODO: dynamic
 			key,
 		))
 	} else {
