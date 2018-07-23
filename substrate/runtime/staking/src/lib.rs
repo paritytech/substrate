@@ -88,14 +88,14 @@ pub enum LockStatus<BlockNumber: PartialEq + Clone> {
 	Staked,
 }
 
-/// The given account was killed.
-pub trait OnAccountKill<Address> {
-	/// The given account was killed.
-	fn on_account_kill(address: &Address);
+/// The account was the given id was killed.
+pub trait OnAccountKill<AccountId> {
+	/// The account was the given id was killed.
+	fn on_account_kill(who: &AccountId);
 }
 
-impl<Address> OnAccountKill<Address> for () {
-	fn on_account_kill(_address: &Address) {}
+impl<AccountId> OnAccountKill<AccountId> for () {
+	fn on_account_kill(_who: &AccountId) {}
 }
 
 pub trait Trait: system::Trait + session::Trait {
