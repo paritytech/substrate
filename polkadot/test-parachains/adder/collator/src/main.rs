@@ -86,6 +86,7 @@ impl ParachainContext for AdderContext {
 		let encoded_head = HeadData(next_head.encode());
 		let encoded_body = BlockData(next_body.encode());
 
+		println!("Created collation.");
 		db.insert(next_head.clone(), next_body);
 		Ok((encoded_body, encoded_head))
 	}

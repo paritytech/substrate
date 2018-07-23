@@ -478,12 +478,15 @@ impl PolkadotProtocol {
 			}
 		};
 
+		debug!(target: "p_net", "New collator role {:?} from {}", role, peer_id);
+
 		match info.validator_key {
 			None => ctx.disable_peer(
 				peer_id,
 				"Sent collator role without registering first as validator",
 			),
 			Some(key) => for (relay_parent, collation) in self.local_collations.note_validator_role(key, role) {
+				debug!(target: "p_net", "Broadcasting collation on relay parent {:?}", relay_parent);
 				send_polkadot_message(
 					ctx,
 					peer_id,
@@ -651,6 +654,7 @@ impl PolkadotProtocol {
 				Some((ref acc_id, ref para_id)) => {
 					let structurally_valid = para_id == &collation_para && acc_id == &collated_acc;
 					if structurally_valid && collation.receipt.check_signature().is_ok() {
+						debug!(target: "p_net", "Received collation for parachain {:?} from peer {}", para_id, from);
 						self.collators.on_collation(acc_id.clone(), relay_parent, collation)
 					} else {
 						ctx.disable_peer(from, "Sent malformed collation")
@@ -662,6 +666,7 @@ impl PolkadotProtocol {
 
 	fn await_collation(&mut self, relay_parent: Hash, para_id: ParaId) -> oneshot::Receiver<Collation> {
 		let (tx, rx) = oneshot::channel();
+		debug!(target: "p_net", "Attempting to get collation for parachain {:?} on relay parent {:?}", para_id, relay_parent);
 		self.collators.await_collation(relay_parent, para_id, tx);
 		rx
 	}
@@ -697,13 +702,19 @@ impl PolkadotProtocol {
 		targets: HashSet<SessionKey>,
 		collation: Collation,
 	) {
+		debug!(target: "p_net", "Importing local collation on relay parent {:?} and parachain {:?}",
+			relay_parent, collation.receipt.parachain_index);
+
 		for (primary, cloned_collation) in self.local_collations.add_collation(relay_parent, targets, collation.clone()) {
 			match self.validators.get(&primary) {
-				Some(peer_id) => send_polkadot_message(
-					ctx,
-					*peer_id,
-					Message::Collation(relay_parent, cloned_collation),
-				),
+				Some(peer_id) => {
+					debug!(target: "p_net", "Sending local collation to {:?}", primary);
+					send_polkadot_message(
+						ctx,
+						*peer_id,
+						Message::Collation(relay_parent, cloned_collation),
+					)
+				},
 				None =>
 					warn!(target: "polkadot_network", "Encountered tracked but disconnected validator {:?}", primary),
 			}
