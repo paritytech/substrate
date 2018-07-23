@@ -34,6 +34,7 @@ use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
 use std::path::Path;
 use std::sync::atomic;
+use std::{thread, time};
 use std::time::{Duration, Instant};
 
 // File where the peers are stored.
@@ -179,9 +180,29 @@ impl NetworkState {
 					file {:?}", path);
 				PeersStorage::Json(peerstore)
 			} else {
-				warn!(target: "sub-libp2p", "Failed to open peer storage {:?} \
-					; peers won't be saved", path);
-				PeersStorage::Memory(MemoryPeerstore::empty())
+				warn!(target: "sub-libp2p", "Failed to open peer storage {:?}\
+					; peers file will be reset", path);
+				fs::remove_file(&path).expect("Failed deleting peers.json");
+
+				// we check for about 1s if the file was really deleted and move on
+				for _x in 0..200 {
+					if !Path::new(&path).exists() {
+						break;
+					} else {
+						debug!("Waiting for effective deletion of invalid/outdate \
+							peers.json");
+						thread::sleep(time::Duration::from_millis(5));
+					}
+				}
+
+				if let Ok(peerstore) = JsonPeerstore::new(path.clone()) {
+					debug!("peers.json reset");
+					PeersStorage::Json(peerstore)
+				} else {
+					warn!(target: "sub-libp2p", "Failed to reset peer storage\
+						{:?}; peers change will not be saved", path);
+					PeersStorage::Memory(MemoryPeerstore::empty())
+				}
 			}
 		} else {
 			debug!(target: "sub-libp2p", "No peers file configured ; peers \
@@ -559,7 +580,7 @@ impl NetworkState {
 	/// You must pass an `UnboundedSender` which will be used by the `send`
 	/// method. Actually sending the data is not covered by this code.
 	///
-	/// The various methods of the `NetworkState` that close a connection do 
+	/// The various methods of the `NetworkState` that close a connection do
 	/// so by dropping this sender.
 	pub fn custom_proto(
 		&self,
@@ -826,7 +847,7 @@ fn parse_and_add_to_peerstore(addr_str: &str, peerstore: &PeersStorage)
 				.peer_or_create(&peer_id)
 				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 	}
-	
+
 	Ok(peer_id)
 }
 
