@@ -26,7 +26,7 @@ use client::error::Result as ClientResult;
 use codec::{Codec, Encode, Decode, Input, Output};
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
+use runtime_primitives::traits::{Block as BlockT, As, NumberFor};
 use utils::{COLUMN_META, BlockKey, db_err, meta_keys, read_id, db_key_to_number, number_to_db_key};
 
 /// Database-backed cache of blockchain data.
@@ -39,10 +39,14 @@ pub struct DbCache<Block: BlockT> {
 impl<Block> DbCache<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u64>,
+		NumberFor<Block>: As<u64>,
 {
 	/// Create new cache.
-	pub fn new(db: Arc<KeyValueDB>, block_index_column: Option<u32>, authorities_column: Option<u32>) -> ClientResult<Self> {
+	pub fn new(
+		db: Arc<KeyValueDB>,
+		block_index_column: Option<u32>,
+		authorities_column: Option<u32>
+	) -> ClientResult<Self> {
 		Ok(DbCache {
 			db: db.clone(),
 			block_index_column,
@@ -59,7 +63,7 @@ impl<Block> DbCache<Block>
 impl<Block> BlockchainCache<Block> for DbCache<Block>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u64>,
+		NumberFor<Block>: As<u64>,
 {
 	fn authorities_at(&self, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
 		let authorities_at = read_id(&*self.db, self.block_index_column, at).and_then(|at| match at {
@@ -80,12 +84,15 @@ impl<Block> BlockchainCache<Block> for DbCache<Block>
 /// Database-backed blockchain cache which holds its entries as a list.
 /// The meta column holds the pointer to the best known cache entry and
 /// every entry points to the previous entry.
+/// New entry appears when the set of authorities changes in block, so the
+/// best entry here means the entry that is valid for the best block (and
+/// probably for its ascendants).
 pub struct DbCacheList<Block: BlockT, T: Clone> {
 	db: Arc<KeyValueDB>,
 	meta_key: &'static [u8],
 	column: Option<u32>,
 	/// Best entry at the moment. None means that cache has no entries at all.
-	best_entry: RwLock<Option<Entry<<<Block as BlockT>::Header as HeaderT>::Number, T>>>,
+	best_entry: RwLock<Option<Entry<NumberFor<Block>, T>>>,
 }
 
 /// Single cache entry.
@@ -111,7 +118,7 @@ struct StorageEntry<N, T> {
 impl<Block, T> DbCacheList<Block, T>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u64>,
+		NumberFor<Block>: As<u64>,
 		T: Clone + PartialEq + Codec,
 {
 	/// Creates new cache list.
@@ -141,15 +148,23 @@ impl<Block, T> DbCacheList<Block, T>
 	}
 
 	/// Gets the best known entry.
-	pub fn best_entry(&self) -> Option<Entry<<<Block as BlockT>::Header as HeaderT>::Number, T>> {
+	pub fn best_entry(&self) -> Option<Entry<NumberFor<Block>, T>> {
 		self.best_entry.read().clone()
 	}
 
 	/// Commits the new best pending value to the database. Returns Some if best entry must
 	/// be updated after transaction is committed.
-	pub fn commit_best_entry(&self, transaction: &mut DBTransaction, valid_from: <<Block as BlockT>::Header as HeaderT>::Number, pending_value: Option<T>) -> Option<Entry<<<Block as BlockT>::Header as HeaderT>::Number, T>> {
+	pub fn commit_best_entry(
+		&self,
+		transaction: &mut DBTransaction,
+		valid_from: NumberFor<Block>,
+		pending_value: Option<T>
+	) -> Option<Entry<NumberFor<Block>, T>> {
 		let best_entry = self.best_entry();
-		let update_best_entry = match (best_entry.as_ref().and_then(|a| a.value.as_ref()), pending_value.as_ref()) {
+		let update_best_entry = match (
+			best_entry.as_ref().and_then(|a| a.value.as_ref()),
+			pending_value.as_ref()
+		) {
 			(Some(best_value), Some(pending_value)) => best_value != pending_value,
 			(None, Some(_)) | (Some(_), None) => true,
 			(None, None) => false,
@@ -173,13 +188,17 @@ impl<Block, T> DbCacheList<Block, T>
 
 	/// Updates the best in-memory cache entry. Must be called after transaction with changes
 	/// from commit_best_entry has been committed.
-	pub fn update_best_entry(&self, best_entry: Option<Entry<<<Block as BlockT>::Header as HeaderT>::Number, T>>) {
+	pub fn update_best_entry(&self, best_entry: Option<Entry<NumberFor<Block>, T>>) {
 		*self.best_entry.write() = best_entry;
 	}
 
 	/// Prune all entries from the beginning up to the block (including entry at the number). Returns
 	/// the number of pruned entries. Pruning never deletes the latest entry in the cache.
-	pub fn prune_entries(&self, transaction: &mut DBTransaction, last_to_prune: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<usize> {
+	pub fn prune_entries(
+		&self,
+		transaction: &mut DBTransaction,
+		last_to_prune: NumberFor<Block>
+	) -> ClientResult<usize> {
 		// find the last entry we want to keep
 		let mut last_entry_to_keep = match self.best_entry() {
 			Some(best_entry) => best_entry.valid_from,
@@ -191,6 +210,9 @@ impl<Block, T> DbCacheList<Block, T>
 
 			let entry = read_storage_entry::<Block, T>(&*self.db, self.column, first_entry_to_remove)?
 				.expect("entry referenced from the next entry; entry exists when referenced; qed");
+			// if we have reached the first list entry
+			// AND all list entries are for blocks that are later than last_to_prune
+			// => nothing to prune
 			first_entry_to_remove = match entry.prev_valid_from {
 				Some(prev_valid_from) => prev_valid_from,
 				None => return Ok(0),
@@ -220,7 +242,7 @@ impl<Block, T> DbCacheList<Block, T>
 	/// Reads the cached value, actual at given block. Returns None if the value was not cached
 	/// or if it has been pruned.
 	fn value_at_key(&self, key: BlockKey) -> ClientResult<Option<T>> {
-		let at = db_key_to_number::<<<Block as BlockT>::Header as HeaderT>::Number>(&key)?;
+		let at = db_key_to_number::<NumberFor<Block>>(&key)?;
 		let best_valid_from = match self.best_entry() {
 			// there are entries in cache
 			Some(best_entry) => {
@@ -256,15 +278,19 @@ impl<Block, T> DbCacheList<Block, T>
 }
 
 /// Reads the entry at the block with given number.
-fn read_storage_entry<Block, T>(db: &KeyValueDB, column: Option<u32>, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<StorageEntry<<<Block as BlockT>::Header as HeaderT>::Number, T>>>
+fn read_storage_entry<Block, T>(
+	db: &KeyValueDB,
+	column: Option<u32>,
+	number: NumberFor<Block>
+) -> ClientResult<Option<StorageEntry<NumberFor<Block>, T>>>
 	where
 		Block: BlockT,
-		<<Block as BlockT>::Header as HeaderT>::Number: As<u64>,
+		NumberFor<Block>: As<u64>,
 		T: Codec,
 {
 	db.get(column, &number_to_db_key(number))
 		.and_then(|entry| match entry {
-			Some(entry) => Ok(StorageEntry::<<<Block as BlockT>::Header as HeaderT>::Number, T>::decode(&mut &entry[..])),
+			Some(entry) => Ok(StorageEntry::<NumberFor<Block>, T>::decode(&mut &entry[..])),
 			None => Ok(None),
 		})
 	.map_err(db_err)

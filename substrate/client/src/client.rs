@@ -468,7 +468,12 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 		E: CallExecutor<Block>,
 		Block: BlockT,
 {
-	fn import_block(&self, block: Block, justification: ::bft::Justification<Block::Hash>, authorities: &[AuthorityId]) {
+	fn import_block(
+		&self,
+		block: Block,
+		justification: ::bft::Justification<Block::Hash>,
+		authorities: &[AuthorityId]
+	) {
 		let (header, extrinsics) = block.deconstruct();
 		let justified_header = JustifiedHeader {
 			header: header,
@@ -599,7 +604,12 @@ mod tests {
 	#[test]
 	fn client_uses_authorities_from_blockchain_cache() {
 		let client = test_client::new();
-		test_client::client::in_mem::cache_authorities_at(client.backend().blockchain(), Default::default(), Some(vec![[1u8; 32].into()]));
-		assert_eq!(client.authorities_at(&BlockId::Hash(Default::default())).unwrap(), vec![[1u8; 32].into()]);
+		test_client::client::in_mem::cache_authorities_at(
+			client.backend().blockchain(),
+			Default::default(),
+			Some(vec![[1u8; 32].into()]));
+		assert_eq!(client.authorities_at(
+			&BlockId::Hash(Default::default())).unwrap(),
+			vec![[1u8; 32].into()]);
 	}
 }

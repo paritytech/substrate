@@ -41,8 +41,7 @@ pub mod meta_keys {
 	pub const TYPE: &[u8; 4] = b"type";
 	/// Best block key.
 	pub const BEST_BLOCK: &[u8; 4] = b"best";
-	/// Best authorities block key. Currently used in light storage only, but could be
-	/// utilized by full storage as well.
+	/// Best authorities block key.
 	pub const BEST_AUTHORITIES: &[u8; 4] = b"auth";
 }
 

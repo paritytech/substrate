@@ -227,7 +227,12 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 }
 
 impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block> {
-	fn import_header(&self, is_new_best: bool, header: Block::Header, authorities: Option<Vec<AuthorityId>>) -> error::Result<()> {
+	fn import_header(
+		&self,
+		is_new_best: bool,
+		header: Block::Header,
+		authorities: Option<Vec<AuthorityId>>
+	) -> error::Result<()> {
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		self.insert(hash, header, None, None, is_new_best);
@@ -377,6 +382,10 @@ impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
 }
 
 /// Insert authorities entry into in-memory blockchain cache. Extracted as a separate function to use it in tests.
-pub fn cache_authorities_at<Block: BlockT>(blockchain: &Blockchain<Block>, at: Block::Hash, authorities: Option<Vec<AuthorityId>>) {
+pub fn cache_authorities_at<Block: BlockT>(
+	blockchain: &Blockchain<Block>,
+	at: Block::Hash,
+	authorities: Option<Vec<AuthorityId>>
+) {
 	blockchain.cache.insert(at, authorities);
 }

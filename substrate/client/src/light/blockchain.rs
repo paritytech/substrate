@@ -32,7 +32,12 @@ use light::fetcher::Fetcher;
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
 	/// Store new header.
-	fn import_header(&self, is_new_best: bool, header: Block::Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()>;
+	fn import_header(
+		&self,
+		is_new_best: bool,
+		header: Block::Header,
+		authorities: Option<Vec<AuthorityId>>
+	) -> ClientResult<()>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<&BlockchainCache<Block>>;

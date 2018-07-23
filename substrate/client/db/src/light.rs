@@ -209,7 +209,12 @@ pub(crate) mod tests {
 
 	type Block = RawBlock<u32>;
 
-	pub fn insert_block(db: &LightStorage<Block>, parent: &Hash, number: u64, authorities: Option<Vec<AuthorityId>>) -> Hash {
+	pub fn insert_block(
+		db: &LightStorage<Block>,
+		parent: &Hash,
+		number: u64,
+		authorities: Option<Vec<AuthorityId>>
+	) -> Hash {
 		let header = Header {
 			number: number.into(),
 			parent_hash: *parent,
