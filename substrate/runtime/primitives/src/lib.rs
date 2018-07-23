@@ -65,18 +65,31 @@ pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;
 
 /// Complex storage builder stuff.
 #[cfg(feature = "std")]
-pub trait BuildStorage {
+pub trait BuildStorage where Self: Sized {
 	fn hash(data: &[u8]) -> [u8; 16] {
 		let r = runtime_io::twox_128(data);
 		trace!(target: "build_storage", "{} <= {}", substrate_primitives::hexdisplay::HexDisplay::from(&r), ascii_format(data));
 		r
 	}
-	fn build_storage(self) -> Result<StorageMap, String>;
+
+	/// Build raw storage, where values are stored without any prefix.
+	fn build_raw_storage(self) -> Result<StorageMap, String>;
+
+	/// Build final storage where values are prefixed with the storage prefix (if configured).
+	fn build_storage(self) -> Result<StorageMap, String> {
+		let mut storage = self.build_raw_storage()?;
+		if let Some(prefix) = storage.get(runtime_io::PREFIX_KEY).cloned() {
+			for value in storage.values_mut() {
+				*value = prefix.iter().cloned().chain(value.iter().cloned()).collect();
+			}
+		}
+		Ok(storage)
+	}
 }
 
 #[cfg(feature = "std")]
 impl BuildStorage for StorageMap {
-	fn build_storage(self) -> Result<StorageMap, String> {
+	fn build_raw_storage(self) -> Result<StorageMap, String> {
 		Ok(self)
 	}
 }
@@ -272,11 +285,11 @@ macro_rules! impl_outer_config {
 		}
 		#[cfg(any(feature = "std", test))]
 		impl $crate::BuildStorage for $main {
-			fn build_storage(self) -> ::std::result::Result<$crate::StorageMap, String> {
+			fn build_raw_storage(self) -> ::std::result::Result<$crate::StorageMap, String> {
 				let mut s = $crate::StorageMap::new();
 				$(
 					if let Some(extra) = self.$snake {
-						s.extend(extra.build_storage()?);
+						s.extend(extra.build_raw_storage()?);
 					}
 				)*
 				Ok(s)

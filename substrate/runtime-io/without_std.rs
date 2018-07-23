@@ -26,6 +26,8 @@ pub extern crate substrate_codec as codec;
 use core::intrinsics;
 use rstd::vec::Vec;
 pub use rstd::{mem, slice};
+use prefix::{DELETED_SET_KEY_PREFIX, is_prefix_configured, add_prefix,
+	strip_prefix, read_prefix_len, purge, schedule_purge};
 
 #[panic_implementation]
 #[no_mangle]
@@ -42,7 +44,7 @@ pub fn panic(info: &::core::panic::PanicInfo) -> ! {
 
 #[alloc_error_handler]
 pub extern fn oom(_: ::core::alloc::Layout) -> ! {
-    static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
+	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
 
 	unsafe {
 		ext_print_utf8(OOM_MSG.as_ptr(), OOM_MSG.len() as u32);
@@ -58,6 +60,8 @@ extern "C" {
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
 	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
+	fn ext_set_prefix(prefix_data: *const u8, prefix_len: u32, value_data: *const u8, value_len: u32);
+	fn ext_save_pefix_keys(prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
@@ -69,60 +73,109 @@ extern "C" {
 	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
 }
 
+/// Set storage values prefix.
+pub fn set_storage_prefix(prefix: &[u8]) {
+	// both branches in following match could be implemented later, but it will involve
+	// upgrading the whole storage
+	match read_prefix_len() {
+		// do nothing if we're not configured to work with prefix
+		None => return,
+		// check that new prefix length is the same as we configured for
+		Some(existing_prefix_len) => assert_eq!(
+			prefix.len(),
+			existing_prefix_len as usize,
+			"Change of prefix length is not currently supported"),
+	};
+
+	let mut prefixed_prefix = prefix.to_vec();
+	prefixed_prefix.extend_from_slice(prefix);
+	unsafe {
+		ext_set_storage(
+			PREFIX_KEY.as_ptr(), PREFIX_KEY.len() as u32,
+			prefixed_prefix.as_ptr(), prefixed_prefix.len() as u32
+		);
+	}
+}
+
+/// Purge scheduled entries from the storage.
+pub fn purge_storage<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> bool>(f: F) {
+	if is_prefix_configured() {
+		purge(f)
+	}
+}
+
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
-	let mut length: u32 = 0;
-	unsafe {
-		let ptr = ext_get_allocated_storage(key.as_ptr(), key.len() as u32, &mut length);
-		if length == u32::max_value() {
-			None
-		} else {
-			Some(Vec::from_raw_parts(ptr, length as usize, length as usize))
-		}
-	}
+	self::raw::storage(key).and_then(|v| strip_prefix(v).1)
+}
+
+/// Get `key` prefix from storage and return a `Vec`, empty if storage prefix is not configured.
+pub fn storage_prefix(key: &[u8]) -> Option<Vec<u8>> {
+	self::raw::storage(key).and_then(|v| strip_prefix(v).0)
 }
 
 /// Set the storage of some particular key to Some value.
 pub fn set_storage(key: &[u8], value: &[u8]) {
-	unsafe {
-		ext_set_storage(
-			key.as_ptr(), key.len() as u32,
-			value.as_ptr(), value.len() as u32
-		);
-	}
+	self::raw::set_storage(key, &add_prefix(value))
 }
 
 /// Clear the storage of some particular key.
 pub fn clear_storage(key: &[u8]) {
+	let empty_value = add_prefix(&[]);
 	unsafe {
-		ext_clear_storage(
-			key.as_ptr(), key.len() as u32
-		);
+		if empty_value.is_empty() {
+			ext_clear_storage(
+				key.as_ptr(), key.len() as u32
+			);
+		} else {
+			schedule_purge(key);
+			ext_set_storage(
+				key.as_ptr(), key.len() as u32,
+				empty_value.as_ptr(), empty_value.len() as u32
+			);
+		}
 	}
 }
 
 /// Determine whether a particular key exists in storage.
 pub fn exists_storage(key: &[u8]) -> bool {
 	unsafe {
-		ext_exists_storage(
-			key.as_ptr(), key.len() as u32
-		) != 0
+		if !is_prefix_configured() {
+			ext_exists_storage(
+				key.as_ptr(), key.len() as u32
+			) != 0
+		} else {
+			storage(key).is_some()
+		}
 	}
 }
 
 /// Clear the storage entries key of which starts with the given prefix.
 pub fn clear_prefix(prefix: &[u8]) {
+	let empty_value = add_prefix(&[]);
 	unsafe {
-		ext_clear_prefix(
-			prefix.as_ptr(),
-			prefix.len() as u32
-		);
+		if empty_value.is_empty() {
+			ext_clear_prefix(
+				prefix.as_ptr(),
+				prefix.len() as u32
+			);
+		} else {
+			ext_save_pefix_keys(
+				prefix.as_ptr(), prefix.len() as u32,
+				DELETED_SET_KEY_PREFIX.as_ptr(), DELETED_SET_KEY_PREFIX.len() as u32);
+			ext_set_prefix(
+				prefix.as_ptr(), prefix.len() as u32,
+				empty_value.as_ptr(), empty_value.len() as u32
+			);
+		}
 	}
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
 /// the number of bytes that the key in storage was beyond the offset.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+	let prefix_len = read_prefix_len().unwrap_or(0);
+	let value_offset = value_offset + prefix_len as usize;
 	unsafe {
 		match ext_get_storage_into(
 			key.as_ptr(), key.len() as u32,
@@ -251,6 +304,43 @@ impl Printable for u64 {
 /// Print a printable value.
 pub fn print<T: Printable + Sized>(value: T) {
 	value.print();
+}
+
+pub(crate) mod raw {
+	use rstd::vec::Vec;
+	use super::{ext_get_allocated_storage, ext_set_storage, ext_clear_storage};
+
+	/// Get raw `key` from storage and return a `Vec`, empty if there's a problem.
+	pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
+		let mut length: u32 = 0;
+		unsafe {
+			let ptr = ext_get_allocated_storage(key.as_ptr(), key.len() as u32, &mut length);
+			if length == u32::max_value() {
+				None
+			} else {
+				Some(Vec::from_raw_parts(ptr, length as usize, length as usize))
+			}
+		}
+	}
+
+	/// Set the storage of some particular key to Some value.
+	pub fn set_storage(key: &[u8], value: &[u8]) {
+		unsafe {
+			ext_set_storage(
+				key.as_ptr(), key.len() as u32,
+				value.as_ptr(), value.len() as u32
+			);
+		}
+	}
+
+	/// Clear the storage of some particular key.
+	pub fn clear_storage(key: &[u8]) {
+		unsafe {
+			ext_clear_storage(
+				key.as_ptr(), key.len() as u32
+			);
+		}
+	}
 }
 
 #[macro_export]

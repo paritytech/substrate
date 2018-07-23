@@ -227,6 +227,18 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
+	ext_set_prefix(prefix_data: *const u8, prefix_len: u32, value_data: *const u8, value_len: u32) => {
+		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
+		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_clear_prefix"))?;
+		this.ext.set_prefix(&prefix, value);
+		Ok(())
+	},
+	ext_save_pefix_keys(prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32) => {
+		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_save_prefix_keys"))?;
+		let set_prefix = this.memory.get(set_prefix_data, set_prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine set_prefix in ext_save_prefix_keys"))?;
+		this.ext.save_pefix_keys(&prefix, &set_prefix);
+		Ok(())
+	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_storage"))?;

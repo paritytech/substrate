@@ -31,55 +31,118 @@ pub use primitives::{blake2_256, twox_128, twox_256};
 
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
+use prefix::{DELETED_SET_KEY_PREFIX, is_prefix_configured, add_prefix,
+	strip_prefix, read_prefix_len, purge, schedule_purge};
 
 // TODO: use the real error, not NoError.
 
 environmental!(ext: trait Externalities);
 
+/// Set storage values prefix.
+pub fn set_storage_prefix(prefix: &[u8]) {
+	ext::with(|ext| {
+		// both branches in following match could be implemented later, but it will involve
+		// upgrading the whole storage
+		match read_prefix_len(ext) {
+			// do nothing if we're not configured to work with prefix
+			None => return,
+			// check that new prefix length is the same as we configured for
+			Some(existing_prefix_len) => assert_eq!(
+				prefix.len(),
+				existing_prefix_len as usize,
+				"Change of prefix length is not currently supported"),
+		};
+
+		let mut prefixed_prefix = prefix.to_vec();
+		prefixed_prefix.extend_from_slice(prefix);
+
+		ext.set_storage(PREFIX_KEY.to_vec(), prefixed_prefix)
+	});
+}
+
+/// Purge scheduled entries from the storage.
+pub fn purge_storage<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> bool>(f: F) {
+	ext::with(|ext| {
+		if is_prefix_configured(ext) {
+			purge(ext, f)
+		}
+	});
+}
+
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
-	ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
-		.expect("read_storage cannot be called outside of an Externalities-provided environment.")
+	ext::with(|ext| ext.storage(key)
+			.and_then(|v| strip_prefix(ext, v).1))
+		.expect("storage cannot be called outside of an Externalities-provided environment.")
+}
+
+/// Get `key` prefix from storage and return a `Vec`, empty if storage prefix is not configured.
+pub fn storage_prefix(key: &[u8]) -> Option<Vec<u8>> {
+	ext::with(|ext| ext.storage(key)
+			.and_then(|v| strip_prefix(ext, v).0))
+		.expect("storage_prefix cannot be called outside of an Externalities-provided environment.")
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
 /// the number of bytes that the key in storage was beyond the offset or None if the storage entry
 /// doesn't exist at all.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
-	ext::with(|ext| ext.storage(key).map(|value| {
-		let value = &value[value_offset..];
-		let written = ::std::cmp::min(value.len(), value_out.len());
-		value_out[0..written].copy_from_slice(&value[0..written]);
-		value.len()
-	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
+	ext::with(|ext| ext.storage(key)
+		.and_then(|v| strip_prefix(ext, v).1)
+		.map(|value| {
+			let value = &value[value_offset..];
+			let written = ::std::cmp::min(value.len(), value_out.len());
+			value_out[0..written].copy_from_slice(&value[0..written]);
+			value.len()
+		})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
 
 /// Set the storage of some particular key to Some value.
 pub fn set_storage(key: &[u8], value: &[u8]) {
-	ext::with(|ext|
-		ext.set_storage(key.to_vec(), value.to_vec())
-	);
+	ext::with(|ext| {
+		let prefixed_value = add_prefix(ext, value);
+		ext.set_storage(key.to_vec(), prefixed_value);
+	});
 }
 
 /// Clear the storage of some particular key.
 pub fn clear_storage(key: &[u8]) {
-	ext::with(|ext|
-		ext.clear_storage(key)
-	);
+	ext::with(|ext| {
+		let empty_value = add_prefix(ext, &[]);
+		if empty_value.is_empty() {
+			ext.clear_storage(key)
+		} else {
+			schedule_purge(ext, key);
+			ext.set_storage(key.to_vec(), empty_value)
+		}
+	});
 }
 
 /// Check whether a given `key` exists in storage.
 pub fn exists_storage(key: &[u8]) -> bool {
 	ext::with(|ext|
-		ext.exists_storage(key)
+		if !is_prefix_configured(ext) {
+			ext.exists_storage(key)
+		} else {
+			ext.storage(key)
+				.map(|v| strip_prefix(ext, v).1.is_some())
+				.unwrap_or(false)
+		}
+
 	).unwrap_or(false)
 }
 
 /// Clear the storage entries key of which starts with the given prefix.
 pub fn clear_prefix(prefix: &[u8]) {
-	ext::with(|ext|
-		ext.clear_prefix(prefix)
-	);
+	ext::with(|ext| {
+		let empty_value = add_prefix(ext, &[]);
+		if empty_value.is_empty() {
+			ext.clear_prefix(prefix)
+		} else {
+			ext.save_pefix_keys(prefix, DELETED_SET_KEY_PREFIX);
+			ext.set_prefix(prefix, empty_value)
+		}
+	});
 }
 
 /// The current relay chain identifier.
@@ -157,6 +220,25 @@ pub fn print<T: Printable + Sized>(value: T) {
 	value.print();
 }
 
+pub(crate) mod raw {
+	use substrate_state_machine::Externalities;
+
+	/// Get raw `key` from storage and return a `Vec`, empty if there's a problem.
+	pub fn storage(ext: &Externalities, key: &[u8]) -> Option<Vec<u8>> {
+		ext.storage(key)
+	}
+
+	/// Set the storage of some particular key to Some value.
+	pub fn set_storage(ext: &mut Externalities, key: &[u8], value: &[u8]) {
+		ext.set_storage(key.to_vec(), value.to_vec());
+	}
+
+	/// Clear the storage of some particular key.
+	pub fn clear_storage(ext: &mut Externalities, key: &[u8]) {
+		ext.clear_storage(key)
+	}
+}
+
 #[macro_export]
 macro_rules! impl_stubs {
 	( $( $new_name:ident $($nodecode:ident)* => $invoke: expr ),*) => {
@@ -191,7 +273,7 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::new();
+		let mut t = TestExternalities::default();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");

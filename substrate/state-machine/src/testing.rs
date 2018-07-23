@@ -17,11 +17,15 @@
 //! Test implementation for Externalities.
 
 use std::collections::HashMap;
-use super::Externalities;
 use triehash::trie_root;
+use keys_set::{Set as KeysSet, Storage as KeysSetStorage};
+use Externalities;
 
 /// Simple HashMap based Externalities impl.
 pub type TestExternalities = HashMap<Vec<u8>, Vec<u8>>;
+
+/// Implementation of keys set storage for TestExternalities.
+pub(crate) struct TestKeysSetStorage<'a>(pub &'a mut TestExternalities);
 
 impl Externalities for TestExternalities {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
@@ -35,16 +39,58 @@ impl Externalities for TestExternalities {
 		}
 	}
 
-	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.retain(|key, _|
-			!key.starts_with(prefix)
-		)
+	fn place_prefix(&mut self, prefix: &[u8], value: Option<Vec<u8>>) {
+		match value {
+			None => self.retain(|key, _| !key.starts_with(prefix)),
+			Some(value) => {
+				for (key, data_value) in self.iter_mut() {
+					if key.starts_with(prefix) {
+						*data_value = value.clone();
+					}
+				}
+			},
+		}
+	}
+
+	fn save_pefix_keys(&mut self, prefix: &[u8], set_prefix: &[u8]) {
+		// in test implementation, prefix overlap won't lead to inifinite execution
+		// but other implementations could suffer
+		// => do not allow overlaps
+		// panic is safe here, since this should only be called from the runtime
+		assert!(!set_prefix.starts_with(prefix));
+
+		// it is safe to collect here, since TestExternalities are used in tests only
+		let keys_to_save: Vec<_> = self.keys()
+			.filter(|key| key.starts_with(prefix))
+			.cloned()
+			.collect();
+
+		// insert keys to the set
+		let mut set_storage = TestKeysSetStorage(self);
+		let mut set = KeysSet::new(set_prefix, &mut set_storage);
+		for key in keys_to_save {
+			set.insert(&key);
+		}
 	}
 
 	fn chain_id(&self) -> u64 { 42 }
 
 	fn storage_root(&mut self) -> [u8; 32] {
 		trie_root(self.clone()).0
+	}
+}
+
+impl<'a> KeysSetStorage for TestKeysSetStorage<'a> {
+	fn read(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.0.storage(key)
+	}
+
+	fn set(&mut self, key: &[u8], value: &[u8]) {
+		self.0.place_storage(key.to_vec(), Some(value.to_vec()));
+	}
+
+	fn clear(&mut self, key: &[u8]) {
+		self.0.place_storage(key.to_vec(), None);
 	}
 }
 

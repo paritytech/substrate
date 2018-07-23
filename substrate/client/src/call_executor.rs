@@ -132,7 +132,9 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		let mut externalities = Ext::new(&mut overlay, &state);
-		let code = externalities.storage(b":code").ok_or(error::ErrorKind::VersionInvalid)?
+		let code = externalities
+			.stripped_storage(b":code")
+			.ok_or(error::ErrorKind::VersionInvalid)?
 			.to_vec();
 
 		self.executor.runtime_version(&mut externalities, &code)

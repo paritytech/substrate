@@ -27,6 +27,7 @@ extern crate log;
 extern crate ethereum_types;
 extern crate hashdb;
 extern crate memorydb;
+extern crate substrate_codec as codec;
 extern crate triehash;
 extern crate patricia_trie;
 
@@ -126,6 +127,24 @@ pub trait Externalities {
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
+	/// Read storage of current contract being called and strips the prefix from the value.
+	/// If you're reading storage values from substrate, you should use this method or else
+	/// storage() call could return wrong value if runtime uses storage prefixes.
+	fn stripped_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.storage(key)
+			.and_then(|value| {
+				let prefix_len = self.storage(self::prefix::PREFIX_LEN_KEY);
+				match self::prefix::strip_prefix(prefix_len, value) {
+					Ok((_, stripped_value)) => stripped_value,
+					Err(error) => {
+						warn!("Failed to parse storage prefix length: {}",
+							error);
+						None
+					},
+				}
+			})
+	}
+
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 		self.place_storage(key, Some(value));
@@ -141,11 +160,25 @@ pub trait Externalities {
 		self.storage(key).is_some()
 	}
 
+	/// Set storage entries which keys are start with the given prefix to the given value.
+	fn set_prefix(&mut self, prefix: &[u8], value: Vec<u8>) {
+		self.place_prefix(prefix, Some(value));
+	}
+
 	/// Clear storage entries which keys are start with the given prefix.
-	fn clear_prefix(&mut self, prefix: &[u8]);
+	fn clear_prefix(&mut self, prefix: &[u8]) {
+		self.place_prefix(prefix, None);
+	}
+
+	/// Save all keys, starting with the given prefix to the keys set with given prefix.
+	/// Prefix should not include set_prefix.
+	fn save_pefix_keys(&mut self, prefix: &[u8], set_prefix: &[u8]);
 
 	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
+
+	/// Set or clear a storage entry with given `prefix` of current contract being called (effective immediately).
+	fn place_prefix(&mut self, prefix: &[u8], value: Option<Vec<u8>>);
 
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
@@ -268,7 +301,8 @@ pub fn execute_using_consensus_failure_handler<
 	let strategy: ExecutionStrategy = (&manager).into();
 
 	// make a copy.
-	let code = ext::Ext::new(overlay, backend).storage(b":code")
+	let code = ext::Ext::new(overlay, backend)
+		.stripped_storage(b":code")
 		.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 		.to_vec();
 
@@ -387,6 +421,18 @@ pub fn execution_proof_check<Exec: CodeExecutor>(
 ) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>> {
 	let backend = proving_backend::create_proof_check_backend(root.into(), proof)?;
 	execute(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
+}
+
+/// Module with prefix-related utilities which are used by both runtime && substrate.
+mod prefix {
+	include!("../../runtime-io/src/prefix_shared.rs");
+}
+
+/// Module with KeysSet structure which is used by both runtime && substrate.
+mod keys_set {
+	use codec::{Decode, Encode};
+
+	include!("../../runtime-io/src/keys_set.rs");
 }
 
 #[cfg(test)]
@@ -541,5 +587,16 @@ mod tests {
 		// check that both results are correct
 		assert_eq!(remote_result, vec![66]);
 		assert_eq!(remote_result, local_result);
+	}
+
+	#[test]
+	fn stripped_storage_works() {
+		let mut ext = TestExternalities::new();
+		ext.set_storage(b"key".to_vec(), b"val".to_vec());
+		assert_eq!(ext.storage(b"key"), Some(b"val".to_vec()));
+
+		ext.set_storage(prefix::PREFIX_LEN_KEY.to_vec(), vec![0, 0, 0, 0, 4, 0, 0, 0]);
+		ext.set_storage(b"key".to_vec(), b"0000val".to_vec());
+		assert_eq!(ext.stripped_storage(b"key"), Some(b"val".to_vec()));
 	}
 }

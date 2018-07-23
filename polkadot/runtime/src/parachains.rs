@@ -214,7 +214,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(mut self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_raw_storage(mut self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use std::collections::HashMap;
 		use codec::Encode;
 

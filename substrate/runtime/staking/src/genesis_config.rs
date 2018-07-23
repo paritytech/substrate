@@ -122,7 +122,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
+	fn build_raw_storage(self) -> Result<runtime_io::TestExternalities, String> {
 		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
 		let mut r: runtime_io::TestExternalities = map![

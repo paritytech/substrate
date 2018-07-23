@@ -37,16 +37,12 @@ extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
+use codec::{Decode, Encode};
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay};
-use runtime_support::{StorageValue, StorageMap, Parameter};
+	Hash, Member, MaybeDisplay, As};
+use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
-
-#[cfg(any(feature = "std", test))]
-use rstd::marker::PhantomData;
-#[cfg(any(feature = "std", test))]
-use codec::Encode;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities};
@@ -89,6 +85,8 @@ decl_storage! {
 	pub ExtrinsicIndex get(extrinsic_index): b"sys:xti" => required u32;
 	pub ExtrinsicData get(extrinsic_data): b"sys:xtd" => required map [ u32 => Vec<u8> ];
 	RandomSeed get(random_seed): b"sys:rnd" => required T::Hash;
+	StoragePurgeInterval get(storage_purge_interval): b"sys:purge_interval" => default T::BlockNumber;
+	MinPurgedValueAge get(min_purged_value_age): b"sys:min_purged_value_age" => default T::BlockNumber;
 	// The current block number being processed. Set by `execute_block`.
 	Number get(block_number): b"sys:num" => required T::BlockNumber;
 	ParentHash get(parent_hash): b"sys:pha" => required T::Hash;
@@ -99,7 +97,30 @@ decl_storage! {
 impl<T: Trait> Module<T> {
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
-		// populate environment.
+		// set new storage prefix if we're configured to use prefix
+		runtime_io::set_storage_prefix(&number.as_().encode());
+		// ..then purge all scheduled entries if the time has come
+		let storage_purge_interval = <StoragePurgeInterval<T>>::get();
+		if storage_purge_interval == Zero::zero() || *number % storage_purge_interval == Zero::zero() {
+			let min_purged_value_age = <MinPurgedValueAge<T>>::get();
+			if *number > min_purged_value_age {
+				let ancient_block = (*number - min_purged_value_age).as_();
+				runtime_io::purge_storage(|_, prefix, value| {
+					// retain entry if it is not deleted
+					if value.is_some() {
+						return true;
+					}
+
+					// or it is deleted later than the ancient_block
+					prefix
+						.and_then(|prefix| Decode::decode(&mut &prefix[..]))
+						.map(|deleted_at_block: u64| deleted_at_block > ancient_block)
+						.unwrap_or(false)
+				});
+			}
+		}
+
+		// ..and finally populate environment.
 		<Number<T>>::put(number);
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
@@ -126,6 +147,17 @@ impl<T: Trait> Module<T> {
 		let mut l = <Digest<T>>::get();
 		traits::Digest::push(&mut l, item);
 		<Digest<T>>::put(l);
+	}
+
+	/// Gets the number of block at which given key value has been changed last or None
+	/// if value is not set OR runtime is NOT configured to store this information.
+	pub fn storage_value_change_block(key: &[u8]) -> Option<T::BlockNumber> {
+		storage::get_prefix(key)
+			.map(|change_block| {
+				let change_block: u64 = Decode::decode(&mut &change_block[..])
+					.expect("failed to decode bock number from storage value prefix");
+				As::sa(change_block)
+			})
 	}
 
 	/// Calculate the current block's random seed.
@@ -195,27 +227,60 @@ impl<T: Trait> Module<T> {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct GenesisConfig<T: Trait>(PhantomData<T>);
+pub struct GenesisConfig<T: Trait> {
+	/// If true, all storage values are prepended with u64 block number and
+	/// storage_value_change_block is able to return Some(change_block).
+	pub use_block_number_prefix: bool,
+	/// Storage purge block interval (in blocks). Every storage_purge_interval
+	/// blocks, deleted values are purged from the storage.
+	pub storage_purge_interval: Option<T::BlockNumber>,
+	/// Minimal age (in blocks) of the deleted value to stay in storage until
+	/// it could be purged.
+	pub min_purged_value_age: Option<T::BlockNumber>,
+}
 
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		GenesisConfig(PhantomData)
+		GenesisConfig {
+			use_block_number_prefix: false,
+			storage_purge_interval: None,
+			min_purged_value_age: None,
+		}
 	}
 }
 
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
+	fn build_raw_storage(self) -> Result<primitives::StorageMap, String> {
 		use codec::Encode;
 
-		Ok(map![
+		let mut storage: primitives::StorageMap = map![
 			Self::hash(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			Self::hash(<Number<T>>::key()).to_vec() => 1u64.encode(),
 			Self::hash(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
 			Self::hash(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
 			Self::hash(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
-		])
+		];
+
+		if let Some(storage_purge_interval) = self.storage_purge_interval {
+			storage.insert(
+				Self::hash(<StoragePurgeInterval<T>>::key()).to_vec(),
+				storage_purge_interval.encode());
+		}
+
+		if let Some(min_purged_value_age) = self.min_purged_value_age {
+			storage.insert(
+				Self::hash(<MinPurgedValueAge<T>>::key()).to_vec(),
+				min_purged_value_age.encode());
+		}
+
+		if self.use_block_number_prefix {
+			storage.insert(runtime_io::PREFIX_LEN_KEY.to_vec(), 8u32.encode());
+			storage.insert(runtime_io::PREFIX_KEY.to_vec(), [0u8; 8].encode());
+		}
+
+		Ok(storage)
 	}
 }
