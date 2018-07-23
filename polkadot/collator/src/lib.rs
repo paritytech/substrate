@@ -60,6 +60,7 @@ extern crate polkadot_primitives;
 extern crate log;
 
 use std::collections::{BTreeSet, BTreeMap, HashSet};
+use std::fmt;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -74,6 +75,28 @@ use tokio::timer::Deadline;
 
 const COLLATION_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// Error to return when the head data was invalid.
+#[derive(Clone, Copy, Debug)]
+pub struct InvalidHead;
+
+/// Collation errors.
+#[derive(Debug)]
+pub enum Error<R> {
+	/// Error on the relay-chain side of things.
+	Polkadot(R),
+	/// Error on the collator side of things.
+	Collator(InvalidHead),
+}
+
+impl<R: fmt::Display> fmt::Display for Error<R> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		match *self {
+			Error::Polkadot(ref err) => write!(f, "Polkadot node error: {}", err),
+			Error::Collator(_) => write!(f, "Collator node error: Invalid head data"),
+		}
+	}
+}
+
 /// Parachain context needed for collation.
 ///
 /// This can be implemented through an externally attached service or a stub.
@@ -84,7 +107,7 @@ pub trait ParachainContext: Clone {
 		&self,
 		last_head: HeadData,
 		ingress: I,
-	) -> (BlockData, HeadData);
+	) -> Result<(BlockData, HeadData), InvalidHead>;
 }
 
 /// Relay chain context needed to collate.
@@ -154,18 +177,18 @@ pub fn collate<'a, R, P>(
 	para_context: P,
 	key: Arc<ed25519::Pair>,
 )
-	-> impl Future<Item=parachain::Collation, Error=R::Error> + 'a
+	-> impl Future<Item=parachain::Collation, Error=Error<R::Error>> + 'a
 	where
 		R: RelayChainContext + 'a,
 		R::Error: 'a,
 		R::FutureEgress: 'a,
 		P: ParachainContext + 'a,
 {
-	collate_ingress(relay_context).map(move |ingress| {
+	collate_ingress(relay_context).map_err(Error::Polkadot).and_then(move |ingress| {
 		let (block_data, head_data) = para_context.produce_candidate(
 			last_head,
 			ingress.0.iter().flat_map(|&(id, ref msgs)| msgs.iter().cloned().map(move |msg| (id, msg)))
-		);
+		).map_err(Error::Collator)?;
 
 		let block_data_hash = block_data.hash();
 		let signature = key.sign(&block_data_hash.0[..]).into();
@@ -181,10 +204,10 @@ pub fn collate<'a, R, P>(
 			block_data_hash,
 		};
 
-		parachain::Collation {
+		Ok(parachain::Collation {
 			receipt,
 			block_data,
-		}
+		})
 	})
 }
 
@@ -243,7 +266,7 @@ impl<P, E> Worker for CollationNode<P, E> where
 					($e:expr) => {
 						match $e {
 							Ok(x) => x,
-							Err(e) => return future::Either::A(future::err(e)),
+							Err(e) => return future::Either::A(future::err(Error::Polkadot(e))),
 						}
 					}
 				}

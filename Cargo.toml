@@ -29,6 +29,7 @@ members = [
 	"polkadot/service",
 
 	"polkadot/test-parachains/adder",
+	"polkadot/test-parachains/adder/collator",
 	"polkadot/test-parachains/adder/wasm",
 
 	"substrate/bft",

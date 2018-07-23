@@ -24,7 +24,7 @@ extern crate tiny_keccak;
 use parachain::codec::{Decode, Encode, Input, Output};
 
 /// Head data for this parachain.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Hash, Eq, PartialEq)]
 pub struct HeadData {
 	/// Block number
 	pub number: u64,
@@ -32,6 +32,12 @@ pub struct HeadData {
 	pub parent_hash: [u8; 32],
 	/// hash of post-execution state.
 	pub post_state: [u8; 32],
+}
+
+impl HeadData {
+	pub fn hash(&self) -> [u8; 32] {
+		::tiny_keccak::keccak256(&self.encode())
+	}
 }
 
 impl Encode for HeadData {
@@ -82,12 +88,13 @@ pub fn hash_state(state: u64) -> [u8; 32] {
 }
 
 /// Start state
+#[derive(Debug)]
 pub struct StateMismatch;
 
 /// Execute a block body on top of given parent head, producing new parent head
 /// if valid.
 pub fn execute(parent_hash: [u8; 32], parent_head: HeadData, block_data: &BlockData) -> Result<HeadData, StateMismatch> {
-	debug_assert_eq!(parent_hash, ::tiny_keccak::keccak256(&parent_head.encode()));
+	debug_assert_eq!(parent_hash, parent_head.hash());
 
 	if hash_state(block_data.state) != parent_head.post_state {
 		return Err(StateMismatch);
