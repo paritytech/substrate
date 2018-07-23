@@ -307,8 +307,8 @@ impl PolkadotProtocol {
 		}
 	}
 
-	/// Send a statement to a validator.
-	fn send_statement(&mut self, ctx: &mut Context<Block>, _val: SessionKey, parent_hash: Hash, statement: SignedStatement) {
+	/// Gossip a consensus statement.
+	fn gossip_statement(&mut self, ctx: &mut Context<Block>, parent_hash: Hash, statement: SignedStatement) {
 		// TODO: something more targeted than gossip.
 		let raw = Message::Statement(parent_hash, statement).encode();
 		self.consensus_gossip.multicast_chain_specific(ctx, raw, parent_hash);

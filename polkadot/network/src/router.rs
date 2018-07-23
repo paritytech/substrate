@@ -25,7 +25,7 @@
 use polkadot_api::{PolkadotApi, LocalPolkadotApi};
 use polkadot_consensus::{SharedTable, TableRouter, SignedStatement, GenericStatement, StatementProducer};
 use polkadot_primitives::{Hash, BlockId, SessionKey};
-use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt, Id as ParaId};
+use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
 
 use futures::prelude::*;
 use tokio::runtime::TaskExecutor;
@@ -89,14 +89,16 @@ impl<P: PolkadotApi> Clone for Router<P> {
 impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 	/// Import a statement whose signature has been checked already.
 	pub(crate) fn import_statement(&self, statement: SignedStatement) {
+		trace!(target: "p_net", "importing consensus statement {:?}", statement.statement);
+
 		// defer any statements for which we haven't imported the candidate yet
-		let (c_hash, parachain_index) = {
+		let c_hash = {
 			let candidate_data = match statement.statement {
-				GenericStatement::Candidate(ref c) => Some((c.hash(), c.parachain_index)),
+				GenericStatement::Candidate(ref c) => Some(c.hash()),
 				GenericStatement::Valid(ref hash)
 					| GenericStatement::Invalid(ref hash)
 					| GenericStatement::Available(ref hash)
-					=> self.table.with_candidate(hash, |c| c.map(|c| (*hash, c.parachain_index))),
+					=> self.table.with_candidate(hash, |c| c.map(|_| *hash)),
 			};
 			match candidate_data {
 				Some(x) => x,
@@ -128,11 +130,11 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 			};
 
 			self.knowledge.lock().note_statement(statement.sender, &statement.statement);
-			self.dispatch_work(c_hash, producer, parachain_index);
+			self.dispatch_work(c_hash, producer);
 		}
 	}
 
-	fn dispatch_work<D, E>(&self, candidate_hash: Hash, producer: StatementProducer<D, E>, parachain: ParaId) where
+	fn dispatch_work<D, E>(&self, candidate_hash: Hash, producer: StatementProducer<D, E>) where
 		D: Future<Item=BlockData,Error=()> + Send + 'static,
 		E: Future<Item=Extrinsic,Error=()> + Send + 'static,
 	{
@@ -161,12 +163,12 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 			// propagate the statements
 			if let Some(validity) = produced.validity {
 				let signed = table.sign_and_import(validity.clone());
-				route_statement(&*network, &*table, parachain, parent_hash, signed);
+				network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
 			}
 
 			if let Some(availability) = produced.availability {
 				let signed = table.sign_and_import(availability);
-				route_statement(&*network, &*table, parachain, parent_hash, signed);
+				network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
 			}
 		});
 
@@ -182,11 +184,10 @@ impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> {
 	fn local_candidate(&self, receipt: CandidateReceipt, block_data: BlockData, extrinsic: Extrinsic) {
 		// give to network to make available.
 		let hash = receipt.hash();
-		let para_id = receipt.parachain_index;
 		let signed = self.table.sign_and_import(GenericStatement::Candidate(receipt));
 
 		self.knowledge.lock().note_candidate(hash, Some(block_data), Some(extrinsic));
-		route_statement(&*self.network, &*self.table, para_id, self.parent_hash, signed);
+		self.network.with_spec(|spec, ctx| spec.gossip_statement(ctx, self.parent_hash, signed));
 	}
 
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> BlockDataReceiver {
@@ -214,32 +215,6 @@ impl Future for BlockDataReceiver {
 			Some(ref mut inner) => inner.poll().map_err(|_| ()),
 			None => return Err(()),
 		}
-	}
-}
-
-// get statement to relevant validators.
-fn route_statement(network: &NetworkService, table: &SharedTable, para_id: ParaId, parent_hash: Hash, statement: SignedStatement) {
-	let broadcast = |i: &mut Iterator<Item=&SessionKey>| {
-		let local_key = table.session_key();
-		network.with_spec(|spec, ctx| {
-			for val in i.filter(|&x| x != &local_key) {
-				spec.send_statement(ctx, *val, parent_hash, statement.clone());
-			}
-		});
-	};
-
-	let g_info = table
-		.group_info()
-		.get(&para_id)
-		.expect("statements only produced about groups which exist");
-
-	match statement.statement {
-		GenericStatement::Candidate(_) =>
-			broadcast(&mut g_info.validity_guarantors.iter().chain(g_info.availability_guarantors.iter())),
-		GenericStatement::Valid(_) | GenericStatement::Invalid(_) =>
-			broadcast(&mut g_info.validity_guarantors.iter()),
-		GenericStatement::Available(_) =>
-			broadcast(&mut g_info.availability_guarantors.iter()),
 	}
 }
 
