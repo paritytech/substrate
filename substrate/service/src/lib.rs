@@ -68,7 +68,7 @@ pub use extrinsic_pool::api::{ExtrinsicPool as ExtrinsicPoolApi};
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, ExtrinsicPool, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
-	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock, RuntimeGenesis,
+	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock, FactoryFullConfiguration, RuntimeGenesis,
 };
 
 /// Substrate service.
@@ -81,7 +81,7 @@ pub struct Service<Components: components::Components> {
 }
 
 /// Creates bare client without any networking.
-pub fn new_client<Factory: components::ServiceFactory>(config: Configuration<Factory::Genesis>)
+pub fn new_client<Factory: components::ServiceFactory>(config: FactoryFullConfiguration<Factory>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
 	let executor = NativeExecutor::with_heap_pages(config.min_heap_pages, config.max_heap_pages);
@@ -98,8 +98,8 @@ impl<Components> Service<Components>
 {
 	/// Creates a new service.
 	pub fn new(
-		config: Configuration<<Components::Factory as ServiceFactory>::Genesis>,
-		task_executor: TaskExecutor
+		config: FactoryFullConfiguration<Components::Factory>,
+		task_executor: TaskExecutor,
 	)
 		-> Result<Self, error::Error>
 	{
@@ -124,10 +124,12 @@ impl<Components> Service<Components>
 		info!("Best block: #{}", best_header.number());
 		telemetry!("node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
+		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let extrinsic_pool = Arc::new(
 			Components::build_extrinsic_pool(config.extrinsic_pool, client.clone())?
 		);
 		let extrinsic_pool_adapter = extrinsic_pool.clone();
+
 		let network_params = network::Params {
 			config: network::ProtocolConfig {
 				roles: config.roles,
@@ -137,7 +139,7 @@ impl<Components> Service<Components>
 			on_demand: on_demand.clone()
 				.map(|d| d as Arc<network::OnDemandService<ComponentBlock<Components>>>),
 			transaction_pool: extrinsic_pool_adapter,
-			specialization: <Components::Factory as ServiceFactory>::NetworkProtocol::default(),
+			specialization: network_protocol,
 		};
 
 		let network = network::Service::new(network_params, Components::Factory::NETWORK_PROTOCOL_ID)?;

@@ -24,16 +24,16 @@ use polkadot_primitives::{Block, Hash, SessionKey};
 use polkadot_primitives::parachain::{CandidateReceipt, HeadData, BlockData};
 use substrate_primitives::H512;
 use codec::Encode;
-use substrate_network::{PeerId, PeerInfo, ClientHandle, Context, Roles, message::Message as SubstrateMessage, specialization::Specialization, generic_message::Message as GenericMessage};
+use substrate_network::{Severity, NodeIndex, PeerInfo, ClientHandle, Context, Roles, message::Message as SubstrateMessage, specialization::Specialization, generic_message::Message as GenericMessage};
 
 use std::sync::Arc;
 use futures::Future;
 
 #[derive(Default)]
 struct TestContext {
-	disabled: Vec<PeerId>,
-	disconnected: Vec<PeerId>,
-	messages: Vec<(PeerId, SubstrateMessage<Block>)>,
+	disabled: Vec<NodeIndex>,
+	disconnected: Vec<NodeIndex>,
+	messages: Vec<(NodeIndex, SubstrateMessage<Block>)>,
 }
 
 impl Context<Block> for TestContext {
@@ -41,25 +41,24 @@ impl Context<Block> for TestContext {
 		unimplemented!()
 	}
 
-	fn disable_peer(&mut self, peer: PeerId, _reason: &str) {
-		self.disabled.push(peer);
+	fn report_peer(&mut self, peer: NodeIndex, reason: Severity) {
+		match reason {
+			Severity::Bad(_) => self.disabled.push(peer),
+			_ => self.disconnected.push(peer),
+		}
 	}
 
-	fn disconnect_peer(&mut self, peer: PeerId) {
-		self.disconnected.push(peer);
-	}
-
-	fn peer_info(&self, _peer: PeerId) -> Option<PeerInfo<Block>> {
+	fn peer_info(&self, _peer: NodeIndex) -> Option<PeerInfo<Block>> {
 		unimplemented!()
 	}
 
-	fn send_message(&mut self, peer_id: PeerId, data: SubstrateMessage<Block>) {
-		self.messages.push((peer_id, data))
+	fn send_message(&mut self, who: NodeIndex, data: SubstrateMessage<Block>) {
+		self.messages.push((who, data))
 	}
 }
 
 impl TestContext {
-	fn has_message(&self, to: PeerId, message: Message) -> bool {
+	fn has_message(&self, to: NodeIndex, message: Message) -> bool {
 		use substrate_network::generic_message::Message as GenericMessage;
 
 		let encoded = message.encode();
@@ -86,21 +85,20 @@ fn make_consensus(parent_hash: Hash, local_key: SessionKey) -> (CurrentConsensus
 	let c = CurrentConsensus {
 		knowledge: knowledge.clone(),
 		parent_hash,
-		session_keys: Default::default(),
 		local_session_key: local_key,
 	};
 
 	(c, knowledge)
 }
 
-fn on_message(protocol: &mut PolkadotProtocol, ctx: &mut TestContext, from: PeerId, message: Message) {
+fn on_message(protocol: &mut PolkadotProtocol, ctx: &mut TestContext, from: NodeIndex, message: Message) {
 	let encoded = message.encode();
 	protocol.on_message(ctx, from, GenericMessage::ChainSpecific(encoded));
 }
 
 #[test]
 fn sends_session_key() {
-	let mut protocol = PolkadotProtocol::new();
+	let mut protocol = PolkadotProtocol::new(None);
 
 	let peer_a = 1;
 	let peer_b = 2;
@@ -120,20 +118,19 @@ fn sends_session_key() {
 		let mut ctx = TestContext::default();
 		let (consensus, _knowledge) = make_consensus(parent_hash, local_key);
 		protocol.new_consensus(&mut ctx, consensus);
-
-		assert!(ctx.has_message(peer_a, Message::SessionKey(parent_hash, local_key)));
+		assert!(ctx.has_message(peer_a, Message::SessionKey(local_key)));
 	}
 
 	{
 		let mut ctx = TestContext::default();
 		protocol.on_connect(&mut ctx, peer_b, make_status(&collator_status, Roles::NONE));
-		assert!(ctx.has_message(peer_b, Message::SessionKey(parent_hash, local_key)));
+		assert!(ctx.has_message(peer_b, Message::SessionKey(local_key)));
 	}
 }
 
 #[test]
 fn fetches_from_those_with_knowledge() {
-	let mut protocol = PolkadotProtocol::new();
+	let mut protocol = PolkadotProtocol::new(None);
 
 	let peer_a = 1;
 	let peer_b = 2;
@@ -169,13 +166,14 @@ fn fetches_from_those_with_knowledge() {
 	{
 		let mut ctx = TestContext::default();
 		protocol.on_connect(&mut ctx, peer_a, make_status(&status, Roles::AUTHORITY));
-		assert!(ctx.has_message(peer_a, Message::SessionKey(parent_hash, local_key)));
+		assert!(ctx.has_message(peer_a, Message::SessionKey(local_key)));
 	}
 
 	// peer A gives session key and gets asked for data.
 	{
 		let mut ctx = TestContext::default();
-		on_message(&mut protocol, &mut ctx, peer_a, Message::SessionKey(parent_hash, a_key));
+		on_message(&mut protocol, &mut ctx, peer_a, Message::SessionKey(a_key));
+		assert!(protocol.validators.contains_key(&a_key));
 		assert!(ctx.has_message(peer_a, Message::RequestBlockData(1, candidate_hash)));
 	}
 
@@ -185,7 +183,7 @@ fn fetches_from_those_with_knowledge() {
 	{
 		let mut ctx = TestContext::default();
 		protocol.on_connect(&mut ctx, peer_b, make_status(&status, Roles::AUTHORITY));
-		on_message(&mut protocol, &mut ctx, peer_b, Message::SessionKey(parent_hash, b_key));
+		on_message(&mut protocol, &mut ctx, peer_b, Message::SessionKey(b_key));
 		assert!(!ctx.has_message(peer_b, Message::RequestBlockData(2, candidate_hash)));
 
 	}
@@ -194,6 +192,7 @@ fn fetches_from_those_with_knowledge() {
 	{
 		let mut ctx = TestContext::default();
 		protocol.on_disconnect(&mut ctx, peer_a);
+		assert!(!protocol.validators.contains_key(&a_key));
 		assert!(ctx.has_message(peer_b, Message::RequestBlockData(2, candidate_hash)));
 	}
 
@@ -208,21 +207,21 @@ fn fetches_from_those_with_knowledge() {
 
 #[test]
 fn remove_bad_collator() {
-	let mut protocol = PolkadotProtocol::new();
+	let mut protocol = PolkadotProtocol::new(None);
 
-	let peer_id = 1;
+	let who = 1;
 	let account_id = [2; 32].into();
 
 	let status = Status { collating_for: Some((account_id, 5.into())) };
 
 	{
 		let mut ctx = TestContext::default();
-		protocol.on_connect(&mut ctx, peer_id, make_status(&status, Roles::NONE));
+		protocol.on_connect(&mut ctx, who, make_status(&status, Roles::NONE));
 	}
 
 	{
 		let mut ctx = TestContext::default();
 		protocol.disconnect_bad_collator(&mut ctx, account_id);
-		assert!(ctx.disabled.contains(&peer_id));
+		assert!(ctx.disabled.contains(&who));
 	}
 }

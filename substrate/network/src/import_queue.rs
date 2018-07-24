@@ -22,7 +22,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
 
 use client::{BlockOrigin, BlockStatus, ImportResult};
-use network_libp2p::PeerId;
+use network_libp2p::{NodeIndex, Severity};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
@@ -37,6 +37,8 @@ use sync::ChainSync;
 pub trait ImportQueue<B: BlockT>: Send + Sync {
 	/// Clear the queue when sync is restarting.
 	fn clear(&self);
+	/// Clears the import queue and stops importing.
+	fn stop(&self);
 	/// Get queue status.
 	fn status(&self) -> ImportQueueStatus<B>;
 	/// Is block with given hash is currently in the queue.
@@ -109,6 +111,16 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 		*best_importing_number = Zero::zero();
 	}
 
+	fn stop(&self) {
+		self.clear();
+		if let Some(handle) = self.handle.lock().take() {
+			self.data.is_stopping.store(true, Ordering::SeqCst);
+			self.data.signal.notify_one();
+
+			let _ = handle.join();
+		}
+	}
+
 	fn status(&self) -> ImportQueueStatus<B> {
 		ImportQueueStatus {
 			importing_count: self.data.queue_blocks.read().len(),
@@ -138,12 +150,7 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 
 impl<B: BlockT> Drop for AsyncImportQueue<B> {
 	fn drop(&mut self) {
-		if let Some(handle) = self.handle.lock().take() {
-			self.data.is_stopping.store(true, Ordering::SeqCst);
-			self.data.signal.notify_one();
-
-			let _ = handle.join();
-		}
+		self.stop();
 	}
 }
 
@@ -195,9 +202,9 @@ trait SyncLinkApi<B: BlockT> {
 	/// Maintain sync.
 	fn maintain_sync(&mut self);
 	/// Disconnect from peer.
-	fn disconnect(&mut self, peer_id: PeerId);
+	fn useless_peer(&mut self, who: NodeIndex, reason: &str);
 	/// Disconnect from peer and restart sync.
-	fn disconnect_and_restart(&mut self, peer_id: PeerId);
+	fn note_useless_and_restart_sync(&mut self, who: NodeIndex, reason: &str);
 	/// Restart sync.
 	fn restart(&mut self);
 }
@@ -226,9 +233,9 @@ enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debug + 
 #[derive(Debug, PartialEq)]
 enum BlockImportError {
 	/// Disconnect from peer and continue import of next bunch of blocks.
-	Disconnect(PeerId),
+	Disconnect(NodeIndex),
 	/// Disconnect from peer and restart sync.
-	DisconnectAndRestart(PeerId),
+	DisconnectAndRestart(NodeIndex),
 	/// Restart sync.
 	Restart,
 }
@@ -349,12 +356,16 @@ fn process_import_result<'a, B: BlockT>(
 			link.block_imported(&hash, number);
 			1
 		},
-		Err(BlockImportError::Disconnect(peer_id)) => {
-			link.disconnect(peer_id);
+		Err(BlockImportError::Disconnect(who)) => {
+			// TODO: FIXME: @arkpar BlockImport shouldn't be trying to manage the peer set.
+			// This should contain an actual reason.
+			link.useless_peer(who, "Import result was stated Disconnect");
 			0
 		},
-		Err(BlockImportError::DisconnectAndRestart(peer_id)) => {
-			link.disconnect_and_restart(peer_id);
+		Err(BlockImportError::DisconnectAndRestart(who)) => {
+			// TODO: FIXME: @arkpar BlockImport shouldn't be trying to manage the peer set.
+			// This should contain an actual reason.
+			link.note_useless_and_restart_sync(who, "Import result was stated DisconnectAndRestart");
 			0
 		},
 		Err(BlockImportError::Restart) => {
@@ -397,13 +408,13 @@ impl<'a, B: 'static + BlockT, E: ExecuteInContext<B>> SyncLinkApi<B> for SyncLin
 		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
 	}
 
-	fn disconnect(&mut self, peer_id: PeerId) {
-		self.with_sync(|_, protocol| protocol.disconnect_peer(peer_id))
+	fn useless_peer(&mut self, who: NodeIndex, reason: &str) {
+		self.with_sync(|_, protocol| protocol.report_peer(who, Severity::Useless(reason)))
 	}
 
-	fn disconnect_and_restart(&mut self, peer_id: PeerId) {
+	fn note_useless_and_restart_sync(&mut self, who: NodeIndex, reason: &str) {
 		self.with_sync(|sync, protocol| {
-			protocol.disconnect_peer(peer_id);
+			protocol.report_peer(who, Severity::Useless(reason));	// is this actually malign or just useless?
 			sync.restart(protocol);
 		})
 	}
@@ -432,6 +443,8 @@ pub mod tests {
 
 	impl<B: 'static + BlockT> ImportQueue<B> for SyncImportQueue {
 		fn clear(&self) { }
+
+		fn stop(&self) { }
 
 		fn status(&self) -> ImportQueueStatus<B> {
 			ImportQueueStatus {
@@ -477,8 +490,8 @@ pub mod tests {
 		fn chain(&self) -> &Client<Block> { &*self.chain }
 		fn block_imported(&mut self, _hash: &Hash, _number: NumberFor<Block>) { self.imported += 1; }
 		fn maintain_sync(&mut self) { self.maintains += 1; }
-		fn disconnect(&mut self, _peer_id: PeerId) { self.disconnects += 1; }
-		fn disconnect_and_restart(&mut self, _peer_id: PeerId) { self.disconnects += 1; self.restarts += 1; }
+		fn useless_peer(&mut self, _: NodeIndex, _: &str) { self.disconnects += 1; }
+		fn note_useless_and_restart_sync(&mut self, _: NodeIndex, _: &str) { self.disconnects += 1; self.restarts += 1; }
 		fn restart(&mut self) { self.restarts += 1; }
 	}
 
