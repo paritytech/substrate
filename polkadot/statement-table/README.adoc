@@ -1,0 +1,5 @@
+
+= Polkadot Statement table
+
+placeholder
+//TODO Write content :)
