@@ -28,6 +28,12 @@ use serde::{Serialize, de::DeserializeOwned};
 
 /// Service configuration.
 pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
+	/// Implementation name
+	pub impl_name: &'static str,
+	/// Implementation version
+	pub impl_version: &'static str,
+	/// Git commit if any.
+	pub impl_commit: Option<&'static str>,
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
@@ -66,6 +72,9 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 	/// Create default config for given chain spec.
 	pub fn default_with_spec(chain_spec: ChainSpec<G>) -> Self {
 		let mut configuration = Configuration {
+			impl_name: "parity-substrate",
+			impl_version: "0.0.0",
+			impl_commit: None,
 			chain_spec,
 			name: Default::default(),
 			roles: Roles::FULL,

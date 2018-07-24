@@ -76,7 +76,7 @@ pub use state_machine::Backend as StateMachineBackend;
 pub use polkadot_primitives::Block as PolkadotBlock;
 pub use service::{Components as ServiceComponents, Service, CustomConfiguration};
 
-use std::io::{self, Write, Read, stdin, stdout};
+use std::io::{Write, Read, stdin, stdout};
 use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
@@ -295,9 +295,8 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		config.keys.push("Alice".into());
 	}
 
-	let sys_conf = SystemConfiguration {
-		chain_name: config.chain_spec.name().to_owned(),
-	};
+	config.rpc_http = Some(parse_address("127.0.0.1:9933", "rpc-port", &matches)?);
+	config.rpc_ws = Some(parse_address("127.0.0.1:9944", "ws-port", &matches)?);
 
 	let mut runtime = Runtime::new()?;
 	let executor = runtime.executor();
@@ -326,8 +325,8 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	};
 
 	match role == service::Roles::LIGHT {
-		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, &matches, sys_conf, worker)?,
-		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, &matches, sys_conf, worker)?,
+		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, worker)?,
+		false => run_until_exit(&mut runtime, service::new_full(config, executor)?, worker)?,
 	}
 
 	// TODO: hard exit if this stalls?
@@ -421,8 +420,6 @@ fn revert_chain(matches: &clap::ArgMatches) -> error::Result<()> {
 fn run_until_exit<C, W>(
 	runtime: &mut Runtime,
 	service: service::Service<C>,
-	matches: &clap::ArgMatches,
-	sys_conf: SystemConfiguration,
 	worker: W,
 ) -> error::Result<()>
 	where
