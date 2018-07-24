@@ -1,20 +1,20 @@
 // Copyright 2018 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
 
-use libp2p::{self, Transport, secio};
+use libp2p::{self, Transport, mplex, secio, yamux};
 use libp2p::core::{MuxedTransport, either, upgrade};
 use libp2p::transport_timeout::TransportTimeout;
 use std::time::Duration;
@@ -52,14 +52,14 @@ pub fn build_transport(
 		})
 		// TODO: check that the public key matches what is reported by identify
 		.map(|(socket, _key), _| socket)
-		.with_upgrade(libp2p::mplex::MultiplexConfig::new())
+		// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
+		.with_upgrade(upgrade::or(
+			upgrade::map(mplex::MplexConfig::new(), either::EitherOutput::First),
+			upgrade::map(yamux::Config::default(), either::EitherOutput::Second),
+		))
 		.into_connection_reuse();
 
 	TransportTimeout::new(base, Duration::from_secs(20))
-		.map_err(|err| {
-			debug!(target: "sub-libp2p", "Error in base transport layer: {:?}", err);
-			err
-		})
 }
 
 /// Specifies whether unencrypted communications are allowed or denied.
