@@ -28,7 +28,7 @@ use io::SyncIo;
 use protocol::{Context, Protocol};
 use config::ProtocolConfig;
 use service::TransactionPool;
-use network_libp2p::{PeerId, SessionInfo, Severity};
+use network_libp2p::{NodeIndex, SessionInfo, Severity};
 use keyring::Keyring;
 use codec::Encode;
 use import_queue::tests::SyncImportQueue;
@@ -41,29 +41,29 @@ pub struct DummySpecialization;
 impl Specialization<Block> for DummySpecialization {
 	fn status(&self) -> Vec<u8> { vec![] }
 
-	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _status: ::message::Status<Block>) {
+	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: ::message::Status<Block>) {
 
 	}
 
-	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId) {
+	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex) {
 
 	}
 
-	fn on_message(&mut self, _ctx: &mut Context<Block>, _peer_id: PeerId, _message: ::message::Message<Block>) {
+	fn on_message(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _message: ::message::Message<Block>) {
 
 	}
 }
 
 pub struct TestIo<'p> {
 	queue: &'p RwLock<VecDeque<TestPacket>>,
-	pub to_disconnect: HashSet<PeerId>,
+	pub to_disconnect: HashSet<NodeIndex>,
 	packets: Vec<TestPacket>,
-	peers_info: HashMap<PeerId, String>,
-	_sender: Option<PeerId>,
+	peers_info: HashMap<NodeIndex, String>,
+	_sender: Option<NodeIndex>,
 }
 
 impl<'p> TestIo<'p> where {
-	pub fn new(queue: &'p RwLock<VecDeque<TestPacket>>, sender: Option<PeerId>) -> TestIo<'p> {
+	pub fn new(queue: &'p RwLock<VecDeque<TestPacket>>, sender: Option<NodeIndex>) -> TestIo<'p> {
 		TestIo {
 			queue: queue,
 			_sender: sender,
@@ -81,28 +81,28 @@ impl<'p> Drop for TestIo<'p> {
 }
 
 impl<'p> SyncIo for TestIo<'p> {
-	fn report_peer(&mut self, peer_id: PeerId, _reason: Severity) {
-		self.to_disconnect.insert(peer_id);
+	fn report_peer(&mut self, who: NodeIndex, _reason: Severity) {
+		self.to_disconnect.insert(who);
 	}
 
 	fn is_expired(&self) -> bool {
 		false
 	}
 
-	fn send(&mut self, peer_id: PeerId, data: Vec<u8>) {
+	fn send(&mut self, who: NodeIndex, data: Vec<u8>) {
 		self.packets.push(TestPacket {
 			data: data,
-			recipient: peer_id,
+			recipient: who,
 		});
 	}
 
-	fn peer_info(&self, peer_id: PeerId) -> String {
-		self.peers_info.get(&peer_id)
+	fn peer_info(&self, who: NodeIndex) -> String {
+		self.peers_info.get(&who)
 			.cloned()
-			.unwrap_or_else(|| peer_id.to_string())
+			.unwrap_or_else(|| who.to_string())
 	}
 
-	fn peer_session_info(&self, _peer_id: PeerId) -> Option<SessionInfo> {
+	fn peer_session_info(&self, _peer_id: NodeIndex) -> Option<SessionInfo> {
 		None
 	}
 }
@@ -110,7 +110,7 @@ impl<'p> SyncIo for TestIo<'p> {
 /// Mocked subprotocol packet
 pub struct TestPacket {
 	data: Vec<u8>,
-	recipient: PeerId,
+	recipient: NodeIndex,
 }
 
 pub struct Peer {
@@ -129,18 +129,18 @@ impl Peer {
 	}
 
 	/// Called on connection to other indicated peer.
-	fn on_connect(&self, other: PeerId) {
+	fn on_connect(&self, other: NodeIndex) {
 		self.sync.on_peer_connected(&mut TestIo::new(&self.queue, Some(other)), other);
 	}
 
 	/// Called on disconnect from other indicated peer.
-	fn on_disconnect(&self, other: PeerId) {
+	fn on_disconnect(&self, other: NodeIndex) {
 		let mut io = TestIo::new(&self.queue, Some(other));
 		self.sync.on_peer_disconnected(&mut io, other);
 	}
 
 	/// Receive a message from another peer. Return a set of peers to disconnect.
-	fn receive_message(&self, from: PeerId, msg: TestPacket) -> HashSet<PeerId> {
+	fn receive_message(&self, from: NodeIndex, msg: TestPacket) -> HashSet<NodeIndex> {
 		let mut io = TestIo::new(&self.queue, Some(from));
 		self.sync.handle_packet(&mut io, from, &msg.data);
 		self.flush();
@@ -219,7 +219,7 @@ impl TransactionPool<Block> for EmptyTransactionPool {
 pub struct TestNet {
 	peers: Vec<Arc<Peer>>,
 	started: bool,
-	disconnect_events: Vec<(PeerId, PeerId)>, //disconnected (initiated by, to)
+	disconnect_events: Vec<(NodeIndex, NodeIndex)>, //disconnected (initiated by, to)
 }
 
 impl TestNet {
@@ -264,7 +264,7 @@ impl TestNet {
 			self.peers[peer].start();
 			for client in 0..self.peers.len() {
 				if peer != client {
-					self.peers[peer].on_connect(client as PeerId);
+					self.peers[peer].on_connect(client as NodeIndex);
 				}
 			}
 		}
@@ -278,17 +278,17 @@ impl TestNet {
 				let disconnecting = {
 					let recipient = packet.recipient;
 					trace!("--- {} -> {} ---", peer, recipient);
-					let to_disconnect = self.peers[recipient].receive_message(peer as PeerId, packet);
+					let to_disconnect = self.peers[recipient].receive_message(peer as NodeIndex, packet);
 					for d in &to_disconnect {
 						// notify this that disconnecting peers are disconnecting
-						self.peers[recipient].on_disconnect(*d as PeerId);
+						self.peers[recipient].on_disconnect(*d as NodeIndex);
 						self.disconnect_events.push((peer, *d));
 					}
 					to_disconnect
 				};
 				for d in &disconnecting {
 					// notify other peers that this peer is disconnecting
-					self.peers[*d].on_disconnect(peer as PeerId);
+					self.peers[*d].on_disconnect(peer as NodeIndex);
 				}
 			}
 

@@ -20,7 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use std::time::{Instant, Duration};
-use network_libp2p::PeerId;
+use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
@@ -51,7 +51,7 @@ struct MessageEntry<B: BlockT> {
 
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
-	peers: HashMap<PeerId, PeerConsensus<B::Hash>>,
+	peers: HashMap<NodeIndex, PeerConsensus<B::Hash>>,
 	message_sink: Option<(mpsc::UnboundedSender<ConsensusMessage<B>>, B::Hash)>,
 	messages: Vec<MessageEntry<B>>,
 	message_hashes: HashSet<B::Hash>,
@@ -74,9 +74,9 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Handle new connected peer.
-	pub fn new_peer(&mut self, protocol: &mut Context<B>, peer_id: PeerId, roles: Roles) {
+	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex, roles: Roles) {
 		if roles.intersects(Roles::AUTHORITY | Roles::FULL) {
-			trace!(target:"gossip", "Registering {:?} {}", roles, peer_id);
+			trace!(target:"gossip", "Registering {:?} {}", roles, who);
 			// Send out all known messages.
 			// TODO: limit by size
 			let mut known_messages = HashSet::new();
@@ -87,9 +87,9 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 					ConsensusMessage::ChainSpecific(ref msg, _) => GenericMessage::ChainSpecific(msg.clone()),
 				};
 
-				protocol.send_message(peer_id, message);
+				protocol.send_message(who, message);
 			}
-			self.peers.insert(peer_id, PeerConsensus {
+			self.peers.insert(who, PeerConsensus {
 				known_messages,
 			});
 		}
@@ -115,16 +115,16 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Handles incoming BFT message, passing to stream and repropagating.
-	pub fn on_bft_message(&mut self, protocol: &mut Context<B>, peer_id: PeerId, message: message::LocalizedBftMessage<B>) {
-		if let Some((hash, message)) = self.handle_incoming(protocol, peer_id, ConsensusMessage::Bft(message)) {
+	pub fn on_bft_message(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: message::LocalizedBftMessage<B>) {
+		if let Some((hash, message)) = self.handle_incoming(protocol, who, ConsensusMessage::Bft(message)) {
 			// propagate to other peers.
 			self.multicast(protocol, message, Some(hash));
 		}
 	}
 
 	/// Handles incoming chain-specific message and repropagates
-	pub fn on_chain_specific(&mut self, protocol: &mut Context<B>, peer_id: PeerId, message: Vec<u8>, parent_hash: B::Hash) {
-		if let Some((hash, message)) = self.handle_incoming(protocol, peer_id, ConsensusMessage::ChainSpecific(message, parent_hash)) {
+	pub fn on_chain_specific(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: Vec<u8>, parent_hash: B::Hash) {
+		if let Some((hash, message)) = self.handle_incoming(protocol, who, ConsensusMessage::ChainSpecific(message, parent_hash)) {
 			// propagate to other peers.
 			self.multicast(protocol, message, Some(hash));
 		}
@@ -163,8 +163,8 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Call when a peer has been disconnected to stop tracking gossip status.
-	pub fn peer_disconnected(&mut self, _protocol: &mut Context<B>, peer_id: PeerId) {
-		self.peers.remove(&peer_id);
+	pub fn peer_disconnected(&mut self, _protocol: &mut Context<B>, who: NodeIndex) {
+		self.peers.remove(&who);
 	}
 
 	/// Prune old or no longer relevant consensus messages.
@@ -195,7 +195,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		}
 	}
 
-	fn handle_incoming(&mut self, protocol: &mut Context<B>, peer_id: PeerId, message: ConsensusMessage<B>) -> Option<(B::Hash, ConsensusMessage<B>)> {
+	fn handle_incoming(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: ConsensusMessage<B>) -> Option<(B::Hash, ConsensusMessage<B>)> {
 		let (hash, parent, message) = match message {
 			ConsensusMessage::Bft(msg) => {
 				let parent = msg.parent_hash;
@@ -223,7 +223,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		};
 
 		if self.message_hashes.contains(&hash) {
-			trace!(target:"gossip", "Ignored already known message from {}", peer_id);
+			trace!(target:"gossip", "Ignored already known message from {}", who);
 			return None;
 		}
 
@@ -234,14 +234,14 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			},
 			(Ok(info), Ok(Some(header))) => {
 				if header.number() < &info.chain.best_number {
-					trace!(target:"gossip", "Ignored ancient message from {}, hash={}", peer_id, parent);
+					trace!(target:"gossip", "Ignored ancient message from {}, hash={}", who, parent);
 					return None;
 				}
 			},
 			(Ok(_), Ok(None)) => {},
 		}
 
-		if let Some(ref mut peer) = self.peers.get_mut(&peer_id) {
+		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			peer.known_messages.insert(hash);
 			if let Some((sink, parent_hash)) = self.message_sink.take() {
 				if parent == parent_hash {
@@ -253,7 +253,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 				self.message_sink = Some((sink, parent_hash));
 			}
 		} else {
-			trace!(target:"gossip", "Ignored statement from unregistered peer {}", peer_id);
+			trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
 			return None;
 		}
 
