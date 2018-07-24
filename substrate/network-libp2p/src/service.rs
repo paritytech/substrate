@@ -546,6 +546,10 @@ fn init_thread(
 				}, timer_token);
 				Ok(())
 			}
+		})
+		.then(|val| {
+			warn!(target: "sub-libp2p", "Timeouts stream closed unexpectedly: {:?}", val);
+			val
 		});
 
 	// Start the process of periodically discovering nodes to connect to.
