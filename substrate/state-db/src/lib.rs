@@ -194,6 +194,8 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn finalize_block(&mut self, hash: &BlockHash) -> CommitSet<Key> {
+		// clear the temporary overlay from the previous finalization.
+		self.unfinalized.clear_overlay();
 		let mut commit = match self.mode {
 			PruningMode::ArchiveAll => {
 				CommitSet::default()
