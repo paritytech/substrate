@@ -80,7 +80,6 @@ use std::io::{Write, Read, stdin, stdout};
 use std::fs::File;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use substrate_telemetry::{init_telemetry, TelemetryConfig};
 use names::{Generator, Name};
 use regex::Regex;
 
@@ -89,6 +88,14 @@ use tokio::runtime::Runtime;
 use service::PruningMode;
 
 const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
+
+/// Executable version. Used to pass version information from the root crate.
+pub struct VersionInfo {
+	/// Implementation version.
+	pub version: &'static str,
+	/// SCM Commit hash.
+	pub commit: &'static str,
+}
 
 fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), String> {
 	let chain_spec = matches.value_of("chain")
@@ -164,7 +171,7 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 /// 9556-9591		Unassigned
 /// 9803-9874		Unassigned
 /// 9926-9949		Unassigned
-pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
+pub fn run<I, T, W>(args: I, worker: W, version: VersionInfo) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 	W: Worker,
@@ -206,6 +213,9 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 
 	let (spec, is_global) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
+	config.impl_name = "parity-polkadot";
+	config.impl_commit = version.commit;
+	config.impl_version = version.version;
 
 	config.name = match matches.value_of("name") {
 		None => Generator::with_naming(Name::Numbered).next().unwrap(),
@@ -280,7 +290,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 
 		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
 		config.network.public_address = None;
-		config.network.client_version = format!("parity-polkadot/{}", crate_version!());
+		config.network.client_version = config.client_id();
 		config.network.use_secret = match matches.value_of("node-key").map(|s| s.parse()) {
 			Some(Ok(secret)) => Some(secret),
 			Some(Err(err)) => return Err(format!("Error parsing node key: {}", err).into()),
@@ -305,24 +315,13 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		matches.is_present("telemetry")
 		|| matches.value_of("telemetry-url").is_some()
 		|| (is_global && !matches.is_present("no-telemetry"));
-	let _guard = if telemetry_enabled {
-		let name = config.name.clone();
-		let chain_name = config.chain_spec.name().to_owned();
-		Some(init_telemetry(TelemetryConfig {
-			url: matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into(),
-			on_connect: Box::new(move || {
-				telemetry!("system.connected";
-					"name" => name.clone(),
-					"implementation" => "parity-polkadot",
-					"version" => crate_version!(),
-					"config" => "",
-					"chain" => chain_name.clone(),
-				);
-			}),
-		}))
+	let telemetry_url = if telemetry_enabled {
+		Some(matches.value_of("telemetry-url").unwrap_or(DEFAULT_TELEMETRY_URL).into())
 	} else {
 		None
 	};
+
+	config.telemetry_url = telemetry_url;
 
 	match role == service::Roles::LIGHT {
 		true => run_until_exit(&mut runtime, service::new_light(config, executor)?, worker)?,

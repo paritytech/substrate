@@ -25,6 +25,7 @@ pub use network::NetworkConfiguration;
 pub use client_db::PruningMode;
 use runtime_primitives::BuildStorage;
 use serde::{Serialize, de::DeserializeOwned};
+use target_info::Target;
 
 /// Service configuration.
 pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
@@ -33,7 +34,7 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Implementation version
 	pub impl_version: &'static str,
 	/// Git commit if any.
-	pub impl_commit: Option<&'static str>,
+	pub impl_commit: &'static str,
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
@@ -66,6 +67,8 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
 	pub rpc_ws: Option<SocketAddr>,
+	/// Telemetry service URL. `None` if disabled.
+	pub telemetry_url: Option<String>,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -74,7 +77,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 		let mut configuration = Configuration {
 			impl_name: "parity-substrate",
 			impl_version: "0.0.0",
-			impl_commit: None,
+			impl_commit: "",
 			chain_spec,
 			name: Default::default(),
 			roles: Roles::FULL,
@@ -91,8 +94,27 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			max_heap_pages: 1024,
 			rpc_http: None,
 			rpc_ws: None,
+			telemetry_url: None,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 		configuration
+	}
+
+	/// Returns platform info
+	pub fn platform() -> String {
+		let env = Target::env();
+		let env_dash = if env.is_empty() { "" } else { "-" };
+		format!("{}-{}{}{}", Target::arch(), Target::os(), env_dash, env)
+	}
+
+	/// Returns full version string.
+	pub fn full_version(&self) -> String {
+		let commit_dash = if self.impl_commit.is_empty() { "" } else { "-" };
+		format!("{}{}{}-{}", self.impl_version, commit_dash, self.impl_commit, Self::platform())
+	}
+
+	/// Implementation id and version.
+	pub fn client_id(&self) -> String {
+		format!("{}/v{}", self.impl_name, self.full_version())
 	}
 }

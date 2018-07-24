@@ -34,10 +34,11 @@ extern crate substrate_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
+extern crate target_info;
 extern crate tokio;
 
 #[macro_use]
-extern crate substrate_telemetry;
+extern crate substrate_telemetry as tel;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
@@ -85,7 +86,8 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	signal: Option<Signal>,
 	_rpc_http: Option<rpc::HttpServer>,
-	_rpc_ws: Option<rpc::WsServer>
+	_rpc_ws: Option<rpc::WsServer>,
+	_telemetry: Option<tel::Telemetry>,
 }
 
 /// Creates bare client without any networking.
@@ -129,6 +131,8 @@ impl<Components> Service<Components>
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let best_header = client.best_block_header()?;
 
+		let version = config.full_version();
+		info!("Client version: {}", version);
 		info!("Best block: #{}", best_header.number());
 		telemetry!("node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
@@ -186,6 +190,7 @@ impl<Components> Service<Components>
 			task_executor.spawn(events);
 		}
 
+		// RPC
 		let rpc_config = RpcConfig {
 			chain_name: config.chain_spec.name().to_string(),
 			impl_name: config.impl_name,
@@ -210,6 +215,29 @@ impl<Components> Service<Components>
 			)
 		};
 
+		// Telemetry
+		let telemetry = match config.telemetry_url {
+			Some(url) => {
+				let name = config.name.clone();
+				let impl_name = config.impl_name.to_owned();
+				let version = version.clone();
+				let chain_name = config.chain_spec.name().to_owned();
+				Some(tel::init_telemetry(tel::TelemetryConfig {
+					url: url,
+					on_connect: Box::new(move || {
+						telemetry!("system.connected";
+								   "name" => name.clone(),
+								   "implementation" => impl_name.clone(),
+								   "version" => version.clone(),
+								   "config" => "",
+								   "chain" => chain_name.clone(),
+								   );
+					}),
+				}))
+			},
+			None => None,
+		};
+
 		Ok(Service {
 			client: client,
 			network: network,
@@ -218,6 +246,7 @@ impl<Components> Service<Components>
 			keystore: keystore,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws,
+			_telemetry: telemetry,
 		})
 	}
 

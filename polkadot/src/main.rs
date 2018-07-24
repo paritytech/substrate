@@ -25,11 +25,16 @@ extern crate futures;
 #[macro_use]
 extern crate error_chain;
 
-use cli::{ServiceComponents, Service};
+use cli::{ServiceComponents, Service, VersionInfo};
 use futures::sync::oneshot;
 use futures::{future, Future};
 
 use std::cell::RefCell;
+
+mod vergen {
+	#![allow(unused)]
+	include!(concat!(env!("OUT_DIR"), "/version.rs"));
+}
 
 // the regular polkadot worker simply does nothing until ctrl-c
 struct Worker;
@@ -59,5 +64,9 @@ impl cli::Worker for Worker {
 quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args(), Worker)
+	let version = VersionInfo {
+		commit: vergen::short_sha(),
+		version: env!("CARGO_PKG_VERSION"),
+	};
+	cli::run(::std::env::args(), Worker, version)
 }

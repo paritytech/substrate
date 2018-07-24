@@ -15,6 +15,7 @@ exit-future = "0.1"
 serde = "1.0"
 serde_json = "1.0"
 serde_derive = "1.0"
+target_info = "0.1"
 substrate-keystore = { path = "../../substrate/keystore" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
