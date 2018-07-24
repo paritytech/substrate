@@ -29,10 +29,6 @@ args:
       value_name: KEY
       help: Specify node secret key (64-character hex string)
       takes_value: true
-  - collator:
-      long: collator
-      help: Enable collator mode
-      takes_value: false
   - validator:
       long: validator
       help: Enable validator mode
@@ -69,7 +65,7 @@ args:
   - chain:
       long: chain
       value_name: CHAIN_SPEC
-      help: Specify the chain specification (one of poc-1, dev, local or staging)
+      help: Specify the chain specification (one of krummelanke, dev, local or staging)
       takes_value: true
   - pruning:
       long: pruning
@@ -118,7 +114,7 @@ subcommands:
         - chain:
             long: chain
             value_name: CHAIN_SPEC
-            help: Specify the chain specification (one of poc-1, dev, local or staging)
+            help: Specify the chain specification (one of krummelanke, dev, local or staging)
             takes_value: true
   - export-blocks:
       about: Export blocks to a file
@@ -182,3 +178,20 @@ subcommands:
               long: max-heap-pages
               value_name: COUNT
               help: The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
+  - revert:
+      about: Revert chain to the previous state
+      args:
+          - NUM:
+              index: 1
+              help: Number of blocks to revert. Default is 256.
+          - chain:
+              long: chain
+              value_name: CHAIN_SPEC
+              help: Specify the chain specification.
+              takes_value: true
+          - base-path:
+              long: base-path
+              short: d
+              value_name: PATH
+              help: Specify custom base path.
+              takes_value: true

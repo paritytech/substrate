@@ -20,18 +20,20 @@
 
 extern crate futures;
 extern crate parking_lot;
+extern crate serde;
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate serde_derive;
 
 pub extern crate transaction_pool as txpool;
 
 pub mod api;
+pub mod watcher;
 
 mod listener;
 mod pool;
-mod watcher;
 
 pub use self::listener::Listener;
 pub use self::pool::Pool;
-pub use self::watcher::Watcher;

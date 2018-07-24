@@ -24,7 +24,7 @@ use backend;
 use light;
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, As};
 use runtime_primitives::bft::Justification;
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
@@ -359,6 +359,10 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 			Some(state) => Ok(state),
 			None => Err(error::ErrorKind::UnknownBlock(format!("{}", block)).into()),
 		}
+	}
+
+	fn revert(&self, _n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
+		Ok(As::sa(0))
 	}
 }
 

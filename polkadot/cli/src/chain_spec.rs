@@ -27,8 +27,8 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The PoC-1 testnet.
-	PoC1Testnet,
+	/// The PoC-1 & PoC-2 era testnet.
+	KrummeLanke,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
 	/// Custom Genesis file.
@@ -39,7 +39,7 @@ pub enum ChainSpec {
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<service::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::PoC1Testnet => service::chain_spec::poc_1_testnet_config()?,
+			ChainSpec::KrummeLanke => service::chain_spec::poc_1_testnet_config()?,
 			ChainSpec::Development => service::chain_spec::development_config(),
 			ChainSpec::LocalTestnet => service::chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => service::chain_spec::staging_testnet_config(),
@@ -53,7 +53,8 @@ impl<'a> From<&'a str> for ChainSpec {
 		match s {
 			"dev" => ChainSpec::Development,
 			"local" => ChainSpec::LocalTestnet,
-			"poc-1" => ChainSpec::PoC1Testnet,
+			"poc-1" => ChainSpec::KrummeLanke,
+			"krummelanke" => ChainSpec::KrummeLanke,
 			"staging" => ChainSpec::StagingTestnet,
 			s => ChainSpec::Custom(s.into()),
 		}
@@ -65,7 +66,7 @@ impl From<ChainSpec> for String {
 		match s {
 			ChainSpec::Development => "dev".into(),
 			ChainSpec::LocalTestnet => "local".into(),
-			ChainSpec::PoC1Testnet => "poc-1".into(),
+			ChainSpec::KrummeLanke => "krummelanke".into(),
 			ChainSpec::StagingTestnet => "staging".into(),
 			ChainSpec::Custom(f) => format!("custom ({})", f),
 		}

@@ -78,3 +78,12 @@ exclude = [
 	"substrate/pwasm-libc",
 	"substrate/test-runtime/wasm",
 ]
+
+[badges]
+travis-ci = { repository = "paritytech/polkadot", branch = "master" }
+maintenance = { status = "actively-developed" }
+is-it-maintained-issue-resolution = { repository = "paritytech/polkadot" }
+is-it-maintained-open-issues = { repository = "paritytech/polkadot" }
+
+[profile.release]
+panic = "abort"

@@ -17,6 +17,8 @@
 use client;
 use rpc;
 
+use errors;
+
 error_chain! {
 	links {
 		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
@@ -34,12 +36,8 @@ error_chain! {
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
-			Error(ErrorKind::Unimplemented, _) => rpc::Error {
-				code: rpc::ErrorCode::ServerError(-1),
-				message: "Not implemented yet".into(),
-				data: None,
-			},
-			_ => rpc::Error::internal_error(),
+			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
+			e => errors::internal(e),
 		}
 	}
 }

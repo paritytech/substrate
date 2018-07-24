@@ -66,6 +66,12 @@ impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for D
 		Err("unimplemented".into())
 	}
 
+	fn submit_and_watch(&self, _block: BlockId, _: UncheckedExtrinsic)
+		-> Result<extrinsic_pool::watcher::Watcher<Hash>, Self::Error>
+	{
+		Err("unimplemented".into())
+	}
+
 	fn light_status(&self) -> extrinsic_pool::txpool::LightStatus {
 		unreachable!()
 	}
@@ -169,7 +175,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let _rpc_servers = {
 		let handler = || {
 			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
-			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool));
+			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool), runtime.executor());
 			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, author, DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
