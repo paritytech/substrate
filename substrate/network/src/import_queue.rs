@@ -24,7 +24,6 @@ use parking_lot::{Condvar, Mutex, RwLock};
 use client::{BlockOrigin, ImportResult};
 use network_libp2p::{NodeIndex, Severity};
 
-use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use blocks::BlockData;
