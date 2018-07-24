@@ -1,0 +1,9 @@
+
+=== Substrate Packages
+
+:leveloffset: +3
+
+// include::../../substrate/bft/README.adoc[]
+NOTE: Substratte will be refactored and the doc will be in another location.
+
+:leveloffset: -3

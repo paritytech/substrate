@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+// TODO: Add missing crate doc between the tags below
+// tag::description[]
+// end::description[]
+
 extern crate ed25519;
 extern crate substrate_client as client;
 extern crate substrate_codec as codec;
@@ -286,7 +290,7 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 
 		let encoded = uxt.encode();
 		let (encoded_size, hash) = (encoded.len(), BlakeTwo256::hash(&encoded));
-		
+
 		debug!(target: "transaction-pool", "Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
 
 		let inner = match uxt.clone().check_with(|a| self.lookup(a)) {

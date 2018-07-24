@@ -1,5 +1,7 @@
 
 = Polkadot Src
 
-placeholder
-//TODO Write content :)
+.Description
+----
+include::main.rs[tag=description]
+----

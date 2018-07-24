@@ -1,11 +1,13 @@
 
 = Substrate CLI
 
-== Summary
-
+.Summary
 [source, toml]
 ----
 include::Cargo.toml[lines=2..5]
 ----
+
+.Description
+Polkadot CLI library
 
 include::doc/shell-completion.adoc[]

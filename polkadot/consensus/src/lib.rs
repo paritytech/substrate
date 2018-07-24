@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Propagation and agreement of candidates.
 //!
 //! Authorities are split into groups by parachain, and each authority might come
@@ -28,6 +29,7 @@
 //! of invalid blocks.
 //!
 //! Groups themselves may be compromised by malicious authorities.
+// end::description[]
 
 extern crate ed25519;
 extern crate parking_lot;
