@@ -28,7 +28,7 @@ use client;
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 use io::SyncIo;
 use message;
-use network_libp2p::{Severity, PeerId};
+use network_libp2p::{Severity, NodeIndex};
 use service;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
@@ -38,16 +38,16 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 /// On-demand service API.
 pub trait OnDemandService<Block: BlockT>: Send + Sync {
 	/// When new node is connected.
-	fn on_connect(&self, peer: PeerId, role: service::Roles);
+	fn on_connect(&self, peer: NodeIndex, role: service::Roles);
 
 	/// When node is disconnected.
-	fn on_disconnect(&self, peer: PeerId);
+	fn on_disconnect(&self, peer: NodeIndex);
 
 	/// Maintain peers requests.
 	fn maintain_peers(&self, io: &mut SyncIo);
 
 	/// When call response is received from remote node.
-	fn on_remote_call_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteCallResponse);
+	fn on_remote_call_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteCallResponse);
 }
 
 /// On-demand requests service. Dispatches requests to appropriate peers.
@@ -66,8 +66,8 @@ struct OnDemandCore<B: BlockT, E: service::ExecuteInContext<B>> {
 	service: Weak<E>,
 	next_request_id: u64,
 	pending_requests: VecDeque<Request<B>>,
-	active_peers: LinkedHashMap<PeerId, Request<B>>,
-	idle_peers: VecDeque<PeerId>,
+	active_peers: LinkedHashMap<NodeIndex, Request<B>>,
+	idle_peers: VecDeque<NodeIndex>,
 }
 
 struct Request<Block: BlockT> {
@@ -132,7 +132,7 @@ impl<B: BlockT, E> OnDemand<B, E> where
 	}
 
 	/// Try to accept response from given peer.
-	fn accept_response<F: FnOnce(Request<B>) -> Accept<B>>(&self, rtype: &str, io: &mut SyncIo, peer: PeerId, request_id: u64, try_accept: F) {
+	fn accept_response<F: FnOnce(Request<B>) -> Accept<B>>(&self, rtype: &str, io: &mut SyncIo, peer: NodeIndex, request_id: u64, try_accept: F) {
 		let mut core = self.core.lock();
 		let request = match core.remove(peer, request_id) {
 			Some(request) => request,
@@ -165,7 +165,7 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 	E: service::ExecuteInContext<B>,
 	B::Header: HeaderT,
 {
-	fn on_connect(&self, peer: PeerId, role: service::Roles) {
+	fn on_connect(&self, peer: NodeIndex, role: service::Roles) {
 		if !role.intersects(service::Roles::FULL | service::Roles::AUTHORITY) { // TODO: correct?
 			return;
 		}
@@ -175,7 +175,7 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 		core.dispatch();
 	}
 
-	fn on_disconnect(&self, peer: PeerId) {
+	fn on_disconnect(&self, peer: NodeIndex) {
 		let mut core = self.core.lock();
 		core.remove_peer(peer);
 		core.dispatch();
@@ -189,7 +189,7 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 		core.dispatch();
 	}
 
-	fn on_remote_call_response(&self, io: &mut SyncIo, peer: PeerId, response: message::RemoteCallResponse) {
+	fn on_remote_call_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteCallResponse) {
 		self.accept_response("call", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, response.proof) {
 				Ok(response) => {
@@ -222,11 +222,11 @@ impl<B, E> OnDemandCore<B, E> where
 	E: service::ExecuteInContext<B>,
 	B::Header: HeaderT,
 {
-	pub fn add_peer(&mut self, peer: PeerId) {
+	pub fn add_peer(&mut self, peer: NodeIndex) {
 		self.idle_peers.push_back(peer);
 	}
 
-	pub fn remove_peer(&mut self, peer: PeerId) {
+	pub fn remove_peer(&mut self, peer: NodeIndex) {
 		if let Some(request) = self.active_peers.remove(&peer) {
 			self.pending_requests.push_front(request);
 			return;
@@ -237,7 +237,7 @@ impl<B, E> OnDemandCore<B, E> where
 		}
 	}
 
-	pub fn maintain_peers(&mut self) -> Vec<PeerId> {
+	pub fn maintain_peers(&mut self) -> Vec<NodeIndex> {
 		let now = Instant::now();
 		let mut bad_peers = Vec::new();
 		loop {
@@ -263,7 +263,7 @@ impl<B, E> OnDemandCore<B, E> where
 		});
 	}
 
-	pub fn remove(&mut self, peer: PeerId, id: u64) -> Option<Request<B>> {
+	pub fn remove(&mut self, peer: NodeIndex, id: u64) -> Option<Request<B>> {
 		match self.active_peers.entry(peer) {
 			Entry::Occupied(entry) => match entry.get().id == id {
 				true => {
@@ -321,7 +321,7 @@ pub mod tests {
 	use client;
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 	use message;
-	use network_libp2p::PeerId;
+	use network_libp2p::NodeIndex;
 	use service::{Roles, ExecuteInContext};
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
@@ -358,7 +358,7 @@ pub mod tests {
 		core.idle_peers.len() + core.active_peers.len()
 	}
 
-	fn receive_call_response(on_demand: &OnDemand<Block, DummyExecutor>, network: &mut TestIo, peer: PeerId, id: message::RequestId) {
+	fn receive_call_response(on_demand: &OnDemand<Block, DummyExecutor>, network: &mut TestIo, peer: NodeIndex, id: message::RequestId) {
 		on_demand.on_remote_call_response(network, peer, message::RemoteCallResponse {
 			id: id,
 			proof: vec![vec![2]],

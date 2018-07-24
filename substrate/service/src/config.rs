@@ -71,7 +71,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			keys: Default::default(),
 			custom: Default::default(),
 			telemetry: Default::default(),
-			pruning: PruningMode::ArchiveAll,
+			pruning: PruningMode::default(),
 			execution_strategy: ExecutionStrategy::Both,
 			min_heap_pages: 8,
 			max_heap_pages: 1024,
