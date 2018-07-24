@@ -4,6 +4,8 @@
 :toc:
 :sectnums:
 
+== Intro
+
 Implementation of a https://polkadot.network node in Rust.
 
 == To play
@@ -26,41 +28,7 @@ You'll now have a `polkadot` binary installed to your `PATH`. You can drop the
 `--branch v0.2` or run `cargo install --git https://github.com/paritytech/polkadot.git polkadot`
 to get the very latest version of Polkadot, but these instructions might not work in that case.
 
-=== Krumme Lanke Testnet
-
-You will connect to the global Krumme Lanke testnet by default. To do this, just use:
-
-[source, shell]
-polkadot
-
-If you want to do anything on it (not that there's much to do), then you'll need
-to get some Krumme Lanke DOTs. Ask in the Polkadot watercooler.
-
-=== Development
-
-You can run a simple single-node development "network" on your machine by
-running in a terminal:
-
-[source, shell]
-polkadot --dev
-
-You can muck around by cloning and building the http://github.com/paritytech/polka-ui and http://github.com/paritytech/polkadot-ui or just heading to https://polkadot.js.org/apps.
-
-== Local Two-node Testnet
-
-If you want to see the multi-node consensus algorithm in action locally, then
-you can create a local testnet. You'll need two terminals open. In one, run:
-
-[source, shell]
-polkadot --chain=local --validator --key Alice -d /tmp/alice
-
-and in the other, run:
-
-[source, shell]
-polkadot --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes '/ip4/127.0.0.1/tcp/30333/p2p/ALICE_BOOTNODE_ID_HERE'
-
-Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of
-the first terminal.
+include::doc/networks/networks.adoc[]
 
 == Hacking on Polkadot
 
@@ -103,4 +71,24 @@ You can start a development chain with:
 [source, shell]
 cargo run -- --dev
 
-include::doc/packages.adoc[]
+include::doc/packages/packages.adoc[]
+
+:leveloffset: +1
+
+include::CONTRIBUTING.adoc[]
+
+:leveloffset: -1
+
+:leveloffset: +1
+
+include::CODE_OF_CONDUCT.adoc[]
+
+:leveloffset: -1
+
+== License
+
+----
+include::LICENSE[]
+----
+
+

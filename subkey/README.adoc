@@ -1,0 +1,7 @@
+= Subkey
+
+A key generation utility.
+
+Usage:
+
+	subkey <search string>
