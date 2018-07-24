@@ -35,7 +35,7 @@ pub fn build_transport(
 
 			let mut plaintext = upgrade::toggleable(upgrade::PlainTextConfig);
 			match unencrypted_allowed {
-				UnencryptedAllowed::Allowed => (),//plaintext.disable(),
+				UnencryptedAllowed::Allowed => plaintext.disable(),
 				UnencryptedAllowed::Denied => (),
 			};
 
@@ -54,7 +54,7 @@ pub fn build_transport(
 		.map(|(socket, _key), _| socket)
 		// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
 		.with_upgrade(upgrade::or(
-			upgrade::map(mplex::MultiplexConfig::new(), either::EitherOutput::First),
+			upgrade::map(mplex::MplexConfig::new(), either::EitherOutput::First),
 			upgrade::map(yamux::Config::default(), either::EitherOutput::Second),
 		))
 		.into_connection_reuse();
