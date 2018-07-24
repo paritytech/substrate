@@ -119,6 +119,10 @@ impl<T: Trait> GasMeter<T> {
 	}
 }
 
+/// Buy the given amount of gas.
+///
+/// Cost is calculated by multiplying the gas cost (taken from the storage) by the `gas_limit`.
+/// The funds are deducted from `transactor`.
 pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
 	gas_limit: T::Gas,
@@ -138,6 +142,7 @@ pub fn buy_gas<T: Trait>(
 	})
 }
 
+/// Refund the unused gas.
 pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) {
 	let b = <staking::Module<T>>::free_balance(transactor);
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
