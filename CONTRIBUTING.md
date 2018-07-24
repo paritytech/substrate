@@ -13,13 +13,13 @@ There are a few basic ground-rules for contributors (including the maintainer(s)
 1. **Non-master branches**, prefixed with a short name moniker (e.g. `gav-my-feature`) must be used for ongoing work.
 1. **All modifications** must be made in a **pull-request** to solicit feedback from other contributors.
 1. A pull-request *must not be merged until CI* has finished successfully.
-1. Contributors should adhere to the house coding style, as specified on the wiki.
+1. Contributors should adhere to the [house coding style](https://github.com/paritytech/polkadot/wiki/Style-Guide).
 
 Merging pull requests once CI is successful:
 
-1. A pull request that does not alter any logic (e.g. comments, dependencies, docs) may be tagged `insubstantial` and merged by its author.
+1. A pull request that does not alter any logic (e.g. comments, dependencies, docs) may be tagged [`insubstantial`](https://github.com/paritytech/polkadot/pulls?utf8=%E2%9C%93&q=is%3Apr+is%3Aopen+label%3AA2-insubstantial+) and merged by its author.
 1. A pull request with no large change to logic that is an urgent fix may be merged after a non-author contributor has reviewed it well.
-1. All other PRs should sit for 48 hours with the `pleasereview` tag in order to garner feedback.
+1. All other PRs should sit for 48 hours with the [`pleasereview`](https://github.com/paritytech/polkadot/pulls?q=is%3Apr+is%3Aopen+label%3AA0-pleasereview) tag in order to garner feedback.
 1. No PR should be merged until all reviews' comments are addressed.
 
 Reviewing pull requests:
