@@ -50,7 +50,7 @@ use parking_lot::RwLock;
 use primitives::H256;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, NumberFor, Zero};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
@@ -372,7 +372,12 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 				let finalizing_hash = if self.finalization_window == 0 {
 					Some(hash)
 				} else {
-					self.blockchain.hash(As::sa((number_u64 - self.finalization_window) as u64))?
+					let finalizing = number_u64 - self.finalization_window;
+					if finalizing > self.storage.state_db.best_finalized() {
+						self.blockchain.hash(As::sa(finalizing))?
+					} else {
+						None
+					}
 				};
 				if let Some(finalizing_hash) = finalizing_hash {
 					trace!("Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
@@ -381,11 +386,41 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 				}
 			}
 
-			debug!("DB Commit {:?} ({})", hash, number);
+			debug!("DB Commit {:?} ({}), best = {}", hash, number, pending_block.is_best);
 			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
 		}
 		Ok(())
+	}
+
+	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
+		use client::blockchain::HeaderBackend;
+		let mut best = self.blockchain.info()?.best_number;
+		for c in 0 .. n.as_() {
+			if best == As::sa(0) {
+				return Ok(As::sa(c))
+			}
+			let mut transaction = DBTransaction::new();
+			match self.storage.state_db.revert_one() {
+				Some(commit) => {
+					apply_state_commit(&mut transaction, commit);
+					let removed = self.blockchain.hash(best)?.ok_or_else(
+						|| client::error::ErrorKind::UnknownBlock(
+							format!("Error reverting to {}. Block hash not found.", best)))?;
+					best -= As::sa(1);
+					let key = number_to_db_key(best.clone());
+					let hash = self.blockchain.hash(best)?.ok_or_else(
+						|| client::error::ErrorKind::UnknownBlock(
+							format!("Error reverting to {}. Block hash not found.", best)))?;
+					transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
+					transaction.delete(columns::BLOCK_INDEX, removed.as_ref());
+					self.storage.db.write(transaction).map_err(db_err)?;
+					self.blockchain.update_meta(hash, best, true);
+				}
+				None => return Ok(As::sa(c))
+			}
+		}
+		Ok(n)
 	}
 
 	fn blockchain(&self) -> &BlockchainDb<Block> {

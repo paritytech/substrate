@@ -21,9 +21,9 @@ use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
 
-use client::{BlockOrigin, BlockStatus, ImportResult};
+use client::{BlockOrigin, ImportResult};
 use network_libp2p::{NodeIndex, Severity};
-use runtime_primitives::generic::BlockId;
+
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use blocks::BlockData;
@@ -221,8 +221,6 @@ enum SyncLink<'a, B: 'a + BlockT, E: 'a + ExecuteInContext<B>> {
 /// Block import successful result.
 #[derive(Debug, PartialEq)]
 enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debug + PartialEq> {
-	/// Block is not imported.
-	NotImported(H, N),
 	/// Imported known block.
 	ImportedKnown(H, N),
 	/// Imported unknown block.
@@ -286,16 +284,6 @@ fn import_single_block<B: BlockT>(
 			let hash = header.hash();
 			let parent = header.parent_hash().clone();
 
-			// check whether the block is known before importing.
-			match chain.block_status(&BlockId::Hash(hash)) {
-				Ok(BlockStatus::InChain) => return Ok(BlockImportResult::NotImported(hash, number)),
-				Ok(_) => {},
-				Err(e) => {
-					debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-					return Err(BlockImportError::Restart);
-				}
-			}
-
 			let result = chain.import(
 				block_origin,
 				header,
@@ -347,10 +335,9 @@ fn process_import_result<'a, B: BlockT>(
 ) -> usize
 {
 	match result {
-		Ok(BlockImportResult::NotImported(_, _)) => 0,
 		Ok(BlockImportResult::ImportedKnown(hash, number)) => {
 			link.block_imported(&hash, number);
-			0
+			1
 		},
 		Ok(BlockImportResult::ImportedUnknown(hash, number)) => {
 			link.block_imported(&hash, number);
@@ -431,6 +418,7 @@ pub mod tests {
 	use test_client::{self, TestClient};
 	use test_client::runtime::{Block, Hash};
 	use on_demand::tests::DummyExecutor;
+	use runtime_primitives::generic::BlockId;
 	use super::*;
 
 	/// Blocks import queue that is importing blocks in the same thread.
@@ -522,7 +510,7 @@ pub mod tests {
 	#[test]
 	fn import_single_good_known_block_is_ignored() {
 		let (client, hash, number, block) = prepare_good_block();
-		assert_eq!(import_single_block(&client, BlockOrigin::File, block), Ok(BlockImportResult::NotImported(hash, number)));
+		assert_eq!(import_single_block(&client, BlockOrigin::File, block), Ok(BlockImportResult::ImportedKnown(hash, number)));
 	}
 
 	#[test]
@@ -542,11 +530,11 @@ pub mod tests {
 	#[test]
 	fn process_import_result_works() {
 		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::NotImported(Default::default(), 0))), 0);
-		assert_eq!(link.total(), 0);
+		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
+		assert_eq!(link.total(), 1);
 
 		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 0);
+		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
 		assert_eq!(link.total(), 1);
 		assert_eq!(link.imported, 1);
 
