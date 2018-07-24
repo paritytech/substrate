@@ -25,4 +25,6 @@ substrate-client-db = { path = "../../substrate/client/db" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
+substrate-rpc = { path = "../../substrate/rpc" }
+substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-telemetry = { path = "../../substrate/telemetry" }

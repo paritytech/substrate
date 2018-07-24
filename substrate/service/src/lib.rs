@@ -32,6 +32,8 @@ extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 extern crate substrate_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
+extern crate substrate_rpc;
+extern crate substrate_rpc_servers as rpc;
 extern crate tokio;
 
 #[macro_use]
@@ -80,6 +82,8 @@ pub struct Service<Components: components::Components> {
 	extrinsic_pool: Arc<Components::ExtrinsicPool>,
 	keystore: Keystore,
 	signal: Option<Signal>,
+	rpc_http: Option<substrate_rpc::HttpServer>,
+	rpc_ws: Option<substrate_rpc::WsServer>
 }
 
 /// Creates bare client without any networking.
@@ -180,12 +184,29 @@ impl<Components> Service<Components>
 			task_executor.spawn(events);
 		}
 
+
+		let handler = || {
+			let client = client.clone();
+			let chain = rpc::apis::chain::Chain::new(client.clone(), executor.clone());
+			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool(), executor.clone());
+			rpc::rpc_handler::<ComponentBlock<C>, _, _, _, _>(
+				client,
+				chain,
+				author,
+				sys_conf.clone(),
+				)
+		};
+		let rpc_http = maybe_start_server(config.rpc_http, |address| rpc::start_http(address, handler()));
+		let rpc_ws = maybe_start_server(config.rpc_ws, |address| rpc::start_ws(address, handler()));
+
 		Ok(Service {
 			client: client,
 			network: network,
 			extrinsic_pool: extrinsic_pool,
 			signal: Some(signal),
 			keystore: keystore,
+			rpc_http,
+			rpc_ws,
 		})
 	}
 
@@ -219,5 +240,42 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 		if let Some(signal) = self.signal.take() {
 			signal.fire();
 		}
+	}
+}
+
+#[derive(Clone)]
+struct RpcConfig {
+	chain_name: String,
+}
+
+fn maybe_start_server<T, F>(mut address: Option<SocketAddr>, start: F) -> Result<Option<T>, io::Error> where
+	F: Fn(&SocketAddr) -> Result<T, io::Error>,
+{
+	match address {
+		Some(address) => Some(start(&address)
+			.or_else(|e| match e.kind() {
+				io::ErrorKind::AddrInUse |
+				io::ErrorKind::PermissionDenied => {
+					warn!("Unable to bind server to {}. Trying random port.", address);
+					address.set_port(0);
+					start(&address)
+				},
+				_ => Err(e),
+			})?),
+		None => None,
+	}
+}
+
+impl substrate_rpc::system::SystemApi for RpcConfig {
+	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok("parity-polkadot".into())
+	}
+
+	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(crate_version!().into())
+	}
+
+	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(self.chain_name.clone())
 	}
 }

@@ -16,6 +16,7 @@
 
 //! Service configuration.
 
+use std::net::SocketAddr;
 use extrinsic_pool;
 use chain_spec::ChainSpec;
 pub use client::ExecutionStrategy;
@@ -55,6 +56,10 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub min_heap_pages: usize,
 	/// Maximum number of heap pages to allocate for Wasm execution.
 	pub max_heap_pages: usize,
+	/// RPC over HTTP binding address. `None` if disabled.
+	pub rpc_http: Option<SocketAddr>,
+	/// RPC over Websockets binding address. `None` if disabled.
+	pub rpc_ws: Option<SocketAddr>,
 }
 
 impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C, G> {
@@ -75,6 +80,8 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			execution_strategy: ExecutionStrategy::Both,
 			min_heap_pages: 8,
 			max_heap_pages: 1024,
+			rpc_http: None,
+			rpc_ws: None,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
 		configuration

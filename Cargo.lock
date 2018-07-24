@@ -3151,6 +3151,8 @@ dependencies = [
  "substrate-keystore 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-rpc 0.1.0",
+ "substrate-rpc-servers 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-telemetry 0.2.0",

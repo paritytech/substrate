@@ -90,25 +90,6 @@ use service::PruningMode;
 
 const DEFAULT_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
-#[derive(Clone)]
-struct SystemConfiguration {
-	chain_name: String,
-}
-
-impl substrate_rpc::system::SystemApi for SystemConfiguration {
-	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok("parity-polkadot".into())
-	}
-
-	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(crate_version!().into())
-	}
-
-	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(self.chain_name.clone())
-	}
-}
-
 fn load_spec(matches: &clap::ArgMatches) -> Result<(service::ChainSpec, bool), String> {
 	let chain_spec = matches.value_of("chain")
 		.map(ChainSpec::from)
@@ -453,45 +434,9 @@ fn run_until_exit<C, W>(
 	let executor = runtime.executor();
 	informant::start(&service, exit.clone(), executor.clone());
 
-	let _rpc_servers = {
-		let http_address = parse_address("127.0.0.1:9933", "rpc-port", matches)?;
-		let ws_address = parse_address("127.0.0.1:9944", "ws-port", matches)?;
-
-		let handler = || {
-			let client = substrate_service::Service::client(&service);
-			let chain = rpc::apis::chain::Chain::new(client.clone(), executor.clone());
-			let author = rpc::apis::author::Author::new(client.clone(), service.extrinsic_pool(), executor.clone());
-			rpc::rpc_handler::<service::ComponentBlock<C>, _, _, _, _>(
-				client,
-				chain,
-				author,
-				sys_conf.clone(),
-			)
-		};
-		(
-			start_server(http_address, |address| rpc::start_http(address, handler())),
-			start_server(ws_address, |address| rpc::start_ws(address, handler())),
-		)
-	};
-
 	let _ = runtime.block_on(worker.work(&service));
 	exit_send.fire();
 	Ok(())
-}
-
-fn start_server<T, F>(mut address: SocketAddr, start: F) -> Result<T, io::Error> where
-	F: Fn(&SocketAddr) -> Result<T, io::Error>,
-{
-	start(&address)
-		.or_else(|e| match e.kind() {
-			io::ErrorKind::AddrInUse |
-			io::ErrorKind::PermissionDenied => {
-				warn!("Unable to bind server to {}. Trying random port.", address);
-				address.set_port(0);
-				start(&address)
-			},
-			_ => Err(e),
-		})
 }
 
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
