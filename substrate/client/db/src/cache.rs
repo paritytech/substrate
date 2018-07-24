@@ -226,13 +226,15 @@ impl<Block, T> DbCacheList<Block, T>
 			let entry = read_storage_entry::<Block, T>(&*self.db, self.column, current_entry)?
 				.expect("referenced entry exists; entry_to_remove is a reference to the entry; qed");
 
-			transaction.delete(self.column, &number_to_db_key(current_entry));
+			if current_entry != last_entry_to_keep {
+				transaction.delete(self.column, &number_to_db_key(current_entry));
+				pruned += 1;
+			}
 			entry_to_remove = entry.prev_valid_from;
-			pruned += 1;
 		}
 
 		let mut entry = read_storage_entry::<Block, T>(&*self.db, self.column, last_entry_to_keep)?
-			.expect("last_entry_to_keep > first_entry_to_remove; that means that we're leaving this entry in the db; qed");
+			.expect("last_entry_to_keep >= first_entry_to_remove; that means that we're leaving this entry in the db; qed");
 		entry.prev_valid_from = None;
 		transaction.put(self.column, &number_to_db_key(last_entry_to_keep), &entry.encode());
 
@@ -392,15 +394,19 @@ mod tests {
 	fn best_authorities_are_pruned() {
 		let db = LightStorage::<Block>::new_test();
 		let mut transaction = DBTransaction::new();
+
+		// insert first entry at block#100
 		db.cache().authorities_at_cache().update_best_entry(
 			db.cache().authorities_at_cache().commit_best_entry(&mut transaction, 100, Some(vec![[1u8; 32].into()])));
 		db.db().write(transaction).unwrap();
 
+		// no entries are pruned, since there's only one entry in the cache
 		let mut transaction = DBTransaction::new();
 		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 50).unwrap(), 0);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 100).unwrap(), 1);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap(), 1);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 100).unwrap(), 0);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap(), 0);
 
+		// insert second entry at block#200
 		let mut transaction = DBTransaction::new();
 		db.cache().authorities_at_cache().update_best_entry(
 			db.cache().authorities_at_cache().commit_best_entry(&mut transaction, 200, Some(vec![[2u8; 32].into()])));
@@ -410,9 +416,11 @@ mod tests {
 		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 50).unwrap(), 0);
 		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 100).unwrap(), 1);
 		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap(), 1);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 200).unwrap(), 2);
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 250).unwrap(), 2);
+		// still only 1 entry is removed since pruning never deletes the last entry
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 200).unwrap(), 1);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 250).unwrap(), 1);
 
+		// physically remove entry for block#100 from db
 		let mut transaction = DBTransaction::new();
 		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 150).unwrap(), 1);
 		db.db().write(transaction).unwrap();
@@ -424,8 +432,9 @@ mod tests {
 		assert_eq!(db.cache().authorities_at(BlockId::Number(200)), Some(vec![[2u8; 32].into()]));
 		assert_eq!(db.cache().authorities_at(BlockId::Number(250)), Some(vec![[2u8; 32].into()]));
 
+		// try to delete last entry => failure (no entries are removed)
 		let mut transaction = DBTransaction::new();
-		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 300).unwrap(), 1);
+		assert_eq!(db.cache().authorities_at_cache().prune_entries(&mut transaction, 300).unwrap(), 0);
 		db.db().write(transaction).unwrap();
 
 		assert_eq!(db.cache().authorities_at_cache().best_entry().unwrap().value, Some(vec![[2u8; 32].into()]));
