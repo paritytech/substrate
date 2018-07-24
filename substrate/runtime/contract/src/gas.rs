@@ -53,7 +53,7 @@ impl<T: Trait> GasMeter<T> {
 	/// amount of gas has lead to overflow. On success returns `Proceed`.
 	///
 	/// NOTE that `amount` is always consumed, i.e. if there is not enough gas
-	/// the will be set to zero.
+	/// then the counter will be set to zero.
 	pub fn charge(&mut self, amount: T::Gas) -> GasMeterResult {
 		let new_value = match self.gas_left.checked_sub(&amount) {
 			None => None,
@@ -70,12 +70,25 @@ impl<T: Trait> GasMeter<T> {
 		}
 	}
 
+	/// Account for used gas expressed in balance units.
+	///
+	/// Same as [`charge`], but amount to be charged is converted from units of balance to
+	/// units of gas.
+	///
+	/// [`charge`]: #method.charge
 	pub fn charge_by_balance(&mut self, amount: T::Balance) -> GasMeterResult {
 		let amount_in_gas: T::Balance = amount / self.gas_price;
 		let amount_in_gas: T::Gas = <T::Gas as As<T::Balance>>::sa(amount_in_gas);
 		self.charge(amount_in_gas)
 	}
 
+	/// Allocate some amount of gas and perform some work with
+	/// a newly created nested gas meter.
+	///
+	/// Invokes `f` with either the gas meter that has `amount` gas left or
+	/// with `None`, if this gas meter has not enough gas to allocate given `amount`.
+	///
+	/// All unused gas in the nested gas meter is returned to this gas meter.
 	pub fn with_nested<R, F: FnOnce(Option<&mut GasMeter<T>>) -> R>(
 		&mut self,
 		amount: T::Gas,
