@@ -283,7 +283,7 @@ mod tests {
 
 	type Parachains = Module<Test>;
 
-	fn new_test_ext(parachains: Vec<(Id, Vec<u8>)>) -> runtime_io::TestExternalities {
+	fn new_test_ext(parachains: Vec<(Id, Vec<u8>, Vec<u8>)>) -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -304,8 +304,8 @@ mod tests {
 	#[test]
 	fn active_parachains_should_work() {
 		let parachains = vec![
-			(5u32.into(), vec![1,2,3]),
-			(100u32.into(), vec![4,5,6]),
+			(5u32.into(), vec![1,2,3], vec![1]),
+			(100u32.into(), vec![4,5,6], vec![2]),
 		];
 
 		with_externalities(&mut new_test_ext(parachains), || {
@@ -318,8 +318,8 @@ mod tests {
 	#[test]
 	fn register_deregister() {
 		let parachains = vec![
-			(5u32.into(), vec![1,2,3]),
-			(100u32.into(), vec![4,5,6]),
+			(5u32.into(), vec![1,2,3], vec![1]),
+			(100u32.into(), vec![4,5,6], vec![2,]),
 		];
 
 		with_externalities(&mut new_test_ext(parachains), || {
@@ -343,8 +343,8 @@ mod tests {
 	#[test]
 	fn duty_roster_works() {
 		let parachains = vec![
-			(0u32.into(), vec![]),
-			(1u32.into(), vec![]),
+			(0u32.into(), vec![], vec![]),
+			(1u32.into(), vec![], vec![]),
 		];
 
 		with_externalities(&mut new_test_ext(parachains), || {
