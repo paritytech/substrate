@@ -33,7 +33,6 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, W: Write,
 {
 	let client = new_client::<F>(config)?;
-	info!("Exporting blocks");
 	let mut block = from;
 
 	let last = match to {

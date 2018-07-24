@@ -358,8 +358,6 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 		Some(v) => Some(v.parse().map_err(|_| "Invalid --to argument")?),
 		None => None,
 	};
-	info!("Exporting blocks from #{} to #{}", from_block, to_block);
-
 	let json = matches.is_present("json");
 
 	let file: Box<Write> = match matches.value_of("OUTPUT") {
