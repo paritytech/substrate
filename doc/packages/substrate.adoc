@@ -1,0 +1,8 @@
+
+=== Substrate Packages
+
+:leveloffset: +3
+
+include::../../substrate/bft/README.adoc[]
+
+:leveloffset: -3
