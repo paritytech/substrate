@@ -9,11 +9,11 @@ Individuals making significant and valuable contributions are given commit-acces
 
 There are a few basic ground-rules for contributors (including the maintainer(s) of the project):
 
-1. **No `--force` pushes** or modifying the Git history in any way.
+1. **No `--force` pushes** or modifying the Git history in any way. If you need to rebase, ensure you do it in your own repo.
 1. **Non-master branches**, prefixed with a short name moniker (e.g. `gav-my-feature`) must be used for ongoing work.
 1. **All modifications** must be made in a **pull-request** to solicit feedback from other contributors.
 1. A pull-request *must not be merged until CI* has finished successfully.
-1. Contributors should adhere to the house coding style, as specific on the wiki.
+1. Contributors should adhere to the house coding style, as specified on the wiki.
 
 Merging pull requests once CI is successful:
 
