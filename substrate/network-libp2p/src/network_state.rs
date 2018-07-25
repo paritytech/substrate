@@ -201,8 +201,7 @@ impl NetworkState {
 			RwLock::new(reserved_peers)
 		};
 
-		let expected_max_peers = cmp::max(config.max_peers as usize,
-			config.reserved_nodes.len());
+		let expected_max_peers = config.max_peers + config.reserved_nodes.len();
 
 		Ok(NetworkState {
 			node_store,
