@@ -3,7 +3,6 @@ name = "polkadot-cli"
 version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Polkadot node implementation in Rust."
-build = "build.rs"
 
 [dependencies]
 clap = { version = "~2.32", features = ["yaml"] }
@@ -32,5 +31,3 @@ polkadot-runtime = { path = "../runtime" }
 polkadot-service = { path = "../service" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
 
-[build-dependencies]
-clap = "~2.32"
