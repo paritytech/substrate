@@ -1,6 +1,6 @@
-name: polkadot
-author: "Parity Team <admin@parity.io>"
-about: Polkadot Node Rust Implementation
+name: {name}
+author: {author}
+about: {description}
 args:
   - log:
       short: l
