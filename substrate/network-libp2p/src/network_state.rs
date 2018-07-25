@@ -51,14 +51,10 @@ pub struct NetworkState {
 	/// Active connections.
 	connections: RwLock<Connections>,
 
-	/// `min_peers` taken from the configuration.
-	min_peers: u32,
-	/// `max_peers` taken from the configuration.
-	max_peers: u32,
-	/// `incoming_peers_factor` taken from the configuration.
-	incoming_peers_factor: u32,
-	/// `max_incoming_peers` calculated as `max_peers / max_incoming_peers_factor` from the configuration.
+	/// Maximum incoming peers.
 	max_incoming_peers: u32,
+	/// Maximum outgoing peers.
+	max_outgoing_peers: u32,
 
 	/// If true, only reserved peers can connect.
 	reserved_only: atomic::AtomicBool,
@@ -210,10 +206,8 @@ impl NetworkState {
 
 		Ok(NetworkState {
 			node_store,
-			min_peers: config.min_peers,
-			max_peers: config.max_peers,
-			incoming_peers_factor: config.incoming_peers_factor,
-			max_incoming_peers: config.max_peers / config.incoming_peers_factor,
+			max_outgoing_peers: config.min_peers,
+			max_incoming_peers: config.max_peers.saturating_sub(config.min_peers),
 			connections: RwLock::new(Connections {
 				peer_by_nodeid: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
 				info_by_peer: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
@@ -476,10 +470,8 @@ impl NetworkState {
 		if self.reserved_only.load(atomic::Ordering::Relaxed) {
 			0
 		} else {
-			let num_open_custom_connections = num_open_custom_connections(&self.connections.read());
-			let min_outgoing_peers = num_open_custom_connections.incoming * self.incoming_peers_factor.saturating_sub(1);
-			cmp::max(min_outgoing_peers.saturating_sub(num_open_custom_connections.outgoing),
-				self.min_peers.saturating_sub(num_open_custom_connections.total))
+			let num_open_custom_connections = num_open_custom_connections(&self.connections.read(), &self.reserved_peers.read());
+			self.max_outgoing_peers.saturating_sub(num_open_custom_connections.unreserved_outgoing)
 		}
 	}
 
@@ -575,7 +567,7 @@ impl NetworkState {
 		let who = accept_connection(&mut connections, &self.next_node_index,
 			node_id.clone(), endpoint)?;
 
-		let num_open_connections = num_open_custom_connections(&connections);
+		let num_open_connections = num_open_custom_connections(&connections, &self.reserved_peers.read());
 
 		let infos = connections.info_by_peer.get_mut(&who)
 			.expect("Newly-created peer id is always valid");
@@ -583,9 +575,10 @@ impl NetworkState {
 		let node_is_reserved = self.reserved_peers.read().contains(&infos.id);
 		if !node_is_reserved {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
-				num_open_connections.total >= self.max_peers ||
 				(endpoint == Endpoint::Listener &&
-				 num_open_connections.incoming >= self.max_incoming_peers)
+				 num_open_connections.unreserved_incoming >= self.max_incoming_peers) ||
+				(endpoint == Endpoint::Dialer &&
+				 num_open_connections.unreserved_outgoing >= self.max_outgoing_peers)
 			{
 				debug!(target: "sub-libp2p", "Refusing node {:?} because we reached the max number of peers", node_id);
 				return Err(IoError::new(IoErrorKind::PermissionDenied, "maximum number of peers reached"))
@@ -779,15 +772,15 @@ fn is_peer_disabled(
 struct OpenCustomConnectionsNumbers {
 	/// Total number of open and pending connections.
 	pub total: u32,
-	/// Incoming number of open and pending connections.
-	pub incoming: u32,
-	/// Outgoing number of open and pending connections.
-	pub outgoing: u32,
+	/// Unreserved incoming number of open and pending connections.
+	pub unreserved_incoming: u32,
+	/// Unreserved outgoing number of open and pending connections.
+	pub unreserved_outgoing: u32,
 }
 
 /// Returns the number of open and pending connections with
 /// custom protocols.
-fn num_open_custom_connections(connections: &Connections) -> OpenCustomConnectionsNumbers {
+fn num_open_custom_connections(connections: &Connections, reserved_peers: &FnvHashSet<PeerId>) -> OpenCustomConnectionsNumbers {
 	let filtered = connections
 		.info_by_peer
 		.values()
@@ -801,18 +794,25 @@ fn num_open_custom_connections(connections: &Connections) -> OpenCustomConnectio
 		);
 
 	let mut total: u32 = 0;
-	let mut incoming: u32 = 0;
+	let mut unreserved_incoming: u32 = 0;
+	let mut unreserved_outgoing: u32 = 0;
+
 	for info in filtered {
 		total += 1;
-		if !info.originated {
-			incoming += 1;
+		let node_is_reserved = reserved_peers.contains(&info.id);
+		if !node_is_reserved {
+			if !info.originated {
+				unreserved_incoming += 1;
+			} else {
+				unreserved_outgoing += 1;
+			}
 		}
 	}
 
 	OpenCustomConnectionsNumbers {
 		total,
-		incoming,
-		outgoing: total - incoming,
+		unreserved_incoming,
+		unreserved_outgoing,
 	}
 }
 
