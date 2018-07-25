@@ -91,6 +91,9 @@ pub fn run<I, T, W>(args: I, worker: W, version: cli::VersionInfo) -> error::Res
 			info!("Parity ·:· Polkadot");
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017, 2018");
+			info!("Chain specification: {}", config.chain_spec.name());
+			info!("Node name: {}", config.name);
+			info!("Roles: {:?}", config.roles);
 			config.custom = worker.configuration();
 			let mut runtime = Runtime::new()?;
 			let executor = runtime.executor();

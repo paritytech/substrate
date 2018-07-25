@@ -94,7 +94,6 @@ fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G
 		Some(spec) => spec,
 		None => ChainSpec::from_json_file(PathBuf::from(chain_key))?
 	};
-	info!("Chain specification: {}", spec.name());
 	Ok(spec)
 }
 
@@ -164,10 +163,6 @@ where
 	init_logger(log_pattern);
 	fdlimit::raise_fd_limit();
 
-	info!("Parity ·:· Polkadot");
-	info!("  version {}", crate_version!());
-	info!("  by Parity Technologies, 2017, 2018");
-
 	if let Some(matches) = matches.subcommand_matches("build-spec") {
 		let spec = load_spec(&matches, spec_factory)?;
 		build_spec::<F>(matches, spec)?;
@@ -204,7 +199,7 @@ where
 		Some(name) => name.into(),
 	};
 	match is_node_name_valid(&config.name) {
-		Ok(_) => info!("Node name: {}", config.name),
+		Ok(_) => (),
 		Err(msg) => return Err(error::ErrorKind::Input(
 			format!("Invalid node name '{}'. Reason: {}. If unsure, use none.", config.name, msg)).into())
 	}
@@ -228,15 +223,12 @@ where
 
 	let role =
 		if matches.is_present("light") {
-			info!("Starting (light)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
-			info!("Starting validator");
 			config.execution_strategy = service::ExecutionStrategy::Both;
 			service::Roles::AUTHORITY
 		} else {
-			info!("Starting (heavy)");
 			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::FULL
 		};

@@ -134,7 +134,6 @@ impl<Components> Service<Components>
 		let best_header = client.best_block_header()?;
 
 		let version = config.full_version();
-		info!("Client version: {}", version);
 		info!("Best block: #{}", best_header.number());
 		telemetry!("node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
