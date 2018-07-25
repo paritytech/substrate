@@ -19,12 +19,13 @@
 
 use std::sync::{Arc, Weak};
 
+use primitives::storage::StorageKey;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{Backend as StateBackend, TrieBackend as StateTrieBackend,
 	TryIntoTrieBackend as TryIntoStateTrieBackend};
 
-use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
+use backend::{BackendEvents as ClientBackendEvents, Backend as ClientBackend, BlockImportOperation, RemoteBackend};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
@@ -60,7 +61,20 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {
+impl<S, F, Block> ClientBackendEvents<Block> for Backend<S, F>
+	where Block: BlockT,
+{
+	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>)
+		-> ClientResult<::client::StorageEventStream<Block::Hash>> {
+		bail!(ClientErrorKind::NotAvailableOnLightClient)
+	}
+}
+
+impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>,
+{
 	type BlockImportOperation = ImportOperation<Block, F>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<Block, F>;

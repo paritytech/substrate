@@ -36,6 +36,12 @@ use {error, in_mem, block_builder, runtime_io, bft, genesis};
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 
+/// Type that implements `futures::Stream` of storage change events.
+pub type StorageEventStream<H> = mpsc::UnboundedReceiver<(
+	H,
+	Vec<(StorageKey, Option<StorageData>)>,
+)>;
+
 /// Substrate Client
 pub struct Client<B, E, Block> where Block: BlockT {
 	backend: Arc<B>,
@@ -49,7 +55,12 @@ pub struct Client<B, E, Block> where Block: BlockT {
 /// A source of blockchain evenets.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
+	fn import_notification_stream(&self) -> BlockchainEventStream<Block>;
+
+	/// Get storage changes event stream.
+	///
+	/// Passing `None` as keys subscribes to all possible keys
+	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>>;
 }
 
 /// Chain head information.
@@ -181,9 +192,9 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok(Client {
 			backend,
 			executor,
-			import_notification_sinks: Mutex::new(Vec::new()),
-			import_lock: Mutex::new(()),
-			importing_block: RwLock::new(None),
+			import_notification_sinks: Default::default(),
+			import_lock: Default::default(),
+			importing_block: Default::default(),
 			execution_strategy,
 		})
 	}
@@ -497,15 +508,20 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
+		B: backend::BackendEvents<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
 {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>> {
+	fn import_notification_stream(&self) -> BlockchainEventStream<Block> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
+	}
+
+	/// Get storage changes event stream.
+	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>> {
+		self.backend.storage_changes_notification_stream(filter_keys)
 	}
 }
 

@@ -56,6 +56,7 @@ pub use client::{
 	BlockStatus, BlockOrigin, BlockchainEventStream, BlockchainEvents,
 	Client, ClientInfo, ChainHead,
 	ImportResult, JustifiedHeader,
+	StorageEventStream,
 };
 pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};

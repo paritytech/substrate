@@ -511,7 +511,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			ExecutionManager::Both(|we, _ne| { 
+			ExecutionManager::Both(|we, _ne| {
 				consensus_failed = true;
 				println!("HELLO!");
 				we

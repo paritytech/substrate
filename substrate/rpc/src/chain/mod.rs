@@ -82,6 +82,7 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> where
 	Block: BlockT + 'static,
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
+	B: client::backend::BackendEvents<Block>,
 	E: client::CallExecutor<Block> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;

@@ -2666,6 +2666,7 @@ name = "substrate-client-db"
 version = "0.1.0"
 dependencies = [
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.1.1 (git+https://github.com/paritytech/parity.git)",
  "kvdb 0.1.0 (git+https://github.com/paritytech/parity.git)",
  "kvdb-memorydb 0.1.0 (git+https://github.com/paritytech/parity.git)",

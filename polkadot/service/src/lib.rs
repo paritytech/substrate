@@ -68,7 +68,7 @@ pub trait Components: service::Components {
 	/// Polkadot API.
 	type Api: 'static + PolkadotApi + Send + Sync;
 	/// Client backend.
-	type Backend: 'static + client::backend::Backend<Block>;
+	type Backend: 'static + client::backend::Backend<Block> + client::backend::BackendEvents<Block>;
 	/// Client executor.
 	type Executor: 'static + client::CallExecutor<Block> + Send + Sync;
 }

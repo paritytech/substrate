@@ -16,6 +16,7 @@
 
 //! Client backend that uses RocksDB database as storage.
 
+extern crate futures;
 extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
 extern crate kvdb;
@@ -38,6 +39,7 @@ extern crate kvdb_memorydb;
 
 pub mod light;
 
+mod notifications;
 mod utils;
 
 use std::sync::Arc;
@@ -46,8 +48,8 @@ use std::path::PathBuf;
 use codec::{Decode, Encode};
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
-use parking_lot::RwLock;
-use primitives::H256;
+use parking_lot::{RwLock, Mutex};
+use primitives::{H256, storage::StorageKey};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, Zero};
@@ -270,6 +272,7 @@ impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
 /// Otherwise, trie nodes are kept only from the most recent block.
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
+	storage_notifications: Mutex<notifications::StorageNotifications<Block>>,
 	blockchain: BlockchainDb<Block>,
 	finalization_window: u64,
 }
@@ -302,6 +305,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		Ok(Backend {
 			storage: Arc::new(storage_db),
+			storage_notifications: Default::default(),
 			blockchain,
 			finalization_window,
 		})
@@ -320,6 +324,14 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 	for key in commit.meta.deleted.into_iter() {
 		transaction.delete(columns::STATE_META, &key[..]);
+	}
+}
+
+impl<Block: BlockT> client::backend::BackendEvents<Block> for Backend<Block> {
+	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>)
+		-> client::error::Result<client::StorageEventStream<Block::Hash>>
+	{
+		Ok(self.storage_notifications.lock().listen(filter_keys))
 	}
 }
 
@@ -363,6 +375,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 					changeset.deleted.push(key.0.into());
 				}
 			}
+			self.storage_notifications.lock().trigger(&hash, &changeset);
 			let number_u64 = number.as_().into();
 			let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset);
 			apply_state_commit(&mut transaction, commit);
@@ -409,7 +422,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 	}
 }
 
-impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block> 
+impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block>
 {}
 
 #[cfg(test)]
