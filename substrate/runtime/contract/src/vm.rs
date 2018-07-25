@@ -175,19 +175,13 @@ fn to_execution_result<T: Trait, E: Ext<T>>(
 #[derive(PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ExecutionResult {
-	pub return_data: Vec<u8>,
-}
-
-impl ExecutionResult {
 	/// The result produced by the execution of the contract.
 	///
 	/// The contract can designate some buffer at the execution time via a special function.
 	/// If contract called this function with non-empty buffer it will be copied here.
 	///
 	/// Note that gas is already charged for returning the data.
-	pub fn return_data(&self) -> &[u8] {
-		&self.return_data
-	}
+	pub return_data: Vec<u8>,
 }
 
 /// Execute the given code as a contract.

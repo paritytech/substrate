@@ -153,7 +153,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				).map_err(|_| "vm execute returned error while create")?
 			};
 
-			nested.overlay.set_code(&dest, exec_result.return_data().to_vec());
+			nested.overlay.set_code(&dest, exec_result.return_data);
 			nested.overlay.into_change_set()
 		};
 
