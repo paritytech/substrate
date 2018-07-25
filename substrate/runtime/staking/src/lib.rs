@@ -52,7 +52,7 @@ use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, AuxLookup, Member};
+	As, AuxLookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
 
 mod mock;
@@ -278,9 +278,10 @@ impl<T: Trait> Module<T> {
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
 		let liability = value + fee;
 
-		if from_balance < liability {
-			return Err("balance too low to send value");
-		}
+		let new_from_balance = match from_balance.checked_sub(&liability) {
+			Some(b) => b,
+			None => return Err("balance too low to send value"),
+		};
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
 		}
@@ -289,13 +290,14 @@ impl<T: Trait> Module<T> {
 		}
 
 		let to_balance = Self::free_balance(&dest);
-		if to_balance + value <= to_balance {
-			return Err("destination balance too high to receive value");
-		}
+		let new_to_balance = match to_balance.checked_add(&value) {
+			Some(b) => b,
+			None => return Err("destination balance too high to receive value"),
+		};
 
 		if transactor != &dest {
-			Self::set_free_balance(transactor, from_balance - liability);
-			Self::set_free_balance_creating(&dest, to_balance + value);
+			Self::set_free_balance(transactor, new_from_balance);
+			Self::set_free_balance_creating(&dest, new_to_balance);
 		}
 
 		Ok(())

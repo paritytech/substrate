@@ -585,3 +585,19 @@ fn transferring_incomplete_reserved_balance_should_work() {
 		assert_eq!(Staking::free_balance(&2), 42);
 	});
 }
+
+#[test]
+fn transferring_too_high_value_should_not_panic() {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
+		<FreeBalance<Test>>::insert(1, u64::max_value());
+		<FreeBalance<Test>>::insert(2, 1);
+
+		assert_err!(
+			Staking::transfer(&1, 2.into(), u64::max_value()),
+			"destination balance too high to receive value"
+		);
+
+		assert_eq!(Staking::free_balance(&1), u64::max_value());
+		assert_eq!(Staking::free_balance(&2), 1);
+	});
+}

@@ -20,7 +20,7 @@ use gas::GasMeter;
 use vm;
 
 use rstd::prelude::*;
-use runtime_primitives::traits::Zero;
+use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
 use runtime_support::StorageMap;
 use staking;
 use system;
@@ -190,9 +190,10 @@ fn transfer<T: Trait>(
 	}
 
 	let from_balance = overlay.get_balance(transactor);
-	if from_balance < value {
-		return Err("balance too low to send value");
-	}
+	let new_from_balance = match from_balance.checked_sub(&value) {
+		Some(b) => b,
+		None => return Err("balance too low to send value"),
+	};
 	if would_create && value < <staking::Module<T>>::existential_deposit() {
 		return Err("value too low to create account");
 	}
@@ -201,13 +202,14 @@ fn transfer<T: Trait>(
 	}
 
 	let to_balance = overlay.get_balance(dest);
-	if to_balance + value <= to_balance {
-		return Err("destination balance too high to receive value");
-	}
+	let new_to_balance = match to_balance.checked_add(&value) {
+		Some(b) => b,
+		None => return Err("destination balance too high to receive value"),
+	};
 
 	if transactor != dest {
-		overlay.set_balance(transactor, from_balance - value);
-		overlay.set_balance(dest, to_balance + value);
+		overlay.set_balance(transactor, new_from_balance);
+		overlay.set_balance(dest, new_to_balance);
 	}
 
 	Ok(())
