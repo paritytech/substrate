@@ -20,7 +20,7 @@
 use std::sync::{Arc, Weak};
 
 use runtime_primitives::{bft::Justification, generic::BlockId};
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::{Backend as StateBackend, TrieBackend as StateTrieBackend,
 	TryIntoTrieBackend as TryIntoStateTrieBackend};
 
@@ -92,6 +92,10 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S:
 			block: block_hash.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", block)))?,
 			fetcher: self.blockchain.fetcher(),
 		})
+	}
+
+	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
+		unimplemented!()
 	}
 }
 

@@ -86,6 +86,7 @@ use codec::{Decode, Encode};
 use client::BlockOrigin;
 use runtime_primitives::generic::SignedBlock;
 use names::{Generator, Name};
+use regex::Regex;
 
 use futures::Future;
 use tokio::runtime::Runtime;
@@ -155,6 +156,29 @@ pub trait Worker {
 	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work;
 }
 
+/// Check whether a node name is considered as valid
+fn is_node_name_valid(_name: &str) -> Result<(), &str> {
+	const MAX_NODE_NAME_LENGTH: usize = 32;
+	let name = _name.to_string();
+	if name.chars().count() >= MAX_NODE_NAME_LENGTH {
+		return Err("Node name too long");
+}
+
+	let invalid_chars = r"[\\.@]";
+	let re = Regex::new(invalid_chars).unwrap();
+	if re.is_match(&name) {
+		return Err("Node name should not contain invalid chars such as '.' and '@'");
+	}
+
+	let invalid_patterns = r"(https?:\\/+)?(www)+";
+	let re = Regex::new(invalid_patterns).unwrap();
+	if re.is_match(&name) {
+		return Err("Node name should not contain urls");
+	}
+
+	Ok(())
+}
+
 /// Parse command line arguments and start the node.
 ///
 /// IANA unassigned port ranges that we could use:
@@ -199,6 +223,10 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		return import_blocks(matches, worker.exit_only());
 	}
 
+	if let Some(matches) = matches.subcommand_matches("revert") {
+		return revert_chain(matches);
+	}
+
 	let (spec, is_global) = load_spec(&matches)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 
@@ -206,7 +234,11 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 		None => Generator::with_naming(Name::Numbered).next().unwrap(),
 		Some(name) => name.into(),
 	};
-	info!("Node name: {}", config.name);
+	match is_node_name_valid(&config.name) {
+		Ok(_) => info!("Node name: {}", config.name),
+		Err(msg) => return Err(error::ErrorKind::Input(
+			format!("Invalid node name '{}'. Reason: {}. If unsure, use none.", config.name, msg)).into())
+	}
 
 	let base_path = base_path(&matches);
 
@@ -220,7 +252,7 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 
 	config.pruning = match matches.value_of("pruning") {
 		Some("archive") => PruningMode::ArchiveAll,
-		None => PruningMode::keep_blocks(256),
+		None => PruningMode::default(),
 		Some(s) => PruningMode::keep_blocks(s.parse()
 			.map_err(|_| error::ErrorKind::Input("Invalid pruning mode specified".to_owned()))?),
 	};
@@ -348,18 +380,22 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 		let _ = exit.wait();
 		let _ = exit_send.send(());
 	});
-	info!("Exporting blocks");
-	let mut block: u32 = match matches.value_of("from") {
+	let mut from_block: u32 = match matches.value_of("from") {
 		Some(v) => v.parse().map_err(|_| "Invalid --from argument")?,
 		None => 1,
 	};
 
-	let last = match matches.value_of("to") {
+	if from_block < 1 {
+		from_block = 1;
+	}
+
+	let to_block = match matches.value_of("to") {
 		Some(v) => v.parse().map_err(|_| "Invalid --to argument")?,
 		None => client.info()?.chain.best_number as u32,
 	};
+	info!("Exporting blocks from #{} to #{}", from_block, to_block);
 
-	if last < block {
+	if to_block < from_block {
 		return Err("Invalid block range specified".into());
 	}
 
@@ -371,30 +407,30 @@ fn export_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	};
 
 	if !json {
-		file.write(&(last - block + 1).encode())?;
+		file.write(&(to_block - from_block + 1).encode())?;
 	}
 
 	loop {
 		if exit_recv.try_recv().is_ok() {
 			break;
 		}
-		match client.block(&BlockId::number(block as u64))? {
-			Some(block) => {
+		match client.block(&BlockId::number(from_block as u64))? {
+			Some(from_block) => {
 				if json {
-					serde_json::to_writer(&mut *file, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
+					serde_json::to_writer(&mut *file, &from_block).map_err(|e| format!("Eror writing JSON: {}", e))?;
 				} else {
-					file.write(&block.encode())?;
+					file.write(&from_block.encode())?;
 				}
 			},
 			None => break,
 		}
-		if block % 10000 == 0 {
-			info!("#{}", block);
+		if from_block % 10000 == 0 {
+			info!("#{}", from_block);
 		}
-		if block == last {
+		if from_block == to_block {
 			break;
 		}
-		block += 1;
+		from_block += 1;
 	}
 	Ok(())
 }
@@ -460,6 +496,25 @@ fn import_blocks<E>(matches: &clap::ArgMatches, exit: E) -> error::Result<()>
 	}
 	info!("Imported {} blocks. Best: #{}", block, client.info()?.chain.best_number);
 
+	Ok(())
+}
+
+fn revert_chain(matches: &clap::ArgMatches) -> error::Result<()> {
+	let (spec, _) = load_spec(&matches)?;
+	let base_path = base_path(matches);
+	let mut config = service::Configuration::default_with_spec(spec);
+	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
+
+	let client = service::new_client(config)?;
+
+	let blocks = match matches.value_of("NUM") {
+		Some(v) => v.parse().map_err(|_| "Invalid block count specified")?,
+		None => 256,
+	};
+
+	let reverted = client.revert(blocks)?;
+	let info = client.info()?.chain;
+	info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);
 	Ok(())
 }
 
@@ -613,7 +668,27 @@ fn init_logger(pattern: &str) {
 
 fn kill_color(s: &str) -> String {
 	lazy_static! {
-		static ref RE: regex::Regex = regex::Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
+		static ref RE: Regex = Regex::new("\x1b\\[[^m]+m").expect("Error initializing color regex");
 	}
 	RE.replace_all(s, "").to_string()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+    #[test]
+    fn tests_node_name_good() {
+        assert!(is_node_name_valid("short name").is_ok());
+    }
+
+    #[test]
+	fn tests_node_name_bad() {
+        assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
+        assert!(is_node_name_valid("Dots.not.Ok").is_err());
+        assert!(is_node_name_valid("http://visit.me").is_err());
+        assert!(is_node_name_valid("https://visit.me").is_err());
+        assert!(is_node_name_valid("www.visit.me").is_err());
+        assert!(is_node_name_valid("email@domain").is_err());
+    }
 }
