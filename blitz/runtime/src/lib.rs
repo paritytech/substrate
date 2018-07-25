@@ -34,6 +34,7 @@ extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate serde;
 
+extern crate substrate_codec as codec;
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
@@ -47,8 +48,10 @@ extern crate blitz_primitives as primitives;
 #[macro_use]
 extern crate substrate_runtime_version as version;
 
+mod chain;
+
 use rstd::prelude::*;
-use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, Log, SessionKey, Signature};
+use primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::{generic, traits::{HasPublicAux, BlakeTwo256, Convert}};
 use version::RuntimeVersion;
 

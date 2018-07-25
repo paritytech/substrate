@@ -51,6 +51,9 @@ pub type BlockNumber = u64;
 /// certainly continue to be the same as the substrate's `AuthorityId`.
 pub type AccountId = primitives::hash::H256;
 
+/// Node id within the Blitz network
+pub type NodeId = primitives::hash::H256;
+
 /// The type for looking up accounts. We don't expect more than 4 billion of them, but you
 /// never know...
 pub type AccountIndex = u64;
