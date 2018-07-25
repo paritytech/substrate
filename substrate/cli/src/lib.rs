@@ -76,6 +76,12 @@ pub struct VersionInfo {
 	pub version: &'static str,
 	/// SCM Commit hash.
 	pub commit: &'static str,
+	/// Executable file name.
+	pub executable_name: &'static str,
+	/// Executable file description.
+	pub description: &'static str,
+	/// Executable file author.
+	pub author: &'static str,
 }
 
 /// CLI Action
@@ -150,7 +156,12 @@ where
 {
 	panic_hook::set();
 
-	let yaml = load_yaml!("./cli.yml");
+	let yaml = format!(include_str!("./cli.yml"),
+		name = version.executable_name,
+		description = version.description,
+		author = version.author,
+	);
+	let yaml = &clap::YamlLoader::load_from_str(&yaml).expect("Invalid yml file")[0];
 	let matches = match clap::App::from_yaml(yaml)
 		.version(&(crate_version!().to_owned() + "\n")[..])
 		.get_matches_from_safe(args) {
