@@ -53,7 +53,7 @@ pub trait Ext<T: Trait> {
 		code: &[u8],
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		data: Vec<u8>,
+		data: &[u8],
 	) -> Result<CreateReceipt<T>, ()>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
@@ -62,7 +62,7 @@ pub trait Ext<T: Trait> {
 		to: &T::AccountId,
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		data: Vec<u8>,
+		data: &[u8],
 	) -> Result<CallReceipt, ()>;
 }
 
@@ -306,7 +306,7 @@ pub fn execute<'a, T: Trait, E: Ext<T>>(
 		let ext = &mut e.ext;
 		let call_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.call(&transfer_to, value, nested_meter, input_data),
+				Some(nested_meter) => ext.call(&transfer_to, value, nested_meter, &input_data),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
@@ -347,7 +347,7 @@ pub fn execute<'a, T: Trait, E: Ext<T>>(
 		let ext = &mut e.ext;
 		let create_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.create(&code, value, nested_meter, input_data),
+				Some(nested_meter) => ext.create(&code, value, nested_meter, &input_data),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
@@ -628,12 +628,12 @@ mod tests {
 			code: &[u8],
 			endowment: u64,
 			_gas_meter: &mut GasMeter<Test>,
-			data: Vec<u8>,
+			data: &[u8],
 		) -> Result<CreateReceipt<Test>, ()> {
 			self.creates.push(CreateEntry {
 				code: code.to_vec(),
 				endowment,
-				data,
+				data: data.to_vec(),
 			});
 			let address = self.next_account_id;
 			self.next_account_id += 1;
@@ -647,7 +647,7 @@ mod tests {
 			to: &u64,
 			value: u64,
 			_gas_meter: &mut GasMeter<Test>,
-			_data: Vec<u8>,
+			_data: &[u8],
 		) -> Result<CallReceipt, ()> {
 			self.transfers.push(TransferEntry { to: *to, value });
 			// Assume for now that it was just a plain transfer.

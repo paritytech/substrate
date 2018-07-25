@@ -48,7 +48,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		_data: Vec<u8>,
+		_data: &[u8],
 	) -> Result<CallReceipt, &'static str> {
 		let dest_code = <CodeOf<T>>::get(&dest);
 
@@ -234,7 +234,7 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
 		code: &[u8],
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		data: Vec<u8>,
+		data: &[u8],
 	) -> Result<CreateReceipt<T>, ()> {
 		let caller = self.ctx.self_account.clone();
 		self.ctx
@@ -247,7 +247,7 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
 		to: &T::AccountId,
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		data: Vec<u8>,
+		data: &[u8],
 	) -> Result<CallReceipt, ()> {
 		let caller = self.ctx.self_account.clone();
 		self.ctx

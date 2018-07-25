@@ -184,7 +184,7 @@ impl<T: Trait> Module<T> {
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
-		let result = ctx.call(aux.clone(), dest, value, &mut gas_meter, data);
+		let result = ctx.call(aux.clone(), dest, value, &mut gas_meter, &data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
