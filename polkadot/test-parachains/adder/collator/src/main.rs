@@ -86,7 +86,9 @@ impl ParachainContext for AdderContext {
 		let encoded_head = HeadData(next_head.encode());
 		let encoded_body = BlockData(next_body.encode());
 
-		println!("Created collation.");
+		println!("Created collation for #{}, post-state={}",
+			next_head.number, next_body.state + next_body.add);
+
 		db.insert(next_head.clone(), next_body);
 		Ok((encoded_body, encoded_head))
 	}
@@ -95,6 +97,19 @@ impl ParachainContext for AdderContext {
 fn main() {
 	let key = Arc::new(Pair::from_seed(&[1; 32]));
 	let id: ParaId = 100.into();
+
+	println!("Starting adder collator with genesis: ");
+
+	{
+		let encoded = GENESIS.encode();
+		println!("Dec: {:?}", encoded);
+		print!("Hex: 0x");
+		for byte in encoded {
+			print!("{:02x}", byte);
+		}
+
+		println!();
+	}
 
 	// can't use signal directly here because CtrlC takes only `Fn`.
 	let (exit_send, exit) = oneshot::channel();
