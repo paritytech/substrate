@@ -23,10 +23,11 @@ use serde_json;
 use client::BlockOrigin;
 use runtime_primitives::generic::{SignedBlock, BlockId};
 use runtime_primitives::traits::{As};
-use components::{ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber};
+use components::{ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber, RuntimeGenesis};
 use new_client;
 use codec::{Decode, Encode};
 use error;
+use chain_spec::ChainSpec;
 
 /// Export a range of blocks to a binary stream.
 pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut output: W, from: FactoryBlockNumber<F>, to: Option<FactoryBlockNumber<F>>, json: bool) -> error::Result<()>
@@ -130,4 +131,9 @@ pub fn revert_chain<F>(config: FactoryFullConfiguration<F>, blocks: FactoryBlock
 	Ok(())
 }
 
-
+/// Build a chain spec json
+pub fn build_spec<G>(spec: ChainSpec<G>, raw: bool) -> error::Result<String>
+	where G: RuntimeGenesis,
+{
+	Ok(spec.to_json(raw)?)
+}

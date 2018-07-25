@@ -97,6 +97,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			telemetry_url: None,
 		};
 		configuration.network.boot_nodes = configuration.chain_spec.boot_nodes().to_vec();
+		configuration.telemetry_url = configuration.chain_spec.telemetry_url().map(str::to_owned);
 		configuration
 	}
 

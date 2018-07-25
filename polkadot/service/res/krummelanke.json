@@ -46,5 +46,6 @@
 	"/ip4/104.211.48.247/tcp/30333/p2p/QmYPx99i3H8EKXrvYHTBwqz3jjFC1kBfkvmSKd2h9zwQFr",
 	"/ip4/40.114.120.164/tcp/30333/p2p/QmWzYU5X1NpFrprD1YZF5Lcj9aE5WF4QEg5FpvQx5XGWG7",
 	"/ip4/40.117.153.33/tcp/30333/p2p/QmSz8qCADMmi92QB8dTqMPu56JYQQKZBAHz7y8KXjvqcvW"
-]
+],
+"telemetryUrl": "wss://telemetry.polkadot.io/submit/"
 }

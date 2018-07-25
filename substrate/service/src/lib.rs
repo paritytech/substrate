@@ -71,11 +71,13 @@ pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::ChainSpec;
 pub use extrinsic_pool::txpool::{Options as ExtrinsicPoolOptions};
 pub use extrinsic_pool::api::{ExtrinsicPool as ExtrinsicPoolApi};
+pub use client::ExecutionStrategy;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, ExtrinsicPool, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
-	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock, FactoryFullConfiguration, RuntimeGenesis,
+	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
+	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 };
 
 /// Substrate service.

@@ -42,7 +42,7 @@ impl cli::Worker for Worker {
 	type Work = Self::Exit;
 	type Exit = future::MapErr<oneshot::Receiver<()>, fn(oneshot::Canceled) -> ()>;
 
-	fn exit_only(self) -> Self::Exit {
+	fn exit_only(&self) -> Self::Exit {
 		// can't use signal directly here because CtrlC takes only `Fn`.
 		let (exit_send, exit) = oneshot::channel();
 
