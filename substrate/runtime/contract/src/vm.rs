@@ -151,21 +151,19 @@ fn to_execution_result<T: Trait, E: Ext<T>>(
 	runtime: Runtime<T, E>,
 	run_err: Option<sandbox::Error>,
 ) -> Result<ExecutionResult, Error> {
-	let mut return_data = Vec::new();
-
 	// Check the exact type of the error. It could be plain trap or
 	// special runtime trap the we must recognize.
-	match (run_err, runtime.special_trap) {
+	let return_data = match (run_err, runtime.special_trap) {
 		// No traps were generated. Proceed normally.
-		(None, None) => {}
+		(None, None) => Vec::new(),
 		// Special case. The trap was the result of the execution `return` host function.
-		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(rd))) => return_data = rd,
+		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(rd))) => rd,
 		// Any other kind of a trap should result in a failure.
 		(Some(_), _) => return Err(Error::Invoke),
 		// Any other case (such as special trap flag without actual trap) signifies
 		// a logic error.
 		_ => unreachable!(),
-	}
+	};
 
 	Ok(ExecutionResult {
 		return_data,
