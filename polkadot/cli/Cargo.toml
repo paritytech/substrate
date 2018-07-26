@@ -3,30 +3,18 @@ name = "polkadot-cli"
 version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Polkadot node implementation in Rust."
-build = "build.rs"
 
 [dependencies]
 clap = { version = "~2.32", features = ["yaml"] }
-backtrace = "0.3"
-env_logger = "0.4"
 error-chain = "0.12"
 log = "0.3"
-atty = "0.2"
-regex = "1"
-time = "0.1"
 slog = "^2"
-ansi_term = "0.10"
 lazy_static = "1.0"
-triehash = "0.1"
-ed25519 = { path = "../../substrate/ed25519" }
-app_dirs = "1.2"
 tokio = "0.1.7"
 futures = "0.1.17"
-fdlimit = "0.1"
 parking_lot = "0.4"
-serde_json = "1.0"
-serde = "1.0"
 exit-future = "0.1"
+substrate-cli = { path = "../../substrate/cli" }
 substrate-client = { path = "../../substrate/client" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
@@ -42,7 +30,4 @@ polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
 polkadot-service = { path = "../service" }
 polkadot-transaction-pool = { path = "../transaction-pool" }
-names = "0.11.0"
 
-[build-dependencies]
-clap = "~2.32"

@@ -21,7 +21,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Decode;
@@ -377,6 +377,12 @@ impl<B, E, Block> Client<B, E, Block> where
 				.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 		}
 		Ok(ImportResult::Queued)
+	}
+
+	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
+	/// successfully reverted.
+	pub fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
+		Ok(self.backend.revert(n)?)
 	}
 
 	/// Get blockchain info.

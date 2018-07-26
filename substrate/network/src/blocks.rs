@@ -19,7 +19,7 @@ use std::cmp;
 use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
-use network_libp2p::PeerId;
+use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, NumberFor, As};
 use message;
 
@@ -29,7 +29,7 @@ const MAX_PARALLEL_DOWNLOADS: u32 = 1;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockData<B: BlockT> {
 	pub block: message::BlockData<B>,
-	pub origin: PeerId,
+	pub origin: NodeIndex,
 }
 
 #[derive(Debug)]
@@ -55,7 +55,7 @@ impl<B: BlockT> BlockRangeState<B> {
 pub struct BlockCollection<B: BlockT> {
 	/// Downloaded blocks.
 	blocks: BTreeMap<NumberFor<B>, BlockRangeState<B>>,
-	peer_requests: HashMap<PeerId, NumberFor<B>>,
+	peer_requests: HashMap<NodeIndex, NumberFor<B>>,
 }
 
 impl<B: BlockT> BlockCollection<B> {
@@ -74,7 +74,7 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	/// Insert a set of blocks into collection.
-	pub fn insert(&mut self, start: NumberFor<B>, blocks: Vec<message::BlockData<B>>, peer_id: PeerId) {
+	pub fn insert(&mut self, start: NumberFor<B>, blocks: Vec<message::BlockData<B>>, who: NodeIndex) {
 		if blocks.is_empty() {
 			return;
 		}
@@ -92,11 +92,11 @@ impl<B: BlockT> BlockCollection<B> {
 			_ => (),
 		}
 
-		self.blocks.insert(start, BlockRangeState::Complete(blocks.into_iter().map(|b| BlockData { origin: peer_id, block: b }).collect()));
+		self.blocks.insert(start, BlockRangeState::Complete(blocks.into_iter().map(|b| BlockData { origin: who, block: b }).collect()));
 	}
 
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
-	pub fn needed_blocks(&mut self, peer_id: PeerId, count: usize, peer_best: NumberFor<B>, common: NumberFor<B>) -> Option<Range<NumberFor<B>>> {
+	pub fn needed_blocks(&mut self, who: NodeIndex, count: usize, peer_best: NumberFor<B>, common: NumberFor<B>) -> Option<Range<NumberFor<B>>> {
 		// First block number that we need to download
 		let first_different = common + As::sa(1);
 		let count = As::sa(count as u64);
@@ -125,11 +125,11 @@ impl<B: BlockT> BlockCollection<B> {
 		};
 		// crop to peers best
 		if range.start > peer_best {
-			trace!(target: "sync", "Out of range for peer {} ({} vs {})", peer_id, range.start, peer_best);
+			trace!(target: "sync", "Out of range for peer {} ({} vs {})", who, range.start, peer_best);
 			return None;
 		}
 		range.end = cmp::min(peer_best + As::sa(1), range.end);
-		self.peer_requests.insert(peer_id, range.start);
+		self.peer_requests.insert(who, range.start);
 		self.blocks.insert(range.start, BlockRangeState::Downloading{ len: range.end - range.start, downloading: downloading + 1 });
 		if range.end <= range.start {
 			panic!("Empty range {:?}, count={}, peer_best={}, common={}, blocks={:?}", range, count, peer_best, common, self.blocks);
@@ -162,8 +162,8 @@ impl<B: BlockT> BlockCollection<B> {
 		drained
 	}
 
-	pub fn clear_peer_download(&mut self, peer_id: PeerId) {
-		match self.peer_requests.entry(peer_id) {
+	pub fn clear_peer_download(&mut self, who: NodeIndex) {
+		match self.peer_requests.entry(who) {
 			Entry::Occupied(entry) => {
 				let start = entry.remove();
 				let remove = match self.blocks.get_mut(&start) {

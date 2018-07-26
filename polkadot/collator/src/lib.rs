@@ -68,7 +68,7 @@ use client::BlockchainEvents;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{AccountId, BlockId, SessionKey};
 use polkadot_primitives::parachain::{self, BlockData, DutyRoster, HeadData, ConsolidatedIngress, Message, Id as ParaId};
-use polkadot_cli::{ServiceComponents, Service, CustomConfiguration};
+use polkadot_cli::{ServiceComponents, Service, CustomConfiguration, VersionInfo};
 use polkadot_cli::Worker;
 use tokio::timer::Deadline;
 
@@ -213,7 +213,7 @@ struct CollationNode<P, E> {
 
 impl<P, E> Worker for CollationNode<P, E> where
 	P: ParachainContext + Send + 'static,
-	E: Future<Item=(),Error=()> + Send + 'static
+	E: Future<Item=(),Error=()> + Send + Clone + 'static
 {
 	type Work = Box<Future<Item=(),Error=()> + Send>;
 	type Exit = E;
@@ -227,8 +227,8 @@ impl<P, E> Worker for CollationNode<P, E> where
 		config
 	}
 
-	fn exit_only(self) -> Self::Exit {
-		self.exit
+	fn exit_only(&self) -> Self::Exit {
+		self.exit.clone()
 	}
 
 	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work {
@@ -323,14 +323,15 @@ pub fn run_collator<P, E>(
 	para_id: ParaId,
 	exit: E,
 	key: Arc<ed25519::Pair>,
-	args: Vec<::std::ffi::OsString>
+	args: Vec<::std::ffi::OsString>,
+	version: VersionInfo,
 ) -> polkadot_cli::error::Result<()> where
 	P: ParachainContext + Send + 'static,
 	E: IntoFuture<Item=(),Error=()>,
-	E::Future: Send + 'static,
+	E::Future: Send + Clone + 'static,
 {
 	let node_logic = CollationNode { parachain_context, exit: exit.into_future(), para_id, key };
-	polkadot_cli::run(args, node_logic)
+	polkadot_cli::run(args, node_logic, version)
 }
 
 #[cfg(test)]
