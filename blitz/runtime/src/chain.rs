@@ -23,10 +23,10 @@ use codec::Decode;
 
 use runtime_primitives::traits::{Hash, BlakeTwo256, Executable, RefInto, MaybeEmpty};
 // use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
-use primitives::{NodeId, AccountId, Balance};
+use primitives::{NodeId, AccountId, Balance, Amount, CTH};
 use {system, session};
 
-// use substrate_runtime_support::{StorageValue, StorageMap};
+use substrate_runtime_support::{StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
 
 // #[cfg(any(feature = "std", test))]
@@ -46,11 +46,14 @@ decl_module! {
 	/// Call type for Blitz.
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: <T as Trait>::PublicAux {
-		// provide candidate receipts for parachains, in ascending order by id.
+		// Register a new node which later may be acted as locker and receive income
 		fn register_node(aux, id: NodeId, income: AccountId, collateral: AccountId) -> Result = 0;
+
+		// Deregister the node and free its collateral funds
 		fn deregister_node(aux, id: NodeId) -> Result = 1;
 
-		fn transfer(aux, from: AccountId, to: AccountId, amount: Balance) -> Result = 2;
+		// Transfer funds from one account to another
+		fn transfer(aux, from: AccountId, to: AccountId, amount: Amount) -> Result = 2;
 	}
 }
 
@@ -58,19 +61,25 @@ decl_storage! {
 	trait Store for Module<T: Trait>;
 
 	// Maps account id to its balance
-	pub AccountBalance get(account_balance): b"blz:ab" => map [ AccountId => Balance ];
+	pub AccountBalance get(account_balance): b"blz:ab" => default map [ AccountId => Balance ];
 
 	// Maps account id to its CTH
-	pub AccountCTH get(account_cth): b"blz:acth" => map [ AccountId => Balance ];
+	pub AccountCTH get(account_cth): b"blz:acth" => map [ AccountId => CTH ];
 
 	// Maps node id to its income account
 	pub IncomeAccount get(income_account): b"blz:nia" => map [ NodeId => AccountId ];
 
-	// Maps node id to its collateral account
-	pub CollateralAccount get(collateral_account): b"blz:nca" => map [ NodeId => AccountId ];
+	// Maps node id to its collateral (staking) account
+	pub NodeToCollateral get(node_to_collateral): b"blz:n2c" => map [ NodeId => AccountId ];
+
+	// Maps collateral account to node id that it is tied to
+	pub CollateralToNode get(collateral_to_node): b"blz:c2n" => map [ AccountId => NodeId ];
 
 	// Maps node id to a list of its network addresses
 	pub NodeAddresses get(node_addresses): b"blz:na" => map [ NodeId => Vec<Vec<u8>> ];
+
+	// How much does it cost to register a new node
+	pub NodeRegistrationFee get(node_registration_fee): b"blz:rpb" => Amount;
 
 	// How many rounds should be sealed within one block of the chain
 	pub RoundsPerBlock get(rounds_per_block): b"blz:rpb" => u32;
@@ -83,18 +92,47 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-	fn register_node(aux: &<T as Trait>::PublicAux, id: NodeId, income: AccountId, collateral: AccountId) -> Result {
+	fn register_node(_aux: &<T as Trait>::PublicAux, node: NodeId, income: AccountId, collateral: AccountId) -> Result {
+		// Performing some consistency checks
+		ensure!(!<NodeToCollateral<T>>::exists(node), "node already exists");
+		ensure!(!<IncomeAccount<T>>::exists(node), "income account already set");
+		ensure!(!<CollateralToNode<T>>::exists(collateral), "collateral is already in use");
+
+		ensure!(<AccountCTH<T>>::exists(collateral), "collateral account does not exist");
+		ensure!(<NodeRegistrationFee<T>>::exists(), "registration fee is not set");
+		let collateral_balance = <AccountBalance<T>>::get(collateral);
+		let registration_fee = <NodeRegistrationFee<T>>::get().unwrap();
+
+		// Taking the registration fee
+		ensure!(collateral_balance > registration_fee, "not enough collateral funds");
+		<AccountBalance<T>>::insert(collateral, collateral_balance - registration_fee);
+
+		// Registering node and its accounts
+		<CollateralToNode<T>>::insert(collateral, node);
+		<NodeToCollateral<T>>::insert(node, collateral);
+		<IncomeAccount<T>>::insert(node, income);
+
+		// Welcome to the club
+		Ok(())
+	}
+
+	fn deregister_node(_aux: &<T as Trait>::PublicAux, id: NodeId) -> Result {
 		unimplemented!()
 	}
 
-	fn deregister_node(aux: &<T as Trait>::PublicAux, id: NodeId) -> Result {
-		unimplemented!()
-	}
+	fn transfer(_aux: &<T as Trait>::PublicAux, from: AccountId, to: AccountId, amount: Amount) -> Result {
+		// Affected accounts should not be collateral
+		ensure!(!<CollateralToNode<T>>::exists(from), "source account is locked as collateral");
+		ensure!(!<CollateralToNode<T>>::exists(to), "destination account is locked as collateral");
 
-	fn transfer(aux: &<T as Trait>::PublicAux, from: AccountId, to: AccountId, amount: Balance) -> Result {
-		
+		let from_balance = <AccountBalance<T>>::get(from);
+		let to_balance = <AccountBalance<T>>::get(to);
 
-		unimplemented!()
+		ensure!(from_balance > amount, "not enough funds");
+		<AccountBalance<T>>::insert(from, from_balance - amount);
+		<AccountBalance<T>>::insert(to, to_balance.checked_add(amount).expect("balance overflow"));
+
+		Ok(())
 	}
 
 }

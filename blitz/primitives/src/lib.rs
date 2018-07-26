@@ -54,6 +54,9 @@ pub type AccountId = primitives::hash::H256;
 /// Node id within the Blitz network
 pub type NodeId = primitives::hash::H256;
 
+/// Chain Transaction Hash is used in a Blitz consensus
+pub type CTH = primitives::hash::H256;
+
 /// The type for looking up accounts. We don't expect more than 4 billion of them, but you
 /// never know...
 pub type AccountIndex = u64;
