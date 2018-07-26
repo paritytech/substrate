@@ -1,33 +1,34 @@
 [package]
-name = "polkadot-cli"
+name = "substrate-cli"
 version = "0.2.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Polkadot node implementation in Rust."
+description = "Substrate CLI interface."
+build = "build.rs"
 
 [dependencies]
 clap = { version = "~2.32", features = ["yaml"] }
+backtrace = "0.3"
+env_logger = "0.4"
 error-chain = "0.12"
 log = "0.3"
+atty = "0.2"
+regex = "1"
+time = "0.1"
 slog = "^2"
+ansi_term = "0.10"
 lazy_static = "1.0"
+app_dirs = "1.2"
 tokio = "0.1.7"
 futures = "0.1.17"
-parking_lot = "0.4"
+fdlimit = "0.1"
 exit-future = "0.1"
-substrate-cli = { path = "../../substrate/cli" }
 substrate-client = { path = "../../substrate/client" }
-substrate-codec = { path = "../../substrate/codec" }
 substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-network = { path = "../../substrate/network" }
-substrate-primitives = { path = "../../substrate/primitives" }
-substrate-rpc = { path = "../../substrate/rpc" }
-substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-service = { path = "../../substrate/service" }
-substrate-state-machine = { path = "../../substrate/state-machine" }
 substrate-telemetry = { path = "../../substrate/telemetry" }
-polkadot-primitives = { path = "../primitives" }
-polkadot-runtime = { path = "../runtime" }
-polkadot-service = { path = "../service" }
-polkadot-transaction-pool = { path = "../transaction-pool" }
+names = "0.11.0"
 
+[build-dependencies]
+clap = "~2.32"
