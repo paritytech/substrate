@@ -69,6 +69,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 		);
 
 		executor.call_at_state(&state, &mut changes, "initialise_block", &header.encode(), native_when_possible())?;
+		changes.commit_prospective();
 
 		Ok(BlockBuilder {
 			header,
@@ -88,6 +89,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 				match ApplyResult::decode(&mut result.as_slice()) {
 					Some(Ok(ApplyOutcome::Success)) | Some(Ok(ApplyOutcome::Fail)) => {
 						self.extrinsics.push(xt);
+						self.changes.commit_prospective();
 						Ok(())
 					}
 					Some(Err(e)) => {
