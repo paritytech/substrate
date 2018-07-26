@@ -355,4 +355,16 @@ mod tests {
 			});
 		});
 	}
+
+	#[test]
+	#[should_panic]
+	fn bad_extrinsic_not_inserted() {
+		let mut t = new_test_ext();
+		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
+		with_externalities(&mut t, || {
+			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+			Executive::apply_extrinsic(xt).unwrap();
+			assert_eq!(<system::Module<Test>>::extrinsic_index(), 0);
+		});
+	}
 }

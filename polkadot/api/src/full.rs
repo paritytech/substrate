@@ -216,7 +216,7 @@ mod tests {
 		let client = client();
 
 		let id = BlockId::number(0);
-		let block_builder = client.build_block(&id, 1_000_000, Vec::new()).unwrap();
+		let block_builder = client.build_block(&id, 0, Vec::new()).unwrap();
 		let block = block_builder.bake().unwrap();
 
 		assert_eq!(block.header.number, 1);

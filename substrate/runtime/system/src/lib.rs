@@ -185,6 +185,7 @@ impl<T: Trait> Module<T> {
 
 	/// Remove all extrinsics data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
+		println!("INDEX: {:?}", Self::extrinsic_index());
 		let extrinsics = (0..Self::extrinsic_index()).map(<ExtrinsicData<T>>::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
