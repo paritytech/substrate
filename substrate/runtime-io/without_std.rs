@@ -61,7 +61,7 @@ extern "C" {
 	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
 	fn ext_set_prefix(prefix_data: *const u8, prefix_len: u32, value_data: *const u8, value_len: u32);
-	fn ext_save_pefix_keys(prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32);
+	fn ext_save_prefix_keys(prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
@@ -160,7 +160,7 @@ pub fn clear_prefix(prefix: &[u8]) {
 				prefix.len() as u32
 			);
 		} else {
-			ext_save_pefix_keys(
+			ext_save_prefix_keys(
 				prefix.as_ptr(), prefix.len() as u32,
 				DELETED_SET_KEY_PREFIX.as_ptr(), DELETED_SET_KEY_PREFIX.len() as u32);
 			ext_set_prefix(

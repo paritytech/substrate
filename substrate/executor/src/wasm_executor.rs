@@ -233,7 +233,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.ext.set_prefix(&prefix, value);
 		Ok(())
 	},
-	ext_save_pefix_keys(prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32) => {
+	ext_save_prefix_keys(prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_save_prefix_keys"))?;
 		let set_prefix = this.memory.get(set_prefix_data, set_prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine set_prefix in ext_save_prefix_keys"))?;
 		this.ext.save_pefix_keys(&prefix, &set_prefix);

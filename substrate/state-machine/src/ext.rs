@@ -219,7 +219,7 @@ mod tests {
 	}
 
 	#[test]
-	fn testing_ext_save_pefix_keys_works() {
+	fn testing_ext_save_prefix_keys_works() {
 		let mut ext = TestExternalities::new();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
@@ -236,7 +236,7 @@ mod tests {
 	}
 
 	#[test]
-	fn backend_ext_save_pefix_keys_works() {
+	fn backend_ext_save_prefix_keys_works() {
 		let backend: InMemory = vec![(b"doe".to_vec(), b"reindeer".to_vec()),
 			(b"dog".to_vec(), b"puppy".to_vec()),
 			(b"dogglesworth".to_vec(), b"cat".to_vec())].into_iter()
