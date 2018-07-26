@@ -19,7 +19,7 @@
 use state_machine::backend::Backend as StateBackend;
 use error;
 use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use runtime_primitives::generic::BlockId;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
@@ -69,6 +69,9 @@ pub trait Backend<Block: BlockT>: Send + Sync {
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
+	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
+	/// successfully reverted.
+	fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>>;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

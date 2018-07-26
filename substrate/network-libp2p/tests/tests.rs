@@ -66,20 +66,20 @@ impl NetworkProtocolHandler for TestProtocol {
 		io.register_timer(0, Duration::from_millis(10)).unwrap();
 	}
 
-	fn read(&self, _io: &NetworkContext, _peer: &PeerId, packet_id: u8, data: &[u8]) {
+	fn read(&self, _io: &NetworkContext, _peer: &NodeIndex, packet_id: u8, data: &[u8]) {
 		assert_eq!(packet_id, 33);
 		self.packet.lock().extend(data);
 	}
 
-	fn connected(&self, io: &NetworkContext, peer: &PeerId) {
+	fn connected(&self, io: &NetworkContext, peer: &NodeIndex) {
 		if self.drop_session {
-			io.disconnect_peer(*peer)
+			io.report_peer(*peer, Severity::Bad("We are evil and just want to drop"))
 		} else {
-			io.respond(33, "hello".to_owned().into_bytes()).unwrap();
+			io.respond(33, "hello".to_owned().into_bytes());
 		}
 	}
 
-	fn disconnected(&self, _io: &NetworkContext, _peer: &PeerId) {
+	fn disconnected(&self, _io: &NetworkContext, _peer: &NodeIndex) {
 		self.got_disconnect.store(true, AtomicOrdering::Relaxed);
 	}
 

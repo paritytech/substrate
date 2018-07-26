@@ -34,6 +34,8 @@ use substrate_runtime_primitives::traits::Block as BlockT;
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
+pub type HttpServer = http::Server;
+pub type WsServer = ws::Server;
 
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<Block: BlockT, S, C, A, Y>(

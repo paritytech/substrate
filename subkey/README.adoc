@@ -1,0 +1,22 @@
+= Subkey
+
+A key generation utility with vanity address support.
+
+Usage:
+
+	subkey <search string> <number of keys>
+
+Sample use:
+
+	$ subkey
+or
+	$ subkey polka
+or
+	$ subkey polka 3
+
+
+Result:
+
+	5CxS39ykKsmPetYQjTqW6aJXkSChnuvPdziA8uphuPaCyRZ1: 406ac59ccbb8358f7c95b726d3ccb039afe35e2dd62045189d1abae8d7805b8a (54%)
+	5CujMhFmChyq3AMUwMasfbqSpZYpbFfZS5UQ7zUn2d63CGBo: 5b6ac59ccbb8358f7c95b726d3ccb039afe35e2dd62045189d1abae8d7805b8a (69%)
+	5EfdN3zChABKsXT9bEg33zqPsBu4YCu1h7yoovvjtsUMqyFU: c46ac59ccbb8358f7c95b726d3ccb039afe35e2dd62045189d1abae8d7805b8a (69%)
