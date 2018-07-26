@@ -21,10 +21,11 @@
 //! to each other and operate on a simple key-value storage.
 
 use codec::Decode;
-use parity_wasm::elements::{self, External, MemoryType};
+use parity_wasm::elements::{self, External, MemoryType, Type, FunctionType};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
+use rstd::collections::BTreeMap;
 use sandbox;
 use gas::{GasMeter, GasMeterResult};
 use runtime_primitives::traits::{As, CheckedMul};
@@ -376,6 +377,73 @@ fn ext_return<E: Ext>(
 	Err(sandbox::HostError)
 }
 
+// trait Param {
+// 	fn new(&sandbox::TypedValue) -> Self;
+// }
+
+// trait Params {
+// 	fn new(&[sandbox::TypedValue]) -> Self;
+// }
+
+// impl Params for () {
+// 	fn new(_args: &[sandbox::TypedValue]) -> Self { () }
+// }
+
+// impl<A1: Param, A2: Param> Params for (A1, A2) {
+// 	fn new(args: &[sandbox::TypedValue]) -> Self {
+// 		assert!(args.len() == 2);
+// 		let a1 = A1::new(&args[0]);
+// 		let a2 = A2::new(&args[1]);
+// 		(a1, a2)
+// 	}
+// }
+
+// impl<A1: Param, A2: Param, A3: Param> Params for (A1, A2, A3) {
+// 	fn new(args: &[sandbox::TypedValue]) -> Self {
+// 		assert!(args.len() == 3);
+// 		let a1 = A1::new(&args[0]);
+// 		let a2 = A2::new(&args[1]);
+// 		let a3 = A3::new(&args[2]);
+// 		(a1, a2, a3)
+// 	}
+// }
+
+// trait ExternalFunction<E: Ext> {
+// 	type Result;
+
+// 	/// Something that can be created from &[TypedValue]
+// 	/// + something that can be compared to a parity-wasm's signature
+// 	type Params: Params;
+
+// 	/// Logic that will be executed upon a call.
+// 	fn call(e: &mut Runtime<E>, params: Self::Params) -> Result<Self::Result, sandbox::HostError>;
+// 	fn signature() -> FunctionType;
+// }
+
+// fn ext_wrapper<E: Ext, F: ExternalFunction<E>>(
+// 	e: &mut Runtime<E>,
+// 	args: &[sandbox::TypedValue],
+// ) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+// 	let args = F::Params::new(args);
+// 	let result = F::call(e, args);
+// 	panic!()
+// }
+
+struct ExtFunc<E: Ext> {
+	f: fn(&mut Runtime<E>, &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError>,
+	func_type: FunctionType,
+}
+
+impl<E: Ext> ExtFunc<E> {
+	fn type_matches(&self, func_type: &FunctionType) -> bool {
+		panic!()
+	}
+}
+
+struct ExtFunctions<E: Ext> {
+	funcs: BTreeMap<String, ExtFunc<E>>,
+}
+
 /// Execute the given code as a contract.
 pub fn execute<'a, E: Ext>(
 	code: &[u8],
@@ -536,6 +604,30 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 			}
 		}
 		None
+	}
+
+	fn check_signatures(&self) -> Result<(), Error> {
+		// TODO: Merge it with `find_mem_import`?
+		let module = self
+			.module
+			.as_ref()
+			.expect("On entry to the function `module` can't be `None`; qed");
+
+		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
+		let import_entries = module.import_section().map(|is| is.entries()).unwrap_or(&[]);
+
+		for import in import_entries {
+			if let ("env", "memory", &External::Function(ref type_index)) =
+				(import.module(), import.field(), import.external())
+			{
+				let Type::Function(ref func_ty) = types
+					.get(*type_index as usize)
+					.ok_or_else(|| Error::Deserialization)?;
+
+
+			}
+		}
+		Ok(())
 	}
 
 	fn into_wasm_code(mut self) -> Result<Vec<u8>, Error> {
