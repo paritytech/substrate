@@ -44,6 +44,9 @@ pub struct TelemetryConfig {
 	pub on_connect: Box<Fn() + Send + 'static>,
 }
 
+/// Telemetry service guard.
+pub type Telemetry = slog_scope::GlobalLoggerGuard;
+
 /// Size of the channel for passing messages to telemetry thread.
 const CHANNEL_SIZE: usize = 262144;
 
