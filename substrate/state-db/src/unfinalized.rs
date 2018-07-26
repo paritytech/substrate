@@ -16,6 +16,9 @@
 
 //! Finalization window.
 //! Maintains trees of block overlays and allows discarding trees/roots
+//! The overlays are added in `insert` and removed in `finalize`.
+//! Last finalized overlay is kept in memory until next call to `finalize` or
+//! `clear_overlay`
 
 use std::collections::{HashMap, VecDeque};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
@@ -29,6 +32,7 @@ pub struct UnfinalizedOverlay<BlockHash: Hash, Key: Hash> {
 	last_finalized: Option<(BlockHash, u64)>,
 	levels: VecDeque<Vec<BlockOverlay<BlockHash, Key>>>,
 	parents: HashMap<BlockHash, BlockHash>,
+	last_finalized_overlay: HashMap<Key, DBValue>,
 }
 
 struct JournalRecord<BlockHash: Hash, Key: Hash> {
@@ -121,6 +125,7 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 			last_finalized: last_finalized,
 			levels,
 			parents,
+			last_finalized_overlay: Default::default(),
 		})
 	}
 
@@ -199,6 +204,15 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 		self.last_finalized.as_ref().map(|&(_, n)| n + 1).unwrap_or(0)
 	}
 
+	pub fn last_finalized_block_number(&self) -> u64 {
+		self.last_finalized.as_ref().map(|&(_, n)| n).unwrap_or(0)
+	}
+
+	/// This may be called when the last finalization commit was applied to the database.
+	pub fn clear_overlay(&mut self) {
+		self.last_finalized_overlay.clear();
+	}
+
 	/// Select a top-level root and finalized it. Discards all sibling subtrees and the root.
 	/// Returns a set of changes that need to be added to the DB.
 	pub fn finalize(&mut self, hash: &BlockHash) -> CommitSet<Key> {
@@ -212,8 +226,9 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 		for (i, overlay) in level.into_iter().enumerate() {
 			self.parents.remove(&overlay.hash);
 			if i == index {
+				self.last_finalized_overlay = overlay.values;
 				// that's the one we need to finalize
-				commit.data.inserted = overlay.values.into_iter().collect();
+				commit.data.inserted = self.last_finalized_overlay.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 				commit.data.deleted = overlay.deleted;
 			} else {
 				// TODO: borrow checker won't allow us to split out mutable refernces
@@ -236,6 +251,9 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 
 	/// Get a value from the node overlay. This searches in every existing changeset.
 	pub fn get(&self, key: &Key) -> Option<DBValue> {
+		if let Some(value) = self.last_finalized_overlay.get(&key) {
+			return Some(value.clone());
+		}
 		for level in self.levels.iter() {
 			for overlay in level.iter() {
 				if let Some(value) = overlay.values.get(&key) {
@@ -244,6 +262,18 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 			}
 		}
 		None
+	}
+
+	/// Revert a single level. Returns commit set that deletes the journal or `None` if not possible.
+	pub fn revert_one(&mut self) -> Option<CommitSet<Key>> {
+		self.levels.pop_back().map(|level| {
+			let mut commit = CommitSet::default();
+			for overlay in level.into_iter() {
+				commit.meta.deleted.push(overlay.journal_key);
+				self.parents.remove(&overlay.hash);
+			}
+			commit
+		})
 	}
 }
 
@@ -357,6 +387,23 @@ mod tests {
 	}
 
 	#[test]
+	fn restore_from_journal_after_finalize() {
+		let h1 = H256::random();
+		let h2 = H256::random();
+		let mut db = make_db(&[1, 2]);
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
+		db.commit(&overlay.insert(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2])));
+		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])));
+		db.commit(&overlay.finalize(&h1));
+		assert_eq!(overlay.levels.len(), 1);
+
+		let overlay2 = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
+		assert_eq!(overlay.levels, overlay2.levels);
+		assert_eq!(overlay.parents, overlay2.parents);
+		assert_eq!(overlay.last_finalized, overlay2.last_finalized);
+	}
+
+	#[test]
 	fn insert_finalize_two() {
 		let h1 = H256::random();
 		let h2 = H256::random();
@@ -374,9 +421,12 @@ mod tests {
 		db.commit(&overlay.finalize(&h1));
 		assert_eq!(overlay.levels.len(), 1);
 		assert_eq!(overlay.parents.len(), 1);
+		assert!(contains(&overlay, 5));
+		overlay.clear_overlay();
 		assert!(!contains(&overlay, 5));
 		assert!(contains(&overlay, 7));
 		db.commit(&overlay.finalize(&h2));
+		overlay.clear_overlay();
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
 		assert!(db.data_eq(&make_db(&[1, 4, 6, 7, 8])));
@@ -446,6 +496,7 @@ mod tests {
 
 		// finalize 1. 2 and all its children should be discarded
 		db.commit(&overlay.finalize(&h_1));
+		overlay.clear_overlay();
 		assert_eq!(overlay.levels.len(), 2);
 		assert_eq!(overlay.parents.len(), 6);
 		assert!(!contains(&overlay, 1));
@@ -457,6 +508,7 @@ mod tests {
 
 		// finalize 1_2. 1_1 and all its children should be discarded
 		db.commit(&overlay.finalize(&h_1_2));
+		overlay.clear_overlay();
 		assert_eq!(overlay.levels.len(), 1);
 		assert_eq!(overlay.parents.len(), 3);
 		assert!(!contains(&overlay, 11));
@@ -467,9 +519,34 @@ mod tests {
 
 		// finalize 1_2_2
 		db.commit(&overlay.finalize(&h_1_2_2));
+		overlay.clear_overlay();
 		assert_eq!(overlay.levels.len(), 0);
 		assert_eq!(overlay.parents.len(), 0);
 		assert!(db.data_eq(&make_db(&[1, 12, 122])));
 		assert_eq!(overlay.last_finalized, Some((h_1_2_2, 3)));
 	}
+
+	#[test]
+	fn insert_revert() {
+		let h1 = H256::random();
+		let h2 = H256::random();
+		let mut db = make_db(&[1, 2, 3, 4]);
+		let mut overlay = UnfinalizedOverlay::<H256, H256>::new(&db).unwrap();
+		assert!(overlay.revert_one().is_none());
+		let changeset1 = make_changeset(&[5, 6], &[2]);
+		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
+		db.commit(&overlay.insert(&h1, 1, &H256::default(), changeset1));
+		db.commit(&overlay.insert(&h2, 2, &h1, changeset2));
+		assert!(contains(&overlay, 7));
+		db.commit(&overlay.revert_one().unwrap());
+		assert_eq!(overlay.parents.len(), 1);
+		assert!(contains(&overlay, 5));
+		assert!(!contains(&overlay, 7));
+		db.commit(&overlay.revert_one().unwrap());
+		assert_eq!(overlay.levels.len(), 0);
+		assert_eq!(overlay.parents.len(), 0);
+		assert!(overlay.revert_one().is_none());
+	}
+
 }
+

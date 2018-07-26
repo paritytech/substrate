@@ -1,18 +1,18 @@
 // Copyright 2018 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
 
 use libp2p::{self, Transport, mplex, secio, yamux};
 use libp2p::core::{MuxedTransport, either, upgrade};
@@ -35,7 +35,7 @@ pub fn build_transport(
 
 			let mut plaintext = upgrade::toggleable(upgrade::PlainTextConfig);
 			match unencrypted_allowed {
-				UnencryptedAllowed::Allowed => (),//plaintext.disable(),
+				UnencryptedAllowed::Allowed => plaintext.disable(),
 				UnencryptedAllowed::Denied => (),
 			};
 
@@ -54,7 +54,7 @@ pub fn build_transport(
 		.map(|(socket, _key), _| socket)
 		// TODO: this `EitherOutput` thing shows that libp2p's API could be improved
 		.with_upgrade(upgrade::or(
-			upgrade::map(mplex::MultiplexConfig::new(), either::EitherOutput::First),
+			upgrade::map(mplex::MplexConfig::new(), either::EitherOutput::First),
 			upgrade::map(yamux::Config::default(), either::EitherOutput::Second),
 		))
 		.into_connection_reuse();

@@ -1,0 +1,33 @@
+
+== Cargo Packages
+
+:leveloffset: +2
+
+include::../polkadot/api/README.adoc[]
+
+include::../polkadot/cli/README.adoc[]
+
+include::../polkadot/collator/README.adoc[]
+
+include::../polkadot/consensus/README.adoc[]
+
+include::../polkadot/executor/README.adoc[]
+
+include::../polkadot/network/README.adoc[]
+
+include::../polkadot/parachain/README.adoc[]
+
+include::../polkadot/primitives/README.adoc[]
+
+include::../polkadot/runtime/README.adoc[]
+
+include::../polkadot/service/README.adoc[]
+
+include::../polkadot/src/README.adoc[]
+
+include::../polkadot/statement-table/README.adoc[]
+
+include::../polkadot/transaction-pool/README.adoc[]
+
+:leveloffset: -2
+

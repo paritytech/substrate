@@ -1,19 +1,20 @@
 // Copyright 2015-2018 Parity Technologies (UK) Ltd.
-// This file is part of Parity.
+// This file is part of Substrate.
 
-// Parity is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Parity is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Parity.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::fmt;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
@@ -35,7 +36,8 @@ pub type ProtocolId = [u8; 3];
 pub type NodeId = H512;
 
 /// Local (temporary) peer session ID.
-pub type PeerId = usize;
+/// RENAME TO NodeIndex
+pub type NodeIndex = usize;
 
 /// Messages used to communitate with the event loop from other threads.
 #[derive(Clone)]
@@ -61,9 +63,9 @@ pub enum NetworkIoMessage {
 	/// Initliaze public interface.
 	InitPublicInterface,
 	/// Disconnect a peer.
-	Disconnect(PeerId),
+	Disconnect(NodeIndex),
 	/// Disconnect and temporary disable peer.
-	DisablePeer(PeerId),
+	DisablePeer(NodeIndex),
 	/// Network has been started with the host as the given enode.
 	NetworkStarted(String),
 }
@@ -213,22 +215,42 @@ impl NetworkConfiguration {
 	}
 }
 
+/// The severity of misbehaviour of a peer that is reported.
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub enum Severity<'a> {
+	/// Peer is timing out. Could be bad connectivity of overload of work on either of our sides.
+	Timeout,
+	/// Peer has been notably useless. E.g. unable to answer a request that we might reasonably consider
+	/// it could answer.
+	Useless(&'a str),
+	/// Peer has behaved in an invalid manner. This doesn't necessarily need to be Byzantine, but peer
+	/// must have taken concrete action in order to behave in such a way which is wantanly invalid. 
+	Bad(&'a str),
+}
+
+impl<'a> fmt::Display for Severity<'a> {
+	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+		match *self {
+			Severity::Timeout => write!(fmt, "Timeout"),
+			Severity::Useless(r) => write!(fmt, "Useless ({})", r),
+			Severity::Bad(r) => write!(fmt, "Bad ({})", r),
+		}
+	}
+}
+
 /// IO access point. This is passed to all IO handlers and provides an interface to the IO subsystem.
 pub trait NetworkContext {
 	/// Send a packet over the network to another peer.
-	fn send(&self, peer: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error>;
+	fn send(&self, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>);
 
 	/// Send a packet over the network to another peer using specified protocol.
-	fn send_protocol(&self, protocol: ProtocolId, peer: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error>;
+	fn send_protocol(&self, protocol: ProtocolId, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>);
 
 	/// Respond to a current network message. Panics if no there is no packet in the context. If the session is expired returns nothing.
-	fn respond(&self, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error>;
+	fn respond(&self, packet_id: PacketId, data: Vec<u8>);
 
-	/// Disconnect a peer and prevent it from connecting again.
-	fn disable_peer(&self, peer: PeerId, reason: &str);
-
-	/// Disconnect peer. Reconnect can be attempted later.
-	fn disconnect_peer(&self, peer: PeerId);
+	/// Report peer. Depending on the report, peer may be disconnected and possibly banned.
+	fn report_peer(&self, peer: NodeIndex, reason: Severity);
 
 	/// Check if the session is still active.
 	fn is_expired(&self) -> bool;
@@ -237,37 +259,33 @@ pub trait NetworkContext {
 	fn register_timer(&self, token: TimerToken, delay: Duration) -> Result<(), Error>;
 
 	/// Returns peer identification string
-	fn peer_client_version(&self, peer: PeerId) -> String;
+	fn peer_client_version(&self, peer: NodeIndex) -> String;
 
 	/// Returns information on p2p session
-	fn session_info(&self, peer: PeerId) -> Option<SessionInfo>;
+	fn session_info(&self, peer: NodeIndex) -> Option<SessionInfo>;
 
 	/// Returns max version for a given protocol.
-	fn protocol_version(&self, protocol: ProtocolId, peer: PeerId) -> Option<u8>;
+	fn protocol_version(&self, protocol: ProtocolId, peer: NodeIndex) -> Option<u8>;
 
 	/// Returns this object's subprotocol name.
 	fn subprotocol_name(&self) -> ProtocolId;
 }
 
 impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
-	fn send(&self, peer: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error> {
+	fn send(&self, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>) {
 		(**self).send(peer, packet_id, data)
 	}
 
-	fn send_protocol(&self, protocol: ProtocolId, peer: PeerId, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error> {
+	fn send_protocol(&self, protocol: ProtocolId, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>) {
 		(**self).send_protocol(protocol, peer, packet_id, data)
 	}
 
-	fn respond(&self, packet_id: PacketId, data: Vec<u8>) -> Result<(), Error> {
+	fn respond(&self, packet_id: PacketId, data: Vec<u8>) {
 		(**self).respond(packet_id, data)
 	}
 
-	fn disable_peer(&self, peer: PeerId, reason: &str) {
-		(**self).disable_peer(peer, reason)
-	}
-
-	fn disconnect_peer(&self, peer: PeerId) {
-		(**self).disconnect_peer(peer)
+	fn report_peer(&self, peer: NodeIndex, reason: Severity) {
+		(**self).report_peer(peer, reason)
 	}
 
 	fn is_expired(&self) -> bool {
@@ -278,15 +296,15 @@ impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
 		(**self).register_timer(token, delay)
 	}
 
-	fn peer_client_version(&self, peer: PeerId) -> String {
+	fn peer_client_version(&self, peer: NodeIndex) -> String {
 		(**self).peer_client_version(peer)
 	}
 
-	fn session_info(&self, peer: PeerId) -> Option<SessionInfo> {
+	fn session_info(&self, peer: NodeIndex) -> Option<SessionInfo> {
 		(**self).session_info(peer)
 	}
 
-	fn protocol_version(&self, protocol: ProtocolId, peer: PeerId) -> Option<u8> {
+	fn protocol_version(&self, protocol: ProtocolId, peer: NodeIndex) -> Option<u8> {
 		(**self).protocol_version(protocol, peer)
 	}
 
@@ -302,11 +320,11 @@ pub trait NetworkProtocolHandler: Sync + Send {
 	/// Initialize the handler
 	fn initialize(&self, _io: &NetworkContext) {}
 	/// Called when new network packet received.
-	fn read(&self, io: &NetworkContext, peer: &PeerId, packet_id: u8, data: &[u8]);
+	fn read(&self, io: &NetworkContext, peer: &NodeIndex, packet_id: u8, data: &[u8]);
 	/// Called when new peer is connected. Only called when peer supports the same protocol.
-	fn connected(&self, io: &NetworkContext, peer: &PeerId);
+	fn connected(&self, io: &NetworkContext, peer: &NodeIndex);
 	/// Called when a previously connected peer disconnects.
-	fn disconnected(&self, io: &NetworkContext, peer: &PeerId);
+	fn disconnected(&self, io: &NetworkContext, peer: &NodeIndex);
 	/// Timer function called after a timeout created with `NetworkContext::timeout`.
 	fn timeout(&self, _io: &NetworkContext, _timer: TimerToken) {}
 }
@@ -333,42 +351,42 @@ impl NonReservedPeerMode {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IpFilter {
-    pub predefined: AllowIP,
-    pub custom_allow: Vec<IpNetwork>,
-    pub custom_block: Vec<IpNetwork>,
+	pub predefined: AllowIP,
+	pub custom_allow: Vec<IpNetwork>,
+	pub custom_block: Vec<IpNetwork>,
 }
 
 impl Default for IpFilter {
-    fn default() -> Self {
-        IpFilter {
-            predefined: AllowIP::All,
-            custom_allow: vec![],
-            custom_block: vec![],
-        }
-    }
+	fn default() -> Self {
+		IpFilter {
+			predefined: AllowIP::All,
+			custom_allow: vec![],
+			custom_block: vec![],
+		}
+	}
 }
 
 impl IpFilter {
-    /// Attempt to parse the peer mode from a string.
-    pub fn parse(s: &str) -> Result<IpFilter, IpNetworkError> {
-        let mut filter = IpFilter::default();
-        for f in s.split_whitespace() {
-            match f {
-                "all" => filter.predefined = AllowIP::All,
-                "private" => filter.predefined = AllowIP::Private,
-                "public" => filter.predefined = AllowIP::Public,
-                "none" => filter.predefined = AllowIP::None,
-                custom => {
-                    if custom.starts_with("-") {
-                        filter.custom_block.push(IpNetwork::from_str(&custom.to_owned().split_off(1))?)
-                    } else {
-                        filter.custom_allow.push(IpNetwork::from_str(custom)?)
-                    }
-                }
-            }
-        }
-        Ok(filter)
-    }
+	/// Attempt to parse the peer mode from a string.
+	pub fn parse(s: &str) -> Result<IpFilter, IpNetworkError> {
+		let mut filter = IpFilter::default();
+		for f in s.split_whitespace() {
+			match f {
+				"all" => filter.predefined = AllowIP::All,
+				"private" => filter.predefined = AllowIP::Private,
+				"public" => filter.predefined = AllowIP::Public,
+				"none" => filter.predefined = AllowIP::None,
+				custom => {
+					if custom.starts_with("-") {
+						filter.custom_block.push(IpNetwork::from_str(&custom.to_owned().split_off(1))?)
+					} else {
+						filter.custom_allow.push(IpNetwork::from_str(custom)?)
+					}
+				}
+			}
+		}
+		Ok(filter)
+	}
 }
 
 /// IP fiter
@@ -380,6 +398,6 @@ pub enum AllowIP {
 	Private,
 	/// Connect to public network only
 	Public,
-    /// Block all addresses
-    None,
+	/// Block all addresses
+	None,
 }
