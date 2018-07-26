@@ -80,7 +80,11 @@ fn fetch_cached_runtime_version<'a, E: Externalities>(
 fn safe_call<F, U>(f: F) -> Result<U>
 	where F: ::std::panic::UnwindSafe + FnOnce() -> U
 {
-	::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into())
+	// Substrate uses custom panic hook that terminates process on panic. Disable it for the native call.
+	let hook = ::std::panic::take_hook();
+	let result = ::std::panic::catch_unwind(f).map_err(|_| ErrorKind::Runtime.into());
+	::std::panic::set_hook(hook);
+	result
 }
 
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
