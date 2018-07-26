@@ -632,9 +632,6 @@ mod tests {
 		executor().call(&mut t, COMPACT_CODE, "execute_block", &has_no_footprint_block, true).0.unwrap();
 		let (prefix, balance) = alice_balance_with_prefix(&t);
 		assert!(prefix.is_none() && balance.is_none());
-
-		// check that value is still scheduled for purge
-		assert!(!is_alice_balance_scheduled_for_purge(&t));
 	}
 
 	#[test]
@@ -660,9 +657,6 @@ mod tests {
 		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &has_no_footprint_block, true).0.unwrap();
 		let (prefix, balance) = alice_balance_with_prefix(&t);
 		assert!(prefix.is_none() && balance.is_none());
-
-		// check that value is still scheduled for purge
-		assert!(!is_alice_balance_scheduled_for_purge(&t));
 	}
 
 	fn recreated_purge_check_blocks() -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {

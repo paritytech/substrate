@@ -204,7 +204,7 @@ mod tests {
 	use codec::Encode;
 	use substrate_state_machine::{Externalities, TestExternalities};
 	use super::{PREFIX_KEY, PREFIX_LEN_KEY, is_prefix_configured,
-		read_prefix_len, add_prefix, strip_prefix, PurgeFilterResult};
+		read_prefix_len, add_prefix, strip_prefix};
 	use super::shared::parse_prefix_len;
 	use super::keys_set::{Set as KeysSet, Storage as KeysSetStorage};
 
