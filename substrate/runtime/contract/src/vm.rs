@@ -30,13 +30,20 @@ use gas::{GasMeter, GasMeterResult};
 use runtime_primitives::traits::{As, CheckedMul};
 use {Trait};
 use exec::{CallReceipt, CreateReceipt};
+use system;
+use staking;
+
+type BalanceOf<T> = <T as staking::Trait>::Balance;
+type AccountIdOf<T> = <T as system::Trait>::AccountId;
 
 /// An interface that provides an access to the external environment in which the
 /// smart-contract is executed.
 ///
 /// This interface is specialised to an account of the executing code, so all
 /// operations are implicitly performed on that account.
-pub trait Ext<T: Trait> {
+pub trait Ext {
+	type T: Trait;
+
 	/// Returns the storage entry of the executing account by the given key.
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
@@ -51,17 +58,17 @@ pub trait Ext<T: Trait> {
 	fn create(
 		&mut self,
 		code: &[u8],
-		value: T::Balance,
-		gas_meter: &mut GasMeter<T>,
+		value: BalanceOf<Self::T>,
+		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
-	) -> Result<CreateReceipt<T>, ()>;
+	) -> Result<CreateReceipt<Self::T>, ()>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
 	fn call(
 		&mut self,
-		to: &T::AccountId,
-		value: T::Balance,
-		gas_meter: &mut GasMeter<T>,
+		to: &AccountIdOf<Self::T>,
+		value: BalanceOf<Self::T>,
+		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
 	) -> Result<CallReceipt, ()>;
 }
@@ -116,14 +123,14 @@ enum SpecialTrap {
 	Return(Vec<u8>),
 }
 
-struct Runtime<'a, T: Trait + 'a, E: Ext<T> + 'a> {
+struct Runtime<'a, E: Ext + 'a> {
 	ext: &'a mut E,
-	config: &'a Config<T>,
+	config: &'a Config<E::T>,
 	memory: sandbox::Memory,
-	gas_meter: &'a mut GasMeter<T>,
+	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
 }
-impl<'a, T: Trait, E: Ext<T> + 'a> Runtime<'a, T, E> {
+impl<'a, E: Ext + 'a> Runtime<'a, E> {
 	fn memory(&self) -> &sandbox::Memory {
 		&self.memory
 	}
@@ -133,7 +140,7 @@ impl<'a, T: Trait, E: Ext<T> + 'a> Runtime<'a, T, E> {
 	///
 	/// Returns `Err` if there is not enough gas.
 	fn store_return_data(&mut self, data: Vec<u8>) -> Result<(), ()> {
-		let data_len = <T::Gas as As<u64>>::sa(data.len() as u64);
+		let data_len = <<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(data.len() as u64);
 		let price = (self.config.return_data_per_byte_cost)
 			.checked_mul(&data_len)
 			.ok_or_else(|| ())?;
@@ -148,8 +155,8 @@ impl<'a, T: Trait, E: Ext<T> + 'a> Runtime<'a, T, E> {
 	}
 }
 
-fn to_execution_result<T: Trait, E: Ext<T>>(
-	runtime: Runtime<T, E>,
+fn to_execution_result<E: Ext>(
+	runtime: Runtime<E>,
 	run_err: Option<sandbox::Error>,
 ) -> Result<ExecutionResult, Error> {
 	// Check the exact type of the error. It could be plain trap or
@@ -184,198 +191,198 @@ pub struct ExecutionResult {
 	pub return_data: Vec<u8>,
 }
 
+// ext_gas(amount: u32)
+//
+// Account for used gas. Traps if gas used is greater than gas limit.
+//
+// - amount: How much gas is used.
+fn ext_gas<E: Ext>(
+	e: &mut Runtime<E>,
+	args: &[sandbox::TypedValue],
+) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	let amount = args[0].as_i32().unwrap() as u32;
+	let amount = <<<E as Ext>::T as Trait>::Gas as As<u32>>::sa(amount);
+
+	match e.gas_meter.charge(amount) {
+		GasMeterResult::Proceed => Ok(sandbox::ReturnValue::Unit),
+		GasMeterResult::OutOfGas => Err(sandbox::HostError),
+	}
+}
+
+// ext_put_storage(location_ptr: u32, value_non_null: u32, value_ptr: u32);
+//
+// Change the value at the given location in storage or remove it.
+//
+// - location_ptr: pointer into the linear
+//   memory where the location of the requested value is placed.
+// - value_non_null: if set to 0, then the entry
+//   at the given location will be removed.
+// - value_ptr: pointer into the linear memory
+//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
+fn ext_set_storage<E: Ext>(
+	e: &mut Runtime<E>,
+	args: &[sandbox::TypedValue],
+) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	let location_ptr = args[0].as_i32().unwrap() as u32;
+	let value_non_null = args[1].as_i32().unwrap() as u32;
+	let value_ptr = args[2].as_i32().unwrap() as u32;
+
+	let mut location = [0; 32];
+
+	e.memory().get(location_ptr, &mut location)?;
+
+	let value = if value_non_null != 0 {
+		let mut value = [0; 32];
+		e.memory().get(value_ptr, &mut value)?;
+		Some(value.to_vec())
+	} else {
+		None
+	};
+	e.ext.set_storage(&location, value);
+
+	Ok(sandbox::ReturnValue::Unit)
+}
+
+// ext_get_storage(location_ptr: u32, dest_ptr: u32);
+//
+// Retrieve the value at the given location from the strorage.
+// If there is no entry at the given location then all-zero-value
+// will be returned.
+//
+// - location_ptr: pointer into the linear
+//   memory where the location of the requested value is placed.
+// - dest_ptr: pointer where contents of the specified storage location
+//   should be placed.
+fn ext_get_storage<E: Ext>(
+	e: &mut Runtime<E>,
+	args: &[sandbox::TypedValue],
+) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	let location_ptr = args[0].as_i32().unwrap() as u32;
+	let dest_ptr = args[1].as_i32().unwrap() as u32;
+
+	let mut location = [0; 32];
+	e.memory().get(location_ptr, &mut location)?;
+
+	if let Some(value) = e.ext.get_storage(&location) {
+		e.memory().set(dest_ptr, &value)?;
+	} else {
+		e.memory().set(dest_ptr, &[0u8; 32])?;
+	}
+
+	Ok(sandbox::ReturnValue::Unit)
+}
+
+// ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
+fn ext_transfer<E: Ext>(
+	e: &mut Runtime<E>,
+	args: &[sandbox::TypedValue],
+) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	let transfer_to_ptr = args[0].as_i32().unwrap() as u32;
+	let transfer_to_len = args[1].as_i32().unwrap() as u32;
+	let value_ptr = args[2].as_i32().unwrap() as u32;
+	let value_len = args[3].as_i32().unwrap() as u32;
+
+	let mut transfer_to = Vec::new();
+	transfer_to.resize(transfer_to_len as usize, 0);
+	e.memory().get(transfer_to_ptr, &mut transfer_to)?;
+	let transfer_to = <<E as Ext>::T as system::Trait>::AccountId::decode(&mut &transfer_to[..]).unwrap();
+
+	let mut value_buf = Vec::new();
+	value_buf.resize(value_len as usize, 0);
+	e.memory().get(value_ptr, &mut value_buf)?;
+	let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..]).unwrap();
+
+	// TODO: Read input data from memory.
+	let input_data = Vec::new();
+
+	// TODO: Let user to choose how much gas to allocate for the execution.
+	let nested_gas_limit = e.gas_meter.gas_left();
+	let ext = &mut e.ext;
+	let call_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
+		match nested_meter {
+			Some(nested_meter) => ext.call(&transfer_to, value, nested_meter, &input_data),
+			// there is not enough gas to allocate for the nested call.
+			None => Err(()),
+		}
+	});
+
+	match call_outcome {
+		// TODO: Find a way how to pass return_data back to the this sandbox.
+		Ok(CallReceipt { .. }) => Ok(sandbox::ReturnValue::Unit),
+		// TODO: Return a status code value that can be handled by the caller instead of a trap.
+		Err(_) => Err(sandbox::HostError),
+	}
+}
+
+// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
+fn ext_create<E: Ext>(
+	e: &mut Runtime<E>,
+	args: &[sandbox::TypedValue],
+) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	let code_ptr = args[0].as_i32().unwrap() as u32;
+	let code_len = args[1].as_i32().unwrap() as u32;
+	let value_ptr = args[2].as_i32().unwrap() as u32;
+	let value_len = args[3].as_i32().unwrap() as u32;
+
+	let mut value_buf = Vec::new();
+	value_buf.resize(value_len as usize, 0);
+	e.memory().get(value_ptr, &mut value_buf)?;
+	let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..]).unwrap();
+
+	let mut code = Vec::new();
+	code.resize(code_len as usize, 0u8);
+	e.memory().get(code_ptr, &mut code)?;
+
+	// TODO: Read input data from the sandbox.
+	let input_data = Vec::new();
+
+	// TODO: Let user to choose how much gas to allocate for the execution.
+	let nested_gas_limit = e.gas_meter.gas_left();
+	let ext = &mut e.ext;
+	let create_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
+		match nested_meter {
+			Some(nested_meter) => ext.create(&code, value, nested_meter, &input_data),
+			// there is not enough gas to allocate for the nested call.
+			None => Err(()),
+		}
+	});
+
+	match create_outcome {
+		// TODO: Copy an address of the created contract in the sandbox.
+		Ok(CreateReceipt { .. }) => Ok(sandbox::ReturnValue::Unit),
+		// TODO: Return a status code value that can be handled by the caller instead of a trap.
+		Err(_) => Err(sandbox::HostError),
+	}
+}
+
+// ext_return(data_ptr: u32, data_len: u32) -> !
+fn ext_return<E: Ext>(
+	e: &mut Runtime<E>,
+	args: &[sandbox::TypedValue],
+) -> Result<sandbox::ReturnValue, sandbox::HostError> {
+	let data_ptr = args[0].as_i32().unwrap() as u32;
+	let data_len = args[1].as_i32().unwrap() as u32;
+
+	let mut data_buf = Vec::new();
+	data_buf.resize(data_len as usize, 0);
+	e.memory().get(data_ptr, &mut data_buf)?;
+
+	e.store_return_data(data_buf)
+		.map_err(|_| sandbox::HostError)?;
+
+	// The trap mechanism is used to immediately terminate the execution.
+	// This trap should be handled appropriately before returning the result
+	// to the user of this crate.
+	Err(sandbox::HostError)
+}
+
 /// Execute the given code as a contract.
-pub fn execute<'a, T: Trait, E: Ext<T>>(
+pub fn execute<'a, E: Ext>(
 	code: &[u8],
 	ext: &'a mut E,
-	gas_meter: &mut GasMeter<T>,
+	gas_meter: &mut GasMeter<E::T>,
 ) -> Result<ExecutionResult, Error> {
 	// TODO: Receive data as an argument
-
-	// ext_gas(amount: u32)
-	//
-	// Account for used gas. Traps if gas used is greater than gas limit.
-	//
-	// - amount: How much gas is used.
-	fn ext_gas<T: Trait, E: Ext<T>>(
-		e: &mut Runtime<T, E>,
-		args: &[sandbox::TypedValue],
-	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
-		let amount = args[0].as_i32().unwrap() as u32;
-		let amount = <T::Gas as As<u32>>::sa(amount);
-
-		match e.gas_meter.charge(amount) {
-			GasMeterResult::Proceed => Ok(sandbox::ReturnValue::Unit),
-			GasMeterResult::OutOfGas => Err(sandbox::HostError),
-		}
-	}
-
-	// ext_put_storage(location_ptr: u32, value_non_null: u32, value_ptr: u32);
-	//
-	// Change the value at the given location in storage or remove it.
-	//
-	// - location_ptr: pointer into the linear
-	//   memory where the location of the requested value is placed.
-	// - value_non_null: if set to 0, then the entry
-	//   at the given location will be removed.
-	// - value_ptr: pointer into the linear memory
-	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
-	fn ext_set_storage<T: Trait, E: Ext<T>>(
-		e: &mut Runtime<T, E>,
-		args: &[sandbox::TypedValue],
-	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
-		let location_ptr = args[0].as_i32().unwrap() as u32;
-		let value_non_null = args[1].as_i32().unwrap() as u32;
-		let value_ptr = args[2].as_i32().unwrap() as u32;
-
-		let mut location = [0; 32];
-
-		e.memory().get(location_ptr, &mut location)?;
-
-		let value = if value_non_null != 0 {
-			let mut value = [0; 32];
-			e.memory().get(value_ptr, &mut value)?;
-			Some(value.to_vec())
-		} else {
-			None
-		};
-		e.ext.set_storage(&location, value);
-
-		Ok(sandbox::ReturnValue::Unit)
-	}
-
-	// ext_get_storage(location_ptr: u32, dest_ptr: u32);
-	//
-	// Retrieve the value at the given location from the strorage.
-	// If there is no entry at the given location then all-zero-value
-	// will be returned.
-	//
-	// - location_ptr: pointer into the linear
-	//   memory where the location of the requested value is placed.
-	// - dest_ptr: pointer where contents of the specified storage location
-	//   should be placed.
-	fn ext_get_storage<T: Trait, E: Ext<T>>(
-		e: &mut Runtime<T, E>,
-		args: &[sandbox::TypedValue],
-	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
-		let location_ptr = args[0].as_i32().unwrap() as u32;
-		let dest_ptr = args[1].as_i32().unwrap() as u32;
-
-		let mut location = [0; 32];
-		e.memory().get(location_ptr, &mut location)?;
-
-		if let Some(value) = e.ext.get_storage(&location) {
-			e.memory().set(dest_ptr, &value)?;
-		} else {
-			e.memory().set(dest_ptr, &[0u8; 32])?;
-		}
-
-		Ok(sandbox::ReturnValue::Unit)
-	}
-
-	// ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_transfer<T: Trait, E: Ext<T>>(
-		e: &mut Runtime<T, E>,
-		args: &[sandbox::TypedValue],
-	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
-		let transfer_to_ptr = args[0].as_i32().unwrap() as u32;
-		let transfer_to_len = args[1].as_i32().unwrap() as u32;
-		let value_ptr = args[2].as_i32().unwrap() as u32;
-		let value_len = args[3].as_i32().unwrap() as u32;
-
-		let mut transfer_to = Vec::new();
-		transfer_to.resize(transfer_to_len as usize, 0);
-		e.memory().get(transfer_to_ptr, &mut transfer_to)?;
-		let transfer_to = T::AccountId::decode(&mut &transfer_to[..]).unwrap();
-
-		let mut value_buf = Vec::new();
-		value_buf.resize(value_len as usize, 0);
-		e.memory().get(value_ptr, &mut value_buf)?;
-		let value = T::Balance::decode(&mut &value_buf[..]).unwrap();
-
-		// TODO: Read input data from memory.
-		let input_data = Vec::new();
-
-		// TODO: Let user to choose how much gas to allocate for the execution.
-		let nested_gas_limit = e.gas_meter.gas_left();
-		let ext = &mut e.ext;
-		let call_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
-			match nested_meter {
-				Some(nested_meter) => ext.call(&transfer_to, value, nested_meter, &input_data),
-				// there is not enough gas to allocate for the nested call.
-				None => Err(()),
-			}
-		});
-
-		match call_outcome {
-			// TODO: Find a way how to pass return_data back to the this sandbox.
-			Ok(CallReceipt { .. }) => Ok(sandbox::ReturnValue::Unit),
-			// TODO: Return a status code value that can be handled by the caller instead of a trap.
-			Err(_) => Err(sandbox::HostError),
-		}
-	}
-
-	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
-	fn ext_create<T: Trait, E: Ext<T>>(
-		e: &mut Runtime<T, E>,
-		args: &[sandbox::TypedValue],
-	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
-		let code_ptr = args[0].as_i32().unwrap() as u32;
-		let code_len = args[1].as_i32().unwrap() as u32;
-		let value_ptr = args[2].as_i32().unwrap() as u32;
-		let value_len = args[3].as_i32().unwrap() as u32;
-
-		let mut value_buf = Vec::new();
-		value_buf.resize(value_len as usize, 0);
-		e.memory().get(value_ptr, &mut value_buf)?;
-		let value = T::Balance::decode(&mut &value_buf[..]).unwrap();
-
-		let mut code = Vec::new();
-		code.resize(code_len as usize, 0u8);
-		e.memory().get(code_ptr, &mut code)?;
-
-		// TODO: Read input data from the sandbox.
-		let input_data = Vec::new();
-
-		// TODO: Let user to choose how much gas to allocate for the execution.
-		let nested_gas_limit = e.gas_meter.gas_left();
-		let ext = &mut e.ext;
-		let create_outcome = e.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
-			match nested_meter {
-				Some(nested_meter) => ext.create(&code, value, nested_meter, &input_data),
-				// there is not enough gas to allocate for the nested call.
-				None => Err(()),
-			}
-		});
-
-		match create_outcome {
-			// TODO: Copy an address of the created contract in the sandbox.
-			Ok(CreateReceipt { .. }) => Ok(sandbox::ReturnValue::Unit),
-			// TODO: Return a status code value that can be handled by the caller instead of a trap.
-			Err(_) => Err(sandbox::HostError),
-		}
-	}
-
-	// ext_return(data_ptr: u32, data_len: u32) -> !
-	fn ext_return<T: Trait, E: Ext<T>>(
-		e: &mut Runtime<T, E>,
-		args: &[sandbox::TypedValue],
-	) -> Result<sandbox::ReturnValue, sandbox::HostError> {
-		let data_ptr = args[0].as_i32().unwrap() as u32;
-		let data_len = args[1].as_i32().unwrap() as u32;
-
-		let mut data_buf = Vec::new();
-		data_buf.resize(data_len as usize, 0);
-		e.memory().get(data_ptr, &mut data_buf)?;
-
-		e.store_return_data(data_buf)
-			.map_err(|_| sandbox::HostError)?;
-
-		// The trap mechanism is used to immediately terminate the execution.
-		// This trap should be handled appropriately before returning the result
-		// to the user of this crate.
-		Err(sandbox::HostError)
-	}
 
 	let config = Config::default();
 
@@ -385,13 +392,13 @@ pub fn execute<'a, T: Trait, E: Ext<T>>(
 	} = prepare_contract(code, &config)?;
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
-	imports.add_host_func("env", "gas", ext_gas::<T, E>);
-	imports.add_host_func("env", "ext_set_storage", ext_set_storage::<T, E>);
-	imports.add_host_func("env", "ext_get_storage", ext_get_storage::<T, E>);
+	imports.add_host_func("env", "gas", ext_gas::<E>);
+	imports.add_host_func("env", "ext_set_storage", ext_set_storage::<E>);
+	imports.add_host_func("env", "ext_get_storage", ext_get_storage::<E>);
 	// TODO: Rename it to ext_call.
-	imports.add_host_func("env", "ext_transfer", ext_transfer::<T, E>);
-	imports.add_host_func("env", "ext_create", ext_create::<T, E>);
-	imports.add_host_func("env", "ext_return", ext_return::<T, E>);
+	imports.add_host_func("env", "ext_transfer", ext_transfer::<E>);
+	imports.add_host_func("env", "ext_create", ext_create::<E>);
+	imports.add_host_func("env", "ext_return", ext_return::<E>);
 	// TODO: ext_balance, ext_address, ext_callvalue, etc.
 	imports.add_memory("env", "memory", memory.clone());
 
@@ -611,7 +618,9 @@ mod tests {
 		transfers: Vec<TransferEntry>,
 		next_account_id: u64,
 	}
-	impl Ext<Test> for MockExt {
+	impl Ext for MockExt {
+		type T = Test;
+
 		fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 			self.storage.get(key).cloned()
 		}

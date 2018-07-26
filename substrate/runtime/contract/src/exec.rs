@@ -226,7 +226,9 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b> {
 	_caller: T::AccountId,
 }
 
-impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
+impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
+	type T = T;
+
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.ctx.overlay.get_storage(&self.ctx.self_account, key)
 	}
