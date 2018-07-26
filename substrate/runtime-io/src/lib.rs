@@ -28,7 +28,7 @@
 
 mod prefix;
 
-pub use prefix::{PREFIX_KEY, PREFIX_LEN_KEY};
+pub use prefix::{PREFIX_KEY, PREFIX_LEN_KEY, PurgeFilterResult};
 
 #[cfg(feature = "std")]
 include!("../with_std.rs");

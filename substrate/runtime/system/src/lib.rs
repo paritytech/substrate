@@ -106,16 +106,19 @@ impl<T: Trait> Module<T> {
 			if *number > min_purged_value_age {
 				let ancient_block = (*number - min_purged_value_age).as_();
 				runtime_io::purge_storage(|_, prefix, value| {
-					// retain entry if it is not deleted
+					// if key is not deleted => delete from deleted keys set
 					if value.is_some() {
-						return true;
+						return runtime_io::PurgeFilterResult::RemoveFromSet;
 					}
 
-					// or it is deleted later than the ancient_block
-					prefix
-						.and_then(|prefix| Decode::decode(&mut &prefix[..]))
+					// if key is deleted later than the ancient_block => leave for another period
+					if prefix.and_then(|prefix| Decode::decode(&mut &prefix[..]))
 						.map(|deleted_at_block: u64| deleted_at_block > ancient_block)
-						.unwrap_or(false)
+						.unwrap_or(false) {
+						return runtime_io::PurgeFilterResult::LeaveAsIs;
+					}
+
+					runtime_io::PurgeFilterResult::Purge
 				});
 			}
 		}

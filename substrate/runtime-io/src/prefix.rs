@@ -29,12 +29,22 @@ pub use self::shared::PREFIX_LEN_KEY;
 pub use self::api::{is_prefix_configured, read_prefix_len, add_prefix,
 	strip_prefix, purge, schedule_purge};
 
+/// Result of purge filter function.
+pub enum PurgeFilterResult {
+	/// Remove key from both deleted set and storage.
+	Purge,
+	/// Remove key from set only.
+	RemoveFromSet,
+	/// Leave key in set and in the storage.
+	LeaveAsIs,
+}
+
 #[cfg(feature = "std")]
 mod api {
 	use substrate_state_machine::Externalities;
 	use super::keys_set::{Set, Storage as SetStorage};
 	use super::{PREFIX_LEN_KEY, PREFIX_KEY, DELETED_SET_KEY_PREFIX, shared};
-	use {raw};
+	use {PurgeFilterResult, raw};
 
 	struct RawSetStorage<'a>(&'a mut Externalities);
 
@@ -70,18 +80,20 @@ mod api {
 	}
 
 	/// Purge scheduled values.
-	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> bool>(ext: &mut Externalities, f: F) {
+	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(ext: &mut Externalities, f: F) {
 		let prefix_len = raw::storage(ext, PREFIX_LEN_KEY);
 		Set::new(DELETED_SET_KEY_PREFIX, &mut RawSetStorage(ext)).retain(|storage, key| {
 			let (prefix, value) = storage.read(key)
 				.map(|value| shared::strip_prefix(prefix_len.clone(), value)
 					.expect("Externalities failure is intercepted by executor"))
 				.unwrap_or_default();
-			if !f(key, prefix, value) {
-				storage.clear(key);
-				false
-			} else {
-				true
+			match f(key, prefix, value) {
+				PurgeFilterResult::Purge => {
+					storage.clear(key);
+					false
+				},
+				PurgeFilterResult::RemoveFromSet => false,
+				PurgeFilterResult::LeaveAsIs => true,
 			}
 		});
 	}
@@ -97,7 +109,7 @@ mod api {
 	use rstd::vec::Vec;
 	use super::keys_set::{Set, Storage as SetStorage};
 	use super::{PREFIX_LEN_KEY, PREFIX_KEY, DELETED_SET_KEY_PREFIX, shared};
-	use raw;
+	use {PurgeFilterResult, raw};
 
 	struct RawSetStorage;
 
@@ -133,18 +145,20 @@ mod api {
 	}
 
 	/// Purge scheduled values.
-	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> bool>(f: F) {
+	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(f: F) {
 		let prefix_len = raw::storage(PREFIX_LEN_KEY);
 		Set::new(DELETED_SET_KEY_PREFIX, &mut RawSetStorage).retain(|storage, key| {
 			let (prefix, value) = storage.read(key)
 				.map(|value| shared::strip_prefix(prefix_len.clone(), value)
 					.expect("Externalities failure is intercepted by executor"))
 				.unwrap_or_default();
-			if !f(key, prefix, value) {
-				storage.clear(key);
-				false
-			} else {
-				true
+			match f(key, prefix, value) {
+				PurgeFilterResult::Purge => {
+					storage.clear(key);
+					false
+				},
+				PurgeFilterResult::RemoveFromSet => false,
+				PurgeFilterResult::LeaveAsIs => true,
 			}
 		});
 	}
@@ -190,7 +204,7 @@ mod tests {
 	use codec::Encode;
 	use substrate_state_machine::{Externalities, TestExternalities};
 	use super::{PREFIX_KEY, PREFIX_LEN_KEY, is_prefix_configured,
-		read_prefix_len, add_prefix, strip_prefix};
+		read_prefix_len, add_prefix, strip_prefix, PurgeFilterResult};
 	use super::shared::parse_prefix_len;
 	use super::keys_set::{Set as KeysSet, Storage as KeysSetStorage};
 

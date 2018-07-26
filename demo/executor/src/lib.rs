@@ -499,6 +499,12 @@ mod tests {
 			.unwrap_or_default()
 	}
 
+	fn is_alice_balance_scheduled_for_purge(t: &TestExternalities) -> bool {
+		let mut key = b":deleted:map:".to_vec();
+		key.extend(&twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())));
+		t.storage(&key).is_some()
+	}
+
 	fn purge_check_blocks() -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
 		let (block1, block1_hash) = construct_block(1, [0u8; 32].into(),
 			hex!("550fb3155809097434b3e214431091d53f566e433376c6f4f582b73d9cee219e").into(),
@@ -626,6 +632,9 @@ mod tests {
 		executor().call(&mut t, COMPACT_CODE, "execute_block", &has_no_footprint_block, true).0.unwrap();
 		let (prefix, balance) = alice_balance_with_prefix(&t);
 		assert!(prefix.is_none() && balance.is_none());
+
+		// check that value is still scheduled for purge
+		assert!(!is_alice_balance_scheduled_for_purge(&t));
 	}
 
 	#[test]
@@ -651,6 +660,9 @@ mod tests {
 		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &has_no_footprint_block, true).0.unwrap();
 		let (prefix, balance) = alice_balance_with_prefix(&t);
 		assert!(prefix.is_none() && balance.is_none());
+
+		// check that value is still scheduled for purge
+		assert!(!is_alice_balance_scheduled_for_purge(&t));
 	}
 
 	fn recreated_purge_check_blocks() -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
@@ -672,7 +684,7 @@ mod tests {
 				function: Call::Staking(staking::Call::transfer(alice().into(), 109)),
 			}]);
 		let (block4, _) = construct_block(4, block3_hash,
-			hex!("ba38ff81ec98670554a00b43f453e491edd336bbf79bacb669928a148c30111c").into(),
+			hex!("4ced8abff58b3f0a4dd7624564ec7b29106ed15a437c10b46c075ecdb251f160").into(),
 			vec![]);
 		(block1, block2, block3, block4)
 	}
@@ -703,6 +715,9 @@ mod tests {
 		executor().call(&mut t, COMPACT_CODE, "execute_block", &block4, true).0.unwrap();
 		assert_eq!(alice_balance_with_prefix(&t),
 			(Some(vec![3, 0, 0, 0, 0, 0, 0, 0]), Some(vec![109, 0, 0, 0, 0, 0, 0, 0])));
+
+		// check that value is not scheduled for purge anymore
+		assert!(!is_alice_balance_scheduled_for_purge(&t));
 	}
 
 	#[test]
@@ -731,5 +746,8 @@ mod tests {
 		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block4, true).0.unwrap();
 		assert_eq!(alice_balance_with_prefix(&t),
 			(Some(vec![3, 0, 0, 0, 0, 0, 0, 0]), Some(vec![109, 0, 0, 0, 0, 0, 0, 0])));
+	
+		// check that value is not scheduled for purge anymore
+		assert!(!is_alice_balance_scheduled_for_purge(&t));
 	}
 }
