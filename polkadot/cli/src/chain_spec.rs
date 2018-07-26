@@ -17,7 +17,6 @@
 //! Predefined chains.
 
 use service;
-use std::path::PathBuf;
 
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
@@ -31,8 +30,6 @@ pub enum ChainSpec {
 	KrummeLanke,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
-	/// Custom Genesis file.
-	Custom(String),
 }
 
 /// Get a chain config from a spec setting.
@@ -43,32 +40,18 @@ impl ChainSpec {
 			ChainSpec::Development => service::chain_spec::development_config(),
 			ChainSpec::LocalTestnet => service::chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => service::chain_spec::staging_testnet_config(),
-			ChainSpec::Custom(f) => service::ChainSpec::from_json_file(PathBuf::from(f))?,
 		})
 	}
-}
 
-impl<'a> From<&'a str> for ChainSpec {
-	fn from(s: &'a str) -> Self {
+	pub(crate) fn from(s: &str) -> Option<Self> {
 		match s {
-			"dev" => ChainSpec::Development,
-			"local" => ChainSpec::LocalTestnet,
-			"poc-1" => ChainSpec::KrummeLanke,
-			"krummelanke" => ChainSpec::KrummeLanke,
-			"staging" => ChainSpec::StagingTestnet,
-			s => ChainSpec::Custom(s.into()),
+			"dev" => Some(ChainSpec::Development),
+			"local" => Some(ChainSpec::LocalTestnet),
+			"poc-1" => Some(ChainSpec::KrummeLanke),
+			"" | "krummelanke" => Some(ChainSpec::KrummeLanke),
+			"staging" => Some(ChainSpec::StagingTestnet),
+			_ => None,
 		}
 	}
 }
 
-impl From<ChainSpec> for String {
-	fn from(s: ChainSpec) -> String {
-		match s {
-			ChainSpec::Development => "dev".into(),
-			ChainSpec::LocalTestnet => "local".into(),
-			ChainSpec::KrummeLanke => "krummelanke".into(),
-			ChainSpec::StagingTestnet => "staging".into(),
-			ChainSpec::Custom(f) => format!("custom ({})", f),
-		}
-	}
-}

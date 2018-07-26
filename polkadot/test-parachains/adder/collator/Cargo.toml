@@ -12,3 +12,4 @@ ed25519 = { path = "../../../../substrate/ed25519" }
 parking_lot = "0.4"
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 futures = "0.1"
+exit-future = "0.1.2"

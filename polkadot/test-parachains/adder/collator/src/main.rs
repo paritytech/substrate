@@ -24,6 +24,7 @@ extern crate ed25519;
 extern crate parking_lot;
 extern crate ctrlc;
 extern crate futures;
+extern crate exit_future;
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -33,9 +34,7 @@ use adder::{HeadData as AdderHead, BlockData as AdderBody};
 use ed25519::Pair;
 use parachain::codec::{Encode, Decode};
 use primitives::parachain::{HeadData, BlockData, Id as ParaId, Message};
-use collator::{InvalidHead, ParachainContext};
-use futures::sync::oneshot;
-use futures::Future;
+use collator::{InvalidHead, ParachainContext, VersionInfo};
 use parking_lot::Mutex;
 
 const GENESIS: AdderHead = AdderHead {
@@ -112,16 +111,15 @@ fn main() {
 	}
 
 	// can't use signal directly here because CtrlC takes only `Fn`.
-	let (exit_send, exit) = oneshot::channel();
+	let (exit_send, exit) = exit_future::signal();
 
 	let exit_send_cell = RefCell::new(Some(exit_send));
 	ctrlc::CtrlC::set_handler(move || {
 		if let Some(exit_send) = exit_send_cell.try_borrow_mut().expect("signal handler not reentrant; qed").take() {
-			exit_send.send(()).expect("Error sending exit notification");
+			exit_send.fire();
 		}
 	});
 
-	let on_exit = exit.map_err(drop);
 	let context = AdderContext {
 		db: Arc::new(Mutex::new(HashMap::new())),
 	};
@@ -130,9 +128,16 @@ fn main() {
 	let res = ::collator::run_collator(
 		context,
 		id,
-		on_exit,
+		exit,
 		key,
 		args,
+		VersionInfo {
+			version: "",
+			commit: "",
+			executable_name: "",
+			description: "",
+			author: "",
+		}
 	);
 
 	if let Err(e) = res {

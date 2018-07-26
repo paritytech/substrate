@@ -1,0 +1,11 @@
+
+= Substrate CLI
+
+== Summary
+
+[source, toml]
+----
+include::Cargo.toml[lines=2..5]
+----
+
+include::doc/shell-completion.adoc[]
