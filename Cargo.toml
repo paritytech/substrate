@@ -16,6 +16,7 @@ ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
 [workspace]
 members = [
 	"polkadot/api",
+	"polkadot/availability-store",
 	"polkadot/cli",
 	"polkadot/collator",
 	"polkadot/consensus",

@@ -444,7 +444,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 	}
 }
 
-impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block> 
+impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block>
 {}
 
 #[cfg(test)]
