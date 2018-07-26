@@ -643,10 +643,6 @@ impl NetworkState {
 				peer_info.id,
 				peer_info.kad_connec.is_alive(),
 				peer_info.protocols.iter().filter(|c| c.1.is_alive()).count());
-			// TODO: we manually clear the connections as a work-around for
-			// networking bugs ; normally it should automatically drop
-			for c in peer_info.protocols.iter() { c.1.clear(); }
-			peer_info.kad_connec.clear();
 			let old = connections.peer_by_nodeid.remove(&peer_info.id);
 			debug_assert_eq!(old, Some(who));
 		}
