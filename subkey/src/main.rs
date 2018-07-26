@@ -1,4 +1,5 @@
-#![feature(test)]
+#![cfg_attr(feature = "bench", feature(test))]
+#[cfg(feature = "bench")]
 extern crate test;
 extern crate ed25519;
 extern crate substrate_primitives;
@@ -115,6 +116,7 @@ fn main() {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	#[cfg(feature = "bench")]
 	use test::Bencher;
 
 	#[test]
@@ -155,6 +157,7 @@ mod tests {
 		assert!(calculate_score("Polkadot", "5GUWv4bLCchGUHJrzULXnh4JgXsMpTKRnjuXTY7Qo1Kh9uYK") == 0);
 	}
 
+	#[cfg(feature = "bench")]
 	#[bench]
     fn bench_paranoiac(b: &mut Bencher) {
         b.iter(|| {
@@ -162,6 +165,7 @@ mod tests {
 		});
     }
 
+	#[cfg(feature = "bench")]
     #[bench]
     fn bench_not_paranoiac(b: &mut Bencher) {
         b.iter(|| {
