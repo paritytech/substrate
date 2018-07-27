@@ -592,4 +592,31 @@ mod tests {
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 958);
 		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 42);
 	}
+
+	#[test]
+	fn block_builder_does_not_include_invalid() {
+		let client = test_client::new();
+
+		let mut builder = client.new_block().unwrap();
+
+		builder.push(sign_tx(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		})).unwrap();
+
+		assert!(builder.push(sign_tx(Transfer {
+			from: Keyring::Eve.to_raw_public().into(),
+			to: Keyring::Alice.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		})).is_err());
+
+		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+
+		assert_eq!(client.info().unwrap().chain.best_number, 1);
+		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
+		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
+	}
 }
