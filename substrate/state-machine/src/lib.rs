@@ -342,11 +342,9 @@ pub fn execute_using_consensus_failure_handler<
 
 	match result {
 		Ok(x) => {
-			overlay.commit_prospective();
 			Ok(x)
 		}
 		Err(e) => {
-			overlay.discard_prospective();
 			Err(Box::new(e))
 		}
 	}
