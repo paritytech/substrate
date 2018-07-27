@@ -91,4 +91,5 @@ is-it-maintained-issue-resolution = { repository = "paritytech/polkadot" }
 is-it-maintained-open-issues = { repository = "paritytech/polkadot" }
 
 [profile.release]
-panic = "abort"
+# Substrate runtime requires unwinding.
+panic = "unwind" 

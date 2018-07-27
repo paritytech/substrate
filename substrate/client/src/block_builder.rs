@@ -22,6 +22,7 @@ use state_machine::{self, native_when_possible};
 use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
 use runtime_primitives::generic::BlockId;
 use {backend, error, Client, CallExecutor};
+use runtime_primitives::{ApplyResult, ApplyOutcome};
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<B, E, Block> where
@@ -68,6 +69,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 		);
 
 		executor.call_at_state(&state, &mut changes, "initialise_block", &header.encode(), native_when_possible())?;
+		changes.commit_prospective();
 
 		Ok(BlockBuilder {
 			header,
@@ -83,9 +85,22 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
 		match self.executor.call_at_state(&self.state, &mut self.changes, "apply_extrinsic", &xt.encode(), native_when_possible()) {
-			Ok(_) => {
-				self.extrinsics.push(xt);
-				Ok(())
+			Ok((result, _)) => {
+				match ApplyResult::decode(&mut result.as_slice()) {
+					Some(Ok(ApplyOutcome::Success)) | Some(Ok(ApplyOutcome::Fail)) => {
+						self.extrinsics.push(xt);
+						self.changes.commit_prospective();
+						Ok(())
+					}
+					Some(Err(e)) => {
+						self.changes.discard_prospective();
+						Err(error::ErrorKind::ApplyExtinsicFailed(e).into())
+					}
+					None => {
+						self.changes.discard_prospective();
+						Err(error::ErrorKind::CallResultDecode("apply_extrinsic").into())
+					}
+				}
 			}
 			Err(e) => {
 				self.changes.discard_prospective();
