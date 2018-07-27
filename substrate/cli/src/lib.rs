@@ -115,7 +115,7 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= MAX_NODE_NAME_LENGTH {
 		return Err("Node name too long");
-}
+	}
 
 	let invalid_chars = r"[\\.@]";
 	let re = Regex::new(invalid_chars).unwrap();
@@ -384,9 +384,9 @@ fn revert_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>
 }
 
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = default.parse().ok().ok_or(format!("Invalid address specified for --{}.", port_param))?;
+	let mut address: SocketAddr = default.parse().ok().ok_or_else(|| format!("Invalid address specified for --{}.", port_param))?;
 	if let Some(port) = matches.value_of(port_param) {
-		let port: u16 = port.parse().ok().ok_or(format!("Invalid port for --{} specified.", port_param))?;
+		let port: u16 = port.parse().ok().ok_or_else(|| format!("Invalid port for --{} specified.", port_param))?;
 		address.set_port(port);
 	}
 
@@ -485,18 +485,18 @@ fn kill_color(s: &str) -> String {
 mod tests {
 	use super::*;
 
-    #[test]
-    fn tests_node_name_good() {
-        assert!(is_node_name_valid("short name").is_ok());
-    }
+	#[test]
+	fn tests_node_name_good() {
+		assert!(is_node_name_valid("short name").is_ok());
+	}
 
-    #[test]
+	#[test]
 	fn tests_node_name_bad() {
-        assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
-        assert!(is_node_name_valid("Dots.not.Ok").is_err());
-        assert!(is_node_name_valid("http://visit.me").is_err());
-        assert!(is_node_name_valid("https://visit.me").is_err());
-        assert!(is_node_name_valid("www.visit.me").is_err());
-        assert!(is_node_name_valid("email@domain").is_err());
-    }
+		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
+		assert!(is_node_name_valid("Dots.not.Ok").is_err());
+		assert!(is_node_name_valid("http://visit.me").is_err());
+		assert!(is_node_name_valid("https://visit.me").is_err());
+		assert!(is_node_name_valid("www.visit.me").is_err());
+		assert!(is_node_name_valid("email@domain").is_err());
+	}
 }
