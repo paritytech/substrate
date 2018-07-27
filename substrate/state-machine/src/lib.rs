@@ -269,7 +269,7 @@ pub fn execute_using_consensus_failure_handler<
 
 	// make a copy.
 	let code = ext::Ext::new(overlay, backend).storage(b":code")
-		.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
+		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 		.to_vec();
 
 	let result = {
@@ -509,7 +509,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			ExecutionManager::Both(|we, _ne| { 
+			ExecutionManager::Both(|we, _ne| {
 				consensus_failed = true;
 				println!("HELLO!");
 				we
