@@ -88,12 +88,12 @@ exclude = [
 	"substrate/test-runtime/wasm",
 ]
 
-[profile.release]
-panic = "abort"
-lto = true
-
 [badges]
 travis-ci = { repository = "paritytech/polkadot", branch = "master" }
 maintenance = { status = "actively-developed" }
 is-it-maintained-issue-resolution = { repository = "paritytech/polkadot" }
 is-it-maintained-open-issues = { repository = "paritytech/polkadot" }
+
+[profile.release]
+# Substrate runtime requires unwinding.
+panic = "unwind"

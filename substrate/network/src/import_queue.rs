@@ -41,7 +41,7 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	fn stop(&self);
 	/// Get queue status.
 	fn status(&self) -> ImportQueueStatus<B>;
-	/// Is block with given hash is currently in the queue.
+	/// Is block with given hash currently in the queue.
 	fn is_importing(&self, hash: &B::Hash) -> bool;
 	/// Import bunch of blocks.
 	fn import_blocks(&self, sync: &mut ChainSync<B>, protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>));
@@ -390,7 +390,7 @@ impl<'a, B: 'static + BlockT, E: ExecuteInContext<B>> SyncLinkApi<B> for SyncLin
 	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.with_sync(|sync, _| sync.block_imported(&hash, number))
 	}
-	
+
 	fn maintain_sync(&mut self) {
 		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
 	}
