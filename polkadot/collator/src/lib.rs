@@ -213,7 +213,7 @@ struct CollationNode<P, E> {
 
 impl<P, E> IntoExit for CollationNode<P, E> where
 	P: ParachainContext + Send + 'static,
-	E: Future<Item=(),Error=()> + Send + Clone + 'static
+	E: Future<Item=(),Error=()> + Send + 'static
 {
 	type Exit = E;
 	fn into_exit(self) -> Self::Exit {
@@ -223,7 +223,7 @@ impl<P, E> IntoExit for CollationNode<P, E> where
 
 impl<P, E> Worker for CollationNode<P, E> where
 	P: ParachainContext + Send + 'static,
-	E: Future<Item=(),Error=()> + Send + Clone + 'static
+	E: Future<Item=(),Error=()> + Send + 'static
 {
 	type Work = Box<Future<Item=(),Error=()> + Send>;
 
