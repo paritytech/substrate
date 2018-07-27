@@ -485,18 +485,18 @@ fn kill_color(s: &str) -> String {
 mod tests {
 	use super::*;
 
-    #[test]
-    fn tests_node_name_good() {
-        assert!(is_node_name_valid("short name").is_ok());
-    }
+	#[test]
+	fn tests_node_name_good() {
+		assert!(is_node_name_valid("short name").is_ok());
+	}
 
-    #[test]
+	#[test]
 	fn tests_node_name_bad() {
-        assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
-        assert!(is_node_name_valid("Dots.not.Ok").is_err());
-        assert!(is_node_name_valid("http://visit.me").is_err());
-        assert!(is_node_name_valid("https://visit.me").is_err());
-        assert!(is_node_name_valid("www.visit.me").is_err());
-        assert!(is_node_name_valid("email@domain").is_err());
-    }
+		assert!(is_node_name_valid("long names are not very cool for the ui").is_err());
+		assert!(is_node_name_valid("Dots.not.Ok").is_err());
+		assert!(is_node_name_valid("http://visit.me").is_err());
+		assert!(is_node_name_valid("https://visit.me").is_err());
+		assert!(is_node_name_valid("www.visit.me").is_err());
+		assert!(is_node_name_valid("email@domain").is_err());
+	}
 }
