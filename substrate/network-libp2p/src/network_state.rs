@@ -33,6 +33,7 @@ use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
 use std::path::Path;
 use std::sync::atomic;
+use std::{thread, time};
 use std::time::{Duration, Instant};
 
 // File where the peers are stored.
@@ -174,17 +175,35 @@ impl NetworkState {
 		let node_store = if let Some(ref path) = config.net_config_path {
 			let path = Path::new(path).join(NODES_FILE);
 			if let Ok(node_store) = JsonPeerstore::new(path.clone()) {
-				debug!(target: "sub-libp2p", "Initialized peer store for JSON \
-					file {:?}", path);
+				debug!(target: "sub-libp2p", "Initialized peer store for JSON file {:?}", path);
 				NodeStore::Json(node_store)
 			} else {
-				warn!(target: "sub-libp2p", "Failed to open peer storage {:?} \
-					; peers won't be saved", path);
-				NodeStore::Memory(MemoryPeerstore::empty())
+				warn!(target: "sub-libp2p", "Failed to open peer storage {:?}; peers file will be reset", path);
+				fs::remove_file(&path).expect("Failed deleting peers.json");
+
+				// we check for about 1s if the file was really deleted and move on
+				for _x in 0..200 {
+					if !Path::new(&path).exists() {
+						break;
+					} else {
+						debug!("Waiting for effective deletion of invalid/outdate peers.json");
+						thread::sleep(time::Duration::from_millis(5));
+					}
+				}
+
+				if let Ok(peerstore) = JsonPeerstore::new(path.clone()) {
+					debug!("peers.json reset");
+					NodeStore::Json(peerstore)
+				} else {
+					warn!(target: "sub-libp2p",
+						"Failed to reset peer storage {:?}; peers change will not be saved",
+						path
+					);
+					NodeStore::Memory(MemoryPeerstore::empty())
+				}
 			}
 		} else {
-			debug!(target: "sub-libp2p", "No peers file configured ; peers \
-				won't be saved");
+			debug!(target: "sub-libp2p", "No peers file configured ; peers won't be saved");
 			NodeStore::Memory(MemoryPeerstore::empty())
 		};
 
