@@ -803,11 +803,11 @@ fn parse_and_add_to_node_store(
 		NodeStore::Memory(ref node_store) =>
 			node_store
 				.peer_or_create(&who)
-				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
+				.set_addr_ttl(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 		NodeStore::Json(ref node_store) =>
 			node_store
 				.peer_or_create(&who)
-				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
+				.set_addr_ttl(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 	}
 	
 	Ok(who)
