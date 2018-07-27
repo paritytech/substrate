@@ -21,6 +21,7 @@ use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
+use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
 use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
 
@@ -72,7 +73,7 @@ pub fn execute_block(block: Block) {
 	assert!(header.extrinsics_root == txs_root, "Transaction trie root must be valid.");
 
 	// execute transactions
-	block.extrinsics.iter().for_each(execute_transaction_backend);
+	block.extrinsics.iter().for_each(|e| { execute_transaction_backend(e).map_err(|_| ()).expect("Extrinsic error"); });
 
 	// check storage root.
 	let storage_root = storage_root().into();
@@ -82,11 +83,11 @@ pub fn execute_block(block: Block) {
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
-pub fn execute_transaction(utx: Extrinsic) {
+pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
 	let extrinsic_index = ExtrinsicIndex::get();
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
 	ExtrinsicIndex::put(extrinsic_index + 1);
-	execute_transaction_backend(&utx);
+	execute_transaction_backend(&utx)
 }
 
 /// Finalise the block.
@@ -109,13 +110,13 @@ pub fn finalise_block() -> Header {
 	}
 }
 
-fn execute_transaction_backend(utx: &Extrinsic) {
+fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 	use runtime_primitives::traits::BlindCheckable;
 
 	// check signature
 	let utx = match utx.clone().check() {
 		Ok(tx) => tx,
-		Err(_) => panic!("All transactions should be properly signed"),
+		Err(_) => return Err(ApplyError::BadSignature),
 	};
 
 	let tx: ::Transfer = utx.transfer;
@@ -123,7 +124,9 @@ fn execute_transaction_backend(utx: &Extrinsic) {
 	// check nonce
 	let nonce_key = tx.from.to_keyed_vec(NONCE_OF);
 	let expected_nonce: u64 = storage::get_or(&nonce_key, 0);
-	assert!(tx.nonce == expected_nonce, "All transactions should have the correct nonce");
+	if !(tx.nonce == expected_nonce) {
+		return Err(ApplyError::Stale)
+	}
 
 	// increment nonce in storage
 	storage::put(&nonce_key, &(expected_nonce + 1));
@@ -133,11 +136,14 @@ fn execute_transaction_backend(utx: &Extrinsic) {
 	let from_balance: u64 = storage::get_or(&from_balance_key, 0);
 
 	// enact transfer
-	assert!(tx.amount <= from_balance, "All transactions should transfer at most the sender balance");
+	if !(tx.amount <= from_balance) {
+		return Err(ApplyError::CantPay)
+	}
 	let to_balance_key = tx.to.to_keyed_vec(BALANCE_OF);
 	let to_balance: u64 = storage::get_or(&to_balance_key, 0);
 	storage::put(&from_balance_key, &(from_balance - tx.amount));
 	storage::put(&to_balance_key, &(to_balance + tx.amount));
+	Ok(ApplyOutcome::Success)
 }
 
 #[cfg(feature = "std")]
