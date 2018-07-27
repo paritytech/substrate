@@ -384,9 +384,9 @@ fn revert_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>
 }
 
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
-	let mut address: SocketAddr = default.parse().ok().ok_or(format!("Invalid address specified for --{}.", port_param))?;
+	let mut address: SocketAddr = default.parse().ok().ok_or_else(|| format!("Invalid address specified for --{}.", port_param))?;
 	if let Some(port) = matches.value_of(port_param) {
-		let port: u16 = port.parse().ok().ok_or(format!("Invalid port for --{} specified.", port_param))?;
+		let port: u16 = port.parse().ok().ok_or_else(|| format!("Invalid port for --{} specified.", port_param))?;
 		address.set_port(port);
 	}
 
