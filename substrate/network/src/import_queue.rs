@@ -133,6 +133,10 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 	}
 
 	fn import_blocks(&self, _sync: &mut ChainSync<B>, _protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>)) {
+		if blocks.1.is_empty() {
+			return;
+		}
+
 		trace!(target:"sync", "Scheduling {} blocks for import", blocks.1.len());
 
 		let mut queue = self.data.queue.lock();
@@ -248,6 +252,16 @@ fn import_many_blocks<'a, B: BlockT>(
 	let (blocks_origin, blocks) = blocks;
 	let count = blocks.len();
 	let mut imported = 0;
+
+	let blocks_range = match (
+			blocks.first().and_then(|b| b.block.header.as_ref().map(|h| h.number())),
+			blocks.last().and_then(|b| b.block.header.as_ref().map(|h| h.number())),
+		) {
+			(Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
+			(Some(first), Some(_)) => format!(" ({})", first),
+			_ => Default::default(),
+		};
+	trace!(target:"sync", "Starting import of {} blocks{}", count, blocks_range);
 
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
