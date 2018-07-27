@@ -64,5 +64,6 @@ fn panic_hook(info: &PanicInfo) {
 	);
 
 	let _ = writeln!(stderr, "{}", ABOUT_PANIC);
+	::std::process::exit(1);
 }
 
