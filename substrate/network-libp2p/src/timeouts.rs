@@ -27,16 +27,16 @@ use tokio_timer::{self, Delay};
 /// `T` can be anything you want, as it is transparently passed from the input
 /// to the output. Timeouts continue to fire forever, as there is no way to
 /// unregister them.
-pub fn build_timeouts_stream<T>(
+pub fn build_timeouts_stream<'a, T>(
 	timeouts_rx: mpsc::UnboundedReceiver<(Duration, T)>
-) -> impl Stream<Item = T, Error = IoError>
-	where T: Clone {
+) -> Box<Stream<Item = T, Error = IoError> + 'a>
+	where T: Clone + 'a {
 	let next_timeout = next_in_timeouts_stream(timeouts_rx);
 
 	// The `unfold` function is essentially a loop turned into a stream. The
 	// first parameter is the initial state, and the closure returns the new
 	// state and an item.
-	stream::unfold(vec![future::Either::A(next_timeout)], move |timeouts| {
+	let stream = stream::unfold(vec![future::Either::A(next_timeout)], move |timeouts| {
 		// `timeouts` is a `Vec` of futures that produce an `Out`.
 
 		// `select_ok` panics if `timeouts` is empty anyway.
@@ -70,7 +70,10 @@ pub fn build_timeouts_stream<T>(
 				}
 			)
 		)
-	}).filter_map(|item| item)
+	}).filter_map(|item| item);
+
+	// Note that we use a `Box` in order to speed up compilation time.
+	Box::new(stream) as Box<Stream<Item = _, Error = _>>
 }
 
 /// Local enum representing the output of the selection.

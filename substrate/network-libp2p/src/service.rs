@@ -948,7 +948,7 @@ fn perform_kademlia_query<T, To, St, C>(
 	let random_peer_id = random_key.into_peer_id();
 	trace!(target: "sub-libp2p", "Start kademlia discovery for {:?}", random_peer_id);
 
-	shared.clone()
+	let future = shared.clone()
 		.kad_system
 		.find_node(random_peer_id, {
 			let shared = shared.clone();
@@ -972,7 +972,10 @@ fn perform_kademlia_query<T, To, St, C>(
 		)
 		.into_future()
 		.map_err(|(err, _)| err)
-		.map(|_| ())
+		.map(|_| ());
+
+	// Note that we use a `Box` in order to speed up compilation.
+	Box::new(future) as Box<Future<Item = _, Error = _>>
 }
 
 /// Connects to additional nodes, if necessary.
@@ -1197,11 +1200,14 @@ fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
 			})
 		});
 	
-	shared.network_state
+	let future = shared.network_state
 		.kad_connection(who.clone())
 		.into_future()
 		.map(move |(_, k)| k.dial(&swarm_controller, &addr, transport))
-		.flatten()
+		.flatten();
+
+	// Note that we use a Box in order to speed up compilation.
+	Box::new(future) as Box<Future<Item = _, Error = _>>
 }
 
 /// Processes the information about a node.
@@ -1331,7 +1337,7 @@ fn ping_all<T, St, C>(
 		ping_futures.push(fut);
 	}
 
-	future::loop_fn(ping_futures, |ping_futures| {
+	let future = future::loop_fn(ping_futures, |ping_futures| {
 		if ping_futures.is_empty() {
 			let fut = future::ok(future::Loop::Break(()));
 			return future::Either::A(fut)
@@ -1341,7 +1347,10 @@ fn ping_all<T, St, C>(
 			.map(|((), _, rest)| future::Loop::Continue(rest))
 			.map_err(|(err, _, _)| err);
 		future::Either::B(fut)
-	})
+	});
+
+	// Note that we use a Box in order to speed up compilation.
+	Box::new(future) as Box<Future<Item = _, Error = _>>
 }
 
 /// Expects a multiaddr of the format `/p2p/<node_id>` and returns the node ID.
