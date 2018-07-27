@@ -96,7 +96,7 @@ pub enum Action<F: ServiceFactory, E: IntoExit> {
 pub trait IntoExit {
 	/// Exit signal type.
 	type Exit: Future<Item=(),Error=()> + Send + 'static;
-	/// Convet into exit signal.
+	/// Convert into exit signal.
 	fn into_exit(self) -> Self::Exit;
 }
 
