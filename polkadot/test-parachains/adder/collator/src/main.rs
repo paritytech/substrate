@@ -124,19 +124,18 @@ fn main() {
 		db: Arc::new(Mutex::new(HashMap::new())),
 	};
 
-	let args: Vec<_> = ::std::env::args().into_iter().map(Into::into).collect();
 	let res = ::collator::run_collator(
 		context,
 		id,
 		exit,
 		key,
-		args,
+		::std::env::args(),
 		VersionInfo {
-			version: "",
-			commit: "",
-			executable_name: "",
-			description: "",
-			author: "",
+			version: "<unknown>",
+			commit: "<unknown>",
+			executable_name: "adder-collator",
+			description: "collator for adder parachain",
+			author: "parity technologies",
 		}
 	);
 

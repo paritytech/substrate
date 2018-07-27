@@ -343,17 +343,19 @@ fn compute_targets(para_id: ParaId, session_keys: &[SessionKey], roster: DutyRos
 ///
 /// Provide a future which resolves when the node should exit.
 /// This function blocks until done.
-pub fn run_collator<P, E>(
+pub fn run_collator<P, E, I, T>(
 	parachain_context: P,
 	para_id: ParaId,
 	exit: E,
 	key: Arc<ed25519::Pair>,
-	args: Vec<::std::ffi::OsString>,
+	args: I,
 	version: VersionInfo,
 ) -> polkadot_cli::error::Result<()> where
 	P: ParachainContext + Send + 'static,
 	E: IntoFuture<Item=(),Error=()>,
 	E::Future: Send + Clone + 'static,
+	I: IntoIterator<Item=T>,
+	T: Into<std::ffi::OsString> + Clone,
 {
 	let node_logic = CollationNode { parachain_context, exit: exit.into_future(), para_id, key };
 	polkadot_cli::run(args, node_logic, version)
