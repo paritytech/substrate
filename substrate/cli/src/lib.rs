@@ -115,7 +115,7 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 	let name = _name.to_string();
 	if name.chars().count() >= MAX_NODE_NAME_LENGTH {
 		return Err("Node name too long");
-}
+	}
 
 	let invalid_chars = r"[\\.@]";
 	let re = Regex::new(invalid_chars).unwrap();
