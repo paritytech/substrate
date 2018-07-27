@@ -100,7 +100,7 @@ pub fn execute(parent_hash: [u8; 32], parent_head: HeadData, block_data: &BlockD
 		return Err(StateMismatch);
 	}
 
-	let new_state = block_data.state.saturating_add(block_data.add);
+	let new_state = block_data.state.overflowing_add(block_data.add);
 
 	Ok(HeadData {
 		number: parent_head.number + 1,
