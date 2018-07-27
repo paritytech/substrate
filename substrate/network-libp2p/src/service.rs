@@ -1115,20 +1115,21 @@ fn open_peer_custom_proto<T, To, St, C>(
 			let socket = out.socket;
 			let original_addr = out.original_addr;
 			out.info
-				.and_then(move |info|
-					if info.info.public_key.into_peer_id() == expected_peer_id {
+				.and_then(move |info| {
+					let actual_peer_id = info.info.public_key.into_peer_id();
+					if actual_peer_id == expected_peer_id {
 						Ok(socket)
 					} else {
 						debug!(target: "sub-libp2p",
-							"Public key mismatch for node {:?} with proto {:?}",
+							"Public key mismatch for node {:?} ; actual: {:?}",
 							expected_peer_id,
-							proto_id
+							actual_peer_id
 						);
 						trace!(target: "sub-libp2p", "Removing addr {} for {:?}", original_addr, expected_peer_id);
 						shared.network_state.set_invalid_kad_address(&expected_peer_id, &original_addr);
-						Err(IoError::new(IoErrorKind::InvalidData, "public key mismatch when identifyed peer"))
+						Err(IoError::new(IoErrorKind::InvalidData, "public key mismatch when identifying peer"))
 					}
-				)
+				})
 				.and_then(move |socket|
 					upgrade::apply(socket, proto, endpoint, client_addr)
 				)
