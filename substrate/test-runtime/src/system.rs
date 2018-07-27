@@ -73,7 +73,7 @@ pub fn execute_block(block: Block) {
 	assert!(header.extrinsics_root == txs_root, "Transaction trie root must be valid.");
 
 	// execute transactions
-	block.extrinsics.iter().for_each(|e| { execute_transaction_backend(e).expect("Extrinsic error"); });
+	block.extrinsics.iter().for_each(|e| { execute_transaction_backend(e).map_err(|_| ()).expect("Extrinsic error"); });
 
 	// check storage root.
 	let storage_root = storage_root().into();

@@ -35,8 +35,8 @@ error_chain! {
 			display("UnknownBlock: {}", &*h),
 		}
 
-		/// Extrinsic error.
-		Runtime(e: ApplyError) {
+		/// Applying extrinsic error.
+		ApplyExtinsicFailed(e: ApplyError) {
 			description("Extrinsic error"),
 			display("Extrinsic error: {:?}", e),
 		}
@@ -119,10 +119,10 @@ error_chain! {
 			display("Remote data fetch has been failed"),
 		}
 
-		/// Error decoding extrinsic outcome.
-		ApplyExtinsicFailed {
-			description("Error decoding extrinsic outcome"),
-			display("Error decoding extrinsic outcome."),
+		/// Error decoding call result.
+		CallResultDecode(method: &'static str) {
+			description("Error decoding call result")
+			display("Error decoding call result of {}", method)
 		}
 	}
 }

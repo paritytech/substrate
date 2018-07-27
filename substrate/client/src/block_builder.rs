@@ -94,11 +94,11 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 					}
 					Some(Err(e)) => {
 						self.changes.discard_prospective();
-						Err(error::ErrorKind::Runtime(e).into())
+						Err(error::ErrorKind::ApplyExtinsicFailed(e).into())
 					}
 					None => {
 						self.changes.discard_prospective();
-						Err(error::ErrorKind::ApplyExtinsicFailed.into())
+						Err(error::ErrorKind::CallResultDecode("apply_extrinsic").into())
 					}
 				}
 			}
