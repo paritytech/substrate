@@ -22,4 +22,5 @@ const ERROR_MSG: &'static str = "Failed to generate metadata files";
 
 fn main() {
 	vergen(OutputFns::all()).expect(ERROR_MSG);
+	println!("cargo:rerun-if-changed=.git/HEAD");
 }
