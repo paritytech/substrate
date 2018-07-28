@@ -121,6 +121,7 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.mark_dirty();
+		self.overlay.clear_prefix(prefix);
 		self.backend.for_keys_with_prefix(prefix, |key| {
 			self.overlay.set_storage(key.to_vec(), None);
 		});
