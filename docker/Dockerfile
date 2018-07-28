@@ -27,7 +27,7 @@ RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 
 COPY version /polkadot
 WORKDIR /polkadot
-EXPOSE 30333 9933
+EXPOSE 30333 9933 9944
 VOLUME ["/data"]
 
 CMD ["/bin/sh", "polkadot"]
