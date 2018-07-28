@@ -85,11 +85,19 @@ pub struct VersionInfo {
 }
 
 /// CLI Action
-pub enum Action<F: ServiceFactory> {
+pub enum Action<F: ServiceFactory, E: IntoExit> {
 	/// Substrate handled the command. No need to do anything.
 	ExecutedInternally,
 	/// Service mode requested. Caller should start the service.
-	RunService(FactoryFullConfiguration<F>),
+	RunService((FactoryFullConfiguration<F>, E)),
+}
+
+/// Something that can be converted into an exit signal.
+pub trait IntoExit {
+	/// Exit signal type.
+	type Exit: Future<Item=(),Error=()> + Send + 'static;
+	/// Convert into exit signal.
+	fn into_exit(self) -> Self::Exit;
 }
 
 fn load_spec<F, G>(matches: &clap::ArgMatches, factory: F) -> Result<ChainSpec<G>, String>
@@ -146,11 +154,11 @@ pub fn prepare_execution<F, I, T, E, S>(
 	version: VersionInfo,
 	spec_factory: S,
 	impl_name: &'static str,
-) -> error::Result<Action<F>>
+) -> error::Result<Action<F, E>>
 where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
-	E: Future<Item=(),Error=()> + Send + 'static,
+	E: IntoExit,
 	F: ServiceFactory,
 	S: FnOnce(&str) -> Result<Option<ChainSpec<FactoryGenesis<F>>>, String>,
 {
@@ -182,13 +190,13 @@ where
 
 	if let Some(matches) = matches.subcommand_matches("export-blocks") {
 		let spec = load_spec(&matches, spec_factory)?;
-		export_blocks::<F, _>(matches, spec, exit)?;
+		export_blocks::<F, _>(matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
 	}
 
 	if let Some(matches) = matches.subcommand_matches("import-blocks") {
 		let spec = load_spec(&matches, spec_factory)?;
-		import_blocks::<F, _>(matches, spec, exit)?;
+		import_blocks::<F, _>(matches, spec, exit.into_exit())?;
 		return Ok(Action::ExecutedInternally);
 	}
 
@@ -298,7 +306,7 @@ where
 		config.telemetry_url = Some(url.to_owned());
 	}
 
-	Ok(Action::RunService(config))
+	Ok(Action::RunService((config, exit)))
 }
 
 fn build_spec<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>) -> error::Result<()>

@@ -69,7 +69,7 @@ use polkadot_api::PolkadotApi;
 use polkadot_primitives::{AccountId, BlockId, SessionKey};
 use polkadot_primitives::parachain::{self, BlockData, DutyRoster, HeadData, ConsolidatedIngress, Message, Id as ParaId};
 use polkadot_cli::{ServiceComponents, Service, CustomConfiguration, VersionInfo};
-use polkadot_cli::Worker;
+use polkadot_cli::{Worker, IntoExit};
 use tokio::timer::Deadline;
 
 const COLLATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -211,12 +211,21 @@ struct CollationNode<P, E> {
 	key: Arc<ed25519::Pair>,
 }
 
+impl<P, E> IntoExit for CollationNode<P, E> where
+	P: ParachainContext + Send + 'static,
+	E: Future<Item=(),Error=()> + Send + 'static
+{
+	type Exit = E;
+	fn into_exit(self) -> Self::Exit {
+		self.exit
+	}
+}
+
 impl<P, E> Worker for CollationNode<P, E> where
 	P: ParachainContext + Send + 'static,
-	E: Future<Item=(),Error=()> + Send + Clone + 'static
+	E: Future<Item=(),Error=()> + Send + 'static
 {
 	type Work = Box<Future<Item=(),Error=()> + Send>;
-	type Exit = E;
 
 	fn configuration(&self) -> CustomConfiguration {
 		let mut config = CustomConfiguration::default();
@@ -225,10 +234,6 @@ impl<P, E> Worker for CollationNode<P, E> where
 			self.para_id.clone(),
 		));
 		config
-	}
-
-	fn exit_only(&self) -> Self::Exit {
-		self.exit.clone()
 	}
 
 	fn work<C: ServiceComponents>(self, service: &Service<C>) -> Self::Work {

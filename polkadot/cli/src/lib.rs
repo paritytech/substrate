@@ -38,7 +38,7 @@ use chain_spec::ChainSpec;
 use futures::Future;
 use tokio::runtime::Runtime;
 pub use service::{Components as ServiceComponents, Service, CustomConfiguration};
-pub use cli::VersionInfo;
+pub use cli::{VersionInfo, IntoExit};
 
 fn load_spec(id: &str) -> Result<Option<service::ChainSpec>, String> {
 	Ok(match ChainSpec::from(id) {
@@ -51,21 +51,15 @@ fn load_spec(id: &str) -> Result<Option<service::ChainSpec>, String> {
 ///
 /// This will be invoked with the service and spawn a future that resolves
 /// when complete.
-pub trait Worker {
+pub trait Worker: IntoExit {
 	/// A future that resolves when the work is done or the node should exit.
 	/// This will be run on a tokio runtime.
 	type Work: Future<Item=(),Error=()> + Send + 'static;
-
-	/// An exit scheduled for the future.
-	type Exit: Future<Item=(),Error=()> + Send + 'static;
 
 	/// Return configuration for the polkadot node.
 	// TODO: make this the full configuration, so embedded nodes don't need
 	// string CLI args
 	fn configuration(&self) -> service::CustomConfiguration { Default::default() }
-
-	/// Don't work, but schedule an exit.
-	fn exit_only(&self) -> Self::Exit;
 
 	/// Do work and schedule exit.
 	fn work<C: service::Components>(self, service: &service::Service<C>) -> Self::Work;
@@ -85,9 +79,9 @@ pub fn run<I, T, W>(args: I, worker: W, version: cli::VersionInfo) -> error::Res
 	W: Worker,
 {
 
-	match cli::prepare_execution::<service::Factory, _, _, _, _>(args, worker.exit_only(), version, load_spec, "parity-polkadot")? {
+	match cli::prepare_execution::<service::Factory, _, _, _, _>(args, worker, version, load_spec, "parity-polkadot")? {
 		cli::Action::ExecutedInternally => (),
-		cli::Action::RunService(mut config) => {
+		cli::Action::RunService((mut config, worker)) => {
 			info!("Parity ·:· Polkadot");
 			info!("  version {}", config.full_version());
 			info!("  by Parity Technologies, 2017, 2018");
