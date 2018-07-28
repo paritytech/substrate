@@ -20,7 +20,7 @@ use std::cmp::Ordering;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 use wasmi::{
-	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder,
+	Module, ModuleInstance,  MemoryInstance, MemoryRef, TableRef, ImportsBuilder
 };
 use wasmi::RuntimeValue::{I32, I64};
 use wasmi::memory_units::{Pages, Bytes};
@@ -28,7 +28,7 @@ use state_machine::{Externalities, CodeExecutor};
 use error::{Error, ErrorKind, Result};
 use wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256};
-use primitives::hexdisplay::{HexDisplay, ascii_format};
+use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use triehash::ordered_trie_root;
 use sandbox;
@@ -200,9 +200,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_storage"))?;
 		if let Some(_preimage) = this.hash_lookup.get(&key) {
-			debug_trace!(target: "wasm-trace", "*** Setting storage: %{} -> {}   [k={}]", ascii_format(&_preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+			debug_trace!(target: "wasm-trace", "*** Setting storage: %{} -> {}   [k={}]", ::primitives::hexdisplay::ascii_format(&_preimage), HexDisplay::from(&value), HexDisplay::from(&key));
 		} else {
-			debug_trace!(target: "wasm-trace", "*** Setting storage:  {} -> {}   [k={}]", ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			debug_trace!(target: "wasm-trace", "*** Setting storage:  {} -> {}   [k={}]", ::primitives::hexdisplay::ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
 		}
 		this.ext.set_storage(key, value);
 		Ok(())
@@ -211,9 +211,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
 		debug_trace!(target: "wasm-trace", "*** Clearing storage: {}   [k={}]", 
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
-				format!("%{}", ascii_format(&_preimage))
+				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
 			} else {
-				format!(" {}", ascii_format(&key))
+				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			}, HexDisplay::from(&key));
 		this.ext.clear_storage(&key);
 		Ok(())
@@ -234,9 +234,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]", 
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
-				format!("%{}", ascii_format(&_preimage))
+				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
 			} else {
-				format!(" {}", ascii_format(&key))
+				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
 				format!("{}", HexDisplay::from(b))
@@ -264,9 +264,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let maybe_value = this.ext.storage(&key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]", 
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
-				format!("%{}", ascii_format(&_preimage))
+				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
 			} else {
-				format!(" {}", ascii_format(&key))
+				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
 				format!("{}", HexDisplay::from(b))
@@ -557,7 +557,12 @@ impl WasmExecutor {
 
 		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
-		memory.set(offset, &data).expect("heap always gives a sensible offset to write");
+		if let Err(_) = memory.set(offset, &data) {
+			let old = try_heap_pages.0;
+			*try_heap_pages = ((old * 2).min(self.max_heap_pages), DECAY_TIMEOUT);
+			trace!(target: "wasm-executor", "Shrunk heap size too small at {} pages. Retrying with {}", old, try_heap_pages.0);
+			return Err(ErrorKind::PleaseRetry.into())
+		}
 
 		let result = instance.invoke_export(
 			method,

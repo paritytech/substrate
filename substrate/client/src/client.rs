@@ -21,7 +21,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Decode;
@@ -386,6 +386,12 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok(ImportResult::Queued)
 	}
 
+	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
+	/// successfully reverted.
+	pub fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
+		Ok(self.backend.revert(n)?)
+	}
+
 	/// Get blockchain info.
 	pub fn info(&self) -> error::Result<ClientInfo<Block>> {
 		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
@@ -611,5 +617,32 @@ mod tests {
 		assert_eq!(client.authorities_at(
 			&BlockId::Hash(Default::default())).unwrap(),
 			vec![[1u8; 32].into()]);
+	}
+
+	#[test]
+	fn block_builder_does_not_include_invalid() {
+		let client = test_client::new();
+
+		let mut builder = client.new_block().unwrap();
+
+		builder.push(sign_tx(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		})).unwrap();
+
+		assert!(builder.push(sign_tx(Transfer {
+			from: Keyring::Eve.to_raw_public().into(),
+			to: Keyring::Alice.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		})).is_err());
+
+		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+
+		assert_eq!(client.info().unwrap().chain.best_number, 1);
+		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
+		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
 	}
 }

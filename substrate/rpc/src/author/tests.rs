@@ -16,11 +16,12 @@
 
 use super::*;
 
-use std::{fmt, sync::Arc};
-use extrinsic_pool::{api, txpool};
-use test_client;
-use parking_lot::Mutex;
+use std::{fmt, sync::Arc, result::Result};
 use codec::Encode;
+use extrinsic_pool::{api, txpool, watcher::{self, Watcher}};
+use parking_lot::Mutex;
+use test_client;
+use tokio::runtime;
 
 type Extrinsic = u64;
 type Hash = u64;
@@ -28,6 +29,7 @@ type Hash = u64;
 #[derive(Default)]
 struct DummyTxPool {
 	submitted: Mutex<Vec<Extrinsic>>,
+	sender: Mutex<Option<watcher::Sender<u64>>>,
 }
 
 #[derive(Debug)]
@@ -46,12 +48,25 @@ impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 	type Error = Error;
 
 	/// Submit extrinsic for inclusion in block.
-	fn submit(&self, _block: BlockHash, xt: Vec<Extrinsic>) -> ::std::result::Result<Vec<Hash>, Self::Error> {
+	fn submit(&self, _block: BlockHash, xt: Vec<Extrinsic>) -> Result<Vec<Hash>, Self::Error> {
 		let mut submitted = self.submitted.lock();
 		if submitted.len() < 1 {
 			let hashes = xt.iter().map(|_xt| 1).collect();
 			submitted.extend(xt);
 			Ok(hashes)
+		} else {
+			Err(Error)
+		}
+	}
+
+	fn submit_and_watch(&self, _block: BlockHash, xt: Extrinsic) -> Result<Watcher<u64>, Self::Error> {
+		let mut submitted = self.submitted.lock();
+		if submitted.len() < 1 {
+			submitted.push(xt);
+			let mut sender = watcher::Sender::default();
+			let watcher = sender.new_watcher();
+			*self.sender.lock() = Some(sender);
+			Ok(watcher)
 		} else {
 			Err(Error)
 		}
@@ -68,9 +83,11 @@ impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 
 #[test]
 fn submit_transaction_should_not_cause_error() {
+	let runtime = runtime::Runtime::new().unwrap();
 	let p = Author {
 		client: Arc::new(test_client::new()),
 		pool: Arc::new(DummyTxPool::default()),
+		subscriptions: Subscriptions::new(runtime.executor()),
 	};
 
 	assert_matches!(
@@ -84,9 +101,11 @@ fn submit_transaction_should_not_cause_error() {
 
 #[test]
 fn submit_rich_transaction_should_not_cause_error() {
+	let runtime = runtime::Runtime::new().unwrap();
 	let p = Author {
 		client: Arc::new(test_client::new()),
 		pool: Arc::new(DummyTxPool::default()),
+		subscriptions: Subscriptions::new(runtime.executor()),
 	};
 
 	assert_matches!(
@@ -95,5 +114,32 @@ fn submit_rich_transaction_should_not_cause_error() {
 	);
 	assert!(
 		AuthorApi::submit_rich_extrinsic(&p, 5).is_err()
+	);
+}
+
+#[test]
+fn should_watch_extrinsic() {
+	//given
+	let mut runtime = runtime::Runtime::new().unwrap();
+	let pool = Arc::new(DummyTxPool::default());
+	let p = Author {
+		client: Arc::new(test_client::new()),
+		pool: pool.clone(),
+		subscriptions: Subscriptions::new(runtime.executor()),
+	};
+	let (subscriber, id_rx, data) = ::jsonrpc_macros::pubsub::Subscriber::new_test("test");
+
+	// when
+	p.watch_extrinsic(Default::default(), subscriber, u64::encode(&5).into());
+
+	// then
+	assert_eq!(runtime.block_on(id_rx), Ok(Ok(0.into())));
+
+	// check notifications
+	pool.sender.lock().as_mut().unwrap().usurped(5);
+
+	assert_eq!(
+		runtime.block_on(data.into_future()).unwrap().0,
+		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"usurped":5},"subscription":0}}"#.into())
 	);
 }

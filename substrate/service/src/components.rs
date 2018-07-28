@@ -26,7 +26,7 @@ use error;
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use extrinsic_pool::{txpool::Options as ExtrinsicPoolOptions, api::ExtrinsicPool as ExtrinsicPoolApi};
-use runtime_primitives::{traits::Block as BlockT, generic::BlockId, BuildStorage};
+use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, generic::BlockId, BuildStorage};
 use config::Configuration;
 
 // Type aliases.
@@ -80,6 +80,12 @@ pub type FactoryGenesis<F> = <F as ServiceFactory>::Genesis;
 /// `Block` type for a factory.
 pub type FactoryBlock<F> = <F as ServiceFactory>::Block;
 
+/// `Number` type for a factory.
+pub type FactoryBlockNumber<F> = <<FactoryBlock<F> as BlockT>::Header as HeaderT>::Number;
+
+/// Full `Configuration` type for a factory.
+pub type FactoryFullConfiguration<F> = Configuration<<F as ServiceFactory>::Configuration, FactoryGenesis<F>>;
+
 /// Client type for `Components`.
 pub type ComponentClient<C> = Client<
 	<C as Components>::Backend,
@@ -102,7 +108,7 @@ pub trait ServiceFactory {
 	/// Block type.
 	type Block: BlockT;
 	/// Network protocol extensions.
-	type NetworkProtocol: network::specialization::Specialization<Self::Block> + Default;
+	type NetworkProtocol: network::specialization::Specialization<Self::Block>;
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool type for the full client.
@@ -111,6 +117,9 @@ pub trait ServiceFactory {
 	type LightExtrinsicPool: ExtrinsicPool<Self::Block>;
 	/// Genesis configuration for the runtime.
 	type Genesis: RuntimeGenesis;
+	/// Other configuration for service members.
+	type Configuration: Default;
+
 	/// Network protocol id.
 	const NETWORK_PROTOCOL_ID: network::ProtocolId;
 
@@ -121,6 +130,10 @@ pub trait ServiceFactory {
 	/// Extrinsic pool constructor for the light client.
 	fn build_light_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<LightClient<Self>>)
 		-> Result<Self::LightExtrinsicPool, error::Error>;
+
+	/// Build network protocol.
+	fn build_network_protocol(config: &FactoryFullConfiguration<Self>)
+		-> Result<Self::NetworkProtocol, error::Error>;
 }
 
 // TODO: move this to substrate-extrinsic-pool
@@ -147,7 +160,7 @@ pub trait Components {
 
 	/// Create client.
 	fn build_client(
-		config: &Configuration<FactoryGenesis<Self::Factory>>,
+		config: &FactoryFullConfiguration<Self::Factory>,
 		executor: CodeExecutor<Self::Factory>,
 	)
 		-> Result<(
@@ -172,7 +185,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type ExtrinsicPool = <Factory as ServiceFactory>::FullExtrinsicPool;
 
 	fn build_client(
-		config: &Configuration<FactoryGenesis<Self::Factory>>,
+		config: &FactoryFullConfiguration<Factory>,
 		executor: CodeExecutor<Self::Factory>,
 	)
 		-> Result<(
@@ -207,7 +220,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type ExtrinsicPool = <Factory as ServiceFactory>::LightExtrinsicPool;
 
 	fn build_client(
-		config: &Configuration<FactoryGenesis<Self::Factory>>,
+		config: &FactoryFullConfiguration<Factory>,
 		executor: CodeExecutor<Self::Factory>,
 	)
 		-> Result<(

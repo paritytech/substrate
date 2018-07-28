@@ -30,11 +30,15 @@ extern crate substrate_network as network;
 extern crate substrate_executor;
 extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
+extern crate substrate_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
+extern crate substrate_rpc;
+extern crate substrate_rpc_servers as rpc;
+extern crate target_info;
 extern crate tokio;
 
 #[macro_use]
-extern crate substrate_telemetry;
+extern crate substrate_telemetry as tel;
 #[macro_use]
 extern crate error_chain;
 #[macro_use]
@@ -48,7 +52,10 @@ mod components;
 mod error;
 mod config;
 mod chain_spec;
+pub mod chain_ops;
 
+use std::io;
+use std::net::SocketAddr;
 use std::sync::Arc;
 use futures::prelude::*;
 use keystore::Store as Keystore;
@@ -64,11 +71,13 @@ pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::ChainSpec;
 pub use extrinsic_pool::txpool::{Options as ExtrinsicPoolOptions};
 pub use extrinsic_pool::api::{ExtrinsicPool as ExtrinsicPoolApi};
+pub use client::ExecutionStrategy;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, ExtrinsicPool, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
-	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock, RuntimeGenesis,
+	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
+	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 };
 
 /// Substrate service.
@@ -78,10 +87,13 @@ pub struct Service<Components: components::Components> {
 	extrinsic_pool: Arc<Components::ExtrinsicPool>,
 	keystore: Keystore,
 	signal: Option<Signal>,
+	_rpc_http: Option<rpc::HttpServer>,
+	_rpc_ws: Option<rpc::WsServer>,
+	_telemetry: Option<tel::Telemetry>,
 }
 
 /// Creates bare client without any networking.
-pub fn new_client<Factory: components::ServiceFactory>(config: Configuration<Factory::Genesis>)
+pub fn new_client<Factory: components::ServiceFactory>(config: FactoryFullConfiguration<Factory>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
 	let executor = NativeExecutor::with_heap_pages(config.min_heap_pages, config.max_heap_pages);
@@ -98,8 +110,8 @@ impl<Components> Service<Components>
 {
 	/// Creates a new service.
 	pub fn new(
-		config: Configuration<<Components::Factory as ServiceFactory>::Genesis>,
-		task_executor: TaskExecutor
+		config: FactoryFullConfiguration<Components::Factory>,
+		task_executor: TaskExecutor,
 	)
 		-> Result<Self, error::Error>
 	{
@@ -121,13 +133,16 @@ impl<Components> Service<Components>
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let best_header = client.best_block_header()?;
 
+		let version = config.full_version();
 		info!("Best block: #{}", best_header.number());
 		telemetry!("node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
+		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
 		let extrinsic_pool = Arc::new(
 			Components::build_extrinsic_pool(config.extrinsic_pool, client.clone())?
 		);
 		let extrinsic_pool_adapter = extrinsic_pool.clone();
+
 		let network_params = network::Params {
 			config: network::ProtocolConfig {
 				roles: config.roles,
@@ -137,7 +152,7 @@ impl<Components> Service<Components>
 			on_demand: on_demand.clone()
 				.map(|d| d as Arc<network::OnDemandService<ComponentBlock<Components>>>),
 			transaction_pool: extrinsic_pool_adapter,
-			specialization: <Components::Factory as ServiceFactory>::NetworkProtocol::default(),
+			specialization: network_protocol,
 		};
 
 		let network = network::Service::new(network_params, Components::Factory::NETWORK_PROTOCOL_ID)?;
@@ -176,12 +191,63 @@ impl<Components> Service<Components>
 			task_executor.spawn(events);
 		}
 
+		// RPC
+		let rpc_config = RpcConfig {
+			chain_name: config.chain_spec.name().to_string(),
+			impl_name: config.impl_name,
+			impl_version: config.impl_version,
+		};
+
+		let (rpc_http, rpc_ws) = {
+			let handler = || {
+				let client = client.clone();
+				let chain = rpc::apis::chain::Chain::new(client.clone(), task_executor.clone());
+				let author = rpc::apis::author::Author::new(client.clone(), extrinsic_pool.api(), task_executor.clone());
+				rpc::rpc_handler::<ComponentBlock<Components>, _, _, _, _>(
+					client,
+					chain,
+					author,
+					rpc_config.clone(),
+					)
+			};
+			(
+				maybe_start_server(config.rpc_http, |address| rpc::start_http(address, handler()))?,
+				maybe_start_server(config.rpc_ws, |address| rpc::start_ws(address, handler()))?,
+			)
+		};
+
+		// Telemetry
+		let telemetry = match config.telemetry_url {
+			Some(url) => {
+				let name = config.name.clone();
+				let impl_name = config.impl_name.to_owned();
+				let version = version.clone();
+				let chain_name = config.chain_spec.name().to_owned();
+				Some(tel::init_telemetry(tel::TelemetryConfig {
+					url: url,
+					on_connect: Box::new(move || {
+						telemetry!("system.connected";
+								   "name" => name.clone(),
+								   "implementation" => impl_name.clone(),
+								   "version" => version.clone(),
+								   "config" => "",
+								   "chain" => chain_name.clone(),
+								   );
+					}),
+				}))
+			},
+			None => None,
+		};
+
 		Ok(Service {
 			client: client,
 			network: network,
 			extrinsic_pool: extrinsic_pool,
 			signal: Some(signal),
 			keystore: keystore,
+			_rpc_http: rpc_http,
+			_rpc_ws: rpc_ws,
+			_telemetry: telemetry,
 		})
 	}
 
@@ -215,5 +281,44 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 		if let Some(signal) = self.signal.take() {
 			signal.fire();
 		}
+	}
+}
+
+fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Option<T>, io::Error> where
+	F: Fn(&SocketAddr) -> Result<T, io::Error>,
+{
+	Ok(match address {
+		Some(mut address) => Some(start(&address)
+			.or_else(|e| match e.kind() {
+				io::ErrorKind::AddrInUse |
+				io::ErrorKind::PermissionDenied => {
+					warn!("Unable to bind server to {}. Trying random port.", address);
+					address.set_port(0);
+					start(&address)
+				},
+				_ => Err(e),
+			})?),
+		None => None,
+	})
+}
+
+#[derive(Clone)]
+struct RpcConfig {
+	chain_name: String,
+	impl_name: &'static str,
+	impl_version: &'static str,
+}
+
+impl substrate_rpc::system::SystemApi for RpcConfig {
+	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(self.impl_name.into())
+	}
+
+	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(self.impl_version.into())
+	}
+
+	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
+		Ok(self.chain_name.clone())
 	}
 }

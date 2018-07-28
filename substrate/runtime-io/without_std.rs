@@ -42,7 +42,7 @@ pub fn panic(info: &::core::panic::PanicInfo) -> ! {
 
 #[alloc_error_handler]
 pub extern fn oom(_: ::core::alloc::Layout) -> ! {
-    static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
+	static OOM_MSG: &str = "Runtime memory exhausted. Aborting";
 
 	unsafe {
 		ext_print_utf8(OOM_MSG.as_ptr(), OOM_MSG.len() as u32);
@@ -101,12 +101,12 @@ pub fn clear_storage(key: &[u8]) {
 	}
 }
 
-/// Clear the storage of some particular key.
-pub fn exists_storage(key: &[u8]) {
+/// Determine whether a particular key exists in storage.
+pub fn exists_storage(key: &[u8]) -> bool {
 	unsafe {
 		ext_exists_storage(
 			key.as_ptr(), key.len() as u32
-		) != 0;
+		) != 0
 	}
 }
 

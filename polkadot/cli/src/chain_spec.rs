@@ -17,7 +17,6 @@
 //! Predefined chains.
 
 use service;
-use std::path::PathBuf;
 
 /// The chain specification (this should eventually be replaced by a more general JSON-based chain
 /// specification).
@@ -27,47 +26,32 @@ pub enum ChainSpec {
 	Development,
 	/// Whatever the current runtime is, with simple Alice/Bob auths.
 	LocalTestnet,
-	/// The PoC-1 testnet.
-	PoC1Testnet,
+	/// The PoC-1 & PoC-2 era testnet.
+	KrummeLanke,
 	/// Whatever the current runtime is with the "global testnet" defaults.
 	StagingTestnet,
-	/// Custom Genesis file.
-	Custom(String),
 }
 
 /// Get a chain config from a spec setting.
 impl ChainSpec {
 	pub(crate) fn load(self) -> Result<service::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::PoC1Testnet => service::chain_spec::poc_1_testnet_config()?,
+			ChainSpec::KrummeLanke => service::chain_spec::poc_1_testnet_config()?,
 			ChainSpec::Development => service::chain_spec::development_config(),
 			ChainSpec::LocalTestnet => service::chain_spec::local_testnet_config(),
 			ChainSpec::StagingTestnet => service::chain_spec::staging_testnet_config(),
-			ChainSpec::Custom(f) => service::ChainSpec::from_json_file(PathBuf::from(f))?,
 		})
 	}
-}
 
-impl<'a> From<&'a str> for ChainSpec {
-	fn from(s: &'a str) -> Self {
+	pub(crate) fn from(s: &str) -> Option<Self> {
 		match s {
-			"dev" => ChainSpec::Development,
-			"local" => ChainSpec::LocalTestnet,
-			"poc-1" => ChainSpec::PoC1Testnet,
-			"staging" => ChainSpec::StagingTestnet,
-			s => ChainSpec::Custom(s.into()),
+			"dev" => Some(ChainSpec::Development),
+			"local" => Some(ChainSpec::LocalTestnet),
+			"poc-1" => Some(ChainSpec::KrummeLanke),
+			"" | "krummelanke" => Some(ChainSpec::KrummeLanke),
+			"staging" => Some(ChainSpec::StagingTestnet),
+			_ => None,
 		}
 	}
 }
 
-impl From<ChainSpec> for String {
-	fn from(s: ChainSpec) -> String {
-		match s {
-			ChainSpec::Development => "dev".into(),
-			ChainSpec::LocalTestnet => "local".into(),
-			ChainSpec::PoC1Testnet => "poc-1".into(),
-			ChainSpec::StagingTestnet => "staging".into(),
-			ChainSpec::Custom(f) => format!("custom ({})", f),
-		}
-	}
-}

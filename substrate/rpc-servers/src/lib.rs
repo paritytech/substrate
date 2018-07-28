@@ -34,6 +34,8 @@ use substrate_runtime_primitives::traits::Block as BlockT;
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
+pub type HttpServer = http::Server;
+pub type WsServer = ws::Server;
 
 /// Construct rpc `IoHandler`
 pub fn rpc_handler<Block: BlockT, S, C, A, Y>(
@@ -45,7 +47,7 @@ pub fn rpc_handler<Block: BlockT, S, C, A, Y>(
 	Block: 'static,
 	S: apis::state::StateApi<Block::Hash>,
 	C: apis::chain::ChainApi<Block::Hash, Block::Header, Metadata=Metadata>,
-	A: apis::author::AuthorApi<Block::Hash, Block::Extrinsic>,
+	A: apis::author::AuthorApi<Block::Hash, Block::Extrinsic, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
 {
 	let mut io = pubsub::PubSubHandler::default();
