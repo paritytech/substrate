@@ -113,21 +113,34 @@ cargo run -- --dev
 
 The easiest/faster option is to use the latest image.
 
+
+.First run
 Let´s first check the version we have. The first time you run this command, the polkadot docker image will be downloaded. This takes a bit of time and bandwidth, be patient:
 
 [source, shell]
-docker run --rm -it chevdor/polkadot:0.2.0 ./version
+docker run --rm -it chevdor/polkadot:latest ./version
 
+
+.Polkadot arguments
 You can also pass any argument/flag that polkadot supports:
 
 [source, shell]
-docker run --rm -it chevdor/polkadot:0.2.0 polkadot --name "PolkaDocker"
+docker run --rm -it chevdor/polkadot:latest polkadot --name "PolkaDocker"
 
+
+.Run as deamon
 Once you are done experimenting and picking the best node name :) you can start polkadot as daemon, exposes the polkadot ports and mount a volume that will keep your blockchain data locally:
 
 [source, shell]
-docker run -d -p 30333:30333 -p 9933:9933 -v /my/local/folder:/data chevdor/polkadot:0.2.0 polkadot
+docker run -d -p 30333:30333 -p 9933:9933 -p 9944:9944 -v /my/local/folder:/data chevdor/polkadot:latest polkadot
 
+.Docker image update
+If you have an image such as `latest` locally, docker will *not* bother downloading the very latest that may be available.
+To update:
+
+- stop and delete your containers (`docker stop ...` `docker rm ...`)
+- delete your previous image (`docker rmi chevdor/polkadot:latest`)
+- run as daemon again, the very latest image will be downloaded again
 
 === Build your own image
 
