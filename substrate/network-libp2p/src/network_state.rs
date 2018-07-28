@@ -658,10 +658,6 @@ impl NetworkState {
 				peer_info.id,
 				peer_info.kad_connec.is_alive(),
 				peer_info.protocols.iter().filter(|c| c.1.is_alive()).count());
-			// TODO: we manually clear the connections as a work-around for
-			// networking bugs ; normally it should automatically drop
-			for c in peer_info.protocols.iter() { c.1.clear(); }
-			peer_info.kad_connec.clear();
 			let old = connections.peer_by_nodeid.remove(&peer_info.id);
 			debug_assert_eq!(old, Some(who));
 		}
@@ -852,11 +848,11 @@ fn parse_and_add_to_node_store(
 		NodeStore::Memory(ref node_store) =>
 			node_store
 				.peer_or_create(&who)
-				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
+				.set_addr_ttl(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 		NodeStore::Json(ref node_store) =>
 			node_store
 				.peer_or_create(&who)
-				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
+				.set_addr_ttl(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 	}
 
 	Ok(who)

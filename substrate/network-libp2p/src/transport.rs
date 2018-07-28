@@ -18,16 +18,14 @@ use libp2p::{self, Transport, mplex, secio, yamux};
 use libp2p::core::{MuxedTransport, either, upgrade};
 use libp2p::transport_timeout::TransportTimeout;
 use std::time::Duration;
-use tokio_core::reactor::Handle;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Builds the transport that serves as a common ground for all connections.
 pub fn build_transport(
-	core: Handle,
 	unencrypted_allowed: UnencryptedAllowed,
 	local_private_key: secio::SecioKeyPair
 ) -> impl MuxedTransport<Output = impl AsyncRead + AsyncWrite> + Clone {
-	let base = libp2p::CommonTransport::new(core)
+	let base = libp2p::CommonTransport::new()
 		.with_upgrade({
 			let secio = secio::SecioConfig {
 				key: local_private_key,
