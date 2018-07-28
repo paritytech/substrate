@@ -1164,8 +1164,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 				);
 			}
 
-			// TODO: this future should be used
-			let _ = unique_connec.dial(&swarm_controller, &addr, with_err);
+			unique_connec.dial(&swarm_controller, &addr, with_err);
 		},
 		Err(err) => {
 			trace!(target: "sub-libp2p",
