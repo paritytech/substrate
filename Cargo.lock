@@ -257,7 +257,7 @@ dependencies = [
 [[package]]
 name = "cid"
 version = "0.2.3"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "integer-encoding 1.0.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "multibase 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -406,7 +406,7 @@ dependencies = [
 [[package]]
 name = "datastore"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "base64 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chashmap 2.2.1 (git+https://github.com/redox-os/tfs)",
@@ -1136,7 +1136,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "libp2p"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1165,7 +1165,7 @@ dependencies = [
 [[package]]
 name = "libp2p-core"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bs58 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1186,7 +1186,7 @@ dependencies = [
 [[package]]
 name = "libp2p-dns"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2)",
@@ -1199,7 +1199,7 @@ dependencies = [
 [[package]]
 name = "libp2p-floodsub"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bs58 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1220,7 +1220,7 @@ dependencies = [
 [[package]]
 name = "libp2p-identify"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1239,7 +1239,7 @@ dependencies = [
 [[package]]
 name = "libp2p-kad"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "bigint 4.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1266,7 +1266,7 @@ dependencies = [
 [[package]]
 name = "libp2p-mplex"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1282,7 +1282,7 @@ dependencies = [
 [[package]]
 name = "libp2p-peerstore"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bs58 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "datastore 0.1.0 (git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2)",
@@ -1297,7 +1297,7 @@ dependencies = [
 [[package]]
 name = "libp2p-ping"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1314,7 +1314,7 @@ dependencies = [
 [[package]]
 name = "libp2p-ratelimit"
 version = "0.1.1"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "aio-limited 0.1.0 (git+https://github.com/paritytech/aio-limited.git)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1327,7 +1327,7 @@ dependencies = [
 [[package]]
 name = "libp2p-relay"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1345,7 +1345,7 @@ dependencies = [
 [[package]]
 name = "libp2p-secio"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "asn1_der 0.5.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1365,7 +1365,7 @@ dependencies = [
 [[package]]
 name = "libp2p-tcp-transport"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2)",
@@ -1378,7 +1378,7 @@ dependencies = [
 [[package]]
 name = "libp2p-transport-timeout"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2)",
@@ -1389,7 +1389,7 @@ dependencies = [
 [[package]]
 name = "libp2p-websocket"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2)",
@@ -1404,7 +1404,7 @@ dependencies = [
 [[package]]
 name = "libp2p-yamux"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1544,7 +1544,7 @@ dependencies = [
 [[package]]
 name = "multiaddr"
 version = "0.3.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "byteorder 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "cid 0.2.3 (git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2)",
@@ -1562,7 +1562,7 @@ dependencies = [
 [[package]]
 name = "multihash"
 version = "0.8.1-pre"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "sha1 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sha2 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1572,7 +1572,7 @@ dependencies = [
 [[package]]
 name = "multistream-select"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2355,7 +2355,7 @@ dependencies = [
 [[package]]
 name = "rw-stream-sink"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3700,7 +3700,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "varint"
 version = "0.1.0"
-source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#0d7efa9a94ee61fbafc6b69d9df5ebcdce22f258"
+source = "git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2#725f9f78ebeddc038941316f120a99daaebc9231"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
