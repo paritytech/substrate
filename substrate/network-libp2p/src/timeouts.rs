@@ -15,10 +15,10 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
 
 use futures::{Async, future, Future, Poll, stream, Stream, sync::mpsc};
-use std::io::Error as IoError;
+use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::marker::PhantomData;
 use std::time::{Duration, Instant};
-use tokio_core::reactor::{Handle, Timeout};
+use tokio_timer::{self, Delay};
 
 /// Builds the timeouts system.
 ///
@@ -27,20 +27,17 @@ use tokio_core::reactor::{Handle, Timeout};
 /// `T` can be anything you want, as it is transparently passed from the input
 /// to the output. Timeouts continue to fire forever, as there is no way to
 /// unregister them.
-pub fn build_timeouts_stream<T>(
-	core: Handle,
+pub fn build_timeouts_stream<'a, T>(
 	timeouts_rx: mpsc::UnboundedReceiver<(Duration, T)>
-) -> impl Stream<Item = T, Error = IoError>
-	where T: Clone {
+) -> Box<Stream<Item = T, Error = IoError> + 'a>
+	where T: Clone + 'a {
 	let next_timeout = next_in_timeouts_stream(timeouts_rx);
 
 	// The `unfold` function is essentially a loop turned into a stream. The
 	// first parameter is the initial state, and the closure returns the new
 	// state and an item.
-	stream::unfold(vec![future::Either::A(next_timeout)], move |timeouts| {
+	let stream = stream::unfold(vec![future::Either::A(next_timeout)], move |timeouts| {
 		// `timeouts` is a `Vec` of futures that produce an `Out`.
-
-		let core = core.clone();
 
 		// `select_ok` panics if `timeouts` is empty anyway.
 		if timeouts.is_empty() {
@@ -53,8 +50,7 @@ pub fn build_timeouts_stream<T>(
 					Out::NewTimeout((Some((duration, item)), next_timeouts)) => {
 						// Received a new timeout request on the channel.
 						let next_timeout = next_in_timeouts_stream(next_timeouts);
-						let at = Instant::now() + duration;
-						let timeout = Timeout::new_at(at, &core)?;
+						let timeout = Delay::new(Instant::now() + duration);
 						let timeout = TimeoutWrapper(timeout, duration, Some(item), PhantomData);
 						timeouts.push(future::Either::B(timeout));
 						timeouts.push(future::Either::A(next_timeout));
@@ -66,8 +62,7 @@ pub fn build_timeouts_stream<T>(
 					Out::Timeout(duration, item) => {
 						// A timeout has happened.
 						let returned = item.clone();
-						let at = Instant::now() + duration;
-						let timeout = Timeout::new_at(at, &core)?;
+						let timeout = Delay::new(Instant::now() + duration);
 						let timeout = TimeoutWrapper(timeout, duration, Some(item), PhantomData);
 						timeouts.push(future::Either::B(timeout));
 						Ok((Some(returned), timeouts))
@@ -75,7 +70,10 @@ pub fn build_timeouts_stream<T>(
 				}
 			)
 		)
-	}).filter_map(|item| item)
+	}).filter_map(|item| item);
+
+	// Note that we use a `Box` in order to speed up compilation time.
+	Box::new(stream) as Box<Stream<Item = _, Error = _>>
 }
 
 /// Local enum representing the output of the selection.
@@ -97,15 +95,20 @@ fn next_in_timeouts_stream<T, B>(
 		.map_err(|_| unreachable!("an UnboundedReceiver can never error"))
 }
 
-/// Does the equivalent to `future.map(move |()| (duration, item))`.
+/// Does the equivalent to `future.map(move |()| (duration, item)).map_err(|err| to_io_err(err))`.
 struct TimeoutWrapper<A, F, T>(F, Duration, Option<T>, PhantomData<A>);
 impl<A, F, T> Future for TimeoutWrapper<A, F, T>
-	where F: Future<Item = ()> {
+	where F: Future<Item = (), Error = tokio_timer::Error> {
 	type Item = Out<A, T>;
-	type Error = F::Error;
+	type Error = IoError;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		let _ready: () = try_ready!(self.0.poll());
+		match self.0.poll() {
+			Ok(Async::Ready(())) => (),
+			Ok(Async::NotReady) => return Ok(Async::NotReady),
+			Err(err) => return Err(IoError::new(IoErrorKind::Other, err.to_string())),
+		}
+
 		let out = Out::Timeout(self.1, self.2.take().expect("poll() called again after success"));
 		Ok(Async::Ready(out))
 	}
