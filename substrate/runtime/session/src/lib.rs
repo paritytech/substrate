@@ -168,9 +168,14 @@ impl<T: Trait> Module<T> {
 		<CurrentStart<T>>::put(now);
 
 		// Enact era length change.
-		if let Some(next_len) = <NextSessionLength<T>>::take() {
-			let block_number = <system::Module<T>>::block_number();
+		let len_changed = if let Some(next_len) = <NextSessionLength<T>>::take() {
 			<SessionLength<T>>::put(next_len);
+			true
+		} else {
+			false
+		};
+		if len_changed || !normal_rotation {
+			let block_number = <system::Module<T>>::block_number();
 			<LastLengthChange<T>>::put(block_number);
 		}
 
