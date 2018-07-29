@@ -25,7 +25,7 @@ use parity_wasm::elements::{self, External, MemoryType, Type, FunctionType};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::prelude::*;
-use rstd::collections::BTreeMap;
+use rstd::collections::btree_map::BTreeMap;
 use sandbox;
 use gas::{GasMeter, GasMeterResult};
 use runtime_primitives::traits::{As, CheckedMul};
