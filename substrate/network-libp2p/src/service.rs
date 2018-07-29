@@ -1276,7 +1276,7 @@ fn start_pinger<T, To, St, C>(
 			})
 		});
 
-	let fut = Interval::new(Instant::now(), Duration::from_secs(30))
+	let fut = Interval::new(Instant::now(), Duration::from_secs(28))
 		.map_err(|err| IoError::new(IoErrorKind::Other, err))
 		.for_each(move |_|
 			ping_all(shared.clone(), transport.clone(), &swarm_controller))
