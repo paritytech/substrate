@@ -20,10 +20,11 @@
 use std::sync::Weak;
 use parking_lot::Mutex;
 
+use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 
-use blockchain::{Backend as BlockchainBackend, BlockStatus,
+use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use error::Result as ClientResult;
 use light::fetcher::Fetcher;
@@ -31,7 +32,15 @@ use light::fetcher::Fetcher;
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
 	/// Store new header.
-	fn import_header(&self, is_new_best: bool, header: Block::Header) -> ClientResult<()>;
+	fn import_header(
+		&self,
+		is_new_best: bool,
+		header: Block::Header,
+		authorities: Option<Vec<AuthorityId>>
+	) -> ClientResult<()>;
+
+	/// Get storage cache.
+	fn cache(&self) -> Option<&BlockchainCache<Block>>;
 }
 
 /// Light client blockchain.
@@ -91,5 +100,9 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 
 	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification<Block::Hash>>> {
 		Ok(None)
+	}
+
+	fn cache(&self) -> Option<&BlockchainCache<Block>> {
+		self.storage.cache()
 	}
 }
