@@ -517,16 +517,6 @@ name = "pwasm-libc"
 version = "0.1.0"
 
 [[package]]
-name = "pwasm-utils"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-wasm 0.31.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "quote"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -760,17 +750,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-runtime-contract"
-version = "0.1.0"
-dependencies = [
- "parity-wasm 0.31.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pwasm-utils 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-runtime-sandbox 0.1.0",
- "substrate-runtime-std 0.1.0",
-]
-
-[[package]]
 name = "substrate-runtime-council"
 version = "0.1.0"
 dependencies = [
@@ -902,7 +881,6 @@ dependencies = [
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-contract 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-sandbox 0.1.0",
@@ -1215,7 +1193,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum proc-macro-hack 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "3ba8d4f9257b85eb6cdf13f055cea3190520aab1409ca2ab43493ea4820c25f0"
 "checksum proc-macro-hack-impl 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d5cb6f960ad471404618e9817c0e5d10b1ae74cfdf01fab89ea0641fe7fb2892"
 "checksum proc-macro2 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "1fa93823f53cfd0f5ac117b189aed6cfdfb2cfc0a9d82e956dd7927595ed7d46"
-"checksum pwasm-utils 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "efd695333cfae6e9dbe2703a6d040e252b57a6fc3b9a65c712615ac042b2e0c5"
 "checksum quote 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)" = "e44651a0dc4cdd99f71c83b561e221f714912d11af1a4dff0631f923d53af035"
 "checksum rand 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)" = "15a732abf9d20f0ad8eeb6f909bf6868722d9a06e1e50802b6a70351f40b4eb1"
 "checksum rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)" = "eba5f8cb59cc50ed56be8880a5c7b496bfd9bd26394e176bc67884094145c2c5"
