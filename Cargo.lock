@@ -1789,12 +1789,12 @@ dependencies = [
 
 [[package]]
 name = "polkadot"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ctrlc 1.1.1 (git+https://github.com/paritytech/rust-ctrlc.git)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-cli 0.2.0",
+ "polkadot-cli 0.3.0",
  "vergen 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1819,7 +1819,7 @@ dependencies = [
 
 [[package]]
 name = "polkadot-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1830,10 +1830,10 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
- "polkadot-service 0.2.0",
+ "polkadot-service 0.3.0",
  "polkadot-transaction-pool 0.1.0",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-cli 0.2.0",
+ "substrate-cli 0.3.0",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-extrinsic-pool 0.1.0",
@@ -1842,9 +1842,9 @@ dependencies = [
  "substrate-rpc 0.1.0",
  "substrate-rpc-servers 0.1.0",
  "substrate-runtime-primitives 0.1.0",
- "substrate-service 0.2.0",
+ "substrate-service 0.3.0",
  "substrate-state-machine 0.1.0",
- "substrate-telemetry 0.2.0",
+ "substrate-telemetry 0.3.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1856,7 +1856,7 @@ dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
- "polkadot-cli 0.2.0",
+ "polkadot-cli 0.3.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
  "substrate-client 0.1.0",
@@ -1975,7 +1975,7 @@ dependencies = [
 
 [[package]]
 name = "polkadot-service"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ed25519 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1996,8 +1996,8 @@ dependencies = [
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
- "substrate-service 0.2.0",
- "substrate-telemetry 0.2.0",
+ "substrate-service 0.3.0",
+ "substrate-telemetry 0.3.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2614,7 +2614,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "ansi_term 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "app_dirs 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2635,8 +2635,8 @@ dependencies = [
  "substrate-extrinsic-pool 0.1.0",
  "substrate-network 0.1.0",
  "substrate-runtime-primitives 0.1.0",
- "substrate-service 0.2.0",
- "substrate-telemetry 0.2.0",
+ "substrate-service 0.3.0",
+ "substrate-telemetry 0.3.0",
  "time 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2661,7 +2661,7 @@ dependencies = [
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-state-machine 0.1.0",
- "substrate-telemetry 0.2.0",
+ "substrate-telemetry 0.3.0",
  "substrate-test-client 0.1.0",
  "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3136,7 +3136,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-service"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3160,7 +3160,7 @@ dependencies = [
  "substrate-rpc-servers 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
- "substrate-telemetry 0.2.0",
+ "substrate-telemetry 0.3.0",
  "target_info 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3194,7 +3194,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-telemetry"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
