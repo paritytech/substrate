@@ -8,7 +8,7 @@ GITREPO=polkadot
 
 # Build the image
 echo "Building ${GITREPO}:$VERSION docker image, hang on!"
-time docker build --build-arg PROFILE=release -t ${GITUSER}/${GITREPO}:$VERSION .
+time docker build --pull --build-arg PROFILE=release -t ${GITUSER}/${GITREPO}:$VERSION .
 
 # Show the list of available images for this repo
 echo "Image is ready"
