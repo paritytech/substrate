@@ -38,6 +38,7 @@ extern crate kvdb_memorydb;
 
 pub mod light;
 
+mod cache;
 mod utils;
 
 use std::sync::Arc;
@@ -47,7 +48,7 @@ use codec::{Decode, Encode};
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
-use primitives::H256;
+use primitives::{H256, AuthorityId};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, NumberFor, Zero};
@@ -204,6 +205,10 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 			None => Ok(None),
 		}
 	}
+
+	fn cache(&self) -> Option<&client::blockchain::Cache<Block>> {
+		None
+	}
 }
 
 /// Database transaction
@@ -229,6 +234,10 @@ impl<Block: BlockT> client::backend::BlockImportOperation<Block> for BlockImport
 			is_best,
 		});
 		Ok(())
+	}
+
+	fn update_authorities(&mut self, _authorities: Vec<AuthorityId>) {
+		// currently authorities are not cached on full nodes
 	}
 
 	fn update_storage(&mut self, update: MemoryDB) -> Result<(), client::error::Error> {

@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# This script show the polkadot version and commit ref that was
+# used to build the image.
+# If you report an issue, call this script to get all details.
+# This script will no longer be required once the polkadot cli
+# can report its commit ref.
+
+echo "-----------------------------------------"
+printf "Polkadot Docker Container: "
+polkadot --version
+printf " "
+git rev-parse HEAD
+echo "-----------------------------------------"

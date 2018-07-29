@@ -68,8 +68,35 @@ impl OverlayedChanges {
 			.map(|x| x.as_ref().map(AsRef::as_ref))
 	}
 
+	/// Inserts the given key-value pair into the prospective change set.
+	///
+	/// `None` can be used to delete a value specified by the given key.
 	fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
 		self.prospective.insert(key, val);
+	}
+
+	/// Removes all key-value pairs which keys share the given prefix.
+	///
+	/// NOTE that this doesn't take place immediately but written into the prospective
+	/// change set, and still can be reverted by [`discard_prospective`].
+	///
+	/// [`discard_prospective`]: #method.discard_prospective
+	fn clear_prefix(&mut self, prefix: &[u8]) {
+		// Iterate over all prospective and mark all keys that share
+		// the given prefix as removed (None).
+		for (key, value) in self.prospective.iter_mut() {
+			if key.starts_with(prefix) {
+				*value = None;
+			}
+		}
+
+		// Then do the same with keys from commited changes.
+		// NOTE that we are making changes in the prospective change set.
+		for key in self.committed.keys() {
+			if key.starts_with(prefix) {
+				self.prospective.insert(key.to_owned(), None);
+			}
+		}
 	}
 
 	/// Discard prospective changes to state.
@@ -269,7 +296,7 @@ pub fn execute_using_consensus_failure_handler<
 
 	// make a copy.
 	let code = ext::Ext::new(overlay, backend).storage(b":code")
-		.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
+		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 		.to_vec();
 
 	let result = {
@@ -509,7 +536,7 @@ mod tests {
 			},
 			"test",
 			&[],
-			ExecutionManager::Both(|we, _ne| { 
+			ExecutionManager::Both(|we, _ne| {
 				consensus_failed = true;
 				println!("HELLO!");
 				we
@@ -539,5 +566,45 @@ mod tests {
 		// check that both results are correct
 		assert_eq!(remote_result, vec![66]);
 		assert_eq!(remote_result, local_result);
+	}
+
+	#[test]
+	fn clear_prefix_in_ext_works() {
+		let initial: HashMap<_, _> = map![
+			b"aaa".to_vec() => b"0".to_vec(),
+			b"abb".to_vec() => b"1".to_vec(),
+			b"abc".to_vec() => b"2".to_vec(),
+			b"bbb".to_vec() => b"3".to_vec()
+		];
+		let backend = InMemory::from(initial).try_into_trie_backend().unwrap();
+		let mut overlay = OverlayedChanges {
+			committed: map![
+				b"aba".to_vec() => Some(b"1312".to_vec()),
+				b"bab".to_vec() => Some(b"228".to_vec())
+			],
+			prospective: map![
+				b"abd".to_vec() => Some(b"69".to_vec()),
+				b"bbd".to_vec() => Some(b"42".to_vec())
+			],
+		};
+
+		{
+			let mut ext = Ext::new(&mut overlay, &backend);
+			ext.clear_prefix(b"ab");
+		}
+		overlay.commit_prospective();
+
+		assert_eq!(
+			overlay.committed,
+			map![
+				b"abb".to_vec() => None,
+				b"abc".to_vec() => None,
+				b"aba".to_vec() => None,
+				b"abd".to_vec() => None,
+
+				b"bab".to_vec() => Some(b"228".to_vec()),
+				b"bbd".to_vec() => Some(b"42".to_vec())
+			],
+		);
 	}
 }

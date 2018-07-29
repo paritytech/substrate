@@ -353,7 +353,17 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 
 	fn on_block_response(&self, io: &mut SyncIo, peer: NodeIndex, request: message::BlockRequest<B>, response: message::BlockResponse<B>) {
 		// TODO: validate response
-		trace!(target: "sync", "BlockResponse {} from {} with {} blocks", response.id, peer, response.blocks.len());
+		let blocks_range = match (
+				response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
+				response.blocks.last().and_then(|b| b.header.as_ref().map(|h| h.number())),
+			) {
+				(Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
+				(Some(first), Some(_)) => format!(" ({})", first),
+				_ => Default::default(),
+			};
+		trace!(target: "sync", "BlockResponse {} from {} with {} blocks{}",
+			response.id, peer, response.blocks.len(), blocks_range);
+
 		self.sync.write().on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response);
 	}
 

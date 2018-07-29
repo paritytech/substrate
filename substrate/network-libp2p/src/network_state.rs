@@ -29,11 +29,11 @@ use {Error, ErrorKind, NetworkConfiguration, NonReservedPeerMode};
 use {NodeIndex, ProtocolId, SessionInfo};
 use parking_lot::{Mutex, RwLock};
 use rand::{self, Rng};
-use std::cmp;
 use std::fs;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind, Read, Write};
 use std::path::Path;
 use std::sync::atomic;
+use std::{thread, time};
 use std::time::{Duration, Instant};
 
 // File where the peers are stored.
@@ -51,10 +51,10 @@ pub struct NetworkState {
 	/// Active connections.
 	connections: RwLock<Connections>,
 
-	/// `min_peers` taken from the configuration.
-	min_peers: u32,
-	/// `max_peers` taken from the configuration.
-	max_peers: u32,
+	/// Maximum incoming peers.
+	max_incoming_peers: u32,
+	/// Maximum outgoing peers.
+	max_outgoing_peers: u32,
 
 	/// If true, only reserved peers can connect.
 	reserved_only: atomic::AtomicBool,
@@ -175,17 +175,35 @@ impl NetworkState {
 		let node_store = if let Some(ref path) = config.net_config_path {
 			let path = Path::new(path).join(NODES_FILE);
 			if let Ok(node_store) = JsonPeerstore::new(path.clone()) {
-				debug!(target: "sub-libp2p", "Initialized peer store for JSON \
-					file {:?}", path);
+				debug!(target: "sub-libp2p", "Initialized peer store for JSON file {:?}", path);
 				NodeStore::Json(node_store)
 			} else {
-				warn!(target: "sub-libp2p", "Failed to open peer storage {:?} \
-					; peers won't be saved", path);
-				NodeStore::Memory(MemoryPeerstore::empty())
+				warn!(target: "sub-libp2p", "Failed to open peer storage {:?}; peers file will be reset", path);
+				fs::remove_file(&path).expect("Failed deleting peers.json");
+
+				// we check for about 1s if the file was really deleted and move on
+				for _x in 0..200 {
+					if !Path::new(&path).exists() {
+						break;
+					} else {
+						debug!("Waiting for effective deletion of invalid/outdate peers.json");
+						thread::sleep(time::Duration::from_millis(5));
+					}
+				}
+
+				if let Ok(peerstore) = JsonPeerstore::new(path.clone()) {
+					debug!("peers.json reset");
+					NodeStore::Json(peerstore)
+				} else {
+					warn!(target: "sub-libp2p",
+						"Failed to reset peer storage {:?}; peers change will not be saved",
+						path
+					);
+					NodeStore::Memory(MemoryPeerstore::empty())
+				}
 			}
 		} else {
-			debug!(target: "sub-libp2p", "No peers file configured ; peers \
-				won't be saved");
+			debug!(target: "sub-libp2p", "No peers file configured ; peers won't be saved");
 			NodeStore::Memory(MemoryPeerstore::empty())
 		};
 
@@ -201,13 +219,12 @@ impl NetworkState {
 			RwLock::new(reserved_peers)
 		};
 
-		let expected_max_peers = cmp::max(config.max_peers as usize,
-			config.reserved_nodes.len());
+		let expected_max_peers = config.max_peers as usize + config.reserved_nodes.len();
 
 		Ok(NetworkState {
 			node_store,
-			min_peers: config.min_peers,
-			max_peers: config.max_peers,
+			max_outgoing_peers: config.min_peers,
+			max_incoming_peers: config.max_peers.saturating_sub(config.min_peers),
 			connections: RwLock::new(Connections {
 				peer_by_nodeid: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
 				info_by_peer: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
@@ -464,19 +481,14 @@ impl NetworkState {
 		}
 	}
 
-	/// Returns the number of open and pending connections with
-	/// custom protocols.
-	pub fn num_open_custom_connections(&self) -> u32 {
-		num_open_custom_connections(&self.connections.read())
-	}
-
 	/// Returns the number of new outgoing custom connections to peers to
 	/// open. This takes into account the number of active peers.
 	pub fn should_open_outgoing_custom_connections(&self) -> u32 {
 		if self.reserved_only.load(atomic::Ordering::Relaxed) {
 			0
 		} else {
-			self.min_peers.saturating_sub(self.num_open_custom_connections())
+			let num_open_custom_connections = num_open_custom_connections(&self.connections.read(), &self.reserved_peers.read());
+			self.max_outgoing_peers.saturating_sub(num_open_custom_connections.unreserved_outgoing)
 		}
 	}
 
@@ -554,7 +566,7 @@ impl NetworkState {
 	/// You must pass an `UnboundedSender` which will be used by the `send`
 	/// method. Actually sending the data is not covered by this code.
 	///
-	/// The various methods of the `NetworkState` that close a connection do 
+	/// The various methods of the `NetworkState` that close a connection do
 	/// so by dropping this sender.
 	pub fn custom_proto(
 		&self,
@@ -572,7 +584,7 @@ impl NetworkState {
 		let who = accept_connection(&mut connections, &self.next_node_index,
 			node_id.clone(), endpoint)?;
 
-		let num_open_connections = num_open_custom_connections(&connections);
+		let num_open_connections = num_open_custom_connections(&connections, &self.reserved_peers.read());
 
 		let infos = connections.info_by_peer.get_mut(&who)
 			.expect("Newly-created peer id is always valid");
@@ -580,7 +592,10 @@ impl NetworkState {
 		let node_is_reserved = self.reserved_peers.read().contains(&infos.id);
 		if !node_is_reserved {
 			if self.reserved_only.load(atomic::Ordering::Relaxed) ||
-				num_open_connections >= self.max_peers
+				(endpoint == Endpoint::Listener &&
+				 num_open_connections.unreserved_incoming >= self.max_incoming_peers) ||
+				(endpoint == Endpoint::Dialer &&
+				 num_open_connections.unreserved_outgoing >= self.max_outgoing_peers)
 			{
 				debug!(target: "sub-libp2p", "Refusing node {:?} because we reached the max number of peers", node_id);
 				return Err(IoError::new(IoErrorKind::PermissionDenied, "maximum number of peers reached"))
@@ -643,10 +658,6 @@ impl NetworkState {
 				peer_info.id,
 				peer_info.kad_connec.is_alive(),
 				peer_info.protocols.iter().filter(|c| c.1.is_alive()).count());
-			// TODO: we manually clear the connections as a work-around for
-			// networking bugs ; normally it should automatically drop
-			for c in peer_info.protocols.iter() { c.1.clear(); }
-			peer_info.kad_connec.clear();
 			let old = connections.peer_by_nodeid.remove(&peer_info.id);
 			debug_assert_eq!(old, Some(who));
 		}
@@ -771,10 +782,19 @@ fn is_peer_disabled(
 	}
 }
 
+struct OpenCustomConnectionsNumbers {
+	/// Total number of open and pending connections.
+	pub total: u32,
+	/// Unreserved incoming number of open and pending connections.
+	pub unreserved_incoming: u32,
+	/// Unreserved outgoing number of open and pending connections.
+	pub unreserved_outgoing: u32,
+}
+
 /// Returns the number of open and pending connections with
 /// custom protocols.
-fn num_open_custom_connections(connections: &Connections) -> u32 {
-	connections
+fn num_open_custom_connections(connections: &Connections, reserved_peers: &FnvHashSet<PeerId>) -> OpenCustomConnectionsNumbers {
+	let filtered = connections
 		.info_by_peer
 		.values()
 		.filter(|info|
@@ -784,8 +804,29 @@ fn num_open_custom_connections(connections: &Connections) -> u32 {
 					_ => false
 				}
 			)
-		)
-		.count() as u32
+		);
+
+	let mut total: u32 = 0;
+	let mut unreserved_incoming: u32 = 0;
+	let mut unreserved_outgoing: u32 = 0;
+
+	for info in filtered {
+		total += 1;
+		let node_is_reserved = reserved_peers.contains(&info.id);
+		if !node_is_reserved {
+			if !info.originated {
+				unreserved_incoming += 1;
+			} else {
+				unreserved_outgoing += 1;
+			}
+		}
+	}
+
+	OpenCustomConnectionsNumbers {
+		total,
+		unreserved_incoming,
+		unreserved_outgoing,
+	}
 }
 
 /// Parses an address of the form `/ip4/x.x.x.x/tcp/x/p2p/xxxxxx`, and adds it
@@ -807,13 +848,13 @@ fn parse_and_add_to_node_store(
 		NodeStore::Memory(ref node_store) =>
 			node_store
 				.peer_or_create(&who)
-				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
+				.set_addr_ttl(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 		NodeStore::Json(ref node_store) =>
 			node_store
 				.peer_or_create(&who)
-				.add_addr(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
+				.set_addr_ttl(addr, Duration::from_secs(100000 * 365 * 24 * 3600)),
 	}
-	
+
 	Ok(who)
 }
 
