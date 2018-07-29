@@ -587,33 +587,17 @@ fn transferring_incomplete_reserved_balance_should_work() {
 }
 
 #[test]
-fn account_removal_removes_storage() {
-	with_externalities(&mut new_test_ext(100, 1, 3, 1, false, 0), || {
-		// Setup two accounts with free balance above than exsistential threshold.
-		{
-			<FreeBalance<Test>>::insert(1, 110);
-			<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
-			<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
+fn transferring_too_high_value_should_not_panic() {
+	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
+		<FreeBalance<Test>>::insert(1, u64::max_value());
+		<FreeBalance<Test>>::insert(2, 1);
 
-			<FreeBalance<Test>>::insert(2, 110);
-			<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
-			<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
-		}
+		assert_err!(
+			Staking::transfer(&1, 2.into(), u64::max_value()),
+			"destination balance too high to receive value"
+		);
 
-		// Transfer funds from account 1 of such amount that after this transfer
-		// the balance of account 1 is will be below than exsistential threshold.
-		//
-		// This should lead to the removal of all storage associated with this account.
-		assert_ok!(Staking::transfer(&1, 2.into(), 20));
-
-		// Verify that all entries from account 1 is removed, while
-		// entries from account 2 is in place.
-		{
-			assert_eq!(<StorageOf<Test>>::get(1, b"foo".to_vec()), None);
-			assert_eq!(<StorageOf<Test>>::get(1, b"bar".to_vec()), None);
-
-			assert_eq!(<StorageOf<Test>>::get(2, b"hello".to_vec()), Some(b"3".to_vec()));
-			assert_eq!(<StorageOf<Test>>::get(2, b"world".to_vec()), Some(b"4".to_vec()));
-		}
+		assert_eq!(Staking::free_balance(&1), u64::max_value());
+		assert_eq!(Staking::free_balance(&2), 1);
 	});
 }
