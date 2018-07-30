@@ -14,7 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{Config, Error, Ext, ExtFunc};
+use super::{Config, Error, Ext};
+use super::env_def::{ExtFunc, Environment};
 use parity_wasm::elements::{self, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
@@ -108,7 +109,7 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 		None
 	}
 
-	fn check_signatures<E: Ext>(&self, sigs: &BTreeMap<String, ExtFunc<E>>) -> Result<(), Error> {
+	fn check_signatures<E: Ext>(&self, env: &Environment<E>) -> Result<(), Error> {
 		// TODO: Merge it with `find_mem_import`?
 		let module = self
 			.module
@@ -137,10 +138,11 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 				return Err(Error::Deserialization);
 			}
 
-			let ext_func = sigs
+			let ext_func = env
+				.funcs
 				.get(import.field())
 				.ok_or_else(|| Error::Deserialization)?;
-			if !ext_func.types_match(func_ty) {
+			if !ext_func.func_type_matches(func_ty) {
 				return Err(Error::Instantiate);
 			}
 		}
@@ -164,13 +166,13 @@ pub(super) struct PreparedContract {
 pub(super) fn prepare_contract<E: Ext>(
 	original_code: &[u8],
 	config: &Config<E::T>,
-	sigs: &BTreeMap<String, ExtFunc<E>>,
+	env: &Environment<E>,
 ) -> Result<PreparedContract, Error> {
 	let mut contract_module = ContractModule::new(original_code, config)?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.inject_gas_metering()?;
 	contract_module.inject_stack_height_metering()?;
-	contract_module.check_signatures(sigs)?;
+	contract_module.check_signatures(env)?;
 
 	// Inspect the module to extract the initial and maximum page count.
 	let memory = if let Some(memory_type) = contract_module.find_mem_import() {
@@ -222,8 +224,8 @@ mod tests {
 	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
 		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
 		let config = Config::<Test>::default();
-		let sigs = BTreeMap::default();
-		prepare_contract::<MockExt>(wasm.as_ref(), &config, &sigs)
+		let env = Environment::new();
+		prepare_contract::<MockExt>(wasm.as_ref(), &config, &env)
 	}
 
 	#[test]
