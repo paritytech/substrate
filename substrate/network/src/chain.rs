@@ -18,7 +18,6 @@
 
 use client::{self, Client as SubstrateClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin, CallExecutor};
 use client::error::Error;
-use state_machine;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
@@ -26,7 +25,7 @@ use runtime_primitives::bft::Justification;
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
-	fn import(&self, is_best: bool, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error>;
+	fn import(&self, origin: BlockOrigin, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error>;
 
 	/// Get blockchain info.
 	fn info(&self) -> Result<ClientInfo<Block>, Error>;
@@ -54,12 +53,10 @@ impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
 	E: CallExecutor<Block> + Send + Sync + 'static,
 	Block: BlockT,
-	Error: From<<<B as client::backend::Backend<Block>>::State as state_machine::backend::Backend>::Error>, {
-
-	fn import(&self, is_best: bool, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error> {
+{
+	fn import(&self, origin: BlockOrigin, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error> {
 		// TODO: defer justification check.
 		let justified_header = self.check_justification(header, justification.into())?;
-		let origin = if is_best { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
 		(self as &SubstrateClient<B, E, Block>).import_block(origin, justified_header, body)
 	}
 

@@ -7,3 +7,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 ed25519 = { version = "*", path = "../substrate/ed25519" }
 substrate-primitives = { version = "*", path = "../substrate/primitives" }
 rand = "0.4"
+
+[features]
+bench = []

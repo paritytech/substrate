@@ -73,8 +73,35 @@ impl OverlayedChanges {
 			.map(|x| x.as_ref().map(AsRef::as_ref))
 	}
 
+	/// Inserts the given key-value pair into the prospective change set.
+	///
+	/// `None` can be used to delete a value specified by the given key.
 	fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
 		self.prospective.insert(key, val);
+	}
+
+	/// Removes all key-value pairs which keys share the given prefix.
+	///
+	/// NOTE that this doesn't take place immediately but written into the prospective
+	/// change set, and still can be reverted by [`discard_prospective`].
+	///
+	/// [`discard_prospective`]: #method.discard_prospective
+	fn clear_prefix(&mut self, prefix: &[u8]) {
+		// Iterate over all prospective and mark all keys that share
+		// the given prefix as removed (None).
+		for (key, value) in self.prospective.iter_mut() {
+			if key.starts_with(prefix) {
+				*value = None;
+			}
+		}
+
+		// Then do the same with keys from commited changes.
+		// NOTE that we are making changes in the prospective change set.
+		for key in self.committed.keys() {
+			if key.starts_with(prefix) {
+				self.prospective.insert(key.to_owned(), None);
+			}
+		}
 	}
 
 	/// Discard prospective changes to state.
@@ -100,8 +127,12 @@ impl OverlayedChanges {
 /// State Machine Error bound.
 ///
 /// This should reflect WASM error type bound for future compatibility.
-pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
-impl<E> Error for E where E: 'static + fmt::Debug + fmt::Display + Send {}
+pub trait Error: 'static + fmt::Debug + fmt::Display + Send {
+	/// Error implies execution should be retried.
+	fn needs_retry(&self) -> bool { false }
+}
+
+impl Error for ExecutionError {}
 
 /// Externalities Error.
 ///
@@ -137,6 +168,11 @@ pub trait Externalities<H: Hasher> {
 		self.place_storage(key.to_vec(), None);
 	}
 
+	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
+	fn exists_storage(&self, key: &[u8]) -> bool {
+		self.storage(key).is_some()
+	}
+
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
 
@@ -155,14 +191,57 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 	/// Externalities error type.
 	type Error: Error;
 
-	/// Call a given method in the runtime.
+	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
+	/// or an execution error) together with a `bool`, which is true if native execution was used.
 	fn call<E: Externalities<H>>(
 		&self,
 		ext: &mut E,
 		code: &[u8],
 		method: &str,
 		data: &[u8],
-	) -> Result<Vec<u8>, Self::Error>;
+		use_native: bool
+	) -> (Result<Vec<u8>, Self::Error>, bool);
+}
+
+/// Strategy for executing a call into the runtime.
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum ExecutionStrategy {
+	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
+	NativeWhenPossible,
+	/// Use the given wasm module.
+	AlwaysWasm,
+	/// Run with both the wasm and the native variant (if compatible). Report any discrepency as an error.
+	Both,
+}
+
+/// Like `ExecutionStrategy` only it also stores a handler in case of consensus failure.
+pub enum ExecutionManager<F> {
+	/// Execute with the native equivalent if it is compatible with the given wasm module; otherwise fall back to the wasm.
+	NativeWhenPossible,
+	/// Use the given wasm module.
+	AlwaysWasm,
+	/// Run with both the wasm and the native variant (if compatible). Call `F` in the case of any discrepency.
+	Both(F),
+}
+
+impl<'a, F> From<&'a ExecutionManager<F>> for ExecutionStrategy {
+	fn from(s: &'a ExecutionManager<F>) -> Self {
+		match *s {
+			ExecutionManager::NativeWhenPossible => ExecutionStrategy::NativeWhenPossible,
+			ExecutionManager::AlwaysWasm => ExecutionStrategy::AlwaysWasm,
+			ExecutionManager::Both(_) => ExecutionStrategy::Both,
+		}
+	}
+}
+
+/// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
+pub fn native_when_possible<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+	ExecutionManager::NativeWhenPossible
+}
+
+/// Evaluate to ExecutionManager::NativeWhenPossible, without having to figure out the type.
+pub fn always_wasm<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8>, E>)->Result<Vec<u8>, E>> {
+	ExecutionManager::AlwaysWasm
 }
 
 /// Execute a call using the given state backend, overlayed changes, and call executor.
@@ -179,6 +258,7 @@ pub fn execute<H, C, B, Exec>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
+	strategy: ExecutionStrategy,
 ) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
 where
 	H: Hasher,
@@ -187,28 +267,127 @@ where
 	B: Backend<H, C>,
 	H::Out: Ord + Encodable
 {
-	let result = {
-		let mut externalities = ext::Ext::new(overlay, backend);
-		// make a copy.
-		let code = externalities.storage(b":code")
-			.ok_or(Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
-			.to_vec();
+	execute_using_consensus_failure_handler(
+		backend,
+		overlay,
+		exec,
+		method,
+		call_data,
+		match strategy {
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+				warn!("Consensus error between wasm {:?} and native {:?}. Using wasm.", wasm_result, native_result);
+				wasm_result
+			}),
+		},
+	)
+}
 
-		exec.call(
-			&mut externalities,
-			&code,
-			method,
-			call_data,
-		).map(move |out| (out, externalities.transaction()))
+/// Execute a call using the given state backend, overlayed changes, and call executor.
+/// Produces a state-backend-specific "transaction" which can be used to apply the changes
+/// to the backing store, such as the disk.
+///
+/// On an error, no prospective changes are written to the overlay.
+///
+/// Note: changes to code will be in place if this call is made again. For running partial
+/// blocks (e.g. a transaction at a time), ensure a different method is used.
+pub fn execute_using_consensus_failure_handler<H, C, B, Exec, Handler>(
+	backend: &B,
+	overlay: &mut OverlayedChanges,
+	exec: &Exec,
+	method: &str,
+	call_data: &[u8],
+	manager: ExecutionManager<Handler>,
+) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	Exec: CodeExecutor<H>,
+	B: Backend<H, C>,
+	H::Out: Ord + Encodable,
+	Handler: FnOnce(Result<Vec<u8>, Exec::Error>, Result<Vec<u8>, Exec::Error>) -> Result<Vec<u8>, Exec::Error>
+{
+	let strategy: ExecutionStrategy = (&manager).into();
+
+	// make a copy.
+	let code = ext::Ext::new(overlay, backend).storage(b":code")
+		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
+		.to_vec();
+
+	let result = {
+		let mut orig_prospective = overlay.prospective.clone();
+
+		let (result, was_native, delta) = loop {
+			let ((result, was_native), delta) = {
+				let mut externalities = ext::Ext::new(overlay, backend);
+				(
+					exec.call(
+						&mut externalities,
+						&code,
+						method,
+						call_data,
+						// attempt to run native first, if we're not directed to run wasm only
+						strategy != ExecutionStrategy::AlwaysWasm,
+					),
+					externalities.transaction()
+				)
+			};
+
+			if result.as_ref().err().map_or(false, |e| e.needs_retry()) {
+				overlay.prospective = orig_prospective.clone();
+			} else {
+				break (result, was_native, delta)
+			}
+		};
+
+		// run wasm separately if we did run native the first time and we're meant to run both
+		let (result, delta) = if let (true, ExecutionManager::Both(on_consensus_failure)) =
+			(was_native, manager)
+		{
+			overlay.prospective = orig_prospective.clone();
+
+			let (wasm_result, wasm_delta) = loop {
+				let ((result, _), delta) = {
+					let mut externalities = ext::Ext::new(overlay, backend);
+					(
+						exec.call(
+							&mut externalities,
+							&code,
+							method,
+							call_data,
+							false,
+						),
+						externalities.transaction()
+					)
+				};
+
+				if result.as_ref().err().map_or(false, |e| e.needs_retry()) {
+					overlay.prospective = orig_prospective.clone();
+				} else {
+					break (result, delta)
+				}
+			};
+
+			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
+				|| (result.is_err() && wasm_result.is_err() && format!("{}", result.as_ref().unwrap_err()) == format!("{}", wasm_result.as_ref().unwrap_err()))
+			{
+				(result, delta)
+			} else {
+				// Consensus error.
+				(on_consensus_failure(wasm_result, result), wasm_delta)
+			}
+		} else {
+			(result, delta)
+		};
+		result.map(move |out| (out, delta))
 	};
 
 	match result {
 		Ok(x) => {
-			overlay.commit_prospective();
 			Ok(x)
 		}
 		Err(e) => {
-			overlay.discard_prospective();
 			Err(Box::new(e))
 		}
 	}
@@ -240,7 +419,7 @@ where
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let (result, transaction) = execute::<H, C, _, _>(&proving_backend, overlay, exec, method, call_data)?;
+	let (result, transaction) = execute::<H, C, _, _>(&proving_backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)?;
 	let proof = proving_backend.extract_proof();
 	Ok((result, proof, transaction))
 }
@@ -255,13 +434,13 @@ pub fn execution_proof_check<H, C, Exec>(
 	call_data: &[u8],
 ) -> Result<(Vec<u8>, memorydb::MemoryDB<H>), Box<Error>>
 where
-	H: Hasher,
-	C: NodeCodec<H>,
-	Exec: CodeExecutor<H>,
-	H::Out: Ord + Encodable
+H: Hasher,
+C: NodeCodec<H>,
+Exec: CodeExecutor<H>,
+H::Out: Ord + Encodable
 {
-	let backend = proving_backend::create_proof_check_backend::<H, C>(root, proof)?;
-	execute::<H, C, _, _>(&backend, overlay, exec, method, call_data)
+	let backend = proving_backend::create_proof_check_backend::<H, C>(root.into(), proof)?;
+	execute::<H, C, _, _>(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
 }
 
 #[cfg(test)]
@@ -273,7 +452,11 @@ mod tests {
 	use ethtrie::RlpCodec;
 	use ethereum_types::H256;
 
-	struct DummyCodeExecutor;
+	struct DummyCodeExecutor {
+		native_available: bool,
+		native_succeeds: bool,
+		fallback_succeeds: bool,
+	}
 
 	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
 		type Error = u8;
@@ -284,10 +467,18 @@ mod tests {
 			_code: &[u8],
 			_method: &str,
 			_data: &[u8],
-		) -> Result<Vec<u8>, Self::Error> {
-			Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]])
+			use_native: bool
+		) -> (Result<Vec<u8>, Self::Error>, bool) {
+			let using_native = use_native && self.native_available;
+			match (using_native, self.native_succeeds, self.fallback_succeeds) {
+				(true, true, _) | (false, _, true) =>
+					(Ok(vec![ext.storage(b"value1").unwrap()[0] + ext.storage(b"value2").unwrap()[0]]), using_native),
+				_ => (Err(0), using_native),
+			}
 		}
 	}
+
+	impl Error for u8 {}
 
 	#[test]
 	fn overlayed_storage_works() {
@@ -350,24 +541,102 @@ mod tests {
 
 	#[test]
 	fn execute_works() {
-		assert_eq!(execute(&trie_backend::tests::test_trie(),
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap().0, vec![66]);
+		assert_eq!(execute(
+			&trie_backend::tests::test_trie(),
+			&mut Default::default(),
+			&DummyCodeExecutor {
+				native_available: true,
+				native_succeeds: true,
+				fallback_succeeds: true,
+			},
+			"test",
+			&[],
+			ExecutionStrategy::NativeWhenPossible
+		).unwrap().0, vec![66]);
+	}
+
+	#[test]
+	fn dual_execution_strategy_detects_consensus_failure() {
+		let mut consensus_failed = false;
+		assert!(execute_using_consensus_failure_handler(
+			&trie_backend::tests::test_trie(),
+			&mut Default::default(),
+			&DummyCodeExecutor {
+				native_available: true,
+				native_succeeds: true,
+				fallback_succeeds: false,
+			},
+			"test",
+			&[],
+			ExecutionManager::Both(|we, _ne| {
+				consensus_failed = true;
+				println!("HELLO!");
+				we
+			}),
+		).is_err());
+		assert!(consensus_failed);
 	}
 
 	#[test]
 	fn prove_execution_and_proof_check_works() {
+		let executor = DummyCodeExecutor {
+			native_available: true,
+			native_succeeds: true,
+			fallback_succeeds: true,
+		};
+
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let (remote_result, remote_proof, _) = prove_execution(remote_backend,
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
+			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check proof locally
-		let (local_result, _) = execution_proof_check::<KeccakHasher, RlpCodec,_,>(remote_root, remote_proof,
-			&mut Default::default(), &DummyCodeExecutor, "test", &[]).unwrap();
+        let (local_result, _) = execution_proof_check::<KeccakHasher, RlpCodec,_,>(remote_root, remote_proof,
+			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check that both results are correct
 		assert_eq!(remote_result, vec![66]);
 		assert_eq!(remote_result, local_result);
+	}
+
+	#[test]
+	fn clear_prefix_in_ext_works() {
+		let initial: HashMap<_, _> = map![
+			b"aaa".to_vec() => b"0".to_vec(),
+			b"abb".to_vec() => b"1".to_vec(),
+			b"abc".to_vec() => b"2".to_vec(),
+			b"bbb".to_vec() => b"3".to_vec()
+		];
+		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial).try_into_trie_backend().unwrap();
+		let mut overlay = OverlayedChanges {
+			committed: map![
+				b"aba".to_vec() => Some(b"1312".to_vec()),
+				b"bab".to_vec() => Some(b"228".to_vec())
+			],
+			prospective: map![
+				b"abd".to_vec() => Some(b"69".to_vec()),
+				b"bbd".to_vec() => Some(b"42".to_vec())
+			],
+		};
+
+		{
+			let mut ext = Ext::new(&mut overlay, &backend);
+			ext.clear_prefix(b"ab");
+		}
+		overlay.commit_prospective();
+
+		assert_eq!(
+			overlay.committed,
+			map![
+				b"abb".to_vec() => None,
+				b"abc".to_vec() => None,
+				b"aba".to_vec() => None,
+				b"abd".to_vec() => None,
+
+				b"bab".to_vec() => Some(b"228".to_vec()),
+				b"bbd".to_vec() => Some(b"42".to_vec())
+			],
+		);
 	}
 }

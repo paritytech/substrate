@@ -110,7 +110,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("polkadot"),
 	impl_name: ver_str!("parity-polkadot"),
 	authoring_version: 1,
-	spec_version: 1,
+	spec_version: 2,
 	impl_version: 0,
 };
 
@@ -168,8 +168,8 @@ pub type Session = session::Module<Concrete>;
 
 impl staking::Trait for Concrete {
 	type Balance = Balance;
-	type DetermineContractAddress = BlakeTwo256;
 	type AccountIndex = AccountIndex;
+	type OnAccountKill = ();
 }
 /// Staking module for this concrete runtime.
 pub type Staking = staking::Module<Concrete>;
@@ -257,7 +257,7 @@ pub mod api {
 mod tests {
 	use super::*;
 	use substrate_primitives as primitives;
-	use ::codec::Slicable;
+	use codec::{Encode, Decode};
 	use substrate_primitives::hexdisplay::HexDisplay;
 	use substrate_serializer as ser;
 	use runtime_primitives::traits::{Digest as DigestT, Header as HeaderT};
@@ -376,7 +376,7 @@ mod tests {
 		// df0f0200
 		// 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
 
-		let v = Slicable::encode(&tx);
+		let v = Encode::encode(&tx);
 		assert_eq!(&v[..], &hex!["6f000000ff0101010101010101010101010101010101010101010101010101010101010101e70300000300df0f02000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"][..]);
 		println!("{}", HexDisplay::from(&v));
 		assert_eq!(UncheckedExtrinsic::decode(&mut &v[..]).unwrap(), tx);
@@ -393,7 +393,7 @@ mod tests {
 				))
 			))),
 		};
-		let v = Slicable::encode(&xt);
+		let v = Encode::encode(&xt);
 		assert_eq!(Extrinsic::decode(&mut &v[..]).unwrap(), xt);
 	}
 

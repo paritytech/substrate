@@ -18,8 +18,9 @@
 
 use state_machine::backend::Backend as StateBackend;
 use error;
+use primitives::AuthorityId;
 use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use runtime_primitives::generic::BlockId;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
@@ -38,6 +39,9 @@ pub trait BlockImportOperation<Block: BlockT> {
 		is_new_best: bool
 	) -> error::Result<()>;
 
+	/// Append authorities set to the transaction. This is a set of parent block (set which
+	/// has been used to check justification of this block).
+	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
 	/// Inject storage data into the database.
 	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
@@ -69,6 +73,9 @@ pub trait Backend<Block: BlockT>: Send + Sync {
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
+	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
+	/// successfully reverted.
+	fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>>;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.

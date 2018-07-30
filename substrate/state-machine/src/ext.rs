@@ -130,6 +130,13 @@ where
 			self.backend.storage(key).expect("Externalities not allowed to fail within runtime"))
 	}
 
+	fn exists_storage(&self, key: &[u8]) -> bool {
+		match self.overlay.storage(key) {
+			Some(x) => x.is_some(),
+			_ => self.backend.exists_storage(key).expect("Externalities not allowed to fail within runtime"),
+		}
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
 		self.mark_dirty();
 		self.overlay.set_storage(key, value);
@@ -137,6 +144,7 @@ where
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.mark_dirty();
+		self.overlay.clear_prefix(prefix);
 		self.backend.for_keys_with_prefix(prefix, |key| {
 			self.overlay.set_storage(key.to_vec(), None);
 		});

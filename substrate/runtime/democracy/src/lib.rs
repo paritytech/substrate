@@ -339,16 +339,15 @@ impl<T: Trait> Default for GenesisConfig<T> {
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use codec::Slicable;
-		use runtime_io::twox_128;
+		use codec::Encode;
 
 		Ok(map![
-			twox_128(<LaunchPeriod<T>>::key()).to_vec() => self.launch_period.encode(),
-			twox_128(<VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
-			twox_128(<MinimumDeposit<T>>::key()).to_vec() => self.minimum_deposit.encode(),
-			twox_128(<ReferendumCount<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
-			twox_128(<NextTally<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
-			twox_128(<PublicPropCount<T>>::key()).to_vec() => (0 as PropIndex).encode()
+			Self::hash(<LaunchPeriod<T>>::key()).to_vec() => self.launch_period.encode(),
+			Self::hash(<VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
+			Self::hash(<MinimumDeposit<T>>::key()).to_vec() => self.minimum_deposit.encode(),
+			Self::hash(<ReferendumCount<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
+			Self::hash(<NextTally<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
+			Self::hash(<PublicPropCount<T>>::key()).to_vec() => (0 as PropIndex).encode()
 		])
 	}
 }
@@ -397,8 +396,8 @@ mod tests {
 	}
 	impl staking::Trait for Test {
 		type Balance = u64;
-		type DetermineContractAddress = staking::DummyContractAddressFor;
 		type AccountIndex = u64;
+		type OnAccountKill = ();
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
@@ -431,7 +430,6 @@ mod tests {
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
-			contract_fee: 0,
 			reclaim_rebate: 0,
 			early_era_slash: 0,
 			session_reward: 0,

@@ -30,12 +30,15 @@
 //! In general, this future should be pre-empted by the import of a justification
 //! set for this block height.
 
+#![recursion_limit="128"]
+
 pub mod error;
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_runtime_version as runtime_version;
 extern crate ed25519;
 extern crate tokio;
 extern crate parking_lot;
@@ -54,7 +57,7 @@ use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use codec::Slicable;
+use codec::Encode;
 use ed25519::LocalizedSignature;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block, Header};
@@ -186,7 +189,7 @@ pub trait Proposer<B: Block> {
 /// Block import trait.
 pub trait BlockImport<B: Block> {
 	/// Import a block alongside its corresponding justification.
-	fn import_block(&self, block: B, justification: Justification<B::Hash>);
+	fn import_block(&self, block: B, justification: Justification<B::Hash>, authorities: &[AuthorityId]);
 }
 
 /// Trait for getting the authorities at a given block.
@@ -305,7 +308,8 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 			info!(target: "bft", "Importing block #{} ({}) directly from BFT consensus",
 				justified_block.header().number(), justified_block.hash());
 
-			self.import.import_block(justified_block, committed.justification)
+			self.import.import_block(justified_block, committed.justification,
+				&self.inner.context().authorities)
 		}
 
 		Ok(Async::Ready(()))
@@ -503,7 +507,7 @@ fn check_justification_signed_message<H>(authorities: &[AuthorityId], message: &
 pub fn check_justification<B: Block>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
 	-> Result<Justification<B::Hash>, UncheckedJustification<B::Hash>>
 {
-	let message = Slicable::encode(&PrimitiveMessage::<B, _> {
+	let message = Encode::encode(&PrimitiveMessage::<B, _> {
 		parent,
 		action: PrimitiveAction::Commit(just.0.round_number as u32, just.0.digest.clone()),
 	});
@@ -518,7 +522,7 @@ pub fn check_justification<B: Block>(authorities: &[AuthorityId], parent: B::Has
 pub fn check_prepare_justification<B: Block>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
 	-> Result<PrepareJustification<B::Hash>, UncheckedJustification<B::Hash>>
 {
-	let message = Slicable::encode(&PrimitiveMessage::<B, _> {
+	let message = Encode::encode(&PrimitiveMessage::<B, _> {
 		parent,
 		action: PrimitiveAction::Prepare(just.0.round_number as u32, just.0.digest.clone()),
 	});
@@ -570,7 +574,7 @@ fn check_action<B: Block>(action: PrimitiveAction<B, B::Hash>, parent_hash: &B::
 		action,
 	};
 
-	let message = Slicable::encode(&primitive);
+	let message = Encode::encode(&primitive);
 	if ed25519::verify_strong(&sig.signature, &message, &sig.signer) {
 		Ok(())
 	} else {
@@ -588,7 +592,7 @@ pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, 
 			action,
 		};
 
-		let to_sign = Slicable::encode(&primitive);
+		let to_sign = Encode::encode(&primitive);
 		LocalizedSignature {
 			signer: signer.clone(),
 			signature: key.sign(&to_sign),
@@ -646,7 +650,7 @@ mod tests {
 	}
 
 	impl BlockImport<TestBlock> for FakeClient {
-		fn import_block(&self, block: TestBlock, _justification: Justification<H256>) {
+		fn import_block(&self, block: TestBlock, _justification: Justification<H256>, _authorities: &[AuthorityId]) {
 			assert!(self.imported_heights.lock().insert(block.header.number))
 		}
 	}

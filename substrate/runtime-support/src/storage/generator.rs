@@ -59,38 +59,38 @@ pub trait Storage {
 	fn exists(&self, key: &[u8]) -> bool;
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect.
-	fn get<T: codec::Slicable>(&self, key: &[u8]) -> Option<T>;
+	fn get<T: codec::Codec>(&self, key: &[u8]) -> Option<T>;
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect. Will panic if
 	/// it's not there.
-	fn require<T: codec::Slicable>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
+	fn require<T: codec::Codec>(&self, key: &[u8]) -> T { self.get(key).expect("Required values must be in storage") }
 
 	/// Load the bytes of a key from storage. Can panic if the type is incorrect. The type's
 	/// default is returned if it's not there.
-	fn get_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
+	fn get_or_default<T: codec::Codec + Default>(&self, key: &[u8]) -> T { self.get(key).unwrap_or_default() }
 
 	/// Put a value in under a key.
-	fn put<T: codec::Slicable>(&self, key: &[u8], val: &T);
+	fn put<T: codec::Codec>(&self, key: &[u8], val: &T);
 
 	/// Remove the bytes of a key from storage.
 	fn kill(&self, key: &[u8]);
 
 	/// Take a value from storage, deleting it after reading.
-	fn take<T: codec::Slicable>(&self, key: &[u8]) -> Option<T> {
+	fn take<T: codec::Codec>(&self, key: &[u8]) -> Option<T> {
 		let value = self.get(key);
 		self.kill(key);
 		value
 	}
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_panic<T: codec::Slicable>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
+	fn take_or_panic<T: codec::Codec>(&self, key: &[u8]) -> T { self.take(key).expect("Required values must be in storage") }
 
 	/// Take a value from storage, deleting it after reading.
-	fn take_or_default<T: codec::Slicable + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
+	fn take_or_default<T: codec::Codec + Default>(&self, key: &[u8]) -> T { self.take(key).unwrap_or_default() }
 }
 
 /// A strongly-typed value kept in storage.
-pub trait StorageValue<T: codec::Slicable> {
+pub trait StorageValue<T: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
 
@@ -120,7 +120,7 @@ pub trait StorageValue<T: codec::Slicable> {
 }
 
 /// A strongly-typed list in storage.
-pub trait StorageList<T: codec::Slicable> {
+pub trait StorageList<T: codec::Codec> {
 	/// Get the prefix key in storage.
 	fn prefix() -> &'static [u8];
 
@@ -150,7 +150,7 @@ pub trait StorageList<T: codec::Slicable> {
 }
 
 /// A strongly-typed map in storage.
-pub trait StorageMap<K: codec::Slicable, V: codec::Slicable> {
+pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	/// The type that get/take returns.
 	type Query;
 
@@ -233,7 +233,7 @@ macro_rules! __storage_items_internal {
 			/// Get the storage key used to fetch a value corresponding to a specific key.
 			fn key_for(x: &$kty) -> Vec<u8> {
 				let mut key = $prefix.to_vec();
-				key.extend($crate::codec::Slicable::encode(x));
+				$crate::codec::Encode::encode_to(x, &mut key);
 				key
 			}
 
@@ -284,7 +284,7 @@ macro_rules! __storage_items_internal {
 			/// Get the storage key used to fetch a value at a given index.
 			fn key_for(index: u32) -> Vec<u8> {
 				let mut key = $prefix.to_vec();
-				key.extend($crate::codec::Slicable::encode(&index));
+				$crate::codec::Encode::encode_to(&index, &mut key);
 				key
 			}
 
@@ -496,7 +496,7 @@ macro_rules! __decl_storage_item {
 			/// Get the storage key used to fetch a value corresponding to a specific key.
 			fn key_for(x: &$kty) -> Vec<u8> {
 				let mut key = $prefix.to_vec();
-				key.extend($crate::codec::Slicable::encode(x));
+				$crate::codec::Encode::encode_to(x, &mut key);
 				key
 			}
 
@@ -991,7 +991,7 @@ macro_rules! __decl_storage_items {
 mod tests {
 	use std::collections::HashMap;
 	use std::cell::RefCell;
-	use codec::Slicable;
+	use codec::Codec;
 	use super::*;
 
 	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
@@ -999,11 +999,11 @@ mod tests {
 			self.borrow_mut().get(key).is_some()
 		}
 
-		fn get<T: Slicable>(&self, key: &[u8]) -> Option<T> {
+		fn get<T: Codec>(&self, key: &[u8]) -> Option<T> {
 			self.borrow_mut().get(key).map(|v| T::decode(&mut &v[..]).unwrap())
 		}
 
-		fn put<T: Slicable>(&self, key: &[u8], val: &T) {
+		fn put<T: Codec>(&self, key: &[u8], val: &T) {
 			self.borrow_mut().insert(key.to_owned(), val.encode());
 		}
 

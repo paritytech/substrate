@@ -86,6 +86,8 @@ impl<H: Hasher, C: NodeCodec<H>> TrieBackend<H, C> {
 	}
 }
 
+impl super::Error for String {}
+
 impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
 	type Error = String;
 	type Transaction = MemoryDB<H>;

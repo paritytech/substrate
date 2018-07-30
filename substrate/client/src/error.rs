@@ -19,6 +19,7 @@
 use std;
 use state_machine;
 use primitives::hexdisplay::HexDisplay;
+use runtime_primitives::ApplyError;
 
 error_chain! {
 	errors {
@@ -32,6 +33,12 @@ error_chain! {
 		UnknownBlock(h: String) {
 			description("unknown block"),
 			display("UnknownBlock: {}", &*h),
+		}
+
+		/// Applying extrinsic error.
+		ApplyExtinsicFailed(e: ApplyError) {
+			description("Extrinsic error"),
+			display("Extrinsic error: {:?}", e),
 		}
 
 		/// Execution error.
@@ -111,6 +118,12 @@ error_chain! {
 			description("remote fetch failed"),
 			display("Remote data fetch has been failed"),
 		}
+
+		/// Error decoding call result.
+		CallResultDecode(method: &'static str) {
+			description("Error decoding call result")
+			display("Error decoding call result of {}", method)
+		}
 	}
 }
 
@@ -132,4 +145,11 @@ impl Error {
 	pub fn from_blockchain(e: Box<std::error::Error + Send>) -> Self {
 		ErrorKind::Blockchain(e).into()
 	}
+
+	/// Chain a state error.
+	pub fn from_state(e: Box<state_machine::Error + Send>) -> Self {
+		ErrorKind::Execution(e).into()
+	}
 }
+
+impl state_machine::Error for Error {}

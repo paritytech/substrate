@@ -41,7 +41,7 @@ mod pruning;
 
 use std::fmt;
 use parking_lot::RwLock;
-use codec::Slicable;
+use codec::Codec;
 use std::collections::HashSet;
 use unfinalized::UnfinalizedOverlay;
 use pruning::RefWindow;
@@ -50,8 +50,8 @@ use pruning::RefWindow;
 pub type DBValue = Vec<u8>;
 
 /// Basic set of requirements for the Block hash and node key types.
-pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Slicable + std::hash::Hash + 'static {}
-impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Slicable + std::hash::Hash + 'static> Hash for T {}
+pub trait Hash: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + 'static {}
+impl<T: Send + Sync + Sized + Eq + PartialEq + Clone + Default + fmt::Debug + Codec + std::hash::Hash + 'static> Hash for T {}
 
 /// Backend database trait. Read-only.
 pub trait MetaDb {
@@ -76,7 +76,7 @@ pub trait HashDb {
 pub enum Error<E: fmt::Debug> {
 	/// Database backend error.
 	Db(E),
-	/// `Slicable` decoding error.
+	/// `Codec` decoding error.
 	Decoding,
 }
 
@@ -138,7 +138,13 @@ impl PruningMode {
 	}
 }
 
-fn to_meta_key<S: Slicable>(suffix: &[u8], data: &S) -> Vec<u8> {
+impl Default for PruningMode {
+	fn default() -> Self {
+		PruningMode::keep_blocks(256)
+	}
+}
+
+fn to_meta_key<S: Codec>(suffix: &[u8], data: &S) -> Vec<u8> {
 	let mut buffer = data.encode();
 	buffer.extend(suffix);
 	buffer
@@ -194,6 +200,8 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn finalize_block(&mut self, hash: &BlockHash) -> CommitSet<Key> {
+		// clear the temporary overlay from the previous finalization.
+		self.unfinalized.clear_overlay();
 		let mut commit = match self.mode {
 			PruningMode::ArchiveAll => {
 				CommitSet::default()
@@ -214,6 +222,10 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		commit
 	}
 
+	pub fn best_finalized(&self) -> u64 {
+		return self.unfinalized.last_finalized_block_number()
+	}
+
 	fn prune(&mut self, commit: &mut CommitSet<Key>) {
 		if let (&mut Some(ref mut pruning), &PruningMode::Constrained(ref constraints)) = (&mut self.pruning, &self.mode) {
 			loop {
@@ -232,6 +244,20 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 
 				pruning.prune_one(commit);
 			}
+		}
+	}
+
+	/// Revert all unfinalized blocks with the best block number.
+	/// Returns a database commit or `None` if not possible.
+	/// For archive an empty commit set is returned.
+	pub fn revert_one(&mut self) -> Option<CommitSet<Key>> {
+		match self.mode {
+			PruningMode::ArchiveAll => {
+				Some(CommitSet::default())
+			},
+			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
+				self.unfinalized.revert_one()
+			},
 		}
 	}
 
@@ -289,6 +315,19 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	pub fn get<D: HashDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>> {
 		self.db.read().get(key, db)
 	}
+
+	/// Revert all unfinalized blocks with the best block number.
+	/// Returns a database commit or `None` if not possible.
+	/// For archive an empty commit set is returned.
+	pub fn revert_one(&self) -> Option<CommitSet<Key>> {
+		self.db.write().revert_one()
+	}
+
+	/// Returns last finalized block number.
+	pub fn best_finalized(&self) -> u64 {
+		return self.db.read().best_finalized()
+	}
+
 }
 
 #[cfg(test)]
