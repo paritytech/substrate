@@ -251,6 +251,7 @@ fn send_polkadot_message(ctx: &mut Context<Block>, to: NodeIndex, message: Messa
 }
 
 /// Polkadot network configuration.
+#[derive(Clone)]
 pub struct Config {
 	/// Set to `Some` with a collator `AccountId` and desired parachain
 	/// if the network protocol should be started in collator mode.

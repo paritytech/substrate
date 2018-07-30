@@ -312,6 +312,9 @@ pub fn run<I, T, W>(args: I, worker: W) -> error::Result<()> where
 	}
 
 	config.custom = worker.configuration();
+	if matches.is_present("no-gossip") {
+		config.custom.network.gossip = false;
+	}
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
 	if matches.is_present("dev") {

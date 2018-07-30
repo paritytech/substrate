@@ -46,7 +46,7 @@ use std::collections::HashMap;
 use codec::Encode;
 use transaction_pool::TransactionPool;
 use polkadot_api::{PolkadotApi, light::RemotePolkadotApiWrapper};
-use polkadot_primitives::{parachain, AccountId, Block, BlockId, Hash};
+use polkadot_primitives::{Block, BlockId, Hash};
 use polkadot_runtime::GenesisConfig;
 use client::Client;
 use polkadot_network::{PolkadotProtocol, consensus::ConsensusNetwork};
@@ -149,7 +149,7 @@ impl service::ServiceFactory for Factory {
 		if let Some((_, ref para_id)) = config.custom.network.collating_for {
 			info!("Starting network in Collator mode for parachain {:?}", para_id);
 		}
-		Ok(PolkadotProtocol::new(config.custom.network))
+		Ok(PolkadotProtocol::new(config.custom.network.clone()))
 	}
 }
 

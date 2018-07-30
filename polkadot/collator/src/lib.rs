@@ -220,7 +220,7 @@ impl<P, E> Worker for CollationNode<P, E> where
 
 	fn configuration(&self) -> CustomConfiguration {
 		let mut config = CustomConfiguration::default();
-		config.collating_for = Some((
+		config.network.collating_for = Some((
 			key_to_account_id(&*self.key),
 			self.para_id.clone(),
 		));

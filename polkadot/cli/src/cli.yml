@@ -103,6 +103,10 @@ args:
       long: max-heap-pages
       value_name: COUNT
       help: The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
+  - no-gossip:
+      long: no-gossip
+      takes_value: false
+      help: Whether to disable gossip of consensus messages.
 subcommands:
   - build-spec:
       about: Build a spec.json file, outputing to stdout
