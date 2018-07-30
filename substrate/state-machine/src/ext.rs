@@ -109,7 +109,7 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 
 	fn place_prefix(&mut self, prefix: &[u8], value: Option<Vec<u8>>) {
 		self.mark_dirty();
-		// TODO: this should also include values from overlay?
+		self.overlay.set_prefix(prefix, value.clone());
 		self.backend.for_keys_with_prefix(prefix, |key| {
 			self.overlay.set_storage(key.to_vec(), value.clone());
 		});
@@ -120,15 +120,22 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		// panic is safe here, since this should only be called from the runtime
 		assert!(!set_prefix.starts_with(prefix));
 
-		// TODO: this should also include values from overlay?
+		// collecting all keys from OverlayedChanges with filter couldn't
+		// take more memory than the OverlayedChanges itself
+		// => since we need to iterate OverlayedChanges + insert into OverlayedChanges
+		// => collect all affected OverlayedChanges keys before iterating backend
+		let mut overlayed_keys: Vec<Vec<u8>> = Vec::new();
+		self.overlay.for_keys_with_prefix(prefix, |key| overlayed_keys.push(key.to_vec()));
+
 		// insert keys to the set
 		self.mark_dirty();
 		{
 			let mut set_storage = ExtKeysSetStorage(self.backend, self.overlay);
 			let mut set = KeysSet::new(set_prefix, &mut set_storage);
-			self.backend.for_keys_with_prefix(prefix, |key| {
-				set.insert(&key);
-			});
+			for overlayed_key in overlayed_keys {
+				set.insert(&overlayed_key);
+			}
+			self.backend.for_keys_with_prefix(prefix, |key| set.insert(key));
 		}
 	}
 

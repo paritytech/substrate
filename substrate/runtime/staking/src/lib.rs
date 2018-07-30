@@ -36,7 +36,6 @@ extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
-extern crate substrate_runtime_contract as contract;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
@@ -46,30 +45,24 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(test)] use std::fmt::Debug;
-use account_db::State;
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use rstd::collections::btree_map::BTreeMap;
 use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, AuxLookup, Hash as HashT, Member};
+	As, AuxLookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
-use double_map::StorageDoubleMap;
+
+mod mock;
 
 pub mod address;
-mod mock;
 mod tests;
 mod genesis_config;
-mod account_db;
-mod double_map;
 
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
-
-pub use account_db::*;
 
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: usize = 64;
@@ -95,39 +88,26 @@ pub enum LockStatus<BlockNumber: PartialEq + Clone> {
 	Staked,
 }
 
-pub trait ContractAddressFor<AccountId: Sized> {
-	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
+/// The account was the given id was killed.
+pub trait OnAccountKill<AccountId> {
+	/// The account was the given id was killed.
+	fn on_account_kill(who: &AccountId);
 }
 
-#[cfg(feature = "std")]
-pub struct DummyContractAddressFor;
-#[cfg(feature = "std")]
-impl ContractAddressFor<u64> for DummyContractAddressFor {
-	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
-		origin + 1
-	}
-}
-
-impl<Hash, AccountId> ContractAddressFor<AccountId> for Hash where
-	Hash: HashT,
-	AccountId: Sized + Codec + From<Hash::Output>,
-	Hash::Output: Codec
-{
-	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId {
-		let mut dest_pre = Hash::hash(code).encode();
-		origin.using_encoded(|s| dest_pre.extend(s));
-		AccountId::from(Hash::hash(&dest_pre))
-	}
+impl<AccountId> OnAccountKill<AccountId> for () {
+	fn on_account_kill(_who: &AccountId) {}
 }
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
-	/// Function type to get the contract address given the creator.
-	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
 	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	/// A function which is invoked when the given account is dead.
+	///
+	/// Gives a chance to clean up resources associated with the given account.
+	type OnAccountKill: OnAccountKill<Self::AccountId>;
 }
 
 decl_module! {
@@ -175,8 +155,6 @@ decl_storage! {
 	pub TransferFee get(transfer_fee): b"sta:transfer_fee" => required T::Balance;
 	// The fee required to create an account. At least as big as ReclaimRebate.
 	pub CreationFee get(creation_fee): b"sta:creation_fee" => required T::Balance;
-	// The fee required to create a contract. At least as big as ReclaimRebate.
-	pub ContractFee get(contract_fee): b"sta:contract_fee" => required T::Balance;
 	// Maximum reward, per validator, that is provided per acceptable session.
 	pub SessionReward get(session_reward): b"sta:session_reward" => required T::Balance;
 	// Slash, per validator that is taken per abnormal era end.
@@ -209,7 +187,9 @@ decl_storage! {
 	// This is the only balance that matters in terms of most operations on tokens. It is
 	// alone used to determine the balance when in the contract execution environment. When this
 	// balance falls below the value of `ExistentialDeposit`, then the "current account" is
-	// deleted: specifically, `Bondage`, `StorageOf`, `CodeOf` and `FreeBalance`.
+	// deleted: specifically, `Bondage` and `FreeBalance`. Furthermore, `OnAccountKill` callback
+	// is invoked, giving a chance to external modules to cleanup data associated with
+	// the deleted account.
 	//
 	// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 	// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
@@ -231,26 +211,20 @@ decl_storage! {
 
 	// The block at which the `who`'s funds become entirely liquid.
 	pub Bondage get(bondage): b"sta:bon:" => default map [ T::AccountId => T::BlockNumber ];
-
-	// The code associated with an account.
-	pub CodeOf: b"sta:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
-}
-
-/// The storage items associated with an account/key.
-///
-/// TODO: keys should also be able to take AsRef<KeyType> to ensure Vec<u8>s can be passed as &[u8]
-pub(crate) struct StorageOf<T>(::rstd::marker::PhantomData<T>);
-impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
-	type Key1 = T::AccountId;
-	type Key2 = Vec<u8>;
-	type Value = Vec<u8>;
-	const PREFIX: &'static [u8] = b"sta:sto:";
 }
 
 enum NewAccountOutcome {
 	NoHint,
 	GoodHint,
 	BadHint,
+}
+
+/// Outcome of a balance update.
+pub enum UpdateBalanceOutcome {
+	/// Account balance was simply updated.
+	Updated,
+	/// The update has led to killing of the account.
+	AccountKilled,
 }
 
 impl<T: Trait> Module<T> {
@@ -292,25 +266,40 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Create a smart-contract account.
-	pub fn create(aux: &T::PublicAux, code: &[u8], value: T::Balance) -> Result {
-		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_create(aux.ref_into(), code, value, &DirectAccountDb)? {
-			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
-		}
-		Ok(())
-	}
-
 	// PUBLIC DISPATCH
 
 	/// Transfer some unlocked staking balance to another staker.
-	/// TODO: probably want to state gas-limit and gas-price.
-	fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
+	pub fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
 		let dest = Self::lookup(dest)?;
-		// commit anything that made it this far to storage
-		if let Some(commit) = Self::effect_transfer(aux.ref_into(), &dest, value, &DirectAccountDb)? {
-			<AccountDb<T>>::merge(&mut DirectAccountDb, commit);
+
+		let transactor = aux.ref_into();
+		let from_balance = Self::free_balance(transactor);
+		let would_create = from_balance.is_zero();
+		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
+		let liability = value + fee;
+
+		let new_from_balance = match from_balance.checked_sub(&liability) {
+			Some(b) => b,
+			None => return Err("balance too low to send value"),
+		};
+		if would_create && value < Self::existential_deposit() {
+			return Err("value too low to create account");
 		}
+		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
+			return Err("bondage too high to send value");
+		}
+
+		let to_balance = Self::free_balance(&dest);
+		let new_to_balance = match to_balance.checked_add(&value) {
+			Some(b) => b,
+			None => return Err("destination balance too high to receive value"),
+		};
+
+		if transactor != &dest {
+			Self::set_free_balance(transactor, new_from_balance);
+			Self::set_free_balance_creating(&dest, new_to_balance);
+		}
+
 		Ok(())
 	}
 
@@ -422,15 +411,17 @@ impl<T: Trait> Module<T> {
 
 	// PUBLIC MUTABLES (DANGEROUS)
 
-	/// Set the free balance of an account to some new value. Will enforce ExistentialDeposit law,
-	/// anulling the account as needed.
-	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> bool {
+	/// Set the free balance of an account to some new value.
+	///
+	/// Will enforce ExistentialDeposit law, anulling the account as needed.
+	/// In that case it will return `AccountKilled`.
+	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		if balance < Self::existential_deposit() {
 			Self::on_reserved_too_low(who);
-			false
+			UpdateBalanceOutcome::AccountKilled
 		} else {
 			<ReservedBalance<T>>::insert(who, balance);
-			true
+			UpdateBalanceOutcome::Updated
 		}
 	}
 
@@ -439,15 +430,55 @@ impl<T: Trait> Module<T> {
 	///
 	/// Doesn't do any preparatory work for creating a new account, so should only be used when it
 	/// is known that the account already exists.
-	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> bool {
+	///
+	/// Returns if the account was successfully updated or update has led to killing of the account.
+	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for no - but consider it instructive.
 //		assert!(!Self::voting_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
 			Self::on_free_too_low(who);
-			false
+			UpdateBalanceOutcome::AccountKilled
 		} else {
 			<FreeBalance<T>>::insert(who, balance);
-			true
+			UpdateBalanceOutcome::Updated
+		}
+	}
+
+	/// Set the free balance on an account to some new value.
+	///
+	/// Same as [`set_free_balance`], but will create a new account.
+	///
+	/// Returns if the account was successfully updated or update has led to killing of the account.
+	///
+	/// [`set_free_balance`]: #method.set_free_balance
+	pub fn set_free_balance_creating(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
+		let ed = <Module<T>>::existential_deposit();
+		// If the balance is too low, then the account is reaped.
+		// NOTE: There are two balances for every account: `reserved_balance` and
+		// `free_balance`. This contract subsystem only cares about the latter: whenever
+		// the term "balance" is used *here* it should be assumed to mean "free balance"
+		// in the rest of the module.
+		// Free balance can never be less than ED. If that happens, it gets reduced to zero
+		// and the account information relevant to this subsystem is deleted (i.e. the
+		// account is reaped).
+		// NOTE: This is orthogonal to the `Bondage` value that an account has, a high
+		// value of which makes even the `free_balance` unspendable.
+		// TODO: enforce this for the other balance-altering functions.
+		if balance < ed {
+			Self::on_free_too_low(who);
+			UpdateBalanceOutcome::AccountKilled
+		} else {
+			if !<FreeBalance<T>>::exists(who) {
+				let outcome = Self::new_account(&who, balance);
+				let credit = match outcome {
+					NewAccountOutcome::GoodHint => balance + <Module<T>>::reclaim_rebate(),
+					_ => balance,
+				};
+				<FreeBalance<T>>::insert(who, credit);
+			} else {
+				<FreeBalance<T>>::insert(who, balance);
+			}
+			UpdateBalanceOutcome::Updated
 		}
 	}
 
@@ -738,8 +769,7 @@ impl<T: Trait> Module<T> {
 	fn on_free_too_low(who: &T::AccountId) {
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
-		<CodeOf<T>>::remove(who);
-		<StorageOf<T>>::remove_prefix(who.clone());
+		T::OnAccountKill::on_account_kill(who);
 
 		if Self::reserved_balance(who).is_zero() {
 			<system::AccountNonce<T>>::remove(who);
@@ -752,101 +782,6 @@ impl<T: Trait> Module<T> {
 		if Self::free_balance(who).is_zero() {
 			<system::AccountNonce<T>>::remove(who);
 		}
-	}
-
-	fn effect_create<DB: AccountDb<T>>(
-		transactor: &T::AccountId,
-		code: &[u8],
-		value: T::Balance,
-		account_db: &DB,
-	) -> result::Result<Option<State<T>>, &'static str> {
-		let from_balance = account_db.get_balance(transactor);
-
-		let liability = value + Self::contract_fee();
-
-		if from_balance < liability {
-			return Err("balance too low to send value");
-		}
-		if value < Self::existential_deposit() {
-			return Err("value too low to create account");
-		}
-		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
-			return Err("bondage too high to send value");
-		}
-
-		let dest = T::DetermineContractAddress::contract_address_for(code, transactor);
-
-		// early-out if degenerate.
-		if &dest == transactor {
-			return Ok(None);
-		}
-
-		let mut local = BTreeMap::new();
-		// two inserts are safe
-		// note that we now know that `&dest != transactor` due to early-out before.
-		local.insert(dest, ChangeEntry::contract_created(value, code.to_vec()));
-		local.insert(transactor.clone(), ChangeEntry::balance_changed(from_balance - liability));
-		Ok(Some(local))
-	}
-
-	fn effect_transfer<DB: AccountDb<T>>(
-		transactor: &T::AccountId,
-		dest: &T::AccountId,
-		value: T::Balance,
-		account_db: &DB,
-	) -> result::Result<Option<State<T>>, &'static str> {
-		let would_create = account_db.get_balance(transactor).is_zero();
-		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
-		let liability = value + fee;
-
-		let from_balance = account_db.get_balance(transactor);
-		if from_balance < liability {
-			return Err("balance too low to send value");
-		}
-		if would_create && value < Self::existential_deposit() {
-			return Err("value too low to create account");
-		}
-		if <Bondage<T>>::get(transactor) > <system::Module<T>>::block_number() {
-			return Err("bondage too high to send value");
-		}
-
-		let to_balance = account_db.get_balance(dest);
-		if to_balance + value <= to_balance {
-			return Err("destination balance too high to receive value");
-		}
-
-		// TODO: an additional fee, based upon gaslimit/gasprice.
-		let gas_limit = 100_000;
-
-		// TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
-		// code in contract itself and use that.
-
-		// Our local overlay: Should be used for any transfers and creates that happen internally.
-		let mut overlay = OverlayAccountDb::new(account_db);
-
-		if transactor != dest {
-			overlay.set_balance(transactor, from_balance - liability);
-			overlay.set_balance(dest, to_balance + value);
-		}
-
-		let dest_code = overlay.get_code(dest);
-		let should_commit = if dest_code.is_empty() {
-			true
-		} else {
-			// TODO: logging (logs are just appended into a notable storage-based vector and
-			// cleared every block).
-			let mut staking_ext = StakingExt {
-				account_db: &mut overlay,
-				account: dest.clone(),
-			};
-			contract::execute(&dest_code, &mut staking_ext, gas_limit).is_ok()
-		};
-
-		Ok(if should_commit {
-			Some(overlay.into_state())
-		} else {
-			None
-		})
 	}
 }
 
