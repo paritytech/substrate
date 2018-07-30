@@ -19,6 +19,7 @@
 
 use std::sync::{Arc, Weak};
 
+use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::{Backend as StateBackend, TrieBackend as StateTrieBackend,
@@ -39,6 +40,7 @@ pub struct Backend<S, F> {
 pub struct ImportOperation<Block: BlockT, F> {
 	is_new_best: bool,
 	header: Option<Block::Header>,
+	authorities: Option<Vec<AuthorityId>>,
 	_phantom: ::std::marker::PhantomData<F>,
 }
 
@@ -69,13 +71,14 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S:
 		Ok(ImportOperation {
 			is_new_best: false,
 			header: None,
+			authorities: None,
 			_phantom: Default::default(),
 		})
 	}
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
-		self.blockchain.storage().import_header(operation.is_new_best, header)
+		self.blockchain.storage().import_header(operation.is_new_best, header, operation.authorities)
 	}
 
 	fn blockchain(&self) -> &Blockchain<S, F> {
@@ -119,6 +122,10 @@ impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where B
 		self.is_new_best = is_new_best;
 		self.header = Some(header);
 		Ok(())
+	}
+
+	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
+		self.authorities = Some(authorities);
 	}
 
 	fn update_storage(&mut self, _update: <Self::State as StateBackend>::Transaction) -> ClientResult<()> {

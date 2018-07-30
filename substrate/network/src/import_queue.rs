@@ -41,7 +41,7 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	fn stop(&self);
 	/// Get queue status.
 	fn status(&self) -> ImportQueueStatus<B>;
-	/// Is block with given hash is currently in the queue.
+	/// Is block with given hash currently in the queue.
 	fn is_importing(&self, hash: &B::Hash) -> bool;
 	/// Import bunch of blocks.
 	fn import_blocks(&self, sync: &mut ChainSync<B>, protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>));
@@ -133,6 +133,10 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 	}
 
 	fn import_blocks(&self, _sync: &mut ChainSync<B>, _protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>)) {
+		if blocks.1.is_empty() {
+			return;
+		}
+
 		trace!(target:"sync", "Scheduling {} blocks for import", blocks.1.len());
 
 		let mut queue = self.data.queue.lock();
@@ -248,6 +252,16 @@ fn import_many_blocks<'a, B: BlockT>(
 	let (blocks_origin, blocks) = blocks;
 	let count = blocks.len();
 	let mut imported = 0;
+
+	let blocks_range = match (
+			blocks.first().and_then(|b| b.block.header.as_ref().map(|h| h.number())),
+			blocks.last().and_then(|b| b.block.header.as_ref().map(|h| h.number())),
+		) {
+			(Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
+			(Some(first), Some(_)) => format!(" ({})", first),
+			_ => Default::default(),
+		};
+	trace!(target:"sync", "Starting import of {} blocks{}", count, blocks_range);
 
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
@@ -390,7 +404,7 @@ impl<'a, B: 'static + BlockT, E: ExecuteInContext<B>> SyncLinkApi<B> for SyncLin
 	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.with_sync(|sync, _| sync.block_imported(&hash, number))
 	}
-	
+
 	fn maintain_sync(&mut self) {
 		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
 	}

@@ -22,6 +22,7 @@ use parking_lot::RwLock;
 use error;
 use backend;
 use light;
+use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, As};
 use runtime_primitives::bft::Justification;
@@ -88,9 +89,27 @@ struct BlockchainStorage<Block: BlockT> {
 }
 
 /// In-memory blockchain. Supports concurrent reads.
-#[derive(Clone)]
 pub struct Blockchain<Block: BlockT> {
 	storage: Arc<RwLock<BlockchainStorage<Block>>>,
+	cache: Cache<Block>,
+}
+
+struct Cache<Block: BlockT> {
+	storage: Arc<RwLock<BlockchainStorage<Block>>>,
+	authorities_at: RwLock<HashMap<Block::Hash, Option<Vec<AuthorityId>>>>,
+}
+
+impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
+	fn clone(&self) -> Self {
+		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
+		Blockchain {
+			storage: storage.clone(),
+			cache: Cache {
+				storage,
+				authorities_at: RwLock::new(self.cache.authorities_at.read().clone()),
+			},
+		}
+	}
 }
 
 impl<Block: BlockT> Blockchain<Block> {
@@ -113,7 +132,11 @@ impl<Block: BlockT> Blockchain<Block> {
 				genesis_hash: Default::default(),
 			}));
 		Blockchain {
-			storage: storage,
+			storage: storage.clone(),
+			cache: Cache {
+				storage: storage,
+				authorities_at: Default::default(),
+			},
 		}
 	}
 
@@ -197,19 +220,37 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 			b.justification().map(|x| x.clone()))
 		))
 	}
+
+	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
+		Some(&self.cache)
+	}
 }
 
 impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block> {
-	fn import_header(&self, is_new_best: bool, header: Block::Header) -> error::Result<()> {
+	fn import_header(
+		&self,
+		is_new_best: bool,
+		header: Block::Header,
+		authorities: Option<Vec<AuthorityId>>
+	) -> error::Result<()> {
 		let hash = header.hash();
+		let parent_hash = *header.parent_hash();
 		self.insert(hash, header, None, None, is_new_best);
+		if is_new_best {
+			self.cache.insert(parent_hash, authorities);
+		}
 		Ok(())
+	}
+
+	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
+		Some(&self.cache)
 	}
 }
 
 /// In-memory operation.
 pub struct BlockImportOperation<Block: BlockT> {
 	pending_block: Option<PendingBlock<Block>>,
+	pending_authorities: Option<Vec<AuthorityId>>,
 	old_state: InMemory,
 	new_state: Option<InMemory>,
 }
@@ -234,6 +275,10 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 			is_best: is_new_best,
 		});
 		Ok(())
+	}
+
+	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
+		self.pending_authorities = Some(authorities);
 	}
 
 	fn update_storage(&mut self, update: <InMemory as StateBackend>::Transaction) -> error::Result<()> {
@@ -282,6 +327,7 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 
 		Ok(BlockImportOperation {
 			pending_block: None,
+			pending_authorities: None,
 			old_state: state,
 			new_state: None,
 		})
@@ -292,9 +338,14 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 			let old_state = &operation.old_state;
 			let (header, body, justification) = pending_block.block.into_inner();
 			let hash = header.hash();
+			let parent_hash = *header.parent_hash();
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 			self.blockchain.insert(hash, header, justification, body, pending_block.is_best);
+			// dumb implementation - store value for each block
+			if pending_block.is_best {
+				self.blockchain.cache.insert(parent_hash, operation.pending_authorities);
+			}
 		}
 		Ok(())
 	}
@@ -316,3 +367,29 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 }
 
 impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> {}
+
+impl<Block: BlockT> Cache<Block> {
+	fn insert(&self, at: Block::Hash, authorities: Option<Vec<AuthorityId>>) {
+		self.authorities_at.write().insert(at, authorities);
+	}
+}
+
+impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
+	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityId>> {
+		let hash = match block {
+			BlockId::Hash(hash) => hash,
+			BlockId::Number(number) => self.storage.read().hashes.get(&number).cloned()?,
+		};
+
+		self.authorities_at.read().get(&hash).cloned().unwrap_or(None)
+	}
+}
+
+/// Insert authorities entry into in-memory blockchain cache. Extracted as a separate function to use it in tests.
+pub fn cache_authorities_at<Block: BlockT>(
+	blockchain: &Blockchain<Block>,
+	at: Block::Hash,
+	authorities: Option<Vec<AuthorityId>>
+) {
+	blockchain.cache.insert(at, authorities);
+}
