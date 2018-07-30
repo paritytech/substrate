@@ -21,9 +21,7 @@
 //! to each other and operate on a simple key-value storage.
 
 use codec::Decode;
-use parity_wasm::elements::{self, External, MemoryType, Type, FunctionType};
-use pwasm_utils;
-use pwasm_utils::rules;
+use parity_wasm::elements::{FunctionType};
 use rstd::prelude::*;
 use rstd::collections::btree_map::BTreeMap;
 use sandbox;
@@ -36,6 +34,10 @@ use staking;
 
 type BalanceOf<T> = <T as staking::Trait>::Balance;
 type AccountIdOf<T> = <T as system::Trait>::AccountId;
+
+mod prepare;
+
+use self::prepare::{prepare_contract, PreparedContract};
 
 /// An interface that provides an access to the external environment in which the
 /// smart-contract is executed.
@@ -377,70 +379,19 @@ fn ext_return<E: Ext>(
 	Err(sandbox::HostError)
 }
 
-// trait Param {
-// 	fn new(&sandbox::TypedValue) -> Self;
-// }
-
-// trait Params {
-// 	fn new(&[sandbox::TypedValue]) -> Self;
-// }
-
-// impl Params for () {
-// 	fn new(_args: &[sandbox::TypedValue]) -> Self { () }
-// }
-
-// impl<A1: Param, A2: Param> Params for (A1, A2) {
-// 	fn new(args: &[sandbox::TypedValue]) -> Self {
-// 		assert!(args.len() == 2);
-// 		let a1 = A1::new(&args[0]);
-// 		let a2 = A2::new(&args[1]);
-// 		(a1, a2)
-// 	}
-// }
-
-// impl<A1: Param, A2: Param, A3: Param> Params for (A1, A2, A3) {
-// 	fn new(args: &[sandbox::TypedValue]) -> Self {
-// 		assert!(args.len() == 3);
-// 		let a1 = A1::new(&args[0]);
-// 		let a2 = A2::new(&args[1]);
-// 		let a3 = A3::new(&args[2]);
-// 		(a1, a2, a3)
-// 	}
-// }
-
-// trait ExternalFunction<E: Ext> {
-// 	type Result;
-
-// 	/// Something that can be created from &[TypedValue]
-// 	/// + something that can be compared to a parity-wasm's signature
-// 	type Params: Params;
-
-// 	/// Logic that will be executed upon a call.
-// 	fn call(e: &mut Runtime<E>, params: Self::Params) -> Result<Self::Result, sandbox::HostError>;
-// 	fn signature() -> FunctionType;
-// }
-
-// fn ext_wrapper<E: Ext, F: ExternalFunction<E>>(
-// 	e: &mut Runtime<E>,
-// 	args: &[sandbox::TypedValue],
-// ) -> Result<sandbox::ReturnValue, sandbox::HostError> {
-// 	let args = F::Params::new(args);
-// 	let result = F::call(e, args);
-// 	panic!()
-// }
-
 struct ExtFunc<E: Ext> {
 	f: fn(&mut Runtime<E>, &[sandbox::TypedValue]) -> Result<sandbox::ReturnValue, sandbox::HostError>,
 	func_type: FunctionType,
 }
 
 impl<E: Ext> ExtFunc<E> {
-	fn type_matches(&self, func_type: &FunctionType) -> bool {
+	fn types_match(&self, func_type: &FunctionType) -> bool {
 		panic!()
 	}
 }
 
-struct ExtFunctions<E: Ext> {
+struct Environment<E: Ext> {
+	/// Functions which defined in the environment.
 	funcs: BTreeMap<String, ExtFunc<E>>,
 }
 
@@ -453,11 +404,12 @@ pub fn execute<'a, E: Ext>(
 	// TODO: Receive data as an argument
 
 	let config = Config::default();
+	let sigs = BTreeMap::<String, ExtFunc<E>>::default();
 
 	let PreparedContract {
 		instrumented_code,
 		memory,
-	} = prepare_contract(code, &config)?;
+	} = prepare_contract(code, &config, &sigs)?;
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
 	imports.add_host_func("env", "gas", ext_gas::<E>);
@@ -519,168 +471,6 @@ impl<T: Trait> Default for Config<T> {
 			max_memory_pages: 16,
 		}
 	}
-}
-
-struct ContractModule<'a, T: Trait + 'a> {
-	// An `Option` is used here for loaning (`take()`-ing) the module.
-	// Invariant: Can't be `None` (i.e. on enter and on exit from the function
-	// the value *must* be `Some`).
-	module: Option<elements::Module>,
-	config: &'a Config<T>,
-}
-
-impl<'a, T: Trait> ContractModule<'a, T> {
-	fn new(original_code: &[u8], config: &'a Config<T>) -> Result<ContractModule<'a, T>, Error> {
-		let module =
-			elements::deserialize_buffer(original_code).map_err(|_| Error::Deserialization)?;
-		Ok(ContractModule {
-			module: Some(module),
-			config,
-		})
-	}
-
-	/// Ensures that module doesn't declare internal memories.
-	///
-	/// In this runtime we only allow wasm module to import memory from the environment.
-	/// Memory section contains declarations of internal linear memories, so if we find one
-	/// we reject such a module.
-	fn ensure_no_internal_memory(&self) -> Result<(), Error> {
-		let module = self
-			.module
-			.as_ref()
-			.expect("On entry to the function `module` can't be None; qed");
-		if module
-			.memory_section()
-			.map_or(false, |ms| ms.entries().len() > 0)
-		{
-			return Err(Error::InternalMemoryDeclared);
-		}
-		Ok(())
-	}
-
-	fn inject_gas_metering(&mut self) -> Result<(), Error> {
-		let gas_rules = rules::Set::new(self.config.regular_op_cost.as_(), Default::default())
-			.with_grow_cost(self.config.grow_mem_cost.as_())
-			.with_forbidden_floats();
-
-		let module = self
-			.module
-			.take()
-			.expect("On entry to the function `module` can't be `None`; qed");
-
-		let contract_module = pwasm_utils::inject_gas_counter(module, &gas_rules)
-			.map_err(|_| Error::GasInstrumentation)?;
-
-		self.module = Some(contract_module);
-		Ok(())
-	}
-
-	fn inject_stack_height_metering(&mut self) -> Result<(), Error> {
-		let module = self
-			.module
-			.take()
-			.expect("On entry to the function `module` can't be `None`; qed");
-
-		let contract_module =
-			pwasm_utils::stack_height::inject_limiter(module, self.config.max_stack_height)
-				.map_err(|_| Error::StackHeightInstrumentation)?;
-
-		self.module = Some(contract_module);
-		Ok(())
-	}
-
-	/// Find the memory import entry and return it's descriptor.
-	fn find_mem_import(&self) -> Option<&MemoryType> {
-		let import_section = self
-			.module
-			.as_ref()
-			.expect("On entry to the function `module` can't be `None`; qed")
-			.import_section()?;
-		for import in import_section.entries() {
-			if let ("env", "memory", &External::Memory(ref memory_type)) =
-				(import.module(), import.field(), import.external())
-			{
-				return Some(memory_type);
-			}
-		}
-		None
-	}
-
-	fn check_signatures(&self) -> Result<(), Error> {
-		// TODO: Merge it with `find_mem_import`?
-		let module = self
-			.module
-			.as_ref()
-			.expect("On entry to the function `module` can't be `None`; qed");
-
-		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
-		let import_entries = module.import_section().map(|is| is.entries()).unwrap_or(&[]);
-
-		for import in import_entries {
-			if let ("env", "memory", &External::Function(ref type_index)) =
-				(import.module(), import.field(), import.external())
-			{
-				let Type::Function(ref func_ty) = types
-					.get(*type_index as usize)
-					.ok_or_else(|| Error::Deserialization)?;
-
-
-			}
-		}
-		Ok(())
-	}
-
-	fn into_wasm_code(mut self) -> Result<Vec<u8>, Error> {
-		elements::serialize(
-			self.module
-				.take()
-				.expect("On entry to the function `module` can't be `None`; qed"),
-		).map_err(|_| Error::Serialization)
-	}
-}
-
-struct PreparedContract {
-	instrumented_code: Vec<u8>,
-	memory: sandbox::Memory,
-}
-
-fn prepare_contract<T: Trait>(original_code: &[u8], config: &Config<T>) -> Result<PreparedContract, Error> {
-	let mut contract_module = ContractModule::new(original_code, config)?;
-	contract_module.ensure_no_internal_memory()?;
-	contract_module.inject_gas_metering()?;
-	contract_module.inject_stack_height_metering()?;
-
-	// Inspect the module to extract the initial and maximum page count.
-	let memory = if let Some(memory_type) = contract_module.find_mem_import() {
-		let limits = memory_type.limits();
-		match (limits.initial(), limits.maximum()) {
-			(initial, Some(maximum)) if initial > maximum => {
-				// Requested initial number of pages should not exceed the requested maximum.
-				return Err(Error::Memory);
-			}
-			(_, Some(maximum)) if maximum > config.max_memory_pages => {
-				// Maximum number of pages should not exceed the configured maximum.
-				return Err(Error::Memory);
-			}
-			(_, None) => {
-				// Maximum number of pages should be always declared.
-				// This isn't a hard requirement and can be treated as a maxiumum set
-				// to configured maximum.
-				return Err(Error::Memory);
-			}
-			(initial, maximum) => sandbox::Memory::new(initial, maximum),
-		}
-	} else {
-		// If none memory imported then just crate an empty placeholder.
-		// Any access to it will lead to out of bounds trap.
-		sandbox::Memory::new(0, Some(0))
-	};
-	let memory = memory.map_err(|_| Error::Memory)?;
-
-	Ok(PreparedContract {
-		instrumented_code: contract_module.into_wasm_code()?,
-		memory,
-	})
 }
 
 #[cfg(test)]
@@ -763,7 +553,8 @@ mod tests {
 	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
 		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
 		let config = Config::<Test>::default();
-		prepare_contract(wasm.as_ref(), &config)
+		let sigs = BTreeMap::default();
+		prepare_contract::<MockExt>(wasm.as_ref(), &config, &sigs)
 	}
 
 	#[test]

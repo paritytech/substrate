@@ -1,0 +1,206 @@
+// Copyright 2018 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate. If not, see <http://www.gnu.org/licenses/>.
+
+use super::{Config, Error, Ext, ExtFunc};
+use parity_wasm::elements::{self, External, FunctionType, MemoryType, Type};
+use pwasm_utils;
+use pwasm_utils::rules;
+use rstd::collections::btree_map::BTreeMap;
+use runtime_primitives::traits::As;
+use sandbox;
+use Trait;
+
+struct ContractModule<'a, T: Trait + 'a> {
+	// An `Option` is used here for loaning (`take()`-ing) the module.
+	// Invariant: Can't be `None` (i.e. on enter and on exit from the function
+	// the value *must* be `Some`).
+	module: Option<elements::Module>,
+	config: &'a Config<T>,
+}
+
+impl<'a, T: Trait> ContractModule<'a, T> {
+	fn new(original_code: &[u8], config: &'a Config<T>) -> Result<ContractModule<'a, T>, Error> {
+		let module =
+			elements::deserialize_buffer(original_code).map_err(|_| Error::Deserialization)?;
+		Ok(ContractModule {
+			module: Some(module),
+			config,
+		})
+	}
+
+	/// Ensures that module doesn't declare internal memories.
+	///
+	/// In this runtime we only allow wasm module to import memory from the environment.
+	/// Memory section contains declarations of internal linear memories, so if we find one
+	/// we reject such a module.
+	fn ensure_no_internal_memory(&self) -> Result<(), Error> {
+		let module = self
+			.module
+			.as_ref()
+			.expect("On entry to the function `module` can't be None; qed");
+		if module
+			.memory_section()
+			.map_or(false, |ms| ms.entries().len() > 0)
+		{
+			return Err(Error::InternalMemoryDeclared);
+		}
+		Ok(())
+	}
+
+	fn inject_gas_metering(&mut self) -> Result<(), Error> {
+		let gas_rules = rules::Set::new(self.config.regular_op_cost.as_(), Default::default())
+			.with_grow_cost(self.config.grow_mem_cost.as_())
+			.with_forbidden_floats();
+
+		let module = self
+			.module
+			.take()
+			.expect("On entry to the function `module` can't be `None`; qed");
+
+		let contract_module = pwasm_utils::inject_gas_counter(module, &gas_rules)
+			.map_err(|_| Error::GasInstrumentation)?;
+
+		self.module = Some(contract_module);
+		Ok(())
+	}
+
+	fn inject_stack_height_metering(&mut self) -> Result<(), Error> {
+		let module = self
+			.module
+			.take()
+			.expect("On entry to the function `module` can't be `None`; qed");
+
+		let contract_module =
+			pwasm_utils::stack_height::inject_limiter(module, self.config.max_stack_height)
+				.map_err(|_| Error::StackHeightInstrumentation)?;
+
+		self.module = Some(contract_module);
+		Ok(())
+	}
+
+	/// Find the memory import entry and return it's descriptor.
+	fn find_mem_import(&self) -> Option<&MemoryType> {
+		let import_section = self
+			.module
+			.as_ref()
+			.expect("On entry to the function `module` can't be `None`; qed")
+			.import_section()?;
+		for import in import_section.entries() {
+			if let ("env", "memory", &External::Memory(ref memory_type)) =
+				(import.module(), import.field(), import.external())
+			{
+				return Some(memory_type);
+			}
+		}
+		None
+	}
+
+	fn check_signatures<E: Ext>(&self, sigs: &BTreeMap<String, ExtFunc<E>>) -> Result<(), Error> {
+		// TODO: Merge it with `find_mem_import`?
+		let module = self
+			.module
+			.as_ref()
+			.expect("On entry to the function `module` can't be `None`; qed");
+
+		let types = module.type_section().map(|ts| ts.types()).unwrap_or(&[]);
+		let import_entries = module
+			.import_section()
+			.map(|is| is.entries())
+			.unwrap_or(&[]);
+
+		for import in import_entries {
+			let type_idx = match import.external() {
+				&External::Function(ref type_idx) => type_idx,
+				_ => continue,
+			};
+
+			let Type::Function(ref func_ty) = types
+				.get(*type_idx as usize)
+				.ok_or_else(|| Error::Deserialization)?;
+
+			if import.module() != "env" {
+				// This import tries to import something from non-"env" module,
+				// but all imports are located in "env" at the moment.
+				return Err(Error::Deserialization);
+			}
+
+			let ext_func = sigs
+				.get(import.field())
+				.ok_or_else(|| Error::Deserialization)?;
+			if !ext_func.types_match(func_ty) {
+				return Err(Error::Instantiate);
+			}
+		}
+		Ok(())
+	}
+
+	fn into_wasm_code(mut self) -> Result<Vec<u8>, Error> {
+		elements::serialize(
+			self.module
+				.take()
+				.expect("On entry to the function `module` can't be `None`; qed"),
+		).map_err(|_| Error::Serialization)
+	}
+}
+
+pub(super) struct PreparedContract {
+	pub instrumented_code: Vec<u8>,
+	pub memory: sandbox::Memory,
+}
+
+pub(super) fn prepare_contract<E: Ext>(
+	original_code: &[u8],
+	config: &Config<E::T>,
+	sigs: &BTreeMap<String, ExtFunc<E>>,
+) -> Result<PreparedContract, Error> {
+	let mut contract_module = ContractModule::new(original_code, config)?;
+	contract_module.ensure_no_internal_memory()?;
+	contract_module.inject_gas_metering()?;
+	contract_module.inject_stack_height_metering()?;
+	contract_module.check_signatures(sigs)?;
+
+	// Inspect the module to extract the initial and maximum page count.
+	let memory = if let Some(memory_type) = contract_module.find_mem_import() {
+		let limits = memory_type.limits();
+		match (limits.initial(), limits.maximum()) {
+			(initial, Some(maximum)) if initial > maximum => {
+				// Requested initial number of pages should not exceed the requested maximum.
+				return Err(Error::Memory);
+			}
+			(_, Some(maximum)) if maximum > config.max_memory_pages => {
+				// Maximum number of pages should not exceed the configured maximum.
+				return Err(Error::Memory);
+			}
+			(_, None) => {
+				// Maximum number of pages should be always declared.
+				// This isn't a hard requirement and can be treated as a maxiumum set
+				// to configured maximum.
+				return Err(Error::Memory);
+			}
+			(initial, maximum) => sandbox::Memory::new(initial, maximum),
+		}
+	} else {
+		// If none memory imported then just crate an empty placeholder.
+		// Any access to it will lead to out of bounds trap.
+		sandbox::Memory::new(0, Some(0))
+	};
+	let memory = memory.map_err(|_| Error::Memory)?;
+
+	Ok(PreparedContract {
+		instrumented_code: contract_module.into_wasm_code()?,
+		memory,
+	})
+}
