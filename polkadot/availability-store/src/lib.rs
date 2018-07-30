@@ -22,12 +22,11 @@ extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 extern crate kvdb;
 extern crate kvdb_rocksdb;
+extern crate kvdb_memorydb;
 
 #[macro_use]
 extern crate log;
 
-#[cfg(test)]
-extern crate kvdb_memorydb;
 
 use codec::{Encode, Decode};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -35,6 +34,7 @@ use kvdb_rocksdb::{Database, DatabaseConfig};
 use polkadot_primitives::Hash;
 use polkadot_primitives::parachain::{Id as ParaId, BlockData, Extrinsic};
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::io;
 
@@ -55,14 +55,28 @@ pub struct Config {
 /// A key for extrinsic data -- relay chain parent hash and parachain ID.
 pub struct Key(pub Hash, pub ParaId);
 
+fn extract_io_err(err: ::kvdb::Error) -> io::Error {
+	match err {
+		::kvdb::Error(::kvdb::ErrorKind::Io(io_err), _) => io_err,
+		::kvdb::Error(::kvdb::ErrorKind::Msg(msg), _) => io::Error::new(
+			io::ErrorKind::Other,
+			msg,
+		),
+		x => io::Error::new(
+			io::ErrorKind::Other,
+			format!("Unexpected error variant: {:?}", x), // only necessary because of nonexaustive match.
+		)
+	}
+}
+
 /// Handle to the availability store.
 #[derive(Clone)]
-pub struct AvStore {
+pub struct Store {
 	inner: Arc<KeyValueDB>,
 }
 
-impl AvStore {
-	/// Create a new `AvStore` with given config.
+impl Store {
+	/// Create a new `Store` with given config on disk.
 	pub fn new(config: Config) -> io::Result<Self> {
 		let mut db_config = DatabaseConfig::with_columns(Some(columns::NUM_COLUMNS));
 		db_config.memory_budget = config.cache_size;
@@ -70,14 +84,21 @@ impl AvStore {
 
 		let path = config.path.to_str().ok_or_else(|| io::Error::new(
 			io::ErrorKind::Other,
-			format!("Bad database path: {}", config.path),
-		));
+			format!("Bad database path: {:?}", config.path),
+		))?;
 
-		let db = Database::open(&db_config, &path)?;
+		let db = Database::open(&db_config, &path).map_err(extract_io_err)?;
 
-		Ok(AvStore {
+		Ok(Store {
 			inner: Arc::new(db),
 		})
+	}
+
+	/// Create a new `Store` in-memory. Useful for tests.
+	pub fn new_in_memory() -> Self {
+		Store {
+			inner: Arc::new(::kvdb_memorydb::create(::columns::NUM_COLUMNS)),
+		}
 	}
 
 	/// Make some data available.
@@ -85,21 +106,22 @@ impl AvStore {
 		let mut tx = DBTransaction::new();
 		let encoded_key = (key.0, key.1).encode();
 
-		if let Some(extrinsic) = extrinsic {
-			tx.put(columns::EXTRINSIC, encoded_key.clone(), extrinsic.encode());
+		if let Some(_extrinsic) = extrinsic {
+			tx.put_vec(columns::EXTRINSIC, &*encoded_key, Vec::new());
 		}
 
-		tx.put(columns::DATA, encoded_key, block_data.encode());
+		tx.put_vec(columns::DATA, &encoded_key, block_data.encode());
 
-		self.inner.write(tx)
+		self.inner.write(tx).map_err(extract_io_err)
 	}
 
 	/// Query block data.
 	pub fn block_data(&self, key: Key) -> Option<BlockData> {
 		let encoded_key = (key.0, key.1).encode();
-		match self.inner.get(columns::DATA, &key[..]) {
-			Ok(Some(raw)) => BlockData::decode(&mut raw[..])
-				.expect("all stored data serialized correctly; qed"),
+		match self.inner.get(columns::DATA, &encoded_key[..]) {
+			Ok(Some(raw)) => Some(
+				BlockData::decode(&mut &raw[..]).expect("all stored data serialized correctly; qed")
+			),
 			Ok(None) => None,
 			Err(e) => {
 				warn!(target: "availability", "Error reading from availability store: {:?}", e);
@@ -111,9 +133,8 @@ impl AvStore {
 	/// Query extrinsic data.
 	pub fn extrinsic(&self, key: Key) -> Option<Extrinsic> {
 		let encoded_key = (key.0, key.1).encode();
-		match self.inner.get(columns::EXTRINSIC, &key[..]) {
-			Ok(Some(raw)) => Extrinsic::decode(&mut raw[..])
-				.expect("all stored data serialized correctly; qed"),
+		match self.inner.get(columns::EXTRINSIC, &encoded_key[..]) {
+			Ok(Some(_raw)) => Some(Extrinsic),
 			Ok(None) => None,
 			Err(e) => {
 				warn!(target: "availability", "Error reading from availability store: {:?}", e);
@@ -125,4 +146,5 @@ impl AvStore {
 
 #[cfg(test)]
 mod tests {
+
 }

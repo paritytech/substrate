@@ -84,6 +84,7 @@ impl Service {
 		thread_pool: ThreadPoolHandle,
 		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
+		extrinsic_store: ::extrinsic_store::Store,
 	) -> Service
 		where
 			A: LocalPolkadotApi + Send + Sync + 'static,
@@ -104,6 +105,7 @@ impl Service {
 				network,
 				parachain_empty_duration,
 				handle: thread_pool,
+				extrinsic_store,
 			};
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
 

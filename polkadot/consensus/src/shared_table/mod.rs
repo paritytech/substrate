@@ -20,6 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use extrinsic_store::{Key, Store as ExtrinsicStore};
 use table::{self, Table, Context as TableContextTrait};
 use polkadot_primitives::{Hash, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, BlockData, Collation, Extrinsic, CandidateReceipt};
@@ -82,6 +83,7 @@ struct SharedTableInner {
 	checked_validity: HashSet<Hash>,
 	checked_availability: HashSet<Hash>,
 	trackers: Vec<IncludabilitySender>,
+	extrinsic_store: ExtrinsicStore,
 }
 
 impl SharedTableInner {
@@ -152,6 +154,8 @@ impl SharedTableInner {
 
 		work.map(|work| StatementProducer {
 			produced_statements: Default::default(),
+			extrinsic_store: self.extrinsic_store.clone(),
+			relay_parent: context.parent_hash.clone(),
 			work
 		})
 	}
@@ -185,6 +189,8 @@ pub struct ProducedStatements {
 pub struct StatementProducer<D: Future, E: Future> {
 	produced_statements: ProducedStatements,
 	work: Work<D, E>,
+	relay_parent: Hash,
+	extrinsic_store: ExtrinsicStore,
 }
 
 impl<D: Future, E: Future> StatementProducer<D, E> {
@@ -219,15 +225,17 @@ impl<D, E, C, Err> Future for PrimedStatementProducer<D, E, C>
 		D: Future<Item=BlockData,Error=Err>,
 		E: Future<Item=Extrinsic,Error=Err>,
 		C: FnMut(Collation) -> Option<bool>,
+		Err: From<::std::io::Error>,
 {
 	type Item = ProducedStatements;
 	type Error = Err;
 
 	fn poll(&mut self) -> Poll<ProducedStatements, Err> {
 		let work = &mut self.inner.work;
+		let statements = &mut self.inner.produced_statements;
 
 		if let Async::Ready(block_data) = work.fetch_block_data.poll()? {
-			self.inner.produced_statements.block_data = Some(block_data.clone());
+			statements.block_data = Some(block_data.clone());
 			if work.evaluate {
 				let is_good = (self.check_candidate)(Collation {
 					block_data,
@@ -235,7 +243,7 @@ impl<D, E, C, Err> Future for PrimedStatementProducer<D, E, C>
 				});
 
 				let hash = work.candidate_receipt.hash();
-				self.inner.produced_statements.validity = match is_good {
+				statements.validity = match is_good {
 					Some(true) => Some(GenericStatement::Valid(hash)),
 					Some(false) => Some(GenericStatement::Invalid(hash)),
 					None => None,
@@ -245,25 +253,35 @@ impl<D, E, C, Err> Future for PrimedStatementProducer<D, E, C>
 
 		if let Some(ref mut fetch_extrinsic) = work.fetch_extrinsic {
 			if let Async::Ready(extrinsic) = fetch_extrinsic.poll()? {
-				self.inner.produced_statements.extrinsic = Some(extrinsic);
+				statements.extrinsic = Some(extrinsic);
 			}
 		}
 
-		let done = self.inner.produced_statements.block_data.is_some() && {
-			if work.evaluate {
-				true
-			} else if self.inner.produced_statements.extrinsic.is_some() {
-				self.inner.produced_statements.availability =
-					Some(GenericStatement::Available(work.candidate_receipt.hash()));
+		let done = match (&statements.block_data, &statements.extrinsic) {
+			(&Some(ref block), &Some(ref extrinsic)) => {
+				let key = Key(self.inner.relay_parent, work.candidate_receipt.parachain_index);
+				self.inner.extrinsic_store.make_available(
+					key,
+					block.clone(),
+					Some(extrinsic.clone())
+				)?;
+
+				statements.availability = Some(GenericStatement::Available(
+					work.candidate_receipt.hash(),
+				));
 
 				true
-			} else {
-				false
 			}
+			(&Some(ref block), None) => {
+				let key = Key(self.inner.relay_parent, work.candidate_receipt.parachain_index);
+				self.inner.extrinsic_store.make_available(key, block.clone(), None)?;
+				true
+			}
+			(&None, _) => false,
 		};
 
 		if done {
-			Ok(Async::Ready(::std::mem::replace(&mut self.inner.produced_statements, Default::default())))
+			Ok(Async::Ready(::std::mem::replace(statements, Default::default())))
 		} else {
 			Ok(Async::NotReady)
 		}
@@ -290,7 +308,12 @@ impl SharedTable {
 	///
 	/// Provide the key to sign with, and the parent hash of the relay chain
 	/// block being built.
-	pub fn new(groups: HashMap<ParaId, GroupInfo>, key: Arc<::ed25519::Pair>, parent_hash: Hash) -> Self {
+	pub fn new(
+		groups: HashMap<ParaId, GroupInfo>,
+		key: Arc<::ed25519::Pair>,
+		parent_hash: Hash,
+		extrinsic_store: ExtrinsicStore,
+	) -> Self {
 		SharedTable {
 			context: Arc::new(TableContext { groups, key, parent_hash }),
 			inner: Arc::new(Mutex::new(SharedTableInner {
@@ -299,6 +322,7 @@ impl SharedTable {
 				checked_validity: HashSet::new(),
 				checked_availability: HashSet::new(),
 				trackers: Vec::new(),
+				extrinsic_store,
 			}))
 		}
 	}
@@ -430,9 +454,9 @@ mod tests {
 	#[derive(Clone)]
 	struct DummyRouter;
 	impl TableRouter for DummyRouter {
-		type Error = ();
-		type FetchCandidate = ::futures::future::Empty<BlockData,()>;
-		type FetchExtrinsic = ::futures::future::Empty<Extrinsic,()>;
+		type Error = ::std::io::Error;
+		type FetchCandidate = ::futures::future::Empty<BlockData,Self::Error>;
+		type FetchExtrinsic = ::futures::future::Empty<Extrinsic,Self::Error>;
 
 		fn local_candidate(&self, _candidate: CandidateReceipt, _block_data: BlockData, _extrinsic: Extrinsic) {
 
@@ -464,7 +488,12 @@ mod tests {
 			needed_availability: 0,
 		});
 
-		let shared_table = SharedTable::new(groups, local_key.clone(), parent_hash);
+		let shared_table = SharedTable::new(
+			groups,
+			local_key.clone(),
+			parent_hash,
+			ExtrinsicStore::new_in_memory(),
+		);
 
 		let candidate = CandidateReceipt {
 			parachain_index: para_id,
@@ -514,7 +543,12 @@ mod tests {
 			needed_availability: 1,
 		});
 
-		let shared_table = SharedTable::new(groups, local_key.clone(), parent_hash);
+		let shared_table = SharedTable::new(
+			groups,
+			local_key.clone(),
+			parent_hash,
+			ExtrinsicStore::new_in_memory(),
+		);
 
 		let candidate = CandidateReceipt {
 			parachain_index: para_id,
@@ -543,5 +577,88 @@ mod tests {
 
 		assert!(producer.work.fetch_extrinsic.is_some(), "should fetch extrinsic when guaranteeing availability");
 		assert!(!producer.work.evaluate, "should not evaluate validity");
+	}
+
+	#[test]
+	fn evaluate_makes_block_data_available() {
+		let store = ExtrinsicStore::new_in_memory();
+		let relay_parent = [0; 32].into();
+		let para_id = 5.into();
+		let block_data = BlockData(vec![1, 2, 3]);
+
+		let candidate = CandidateReceipt {
+			parachain_index: para_id,
+			collator: [1; 32].into(),
+			signature: Default::default(),
+			head_data: ::polkadot_primitives::parachain::HeadData(vec![1, 2, 3, 4]),
+			balance_uploads: Vec::new(),
+			egress_queue_roots: Vec::new(),
+			fees: 1_000_000,
+			block_data_hash: [2; 32].into(),
+		};
+
+		let block_data_res: ::std::io::Result<_> = Ok(block_data.clone());
+		let producer: StatementProducer<_, future::Empty<_, _>> = StatementProducer {
+			produced_statements: Default::default(),
+			work: Work {
+				candidate_receipt: candidate,
+				fetch_block_data: block_data_res.into_future().fuse(),
+				fetch_extrinsic: None,
+				evaluate: true,
+			},
+			relay_parent,
+			extrinsic_store: store.clone(),
+		};
+
+		let produced = producer.prime(|_| Some(true)).wait().unwrap();
+
+		assert_eq!(produced.block_data.as_ref(), Some(&block_data));
+		assert!(produced.validity.is_some());
+		assert!(produced.availability.is_none());
+
+		assert_eq!(store.block_data(Key(relay_parent, para_id)).unwrap(), block_data);
+		assert!(store.extrinsic(Key(relay_parent, para_id)).is_none());
+	}
+
+	#[test]
+	fn full_availability() {
+		let store = ExtrinsicStore::new_in_memory();
+		let relay_parent = [0; 32].into();
+		let para_id = 5.into();
+		let block_data = BlockData(vec![1, 2, 3]);
+
+		let candidate = CandidateReceipt {
+			parachain_index: para_id,
+			collator: [1; 32].into(),
+			signature: Default::default(),
+			head_data: ::polkadot_primitives::parachain::HeadData(vec![1, 2, 3, 4]),
+			balance_uploads: Vec::new(),
+			egress_queue_roots: Vec::new(),
+			fees: 1_000_000,
+			block_data_hash: [2; 32].into(),
+		};
+
+		let block_data_res: ::std::io::Result<_> = Ok(block_data.clone());
+		let extrinsic_res: ::std::io::Result<_> = Ok(Extrinsic);
+		let producer = StatementProducer {
+			produced_statements: Default::default(),
+			work: Work {
+				candidate_receipt: candidate,
+				fetch_block_data: block_data_res.into_future().fuse(),
+				fetch_extrinsic: Some(extrinsic_res.into_future().fuse()),
+				evaluate: false,
+			},
+			relay_parent,
+			extrinsic_store: store.clone(),
+		};
+
+		let produced = producer.prime(|_| Some(true)).wait().unwrap();
+
+		assert_eq!(produced.block_data.as_ref(), Some(&block_data));
+		assert!(produced.validity.is_none());
+		assert!(produced.availability.is_some());
+
+		assert_eq!(store.block_data(Key(relay_parent, para_id)).unwrap(), block_data);
+		assert!(store.extrinsic(Key(relay_parent, para_id)).is_some());
 	}
 }

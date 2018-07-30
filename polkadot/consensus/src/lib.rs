@@ -32,6 +32,7 @@
 extern crate ed25519;
 extern crate parking_lot;
 extern crate polkadot_api;
+extern crate polkadot_availability_store as extrinsic_store;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
 extern crate polkadot_transaction_pool as transaction_pool;
@@ -66,6 +67,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use codec::{Decode, Encode};
+use extrinsic_store::Store as ExtrinsicStore;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt, CandidateSignature};
@@ -236,6 +238,8 @@ pub struct ProposerFactory<C, N, P> {
 	pub handle: TaskExecutor,
 	/// The duration after which parachain-empty blocks will be allowed.
 	pub parachain_empty_duration: Duration,
+	/// Store for extrinsic data.
+	pub extrinsic_store: ExtrinsicStore,
 }
 
 impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
@@ -276,7 +280,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		let active_parachains = self.client.active_parachains(&id)?;
 
 		let n_parachains = active_parachains.len();
-		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
+		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash, self.extrinsic_store.clone()));
 		let (router, input, output) = self.network.communication_for(
 			authorities,
 			table.clone(),
