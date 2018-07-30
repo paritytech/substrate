@@ -60,7 +60,6 @@ use std::sync::Arc;
 use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
-use network::ManageNetwork;
 use runtime_primitives::traits::{Header, As};
 use exit_future::Signal;
 use tokio::runtime::TaskExecutor;
@@ -157,8 +156,6 @@ impl<Components> Service<Components>
 
 		let network = network::Service::new(network_params, Components::Factory::NETWORK_PROTOCOL_ID)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
-
-		network.start_network();
 
 		{
 			// block notifications
@@ -276,8 +273,6 @@ impl<Components> Service<Components>
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
-
-		self.network.stop_network();
 
 		if let Some(signal) = self.signal.take() {
 			signal.fire();
