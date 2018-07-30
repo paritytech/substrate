@@ -18,6 +18,7 @@
 
 use state_machine::backend::Backend as StateBackend;
 use error;
+use primitives::AuthorityId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use runtime_primitives::generic::BlockId;
@@ -38,6 +39,9 @@ pub trait BlockImportOperation<Block: BlockT> {
 		is_new_best: bool
 	) -> error::Result<()>;
 
+	/// Append authorities set to the transaction. This is a set of parent block (set which
+	/// has been used to check justification of this block).
+	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
 	/// Inject storage data into the database.
 	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.

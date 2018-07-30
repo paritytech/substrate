@@ -75,6 +75,7 @@ struct ChainSpecFile {
 	pub name: String,
 	pub id: String,
 	pub boot_nodes: Vec<String>,
+	pub telemetry_url: Option<String>,
 }
 
 /// A configuration of a chain. Can be used to build a genesis block.
@@ -94,6 +95,10 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 
 	pub fn id(&self) -> &str {
 		&self.spec.id
+	}
+
+	pub fn telemetry_url(&self) -> Option<&str> {
+		self.spec.telemetry_url.as_ref().map(String::as_str)
 	}
 
 	/// Parse json content into a `ChainSpec`
@@ -116,11 +121,19 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 	}
 
 	/// Create hardcoded spec.
-	pub fn from_genesis(name: &str, id: &str, constructor: fn() -> G, boot_nodes: Vec<String>) -> Self {
+	pub fn from_genesis(
+		name: &str,
+		id: &str,
+		constructor: fn() -> G,
+		boot_nodes: Vec<String>,
+		telemetry_url: Option<&str>
+	) -> Self
+	{
 		let spec = ChainSpecFile {
 			name: name.to_owned(),
 			id: id.to_owned(),
 			boot_nodes: boot_nodes,
+			telemetry_url: telemetry_url.map(str::to_owned),
 		};
 		ChainSpec {
 			spec,

@@ -6,6 +6,7 @@
 
 Implementation of a https://polkadot.network node in Rust.
 
+
 == To play
 
 If you'd like to play with Polkadot, you'll need to install a client like this
@@ -46,6 +47,7 @@ polkadot --dev
 
 You can muck around by cloning and building the http://github.com/paritytech/polka-ui and http://github.com/paritytech/polkadot-ui or just heading to https://polkadot.js.org/apps.
 
+
 == Local Two-node Testnet
 
 If you want to see the multi-node consensus algorithm in action locally, then
@@ -62,6 +64,7 @@ polkadot --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnode
 Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of
 the first terminal.
 
+
 == Hacking on Polkadot
 
 If you'd actually like hack on Polkadot, you can just grab the source code and
@@ -74,7 +77,7 @@ rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
 rustup update stable
 cargo install --git https://github.com/alexcrichton/wasm-gc
-sudo apt install cmake pkg-config libssl-dev
+sudo apt install cmake pkg-config libssl-dev git
 ----
 
 Then, grab the Polkadot source code:
@@ -102,5 +105,105 @@ You can start a development chain with:
 
 [source, shell]
 cargo run -- --dev
+
+
+== Using Docker
+
+=== The easiest way
+
+The easiest/faster option is to use the latest image.
+
+
+.First run
+Let´s first check the version we have. The first time you run this command, the polkadot docker image will be downloaded. This takes a bit of time and bandwidth, be patient:
+
+[source, shell]
+docker run --rm -it chevdor/polkadot:latest ./version
+
+
+.Polkadot arguments
+You can also pass any argument/flag that polkadot supports:
+
+[source, shell]
+docker run --rm -it chevdor/polkadot:latest polkadot --name "PolkaDocker"
+
+
+.Run as deamon
+Once you are done experimenting and picking the best node name :) you can start polkadot as daemon, exposes the polkadot ports and mount a volume that will keep your blockchain data locally:
+
+[source, shell]
+docker run -d -p 30333:30333 -p 9933:9933 -p 9944:9944 -v /my/local/folder:/data chevdor/polkadot:latest polkadot
+
+.Docker image update
+If you have an image such as `latest` locally, docker will *not* bother downloading the very latest that may be available.
+To update:
+
+- stop and delete your containers (`docker stop ...` `docker rm ...`)
+- delete your previous image (`docker rmi chevdor/polkadot:latest`)
+- run as daemon again, the very latest image will be downloaded again
+
+=== Build your own image
+
+To get up and running with the smallest footprint on your system, you may use the Polkadot Docker image.
+You can either build it yourself (it takes a while...):
+
+[source, shell]
+----
+ccd docker
+./build.sh
+----
+
+=== Reporting issues
+
+If you run into issues with polkadot when using docker, please run the following command
+(replace the tag with the appropriate one if you do not use latest):
+
+[source, shell]
+docker run --rm -it chevdor/polkadot:latest version
+
+This will show you the polkadot version as well as the git commit ref that was used to build your container.
+Just paste that in the issue you create.
+
+
+== Shell completion
+
+The Polkadot cli command supports shell auto-completion. For this to work, you will need to run the completion script matching you build and system.
+
+Assuming you built a release version using `cargo build --release` and use `bash` run the following:
+
+[source, shell]
+source target/release/completion-scripts/polkadot.bash
+
+You can find completion scripts for:
+- bash
+- fish
+- zsh
+- elvish
+- powershell
+
+To make this change persistent, you can proceed as follow:
+
+=== First install
+
+[source, shell]
+----
+COMPL_DIR=$HOME/.completion
+mkdir -p $COMPL_DIR
+cp -f target/release/completion-scripts/polkadot.bash $COMPL_DIR/
+echo "source $COMPL_DIR/polkadot.bash" >> $HOME/.bash_profile
+source $HOME/.bash_profile
+----
+
+=== Update
+
+When you build a new version of Polkadot, the following will ensure you auto-completion script matches the current binary:
+
+[source, shell]
+----
+COMPL_DIR=$HOME/.completion
+mkdir -p $COMPL_DIR
+cp -f target/release/completion-scripts/polkadot.bash $COMPL_DIR/
+source $HOME/.bash_profile
+----
 
 include::doc/packages.adoc[]

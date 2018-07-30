@@ -22,6 +22,8 @@ use polkadot_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyC
 	SessionConfig, StakingConfig, TimestampConfig};
 use service::ChainSpec;
 
+const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
+
 pub fn poc_1_testnet_config() -> Result<ChainSpec<GenesisConfig>, String> {
 	ChainSpec::from_embedded(include_bytes!("../res/krummelanke.json"))
 }
@@ -55,7 +57,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
-			contract_fee: 0,
 			reclaim_rebate: 0,
 			early_era_slash: 10000,
 			session_reward: 100,
@@ -94,7 +95,13 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 /// Staging testnet config.
 pub fn staging_testnet_config() -> ChainSpec<GenesisConfig> {
 	let boot_nodes = vec![];
-	ChainSpec::from_genesis("Staging Testnet", "staging_testnet", staging_testnet_config_genesis, boot_nodes)
+	ChainSpec::from_genesis(
+		"Staging Testnet",
+		"staging_testnet",
+		staging_testnet_config_genesis,
+		boot_nodes,
+		Some(STAGING_TELEMETRY_URL.into()),
+	)
 }
 
 fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
@@ -125,7 +132,6 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			existential_deposit: 500,
 			transfer_fee: 0,
 			creation_fee: 0,
-			contract_fee: 0,
 			reclaim_rebate: 0,
 			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60))).collect(),
 			validator_count: 2,
@@ -169,7 +175,7 @@ fn development_config_genesis() -> GenesisConfig {
 
 /// Development config (single validator Alice)
 pub fn development_config() -> ChainSpec<GenesisConfig> {
-	ChainSpec::from_genesis("Development", "development", development_config_genesis, vec![])
+	ChainSpec::from_genesis("Development", "development", development_config_genesis, vec![], None)
 }
 
 fn local_testnet_genesis() -> GenesisConfig {
@@ -181,5 +187,5 @@ fn local_testnet_genesis() -> GenesisConfig {
 
 /// Local testnet config (multivalidator Alice + Bob)
 pub fn local_testnet_config() -> ChainSpec<GenesisConfig> {
-	ChainSpec::from_genesis("Local Testnet", "local_testnet", local_testnet_genesis, vec![])
+	ChainSpec::from_genesis("Local Testnet", "local_testnet", local_testnet_genesis, vec![], None)
 }

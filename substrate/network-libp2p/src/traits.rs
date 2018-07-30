@@ -224,7 +224,7 @@ pub enum Severity<'a> {
 	/// it could answer.
 	Useless(&'a str),
 	/// Peer has behaved in an invalid manner. This doesn't necessarily need to be Byzantine, but peer
-	/// must have taken concrete action in order to behave in such a way which is wantanly invalid. 
+	/// must have taken concrete action in order to behave in such a way which is wantanly invalid.
 	Bad(&'a str),
 }
 
