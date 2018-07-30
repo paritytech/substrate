@@ -213,7 +213,10 @@ pub struct LightComponents<Factory: ServiceFactory> {
 	_factory: PhantomData<Factory>,
 }
 
-impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
+impl<Factory: ServiceFactory> Components for LightComponents<Factory>
+	where
+		<<Factory as ServiceFactory>::Block as BlockT>::Hash: Into<[u8; 32]>,
+{
 	type Factory = Factory;
 	type Executor = LightExecutor<Factory>;
 	type Backend = LightBackend<Factory>;

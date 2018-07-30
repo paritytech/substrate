@@ -18,7 +18,10 @@
 
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use codec::{Encode, Decode, Input, Output};
-pub use self::generic::{BlockAnnounce, RemoteCallRequest, ConsensusVote, SignedConsensusVote, FromBlock};
+pub use self::generic::{
+	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
+	ConsensusVote, SignedConsensusVote, FromBlock
+};
 
 /// A unique ID of a request.
 pub type RequestId = u64;
@@ -135,7 +138,32 @@ impl Decode for RemoteCallResponse {
 		})
 	}
 }
-	
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+/// Remote read response.
+pub struct RemoteReadResponse {
+	/// Id of a request this response was made for.
+	pub id: RequestId,
+	/// Read proof.
+	pub proof: Vec<Vec<u8>>,
+}
+
+impl Encode for RemoteReadResponse {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push(&self.id);
+		dest.push(&self.proof);
+	}
+}
+
+impl Decode for RemoteReadResponse {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(RemoteReadResponse {
+			id: Decode::decode(input)?,
+			proof: Decode::decode(input)?,
+		})
+	}
+}
+
 /// Generic types.
 pub mod generic {
 	use primitives::AuthorityId;
@@ -143,8 +171,10 @@ pub mod generic {
 	use runtime_primitives::bft::Justification;
 	use ed25519;
 	use service::Roles;
-	use super::{BlockAttributes, RemoteCallResponse, RequestId, Transactions, Direction};
-
+	use super::{
+		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
+		RequestId, Transactions, Direction
+	};
 
 	/// Block data sent in the response.
 	#[derive(Debug, PartialEq, Eq, Clone)]
@@ -446,6 +476,10 @@ pub mod generic {
 		RemoteCallRequest(RemoteCallRequest<Hash>),
 		/// Remote method call response.
 		RemoteCallResponse(RemoteCallResponse),
+		/// Remote storage read request.
+		RemoteReadRequest(RemoteReadRequest<Hash>),
+		/// Remote storage read response.
+		RemoteReadResponse(RemoteReadResponse),
 		/// Chain-specific message
 		ChainSpecific(Vec<u8>),
 	}
@@ -487,6 +521,14 @@ pub mod generic {
 					dest.push_byte(7);
 					dest.push(m);
 				}
+				Message::RemoteReadRequest(ref m) => {
+					dest.push_byte(8);
+					dest.push(m);
+				}
+				Message::RemoteReadResponse(ref m) => {
+					dest.push_byte(9);
+					dest.push(m);
+				}
 				Message::ChainSpecific(ref m) => {
 					dest.push_byte(255);
 					dest.push(m);
@@ -508,6 +550,8 @@ pub mod generic {
 				5 => Some(Message::BftMessage(Decode::decode(input)?)),
 				6 => Some(Message::RemoteCallRequest(Decode::decode(input)?)),
 				7 => Some(Message::RemoteCallResponse(Decode::decode(input)?)),
+				8 => Some(Message::RemoteReadRequest(Decode::decode(input)?)),
+				9 => Some(Message::RemoteReadResponse(Decode::decode(input)?)),
 				255 => Some(Message::ChainSpecific(Decode::decode(input)?)),
 				_ => None,
 			}
@@ -675,6 +719,35 @@ pub mod generic {
 				block: Decode::decode(input)?,
 				method: String::from_utf8_lossy(&Vec::decode(input)?).into(),
 				data: Decode::decode(input)?,
+			})
+		}
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone)]
+	/// Remote storage read request.
+	pub struct RemoteReadRequest<H> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Block at which to perform call.
+		pub block: H,
+		/// Storage key.
+		pub key: Vec<u8>,
+	}
+
+	impl<Hash: Encode> Encode for RemoteReadRequest<Hash> {
+		fn encode_to<T: Output>(&self, dest: &mut T) {
+			dest.push(&self.id);
+			dest.push(&self.block);
+			dest.push(&self.key);
+		}
+	}
+
+	impl<Hash: Decode> Decode for RemoteReadRequest<Hash> {
+		fn decode<I: Input>(input: &mut I) -> Option<Self> {
+			Some(RemoteReadRequest {
+				id: Decode::decode(input)?,
+				block: Decode::decode(input)?,
+				key: Decode::decode(input)?,
 			})
 		}
 	}

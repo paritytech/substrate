@@ -19,6 +19,7 @@ use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
+use rustc_hex::ToHex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, As};
 use runtime_primitives::generic::BlockId;
 use network_libp2p::{NodeIndex, Severity};
@@ -268,6 +269,8 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 			GenericMessage::Transactions(m) => self.on_extrinsics(io, who, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(io, who, request),
 			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(io, who, response),
+			GenericMessage::RemoteReadRequest(request) => self.on_remote_read_request(io, who, request),
+			GenericMessage::RemoteReadResponse(response) => self.on_remote_read_response(io, who, response),
 			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, other),
 		}
 	}
@@ -600,6 +603,26 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 	fn on_remote_call_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteCallResponse) {
 		trace!(target: "sync", "Remote call response {} from {}", response.id, who);
 		self.on_demand.as_ref().map(|s| s.on_remote_call_response(io, who, response));
+	}
+
+	fn on_remote_read_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteReadRequest<B::Hash>) {
+		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
+			request.id, who, request.key.to_hex(), request.block);
+		let proof = match self.context_data.chain.read_proof(&request.block, &request.key) {
+			Ok(proof) => proof,
+			Err(error) => {
+				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
+					request.id, who, request.key.to_hex(), request.block, error);
+				Default::default()
+			},
+		};
+ 		self.send_message(io, who, GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
+			id: request.id, proof,
+		}));
+	}
+ 	fn on_remote_read_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteReadResponse) {
+		trace!(target: "sync", "Remote read response {} from {}", response.id, who);
+		self.on_demand.as_ref().map(|s| s.on_remote_read_response(io, who, response));
 	}
 
 	/// Execute a closure with access to a network context and specialization.

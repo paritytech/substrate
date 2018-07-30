@@ -18,6 +18,7 @@
 //! Everything else is requested from full nodes on demand.
 
 use std::sync::{Arc, Weak};
+use futures::{Future, IntoFuture};
 
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
@@ -29,7 +30,7 @@ use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use light::fetcher::Fetcher;
+use light::fetcher::{Fetcher, RemoteReadRequest};
 
 /// Light client backend.
 pub struct Backend<S, F> {
@@ -152,8 +153,13 @@ impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: 
 	type Error = ClientError;
 	type Transaction = ();
 
-	fn storage(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into()) // TODO: fetch from remote node
+	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		self.fetcher.upgrade().ok_or(ClientErrorKind::NotAvailableOnLightClient)?
+			.remote_read(RemoteReadRequest {
+				block: self.block,
+				key: key.to_vec(),
+			})
+			.into_future().wait()
 	}
 
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, _prefix: &[u8], _action: A) {
@@ -179,20 +185,57 @@ impl<Block, F> TryIntoStateTrieBackend for OnDemandState<Block, F> where Block: 
 
 #[cfg(test)]
 pub mod tests {
-	use futures::future::{ok, FutureResult};
+	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
 	use call_executor::CallResult;
+	use executor::{self, NativeExecutionDispatch};
 	use error::Error as ClientError;
-	use test_client::runtime::{Hash, Block};
-	use light::fetcher::{Fetcher, RemoteCallRequest};
+	use test_client::{self, runtime::{Hash, Block}};
+	use in_mem::{Blockchain as InMemoryBlockchain};
+	use light::{new_fetch_checker, new_light_blockchain};
+	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker, RemoteCallRequest};
+	use super::*;
 
 	pub type OkCallFetcher = Mutex<CallResult>;
 
 	impl Fetcher<Block> for OkCallFetcher {
+		type RemoteReadResult = FutureResult<Option<Vec<u8>>, ClientError>;
 		type RemoteCallResult = FutureResult<CallResult, ClientError>;
+
+		fn remote_read(&self, _request: RemoteReadRequest<Hash>) -> Self::RemoteReadResult {
+			err("Not implemented on test node".into())
+		}
 
 		fn remote_call(&self, _request: RemoteCallRequest<Hash>) -> Self::RemoteCallResult {
 			ok((*self.lock()).clone())
 		}
+	}
+
+	#[test]
+	fn storage_read_proof_is_generated_and_checked() {
+		// prepare remote client
+		let remote_client = test_client::new();
+		let remote_block_id = BlockId::Number(0);
+		let remote_block_hash = remote_client.block_hash(0).unwrap().unwrap();
+		let mut remote_block_header = remote_client.header(&remote_block_id).unwrap().unwrap();
+		remote_block_header.state_root = remote_client.state_at(&remote_block_id).unwrap().storage_root(::std::iter::empty()).0.into();
+
+		// 'fetch' read proof from remote node
+		let authorities_len = remote_client.authorities_at(&remote_block_id).unwrap().len();
+		let remote_read_proof = remote_client.read_proof(&remote_block_id, b":auth:len").unwrap();
+
+		// check remote read proof locally
+		let local_storage = InMemoryBlockchain::<Block>::new();
+		local_storage.insert(remote_block_hash, remote_block_header, None, None, true);
+		let local_executor = test_client::LocalExecutor::with_heap_pages(8, 8);
+		let local_checker: LightDataChecker<
+				InMemoryBlockchain<Block>,
+				executor::NativeExecutor<test_client::LocalExecutor>,
+				OkCallFetcher
+			> = new_fetch_checker(new_light_blockchain(local_storage), local_executor);
+		assert_eq!(local_checker.check_read_proof(&RemoteReadRequest {
+			block: remote_block_hash,
+			key: b":auth:len".to_vec(),
+		}, remote_read_proof).unwrap().unwrap()[0], authorities_len as u8);
 	}
 }
