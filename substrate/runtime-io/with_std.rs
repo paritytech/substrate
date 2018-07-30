@@ -229,6 +229,11 @@ pub(crate) mod raw {
 		ext.storage(key)
 	}
 
+	/// Get cached raw `key` from storage and return a `Vec`, empty if there's a problem.
+	pub fn cached_storage(ext: &Externalities, key: &[u8]) -> Option<Vec<u8>> {
+		ext.cached_storage(key)
+	}
+
 	/// Set the storage of some particular key to Some value.
 	pub fn set_storage(ext: &mut Externalities, key: &[u8], value: &[u8]) {
 		ext.set_storage(key.to_vec(), value.to_vec());

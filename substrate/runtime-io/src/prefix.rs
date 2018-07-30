@@ -56,32 +56,32 @@ mod api {
 
 	/// Returns true if storage value prefix is configured in this runtime.
 	pub fn is_prefix_configured(ext: &Externalities) -> bool {
-		raw::storage(ext, PREFIX_LEN_KEY).is_some()
+		raw::cached_storage(ext, PREFIX_LEN_KEY).is_some()
 	}
 
 	/// Read storage value at the PREFIX_LEN_KEY.
 	pub fn read_prefix_len(ext: &Externalities) -> Option<u32> {
-		shared::parse_prefix_len(raw::storage(ext, PREFIX_LEN_KEY))
+		shared::parse_prefix_len(raw::cached_storage(ext, PREFIX_LEN_KEY))
 			.expect("Externalities failure is intercepted by executor")
 	}
 
 	/// Add prefix to the value.
 	pub fn add_prefix(ext: &Externalities, value: &[u8]) -> Vec<u8> {
 		shared::add_prefix(
-			raw::storage(ext, PREFIX_KEY),
+			raw::cached_storage(ext, PREFIX_KEY),
 			read_prefix_len(ext),
 			value)
 	}
 
 	/// Strip prefix from the value.
 	pub fn strip_prefix(ext: &Externalities, value: Vec<u8>) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
-		shared::strip_prefix(raw::storage(ext, PREFIX_LEN_KEY), value)
+		shared::strip_prefix(raw::cached_storage(ext, PREFIX_LEN_KEY), value)
 			.expect("Externalities failure is intercepted by executor")
 	}
 
 	/// Purge scheduled values.
 	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(ext: &mut Externalities, f: F) {
-		let prefix_len = raw::storage(ext, PREFIX_LEN_KEY);
+		let prefix_len = raw::cached_storage(ext, PREFIX_LEN_KEY);
 		Set::new(DELETED_SET_KEY_PREFIX, &mut RawSetStorage(ext)).retain(|storage, key| {
 			let (prefix, value) = storage.read(key)
 				.map(|value| shared::strip_prefix(prefix_len.clone(), value)
@@ -121,32 +121,32 @@ mod api {
 
 	/// Returns true if storage value prefix is configured in this runtime.
 	pub fn is_prefix_configured() -> bool {
-		raw::storage(PREFIX_LEN_KEY).is_some()
+		raw::cached_storage(PREFIX_LEN_KEY).is_some()
 	}
 
 	/// Read storage value at the PREFIX_LEN_KEY.
 	pub fn read_prefix_len() -> Option<u32> {
-		shared::parse_prefix_len(raw::storage(PREFIX_LEN_KEY))
+		shared::parse_prefix_len(raw::cached_storage(PREFIX_LEN_KEY))
 			.expect("Externalities failure is intercepted by executor")
 	}
 
 	/// Add prefix to the value.
 	pub fn add_prefix(value: &[u8]) -> Vec<u8> {
 		shared::add_prefix(
-			raw::storage(PREFIX_KEY),
+			raw::cached_storage(PREFIX_KEY),
 			read_prefix_len(),
 			value)
 	}
 
 	/// Strip prefix from the value.
 	pub fn strip_prefix(value: Vec<u8>) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
-		shared::strip_prefix(raw::storage(PREFIX_LEN_KEY), value)
+		shared::strip_prefix(raw::cached_storage(PREFIX_LEN_KEY), value)
 			.expect("Externalities failure is intercepted by executor")
 	}
 
 	/// Purge scheduled values.
 	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(f: F) {
-		let prefix_len = raw::storage(PREFIX_LEN_KEY);
+		let prefix_len = raw::cached_storage(PREFIX_LEN_KEY);
 		Set::new(DELETED_SET_KEY_PREFIX, &mut RawSetStorage).retain(|storage, key| {
 			let (prefix, value) = storage.read(key)
 				.map(|value| shared::strip_prefix(prefix_len.clone(), value)

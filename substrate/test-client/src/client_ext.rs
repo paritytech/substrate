@@ -27,7 +27,7 @@ use {Backend, Executor};
 
 /// Extension trait for a test client.
 pub trait TestClient {
-	/// Crates new client instance for tests.
+	/// Creates new client instance for tests.
 	fn new_for_tests() -> Self;
 
 	/// Justify and import block to the chain.

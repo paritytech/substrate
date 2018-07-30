@@ -163,6 +163,11 @@ pub trait Externalities {
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
+	/// Read (preferably from the cache, if enabled) storage of current contract being called.
+	fn cached_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.storage(key)
+	}
+
 	/// Read storage of current contract being called and strips the prefix from the value.
 	/// If you're reading storage values from substrate, you should use this method or else
 	/// storage() call could return wrong value if runtime uses storage prefixes.

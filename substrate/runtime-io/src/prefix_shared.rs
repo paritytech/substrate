@@ -21,11 +21,12 @@ pub const PREFIX_LEN_KEY: &'static [u8] = b":prefix_len";
 
 /// Strips the prefix from the storage value.
 pub fn strip_prefix(prefix_len_value: Option<Vec<u8>>, value: Vec<u8>) -> Result<(Option<Vec<u8>>, Option<Vec<u8>>), &'static str> {
+	let value_len = value.len();
 	match parse_prefix_len(prefix_len_value)? {
 		None => Ok((None, Some(value))),
-		Some(prefix_len) if value.len() < prefix_len as usize =>
+		Some(prefix_len) if value_len < prefix_len as usize =>
 			Err("Too short storage value to have prefix"),
-		Some(prefix_len) if value.len() == prefix_len as usize =>
+		Some(prefix_len) if value_len == prefix_len as usize =>
 			Ok((Some(value), None)),
 		Some(prefix_len) => {
 			let mut prefix = value;

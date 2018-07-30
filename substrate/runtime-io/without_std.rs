@@ -63,7 +63,7 @@ extern "C" {
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
 	fn ext_set_prefix(include_new_keys: u32, prefix_data: *const u8, prefix_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_save_prefix_keys(include_new_keys: u32, prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32);
-	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
+	fn ext_get_allocated_storage(cache_value: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
 	fn ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
@@ -318,7 +318,20 @@ pub(crate) mod raw {
 	pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 		let mut length: u32 = 0;
 		unsafe {
-			let ptr = ext_get_allocated_storage(key.as_ptr(), key.len() as u32, &mut length);
+			let ptr = ext_get_allocated_storage(0, key.as_ptr(), key.len() as u32, &mut length);
+			if length == u32::max_value() {
+				None
+			} else {
+				Some(Vec::from_raw_parts(ptr, length as usize, length as usize))
+			}
+		}
+	}
+
+	/// Get cached raw `key` from storage and return a `Vec`, empty if there's a problem.
+	pub fn cached_storage(key: &[u8]) -> Option<Vec<u8>> {
+		let mut length: u32 = 0;
+		unsafe {
+			let ptr = ext_get_allocated_storage(1, key.as_ptr(), key.len() as u32, &mut length);
 			if length == u32::max_value() {
 				None
 			} else {

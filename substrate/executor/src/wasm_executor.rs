@@ -244,9 +244,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
-	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
+	ext_get_allocated_storage(cache_value: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_storage"))?;
-		let maybe_value = this.ext.storage(&key);
+		let maybe_value = if cache_value != 0 {
+			this.ext.cached_storage(&key)
+		} else {
+			this.ext.storage(&key)
+		};
 
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]", 
 			if let Some(_preimage) = this.hash_lookup.get(&key) {

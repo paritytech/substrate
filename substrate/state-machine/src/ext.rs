@@ -16,7 +16,7 @@
 
 //! Concrete externalities implementation.
 
-use std::{error, fmt};
+use std::{error, fmt, cell::RefCell, collections::HashMap};
 use backend::Backend;
 use keys_set::{Set as KeysSet, Storage as KeysSetStorage};
 use {Externalities, OverlayedChanges};
@@ -58,6 +58,8 @@ pub struct Ext<'a, B: 'a + Backend> {
 	backend: &'a B,
 	// The transaction necessary to commit to the backend.
 	transaction: Option<(B::Transaction, [u8; 32])>,
+	// In-memory cache for frequently used values.
+	cache: RefCell<HashMap<Vec<u8>, Option<Vec<u8>>>>,
 }
 
 /// Implementation of keys set storage for Backend + OverlayedChanges.
@@ -70,6 +72,7 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 			overlay,
 			backend,
 			transaction: None,
+			cache: Default::default(),
 		}
 	}
 
@@ -93,6 +96,23 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect("Externalities not allowed to fail within runtime"))
+	}
+
+	fn cached_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
+		self.overlay.storage(key)
+			.map(|x| x.map(|x| x.to_vec()))
+			.unwrap_or_else(|| {
+				let value_from_cache = self.cache.borrow().get(key).cloned();
+				match value_from_cache {
+					Some(value) => value,
+					None => {
+						let value = self.backend.storage(key)
+							.expect("Externalities not allowed to fail within runtime");
+						self.cache.borrow_mut().insert(key.to_vec(), value.clone());
+						value
+					},
+				}
+			})
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
