@@ -34,7 +34,6 @@ members = [
 
 	"polkadot/test-parachains/adder",
 	"polkadot/test-parachains/adder/collator",
-	"polkadot/test-parachains/adder/wasm",
 
 	"substrate/bft",
 	"substrate/cli",
@@ -81,6 +80,7 @@ members = [
 ]
 exclude = [
 	"polkadot/runtime/wasm",
+	"polkadot/test-parachains/adder/wasm",
 	"demo/runtime/wasm",
 	"substrate/executor/wasm",
 	"substrate/pwasm-alloc",

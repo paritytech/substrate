@@ -12,3 +12,9 @@ tiny-keccak = "1.4"
 
 [lib]
 crate-type = ["cdylib"]
+
+[target.release]
+panic = "abort"
+lto = true
+
+[workspace]

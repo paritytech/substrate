@@ -75,7 +75,7 @@ impl ParachainContext for AdderContext {
 		};
 
 		let next_body = AdderBody {
-			state: last_body.state.overflowing_add(last_body.add),
+			state: last_body.state.overflowing_add(last_body.add).0,
 			add: adder_head.number % 100,
 		};
 
@@ -86,7 +86,7 @@ impl ParachainContext for AdderContext {
 		let encoded_body = BlockData(next_body.encode());
 
 		println!("Created collation for #{}, post-state={}",
-			next_head.number, next_body.state.overflowing_add(next_body.add));
+			next_head.number, next_body.state.overflowing_add(next_body.add).0);
 
 		db.insert(next_head.clone(), next_body);
 		Ok((encoded_body, encoded_head))

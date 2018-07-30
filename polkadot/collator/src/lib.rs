@@ -69,7 +69,7 @@ use client::BlockchainEvents;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{AccountId, BlockId, SessionKey};
 use polkadot_primitives::parachain::{self, BlockData, DutyRoster, HeadData, ConsolidatedIngress, Message, Id as ParaId};
-use polkadot_cli::{ServiceComponents, Service, CustomConfiguration, VersionInfo};
+use polkadot_cli::{ServiceComponents, Service, CustomConfiguration};
 use polkadot_cli::{Worker, IntoExit};
 use tokio::timer::Deadline;
 
