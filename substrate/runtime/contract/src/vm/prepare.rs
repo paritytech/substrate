@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{Config, Error, Ext, ExtFunc};
-use parity_wasm::elements::{self, External, FunctionType, MemoryType, Type};
+use parity_wasm::elements::{self, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use rstd::collections::btree_map::BTreeMap;
@@ -203,4 +203,62 @@ pub(super) fn prepare_contract<E: Ext>(
 		instrumented_code: contract_module.into_wasm_code()?,
 		memory,
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use std::fmt;
+	use wabt;
+	use ::tests::Test;
+	use super::*;
+	use vm::tests::MockExt;
+
+	impl fmt::Debug for PreparedContract {
+		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+			write!(f, "PreparedContract {{ .. }}")
+		}
+	}
+
+	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
+		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
+		let config = Config::<Test>::default();
+		let sigs = BTreeMap::default();
+		prepare_contract::<MockExt>(wasm.as_ref(), &config, &sigs)
+	}
+
+	#[test]
+	fn internal_memory_declaration() {
+		let r = parse_and_prepare_wat(r#"(module (memory 1 1))"#);
+		assert_matches!(r, Err(Error::InternalMemoryDeclared));
+	}
+
+	#[test]
+	fn memory() {
+		// This test assumes that maximum page number is configured to a certain number.
+		assert_eq!(Config::<Test>::default().max_memory_pages, 16);
+
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 1)))"#);
+		assert_matches!(r, Ok(_));
+
+		// No memory import
+		let r = parse_and_prepare_wat(r#"(module)"#);
+		assert_matches!(r, Ok(_));
+
+		// incorrect import name. That's kinda ok, since this will fail
+		// at later stage when imports will be resolved.
+		let r = parse_and_prepare_wat(r#"(module (import "vne" "memory" (memory 1 1)))"#);
+		assert_matches!(r, Ok(_));
+
+		// initial exceed maximum
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 16 1)))"#);
+		assert_matches!(r, Err(Error::Memory));
+
+		// no maximum
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1)))"#);
+		assert_matches!(r, Err(Error::Memory));
+
+		// requested maximum exceed configured maximum
+		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 17)))"#);
+		assert_matches!(r, Err(Error::Memory));
+	}
 }

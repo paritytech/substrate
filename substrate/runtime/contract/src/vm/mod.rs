@@ -477,7 +477,6 @@ impl<T: Trait> Default for Config<T> {
 mod tests {
 	use super::*;
 	use std::collections::HashMap;
-	use std::fmt;
 	use wabt;
 	use gas::GasMeter;
 	use ::tests::Test;
@@ -494,7 +493,7 @@ mod tests {
 		value: u64,
 	}
 	#[derive(Default)]
-	struct MockExt {
+	pub struct MockExt {
 		storage: HashMap<Vec<u8>, Vec<u8>>,
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
@@ -542,55 +541,6 @@ mod tests {
 				return_data: Vec::new(),
 			})
 		}
-	}
-
-	impl fmt::Debug for PreparedContract {
-		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-			write!(f, "PreparedContract {{ .. }}")
-		}
-	}
-
-	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
-		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
-		let config = Config::<Test>::default();
-		let sigs = BTreeMap::default();
-		prepare_contract::<MockExt>(wasm.as_ref(), &config, &sigs)
-	}
-
-	#[test]
-	fn internal_memory_declaration() {
-		let r = parse_and_prepare_wat(r#"(module (memory 1 1))"#);
-		assert_matches!(r, Err(Error::InternalMemoryDeclared));
-	}
-
-	#[test]
-	fn memory() {
-		// This test assumes that maximum page number is configured to a certain number.
-		assert_eq!(Config::<Test>::default().max_memory_pages, 16);
-
-		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 1)))"#);
-		assert_matches!(r, Ok(_));
-
-		// No memory import
-		let r = parse_and_prepare_wat(r#"(module)"#);
-		assert_matches!(r, Ok(_));
-
-		// incorrect import name. That's kinda ok, since this will fail
-		// at later stage when imports will be resolved.
-		let r = parse_and_prepare_wat(r#"(module (import "vne" "memory" (memory 1 1)))"#);
-		assert_matches!(r, Ok(_));
-
-		// initial exceed maximum
-		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 16 1)))"#);
-		assert_matches!(r, Err(Error::Memory));
-
-		// no maximum
-		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1)))"#);
-		assert_matches!(r, Err(Error::Memory));
-
-		// requested maximum exceed configured maximum
-		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 17)))"#);
-		assert_matches!(r, Err(Error::Memory));
 	}
 
 	const CODE_TRANSFER: &str = r#"
