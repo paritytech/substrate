@@ -1,6 +1,6 @@
 [package]
 name = "substrate-service"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]

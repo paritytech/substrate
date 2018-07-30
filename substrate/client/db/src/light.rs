@@ -21,14 +21,15 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
-use client::blockchain::{BlockStatus, HeaderBackend as BlockchainHeaderBackend,
-	Info as BlockchainInfo};
+use client::blockchain::{BlockStatus, Cache as BlockchainCache,
+	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, Zero, As};
+use cache::DbCache;
 use utils::{meta_keys, Meta, db_err, number_to_db_key, open_database, read_db, read_id, read_meta};
 use DatabaseSettings;
 
@@ -36,12 +37,17 @@ pub(crate) mod columns {
 	pub const META: Option<u32> = ::utils::COLUMN_META;
 	pub const BLOCK_INDEX: Option<u32> = Some(1);
 	pub const HEADER: Option<u32> = Some(2);
+	pub const AUTHORITIES: Option<u32> = Some(3);
 }
+
+/// Keep authorities for last 'AUTHORITIES_ENTRIES_TO_KEEP' blocks.
+pub(crate) const AUTHORITIES_ENTRIES_TO_KEEP: u64 = 2048;
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 pub struct LightStorage<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	meta: RwLock<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>>,
+	cache: DbCache<Block>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -73,12 +79,24 @@ impl<Block> LightStorage<Block>
 	}
 
 	fn from_kvdb(db: Arc<KeyValueDB>) -> ClientResult<Self> {
+		let cache = DbCache::new(db.clone(), columns::BLOCK_INDEX, columns::AUTHORITIES)?;
 		let meta = RwLock::new(read_meta::<Block>(&*db, columns::HEADER)?);
 
 		Ok(LightStorage {
 			db,
 			meta,
+			cache,
 		})
+	}
+
+	#[cfg(test)]
+	pub(crate) fn db(&self) -> &Arc<KeyValueDB> {
+		&self.db
+	}
+
+	#[cfg(test)]
+	pub(crate) fn cache(&self) -> &DbCache<Block> {
+		&self.cache
 	}
 
 	fn update_meta(&self, hash: Block::Hash, number: <<Block as BlockT>::Header as HeaderT>::Number, is_best: bool) {
@@ -139,7 +157,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	where
 		Block: BlockT,
 {
-	fn import_header(&self, is_new_best: bool, header: Block::Header) -> ClientResult<()> {
+	fn import_header(&self, is_new_best: bool, header: Block::Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();
 
 		let hash = header.hash();
@@ -149,15 +167,38 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		transaction.put(columns::HEADER, &key, &header.encode());
 		transaction.put(columns::BLOCK_INDEX, hash.as_ref(), &key);
 
-		if is_new_best {
+		let best_authorities = if is_new_best {
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
-		}
+
+			// cache authorities for previous block
+			let number: u64 = number.as_();
+			let previous_number = number.checked_sub(1);
+			let best_authorities = previous_number
+				.and_then(|previous_number| self.cache.authorities_at_cache()
+					.commit_best_entry(&mut transaction, As::sa(previous_number), authorities));
+
+			// prune authorities from 'ancient' blocks
+			if let Some(ancient_number) = number.checked_sub(AUTHORITIES_ENTRIES_TO_KEEP) {
+				self.cache.authorities_at_cache().prune_entries(&mut transaction, As::sa(ancient_number))?;
+			}
+
+			best_authorities
+		} else {
+			None
+		};
 
 		debug!("Light DB Commit {:?} ({})", hash, number);
 		self.db.write(transaction).map_err(db_err)?;
 		self.update_meta(hash, number, is_new_best);
+		if let Some(best_authorities) = best_authorities {
+			self.cache.authorities_at_cache().update_best_entry(Some(best_authorities));
+		}
 
 		Ok(())
+	}
+
+	fn cache(&self) -> Option<&BlockchainCache<Block>> {
+		Some(&self.cache)
 	}
 }
 
@@ -168,7 +209,12 @@ pub(crate) mod tests {
 
 	type Block = RawBlock<u32>;
 
-	pub fn insert_block(db: &LightStorage<Block>, parent: &Hash, number: u32) -> Hash {
+	pub fn insert_block(
+		db: &LightStorage<Block>,
+		parent: &Hash,
+		number: u64,
+		authorities: Option<Vec<AuthorityId>>
+	) -> Hash {
 		let header = Header {
 			number: number.into(),
 			parent_hash: *parent,
@@ -178,14 +224,14 @@ pub(crate) mod tests {
 		};
 
 		let hash = header.hash();
-		db.import_header(true, header).unwrap();
+		db.import_header(true, header, authorities).unwrap();
 		hash
 	}
 
 	#[test]
 	fn returns_known_header() {
 		let db = LightStorage::new_test();
-		let known_hash = insert_block(&db, &Default::default(), 0);
+		let known_hash = insert_block(&db, &Default::default(), 0, None);
 		let header_by_hash = db.header(BlockId::Hash(known_hash)).unwrap().unwrap();
 		let header_by_number = db.header(BlockId::Number(0)).unwrap().unwrap();
 		assert_eq!(header_by_hash, header_by_number);
@@ -201,12 +247,12 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_info() {
 		let db = LightStorage::new_test();
-		let genesis_hash = insert_block(&db, &Default::default(), 0);
+		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
 		let info = db.info().unwrap();
 		assert_eq!(info.best_hash, genesis_hash);
 		assert_eq!(info.best_number, 0);
 		assert_eq!(info.genesis_hash, genesis_hash);
-		let best_hash = insert_block(&db, &genesis_hash, 1);
+		let best_hash = insert_block(&db, &genesis_hash, 1, None);
 		let info = db.info().unwrap();
 		assert_eq!(info.best_hash, best_hash);
 		assert_eq!(info.best_number, 1);
@@ -216,7 +262,7 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_block_status() {
 		let db = LightStorage::new_test();
-		let genesis_hash = insert_block(&db, &Default::default(), 0);
+		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
 		assert_eq!(db.status(BlockId::Hash(genesis_hash)).unwrap(), BlockStatus::InChain);
 		assert_eq!(db.status(BlockId::Number(0)).unwrap(), BlockStatus::InChain);
 		assert_eq!(db.status(BlockId::Hash(1.into())).unwrap(), BlockStatus::Unknown);
@@ -226,7 +272,7 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_block_hash() {
 		let db = LightStorage::new_test();
-		let genesis_hash = insert_block(&db, &Default::default(), 0);
+		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
 		assert_eq!(db.hash(0).unwrap(), Some(genesis_hash));
 		assert_eq!(db.hash(1).unwrap(), None);
 	}
@@ -235,11 +281,11 @@ pub(crate) mod tests {
 	fn import_header_works() {
 		let db = LightStorage::new_test();
 
-		let genesis_hash = insert_block(&db, &Default::default(), 0);
+		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
 		assert_eq!(db.db.iter(columns::HEADER).count(), 1);
 		assert_eq!(db.db.iter(columns::BLOCK_INDEX).count(), 1);
 
-		let _ = insert_block(&db, &genesis_hash, 1);
+		let _ = insert_block(&db, &genesis_hash, 1, None);
 		assert_eq!(db.db.iter(columns::HEADER).count(), 2);
 		assert_eq!(db.db.iter(columns::BLOCK_INDEX).count(), 2);
 	}

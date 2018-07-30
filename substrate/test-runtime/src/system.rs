@@ -69,16 +69,16 @@ pub fn execute_block(block: Block) {
 	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let txs_root = enumerated_trie_root(&txs).into();
-	info_expect_equal_hash(&header.extrinsics_root, &txs_root);
-	assert!(header.extrinsics_root == txs_root, "Transaction trie root must be valid.");
+	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
+	assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
 
 	// execute transactions
 	block.extrinsics.iter().for_each(|e| { execute_transaction_backend(e).map_err(|_| ()).expect("Extrinsic error"); });
 
 	// check storage root.
 	let storage_root = storage_root().into();
-	info_expect_equal_hash(&header.state_root, &storage_root);
-	assert!(header.state_root == storage_root, "Storage root must match that calculated.");
+	info_expect_equal_hash(&storage_root, &header.state_root);
+	assert!(storage_root == header.state_root, "Storage root must match that calculated.");
 }
 
 /// Execute a transaction outside of the block execution function.

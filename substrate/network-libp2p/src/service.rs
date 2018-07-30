@@ -41,7 +41,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use futures::{future, Future, Stream, IntoFuture};
 use futures::sync::{mpsc, oneshot};
-use tokio_core::reactor::{Core, Handle};
+use tokio::runtime::current_thread;
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Interval, Deadline};
 
@@ -118,7 +118,7 @@ impl NetworkService {
 			local_peer_id: local_peer_id.clone(),
 			kbuckets_timeout: Duration::from_secs(600),
 			request_timeout: Duration::from_secs(10),
-			known_initial_peers: network_state.known_peers().collect(),
+			known_initial_peers: network_state.known_peers(),
 		});
 
 		let shared = Arc::new(Shared {
@@ -191,8 +191,8 @@ impl NetworkService {
 
 		let shared = self.shared.clone();
 		let join_handle = thread::spawn(move || {
-			// Tokio core that is going to run everything in this thread.
-			let mut core = match Core::new() {
+			// Tokio runtime that is going to run everything in this thread.
+			let mut runtime = match current_thread::Runtime::new() {
 				Ok(c) => c,
 				Err(err) => {
 					let _ = init_tx.send(Err(err.into()));
@@ -200,7 +200,7 @@ impl NetworkService {
 				}
 			};
 
-			let fut = match init_thread(core.handle(), shared,
+			let fut = match init_thread(shared,
 				timeouts_register_rx, close_rx) {
 				Ok(future) => {
 					debug!(target: "sub-libp2p", "Successfully started networking service");
@@ -213,7 +213,7 @@ impl NetworkService {
 				}
 			};
 
-			match core.run(fut) {
+			match runtime.block_on(fut) {
 				Ok(()) => debug!(target: "sub-libp2p", "libp2p future finished"),
 				Err(err) => error!(target: "sub-libp2p", "error while running libp2p: {:?}", err),
 			}
@@ -395,7 +395,6 @@ impl NetworkContext for NetworkContextImpl {
 /// - `timeouts_register_rx` should receive newly-registered timeouts.
 /// - `close_rx` should be triggered when we want to close the network.
 fn init_thread(
-	core: Handle,
 	shared: Arc<Shared>,
 	timeouts_register_rx: mpsc::UnboundedReceiver<
 		(Duration, (Arc<NetworkProtocolHandler + Send + Sync + 'static>, ProtocolId, TimerToken))
@@ -405,7 +404,6 @@ fn init_thread(
 	// Build the transport layer.
 	let transport = {
 		let base = transport::build_transport(
-			core.clone(),
 			transport::UnencryptedAllowed::Denied,
 			shared.network_state.local_private_key().clone()
 		);
@@ -535,7 +533,7 @@ fn init_thread(
 
 	// Build the timeouts system for the `register_timeout` function.
 	// (note: this has nothing to do with socket timeouts)
-	let timeouts = timeouts::build_timeouts_stream(core.clone(), timeouts_register_rx)
+	let timeouts = timeouts::build_timeouts_stream(timeouts_register_rx)
 		.for_each({
 			let shared = shared.clone();
 			move |(handler, protocol_id, timer_token)| {
@@ -630,7 +628,7 @@ fn listener_handle<'a, C>(
 			match shared.network_state.ping_connection(node_id.clone()) {
 				Ok((_, ping_connec)) => {
 					trace!(target: "sub-libp2p", "Successfully opened ping substream with {:?}", node_id);
-					let fut = ping_connec.set_until(pinger, future);
+					let fut = ping_connec.tie_or_passthrough(pinger, future);
 					Box::new(fut) as Box<_>
 				},
 				Err(err) => Box::new(future::err(err)) as Box<_>
@@ -687,7 +685,7 @@ fn handle_kademlia_connection(
 		val
 	});
 
-	Ok(kad_connec.set_until(controller, future))
+	Ok(kad_connec.tie_or_passthrough(controller, future))
 }
 
 /// When a remote performs a `FIND_NODE` Kademlia request for `searched`,
@@ -823,7 +821,7 @@ fn handle_custom_connection(
 		});
 
 	let val = (custom_proto_out.outgoing, custom_proto_out.protocol_version);
-	let final_fut = unique_connec.set_until(val, fut)
+	let final_fut = unique_connec.tie_or_stop(val, fut)
 		.then(move |val| {
 			// Makes sure that `dc_guard` is kept alive until here.
 			drop(dc_guard);
@@ -950,7 +948,7 @@ fn perform_kademlia_query<T, To, St, C>(
 	let random_peer_id = random_key.into_peer_id();
 	trace!(target: "sub-libp2p", "Start kademlia discovery for {:?}", random_peer_id);
 
-	shared.clone()
+	let future = shared.clone()
 		.kad_system
 		.find_node(random_peer_id, {
 			let shared = shared.clone();
@@ -974,7 +972,10 @@ fn perform_kademlia_query<T, To, St, C>(
 		)
 		.into_future()
 		.map_err(|(err, _)| err)
-		.map(|_| ())
+		.map(|_| ());
+
+	// Note that we use a `Box` in order to speed up compilation.
+	Box::new(future) as Box<Future<Item = _, Error = _>>
 }
 
 /// Connects to additional nodes, if necessary.
@@ -1163,8 +1164,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 				);
 			}
 
-			// TODO: this future should be used
-			let _ = unique_connec.get_or_dial(&swarm_controller, &addr, with_err);
+			unique_connec.dial(&swarm_controller, &addr, with_err);
 		},
 		Err(err) => {
 			trace!(target: "sub-libp2p",
@@ -1200,11 +1200,14 @@ fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
 			})
 		});
 	
-	shared.network_state
+	let future = shared.network_state
 		.kad_connection(who.clone())
 		.into_future()
-		.map(move |(_, k)| k.get_or_dial(&swarm_controller, &addr, transport))
-		.flatten()
+		.map(move |(_, k)| k.dial(&swarm_controller, &addr, transport))
+		.flatten();
+
+	// Note that we use a Box in order to speed up compilation.
+	Box::new(future) as Box<Future<Item = _, Error = _>>
 }
 
 /// Processes the information about a node.
@@ -1305,7 +1308,7 @@ fn ping_all<T, St, C>(
 
 		let addr = Multiaddr::from(AddrComponent::P2P(who.clone().into_bytes()));
 		let fut = pinger
-			.get_or_dial(&swarm_controller, &addr, transport.clone())
+			.dial(&swarm_controller, &addr, transport.clone())
 			.and_then(move |mut p| {
 				trace!(target: "sub-libp2p", "Pinging peer #{} aka. {:?}", peer, who);
 				p.ping()
@@ -1334,7 +1337,7 @@ fn ping_all<T, St, C>(
 		ping_futures.push(fut);
 	}
 
-	future::loop_fn(ping_futures, |ping_futures| {
+	let future = future::loop_fn(ping_futures, |ping_futures| {
 		if ping_futures.is_empty() {
 			let fut = future::ok(future::Loop::Break(()));
 			return future::Either::A(fut)
@@ -1344,7 +1347,10 @@ fn ping_all<T, St, C>(
 			.map(|((), _, rest)| future::Loop::Continue(rest))
 			.map_err(|(err, _, _)| err);
 		future::Either::B(fut)
-	})
+	});
+
+	// Note that we use a Box in order to speed up compilation.
+	Box::new(future) as Box<Future<Item = _, Error = _>>
 }
 
 /// Expects a multiaddr of the format `/p2p/<node_id>` and returns the node ID.

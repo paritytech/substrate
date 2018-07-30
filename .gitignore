@@ -13,3 +13,4 @@ demo/runtime/wasm/target/
 **/._*
 .vscode
 polkadot.*
+.DS_Store
