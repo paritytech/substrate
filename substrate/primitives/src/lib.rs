@@ -49,6 +49,8 @@ extern crate substrate_runtime_std as rstd;
 
 #[cfg(test)]
 extern crate substrate_serializer;
+#[cfg(test)]
+extern crate heapsize;
 
 #[cfg(test)]
 #[macro_use]
@@ -83,7 +85,7 @@ mod authority_id;
 mod tests;
 
 pub use self::hash::{H160, H256, H512};
-pub use self::uint::{U256, U512};
+pub use self::uint::U256;
 pub use authority_id::AuthorityId;
 
 /// A 512-bit value interpreted as a signature.

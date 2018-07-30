@@ -44,9 +44,7 @@ macro_rules! impl_serde {
 }
 
 construct_uint!(U256, 4);
-construct_uint!(U512, 8);
 impl_serde!(U256, 4);
-impl_serde!(U512, 8);
 
 #[cfg(test)]
 mod tests {
@@ -68,7 +66,8 @@ mod tests {
 					($name::from(1_000), "0x3e8"),
 					($name::from(100_000), "0x186a0"),
 					($name::from(u64::max_value()), "0xffffffffffffffff"),
-					($name::from(u64::max_value()) + 1.into(), "0x10000000000000000"),
+					// TODO: `uint` doesn't have the same conversion facilities as `ethereum_types::H256` – need to port over the manual impls from `ethereum-types` to the macro so we can to `1.into()`
+					($name::from(u64::max_value()) + $name::from(1), "0x10000000000000000"),
 				];
 
 				for (number, expected) in tests {
@@ -87,7 +86,6 @@ mod tests {
 	}
 
 	test!(U256, test_u256);
-	test!(U512, test_u512);
 
 	#[test]
 	fn test_large_values() {
