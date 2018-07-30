@@ -56,6 +56,7 @@ use service::FactoryFullConfiguration;
 pub use service::{Roles, PruningMode, ExtrinsicPoolOptions,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 pub use client::ExecutionStrategy;
+pub use polkadot_network::Config as NetworkConfig;
 
 /// Specialised polkadot `ChainSpec`.
 pub type ChainSpec = service::ChainSpec<GenesisConfig>;
@@ -94,9 +95,8 @@ pub type Configuration = FactoryFullConfiguration<Factory>;
 /// Polkadot-specific configuration.
 #[derive(Default)]
 pub struct CustomConfiguration {
-	/// Set to `Some` with a collator `AccountId` and desired parachain
-	/// if the network protocol should be started in collator mode.
-	pub collating_for: Option<(AccountId, parachain::Id)>,
+	/// Network configuration
+	pub network: NetworkConfig,
 }
 
 /// Polkadot config for the substrate service.
@@ -146,10 +146,10 @@ impl service::ServiceFactory for Factory {
 	fn build_network_protocol(config: &Configuration)
 		-> Result<PolkadotProtocol, Error>
 	{
-		if let Some((_, ref para_id)) = config.custom.collating_for {
+		if let Some((_, ref para_id)) = config.custom.network.collating_for {
 			info!("Starting network in Collator mode for parachain {:?}", para_id);
 		}
-		Ok(PolkadotProtocol::new(config.custom.collating_for))
+		Ok(PolkadotProtocol::new(config.custom.network))
 	}
 }
 

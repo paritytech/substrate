@@ -250,6 +250,24 @@ fn send_polkadot_message(ctx: &mut Context<Block>, to: NodeIndex, message: Messa
 	ctx.send_message(to, generic_message::Message::ChainSpecific(encoded))
 }
 
+/// Polkadot network configuration.
+pub struct Config {
+	/// Set to `Some` with a collator `AccountId` and desired parachain
+	/// if the network protocol should be started in collator mode.
+	pub collating_for: Option<(AccountId, ParaId)>,
+	/// Whether to participate in consensus message gossip.
+	pub gossip: bool,
+}
+
+impl Default for Config {
+	fn default() -> Self {
+		Config {
+			collating_for: None,
+			gossip: true,
+		}
+	}
+}
+
 /// Polkadot protocol attachment for substrate.
 pub struct PolkadotProtocol {
 	peers: HashMap<NodeIndex, PeerInfo>,
@@ -266,12 +284,15 @@ pub struct PolkadotProtocol {
 
 impl PolkadotProtocol {
 	/// Instantiate a polkadot protocol handler.
-	pub fn new(collating_for: Option<(AccountId, ParaId)>) -> Self {
+	pub fn new(config: Config) -> Self {
+		let mut gossip: ConsensusGossip<Block> = ConsensusGossip::new();
+		gossip.enable(config.gossip);
+
 		PolkadotProtocol {
 			peers: HashMap::new(),
 			consensus_gossip: ConsensusGossip::new(),
 			collators: CollatorPool::new(),
-			collating_for,
+			collating_for: config.collating_for,
 			validators: HashMap::new(),
 			local_collations: LocalCollations::new(),
 			live_consensus: None,
