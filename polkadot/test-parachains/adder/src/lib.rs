@@ -87,7 +87,7 @@ pub fn hash_state(state: u64) -> [u8; 32] {
 	::tiny_keccak::keccak256(state.encode().as_slice())
 }
 
-/// Start state
+/// Start state mismatched with parent header's state hash.
 #[derive(Debug)]
 pub struct StateMismatch;
 
