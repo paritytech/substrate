@@ -23,6 +23,8 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine;
 extern crate triehash;
 extern crate ed25519;
+extern crate hashdb;
+extern crate plain_hasher;
 
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
@@ -31,10 +33,24 @@ pub use primitives::{blake2_256, twox_128, twox_256};
 
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
+use primitives::hash::H256;
+use hashdb::Hasher;
+use plain_hasher::PlainHasher;
 
 // TODO: use the real error, not NoError.
 
-environmental!(ext: trait Externalities);
+// TODO: This is just a sanity check toy impl of `Hasher` – this needs to go somewhere else and possibly be renamed to `Hash`?
+struct MyHasher;
+impl Hasher for MyHasher {
+	type Out = H256;
+	type StdHasher = PlainHasher;
+	const LENGTH:usize = 32;
+	fn hash(x: &[u8]) -> Self::Out {
+		blake2_256(x).into()
+	}
+}
+
+environmental!(ext: trait Externalities<MyHasher>);
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
@@ -83,10 +99,11 @@ pub fn chain_id() -> u64 {
 }
 
 /// "Commit" all existing operations and get the resultant storage root.
-pub fn storage_root() -> [u8; 32] {
+// TODO: this used to be: `pub fn storage_root() -> [u8; 32]` – does it really need to use H256?
+pub fn storage_root() -> H256 {
 	ext::with(|ext|
 		ext.storage_root()
-	).unwrap_or([0u8; 32])
+	).unwrap_or(H256::new())
 }
 
 /// A trie root formed from the enumerated items.
@@ -118,7 +135,8 @@ pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities, f: F) -> R {
+// TODO: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<MyHasher>, f: F) -> R {
 	ext::using(ext, f)
 }
 
@@ -181,6 +199,13 @@ macro_rules! impl_stubs {
 #[cfg(test)]
 mod std_tests {
 	use super::*;
+
+	#[test]
+	fn test_heapsizeof() {
+		use heapsize::HeapSizeOf;
+		let h = H256::new();
+		assert_eq!(h.heap_size_of_children(), 0);
+	}
 
 	#[test]
 	fn storage_works() {
