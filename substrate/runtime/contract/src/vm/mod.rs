@@ -209,7 +209,7 @@ pub fn execute<'a, E: Ext>(
 
 	let mut imports = sandbox::EnvironmentDefinitionBuilder::new();
 	for (func_name, ext_func) in &env.funcs {
-		imports.add_host_func("env", &func_name[..], ext_func.f);
+		imports.add_host_func("env", &func_name[..], ext_func.raw_fn_ptr());
 	}
 
 	// TODO: Rename ext_transfer to ext_call.

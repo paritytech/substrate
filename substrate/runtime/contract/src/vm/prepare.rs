@@ -17,8 +17,8 @@
 //! Module that takes care of loading, checking and preprocessing of a
 //! wasm module before execution.
 
+use super::env_def::HostFunctionSet;
 use super::{Config, Error, Ext};
-use super::env_def::Environment;
 use parity_wasm::elements::{self, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
@@ -111,8 +111,14 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 		None
 	}
 
-	fn check_signatures<E: Ext>(&self, env: &Environment<E>) -> Result<(), Error> {
-		// TODO: Merge it with `find_mem_import`?
+	/// Scan an import section if any.
+	///
+	/// This accomplishes two tasks:
+	///
+	/// - checks any imported function against defined host functions set, incl.
+	///   their signatures.
+	/// - if there is a memory import, returns it's descriptor
+	fn scan_imports<E: Ext>(&self, env: &HostFunctionSet<E>) -> Result<Option<&MemoryType>, Error> {
 		let module = self
 			.module
 			.as_ref()
@@ -124,21 +130,27 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 			.map(|is| is.entries())
 			.unwrap_or(&[]);
 
+		let mut imported_mem_type = None;
+
 		for import in import_entries {
+			if import.module() != "env" {
+				// This import tries to import something from non-"env" module,
+				// but all imports are located in "env" at the moment.
+				return Err(Error::Deserialization);
+			}
+
 			let type_idx = match import.external() {
 				&External::Function(ref type_idx) => type_idx,
+				&External::Memory(ref memory_type) => {
+					imported_mem_type = Some(memory_type);
+					continue;
+				}
 				_ => continue,
 			};
 
 			let Type::Function(ref func_ty) = types
 				.get(*type_idx as usize)
 				.ok_or_else(|| Error::Deserialization)?;
-
-			if import.module() != "env" {
-				// This import tries to import something from non-"env" module,
-				// but all imports are located in "env" at the moment.
-				return Err(Error::Deserialization);
-			}
 
 			let ext_func = env
 				.funcs
@@ -148,7 +160,7 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 				return Err(Error::Instantiate);
 			}
 		}
-		Ok(())
+		Ok(imported_mem_type)
 	}
 
 	fn into_wasm_code(mut self) -> Result<Vec<u8>, Error> {
@@ -168,16 +180,15 @@ pub(super) struct PreparedContract {
 pub(super) fn prepare_contract<E: Ext>(
 	original_code: &[u8],
 	config: &Config<E::T>,
-	env: &Environment<E>,
+	env: &HostFunctionSet<E>,
 ) -> Result<PreparedContract, Error> {
 	let mut contract_module = ContractModule::new(original_code, config)?;
 	contract_module.ensure_no_internal_memory()?;
 	contract_module.inject_gas_metering()?;
 	contract_module.inject_stack_height_metering()?;
-	contract_module.check_signatures(env)?;
 
-	// Inspect the module to extract the initial and maximum page count.
-	let memory = if let Some(memory_type) = contract_module.find_mem_import() {
+	let memory = if let Some(memory_type) = contract_module.scan_imports(env)? {
+		// Inspect the module to extract the initial and maximum page count.
 		let limits = memory_type.limits();
 		match (limits.initial(), limits.maximum()) {
 			(initial, Some(maximum)) if initial > maximum => {
@@ -211,11 +222,11 @@ pub(super) fn prepare_contract<E: Ext>(
 
 #[cfg(test)]
 mod tests {
-	use std::fmt;
-	use wabt;
-	use ::tests::Test;
 	use super::*;
+	use std::fmt;
+	use tests::Test;
 	use vm::tests::MockExt;
+	use wabt;
 
 	impl fmt::Debug for PreparedContract {
 		fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -248,10 +259,8 @@ mod tests {
 		let r = parse_and_prepare_wat(r#"(module)"#);
 		assert_matches!(r, Ok(_));
 
-		// incorrect import name. That's kinda ok, since this will fail
-		// at later stage when imports will be resolved.
 		let r = parse_and_prepare_wat(r#"(module (import "vne" "memory" (memory 1 1)))"#);
-		assert_matches!(r, Ok(_));
+		assert_matches!(r, Err(Error::Deserialization));
 
 		// initial exceed maximum
 		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 16 1)))"#);
