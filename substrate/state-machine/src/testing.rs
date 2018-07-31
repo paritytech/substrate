@@ -32,6 +32,12 @@ impl Externalities for TestExternalities {
 		self.get(key).map(|x| x.to_vec())
 	}
 
+	fn exists_previous_storage(&self, key: &[u8]) -> bool {
+		// we do not really need this in testing, since storage in testing is
+		// created for single block only => just work as exists_storage() here
+		self.get(key).is_some()
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		match maybe_value {
 			Some(value) => { self.insert(key, value); }
@@ -39,7 +45,7 @@ impl Externalities for TestExternalities {
 		}
 	}
 
-	fn place_prefix(&mut self, prefix: &[u8], value: Option<Vec<u8>>) {
+	fn place_prefix(&mut self, _include_new_keys: bool, prefix: &[u8], value: Option<Vec<u8>>) {
 		match value {
 			None => self.retain(|key, _| !key.starts_with(prefix)),
 			Some(value) => {
@@ -52,7 +58,7 @@ impl Externalities for TestExternalities {
 		}
 	}
 
-	fn save_pefix_keys(&mut self, prefix: &[u8], set_prefix: &[u8]) {
+	fn save_pefix_keys(&mut self, _include_new_keys: bool, prefix: &[u8], set_prefix: &[u8]) {
 		// in test implementation, prefix overlap won't lead to inifinite execution
 		// but other implementations could suffer
 		// => do not allow overlaps

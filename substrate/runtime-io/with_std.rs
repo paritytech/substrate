@@ -109,7 +109,8 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 pub fn clear_storage(key: &[u8]) {
 	ext::with(|ext| {
 		let empty_value = add_prefix(ext, &[]);
-		if empty_value.is_empty() {
+		// if we do not use prefix OR value has been created + deleted in the same block => just remove
+		if empty_value.is_empty() || !ext.exists_previous_storage(key) {
 			ext.clear_storage(key)
 		} else {
 			schedule_purge(ext, key);
@@ -139,8 +140,8 @@ pub fn clear_prefix(prefix: &[u8]) {
 		if empty_value.is_empty() {
 			ext.clear_prefix(prefix)
 		} else {
-			ext.save_pefix_keys(prefix, DELETED_SET_KEY_PREFIX);
-			ext.set_prefix(prefix, empty_value)
+			ext.save_pefix_keys(false, prefix, DELETED_SET_KEY_PREFIX);
+			ext.set_prefix(false, prefix, empty_value)
 		}
 	});
 }

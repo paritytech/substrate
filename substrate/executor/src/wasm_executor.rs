@@ -222,21 +222,25 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_storage"))?;
 		Ok(if this.ext.exists_storage(&key) { 1 } else { 0 })
 	},
+	ext_exists_previous_storage(key_data: *const u8, key_len: u32) -> u32 => {
+		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_previous_storage"))?;
+		Ok(if this.ext.exists_previous_storage(&key) { 1 } else { 0 })
+	},
 	ext_clear_prefix(prefix_data: *const u8, prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
 		this.ext.clear_prefix(&prefix);
 		Ok(())
 	},
-	ext_set_prefix(prefix_data: *const u8, prefix_len: u32, value_data: *const u8, value_len: u32) => {
+	ext_set_prefix(include_new_keys: u32, prefix_data: *const u8, prefix_len: u32, value_data: *const u8, value_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_clear_prefix"))?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_clear_prefix"))?;
-		this.ext.set_prefix(&prefix, value);
+		this.ext.set_prefix(include_new_keys != 0, &prefix, value);
 		Ok(())
 	},
-	ext_save_prefix_keys(prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32) => {
+	ext_save_prefix_keys(include_new_keys: u32, prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32) => {
 		let prefix = this.memory.get(prefix_data, prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine prefix in ext_save_prefix_keys"))?;
 		let set_prefix = this.memory.get(set_prefix_data, set_prefix_len as usize).map_err(|_| UserError("Invalid attempt to determine set_prefix in ext_save_prefix_keys"))?;
-		this.ext.save_pefix_keys(&prefix, &set_prefix);
+		this.ext.save_pefix_keys(include_new_keys != 0, &prefix, &set_prefix);
 		Ok(())
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.

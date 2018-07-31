@@ -102,20 +102,26 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		}
 	}
 
+	fn exists_previous_storage(&self, key: &[u8]) -> bool {
+		self.backend.exists_storage(key).expect("Externalities not allowed to fail within runtime")
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
 		self.mark_dirty();
 		self.overlay.set_storage(key, value);
 	}
 
-	fn place_prefix(&mut self, prefix: &[u8], value: Option<Vec<u8>>) {
+	fn place_prefix(&mut self, include_new_keys: bool, prefix: &[u8], value: Option<Vec<u8>>) {
 		self.mark_dirty();
-		self.overlay.set_prefix(prefix, value.clone());
+		if include_new_keys {
+			self.overlay.set_prefix(prefix, value.clone());
+		}
 		self.backend.for_keys_with_prefix(prefix, |key| {
 			self.overlay.set_storage(key.to_vec(), value.clone());
 		});
 	}
 
-	fn save_pefix_keys(&mut self, prefix: &[u8], set_prefix: &[u8]) {
+	fn save_pefix_keys(&mut self, include_new_keys: bool, prefix: &[u8], set_prefix: &[u8]) {
 		// do not allow overlaps
 		// panic is safe here, since this should only be called from the runtime
 		assert!(!set_prefix.starts_with(prefix));
@@ -125,7 +131,9 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		// => since we need to iterate OverlayedChanges + insert into OverlayedChanges
 		// => collect all affected OverlayedChanges keys before iterating backend
 		let mut overlayed_keys: Vec<Vec<u8>> = Vec::new();
-		self.overlay.for_keys_with_prefix(prefix, |key| overlayed_keys.push(key.to_vec()));
+		if include_new_keys {
+			self.overlay.for_keys_with_prefix(prefix, |key| overlayed_keys.push(key.to_vec()));
+		}
 
 		// insert keys to the set
 		self.mark_dirty();
@@ -202,7 +210,7 @@ mod tests {
 	#[test]
 	fn removal_with_place_prefix_works() {
 		fn do_test(ext: &mut Externalities) {
-			ext.place_prefix(b"dog", None);
+			ext.place_prefix(true, b"dog", None);
 			assert!(ext.storage(b"doe").is_some());
 			assert!(ext.storage(b"dog").is_none());
 			assert!(ext.storage(b"dogglesworth").is_none());
@@ -215,14 +223,30 @@ mod tests {
 	#[test]
 	fn ext_update_with_place_prefix_works() {
 		fn do_test(ext: &mut Externalities) {
-			ext.place_prefix(b"dog", Some(b"puma".to_vec()));
+			ext.place_storage(b"doggy".to_vec(), Some(b"new_key".to_vec()));
+			ext.place_prefix(true, b"dog", Some(b"puma".to_vec()));
 			assert_eq!(ext.storage(b"doe"), Some(b"reindeer".to_vec()));
 			assert_eq!(ext.storage(b"dog"), Some(b"puma".to_vec()));
 			assert_eq!(ext.storage(b"dogglesworth"), Some(b"puma".to_vec()));
+			assert_eq!(ext.storage(b"doggy"), Some(b"puma".to_vec()));
 		}
 
 		with_backend_based_ext(do_test);
 		with_testing_ext(do_test);
+	}
+
+	#[test]
+	fn ext_update_with_place_prefix_does_not_include_new_keys() {
+		fn do_test(ext: &mut Externalities) {
+			ext.place_storage(b"doggy".to_vec(), Some(b"new_key".to_vec()));
+			ext.place_prefix(false, b"dog", Some(b"puma".to_vec()));
+			assert_eq!(ext.storage(b"doe"), Some(b"reindeer".to_vec()));
+			assert_eq!(ext.storage(b"dog"), Some(b"puma".to_vec()));
+			assert_eq!(ext.storage(b"dogglesworth"), Some(b"puma".to_vec()));
+			assert_eq!(ext.storage(b"doggy"), Some(b"new_key".to_vec()));
+		}
+
+		with_backend_based_ext(do_test);
 	}
 
 	#[test]
@@ -232,7 +256,7 @@ mod tests {
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 
-		ext.save_pefix_keys(b"dog", b":deleted");
+		ext.save_pefix_keys(true, b"dog", b":deleted");
 
 		let mut set_storage = TestKeysSetStorage(&mut ext);
 		let mut set = KeysSet::new(b":deleted", &mut set_storage);
@@ -244,14 +268,37 @@ mod tests {
 
 	#[test]
 	fn backend_ext_save_prefix_keys_works() {
-		let backend: InMemory = vec![(b"doe".to_vec(), b"reindeer".to_vec()),
+		let backend: InMemory = vec![
+			(b"doe".to_vec(), b"reindeer".to_vec()),
 			(b"dog".to_vec(), b"puppy".to_vec()),
 			(b"dogglesworth".to_vec(), b"cat".to_vec())].into_iter()
 			.collect::<::std::collections::HashMap<_, _>>().into();
 		let mut changes = OverlayedChanges::default();
 		let mut ext = Ext::new(&mut changes, &backend);
 
-		ext.save_pefix_keys(b"dog", b":deleted");
+		ext.save_pefix_keys(true, b"dog", b":deleted");
+
+		let mut set_storage = ExtKeysSetStorage(ext.backend, ext.overlay);
+		let mut set = KeysSet::new(b":deleted", &mut set_storage);
+		let mut saved_keys = ::std::collections::BTreeSet::new();
+		set.retain(|_, key| { saved_keys.insert(key.to_vec()); false });
+		assert_eq!(vec![b"dog".to_vec(), b"dogglesworth".to_vec()],
+			saved_keys.into_iter().collect::<Vec<_>>());
+	}
+
+	#[test]
+	fn backend_ext_save_prefix_keys_does_not_include_new_keys() {
+		let backend: InMemory = vec![
+			(b"doe".to_vec(), b"reindeer".to_vec()),
+			(b"dog".to_vec(), b"puppy".to_vec()),
+			(b"dogglesworth".to_vec(), b"cat".to_vec())].into_iter()
+			.collect::<::std::collections::HashMap<_, _>>().into();
+		let mut changes = OverlayedChanges::default();
+		let mut ext = Ext::new(&mut changes, &backend);
+
+		ext.place_storage(b"dog".to_vec(), Some(b"old_key".to_vec()));
+		ext.place_storage(b"doggy".to_vec(), Some(b"new_key".to_vec()));
+		ext.save_pefix_keys(false, b"dog", b":deleted");
 
 		let mut set_storage = ExtKeysSetStorage(ext.backend, ext.overlay);
 		let mut set = KeysSet::new(b":deleted", &mut set_storage);
@@ -264,12 +311,12 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn backend_ext_save_prefix_panics_when_used_wrong() {
-		with_backend_based_ext(|ext| ext.save_pefix_keys(b":de", b":deleted"));
+		with_backend_based_ext(|ext| ext.save_pefix_keys(false, b":de", b":deleted"));
 	}
 
 	#[test]
 	#[should_panic]
 	fn testing_ext_save_prefix_panics_when_used_wrong() {
-		TestExternalities::new().save_pefix_keys(b":de", b":deleted")
+		TestExternalities::new().save_pefix_keys(false, b":de", b":deleted")
 	}
 }

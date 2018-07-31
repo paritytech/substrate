@@ -59,9 +59,10 @@ extern "C" {
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
 	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
+	fn ext_exists_previous_storage(key_data: *const u8, key_len: u32) -> u32;
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
-	fn ext_set_prefix(prefix_data: *const u8, prefix_len: u32, value_data: *const u8, value_len: u32);
-	fn ext_save_prefix_keys(prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32);
+	fn ext_set_prefix(include_new_keys: u32, prefix_data: *const u8, prefix_len: u32, value_data: *const u8, value_len: u32);
+	fn ext_save_prefix_keys(include_new_keys: u32, prefix_data: *const u8, prefix_len: u32, set_prefix_data: *const u8, set_prefix_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
@@ -123,7 +124,8 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 pub fn clear_storage(key: &[u8]) {
 	let empty_value = add_prefix(&[]);
 	unsafe {
-		if empty_value.is_empty() {
+		// if we do not use prefix OR value has been created + deleted in the same block => just remove
+		if empty_value.is_empty() || ext_exists_previous_storage(key.as_ptr(), key.len() as u32) == 0 {
 			ext_clear_storage(
 				key.as_ptr(), key.len() as u32
 			);
@@ -161,9 +163,11 @@ pub fn clear_prefix(prefix: &[u8]) {
 			);
 		} else {
 			ext_save_prefix_keys(
+				0,
 				prefix.as_ptr(), prefix.len() as u32,
 				DELETED_SET_KEY_PREFIX.as_ptr(), DELETED_SET_KEY_PREFIX.len() as u32);
 			ext_set_prefix(
+				0,
 				prefix.as_ptr(), prefix.len() as u32,
 				empty_value.as_ptr(), empty_value.len() as u32
 			);

@@ -191,30 +191,43 @@ pub trait Externalities {
 		self.place_storage(key.to_vec(), None);
 	}
 
-	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
+	/// Checks if storage entry (`key`) of current contract being called exists.
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		self.storage(key).is_some()
 	}
 
+	/// Checks if storage entry (`key`) of current contract being called existed at the moment
+	/// when Externalities were created.
+	fn exists_previous_storage(&self, key: &[u8]) -> bool;
+
 	/// Set storage entries which keys are start with the given prefix to the given value.
-	fn set_prefix(&mut self, prefix: &[u8], value: Vec<u8>) {
-		self.place_prefix(prefix, Some(value));
+	/// If include_new_keys is true, all keys that have been created since the moment
+	/// of Externalities creation are also updated. Otherwise - only keys that
+	/// pre-existed before are affected.
+	fn set_prefix(&mut self, include_new_keys: bool, prefix: &[u8], value: Vec<u8>) {
+		self.place_prefix(include_new_keys, prefix, Some(value));
 	}
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]) {
-		self.place_prefix(prefix, None);
+		self.place_prefix(true, prefix, None);
 	}
 
 	/// Save all keys, starting with the given prefix to the keys set with given prefix.
 	/// Prefix should not include set_prefix.
-	fn save_pefix_keys(&mut self, prefix: &[u8], set_prefix: &[u8]);
+	/// If include_new_keys is true, all keys that have been created since the moment
+	/// of Externalities creation are also saved. Otherwise - only save keys that
+	/// pre-existed before.
+	fn save_pefix_keys(&mut self, include_new_keys: bool, prefix: &[u8], set_prefix: &[u8]);
 
 	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
 	/// Set or clear a storage entry with given `prefix` of current contract being called (effective immediately).
-	fn place_prefix(&mut self, prefix: &[u8], value: Option<Vec<u8>>);
+	/// If include_new_keys is true, all keys that have been created since the moment
+	/// of Externalities creation are also updated. Otherwise - only keys that
+	/// pre-existed before are affected.
+	fn place_prefix(&mut self, include_new_keys: bool, prefix: &[u8], value: Option<Vec<u8>>);
 
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;

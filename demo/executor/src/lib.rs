@@ -506,20 +506,20 @@ mod tests {
 
 	fn purge_check_blocks() -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
 		let (block1, block1_hash) = construct_block(1, [0u8; 32].into(),
-			hex!("98c95785d35313f3d42b008eb03232f9f6afee8b9aab97f89c8abc33b1e36f6c").into(),
+			hex!("cf08615c8d3cd648d9342375ee68a4ba0e0c8c1a00f7588411f981acd54bb664").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
 				function: Call::Staking(staking::Call::transfer(bob().into(), 100)),
 			}]);
 		let (block2, block2_hash) = construct_block(2, block1_hash,
-			hex!("06ad3d42c4cd8014ec4da70885363445075f12711a6c58c273375f669dd235d6").into(),
+			hex!("7d81c7902acce2ab17043e657e5db5e86c7b2bf96ad6efebd8ab915d4824c0d5").into(),
 			vec![]);
 		let (block3, block3_hash) = construct_block(3, block2_hash,
-			hex!("33e075417e0402e0cb923cae68d3559a879b1d0b7b0bd55f1e3b01c8c46c7c30").into(),
+			hex!("2ceb56cc19833a285fce9c4e0a9b3c90a97483586bf2b3f8dbcae028e883a3d5").into(),
 			vec![]);
 		let (block4, _) = construct_block(4, block3_hash,
-			hex!("2ffab08e7bd186004e51510ad0a927f9ae520a1d56fc544f970bd06d44b1ee40").into(),
+			hex!("373319ec698d97e3a65b40e11dde0d89b64f8abdc084c881ebcdc23303125ee0").into(),
 			vec![]);
 		(block1, block2, block3, block4)
 	}
@@ -584,26 +584,26 @@ mod tests {
 			hex!("fd175eb2a1df58e4e103c1f630a11bdc46a4ea0bb26fcb44315a37c8694ce09a").into(),
 			vec![]);
 		let (block3, block3_hash) = construct_block(3, block2_hash,
-			hex!("5225f4861c89007b858dfb7f701728d14a214df96d735f80e59e020675cdbad3").into(),
+			hex!("98b2153929fca311a1edce644d1bdfd223405005e9c94f363441b2c8c617af48").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
 				function: Call::Staking(staking::Call::transfer(bob().into(), 100)),
 			}]);
 		let (block4, block4_hash) = construct_block(4, block3_hash,
-			hex!("e8826789efa5f521062fd5d4ea1cbc3f758e51fd3d2a65f7e7612c45a960b961").into(),
+			hex!("9f9c8a7ccef3e9b55f908a5797bba1515a7e13b0c1924c14e5379fdd60931cf3").into(),
 			vec![]);
 		let (block5, block5_hash) = construct_block(5, block4_hash,
-			hex!("8b88f7c5cd1bfc3aa416a9434ae62ae607fff3751bb632e84a3520d7aba86348").into(),
+			hex!("7202b88a03c02581706634571171027b632a2e4285b9f70bfa2acaeada441b36").into(),
 			vec![]);
 		let (block6, block6_hash) = construct_block(6, block5_hash,
-			hex!("de4d162b2c70781cba13d39646f420b7f479dd8677e3121a4ee8862636fc7433").into(),
+			hex!("b345fb946ef7c8274647fc465ad4f27d06936ecf163bc7e966548a644ab05179").into(),
 			vec![]);
 		let (block7, block7_hash) = construct_block(7, block6_hash,
-			hex!("d9ef3e74441b4c3a846f8482e5adb2341951be0caa867d34dd255527a8079fbf").into(),
+			hex!("b6007eb860ba775a8039ffd427f42938f9d000f54e7ef119daa8add8e4c85ff5").into(),
 			vec![]);
 		let (block8, _) = construct_block(8, block7_hash,
-			hex!("9cc6a8e83ed7e01b0b0bc3fb0da8f847443d2b3b7be5dc767f4a213786a090a5").into(),
+			hex!("c17bfe3a2bfe99a600c9f4e3582b04b46d7b2127797abf543be295eccb378795").into(),
 			vec![]);
 		(vec![block1, block2], vec![block3, block4, block5, block6, block7], block8)
 	}
@@ -660,24 +660,24 @@ mod tests {
 
 	fn recreated_purge_check_blocks() -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
 		let (block1, block1_hash) = construct_block(1, [0u8; 32].into(),
-			hex!("d3e819b9539fea007e4489c903abb928aa80f97ff850a6f1f3d0ca1a67f58159").into(),
+			hex!("68204a44f3f5da24c83ef51c09a7e121d7df744105d94bbe37f9429176f71ade").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
 				function: Call::Staking(staking::Call::transfer(bob().into(), 110)),
 			}]);
 		let (block2, block2_hash) = construct_block(2, block1_hash,
-			hex!("5b69688dbed36d7834cb940e77ebd1bccabf8ed8939b4ab122714fc6b6bf8cad").into(),
+			hex!("024ce4045f676fc2b40eb6ba34a23552a06a4d7698f581ef53e9d9a09bb05eaf").into(),
 			vec![]);
 		let (block3, block3_hash) = construct_block(3, block2_hash,
-			hex!("b2031fd2fc59bd6eb5c19768a94605895f8d15ac151c147defdaf1fe8670c515").into(),
+			hex!("2a990bbc72f6856422b68bcb1c096638529df5699ee74c94accbefd4d3fac5a2").into(),
 			vec![BareExtrinsic {
 				signed: bob(),
 				index: 0,
 				function: Call::Staking(staking::Call::transfer(alice().into(), 109)),
 			}]);
 		let (block4, _) = construct_block(4, block3_hash,
-			hex!("e14f06895c83bbd9e5d149827caa213d06329b4d1e7cc99c854c72a865e3de59").into(),
+			hex!("1667712e3060c5c246998326bfbf059f1f4a3beafdcf3e08e8cffb3583a057f8").into(),
 			vec![]);
 		(block1, block2, block3, block4)
 	}
