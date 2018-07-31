@@ -16,12 +16,12 @@
 
 //! Storage notifications
 
-// TODO [ToDr] Use FNV HashSet
 use std::{
 	collections::{HashSet, HashMap},
 	sync::Arc,
 };
 
+use fnv::{FnvHashSet, FnvHashMap};
 use futures::sync::mpsc;
 use primitives::storage::{StorageKey, StorageData};
 use runtime_primitives::traits::Block as BlockT;
@@ -54,9 +54,9 @@ type SubscriberId = u64;
 #[derive(Debug)]
 pub struct StorageNotifications<Block: BlockT> {
 	next_id: SubscriberId,
-	wildcard_listeners: HashSet<SubscriberId>,
-	listeners: HashMap<StorageKey, HashSet<SubscriberId>>,
-	sinks: HashMap<SubscriberId, (
+	wildcard_listeners: FnvHashSet<SubscriberId>,
+	listeners: HashMap<StorageKey, FnvHashSet<SubscriberId>>,
+	sinks: FnvHashMap<SubscriberId, (
 		mpsc::UnboundedSender<(Block::Hash, StorageChangeSet)>,
 		Option<HashSet<StorageKey>>,
 	)>,

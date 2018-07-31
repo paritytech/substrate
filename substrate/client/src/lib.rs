@@ -32,6 +32,7 @@ extern crate substrate_state_machine as state_machine;
 #[macro_use] extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 
 extern crate ed25519;
+extern crate fnv;
 extern crate futures;
 extern crate parking_lot;
 extern crate triehash;
