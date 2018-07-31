@@ -224,7 +224,7 @@ mod tests {
 	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
 		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
 		let config = Config::<Test>::default();
-		let env = Environment::new();
+		let env = ::vm::env_def::init_env();
 		prepare_contract::<MockExt>(wasm.as_ref(), &config, &env)
 	}
 
