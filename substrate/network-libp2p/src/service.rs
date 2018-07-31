@@ -451,7 +451,7 @@ fn init_thread(
 					let listener_upgrade = upgrade::or(upgrade::or(upgrade::or(
 						upgrade::map_with_addr(shared.kad_upgrade.clone(), |(c, f), a| FinalUpgrade::Kad(c, f, a.clone())),
 						upgrade::map(IdentifyProtocolConfig, |id| FinalUpgrade::Identify(id, original_addr))),
-						upgrade::map_with_addr(ping::Ping, |(p, f), addr| FinalUpgrade::Ping(p, f, addr.clone()))),
+						upgrade::map_with_addr(ping::Ping, |out, addr| FinalUpgrade::from((out, addr.clone())))),
 						upgrade::map_with_addr(DelayedProtosList(shared), |c, a| FinalUpgrade::Custom(c, a.clone())));
 					upgrade::apply(out.socket, listener_upgrade, endpoint, client_addr)
 				}
@@ -583,10 +583,21 @@ enum FinalUpgrade<C> {
 	Kad(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>, Multiaddr),
 	/// The remote identification system, and the multiaddress we see the remote as.
 	Identify(IdentifyOutput<C>, Multiaddr),
-	Ping(ping::Pinger, Box<Future<Item = (), Error = IoError>>, Multiaddr),
+	PingDialer(ping::Pinger, Box<Future<Item = (), Error = IoError>>, Multiaddr),
+	PingListener(Box<Future<Item = (), Error = IoError>>, Multiaddr),
 	/// `Custom` means anything not in the core libp2p and is handled
 	/// by `CustomProtoConnectionUpgrade`.
 	Custom(RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>, Multiaddr),
+}
+
+impl<C> From<(ping::PingOutput, Multiaddr)> for FinalUpgrade<C> {
+	fn from((out, addr): (ping::PingOutput, Multiaddr)) -> FinalUpgrade<C> {
+		match out {
+			ping::PingOutput::Ponger(processing) => FinalUpgrade::PingListener(processing, addr),
+			ping::PingOutput::Pinger { pinger, processing } =>
+				FinalUpgrade::PingDialer(pinger, processing, addr),
+		}
+	}
 }
 
 /// Called whenever we successfully open a multistream with a remote.
@@ -623,7 +634,12 @@ fn listener_handle<'a, C>(
 		FinalUpgrade::Identify(IdentifyOutput::RemoteInfo { .. }, _) =>
 			unreachable!("We are never dialing with the identify protocol"),
 
-		FinalUpgrade::Ping(pinger, future, client_addr) => {
+		FinalUpgrade::PingListener(future, client_addr) => {
+			trace!(target: "sub-libp2p", "Received ping substream from {:?}", client_addr);
+			future
+		},
+
+		FinalUpgrade::PingDialer(pinger, future, client_addr) => {
 			let node_id = p2p_multiaddr_to_node_id(client_addr);
 			match shared.network_state.ping_connection(node_id.clone()) {
 				Ok((_, ping_connec)) => {
@@ -1269,9 +1285,9 @@ fn start_pinger<T, To, St, C>(
 		.and_then(move |out, endpoint, client_addr|
 			upgrade::apply(out.socket, ping::Ping, endpoint, client_addr)
 		)
-		.and_then(move |(ctrl, fut), _, client_addr| {
+		.and_then(move |out, _, client_addr| {
 			client_addr.map(|client_addr| {
-				let out = FinalUpgrade::Ping(ctrl, fut, client_addr.clone());
+				let out = FinalUpgrade::from((out, client_addr.clone()));
 				(out, future::ok(client_addr))
 			})
 		});
