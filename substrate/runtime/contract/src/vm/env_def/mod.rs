@@ -14,21 +14,17 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CallReceipt, CreateReceipt, Ext, GasMeterResult, Runtime};
+use super::{CallReceipt, CreateReceipt, Ext, GasMeterResult, Runtime, BalanceOf};
 use codec::Decode;
 use parity_wasm::elements::{FunctionType, ValueType};
 use rstd::collections::btree_map::BTreeMap;
-use runtime_primitives::traits::{As, Zero};
+use runtime_primitives::traits::As;
 use sandbox::{self, TypedValue};
-use staking;
 use system;
 use Trait;
 
 #[macro_use]
 mod macros;
-
-type BalanceOf<T> = <T as staking::Trait>::Balance;
-type AccountIdOf<T> = <T as system::Trait>::AccountId;
 
 pub trait ConvertibleToWasm: Sized {
 	const VALUE_TYPE: ValueType;

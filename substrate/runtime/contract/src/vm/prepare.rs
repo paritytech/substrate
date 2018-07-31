@@ -14,12 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
+//! Module that takes care of loading, checking and preprocessing of a
+//! wasm module before execution.
+
 use super::{Config, Error, Ext};
-use super::env_def::{ExtFunc, Environment};
+use super::env_def::Environment;
 use parity_wasm::elements::{self, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
-use rstd::collections::btree_map::BTreeMap;
 use runtime_primitives::traits::As;
 use sandbox;
 use Trait;

@@ -17,10 +17,7 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use codec::Decode;
-use parity_wasm::elements::{FunctionType};
 use rstd::prelude::*;
-use rstd::collections::btree_map::BTreeMap;
 use sandbox;
 use gas::{GasMeter, GasMeterResult};
 use runtime_primitives::traits::{As, CheckedMul};
@@ -38,7 +35,6 @@ mod prepare;
 mod env_def;
 
 use self::prepare::{prepare_contract, PreparedContract};
-use self::env_def::{ExtFunc, Environment};
 
 /// An interface that provides an access to the external environment in which the
 /// smart-contract is executed.
