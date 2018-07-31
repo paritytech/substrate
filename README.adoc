@@ -149,7 +149,7 @@ You can either build it yourself (it takes a while...):
 
 [source, shell]
 ----
-ccd docker
+cd docker
 ./build.sh
 ----
 
