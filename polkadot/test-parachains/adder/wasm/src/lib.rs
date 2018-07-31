@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! WASM validation for basic-add parachain.
+//! WASM validation for adder parachain.
 
 #![no_std]
 
