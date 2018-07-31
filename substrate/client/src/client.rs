@@ -367,6 +367,7 @@ impl<B, E, Block> Client<B, E, Block> where
 					},
 				);
 				let (_, storage_update) = r?;
+				overlay.commit_prospective();
 				Some((storage_update, overlay.into_committed()))
 			},
 			None => None,

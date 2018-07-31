@@ -81,6 +81,11 @@ impl<Block: BlockT> StorageNotifications<Block> {
 	pub fn trigger(&mut self, hash: &Block::Hash, changeset: impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)>) {
 		let has_wildcard = !self.wildcard_listeners.is_empty();
 
+		// early exit if no listeners
+		if !has_wildcard && self.listeners.is_empty() {
+			return;
+		}
+
 		let mut subscribers = self.wildcard_listeners.clone();
 		let mut changes = Vec::new();
 
@@ -111,7 +116,32 @@ impl<Block: BlockT> StorageNotifications<Block> {
 				None => false,
 			};
 			if remove_subscriber {
-				self.sinks.remove(&subscriber);
+				self.remove_subscriber(subscriber);
+			}
+		}
+	}
+
+	fn remove_subscriber(&mut self, subscriber: SubscriberId) {
+		if let Some((_, filters)) = self.sinks.remove(&subscriber) {
+			match filters {
+				None => {
+					self.wildcard_listeners.remove(&subscriber);
+				},
+				Some(filters) => {
+					for key in filters {
+						let remove_key = match self.listeners.get_mut(&key) {
+							Some(ref mut set) => {
+								set.remove(&subscriber);
+								set.is_empty()
+							},
+							None => false,
+						};
+
+						if remove_key {
+							self.listeners.remove(&key);
+						}
+					}
+				},
 			}
 		}
 	}
@@ -209,5 +239,29 @@ mod tests {
 		assert_eq!(recv2.next().unwrap(), Ok((1.into(), vec![
 			(StorageKey(vec![2]), Some(StorageData(vec![3]))),
 		].into())));
+	}
+
+	#[test]
+	fn should_cleanup_subscribers_if_dropped() {
+		// given
+		let mut notifications = StorageNotifications::<Block>::default();
+		{
+			let _recv1 = notifications.listen(Some(&[StorageKey(vec![1])])).wait();
+			let _recv2 = notifications.listen(Some(&[StorageKey(vec![2])])).wait();
+			let _recv3 = notifications.listen(None).wait();
+			assert_eq!(notifications.listeners.len(), 2);
+			assert_eq!(notifications.wildcard_listeners.len(), 1);
+		}
+
+		// when
+		let changeset = vec![
+			(vec![2], Some(vec![3])),
+			(vec![1], None),
+		];
+		notifications.trigger(&1.into(), changeset.into_iter());
+
+		// then
+		assert_eq!(notifications.listeners.len(), 0);
+		assert_eq!(notifications.wildcard_listeners.len(), 0);
 	}
 }

@@ -379,14 +379,7 @@ pub fn execute_using_consensus_failure_handler<
 		result.map(move |out| (out, delta))
 	};
 
-	match result {
-		Ok(x) => {
-			Ok(x)
-		}
-		Err(e) => {
-			Err(Box::new(e))
-		}
-	}
+	result.map_err(|e| Box::new(e) as _)
 }
 
 /// Prove execution using the given state backend, overlayed changes, and call executor.
