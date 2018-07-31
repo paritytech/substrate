@@ -116,8 +116,17 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn deregister_node(_aux: &<T as Trait>::PublicAux, id: NodeId) -> Result {
-		unimplemented!()
+	fn deregister_node(_aux: &<T as Trait>::PublicAux, node: NodeId) -> Result {
+		ensure!(<NodeToCollateral<T>>::exists(node), "node does not exist");
+		ensure!(<IncomeAccount<T>>::exists(node), "income account is not set");
+
+		let collateral = <NodeToCollateral<T>>::get(node).unwrap();
+		<CollateralToNode<T>>::remove(collateral);
+
+		<NodeToCollateral<T>>::remove(node);
+		<IncomeAccount<T>>::remove(node);
+
+		Ok(())
 	}
 
 	fn transfer(_aux: &<T as Trait>::PublicAux, from: AccountId, to: AccountId, amount: Amount) -> Result {
