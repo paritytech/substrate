@@ -38,7 +38,7 @@ pub use self::alloc_types::*;
 pub fn serialize<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error> where
 	S: Serializer,
 {
-	let hex: String = ::rustc_hex::ToHex::to_hex(bytes);
+	let hex: String = ::hex::encode(bytes);
 	serializer.serialize_str(&format!("0x{}", hex))
 }
 
@@ -54,7 +54,7 @@ pub fn serialize_uint<S>(bytes: &[u8], serializer: S) -> Result<S::Ok, S::Error>
 		return serializer.serialize_str("0x0");
 	}
 
-	let hex: String = ::rustc_hex::ToHex::to_hex(bytes);
+	let hex: String = ::hex::encode(bytes);
 	let has_leading_zero = !hex.is_empty() && &hex[0..1] == "0";
 	serializer.serialize_str(
 		&format!("0x{}", if has_leading_zero { &hex[1..] } else { &hex })
@@ -125,21 +125,21 @@ pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Resul
 
 			let bytes = match self.len {
 				ExpectedLen::Between(..) if v.len() % 2 != 0 => {
-					::rustc_hex::FromHex::from_hex(&*format!("0{}", &v[2..]))
+					::hex::decode(&*format!("0{}", &v[2..]))
 				},
-				_ => ::rustc_hex::FromHex::from_hex(&v[2..])
+				_ => ::hex::decode(&v[2..])
 			};
 
 			#[cfg(feature = "std")]
-			fn format_err(e: ::rustc_hex::FromHexError) -> String {
+			fn format_err(e: ::hex::FromHexError) -> String {
 				format!("invalid hex value: {:?}", e)
 			}
 
 			#[cfg(not(feature = "std"))]
-			fn format_err(e: ::rustc_hex::FromHexError) -> String {
+			fn format_err(e: ::hex::FromHexError) -> String {
 				match e {
-					::rustc_hex::InvalidHexLength => format!("invalid hex value: invalid length"),
-					::rustc_hex::InvalidHexCharacter(c, p) =>
+					::hex::FromHexError::InvalidStringLength | ::hex::FromHexError::OddLength => format!("invalid hex value: invalid length"),
+					::hex::InvalidHexCharacter(c, p) =>
 						format!("invalid hex value: invalid character {} at position {}", c, p),
 				}
 			}

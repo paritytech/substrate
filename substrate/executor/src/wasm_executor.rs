@@ -209,7 +209,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_clear_storage(key_data: *const u8, key_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_storage"))?;
-		debug_trace!(target: "wasm-trace", "*** Clearing storage: {}   [k={}]", 
+		debug_trace!(target: "wasm-trace", "*** Clearing storage: {}   [k={}]",
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
 				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
 			} else {
@@ -232,7 +232,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_storage"))?;
 		let maybe_value = this.ext.storage(&key);
 
-		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]", 
+		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]",
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
 				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
 			} else {
@@ -262,7 +262,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_get_storage_into"))?;
 		let maybe_value = this.ext.storage(&key);
-		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]", 
+		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]",
 			if let Some(_preimage) = this.hash_lookup.get(&key) {
 				format!("%{}", ::primitives::hexdisplay::ascii_format(&_preimage))
 			} else {
@@ -618,7 +618,7 @@ impl CodeExecutor for WasmExecutor {
 		data: &[u8],
 		_use_native: bool
 	) -> (Result<Vec<u8>>, bool) {
-		(Module::from_buffer(code).map_err(Into::into).and_then(|module| 
+		(Module::from_buffer(code).map_err(Into::into).and_then(|module|
 			self.call_in_wasm_module(ext, &module, method, data)
 		), false)
 	}
@@ -627,7 +627,7 @@ impl CodeExecutor for WasmExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use rustc_hex::FromHex;
+	use hex::decode as decode_hex;
 	use codec::Encode;
 	use state_machine::TestExternalities;
 
@@ -720,11 +720,11 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_256", &[], true).0.unwrap(),
-			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a").unwrap()
+			decode_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a").unwrap()
 		);
 		assert_eq!(
 			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!", true).0.unwrap(),
-			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74").unwrap()
+			decode_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74").unwrap()
 		);
 	}
 
@@ -734,11 +734,11 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_128", &[], true).0.unwrap(),
-			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd5").unwrap()
+			decode_hex("99e9d85137db46ef4bbea33613baafd5").unwrap()
 		);
 		assert_eq!(
 			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!", true).0.unwrap(),
-			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af").unwrap()
+			decode_hex("b27dfd7f223f177f2a13647b533599af").unwrap()
 		);
 	}
 

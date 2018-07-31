@@ -39,7 +39,6 @@ extern crate ed25519;
 extern crate serde;
 extern crate wasmi;
 extern crate byteorder;
-extern crate rustc_hex;
 extern crate triehash;
 extern crate parking_lot;
 extern crate twox_hash;
@@ -53,6 +52,8 @@ extern crate error_chain;
 
 #[cfg(test)]
 extern crate assert_matches;
+#[cfg(test)]
+extern crate hex;
 
 #[cfg(test)]
 extern crate wabt;
