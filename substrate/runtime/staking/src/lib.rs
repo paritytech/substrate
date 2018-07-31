@@ -127,7 +127,7 @@ decl_module! {
 		fn set_sessions_per_era(new: T::BlockNumber) -> Result = 0;
 		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;
 		fn set_validator_count(new: u32) -> Result = 2;
-		fn force_new_era() -> Result = 3;
+		fn force_new_era(should_slash: bool) -> Result = 3;
 	}
 }
 
@@ -181,6 +181,9 @@ decl_storage! {
 	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required T::AccountIndex;
 	// The enumeration sets.
 	pub EnumSet get(enum_set): b"sta:enum_set" => default map [ T::AccountIndex => Vec<T::AccountId> ];
+
+	// We are forcing a new era.
+	pub ForcingNewEra get(forcing_new_era): b"sta:forcing_new_era" => ();
 
 	// The "free" balance of a given account.
 	//
@@ -403,10 +406,11 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Force there to be a new era. This also forces a new session immediately after.
-	fn force_new_era() -> Result {
-		<session::Module<T>>::rotate_session(false);
-		Ok(())
+	/// Force there to be a new era. This also forces a new session immediately after by
+	/// setting `normal_rotation` to be false. Validators will get slashed.
+	fn force_new_era(should_slash: bool) -> Result {
+		<ForcingNewEra<T>>::put(());
+		<session::Module<T>>::force_new_session(!should_slash)
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
@@ -621,7 +625,10 @@ impl<T: Trait> Module<T> {
 				}
 			}
 		}
-		if ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero() || !normal_rotation {
+		if <ForcingNewEra<T>>::take().is_some()
+			|| ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero()
+			|| !normal_rotation
+		{
 			Self::new_era();
 		}
 	}
