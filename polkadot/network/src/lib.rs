@@ -26,6 +26,7 @@ extern crate substrate_network;
 extern crate substrate_primitives;
 
 extern crate polkadot_api;
+extern crate polkadot_availability_store as av_store;
 extern crate polkadot_consensus;
 extern crate polkadot_primitives;
 
@@ -261,6 +262,7 @@ pub struct PolkadotProtocol {
 	live_consensus: Option<CurrentConsensus>,
 	in_flight: HashMap<(RequestId, NodeIndex), BlockDataRequest>,
 	pending: Vec<BlockDataRequest>,
+	extrinsic_store: Option<::av_store::Store>,
 	next_req_id: u64,
 }
 
@@ -277,6 +279,7 @@ impl PolkadotProtocol {
 			live_consensus: None,
 			in_flight: HashMap::new(),
 			pending: Vec::new(),
+			extrinsic_store: None,
 			next_req_id: 1,
 		}
 	}
@@ -679,5 +682,10 @@ impl PolkadotProtocol {
 					warn!(target: "polkadot_network", "Encountered tracked but disconnected validator {:?}", primary),
 			}
 		}
+	}
+
+	/// register availability store.
+	pub fn register_availability_store(&mut self, extrinsic_store: ::av_store::Store) {
+		self.extrinsic_store = Some(extrinsic_store);
 	}
 }

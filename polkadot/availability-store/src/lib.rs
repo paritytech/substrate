@@ -27,7 +27,6 @@ extern crate kvdb_memorydb;
 #[macro_use]
 extern crate log;
 
-
 use codec::{Encode, Decode};
 use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
