@@ -53,7 +53,8 @@ extern crate error_chain;
 #[cfg(test)]
 extern crate assert_matches;
 #[cfg(test)]
-extern crate hex;
+#[macro_use]
+extern crate hex_literal;
 
 #[cfg(test)]
 extern crate wabt;

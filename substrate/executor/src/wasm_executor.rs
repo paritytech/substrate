@@ -627,7 +627,6 @@ impl CodeExecutor for WasmExecutor {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use hex::decode as decode_hex;
 	use codec::Encode;
 	use state_machine::TestExternalities;
 
@@ -720,11 +719,11 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_256", &[], true).0.unwrap(),
-			decode_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a").unwrap()
+			hex!("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a")
 		);
 		assert_eq!(
 			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!", true).0.unwrap(),
-			decode_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74").unwrap()
+			hex!("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74")
 		);
 	}
 
@@ -734,11 +733,11 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_128", &[], true).0.unwrap(),
-			decode_hex("99e9d85137db46ef4bbea33613baafd5").unwrap()
+			hex!("99e9d85137db46ef4bbea33613baafd5")
 		);
 		assert_eq!(
 			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!", true).0.unwrap(),
-			decode_hex("b27dfd7f223f177f2a13647b533599af").unwrap()
+			hex!("b27dfd7f223f177f2a13647b533599af")
 		);
 	}
 
