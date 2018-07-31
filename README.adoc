@@ -147,8 +147,6 @@ To update:
 To get up and running with the smallest footprint on your system, you may use the Polkadot Docker image.
 You can either build it yourself (it takes a while...):
 
-NOTE: Make sure you build from the project root, *not* from the `./docker` folder.
-
 [source, shell]
 ----
 ./docker/build.sh
@@ -160,7 +158,7 @@ If you run into issues with polkadot when using docker, please run the following
 (replace the tag with the appropriate one if you do not use latest):
 
 [source, shell]
-docker run --rm -it chevdor/polkadot:latest version
+docker run --rm -it chevdor/polkadot:latest polkadot --version
 
 This will show you the polkadot version as well as the git commit ref that was used to build your container.
 Just paste that in the issue you create.
