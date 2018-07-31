@@ -505,6 +505,20 @@ impl WasmExecutor {
 		}
 	}
 
+
+	/// Call a given method in the given code.
+	/// This should be used for tests only.
+	pub fn call<E: Externalities>(
+		&self,
+		ext: &mut E,
+		code: &[u8],
+		method: &str,
+		data: &[u8],
+		) -> Result<Vec<u8>> {
+		let module = ::wasmi::Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
+		self.call_in_wasm_module(ext, &module, method, data)
+	}
+
 	/// Call a given method in the given wasm-module runtime.
 	pub fn call_in_wasm_module<E: Externalities>(
 		&self,
@@ -593,7 +607,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_empty_return", &[], true).0.unwrap();
+		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_empty_return", &[]).unwrap();
 		assert_eq!(output, vec![0u8; 0]);
 	}
 
@@ -602,10 +616,10 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_panic", &[], true).0;
+		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_panic", &[]);
 		assert!(output.is_err());
 
-		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_conditional_panic", &[2], true).0;
+		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_conditional_panic", &[2]);
 		assert!(output.is_err());
 	}
 
@@ -615,7 +629,7 @@ mod tests {
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_data_in", b"Hello world", true).0.unwrap();
+		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_data_in", b"Hello world").unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -638,7 +652,7 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		// This will clear all entries which prefix is "ab".
-		let output = WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_clear_prefix", b"ab", true).0.unwrap();
+		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_clear_prefix", b"ab").unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
@@ -655,11 +669,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_blake2_256", &[], true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_blake2_256", &[]).unwrap(),
 			blake2_256(&b""[..]).encode()
 		);
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!", true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
 			blake2_256(&b"Hello world!"[..]).encode()
 		);
 	}
@@ -669,11 +683,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_256", &[], true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_twox_256", &[]).unwrap(),
 			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a").unwrap()
 		);
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!", true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
 			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74").unwrap()
 		);
 	}
@@ -683,11 +697,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_128", &[], true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_twox_128", &[]).unwrap(),
 			FromHex::from_hex("99e9d85137db46ef4bbea33613baafd5").unwrap()
 		);
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!", true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
 			FromHex::from_hex("b27dfd7f223f177f2a13647b533599af").unwrap()
 		);
 	}
@@ -703,7 +717,7 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata, true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![1]
 		);
 
@@ -713,7 +727,7 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata, true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![0]
 		);
 	}
@@ -723,8 +737,8 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[], true).0.unwrap(),
-			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
+			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).encode()
 		);
 	}
 
