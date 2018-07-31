@@ -11,6 +11,6 @@ Run the following command
 
 To build your own image from the source, you can run the following command:
 
-	./build.sh
+	./docker/build.sh
 
 NOTE: Building the image takes a while. Count at least 30min on a good machine.

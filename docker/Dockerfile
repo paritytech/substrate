@@ -1,33 +1,28 @@
-FROM phusion/baseimage:0.10.1
+FROM rust:latest as builder
 LABEL maintainer "chevdor@gmail.com"
+LABEL description="This is the build stage for Polkadot. Here we create the binary."
 
 ARG PROFILE=release
+WORKDIR /polkadot
+COPY . .
+RUN cargo build --$PROFILE
 
-RUN mkdir -p polkadot && \
-	apt-get update && \
-	apt-get upgrade -y && \
-	apt-get install -y cmake pkg-config libssl-dev git && \
-	apt-get clean && \
+
+FROM ubuntu:latest
+LABEL maintainer "chevdor@gmail.com"
+LABEL description="This is the 2nd stage: a very small image where we copy the Polkadot binary."
+ARG PROFILE=release
+COPY --from=builder /polkadot/target/$PROFILE/polkadot /usr/local/bin
+
+RUN apt-get update && \
+    apt-get install -y \
+    	libssl1.1 && \
+    apt-get clean && \
+    apt-get autoclean && \
 	mkdir -p /root/.local/share/Polkadot && \
 	ln -s /root/.local/share/Polkadot /data
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-	export PATH=$PATH:$HOME/.cargo/bin && \
-	rustup update nightly && \
-	rustup target add wasm32-unknown-unknown --toolchain nightly && \
-	rustup update stable && \
-	cargo install --git https://github.com/alexcrichton/wasm-gc && \
-	git clone https://github.com/paritytech/polkadot.git && \
-	cd polkadot && \
-	./build.sh && \
-	cargo build --$PROFILE && \
-	mv target/$PROFILE/polkadot /usr/local/bin && \
-	cargo clean && \
-	rm -rf /root/.cargo /root/.rustup /tmp/*
-
-COPY version /polkadot
-WORKDIR /polkadot
 EXPOSE 30333 9933 9944
 VOLUME ["/data"]
 
-CMD ["/bin/sh", "polkadot"]
+CMD ["/usr/local/bin/polkadot"]
