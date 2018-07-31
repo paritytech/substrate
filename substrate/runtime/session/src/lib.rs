@@ -94,7 +94,8 @@ decl_storage! {
 	// Percent by which the session must necessarily finish late before we early-exit the session.
 	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Moment;
 
-	// New session is being forced.
+	// New session is being forced is this entry exists; in which case, the boolean value is whether
+	// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
 	pub ForcingNewSession get(forcing_new_session): b"ses:forcing_new_session" => bool;
 	// Block at which the session length last changed.
 	LastLengthChange: b"ses:llc" => T::BlockNumber;
