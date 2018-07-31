@@ -53,7 +53,7 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
-	fn build_storage(self) -> Result<StorageMap, String> {
+	fn build_raw_storage(self) -> Result<StorageMap, String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
 			Genesis::Raw(map) => Ok(map.into_iter().map(|(k, v)| (k.0, v.0)).collect()),

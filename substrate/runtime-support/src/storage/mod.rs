@@ -55,7 +55,7 @@ impl<'a, I: Input + 'a> Input for AppendZeroes<'a, I> {
 	}
 }
 
- /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
+/// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 	let key = twox_128(key);
 	runtime_io::read_storage(&key[..], &mut [0; 0][..], 0).map(|_| {
@@ -65,6 +65,12 @@ pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 		};
 		Decode::decode(&mut AppendZeroes { input: &mut input } ).expect("storage is not null, therefore must be a valid type")
 	})
+}
+
+/// Return the prefix of the value of the item in storage under `key`, or `None`
+/// if there is no explicit entry OR there is no prefix.
+pub fn get_prefix(key: &[u8]) -> Option<Vec<u8>> {
+	runtime_io::storage_prefix(&twox_128(key)[..])
 }
 
 /// Return the value of the item in storage under `key`, or the type's default if there is no

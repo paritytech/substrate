@@ -590,7 +590,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_raw_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
 		use codec::Encode;
 
 		Ok(map![

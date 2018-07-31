@@ -40,7 +40,7 @@ native_executor_instance!(pub Executor, demo_runtime::api::dispatch, demo_runtim
 
 #[cfg(test)]
 mod tests {
-	use runtime_io;
+	use runtime_io::{self, Externalities};
 	use super::Executor;
 	use substrate_executor::{WasmExecutor, NativeExecutionDispatch};
 	use codec::{Encode, Decode, Joiner};
@@ -48,12 +48,12 @@ mod tests {
 	use runtime_support::{Hashable, StorageValue, StorageMap};
 	use state_machine::{CodeExecutor, TestExternalities};
 	use primitives::twox_128;
-	use demo_primitives::{Hash, BlockNumber, AccountId};
+	use demo_primitives::{Hash, BlockNumber, AccountId, Balance};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
 	use {staking, system, consensus};
-	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
-		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic};
+	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking, System,
+		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic, SystemConfig};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -182,12 +182,17 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> TestExternalities {
+	fn new_test_ext(with_prefix: bool, existential_deposit: Balance) -> TestExternalities {
 		use keyring::Keyring::*;
 		let three = [3u8; 32].into();
 		GenesisConfig {
 			consensus: Some(Default::default()),
-			system: Some(Default::default()),
+			system: Some(SystemConfig {
+				use_block_number_prefix: with_prefix,
+				storage_purge_interval: if with_prefix { Some(4) } else { None },
+				min_purged_value_age: if with_prefix { Some(2) } else { None },
+				..Default::default()
+			}),
 			session: Some(SessionConfig {
 				session_length: 2,
 				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
@@ -202,7 +207,7 @@ mod tests {
 				bonding_duration: 0,
 				transaction_base_fee: 1,
 				transaction_byte_fee: 0,
-				existential_deposit: 0,
+				existential_deposit,
 				transfer_fee: 0,
 				creation_fee: 0,
 				reclaim_rebate: 0,
@@ -212,7 +217,7 @@ mod tests {
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
 			timestamp: Some(Default::default()),
-		}.build_storage().unwrap()
+		}.build_storage().unwrap().into()
 	}
 
 	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<BareExtrinsic>) -> (Vec<u8>, Hash) {
@@ -243,11 +248,15 @@ mod tests {
 		(Block { header, extrinsics }.encode(), hash.into())
 	}
 
-	fn block1() -> (Vec<u8>, Hash) {
+	fn block1(with_prefix: bool) -> (Vec<u8>, Hash) {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("b97d52254fc967bb94bed485de6a738e9fad05decfda3453711677b8becf6d0a").into(),
+			if with_prefix {
+				hex!("8c516ad4b624f1d2d83c4bff6a82681edff7ef226d547da0119b70301a172da4")
+			} else {
+				hex!("b97d52254fc967bb94bed485de6a738e9fad05decfda3453711677b8becf6d0a")
+			}.into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -259,7 +268,7 @@ mod tests {
 	fn block2() -> (Vec<u8>, Hash) {
 		construct_block(
 			2,
-			block1().1,
+			block1(false).1,
 			hex!("a1f018d2faa339f72f5ee29050b4670d971e2e271cc06c41ee9cbe1f4c6feec9").into(),
 			vec![
 				BareExtrinsic {
@@ -291,9 +300,9 @@ mod tests {
 
 	#[test]
 	fn full_native_block_import_works() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false, 0);
 
-		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1().0, true).0.unwrap();
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1(false).0, true).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
@@ -310,9 +319,9 @@ mod tests {
 
 	#[test]
 	fn full_wasm_block_import_works() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false, 0);
 
-		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1().0, true).0.unwrap();
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1(false).0, true).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
@@ -329,7 +338,7 @@ mod tests {
 
 	#[test]
 	fn wasm_big_block_import_fails() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false, 0);
 
 		let r = WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, true).0;
 		assert!(!r.is_ok());
@@ -337,7 +346,7 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_succeeds() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false, 0);
 
 		let r = Executor::with_heap_pages(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, true).0;
 		assert!(r.is_ok());
@@ -345,7 +354,7 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_fails_on_fallback() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false, 0);
 
 		let r = Executor::with_heap_pages(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, false).0;
 		assert!(!r.is_ok());
@@ -394,5 +403,344 @@ mod tests {
 			assert_eq!(Staking::voting_balance(&alice()), 42);
 			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
+	}
+
+	#[test]
+	fn change_block_number_is_unknown_by_runtime_without_prefix() {
+		let mut t = new_test_ext(false, 0);
+		runtime_io::with_externalities(&mut t, || {
+			assert_eq!(System::storage_value_change_block(
+				&<staking::SessionReward<Concrete>>::key()
+			), None)
+		});
+	}
+
+	#[test]
+	fn change_block_number_is_known_by_native_runtime_with_prefix() {
+		let mut t = new_test_ext(true, 0);
+
+		runtime_io::with_externalities(&mut t, || {
+			// session reward is non-empty at genesis
+			assert_eq!(System::storage_value_change_block(
+				&<staking::SessionReward<Concrete>>::key()
+			), Some(0));
+			// Alice have a non-empty balance at the genesis
+			assert_eq!(System::storage_value_change_block(
+				&<staking::FreeBalance<Concrete>>::key_for(alice())
+			), Some(0));
+			// and Bob does not
+			assert_eq!(System::storage_value_change_block(
+				&<staking::FreeBalance<Concrete>>::key_for(bob())
+			), None);
+		});
+
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1(true).0, true).0.unwrap();
+
+		runtime_io::with_externalities(&mut t, || {
+			// session reward has not changed at block#1
+			assert_eq!(System::storage_value_change_block(
+				&<staking::SessionReward<Concrete>>::key()
+			), Some(0));
+			// Alice balance has been changed at block#1
+			assert_eq!(System::storage_value_change_block(
+				&<staking::FreeBalance<Concrete>>::key_for(alice())
+			), Some(1));
+			// Bob balance has been changed at block#1
+			assert_eq!(System::storage_value_change_block(
+				&<staking::FreeBalance<Concrete>>::key_for(bob())
+			), Some(1));
+		});
+	}
+
+	#[test]
+	fn change_block_number_is_known_by_wasm_runtime_with_prefix() {
+		let mut t = new_test_ext(true, 0);
+
+		runtime_io::with_externalities(&mut t, || {
+			// session reward is non-empty at genesis
+			assert_eq!(System::storage_value_change_block(
+				&<staking::SessionReward<Concrete>>::key()
+			), Some(0));
+			// Alice have a non-empty balance at the genesis
+			assert_eq!(System::storage_value_change_block(
+				&<staking::FreeBalance<Concrete>>::key_for(alice())
+			), Some(0));
+			// and Bob does not
+			assert_eq!(System::storage_value_change_block(
+				&<staking::FreeBalance<Concrete>>::key_for(bob())
+			), None);
+		});
+
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1(true).0, true).0.unwrap();
+
+		runtime_io::with_externalities(&mut t, || {
+			// session reward has not changed at block#1
+			assert_eq!(System::storage_value_change_block(
+				&<staking::SessionReward<Concrete>>::key()
+			), Some(0));
+			// Alice balance has been changed at block#1
+			assert_eq!(System::storage_value_change_block(
+				&<staking::FreeBalance<Concrete>>::key_for(alice())
+			), Some(1));
+			// Bob balance has been changed at block#1
+			assert_eq!(System::storage_value_change_block(
+				&<staking::FreeBalance<Concrete>>::key_for(bob())
+			), Some(1));
+		});
+	}
+
+	fn alice_balance_with_prefix(t: &TestExternalities) -> (Option<Vec<u8>>, Option<Vec<u8>>) {
+		t.storage(&twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())))
+			.map(|mut prefix| {
+				let balance = prefix.split_off(8);
+				(Some(prefix), if balance.is_empty() { None } else { Some(balance) })
+			})
+			.unwrap_or_default()
+	}
+
+	fn is_alice_balance_scheduled_for_purge(t: &TestExternalities) -> bool {
+		let mut key = b":deleted:map:".to_vec();
+		key.extend(&twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())));
+		t.storage(&key).is_some()
+	}
+
+	fn purge_check_blocks() -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
+		let (block1, block1_hash) = construct_block(1, [0u8; 32].into(),
+			hex!("cf08615c8d3cd648d9342375ee68a4ba0e0c8c1a00f7588411f981acd54bb664").into(),
+			vec![BareExtrinsic {
+				signed: alice(),
+				index: 0,
+				function: Call::Staking(staking::Call::transfer(bob().into(), 100)),
+			}]);
+		let (block2, block2_hash) = construct_block(2, block1_hash,
+			hex!("7d81c7902acce2ab17043e657e5db5e86c7b2bf96ad6efebd8ab915d4824c0d5").into(),
+			vec![]);
+		let (block3, block3_hash) = construct_block(3, block2_hash,
+			hex!("2ceb56cc19833a285fce9c4e0a9b3c90a97483586bf2b3f8dbcae028e883a3d5").into(),
+			vec![]);
+		let (block4, _) = construct_block(4, block3_hash,
+			hex!("373319ec698d97e3a65b40e11dde0d89b64f8abdc084c881ebcdc23303125ee0").into(),
+			vec![]);
+		(block1, block2, block3, block4)
+	}
+
+	#[test]
+	fn prefixed_values_are_purged_after_native_purge_block_import() {
+		let mut t = new_test_ext(true, 100);
+		let (block1, block2, block3, block4) = purge_check_blocks();
+
+		// at the genesis block there's Alice with free balance of 111
+		// let's say at block1 Alice transfers 100 dots to Bob
+		// => Alice account disappers, because her balance is dropped below existential deposit (100)
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1, true).0.unwrap();
+
+		// after block1 Alice' free balance is deleted, but it still has a footprint in db
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// mine empty block#2
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block2, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// mine empty block#3
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block3, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// purge is performed @ block#4 => mine empty block && check that footprint is removed
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block4, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t), (None, None));
+	}
+
+	#[test]
+	fn prefixed_values_are_purged_after_wasm_purge_block_import() {
+		let mut t = new_test_ext(true, 100);
+		let (block1, block2, block3, block4) = purge_check_blocks();
+
+		// at the genesis block there's Alice with free balance of 111
+		// let's say at block1 Alice transfers 100 dots to Bob
+		// => Alice account disappers, because her balance is dropped below existential deposit (100)
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1, true).0.unwrap();
+
+		// after block1 Alice' free balance is deleted, but it still has a footprint in db
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// mine empty block#2
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block2, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// mine empty block#3
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block3, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// purge is performed @ block#4 => mine empty block && check that footprint is removed
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block4, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t), (None, None));
+	}
+
+	fn recently_purge_check_blocks() -> (Vec<Vec<u8>>, Vec<Vec<u8>>, Vec<u8>) {
+		let (block1, block1_hash) = construct_block(1, [0u8; 32].into(),
+			hex!("f08294d628fd15e6410184f0a87c867fdea6d13fc1da718696e753f96d93ae72").into(),
+			vec![]);
+		let (block2, block2_hash) = construct_block(2, block1_hash,
+			hex!("fd175eb2a1df58e4e103c1f630a11bdc46a4ea0bb26fcb44315a37c8694ce09a").into(),
+			vec![]);
+		let (block3, block3_hash) = construct_block(3, block2_hash,
+			hex!("98b2153929fca311a1edce644d1bdfd223405005e9c94f363441b2c8c617af48").into(),
+			vec![BareExtrinsic {
+				signed: alice(),
+				index: 0,
+				function: Call::Staking(staking::Call::transfer(bob().into(), 100)),
+			}]);
+		let (block4, block4_hash) = construct_block(4, block3_hash,
+			hex!("9f9c8a7ccef3e9b55f908a5797bba1515a7e13b0c1924c14e5379fdd60931cf3").into(),
+			vec![]);
+		let (block5, block5_hash) = construct_block(5, block4_hash,
+			hex!("7202b88a03c02581706634571171027b632a2e4285b9f70bfa2acaeada441b36").into(),
+			vec![]);
+		let (block6, block6_hash) = construct_block(6, block5_hash,
+			hex!("b345fb946ef7c8274647fc465ad4f27d06936ecf163bc7e966548a644ab05179").into(),
+			vec![]);
+		let (block7, block7_hash) = construct_block(7, block6_hash,
+			hex!("b6007eb860ba775a8039ffd427f42938f9d000f54e7ef119daa8add8e4c85ff5").into(),
+			vec![]);
+		let (block8, _) = construct_block(8, block7_hash,
+			hex!("c17bfe3a2bfe99a600c9f4e3582b04b46d7b2127797abf543be295eccb378795").into(),
+			vec![]);
+		(vec![block1, block2], vec![block3, block4, block5, block6, block7], block8)
+	}
+
+	#[test]
+	fn prefixed_values_are_not_purged_after_native_purge_block_import_if_deleted_recently() {
+		let mut t = new_test_ext(true, 100);
+		let (has_balance_blocks, has_no_balance_blocks, has_no_footprint_block) = recently_purge_check_blocks();
+
+		// at these blocks Alice has a balance
+		for has_balance_block in has_balance_blocks {
+			executor().call(&mut t, COMPACT_CODE, "execute_block", &has_balance_block, true).0.unwrap();
+			let (prefix, balance) = alice_balance_with_prefix(&t);
+			assert!(prefix.is_some() && balance.is_some());
+		}
+
+		// at these blocks Alice has no balance, but balance is not yet purged
+		for has_no_balance_block in has_no_balance_blocks {
+			executor().call(&mut t, COMPACT_CODE, "execute_block", &has_no_balance_block, true).0.unwrap();
+			let (prefix, balance) = alice_balance_with_prefix(&t);
+			assert!(prefix.is_some() && balance.is_none());
+		}
+
+		// finally balance is purged off the db
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &has_no_footprint_block, true).0.unwrap();
+		let (prefix, balance) = alice_balance_with_prefix(&t);
+		assert!(prefix.is_none() && balance.is_none());
+	}
+
+	#[test]
+	fn prefixed_values_are_not_purged_after_wasm_purge_block_import_if_deleted_recently() {
+		let mut t = new_test_ext(true, 100);
+		let (has_balance_blocks, has_no_balance_blocks, has_no_footprint_block) = recently_purge_check_blocks();
+
+		// at these blocks Alice has a balance
+		for has_balance_block in has_balance_blocks {
+			WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &has_balance_block, true).0.unwrap();
+			let (prefix, balance) = alice_balance_with_prefix(&t);
+			assert!(prefix.is_some() && balance.is_some());
+		}
+
+		// at these blocks Alice has no balance, but balance is not yet purged
+		for has_no_balance_block in has_no_balance_blocks {
+			WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &has_no_balance_block, true).0.unwrap();
+			let (prefix, balance) = alice_balance_with_prefix(&t);
+			assert!(prefix.is_some() && balance.is_none());
+		}
+
+		// finally balance is purged off the db
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &has_no_footprint_block, true).0.unwrap();
+		let (prefix, balance) = alice_balance_with_prefix(&t);
+		assert!(prefix.is_none() && balance.is_none());
+	}
+
+	fn recreated_purge_check_blocks() -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
+		let (block1, block1_hash) = construct_block(1, [0u8; 32].into(),
+			hex!("68204a44f3f5da24c83ef51c09a7e121d7df744105d94bbe37f9429176f71ade").into(),
+			vec![BareExtrinsic {
+				signed: alice(),
+				index: 0,
+				function: Call::Staking(staking::Call::transfer(bob().into(), 110)),
+			}]);
+		let (block2, block2_hash) = construct_block(2, block1_hash,
+			hex!("024ce4045f676fc2b40eb6ba34a23552a06a4d7698f581ef53e9d9a09bb05eaf").into(),
+			vec![]);
+		let (block3, block3_hash) = construct_block(3, block2_hash,
+			hex!("2a990bbc72f6856422b68bcb1c096638529df5699ee74c94accbefd4d3fac5a2").into(),
+			vec![BareExtrinsic {
+				signed: bob(),
+				index: 0,
+				function: Call::Staking(staking::Call::transfer(alice().into(), 109)),
+			}]);
+		let (block4, _) = construct_block(4, block3_hash,
+			hex!("1667712e3060c5c246998326bfbf059f1f4a3beafdcf3e08e8cffb3583a057f8").into(),
+			vec![]);
+		(block1, block2, block3, block4)
+	}
+
+	#[test]
+	fn prefixed_values_are_not_purged_after_native_purge_block_import_if_recreated_after_deletion() {
+		let mut t = new_test_ext(true, 100);
+		let (block1, block2, block3, block4) = recreated_purge_check_blocks();
+
+		// at the genesis block there's Alice with free balance of 111
+		// let's say at block1 Alice transfers 100 dots to Bob
+		// => Alice account disappers, because her balance is dropped below existential deposit (100)
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1, true).0.unwrap();
+
+		// after block1 Alice' free balance is deleted, but it still has a footprint in db
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// mine empty block#2
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block2, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// at block#3 Bob returns 100 DOTs to Alice => Alice account is recreated back
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block3, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t),
+			(Some(vec![3, 0, 0, 0, 0, 0, 0, 0]), Some(vec![109, 0, 0, 0, 0, 0, 0, 0])));
+
+		// purge is performed @ block#4 => Aice account is not deleted
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block4, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t),
+			(Some(vec![3, 0, 0, 0, 0, 0, 0, 0]), Some(vec![109, 0, 0, 0, 0, 0, 0, 0])));
+
+		// check that value is not scheduled for purge anymore
+		assert!(!is_alice_balance_scheduled_for_purge(&t));
+	}
+
+	#[test]
+	fn prefixed_values_are_not_purged_after_wasm_purge_block_import_if_recreated_after_deletion() {
+		let mut t = new_test_ext(true, 100);
+		let (block1, block2, block3, block4) = recreated_purge_check_blocks();
+
+		// at the genesis block there's Alice with free balance of 111
+		// let's say at block1 Alice transfers 110 dots to Bob
+		// => Alice account disappers, because her balance is dropped below existential deposit (100)
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block1, true).0.unwrap();
+
+		// after block1 Alice' free balance is deleted, but it still has a footprint in db
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// mine empty block#2
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block2, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t), (Some(vec![1, 0, 0, 0, 0, 0, 0, 0]), None));
+
+		// at block#3 Bob returns 109 DOTs to Alice => Alice account is recreated back
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block3, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t),
+			(Some(vec![3, 0, 0, 0, 0, 0, 0, 0]), Some(vec![109, 0, 0, 0, 0, 0, 0, 0])));
+
+		// purge is performed @ block#4 => Aice account is not deleted
+		WasmExecutor::new(8, 8).call(&mut t, COMPACT_CODE, "execute_block", &block4, true).0.unwrap();
+		assert_eq!(alice_balance_with_prefix(&t),
+			(Some(vec![3, 0, 0, 0, 0, 0, 0, 0]), Some(vec![109, 0, 0, 0, 0, 0, 0, 0])));
+	
+		// check that value is not scheduled for purge anymore
+		assert!(!is_alice_balance_scheduled_for_purge(&t));
 	}
 }
