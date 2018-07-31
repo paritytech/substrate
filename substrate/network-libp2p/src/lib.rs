@@ -19,9 +19,8 @@
 
 extern crate parking_lot;
 extern crate fnv;
-#[macro_use]
 extern crate futures;
-extern crate tokio_core;
+extern crate tokio;
 extern crate tokio_io;
 extern crate tokio_timer;
 extern crate ethkey;

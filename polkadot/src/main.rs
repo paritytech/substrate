@@ -25,19 +25,22 @@ extern crate futures;
 #[macro_use]
 extern crate error_chain;
 
-use cli::{ServiceComponents, Service};
+use cli::{ServiceComponents, Service, VersionInfo};
 use futures::sync::oneshot;
 use futures::{future, Future};
 
 use std::cell::RefCell;
 
+mod vergen {
+	#![allow(unused)]
+	include!(concat!(env!("OUT_DIR"), "/version.rs"));
+}
+
 // the regular polkadot worker simply does nothing until ctrl-c
 struct Worker;
-impl cli::Worker for Worker {
-	type Work = Self::Exit;
+impl cli::IntoExit for Worker {
 	type Exit = future::MapErr<oneshot::Receiver<()>, fn(oneshot::Canceled) -> ()>;
-
-	fn exit_only(self) -> Self::Exit {
+	fn into_exit(self) -> Self::Exit {
 		// can't use signal directly here because CtrlC takes only `Fn`.
 		let (exit_send, exit) = oneshot::channel();
 
@@ -50,14 +53,25 @@ impl cli::Worker for Worker {
 
 		exit.map_err(drop)
 	}
+}
 
-	fn work<C: ServiceComponents>(self, _service: &Service<C>) -> Self::Exit {
-		self.exit_only()
+impl cli::Worker for Worker {
+	type Work = <Self as cli::IntoExit>::Exit;
+	fn work<C: ServiceComponents>(self, _service: &Service<C>) -> Self::Work {
+		use cli::IntoExit;
+		self.into_exit()
 	}
 }
 
 quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
-	cli::run(::std::env::args(), Worker)
+	let version = VersionInfo {
+		commit: vergen::short_sha(),
+		version: env!("CARGO_PKG_VERSION"),
+		executable_name: "polkadot",
+		author: "Parity Team <admin@parity.io>",
+		description: "Polkadot Node Rust Implementation",
+	};
+	cli::run(::std::env::args(), Worker, version)
 }
