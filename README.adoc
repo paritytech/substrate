@@ -1,6 +1,6 @@
 = Polkadot
 :Author: Polkadot developers
-:Revision: 0.2.0
+:Revision: 0.2.1
 :toc:
 :sectnums:
 
