@@ -145,6 +145,12 @@ pub type Council = council::Module<Concrete>;
 /// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Concrete>;
 
+pub type BlitzChain = chain::Module<Concrete>;
+
+impl chain::Trait for Concrete {
+	type PublicAux = AccountId;
+}
+
 impl_outer_dispatch! {
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -156,6 +162,7 @@ impl_outer_dispatch! {
 		Democracy = 5,
 		Council = 6,
 		CouncilVoting = 7,
+		BlitzChain = 8,
 	}
 
 	#[derive(Clone, PartialEq, Eq)]
