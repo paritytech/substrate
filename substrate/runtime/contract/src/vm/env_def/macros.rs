@@ -113,21 +113,21 @@ macro_rules! define_env {
 		$( $name:ident ( $ctx:ident, $( $names:ident : $params:ty ),* )
 			$( -> $returns:ty )* => $body:tt , )*
 	) => {
-		pub fn init_env<E: Ext>() -> Environment<E> {
-			let mut env = Environment::new();
+		pub(crate) fn init_env<E: Ext>() -> HostFunctionSet<E> {
+			let mut env = HostFunctionSet::new();
 
 			$(
 				env.funcs.insert(
 					stringify!( $name ).to_string(),
-					ExtFunc {
-						func_type: gen_signature!( ( $( $params ),* ) $( -> $returns )* ),
-						f: {
+					HostFunction::new(
+						gen_signature!( ( $( $params ),* ) $( -> $returns )* ),
+						{
 							define_func!(
 								< E: $ext_ty > $name ( $ctx, $( $names : $params ),* ) $( -> $returns )* => $body
 							);
 							$name::<E>
 						},
-					},
+					),
 				);
 			)*
 
@@ -142,7 +142,7 @@ mod tests {
 	use parity_wasm::elements::ValueType;
 	use runtime_primitives::traits::{As, Zero};
 	use sandbox::{self, ReturnValue, TypedValue};
-	use vm::env_def::{Environment, ExtFunc};
+	use vm::env_def::{HostFunctionSet, HostFunction};
 	use vm::tests::MockExt;
 	use vm::{Ext, Runtime};
 	use Trait;

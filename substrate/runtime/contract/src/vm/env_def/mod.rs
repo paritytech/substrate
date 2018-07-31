@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CallReceipt, CreateReceipt, Ext, GasMeterResult, Runtime, BalanceOf};
+use super::{BalanceOf, CallReceipt, CreateReceipt, Ext, GasMeterResult, Runtime};
 use codec::Decode;
 use parity_wasm::elements::{FunctionType, ValueType};
 use rstd::collections::btree_map::BTreeMap;
@@ -53,31 +53,50 @@ impl ConvertibleToWasm for u32 {
 	}
 }
 
-pub struct Environment<E: Ext> {
+/// Represents a set of function that defined in this particular environment and
+/// which can be imported and called by the module.
+pub(crate) struct HostFunctionSet<E: Ext> {
 	/// Functions which defined in the environment.
-	pub funcs: BTreeMap<String, ExtFunc<E>>,
+	pub funcs: BTreeMap<String, HostFunction<E>>,
 }
-
-impl<E: Ext> Environment<E> {
+impl<E: Ext> HostFunctionSet<E> {
 	pub fn new() -> Self {
-		Environment {
+		HostFunctionSet {
 			funcs: BTreeMap::new(),
 		}
 	}
 }
 
-pub struct ExtFunc<E: Ext> {
+pub(crate) struct HostFunction<E: Ext> {
 	pub(crate) f: fn(&mut Runtime<E>, &[sandbox::TypedValue])
 		-> Result<sandbox::ReturnValue, sandbox::HostError>,
 	func_type: FunctionType,
 }
+impl<E: Ext> HostFunction<E> {
+	/// Create a new instance of a host function.
+	pub fn new(
+		func_type: FunctionType,
+		f: fn(&mut Runtime<E>, &[sandbox::TypedValue])
+			-> Result<sandbox::ReturnValue, sandbox::HostError>,
+	) -> Self {
+		HostFunction { func_type, f }
+	}
 
-impl<E: Ext> ExtFunc<E> {
+	/// Returns a function pointer of this host function.
+	pub fn raw_fn_ptr(
+		&self,
+	) -> fn(&mut Runtime<E>, &[sandbox::TypedValue])
+		-> Result<sandbox::ReturnValue, sandbox::HostError> {
+		self.f
+	}
+
+	/// Check if the this function could be invoked with the given function signature.
 	pub fn func_type_matches(&self, func_type: &FunctionType) -> bool {
 		&self.func_type == func_type
 	}
 }
 
+// TODO: init_env() is too implicit. Can I fix it?
 define_env!(
 	<E: Ext>,
 
