@@ -50,11 +50,11 @@ build_rpc_trait! {
 
 		#[pubsub(name = "chain_newHead")] {
 			/// New head subscription
-			#[rpc(name = "subscribe_newHead", alias = ["chain_subscribeNewHead", ])]
+			#[rpc(name = "chain_subscribeNewHead", alias = ["subscribe_newHead", ])]
 			fn subscribe_new_head(&self, Self::Metadata, pubsub::Subscriber<Header>);
 
 			/// Unsubscribe from new head subscription.
-			#[rpc(name = "unsubscribe_newHead", alias = ["chain_unsubscribeNewHead", ])]
+			#[rpc(name = "chain_unsubscribeNewHead", alias = ["unsubscribe_newHead", ])]
 			fn unsubscribe_new_head(&self, SubscriptionId) -> RpcResult<bool>;
 		}
 	}
