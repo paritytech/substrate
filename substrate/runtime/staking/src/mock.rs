@@ -24,7 +24,6 @@ use primitives::testing::{Digest, Header};
 use substrate_primitives::H256;
 use runtime_io;
 use {GenesisConfig, Module, Trait, consensus, session, system, timestamp};
-use super::DummyContractAddressFor;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -55,8 +54,8 @@ impl timestamp::Trait for Test {
 }
 impl Trait for Test {
 	type Balance = u64;
-	type DetermineContractAddress = DummyContractAddressFor;
 	type AccountIndex = u64;
+	type OnAccountKill = ();
 }
 
 pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool, reward: u64) -> runtime_io::TestExternalities {
@@ -95,7 +94,6 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		existential_deposit: ext_deposit,
 		transfer_fee: 0,
 		creation_fee: 0,
-		contract_fee: 0,
 		reclaim_rebate: 0,
 		session_reward: reward,
 		early_era_slash: if monied { 20 } else { 0 },
