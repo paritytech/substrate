@@ -141,13 +141,6 @@ fn is_node_name_valid(_name: &str) -> Result<(), &str> {
 }
 
 /// Parse command line arguments and execute commands or return service configuration.
-///
-/// IANA unassigned port ranges that we could use:
-/// 6717-6766		Unassigned
-/// 8504-8553		Unassigned
-/// 9556-9591		Unassigned
-/// 9803-9874		Unassigned
-/// 9926-9949		Unassigned
 pub fn prepare_execution<F, I, T, E, S>(
 	args: I,
 	exit: E,

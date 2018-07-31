@@ -55,17 +55,39 @@ pub struct ConsensusGossip<B: BlockT> {
 	message_sink: Option<(mpsc::UnboundedSender<ConsensusMessage<B>>, B::Hash)>,
 	messages: Vec<MessageEntry<B>>,
 	message_hashes: HashSet<B::Hash>,
+	enabled: bool,
 }
 
 impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
-	/// Create a new instance.
+	/// Create a new instance. Enabled by default.
 	pub fn new() -> Self {
 		ConsensusGossip {
 			peers: HashMap::new(),
 			message_sink: None,
 			messages: Default::default(),
 			message_hashes: Default::default(),
+			enabled: true,
 		}
+	}
+
+	/// Set the gossip instance to active (true) or inactive (false).
+	/// Returns previous enabled state.
+	pub fn enable(&mut self, enable: bool) -> bool {
+		let prev = self.enabled;
+
+		if !enable && prev {
+			self.abort();
+			self.peers.clear();
+
+			self.messages.clear();
+			self.messages.shrink_to_fit();
+
+			self.message_hashes.clear();
+			self.message_hashes.shrink_to_fit();
+		}
+
+		self.enabled = enable;
+		prev
 	}
 
 	/// Closes all notification streams.
@@ -75,7 +97,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex, roles: Roles) {
-		if roles.intersects(Roles::AUTHORITY | Roles::FULL) {
+		if self.enabled {
 			trace!(target:"gossip", "Registering {:?} {}", roles, who);
 			// Send out all known messages.
 			// TODO: limit by size
@@ -89,6 +111,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 				protocol.send_message(who, message);
 			}
+
 			self.peers.insert(who, PeerConsensus {
 				known_messages,
 			});
@@ -116,6 +139,8 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Handles incoming BFT message, passing to stream and repropagating.
 	pub fn on_bft_message(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: message::LocalizedBftMessage<B>) {
+		if self.enabled { return }
+
 		if let Some((hash, message)) = self.handle_incoming(protocol, who, ConsensusMessage::Bft(message)) {
 			// propagate to other peers.
 			self.multicast(protocol, message, Some(hash));
@@ -124,6 +149,8 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Handles incoming chain-specific message and repropagates
 	pub fn on_chain_specific(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: Vec<u8>, parent_hash: B::Hash) {
+		if self.enabled { return }
+
 		if let Some((hash, message)) = self.handle_incoming(protocol, who, ConsensusMessage::ChainSpecific(message, parent_hash)) {
 			// propagate to other peers.
 			self.multicast(protocol, message, Some(hash));
@@ -151,12 +178,16 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Multicast a chain-specific message to other authorities.
 	pub fn multicast_chain_specific(&mut self, protocol: &mut Context<B>, message: Vec<u8>, parent_hash: B::Hash) {
+		if self.enabled { return }
+
 		trace!(target:"gossip", "sending chain-specific message");
 		self.multicast(protocol, ConsensusMessage::ChainSpecific(message, parent_hash), None);
 	}
 
 	/// Multicast a BFT message to other authorities
 	pub fn multicast_bft_message(&mut self, protocol: &mut Context<B>, message: message::LocalizedBftMessage<B>) {
+		if self.enabled { return }
+
 		// Broadcast message to all authorities.
 		trace!(target:"gossip", "Broadcasting BFT message {:?}", message);
 		self.multicast(protocol, ConsensusMessage::Bft(message), None);
