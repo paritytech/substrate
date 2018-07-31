@@ -15,6 +15,7 @@ serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 # TODO: Used to fetch `uint` from "https://github.com/rphmeier/primitives.git" – what was `compile-for-wasm` adding?
 uint = { git = "https://github.com/paritytech/parity-common", branch = "add-fixed-hash", default_features = false }
+rlp = { git = "https://github.com/paritytech/parity-common", branch = "add-fixed-hash" }
 twox-hash = { version = "1.1.0", optional = true }
 byteorder = { version = "1.1", default_features = false }
 blake2-rfc = { version = "0.2.18", optional = true }
