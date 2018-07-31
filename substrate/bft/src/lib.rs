@@ -248,6 +248,7 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
 		use std::time::{Instant, Duration};
 
+		let round = round / 3;
 		let round = ::std::cmp::min(63, round) as u32;
 		let timeout = 1u64.checked_shl(round)
 			.unwrap_or_else(u64::max_value)
