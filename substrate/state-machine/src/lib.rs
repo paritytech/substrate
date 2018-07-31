@@ -34,7 +34,6 @@ extern crate byteorder;
 extern crate parking_lot;
 
 use std::collections::HashMap;
-use std::collections::hash_map::Drain;
 use std::fmt;
 
 pub mod backend;
@@ -86,9 +85,22 @@ impl OverlayedChanges {
 		}
 	}
 
-	/// Drain prospective changes to an iterator.
-	pub fn drain(&mut self) -> Drain<Vec<u8>, Option<Vec<u8>>> {
+	/// Drain committed changes to an iterator.
+	///
+	/// Panics:
+	/// Will panic if there are any uncommitted prospective changes.
+	pub fn drain<'a>(&'a mut self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> + 'a {
+		assert!(self.prospective.is_empty());
 		self.committed.drain()
+	}
+
+	/// Consume `OverlayedChanges` and take committed set.
+	///
+	/// Panics:
+	/// Will panic if there are any uncommitted prospective changes.
+	pub fn into_committed(self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
+		assert!(self.prospective.is_empty());
+		self.committed.into_iter()
 	}
 }
 

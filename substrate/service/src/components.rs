@@ -149,9 +149,7 @@ pub trait Components {
 	/// Associated service factory.
 	type Factory: ServiceFactory;
 	/// Client backend.
-	type Backend: 'static
-		+ client::backend::Backend<FactoryBlock<Self::Factory>>
-		+ client::backend::BackendEvents<FactoryBlock<Self::Factory>>;
+	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>>;
 	/// Client executor.
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>> + Send + Sync;
 	/// Extrinsic pool type.

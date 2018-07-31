@@ -31,21 +31,17 @@ use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
+use notifications::{StorageNotifications, StorageEventStream};
 use {error, in_mem, block_builder, runtime_io, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 
-/// Type that implements `futures::Stream` of storage change events.
-pub type StorageEventStream<H> = mpsc::UnboundedReceiver<(
-	H,
-	Vec<(StorageKey, Option<StorageData>)>,
-)>;
-
 /// Substrate Client
 pub struct Client<B, E, Block> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
+	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
@@ -192,6 +188,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok(Client {
 			backend,
 			executor,
+			storage_notifications: Default::default(),
 			import_notification_sinks: Default::default(),
 			import_lock: Default::default(),
 			importing_block: Default::default(),
@@ -364,7 +361,7 @@ impl<B, E, Block> Client<B, E, Block> where
 					},
 				);
 				let (_, storage_update) = r?;
-				Some(storage_update)
+				Some((storage_update, overlay.into_committed()))
 			},
 			None => None,
 		};
@@ -373,8 +370,11 @@ impl<B, E, Block> Client<B, E, Block> where
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
 		let unchecked: bft::UncheckedJustification<_> = justification.uncheck().into();
 		transaction.set_block_data(header.clone(), body, Some(unchecked.into()), is_new_best)?;
-		if let Some(storage_update) = storage_update {
+		if let Some((storage_update, changes)) = storage_update {
 			transaction.update_storage(storage_update)?;
+			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
+			self.storage_notifications.lock()
+				.trigger(&hash, changes);
 		}
 		self.backend.commit_operation(transaction)?;
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
@@ -508,7 +508,6 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 	where
-		B: backend::BackendEvents<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
 {
@@ -521,7 +520,7 @@ impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 
 	/// Get storage changes event stream.
 	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>> {
-		self.backend.storage_changes_notification_stream(filter_keys)
+		Ok(self.storage_notifications.lock().listen(filter_keys))
 	}
 }
 

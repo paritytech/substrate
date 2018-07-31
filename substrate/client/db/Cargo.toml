@@ -4,7 +4,6 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-futures = "0.1.17"
 parking_lot = "0.4"
 log = "0.3"
 kvdb = { git = "https://github.com/paritytech/parity.git" }

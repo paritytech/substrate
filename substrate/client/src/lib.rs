@@ -50,14 +50,15 @@ pub mod block_builder;
 pub mod light;
 mod call_executor;
 mod client;
+mod notifications;
 
+pub use blockchain::Info as ChainInfo;
+pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
 pub use client::{
 	new_in_mem,
 	BlockStatus, BlockOrigin, BlockchainEventStream, BlockchainEvents,
 	Client, ClientInfo, ChainHead,
 	ImportResult, JustifiedHeader,
-	StorageEventStream,
 };
-pub use blockchain::Info as ChainInfo;
-pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
+pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
