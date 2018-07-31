@@ -2297,6 +2297,17 @@ dependencies = [
 [[package]]
 name = "rlp"
 version = "0.2.1"
+source = "git+https://github.com/paritytech/parity-common?branch=add-fixed-hash#b0cf5d1cf5bf0d284fae8e724df00fcb52673542"
+dependencies = [
+ "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "rlp"
+version = "0.2.1"
 source = "git+https://github.com/paritytech/parity-common#4481687a81f04993e5f54adef27852167d7114f7"
 dependencies = [
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2857,6 +2868,7 @@ dependencies = [
  "fixed-hash 0.2.2 (git+https://github.com/paritytech/parity-common?branch=add-fixed-hash)",
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rlp 0.2.1 (git+https://github.com/paritytech/parity-common?branch=add-fixed-hash)",
  "rustc-hex 2.0.0 (git+https://github.com/rphmeier/rustc-hex.git)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4130,6 +4142,7 @@ dependencies = [
 "checksum rhododendron 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9e38401cc1b63e71ec9119115c7e1354fcf54c8006ad59a22409dd8bd93737b2"
 "checksum ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6f7d28b30a72c01b458428e0ae988d4149c20d902346902be881e3edc4bb325c"
 "checksum rlp 0.2.1 (git+https://github.com/paritytech/parity-common)" = "<none>"
+"checksum rlp 0.2.1 (git+https://github.com/paritytech/parity-common?branch=add-fixed-hash)" = "<none>"
 "checksum rlp 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "89db7f8dfdd5eb7ab3ac3ece7a07fd273a680b4b224cb231181280e8996f9f0b"
 "checksum rocksdb 0.4.5 (git+https://github.com/paritytech/rust-rocksdb)" = "<none>"
 "checksum rocksdb-sys 0.3.0 (git+https://github.com/paritytech/rust-rocksdb)" = "<none>"
