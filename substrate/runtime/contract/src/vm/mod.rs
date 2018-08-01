@@ -211,11 +211,6 @@ pub fn execute<'a, E: Ext>(
 	for (func_name, ext_func) in &env.funcs {
 		imports.add_host_func("env", &func_name[..], ext_func.raw_fn_ptr());
 	}
-
-	// TODO: Rename ext_transfer to ext_call.
-	// TODO: ext_balance, ext_address, ext_callvalue, etc.
-
-	// TODO: ext_balance, ext_address, ext_callvalue, etc.
 	imports.add_memory("env", "memory", memory.clone());
 
 	let mut runtime = Runtime {

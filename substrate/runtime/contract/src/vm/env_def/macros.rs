@@ -16,6 +16,8 @@
 
 //! Definition of macros that hides boilerplate of defining external environment
 //! for a wasm module.
+//!
+//! Typically you should use `define_env` macro.
 
 #[macro_export]
 macro_rules! convert_args {
@@ -48,7 +50,17 @@ macro_rules! unmarshall_then_body {
 				$args_iter.next()
 					.and_then(|v| <$params as $crate::vm::env_def::ConvertibleToWasm>
 						::from_typed_value(v.clone()))
-					.expect("TODO"); // TODO
+					.expect(
+						"precondition: all imports should be checked against the signatures of corresponding
+						functions defined by `define_env!` macro by the user of the macro;
+						signatures of these functions defined by `$params`;
+						calls always made with arguments types of which are defined by the corresponding imports;
+						thus types of arguments should be equal to type list in `$params` and
+						length of argument list and $params should be equal;
+						thus this can never be `None`;
+						qed;
+						"
+					);
 		)*
 		$body
 	})
@@ -108,12 +120,19 @@ macro_rules! define_func {
 	};
 }
 
+/// Define a function set that can be imported by executing wasm code.
+///
+/// **NB**: Be advised that all functions defined by this macro
+/// will panic if called with unexpected arguments.
+///
+/// It's up to the user of this macro to check signatures of wasm code to be executed
+/// and reject the code if any imported function has a mismached signature.
 macro_rules! define_env {
-	( < E: $ext_ty:tt > ,
+	( $init_name:ident , < E: $ext_ty:tt > ,
 		$( $name:ident ( $ctx:ident, $( $names:ident : $params:ty ),* )
 			$( -> $returns:ty )* => $body:tt , )*
 	) => {
-		pub(crate) fn init_env<E: Ext>() -> HostFunctionSet<E> {
+		pub(crate) fn $init_name<E: Ext>() -> HostFunctionSet<E> {
 			let mut env = HostFunctionSet::new();
 
 			$(
@@ -249,7 +268,7 @@ mod tests {
 
 	#[test]
 	fn macro_define_env() {
-		define_env!(<E: Ext>,
+		define_env!(init_env, <E: Ext>,
 			ext_gas( _ctx, amount: u32 ) => {
 				let amount = <<<E as Ext>::T as Trait>::Gas as As<u32>>::sa(amount);
 				if !amount.is_zero() {

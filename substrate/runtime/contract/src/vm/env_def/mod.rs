@@ -96,9 +96,11 @@ impl<E: Ext> HostFunction<E> {
 	}
 }
 
-// TODO: init_env() is too implicit. Can I fix it?
-define_env!(
-	<E: Ext>,
+// TODO: ext_balance, ext_address, ext_callvalue, etc.
+
+// Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
+// a function set which can be imported by an executed contract.
+define_env!(init_env, <E: Ext>,
 
 	// gas(amount: u32)
 	//
@@ -164,6 +166,7 @@ define_env!(
 		Ok(())
 	},
 
+	// TODO: Rename ext_transfer to ext_call.
 	// ext_transfer(transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
 	ext_transfer(ctx, transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32) => {
 		let mut transfer_to = Vec::new();

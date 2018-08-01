@@ -94,23 +94,6 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 		Ok(())
 	}
 
-	/// Find the memory import entry and return it's descriptor.
-	fn find_mem_import(&self) -> Option<&MemoryType> {
-		let import_section = self
-			.module
-			.as_ref()
-			.expect("On entry to the function `module` can't be `None`; qed")
-			.import_section()?;
-		for import in import_section.entries() {
-			if let ("env", "memory", &External::Memory(ref memory_type)) =
-				(import.module(), import.field(), import.external())
-			{
-				return Some(memory_type);
-			}
-		}
-		None
-	}
-
 	/// Scan an import section if any.
 	///
 	/// This accomplishes two tasks:
@@ -177,6 +160,16 @@ pub(super) struct PreparedContract {
 	pub memory: sandbox::Memory,
 }
 
+/// Loads the given module given in `original_code`, performs some checks on it and
+/// does some preprocessing.
+///
+/// The checks are:
+///
+/// - module doesn't define an internal memory instance,
+/// - imported memory (if any) doesn't reserve more memory than permitted by the `config`,
+/// - all imported functions from the external environment matches defined by `env` module,
+///
+/// The preprocessing includes injecting code for gas metering and metering the height of stack.
 pub(super) fn prepare_contract<E: Ext>(
 	original_code: &[u8],
 	config: &Config<E::T>,
