@@ -273,6 +273,9 @@ mod tests {
 		let r = parse_and_prepare_wat(r#"(module (import "env" "gas" (func (param i32))))"#);
 		assert_matches!(r, Ok(_));
 
+		let r = parse_and_prepare_wat(r#"(module (import "env" "gas" (func (param i64))))"#);
+		assert_matches!(r, Err(Error::Instantiate));
+
 		let r = parse_and_prepare_wat(r#"(module (import "env" "unknown_func" (func)))"#);
 		assert_matches!(r, Err(Error::Instantiate));
 	}
