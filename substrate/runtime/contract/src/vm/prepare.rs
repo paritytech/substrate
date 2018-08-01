@@ -267,4 +267,13 @@ mod tests {
 		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 17)))"#);
 		assert_matches!(r, Err(Error::Memory));
 	}
+
+	#[test]
+	fn imports() {
+		let r = parse_and_prepare_wat(r#"(module (import "env" "gas" (func (param i32))))"#);
+		assert_matches!(r, Ok(_));
+
+		let r = parse_and_prepare_wat(r#"(module (import "env" "unknown_func" (func)))"#);
+		assert_matches!(r, Err(Error::Instantiate));
+	}
 }
