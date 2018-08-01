@@ -524,7 +524,7 @@ impl Store {
 #[cfg(test)]
 mod tests {
 	use wasm_executor::WasmExecutor;
-	use state_machine::{TestExternalities, CodeExecutor};
+	use state_machine::TestExternalities;
 	use wabt;
 
 	#[test]
@@ -554,7 +554,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox", &code, true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_sandbox", &code).unwrap(),
 			vec![1],
 		);
 	}
@@ -575,7 +575,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox", &code, true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_sandbox", &code).unwrap(),
 			vec![0],
 		);
 	}
@@ -613,7 +613,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox", &code, true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_sandbox", &code).unwrap(),
 			vec![1],
 		);
 	}
@@ -647,7 +647,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox_args", &code, true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_sandbox_args", &code).unwrap(),
 			vec![1],
 		);
 	}
@@ -669,7 +669,7 @@ mod tests {
 		"#).unwrap();
 
 		assert_eq!(
-			WasmExecutor::new(8, 8).call(&mut ext, &test_code[..], "test_sandbox_return_val", &code, true).0.unwrap(),
+			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
 			vec![1],
 		);
 	}

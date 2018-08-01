@@ -96,7 +96,7 @@ pub struct Service<Components: components::Components> {
 pub fn new_client<Factory: components::ServiceFactory>(config: FactoryFullConfiguration<Factory>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
-	let executor = NativeExecutor::with_heap_pages(config.min_heap_pages, config.max_heap_pages);
+	let executor = NativeExecutor::with_heap_pages(config.max_heap_pages);
 	let (client, _) = components::FullComponents::<Factory>::build_client(
 		&config,
 		executor,
@@ -118,7 +118,7 @@ impl<Components> Service<Components>
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
-		let executor = NativeExecutor::with_heap_pages(config.min_heap_pages, config.max_heap_pages);
+		let executor = NativeExecutor::with_heap_pages(config.max_heap_pages);
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 		for seed in &config.keys {
@@ -208,7 +208,7 @@ impl<Components> Service<Components>
 					chain,
 					author,
 					rpc_config.clone(),
-					)
+				)
 			};
 			(
 				maybe_start_server(config.rpc_http, |address| rpc::start_http(address, handler()))?,
@@ -227,12 +227,12 @@ impl<Components> Service<Components>
 					url: url,
 					on_connect: Box::new(move || {
 						telemetry!("system.connected";
-								   "name" => name.clone(),
-								   "implementation" => impl_name.clone(),
-								   "version" => version.clone(),
-								   "config" => "",
-								   "chain" => chain_name.clone(),
-								   );
+							"name" => name.clone(),
+							"implementation" => impl_name.clone(),
+							"version" => version.clone(),
+							"config" => "",
+							"chain" => chain_name.clone(),
+						);
 					}),
 				}))
 			},

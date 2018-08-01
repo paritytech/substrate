@@ -122,10 +122,7 @@ impl OverlayedChanges {
 /// State Machine Error bound.
 ///
 /// This should reflect WASM error type bound for future compatibility.
-pub trait Error: 'static + fmt::Debug + fmt::Display + Send {
-	/// Error implies execution should be retried.
-	fn needs_retry(&self) -> bool { false }
-}
+pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 
 impl Error for ExecutionError {}
 
@@ -302,7 +299,7 @@ pub fn execute_using_consensus_failure_handler<
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
 
-		let (result, was_native, delta) = loop {
+		let (result, was_native, delta) = {
 			let ((result, was_native), delta) = {
 				let mut externalities = ext::Ext::new(overlay, backend);
 				(
@@ -317,12 +314,7 @@ pub fn execute_using_consensus_failure_handler<
 					externalities.transaction()
 				)
 			};
-
-			if result.as_ref().err().map_or(false, |e| e.needs_retry()) {
-				overlay.prospective = orig_prospective.clone();
-			} else {
-				break (result, was_native, delta)
-			}
+			(result, was_native, delta)
 		};
 
 		// run wasm separately if we did run native the first time and we're meant to run both
@@ -331,7 +323,7 @@ pub fn execute_using_consensus_failure_handler<
 		{
 			overlay.prospective = orig_prospective.clone();
 
-			let (wasm_result, wasm_delta) = loop {
+			let (wasm_result, wasm_delta) = {
 				let ((result, _), delta) = {
 					let mut externalities = ext::Ext::new(overlay, backend);
 					(
@@ -345,12 +337,7 @@ pub fn execute_using_consensus_failure_handler<
 						externalities.transaction()
 					)
 				};
-
-				if result.as_ref().err().map_or(false, |e| e.needs_retry()) {
-					overlay.prospective = orig_prospective.clone();
-				} else {
-					break (result, delta)
-				}
+				(result, delta)
 			};
 
 			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
