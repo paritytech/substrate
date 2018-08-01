@@ -32,6 +32,7 @@ extern crate substrate_state_machine as state_machine;
 #[macro_use] extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 
 extern crate ed25519;
+extern crate fnv;
 extern crate futures;
 extern crate parking_lot;
 extern crate triehash;
@@ -50,13 +51,15 @@ pub mod block_builder;
 pub mod light;
 mod call_executor;
 mod client;
+mod notifications;
 
+pub use blockchain::Info as ChainInfo;
+pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
 pub use client::{
 	new_in_mem,
 	BlockStatus, BlockOrigin, BlockchainEventStream, BlockchainEvents,
 	Client, ClientInfo, ChainHead,
 	ImportResult, JustifiedHeader,
 };
-pub use blockchain::Info as ChainInfo;
-pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
+pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;

@@ -173,9 +173,10 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let mut runtime = Runtime::new()?;
 	let _rpc_servers = {
 		let handler = || {
+			let state = rpc::apis::state::State::new(client.clone(), runtime.executor());
 			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
 			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool), runtime.executor());
-			rpc::rpc_handler::<Block, _, _, _, _>(client.clone(), chain, author, DummySystem)
+			rpc::rpc_handler::<Block, _, _, _, _>(state, chain, author, DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();

@@ -16,11 +16,11 @@
 
 //! Polkadot Client data backend
 
-use state_machine::backend::Backend as StateBackend;
 use error;
 use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use state_machine::backend::Backend as StateBackend;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block: BlockT> {
