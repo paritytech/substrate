@@ -28,11 +28,14 @@ use RuntimeInfo;
 
 // For the internal Runtime Cache:
 // Is it compatible enough to run this natively or do we need to fall back on the WasmModule
+
 enum Compatibility {
 	InvalidVersion(WasmModule),
-	IsCompatible(RuntimeVersion),
+	IsCompatible(RuntimeVersion, WasmModule),
 	NotCompatible(RuntimeVersion, WasmModule)
 }
+
+unsafe impl Send for Compatibility {}
 
 type CacheType = HashMap<u64, Compatibility>;
 
@@ -54,6 +57,7 @@ fn gen_cache_key(code: &[u8]) -> u64 {
 /// the runtime version entry for `code`, determines whether `Compatibility::IsCompatible`
 /// can be used by by comparing returned RuntimeVersion to `ref_version`
 fn fetch_cached_runtime_version<'a, E: Externalities>(
+	wasm_executor: &WasmExecutor,
 	cache: &'a mut MutexGuard<CacheType>,
 	ext: &mut E,
 	code: &[u8],
@@ -62,12 +66,12 @@ fn fetch_cached_runtime_version<'a, E: Externalities>(
 	cache.entry(gen_cache_key(code))
 		.or_insert_with(|| {
 			let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-			let version = WasmExecutor::new(8, 8).call_in_wasm_module(ext, &module, "version", &[]).ok()
+			let version = wasm_executor.call_in_wasm_module(ext, &module, "version", &[]).ok()
 				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
 
 			if let Some(v) = version {
 				if ref_version.can_call_with(&v) {
-					Compatibility::IsCompatible(v)
+					Compatibility::IsCompatible(v, module)
 				} else {
 					Compatibility::NotCompatible(v, module)
 				}
@@ -109,8 +113,8 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	const VERSION: RuntimeVersion;
 
 	/// Construct corresponding `NativeExecutor` with given `heap_pages`.
-	fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> NativeExecutor<Self> where Self: Sized {
-		NativeExecutor::with_heap_pages(min_heap_pages, max_heap_pages)
+	fn with_heap_pages(max_heap_pages: usize) -> NativeExecutor<Self> where Self: Sized {
+		NativeExecutor::with_heap_pages(max_heap_pages)
 	}
 }
 
@@ -126,15 +130,10 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// Create new instance with specific number of pages for wasm fallback's heap.
-	pub fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> Self {
-		// FIXME: set this entry at compile time
-		RUNTIMES_CACHE.lock().insert(
-			gen_cache_key(D::native_equivalent()),
-			Compatibility::IsCompatible(D::VERSION));
-
+	pub fn with_heap_pages(max_heap_pages: usize) -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: WasmExecutor::new(min_heap_pages, max_heap_pages),
+			fallback: WasmExecutor::new(max_heap_pages),
 		}
 	}
 }
@@ -157,8 +156,8 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		code: &[u8],
 	) -> Option<RuntimeVersion> {
 		let mut c = RUNTIMES_CACHE.lock();
-		match fetch_cached_runtime_version(&mut c, ext, code, D::VERSION) {
-			Compatibility::IsCompatible(v) | Compatibility::NotCompatible(v, _) => Some(v.clone()),
+		match fetch_cached_runtime_version(&self.fallback, &mut c, ext, code, D::VERSION) {
+			Compatibility::IsCompatible(v, _) | Compatibility::NotCompatible(v, _) => Some(v.clone()),
 			Compatibility::InvalidVersion(_m) => None
 		}
 	}
@@ -176,11 +175,9 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 		use_native: bool,
 	) -> (Result<Vec<u8>>, bool) {
 		let mut c = RUNTIMES_CACHE.lock();
-		match (use_native, fetch_cached_runtime_version(&mut c, ext, code, D::VERSION)) {
-			(_, Compatibility::NotCompatible(_, m)) | (_, Compatibility::InvalidVersion(m)) =>
+		match (use_native, fetch_cached_runtime_version(&self.fallback, &mut c, ext, code, D::VERSION)) {
+			(_, Compatibility::NotCompatible(_, m)) | (_, Compatibility::InvalidVersion(m)) | (false, Compatibility::IsCompatible(_, m)) =>
 				(self.fallback.call_in_wasm_module(ext, m, method, data), false),
-			(false, _) =>
-				(self.fallback.call(ext, code, method, data, false).0, false),
 			_ => (D::dispatch(ext, method, data), true),
 		}
 	}
@@ -211,8 +208,8 @@ macro_rules! native_executor_instance {
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
 
-			fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::with_heap_pages(min_heap_pages, max_heap_pages)
+			fn with_heap_pages(max_heap_pages: usize) -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor::with_heap_pages(max_heap_pages)
 			}
 		}
 	}
