@@ -17,14 +17,14 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use rstd::prelude::*;
-use sandbox;
-use gas::{GasMeter, GasMeterResult};
-use runtime_primitives::traits::{As, CheckedMul};
-use {Trait};
 use exec::{CallReceipt, CreateReceipt};
-use system;
+use gas::{GasMeter, GasMeterResult};
+use rstd::prelude::*;
+use runtime_primitives::traits::{As, CheckedMul};
+use sandbox;
 use staking;
+use system;
+use Trait;
 
 type BalanceOf<T> = <T as staking::Trait>::Balance;
 type AccountIdOf<T> = <T as system::Trait>::AccountId;
@@ -173,9 +173,7 @@ fn to_execution_result<E: Ext>(
 		_ => unreachable!(),
 	};
 
-	Ok(ExecutionResult {
-		return_data,
-	})
+	Ok(ExecutionResult { return_data })
 }
 
 /// The result of execution of a smart-contract.
@@ -267,10 +265,10 @@ impl<T: Trait> Default for Config<T> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::collections::HashMap;
-	use wabt;
 	use gas::GasMeter;
-	use ::tests::Test;
+	use std::collections::HashMap;
+	use tests::Test;
+	use wabt;
 
 	#[derive(Debug, PartialEq, Eq)]
 	struct CreateEntry {
@@ -314,9 +312,7 @@ mod tests {
 			let address = self.next_account_id;
 			self.next_account_id += 1;
 
-			Ok(CreateReceipt {
-				address,
-			})
+			Ok(CreateReceipt { address })
 		}
 		fn call(
 			&mut self,
@@ -365,7 +361,11 @@ mod tests {
 		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
 		let mut mock_ext = MockExt::default();
-		execute(&code_transfer, &mut mock_ext, &mut GasMeter::with_limit(50_000, 1)).unwrap();
+		execute(
+			&code_transfer,
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		).unwrap();
 
 		assert_eq!(&mock_ext.transfers, &[TransferEntry { to: 2, value: 6 }]);
 	}
@@ -388,7 +388,11 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 
 		assert_matches!(
-			execute(&code_mem, &mut mock_ext, &mut GasMeter::with_limit(100_000, 1)),
+			execute(
+				&code_mem,
+				&mut mock_ext,
+				&mut GasMeter::with_limit(100_000, 1)
+			),
 			Err(_)
 		);
 	}

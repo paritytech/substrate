@@ -161,7 +161,7 @@ mod tests {
 	use parity_wasm::elements::ValueType;
 	use runtime_primitives::traits::{As, Zero};
 	use sandbox::{self, ReturnValue, TypedValue};
-	use vm::env_def::{HostFunctionSet, HostFunction};
+	use vm::env_def::{HostFunction, HostFunctionSet};
 	use vm::tests::MockExt;
 	use vm::{Ext, Runtime};
 	use Trait;
