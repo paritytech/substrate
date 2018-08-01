@@ -156,8 +156,19 @@ impl Store {
 	// TODO: Remove this
 	pub fn generate_from_seed(&mut self, seed: &str) -> Result<Pair> {
 		let mut s: [u8; 32] = [' ' as u8; 32];
-		let len = ::std::cmp::min(32, seed.len());
-		&mut s[..len].copy_from_slice(&seed.as_bytes()[..len]);
+		
+		let was_hex = if seed.len() == 66 && &seed[0..2] == "0x" {
+			if let Ok(d) = hex::decode(&seed[2..]) {
+				s.copy_from_slice(&d);
+				true
+			} else { false }
+		} else { false };
+
+		if !was_hex {
+			let len = ::std::cmp::min(32, seed.len());
+			&mut s[..len].copy_from_slice(&seed.as_bytes()[..len]);
+		}
+
 		let pair = Pair::from_seed(&s);
 		self.additional.insert(pair.public(), s);
 		Ok(pair)
