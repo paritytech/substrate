@@ -170,7 +170,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Propose a sensitive action to be taken.
+	/// Sponsor a proposed sensitive action to be taken.
 	fn second(aux: &T::PublicAux, proposal: PropIndex) -> Result {
 		let mut deposit = Self::deposit_of(proposal)
 			.ok_or("can only second an existing proposal")?;

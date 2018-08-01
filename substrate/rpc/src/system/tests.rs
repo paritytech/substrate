@@ -22,7 +22,7 @@ impl SystemApi for () {
 		Ok("testclient".into())
 	}
 	fn system_version(&self) -> Result<String> {
-		Ok("0.2.1".into())
+		Ok("0.2.2".into())
 	}
 	fn system_chain(&self) -> Result<String> {
 		Ok("testchain".into())
@@ -41,7 +41,7 @@ fn system_name_works() {
 fn system_version_works() {
 	assert_eq!(
 		SystemApi::system_version(&()).unwrap(),
-		"0.2.1".to_owned()
+		"0.2.2".to_owned()
 	);
 }
 
