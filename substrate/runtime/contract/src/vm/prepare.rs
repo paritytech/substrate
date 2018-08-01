@@ -119,7 +119,7 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 			if import.module() != "env" {
 				// This import tries to import something from non-"env" module,
 				// but all imports are located in "env" at the moment.
-				return Err(Error::Deserialization);
+				return Err(Error::Instantiate);
 			}
 
 			let type_idx = match import.external() {
@@ -133,12 +133,12 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 
 			let Type::Function(ref func_ty) = types
 				.get(*type_idx as usize)
-				.ok_or_else(|| Error::Deserialization)?;
+				.ok_or_else(|| Error::Instantiate)?;
 
 			let ext_func = env
 				.funcs
 				.get(import.field())
-				.ok_or_else(|| Error::Deserialization)?;
+				.ok_or_else(|| Error::Instantiate)?;
 			if !ext_func.func_type_matches(func_ty) {
 				return Err(Error::Instantiate);
 			}
@@ -253,7 +253,7 @@ mod tests {
 		assert_matches!(r, Ok(_));
 
 		let r = parse_and_prepare_wat(r#"(module (import "vne" "memory" (memory 1 1)))"#);
-		assert_matches!(r, Err(Error::Deserialization));
+		assert_matches!(r, Err(Error::Instantiate));
 
 		// initial exceed maximum
 		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 16 1)))"#);
