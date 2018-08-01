@@ -173,7 +173,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	let mut runtime = Runtime::new()?;
 	let _rpc_servers = {
 		let handler = || {
-			let state = rpc::apis::chain::State::new(client.clone(), runtime.executor());
+			let state = rpc::apis::state::State::new(client.clone(), runtime.executor());
 			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
 			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool), runtime.executor());
 			rpc::rpc_handler::<Block, _, _, _, _>(state, chain, author, DummySystem)
