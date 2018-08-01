@@ -18,6 +18,10 @@ triehash = { version = "0.1.2", optional = true }
 ed25519 = { path = "../ed25519", optional = true }
 hashdb = { git = "https://github.com/paritytech/parity-common" }
 plain_hasher = { git = "https://github.com/paritytech/parity-common" }
+rlp = { git = "https://github.com/paritytech/parity-common" }
+
+[dev-dependencies]
+heapsize = "0.4"
 
 [features]
 default = ["std"]

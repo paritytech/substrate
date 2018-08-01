@@ -25,6 +25,10 @@ extern crate triehash;
 extern crate ed25519;
 extern crate hashdb;
 extern crate plain_hasher;
+extern crate rlp;
+
+#[cfg(test)]
+extern crate heapsize;
 
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
@@ -33,14 +37,14 @@ pub use primitives::{blake2_256, twox_128, twox_256};
 
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
-use primitives::hash::H256;
+use primitives::H256;
 use hashdb::Hasher;
 use plain_hasher::PlainHasher;
 
 // TODO: use the real error, not NoError.
 
 // TODO: This is just a sanity check toy impl of `Hasher` – this needs to go somewhere else and possibly be renamed to `Hash`?
-struct MyHasher;
+pub struct MyHasher;
 impl Hasher for MyHasher {
 	type Out = H256;
 	type StdHasher = PlainHasher;
@@ -206,7 +210,9 @@ macro_rules! impl_stubs {
 #[cfg(test)]
 mod std_tests {
 	use super::*;
+	use rlp::{Encodable, Decodable, RlpStream, Rlp};
 
+	// TODO: remove these tests (heapsizeof, encodable, decodable)
 	#[test]
 	fn test_heapsizeof() {
 		use heapsize::HeapSizeOf;
@@ -214,9 +220,27 @@ mod std_tests {
 		assert_eq!(h.heap_size_of_children(), 0);
 	}
 
+	// TODO: remove these tests (heapsizeof, encodable, decodable)
+	#[test]
+	fn test_hash_is_encodable() {
+		let h = H256::from(32);
+		let mut s = RlpStream::new();
+		h.rlp_append(&mut s);
+		let rlp_bytes = s.drain();
+		assert_eq!(rlp_bytes.into_vec(), vec![160, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32] );
+	}
+
+	// TODO: remove these tests (heapsizeof, encodable, decodable)
+	#[test]
+	fn test_hash_is_decodable() {
+		let data = Rlp::new(&[160, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32]);
+		let h = H256::decode(&data).unwrap();
+		assert_eq!(h, H256::from(32));
+	}
+
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::new();
+		let mut t = TestExternalities::<MyHasher>::new();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -237,7 +261,7 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<MyHasher> = map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		];
 
@@ -253,7 +277,7 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<MyHasher> = map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
