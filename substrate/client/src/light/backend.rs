@@ -62,7 +62,11 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {
+impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>,
+{
 	type BlockImportOperation = ImportOperation<Block, F>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<Block, F>;

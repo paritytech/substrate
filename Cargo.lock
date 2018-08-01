@@ -1,4 +1,27 @@
 [[package]]
+name = "adder"
+version = "0.1.0"
+dependencies = [
+ "polkadot-parachain 0.1.0",
+ "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "adder-collator"
+version = "0.1.0"
+dependencies = [
+ "adder 0.1.0",
+ "ctrlc 1.1.1 (git+https://github.com/paritytech/rust-ctrlc.git)",
+ "ed25519 0.1.0",
+ "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-collator 0.1.0",
+ "polkadot-parachain 0.1.0",
+ "polkadot-primitives 0.1.0",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -965,7 +988,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "jsonrpc-core"
 version = "8.0.2"
-source = "git+https://github.com/paritytech/jsonrpc.git#c3f02dfbbef0c4afe16633f503917d4a0501ee9d"
+source = "git+https://github.com/paritytech/jsonrpc.git#7e5df8ca2acc01c608b2d2bd8cdcdb19d8cbaa90"
 dependencies = [
  "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -977,7 +1000,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-http-server"
 version = "8.0.1"
-source = "git+https://github.com/paritytech/jsonrpc.git#c3f02dfbbef0c4afe16633f503917d4a0501ee9d"
+source = "git+https://github.com/paritytech/jsonrpc.git#7e5df8ca2acc01c608b2d2bd8cdcdb19d8cbaa90"
 dependencies = [
  "hyper 0.11.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git)",
@@ -990,7 +1013,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-macros"
 version = "8.0.1"
-source = "git+https://github.com/paritytech/jsonrpc.git#c3f02dfbbef0c4afe16633f503917d4a0501ee9d"
+source = "git+https://github.com/paritytech/jsonrpc.git#7e5df8ca2acc01c608b2d2bd8cdcdb19d8cbaa90"
 dependencies = [
  "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git)",
  "jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git)",
@@ -1000,7 +1023,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-pubsub"
 version = "8.0.1"
-source = "git+https://github.com/paritytech/jsonrpc.git#c3f02dfbbef0c4afe16633f503917d4a0501ee9d"
+source = "git+https://github.com/paritytech/jsonrpc.git#7e5df8ca2acc01c608b2d2bd8cdcdb19d8cbaa90"
 dependencies = [
  "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git)",
  "log 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1010,7 +1033,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-server-utils"
 version = "8.0.1"
-source = "git+https://github.com/paritytech/jsonrpc.git#c3f02dfbbef0c4afe16633f503917d4a0501ee9d"
+source = "git+https://github.com/paritytech/jsonrpc.git#7e5df8ca2acc01c608b2d2bd8cdcdb19d8cbaa90"
 dependencies = [
  "bytes 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "globset 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1023,7 +1046,7 @@ dependencies = [
 [[package]]
 name = "jsonrpc-ws-server"
 version = "8.0.0"
-source = "git+https://github.com/paritytech/jsonrpc.git#c3f02dfbbef0c4afe16633f503917d4a0501ee9d"
+source = "git+https://github.com/paritytech/jsonrpc.git#7e5df8ca2acc01c608b2d2bd8cdcdb19d8cbaa90"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "jsonrpc-core 8.0.2 (git+https://github.com/paritytech/jsonrpc.git)",
@@ -1951,7 +1974,7 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2672,7 +2695,8 @@ version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.23 (registry+https://github.com/rust-lang/crates.io-index)",
+ "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2732,7 +2756,7 @@ dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2745,7 +2769,7 @@ dependencies = [
  "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "twox-hash 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2864,9 +2888,9 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-serializer 0.1.0",
- "twox-hash 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "uint 0.2.2 (git+https://github.com/paritytech/parity-common?branch=add-fixed-hash)",
- "wasmi 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "uint 0.1.2 (git+https://github.com/rphmeier/primitives.git?branch=compile-for-wasm)",
+ "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3053,7 +3077,7 @@ dependencies = [
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-std 0.1.0",
  "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3815,7 +3839,7 @@ dependencies = [
 
 [[package]]
 name = "wasmi"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4233,8 +4257,8 @@ dependencies = [
 "checksum wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "182ae543249ccf2705f324d233891c1176fca142e137b55ba43d9dbfe93f18a2"
 "checksum wabt-sys 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "8ca77c6b934a2b32618941b2f565aac43b8cb7141378c3b4fba4d8fcdcd57da3"
 "checksum want 0.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "a05d9d966753fa4b5c8db73fcab5eed4549cfe0e1e4e66911e5564a0085c35d1"
-"checksum wasmi 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "9b4a6d379e9332b1b1f52c5a87f2481c85c7c931d8ec411963dfb8f26b1ec1e3"
-"checksum websocket 0.20.3 (registry+https://github.com/rust-lang/crates.io-index)" = "9234b4e667c19995475227172446884f516ec0963380afa960d962ab9f4c0bfa"
+"checksum wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "522fe3fdd44a56f25cd5ddcd8ccdb1cf2e982ceb28fcb00f41d8a018ae5245a8"
+"checksum websocket 0.20.2 (registry+https://github.com/rust-lang/crates.io-index)" = "eb277e7f4c23dc49176f74ae200e77651764efb2c25f56ad2d22623b63826369"
 "checksum winapi 0.2.8 (registry+https://github.com/rust-lang/crates.io-index)" = "167dc9d6949a9b857f3451275e911c3f44255842c1f7a76f33c55103a909087a"
 "checksum winapi 0.3.5 (registry+https://github.com/rust-lang/crates.io-index)" = "773ef9dcc5f24b7d850d0ff101e542ff24c3b090a9768e03ff889fdef41f00fd"
 "checksum winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "2d315eee3b34aca4797b2da6b13ed88266e6d612562a0c46390af8299fc699bc"

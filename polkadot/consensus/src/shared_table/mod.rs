@@ -143,6 +143,7 @@ impl SharedTableInner {
 						fetch_block_data,
 						fetch_extrinsic,
 						evaluate: checking_validity,
+						ensure_available: checking_availability,
 					})
 				}
 			}
@@ -206,6 +207,7 @@ struct Work<D: Future, E: Future> {
 	fetch_block_data: future::Fuse<D>,
 	fetch_extrinsic: Option<future::Fuse<E>>,
 	evaluate: bool,
+	ensure_available: bool,
 }
 
 /// Primed statement producer.
@@ -235,31 +237,35 @@ impl<D, E, C, Err> Future for PrimedStatementProducer<D, E, C>
 				});
 
 				let hash = work.candidate_receipt.hash();
+
+				debug!(target: "consensus", "Making validity statement about candidate {}: is_good? {:?}", hash, is_good);
 				self.inner.produced_statements.validity = match is_good {
 					Some(true) => Some(GenericStatement::Valid(hash)),
 					Some(false) => Some(GenericStatement::Invalid(hash)),
 					None => None,
 				};
+
+				work.evaluate = false;
 			}
 		}
 
-		if let Some(ref mut fetch_extrinsic) = work.fetch_extrinsic {
-			if let Async::Ready(extrinsic) = fetch_extrinsic.poll()? {
+		if let Async::Ready(Some(extrinsic)) = work.fetch_extrinsic.poll()? {
+			if work.ensure_available {
+				let hash = work.candidate_receipt.hash();
+				debug!(target: "consensus", "Claiming candidate {} available.", hash);
+
+				// TODO: actually wait for block data and then ensure availability.
 				self.inner.produced_statements.extrinsic = Some(extrinsic);
+				self.inner.produced_statements.availability =
+					Some(GenericStatement::Available(hash));
+
+				work.ensure_available = false;
 			}
 		}
 
-		let done = self.inner.produced_statements.block_data.is_some() && {
-			if work.evaluate {
-				true
-			} else if self.inner.produced_statements.extrinsic.is_some() {
-				self.inner.produced_statements.availability =
-					Some(GenericStatement::Available(work.candidate_receipt.hash()));
-
-				true
-			} else {
-				false
-			}
+		let done = match (work.evaluate, work.ensure_available) {
+			(false, false) => true,
+			_ => false,
 		};
 
 		if done {
@@ -356,10 +362,25 @@ impl SharedTable {
 	}
 
 	/// Sign and import a local statement.
-	pub fn sign_and_import(&self, statement: table::Statement) -> SignedStatement {
-		let proposed_digest = match statement {
-			GenericStatement::Candidate(ref c) => Some(c.hash()),
-			_ => None,
+	///
+	/// For candidate statements, this may also produce a second signed statement
+	/// concerning the availability of the candidate data.
+	pub fn sign_and_import(&self, statement: table::Statement)
+		-> (SignedStatement, Option<SignedStatement>)
+	{
+		let (proposed_digest, availability) = match statement {
+			GenericStatement::Candidate(ref c) => {
+				let mut availability = None;
+				let hash = c.hash();
+
+				// TODO: actually store the data in an availability store of some kind.
+				if self.context.is_availability_guarantor_of(&self.context.local_id(), &c.parachain_index) {
+					availability = Some(self.context.sign_statement(GenericStatement::Available(hash)));
+				}
+
+				(Some(hash), availability)
+			}
+			_ => (None, None),
 		};
 
 		let signed_statement = self.context.sign_statement(statement);
@@ -370,7 +391,13 @@ impl SharedTable {
 		}
 
 		inner.table.import_statement(&*self.context, signed_statement.clone());
-		signed_statement
+
+		// ensure the availability statement is imported after the candidate.
+		if let Some(a) = availability.clone() {
+			inner.table.import_statement(&*self.context, a);
+		}
+
+		(signed_statement, availability)
 	}
 
 	/// Execute a closure using a specific candidate.
@@ -543,5 +570,6 @@ mod tests {
 
 		assert!(producer.work.fetch_extrinsic.is_some(), "should fetch extrinsic when guaranteeing availability");
 		assert!(!producer.work.evaluate, "should not evaluate validity");
+		assert!(producer.work.ensure_available);
 	}
 }
