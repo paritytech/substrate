@@ -31,6 +31,7 @@ use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
+use notifications::{StorageNotifications, StorageEventStream};
 use {error, in_mem, block_builder, runtime_io, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
@@ -40,6 +41,7 @@ pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotif
 pub struct Client<B, E, Block> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
+	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
@@ -49,7 +51,12 @@ pub struct Client<B, E, Block> where Block: BlockT {
 /// A source of blockchain evenets.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
+	fn import_notification_stream(&self) -> BlockchainEventStream<Block>;
+
+	/// Get storage changes event stream.
+	///
+	/// Passing `None` as `filter_keys` subscribes to all storage changes.
+	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>>;
 }
 
 /// Chain head information.
@@ -182,9 +189,10 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok(Client {
 			backend,
 			executor,
-			import_notification_sinks: Mutex::new(Vec::new()),
-			import_lock: Mutex::new(()),
-			importing_block: RwLock::new(None),
+			storage_notifications: Default::default(),
+			import_notification_sinks: Default::default(),
+			import_lock: Default::default(),
+			importing_block: Default::default(),
 			execution_strategy,
 		})
 	}
@@ -332,7 +340,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
-		let storage_update = match transaction.state()? {
+		let (storage_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
 				let mut r = self.executor.call_at_state(
@@ -359,9 +367,10 @@ impl<B, E, Block> Client<B, E, Block> where
 					},
 				);
 				let (_, storage_update) = r?;
-				Some(storage_update)
+				overlay.commit_prospective();
+				(Some(storage_update), Some(overlay.into_committed()))
 			},
-			None => None,
+			None => (None, None)
 		};
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
@@ -373,7 +382,15 @@ impl<B, E, Block> Client<B, E, Block> where
 			transaction.update_storage(storage_update)?;
 		}
 		self.backend.commit_operation(transaction)?;
+
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
+
+			if let Some(storage_changes) = storage_changes {
+				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
+				self.storage_notifications.lock()
+					.trigger(&hash, storage_changes);
+			}
+
 			let notification = BlockImportNotification::<Block> {
 				hash: hash,
 				origin: origin,
@@ -516,15 +533,19 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
 {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>> {
+	fn import_notification_stream(&self) -> BlockchainEventStream<Block> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
+	}
+
+	/// Get storage changes event stream.
+	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>> {
+		Ok(self.storage_notifications.lock().listen(filter_keys))
 	}
 }
 

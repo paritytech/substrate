@@ -16,7 +16,7 @@
 
 //! Consensus service.
 
-/// Consensus service. A long runnung service that manages BFT agreement and parachain
+/// Consensus service. A long running service that manages BFT agreement and parachain
 /// candidate agreement over the network.
 ///
 /// This uses a handle to an underlying thread pool to dispatch heavy work

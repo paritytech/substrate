@@ -227,7 +227,7 @@ pub fn new_full(config: Configuration, executor: TaskExecutor)
 			consensus_net,
 			service.extrinsic_pool(),
 			executor,
-			::std::time::Duration::from_millis(4000), // TODO: dynamic
+			::std::time::Duration::from_secs(4), // TODO: dynamic
 			key,
 			av_store.clone(),
 		))
@@ -320,13 +320,13 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 				Err(e) => match *e.kind() {
 					transaction_pool::ErrorKind::AlreadyImported(hash) => Some(hash[..].into()),
 					_ => {
-						debug!("Error adding transaction to the pool: {:?}", e);
+						debug!(target: "txpool", "Error adding transaction to the pool: {:?}", e);
 						None
 					},
 				}
 			}
 		} else {
-			debug!("Error decoding transaction");
+			debug!(target: "txpool", "Error decoding transaction");
 			None
 		}
 	}
