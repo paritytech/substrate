@@ -18,14 +18,13 @@
 
 use std::sync::Arc;
 
-use runtime_primitives::traits::Block as BlockT;
-use runtime_primitives::generic::BlockId;
 use client::{self, Client, BlockchainEvents};
-
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use rpc::Result as RpcResult;
 use rpc::futures::{Future, Sink, Stream};
+use runtime_primitives::generic::BlockId;
+use runtime_primitives::traits::Block as BlockT;
 use tokio::runtime::TaskExecutor;
 
 use subscriptions::Subscriptions;
@@ -51,11 +50,11 @@ build_rpc_trait! {
 
 		#[pubsub(name = "chain_newHead")] {
 			/// New head subscription
-			#[rpc(name = "subscribe_newHead")]
+			#[rpc(name = "chain_subscribeNewHead", alias = ["subscribe_newHead", ])]
 			fn subscribe_new_head(&self, Self::Metadata, pubsub::Subscriber<Header>);
 
 			/// Unsubscribe from new head subscription.
-			#[rpc(name = "unsubscribe_newHead")]
+			#[rpc(name = "chain_unsubscribeNewHead", alias = ["unsubscribe_newHead", ])]
 			fn unsubscribe_new_head(&self, SubscriptionId) -> RpcResult<bool>;
 		}
 	}
@@ -72,7 +71,7 @@ pub struct Chain<B, E, Block: BlockT> {
 impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	/// Create new Chain API RPC handler.
 	pub fn new(client: Arc<Client<B, E, Block>>, executor: TaskExecutor) -> Self {
-		Chain {
+		Self {
 			client,
 			subscriptions: Subscriptions::new(executor),
 		}
