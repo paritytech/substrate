@@ -73,6 +73,11 @@ impl<C: Collators, P: PolkadotApi> CollationFetch<C, P> {
 			live_fetch: None,
 		}
 	}
+
+	/// Access the underlying relay parent hash.
+	pub fn relay_parent(&self) -> Hash {
+		self.relay_parent_hash
+	}
 }
 
 impl<C: Collators, P: PolkadotApi> Future for CollationFetch<C, P> {

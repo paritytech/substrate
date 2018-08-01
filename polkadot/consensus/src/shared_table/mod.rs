@@ -20,7 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
-use extrinsic_store::{Key, Store as ExtrinsicStore};
+use extrinsic_store::{Data, Store as ExtrinsicStore};
 use table::{self, Table, Context as TableContextTrait};
 use polkadot_primitives::{Hash, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, BlockData, Collation, Extrinsic, CandidateReceipt};
@@ -259,22 +259,28 @@ impl<D, E, C, Err> Future for PrimedStatementProducer<D, E, C>
 
 		let done = match (&statements.block_data, &statements.extrinsic) {
 			(&Some(ref block), &Some(ref extrinsic)) => {
-				let key = Key(self.inner.relay_parent, work.candidate_receipt.parachain_index);
-				self.inner.extrinsic_store.make_available(
-					key,
-					block.clone(),
-					Some(extrinsic.clone())
-				)?;
+				let candidate_hash = work.candidate_receipt.hash();
+				self.inner.extrinsic_store.make_available(Data {
+					relay_parent: self.inner.relay_parent,
+					parachain_id: work.candidate_receipt.parachain_index,
+					candidate_hash,
+					block_data: block.clone(),
+					extrinsic: Some(extrinsic.clone()),
+				})?;
 
-				statements.availability = Some(GenericStatement::Available(
-					work.candidate_receipt.hash(),
-				));
+				statements.availability = Some(GenericStatement::Available(candidate_hash));
 
 				true
 			}
 			(&Some(ref block), None) => {
-				let key = Key(self.inner.relay_parent, work.candidate_receipt.parachain_index);
-				self.inner.extrinsic_store.make_available(key, block.clone(), None)?;
+				self.inner.extrinsic_store.make_available(Data {
+					relay_parent: self.inner.relay_parent,
+					parachain_id: work.candidate_receipt.parachain_index,
+					candidate_hash: work.candidate_receipt.hash(),
+					block_data: block.clone(),
+					extrinsic: None,
+				})?;
+
 				true
 			}
 			(&None, _) => false,

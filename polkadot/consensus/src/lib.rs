@@ -339,19 +339,42 @@ fn dispatch_collation_work<R, C, P>(
 	router: R,
 	handle: &TaskExecutor,
 	work: Option<CollationFetch<C, P>>,
+	extrinsic_store: Store,
 ) -> exit_future::Signal where
 	C: Collators + Send + 'static,
 	P: PolkadotApi + Send + Sync + 'static,
 	<C::Collation as IntoFuture>::Future: Send + 'static,
 	R: TableRouter + Send + 'static,
 {
+	use extrinsic_store::Data;
+
 	let (signal, exit) = exit_future::signal();
+
+	let work = match work {
+		Some(w) => w,
+		None => return signal,
+	};
+
+	let relay_parent = work.relay_parent();
 	let handled_work = work.then(move |result| match result {
-		Ok(Some((collation, extrinsic))) => {
-			router.local_candidate(collation.receipt, collation.block_data, extrinsic);
+		Ok((collation, extrinsic)) => {
+			let res = extrinsic_store.make_available(Data {
+				relay_parent,
+				parachain_id: collation.receipt.parachain_index,
+				candidate_hash: collation.receipt.hash(),
+				block_data: collation.block_data.clone(),
+				extrinsic: Some(collation.extrinsic.clone()),
+			});
+
+			match res {
+				Ok(()) =>
+					router.local_candidate(collation.receipt, collation.block_data, extrinsic),
+				Err(e) =>
+					warn!(target: "consensus", "Failed to make collation data available"),
+			}
+
 			Ok(())
 		}
-		Ok(None) => Ok(()),
 		Err(_e) => {
 			warn!(target: "consensus", "Failed to collate candidate");
 			Ok(())
