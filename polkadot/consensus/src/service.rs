@@ -60,9 +60,6 @@ fn start_bft<F, C>(
 {
 	const DELAY_UNTIL: Duration = Duration::from_millis(5000);
 
-	debug!(target: "bft", "Starting agreement. Refusing to evaluate for {:?} from now.",
-		DELAY_UNTIL);
-
 	let mut handle = LocalThreadHandle::current();
 	let work = Delay::new(Instant::now() + DELAY_UNTIL)
 		.then(move |res| {
@@ -71,7 +68,14 @@ fn start_bft<F, C>(
 			}
 
 			match bft_service.build_upon(&header) {
-				Ok(maybe_bft_work) => maybe_bft_work,
+				Ok(maybe_bft_work) => {
+					if maybe_bft_work.is_some() {
+						debug!(target: "bft", "Starting agreement. After forced delay for {:?}",
+							DELAY_UNTIL);
+					}
+
+					maybe_bft_work
+				}
 				Err(e) => {
 					warn!(target: "bft", "BFT agreement error: {}", e);
 					None
@@ -156,7 +160,7 @@ impl Service {
 				interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 					if let Ok(best_block) = c.best_block_header() {
 						let hash = best_block.hash();
-						if hash == prev_best {
+						if hash == prev_best && s.live_agreement() != Some(hash) {
 							debug!("Starting consensus round after a timeout");
 							start_bft(best_block, s.clone());
 						}
