@@ -55,7 +55,17 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
 	fn build_raw_storage(self) -> Result<StorageMap, String> {
 		match self.genesis.resolve()? {
+			Genesis::Runtime(gc) => gc.build_raw_storage(),
+			Genesis::Raw(_) =>
+				unreachable!("build_raw_storage is only called from build_storage; in build_storage we check that genesis is not Raw; qed"),
+		}
+	}
+
+	fn build_storage(self) -> Result<StorageMap, String> {
+		match self.genesis.resolve()? {
+			// values are not yet prefixed
 			Genesis::Runtime(gc) => gc.build_storage(),
+			// raw means that values are already prefixed
 			Genesis::Raw(map) => Ok(map.into_iter().map(|(k, v)| (k.0, v.0)).collect()),
 		}
 	}
