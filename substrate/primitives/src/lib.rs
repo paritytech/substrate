@@ -45,6 +45,8 @@ extern crate serde_derive;
 extern crate core;
 #[cfg(feature = "std")]
 extern crate wasmi;
+extern crate hashdb;
+extern crate plain_hasher;
 
 extern crate substrate_runtime_std as rstd;
 
@@ -77,6 +79,7 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 pub mod hexdisplay;
 
 pub mod hash;
+pub mod hasher;
 pub mod sandbox;
 pub mod storage;
 pub mod uint;
@@ -88,6 +91,7 @@ mod tests;
 pub use self::hash::{H160, H256, H512};
 pub use self::uint::U256;
 pub use authority_id::AuthorityId;
+pub use self::hasher::BlakeHasher;
 
 /// A 512-bit value interpreted as a signature.
 pub type Signature = hash::H512;
