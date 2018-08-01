@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
@@ -52,7 +52,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 			};
 			let txpool_status = txpool.light_status();
 			let best_number: u64 = best_block.number().as_();
-			info!(target: "polkadot", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_number, hash);
+			info!(target: "substrate", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_number, hash);
 			telemetry!("system.interval"; "status" => status, "peers" => num_peers, "height" => best_number, "best" => ?hash, "txcount" => txpool_status.transaction_count);
 		} else {
 			warn!("Error getting best block information");
@@ -62,7 +62,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 
 	let client = service.client();
 	let display_block_import = client.import_notification_stream().for_each(|n| {
-		info!(target: "polkadot", "Imported #{} ({})", n.header.number, n.hash);
+		info!(target: "substrate", "Imported #{} ({})", n.header.number(), n.hash);
 		Ok(())
 	});
 

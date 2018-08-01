@@ -205,7 +205,6 @@ mod tests {
 				existential_deposit: 0,
 				transfer_fee: 0,
 				creation_fee: 0,
-				contract_fee: 0,
 				reclaim_rebate: 0,
 				early_era_slash: 0,
 				session_reward: 0,
@@ -248,7 +247,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("786071057714fdd6ea4595eecd4a0f327908d65f462ff5bca0f700fafce588c9").into(),
+			hex!("b97d52254fc967bb94bed485de6a738e9fad05decfda3453711677b8becf6d0a").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -261,7 +260,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("a7f1259cc6b2fa758542f2996e737f8f0de9dec3a9d32641da348178f48b9fc2").into(),
+			hex!("a1f018d2faa339f72f5ee29050b4670d971e2e271cc06c41ee9cbe1f4c6feec9").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -281,7 +280,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("d95fc2cf4541b97ed2cd381fe7a486af8aebad9ed0480c30e9cca184bb207e95").into(),
+			hex!("41d07010f49aa29b2c9aca542cbaa6f59aafd3dda53cdf711c51ddb7d386912e").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,

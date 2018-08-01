@@ -4,14 +4,18 @@ path = "polkadot/src/main.rs"
 
 [package]
 name = "polkadot"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Parity Technologies <admin@parity.io>"]
+build = "build.rs"
 
 [dependencies]
 error-chain = "0.12"
 polkadot-cli = { path = "polkadot/cli" }
 futures = "0.1"
 ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
+
+[build-dependencies]
+vergen = "0.1"
 
 [workspace]
 members = [
@@ -28,6 +32,7 @@ members = [
 	"polkadot/service",
 
 	"substrate/bft",
+	"substrate/cli",
 	"substrate/client",
 	"substrate/client/db",
 	"substrate/codec",
@@ -91,4 +96,5 @@ is-it-maintained-issue-resolution = { repository = "paritytech/polkadot" }
 is-it-maintained-open-issues = { repository = "paritytech/polkadot" }
 
 [profile.release]
-panic = "abort"
+# Substrate runtime requires unwinding.
+panic = "unwind" 

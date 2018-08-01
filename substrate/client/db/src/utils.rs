@@ -41,6 +41,8 @@ pub mod meta_keys {
 	pub const TYPE: &[u8; 4] = b"type";
 	/// Best block key.
 	pub const BEST_BLOCK: &[u8; 4] = b"best";
+	/// Best authorities block key.
+	pub const BEST_AUTHORITIES: &[u8; 4] = b"auth";
 }
 
 /// Database metadata.
@@ -67,6 +69,17 @@ pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u64> {
 		((n >> 8) & 0xff) as u8,
 		(n & 0xff) as u8
 	]
+}
+
+/// Convert block key into block number.
+pub fn db_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u64> {
+	match key.len() {
+		4 => Ok((key[0] as u64) << 24
+			| (key[1] as u64) << 16
+			| (key[2] as u64) << 8
+			| (key[3] as u64)).map(As::sa),
+		_ => Err(client::error::ErrorKind::Backend("Invalid block key".into()).into()),
+	}
 }
 
 /// Maps database error to client error

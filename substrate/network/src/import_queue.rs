@@ -21,9 +21,9 @@ use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
 
-use client::{BlockOrigin, BlockStatus, ImportResult};
-use network_libp2p::{PeerId, Severity};
-use runtime_primitives::generic::BlockId;
+use client::{BlockOrigin, ImportResult};
+use network_libp2p::{NodeIndex, Severity};
+
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use blocks::BlockData;
@@ -41,7 +41,7 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	fn stop(&self);
 	/// Get queue status.
 	fn status(&self) -> ImportQueueStatus<B>;
-	/// Is block with given hash is currently in the queue.
+	/// Is block with given hash currently in the queue.
 	fn is_importing(&self, hash: &B::Hash) -> bool;
 	/// Import bunch of blocks.
 	fn import_blocks(&self, sync: &mut ChainSync<B>, protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>));
@@ -133,6 +133,10 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 	}
 
 	fn import_blocks(&self, _sync: &mut ChainSync<B>, _protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>)) {
+		if blocks.1.is_empty() {
+			return;
+		}
+
 		trace!(target:"sync", "Scheduling {} blocks for import", blocks.1.len());
 
 		let mut queue = self.data.queue.lock();
@@ -202,9 +206,9 @@ trait SyncLinkApi<B: BlockT> {
 	/// Maintain sync.
 	fn maintain_sync(&mut self);
 	/// Disconnect from peer.
-	fn useless_peer(&mut self, peer_id: PeerId, reason: &str);
+	fn useless_peer(&mut self, who: NodeIndex, reason: &str);
 	/// Disconnect from peer and restart sync.
-	fn note_useless_and_restart_sync(&mut self, peer_id: PeerId, reason: &str);
+	fn note_useless_and_restart_sync(&mut self, who: NodeIndex, reason: &str);
 	/// Restart sync.
 	fn restart(&mut self);
 }
@@ -221,8 +225,6 @@ enum SyncLink<'a, B: 'a + BlockT, E: 'a + ExecuteInContext<B>> {
 /// Block import successful result.
 #[derive(Debug, PartialEq)]
 enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debug + PartialEq> {
-	/// Block is not imported.
-	NotImported(H, N),
 	/// Imported known block.
 	ImportedKnown(H, N),
 	/// Imported unknown block.
@@ -233,9 +235,9 @@ enum BlockImportResult<H: ::std::fmt::Debug + PartialEq, N: ::std::fmt::Debug + 
 #[derive(Debug, PartialEq)]
 enum BlockImportError {
 	/// Disconnect from peer and continue import of next bunch of blocks.
-	Disconnect(PeerId),
+	Disconnect(NodeIndex),
 	/// Disconnect from peer and restart sync.
-	DisconnectAndRestart(PeerId),
+	DisconnectAndRestart(NodeIndex),
 	/// Restart sync.
 	Restart,
 }
@@ -250,6 +252,16 @@ fn import_many_blocks<'a, B: BlockT>(
 	let (blocks_origin, blocks) = blocks;
 	let count = blocks.len();
 	let mut imported = 0;
+
+	let blocks_range = match (
+			blocks.first().and_then(|b| b.block.header.as_ref().map(|h| h.number())),
+			blocks.last().and_then(|b| b.block.header.as_ref().map(|h| h.number())),
+		) {
+			(Some(first), Some(last)) if first != last => format!(" ({}..{})", first, last),
+			(Some(first), Some(_)) => format!(" ({})", first),
+			_ => Default::default(),
+		};
+	trace!(target:"sync", "Starting import of {} blocks{}", count, blocks_range);
 
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
@@ -285,16 +297,6 @@ fn import_single_block<B: BlockT>(
 			let number = header.number().clone();
 			let hash = header.hash();
 			let parent = header.parent_hash().clone();
-
-			// check whether the block is known before importing.
-			match chain.block_status(&BlockId::Hash(hash)) {
-				Ok(BlockStatus::InChain) => return Ok(BlockImportResult::NotImported(hash, number)),
-				Ok(_) => {},
-				Err(e) => {
-					debug!(target: "sync", "Error importing block {}: {:?}: {:?}", number, hash, e);
-					return Err(BlockImportError::Restart);
-				}
-			}
 
 			let result = chain.import(
 				block_origin,
@@ -347,25 +349,24 @@ fn process_import_result<'a, B: BlockT>(
 ) -> usize
 {
 	match result {
-		Ok(BlockImportResult::NotImported(_, _)) => 0,
 		Ok(BlockImportResult::ImportedKnown(hash, number)) => {
 			link.block_imported(&hash, number);
-			0
+			1
 		},
 		Ok(BlockImportResult::ImportedUnknown(hash, number)) => {
 			link.block_imported(&hash, number);
 			1
 		},
-		Err(BlockImportError::Disconnect(peer_id)) => {
+		Err(BlockImportError::Disconnect(who)) => {
 			// TODO: FIXME: @arkpar BlockImport shouldn't be trying to manage the peer set.
 			// This should contain an actual reason.
-			link.useless_peer(peer_id, "Import result was stated Disconnect");
+			link.useless_peer(who, "Import result was stated Disconnect");
 			0
 		},
-		Err(BlockImportError::DisconnectAndRestart(peer_id)) => {
+		Err(BlockImportError::DisconnectAndRestart(who)) => {
 			// TODO: FIXME: @arkpar BlockImport shouldn't be trying to manage the peer set.
 			// This should contain an actual reason.
-			link.note_useless_and_restart_sync(peer_id, "Import result was stated DisconnectAndRestart");
+			link.note_useless_and_restart_sync(who, "Import result was stated DisconnectAndRestart");
 			0
 		},
 		Err(BlockImportError::Restart) => {
@@ -403,18 +404,18 @@ impl<'a, B: 'static + BlockT, E: ExecuteInContext<B>> SyncLinkApi<B> for SyncLin
 	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
 		self.with_sync(|sync, _| sync.block_imported(&hash, number))
 	}
-	
+
 	fn maintain_sync(&mut self) {
 		self.with_sync(|sync, protocol| sync.maintain_sync(protocol))
 	}
 
-	fn useless_peer(&mut self, peer_id: PeerId, reason: &str) {
-		self.with_sync(|_, protocol| protocol.report_peer(peer_id, Severity::Useless(reason)))
+	fn useless_peer(&mut self, who: NodeIndex, reason: &str) {
+		self.with_sync(|_, protocol| protocol.report_peer(who, Severity::Useless(reason)))
 	}
 
-	fn note_useless_and_restart_sync(&mut self, peer_id: PeerId, reason: &str) {
+	fn note_useless_and_restart_sync(&mut self, who: NodeIndex, reason: &str) {
 		self.with_sync(|sync, protocol| {
-			protocol.report_peer(peer_id, Severity::Useless(reason));	// is this actually malign or just useless?
+			protocol.report_peer(who, Severity::Useless(reason));	// is this actually malign or just useless?
 			sync.restart(protocol);
 		})
 	}
@@ -431,6 +432,7 @@ pub mod tests {
 	use test_client::{self, TestClient};
 	use test_client::runtime::{Block, Hash};
 	use on_demand::tests::DummyExecutor;
+	use runtime_primitives::generic::BlockId;
 	use super::*;
 
 	/// Blocks import queue that is importing blocks in the same thread.
@@ -490,8 +492,8 @@ pub mod tests {
 		fn chain(&self) -> &Client<Block> { &*self.chain }
 		fn block_imported(&mut self, _hash: &Hash, _number: NumberFor<Block>) { self.imported += 1; }
 		fn maintain_sync(&mut self) { self.maintains += 1; }
-		fn useless_peer(&mut self, _: PeerId, _: &str) { self.disconnects += 1; }
-		fn note_useless_and_restart_sync(&mut self, _: PeerId, _: &str) { self.disconnects += 1; self.restarts += 1; }
+		fn useless_peer(&mut self, _: NodeIndex, _: &str) { self.disconnects += 1; }
+		fn note_useless_and_restart_sync(&mut self, _: NodeIndex, _: &str) { self.disconnects += 1; self.restarts += 1; }
 		fn restart(&mut self) { self.restarts += 1; }
 	}
 
@@ -522,7 +524,7 @@ pub mod tests {
 	#[test]
 	fn import_single_good_known_block_is_ignored() {
 		let (client, hash, number, block) = prepare_good_block();
-		assert_eq!(import_single_block(&client, BlockOrigin::File, block), Ok(BlockImportResult::NotImported(hash, number)));
+		assert_eq!(import_single_block(&client, BlockOrigin::File, block), Ok(BlockImportResult::ImportedKnown(hash, number)));
 	}
 
 	#[test]
@@ -542,11 +544,11 @@ pub mod tests {
 	#[test]
 	fn process_import_result_works() {
 		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::NotImported(Default::default(), 0))), 0);
-		assert_eq!(link.total(), 0);
+		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
+		assert_eq!(link.total(), 1);
 
 		let mut link = TestLink::new();
-		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 0);
+		assert_eq!(process_import_result::<Block>(&mut link, Ok(BlockImportResult::ImportedKnown(Default::default(), 0))), 1);
 		assert_eq!(link.total(), 1);
 		assert_eq!(link.imported, 1);
 
