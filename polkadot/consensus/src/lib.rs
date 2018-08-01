@@ -273,7 +273,12 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			sign_with.public().into(),
 		)?;
 
+		info!("Starting consensus session on top of parent {:?}. Local parachain duty is {:?}",
+			parent_hash, local_duty.validation);
+
 		let active_parachains = self.client.active_parachains(&id)?;
+
+		debug!(target: "consensus", "Active parachains: {:?}", active_parachains);
 
 		let n_parachains = active_parachains.len();
 		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
