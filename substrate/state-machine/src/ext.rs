@@ -155,8 +155,6 @@ where
 	}
 
 	fn storage_root(&mut self) -> H::Out
-	where
-		H::Out: Ord + Encodable
 	{
 		if let Some((_, ref root)) =  self.transaction {
 			return root.clone();

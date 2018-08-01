@@ -23,6 +23,7 @@ use triehash::trie_root;
 use hashdb::Hasher;
 use rlp::Encodable;
 use std::marker::PhantomData;
+use std::iter::FromIterator;
 
 /// Simple HashMap-based Externalities impl.
 pub struct TestExternalities<H> {
@@ -34,6 +35,16 @@ impl<H: Hasher> TestExternalities<H> {
 	/// Create a new instance of `TestExternalities`
 	pub fn new() -> Self {
 		TestExternalities {inner: HashMap::new(), hasher: PhantomData}
+	}
+}
+
+impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> {
+	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
+		let mut t = Self::new();
+		for i in iter {
+			t.inner.insert(i.0, i.1);
+		}
+		t
 	}
 }
 
