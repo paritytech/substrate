@@ -55,7 +55,7 @@ pub trait BlockchainEvents<Block: BlockT> {
 
 	/// Get storage changes event stream.
 	///
-	/// Passing `None` as keys subscribes to all possible keys
+	/// Passing `None` as `filter_keys` subscribes to all storage changes.
 	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>>;
 }
 
@@ -340,7 +340,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
-		let storage_update = match transaction.state()? {
+		let (storage_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
 				let mut r = self.executor.call_at_state(
@@ -368,9 +368,9 @@ impl<B, E, Block> Client<B, E, Block> where
 				);
 				let (_, storage_update) = r?;
 				overlay.commit_prospective();
-				Some((storage_update, overlay.into_committed()))
+				(Some(storage_update), Some(overlay.into_committed()))
 			},
-			None => None,
+			None => (None, None)
 		};
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
@@ -378,14 +378,19 @@ impl<B, E, Block> Client<B, E, Block> where
 		let unchecked: bft::UncheckedJustification<_> = justification.uncheck().into();
 		transaction.set_block_data(header.clone(), body, Some(unchecked.into()), is_new_best)?;
 		transaction.update_authorities(authorities);
-		if let Some((storage_update, changes)) = storage_update {
+		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
-			// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
-			self.storage_notifications.lock()
-				.trigger(&hash, changes);
 		}
 		self.backend.commit_operation(transaction)?;
+
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
+
+			if let Some(storage_changes) = storage_changes {
+				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
+				self.storage_notifications.lock()
+					.trigger(&hash, storage_changes);
+			}
+
 			let notification = BlockImportNotification::<Block> {
 				hash: hash,
 				origin: origin,
