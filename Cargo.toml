@@ -32,6 +32,9 @@ members = [
 	"polkadot/transaction-pool",
 	"polkadot/service",
 
+	"polkadot/test-parachains/adder",
+	"polkadot/test-parachains/adder/collator",
+
 	"substrate/bft",
 	"substrate/cli",
 	"substrate/client",
@@ -77,6 +80,7 @@ members = [
 ]
 exclude = [
 	"polkadot/runtime/wasm",
+	"polkadot/test-parachains/adder/wasm",
 	"demo/runtime/wasm",
 	"substrate/executor/wasm",
 	"substrate/pwasm-alloc",
@@ -92,4 +96,4 @@ is-it-maintained-open-issues = { repository = "paritytech/polkadot" }
 
 [profile.release]
 # Substrate runtime requires unwinding.
-panic = "unwind" 
+panic = "unwind"

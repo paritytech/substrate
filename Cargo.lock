@@ -1,4 +1,27 @@
 [[package]]
+name = "adder"
+version = "0.1.0"
+dependencies = [
+ "polkadot-parachain 0.1.0",
+ "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "adder-collator"
+version = "0.1.0"
+dependencies = [
+ "adder 0.1.0",
+ "ctrlc 1.1.1 (git+https://github.com/paritytech/rust-ctrlc.git)",
+ "ed25519 0.1.0",
+ "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-collator 0.1.0",
+ "polkadot-parachain 0.1.0",
+ "polkadot-primitives 0.1.0",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -14,12 +14,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Defines WASM module logic.
+//! WASM validation for adder parachain.
 
-use core::{intrinsics, panic, alloc};
-use parachain::{self, ValidationResult};
+#![no_std]
+
+#![feature(
+	alloc, core_intrinsics, lang_items, panic_implementation, core_panic_info,
+	alloc_error_handler
+)]
+
+extern crate alloc;
+extern crate wee_alloc;
+extern crate pwasm_libc;
+extern crate adder;
+extern crate polkadot_parachain as parachain;
+extern crate tiny_keccak;
+
+// Define global allocator.
+#[global_allocator]
+static ALLOC: wee_alloc::WeeAlloc = wee_alloc::WeeAlloc::INIT;
+
+use core::{intrinsics, panic};
+use parachain::ValidationResult;
 use parachain::codec::{Encode, Decode};
-use super::{HeadData, BlockData};
+use adder::{HeadData, BlockData};
 
 #[panic_implementation]
 #[no_mangle]
@@ -31,7 +49,7 @@ pub fn panic(_info: &panic::PanicInfo) -> ! {
 
 #[alloc_error_handler]
 #[no_mangle]
-pub fn oom(_: alloc::Layout) -> ! {
+pub fn oom(_: ::core::alloc::Layout) -> ! {
 	unsafe {
 		intrinsics::abort();
 	}
@@ -39,8 +57,6 @@ pub fn oom(_: alloc::Layout) -> ! {
 
 #[no_mangle]
 pub extern fn validate(offset: usize, len: usize) -> usize {
-	let hash_state = |state: u64| ::tiny_keccak::keccak256(state.encode().as_slice());
-
 	let params = unsafe { ::parachain::load_params(offset, len) };
 	let parent_head = HeadData::decode(&mut &params.parent_head[..])
 		.expect("invalid parent head format.");
@@ -48,14 +64,10 @@ pub extern fn validate(offset: usize, len: usize) -> usize {
 	let block_data = BlockData::decode(&mut &params.block_data[..])
 		.expect("invalid block data format.");
 
-	assert_eq!(hash_state(block_data.state), parent_head.post_state, "wrong post-state proof");
-	let new_state = block_data.state.saturating_add(block_data.add);
+	let parent_hash = ::tiny_keccak::keccak256(&params.parent_head[..]);
 
-	let new_head = HeadData {
-		number: parent_head.number + 1,
-		parent_hash: ::tiny_keccak::keccak256(&params.parent_head[..]),
-		post_state: hash_state(new_state),
-	};
-
-	parachain::write_result(ValidationResult { head_data: new_head.encode() })
+	match ::adder::execute(parent_hash, parent_head, &block_data) {
+		Ok(new_head) => parachain::write_result(ValidationResult { head_data: new_head.encode() }),
+		Err(_) => panic!("execution failure"),
+	}
 }

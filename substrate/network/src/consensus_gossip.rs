@@ -124,7 +124,9 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Handles incoming chain-specific message and repropagates
 	pub fn on_chain_specific(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: Vec<u8>, parent_hash: B::Hash) {
+		debug!(target: "gossip", "received chain-specific gossip message");
 		if let Some((hash, message)) = self.handle_incoming(protocol, who, ConsensusMessage::ChainSpecific(message, parent_hash)) {
+			debug!(target: "gossip", "handled incoming chain-specific message");
 			// propagate to other peers.
 			self.multicast(protocol, message, Some(hash));
 		}
@@ -245,6 +247,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			peer.known_messages.insert(hash);
 			if let Some((sink, parent_hash)) = self.message_sink.take() {
 				if parent == parent_hash {
+					debug!(target: "gossip", "Pushing relevant consensus message to sink.");
 					if let Err(e) = sink.unbounded_send(message.clone()) {
 						trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
 					}
