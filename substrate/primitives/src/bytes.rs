@@ -139,7 +139,7 @@ pub fn deserialize_check_len<'de, D>(deserializer: D, len: ExpectedLen) -> Resul
 			fn format_err(e: ::rustc_hex::FromHexError) -> String {
 				match e {
 					::rustc_hex::InvalidHexLength => format!("invalid hex value: invalid length"),
-					::hex::InvalidHexCharacter(c, p) =>
+					::rustc_hex::InvalidHexCharacter(c, p) =>
 						format!("invalid hex value: invalid character {} at position {}", c, p),
 				}
 			}
