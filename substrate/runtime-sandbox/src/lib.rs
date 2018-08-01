@@ -50,6 +50,10 @@ extern crate substrate_primitives as primitives;
 #[cfg(test)]
 extern crate wabt;
 
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
+
 use rstd::prelude::*;
 
 pub use primitives::sandbox::{TypedValue, ReturnValue, HostError};

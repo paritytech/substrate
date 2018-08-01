@@ -309,7 +309,7 @@ impl<T> Instance<T> {
 #[cfg(test)]
 mod tests {
 	use wabt;
-	use ::{TypedValue, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
+	use ::{Error, TypedValue, ReturnValue, HostError, EnvironmentDefinitionBuilder, Instance};
 
 	fn execute_sandboxed(code: &[u8], args: &[TypedValue]) -> Result<ReturnValue, HostError> {
 		struct State {
@@ -335,12 +335,20 @@ mod tests {
 			e.counter += inc_by as u32;
 			Ok(ReturnValue::Value(TypedValue::I32(e.counter as i32)))
 		}
+		/// Function that takes one argument of any type and returns that value.
+		fn env_polymorphic_id(_e: &mut State, args: &[TypedValue]) -> Result<ReturnValue, HostError> {
+			if args.len() != 1 {
+				return Err(HostError);
+			}
+			Ok(ReturnValue::Value(args[0]))
+		}
 
 		let mut state = State { counter: 0 };
 
 		let mut env_builder = EnvironmentDefinitionBuilder::new();
 		env_builder.add_host_func("env", "assert", env_assert);
 		env_builder.add_host_func("env", "inc_counter", env_inc_counter);
+		env_builder.add_host_func("env", "polymorphic_id", env_polymorphic_id);
 
 		let mut instance = Instance::new(code, &env_builder, &mut state)?;
 		let result = instance.invoke(b"call", args, &mut state);
@@ -403,5 +411,72 @@ mod tests {
 			]
 		).unwrap();
 		assert_eq!(return_val, ReturnValue::Value(TypedValue::I32(0x1337)));
+	}
+
+	#[test]
+	fn signatures_dont_matter() {
+		let code = wabt::wat2wasm(r#"
+		(module
+			(import "env" "polymorphic_id" (func $id_i32 (param i32) (result i32)))
+			(import "env" "polymorphic_id" (func $id_i64 (param i64) (result i64)))
+			(import "env" "assert" (func $assert (param i32)))
+
+			(func (export "call")
+				;; assert that we can actually call the "same" function with different
+				;; signatures.
+				(call $assert
+					(i32.eq
+						(call $id_i32
+							(i32.const 0x012345678)
+						)
+						(i32.const 0x012345678)
+					)
+				)
+				(call $assert
+					(i64.eq
+						(call $id_i64
+							(i64.const 0x0123456789abcdef)
+						)
+						(i64.const 0x0123456789abcdef)
+					)
+				)
+			)
+		)
+		"#).unwrap();
+
+		let return_val = execute_sandboxed(&code, &[]).unwrap();
+		assert_eq!(return_val, ReturnValue::Unit);
+	}
+
+	#[test]
+	fn cant_return_unmatching_type() {
+		fn env_returns_i32(_e: &mut (), _args: &[TypedValue]) -> Result<ReturnValue, HostError> {
+			Ok(ReturnValue::Value(TypedValue::I32(42)))
+		}
+
+		let mut env_builder = EnvironmentDefinitionBuilder::new();
+		env_builder.add_host_func("env", "returns_i32", env_returns_i32);
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			;; It's actually returns i32, but imported as if it returned i64
+			(import "env" "returns_i32" (func $returns_i32 (result i64)))
+
+			(func (export "call")
+				(drop
+					(call $returns_i32)
+				)
+			)
+		)
+		"#).unwrap();
+
+		// It succeeds since we are able to import functions with types we want.
+		let mut instance = Instance::new(&code, &env_builder, &mut ()).unwrap();
+
+		// But this fails since we imported a function that returns i32 as if it returned i64.
+		assert_matches!(
+			instance.invoke(b"call", &[], &mut ()),
+			Err(Error::Execution)
+		);
 	}
 }
