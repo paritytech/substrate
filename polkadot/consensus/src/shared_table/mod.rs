@@ -603,6 +603,8 @@ mod tests {
 			block_data_hash: [2; 32].into(),
 		};
 
+		let hash = candidate.hash();
+
 		let block_data_res: ::std::io::Result<_> = Ok(block_data.clone());
 		let producer: StatementProducer<_, future::Empty<_, _>> = StatementProducer {
 			produced_statements: Default::default(),
@@ -622,8 +624,8 @@ mod tests {
 		assert!(produced.validity.is_some());
 		assert!(produced.availability.is_none());
 
-		assert_eq!(store.block_data(Key(relay_parent, para_id)).unwrap(), block_data);
-		assert!(store.extrinsic(Key(relay_parent, para_id)).is_none());
+		assert_eq!(store.block_data(relay_parent, hash).unwrap(), block_data);
+		assert!(store.extrinsic(relay_parent, hash).is_none());
 	}
 
 	#[test]
@@ -643,6 +645,8 @@ mod tests {
 			fees: 1_000_000,
 			block_data_hash: [2; 32].into(),
 		};
+
+		let hash = candidate.hash();
 
 		let block_data_res: ::std::io::Result<_> = Ok(block_data.clone());
 		let extrinsic_res: ::std::io::Result<_> = Ok(Extrinsic);
@@ -664,7 +668,7 @@ mod tests {
 		assert!(produced.validity.is_none());
 		assert!(produced.availability.is_some());
 
-		assert_eq!(store.block_data(Key(relay_parent, para_id)).unwrap(), block_data);
-		assert!(store.extrinsic(Key(relay_parent, para_id)).is_some());
+		assert_eq!(store.block_data(relay_parent, hash).unwrap(), block_data);
+		assert!(store.extrinsic(relay_parent, hash).is_some());
 	}
 }

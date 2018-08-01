@@ -313,6 +313,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			router.clone(),
 			&self.handle,
 			collation_work,
+			self.extrinsic_store.clone(),
 		);
 
 		let proposer = Proposer {
@@ -339,7 +340,7 @@ fn dispatch_collation_work<R, C, P>(
 	router: R,
 	handle: &TaskExecutor,
 	work: Option<CollationFetch<C, P>>,
-	extrinsic_store: Store,
+	extrinsic_store: ExtrinsicStore,
 ) -> exit_future::Signal where
 	C: Collators + Send + 'static,
 	P: PolkadotApi + Send + Sync + 'static,
@@ -363,14 +364,14 @@ fn dispatch_collation_work<R, C, P>(
 				parachain_id: collation.receipt.parachain_index,
 				candidate_hash: collation.receipt.hash(),
 				block_data: collation.block_data.clone(),
-				extrinsic: Some(collation.extrinsic.clone()),
+				extrinsic: Some(extrinsic.clone()),
 			});
 
 			match res {
 				Ok(()) =>
 					router.local_candidate(collation.receipt, collation.block_data, extrinsic),
 				Err(e) =>
-					warn!(target: "consensus", "Failed to make collation data available"),
+					warn!(target: "consensus", "Failed to make collation data available: {:?}", e),
 			}
 
 			Ok(())
