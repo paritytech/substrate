@@ -11,17 +11,14 @@ rustc_version = "0.2"
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 environmental = { path = "../environmental", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
-# TODO: when we remove the toy impl of `Hasher` from `with_std.rs` I think this can go back to use `default_features = false`
-substrate-primitives = { path = "../primitives", features=["std"] }
+substrate-primitives = { path = "../primitives", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
 triehash = { version = "0.1.2", optional = true }
 ed25519 = { path = "../ed25519", optional = true }
-hashdb = { git = "https://github.com/paritytech/parity-common" }
-plain_hasher = { git = "https://github.com/paritytech/parity-common" }
-rlp = { git = "https://github.com/paritytech/parity-common" }
 
 [dev-dependencies]
 heapsize = "0.4"
+rlp = { git = "https://github.com/paritytech/parity-common" }
 
 [features]
 default = ["std"]
