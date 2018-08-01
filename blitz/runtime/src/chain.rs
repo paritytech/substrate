@@ -93,6 +93,8 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
 	fn register_node(_aux: &<T as Trait>::PublicAux, node: NodeId, income: AccountId, collateral: AccountId) -> Result {
+		// TODO Record timestamp (or round id) of node registration
+
 		// Performing some consistency checks
 		ensure!(!<NodeToCollateral<T>>::exists(node), "node already exists");
 		ensure!(!<IncomeAccount<T>>::exists(node), "income account already set");
@@ -117,6 +119,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn deregister_node(_aux: &<T as Trait>::PublicAux, node: NodeId) -> Result {
+		// TODO Check timestamp (or round id) of node registration
+
 		ensure!(<NodeToCollateral<T>>::exists(node), "node does not exist");
 		ensure!(<IncomeAccount<T>>::exists(node), "income account is not set");
 
