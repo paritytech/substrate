@@ -41,6 +41,8 @@ use primitives::H256;
 
 // TODO: use the real error, not NoError.
 
+// REVIEW:	The `environmental!` machinery can't really work with generics so need a concrete impl here.
+// 			This means that consumers of the generated code can't use generics either?
 environmental!(ext: trait Externalities<BlakeHasher>);
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
