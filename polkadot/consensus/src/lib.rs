@@ -258,8 +258,6 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 
-		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
-
 		let parent_hash = parent_header.hash().into();
 
 		let id = BlockId::hash(parent_hash);
@@ -295,9 +293,6 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			self.parachain_empty_duration.clone(),
 		);
 
-		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
-			DELAY_UNTIL);
-
 		let validation_para = match local_duty.validation {
 			Chain::Relay => None,
 			Chain::Parachain(id) => Some(id),
@@ -320,7 +315,6 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			client: self.client.clone(),
 			dynamic_inclusion,
 			local_key: sign_with,
-			minimum_delay: now + DELAY_UNTIL,
 			parent_hash,
 			parent_id: id,
 			parent_number: parent_header.number,
@@ -375,7 +369,6 @@ pub struct Proposer<C: PolkadotApi> {
 	client: Arc<C>,
 	dynamic_inclusion: DynamicInclusion,
 	local_key: Arc<ed25519::Pair>,
-	minimum_delay: Instant,
 	parent_hash: Hash,
 	parent_id: BlockId,
 	parent_number: BlockNumber,
@@ -406,17 +399,10 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			initial_included,
 		).unwrap_or_else(|| now + Duration::from_millis(1));
 
-		let minimum_delay = if self.minimum_delay > now + ATTEMPT_PROPOSE_EVERY {
-			Some(Delay::new(self.minimum_delay))
-		} else {
-			None
-		};
-
 		let timing = ProposalTiming {
 			attempt_propose: Interval::new(now + ATTEMPT_PROPOSE_EVERY, ATTEMPT_PROPOSE_EVERY),
 			enough_candidates: Delay::new(enough_candidates),
 			dynamic_inclusion: self.dynamic_inclusion.clone(),
-			minimum_delay,
 			last_included: initial_included,
 		};
 
@@ -489,11 +475,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			// delay casting vote until able according to minimum block time,
 			// timestamp delay, and count delay.
 			// construct a future from the maximum of the two durations.
-			let max_delay = [timestamp_delay, count_delay, Some(self.minimum_delay)]
-				.iter()
-				.cloned()
-				.max()
-				.expect("iterator not empty; thus max returns `Some`; qed");
+			let max_delay = ::std::cmp::max(timestamp_delay, count_delay);
 
 			let temporary_delay = match max_delay {
 				Some(duration) => future::Either::A(
@@ -615,7 +597,6 @@ struct ProposalTiming {
 	attempt_propose: Interval,
 	dynamic_inclusion: DynamicInclusion,
 	enough_candidates: Delay,
-	minimum_delay: Option<Delay>,
 	last_included: usize,
 }
 
@@ -631,12 +612,6 @@ impl ProposalTiming {
 		if let Async::Ready(x) = self.attempt_propose.poll().map_err(ErrorKind::Timer)? {
 			x.expect("timer still alive; intervals never end; qed");
 		}
-
-		if let Some(ref mut min) = self.minimum_delay {
-			try_ready!(min.poll().map_err(ErrorKind::Timer));
-		}
-
-		self.minimum_delay = None; // after this point, the future must have completed.
 
 		if included == self.last_included {
 			return self.enough_candidates.poll().map_err(ErrorKind::Timer);
