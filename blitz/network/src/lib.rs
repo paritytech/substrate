@@ -37,9 +37,9 @@ mod message;
 pub mod transaction;
 
 use message::BlitzMessage;
-use codec::Slicable;
+use codec::{Encode, Decode};
 use substrate_primitives::{AuthorityId};
-use substrate_network::{PeerId, RequestId, Context};
+use substrate_network::{NodeIndex, RequestId, Context, Severity};
 use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
 use blitz_primitives::{Block, Hash};
@@ -60,28 +60,30 @@ pub struct Status {
 	// collating_for: Option<ParaId>,
 }
 
-impl Slicable for Status {
-	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
+impl Encode for Status {
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
 		// match self.collating_for {
-		// 	Some(ref id) => {
-		// 		v.push(1);
-		// 		id.using_encoded(|s| v.extend(s));
+		// 	Some(ref details) => {
+		// 		dest.push_byte(1);
+		// 		dest.push(details);
 		// 	}
 		// 	None => {
-		// 		v.push(0);
+		// 		dest.push_byte(0);
 		// 	}
 		// }
-		v
+		unimplemented!()
 	}
+}
 
-	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+impl Decode for Status {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
 		// let collating_for = match input.read_byte()? {
 		// 	0 => None,
-		// 	// 1 => Some(ParaId::decode(input)?),
+		// 	1 => Some(Decode::decode(input)?),
 		// 	_ => return None,
 		// };
-		Some(Status { /* collating_for */ })
+		// Some(Status { collating_for })
+		unimplemented!()
 	}
 }
 
@@ -142,8 +144,8 @@ struct PeerInfo {
 /// Blitz protocol attachment for substrate.
 #[derive(Default)]
 pub struct BlitzProtocol {
-	peers: HashMap<PeerId, PeerInfo>,
-	// collators: HashMap<ParaId, Vec<PeerId>>,
+	peers: HashMap<NodeIndex, PeerInfo>,
+	// collators: HashMap<ParaId, Vec<NodeIndex>>,
 	// collating_for: Option<ParaId>,
 }
 
@@ -152,11 +154,11 @@ impl Specialization<Block> for BlitzProtocol {
 		Status { /*collating_for: self.collating_for.clone()*/ }.encode()
 	}
 
-	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, status: FullStatus) {
+	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, status: FullStatus) {
 		let status = match Status::decode(&mut &status.chain_status[..]) {
 			Some(status) => status,
 			None => {
-				ctx.disable_peer(peer_id);
+				ctx.report_peer(peer_id, Severity::Bad("could not decode status message"));
 				return;
 			}
 		};
@@ -170,7 +172,7 @@ impl Specialization<Block> for BlitzProtocol {
 		self.peers.insert(peer_id, PeerInfo { status });
 	}
 
-	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, peer_id: PeerId) {
+	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, peer_id: NodeIndex) {
 		if let Some(info) = self.peers.remove(&peer_id) {
 			/*if let Some(collators) = info.status.collating_for.and_then(|id| self.collators.get_mut(&id)) {
 				if let Some(pos) = collators.iter().position(|x| x == &peer_id) {
@@ -180,7 +182,7 @@ impl Specialization<Block> for BlitzProtocol {
 		}
 	}
 
-	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: PeerId, message: substrate_network::message::Message<Block>) {
+	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, message: substrate_network::message::Message<Block>) {
 		use substrate_network::generic_message::Message;
 
 		match message {
@@ -193,7 +195,7 @@ impl Specialization<Block> for BlitzProtocol {
 					Ok(m) => m,
 					Err(e) => {
 						trace!(target: "b_net", "Bad message from {}: {}", peer_id, e);
-						ctx.disable_peer(peer_id);
+						ctx.report_peer(peer_id, Severity::Bad("could not decode chain specific message"));
 						return;
 					}
 				};
@@ -207,7 +209,7 @@ impl Specialization<Block> for BlitzProtocol {
 }
 
 impl BlitzProtocol {
-	fn send_message(ctx: &mut Context<Block>, peer_id: PeerId, message: BlitzMessage) {
+	fn send_message(ctx: &mut Context<Block>, peer_id: NodeIndex, message: BlitzMessage) {
 		let data = serde_json::to_vec(&message).expect("serialization is infallible");
 		ctx.send_message(peer_id, substrate_network::generic_message::Message::ChainSpecific(data));
 	}
