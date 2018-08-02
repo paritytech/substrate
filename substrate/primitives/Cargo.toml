@@ -7,6 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crunchy = "0.1"
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
+elastic-array = "0.10"
 # TODO: I think we can go back to `default_features = false` when we have a proper impl of `Hasher` to use
 fixed-hash = { git = "https://github.com/paritytech/parity-common", branch = "add-fixed-hash", features = ["heapsizeof"] }
 rustc-hex = { version = "2.0", default_features = false }
@@ -20,6 +21,7 @@ byteorder = { version = "1.1", default_features = false }
 blake2-rfc = { version = "0.2.18", optional = true }
 wasmi = { version = "0.4", optional = true }
 hashdb = { git = "https://github.com/paritytech/parity-common" }
+patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 plain_hasher = { git = "https://github.com/paritytech/parity-common" }
 
 [dev-dependencies]

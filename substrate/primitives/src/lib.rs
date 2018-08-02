@@ -47,6 +47,8 @@ extern crate core;
 extern crate wasmi;
 extern crate hashdb;
 extern crate plain_hasher;
+extern crate patricia_trie;
+extern crate elastic_array;
 
 extern crate substrate_runtime_std as rstd;
 
@@ -84,6 +86,7 @@ pub mod sandbox;
 pub mod storage;
 pub mod uint;
 mod authority_id;
+mod rlp_codec;
 
 #[cfg(test)]
 mod tests;
@@ -92,6 +95,7 @@ pub use self::hash::{H160, H256, H512};
 pub use self::uint::U256;
 pub use authority_id::AuthorityId;
 pub use self::hasher::BlakeHasher;
+pub use self::rlp_codec::BlakeRlpCodec;
 
 /// A 512-bit value interpreted as a signature.
 pub type Signature = hash::H512;
