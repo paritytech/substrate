@@ -80,7 +80,7 @@ mod api {
 	}
 
 	/// Purge scheduled values.
-	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(ext: &mut Externalities, f: F) {
+	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(ext: &mut Externalities, f: F) -> usize {
 		let prefix_len = raw::cached_storage(ext, PREFIX_LEN_KEY);
 		Set::new(DELETED_SET_KEY_PREFIX, &mut RawSetStorage(ext)).retain(|storage, key| {
 			let (prefix, value) = storage.read(key)
@@ -95,7 +95,7 @@ mod api {
 				PurgeFilterResult::RemoveFromSet => false,
 				PurgeFilterResult::LeaveAsIs => true,
 			}
-		});
+		})
 	}
 
 	/// Schedule value at given `key` for future purge.
@@ -145,7 +145,7 @@ mod api {
 	}
 
 	/// Purge scheduled values.
-	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(f: F) {
+	pub fn purge<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(f: F) -> usize {
 		let prefix_len = raw::cached_storage(PREFIX_LEN_KEY);
 		Set::new(DELETED_SET_KEY_PREFIX, &mut RawSetStorage).retain(|storage, key| {
 			let (prefix, value) = storage.read(key)
@@ -160,7 +160,7 @@ mod api {
 				PurgeFilterResult::RemoveFromSet => false,
 				PurgeFilterResult::LeaveAsIs => true,
 			}
-		});
+		})
 	}
 
 	/// Schedule value at given `key` for future purge.

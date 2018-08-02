@@ -68,13 +68,15 @@ impl<'a, S: 'a + Storage> Set<'a, S> {
 	}
 
 	/// Retains only the elements specified by the predicate, which takes key, prefix and value.
+	/// Returns number of deleted elements
 	#[allow(dead_code)] // part of the Set, but used only by runtime => allow dead code to keep it together
-	pub fn retain<F: FnMut(&mut S, &[u8]) -> bool>(&mut self, mut f: F) {
+	pub fn retain<F: FnMut(&mut S, &[u8]) -> bool>(&mut self, mut f: F) -> usize {
 		// read list length
 		let list_len_key = compose_key2(self.prefix, LIST_LEN_KEY_PREFIX);
 		let mut list_len: u32 = self.storage.read(&list_len_key)
 			.and_then(|len| Decode::decode(&mut &len[..]))
 			.unwrap_or(0);
+		let original_list_len = list_len;
 
 		// for each list item: run f and remove item if required
 		let mut idx = 0u32;
@@ -104,6 +106,8 @@ impl<'a, S: 'a + Storage> Set<'a, S> {
 		}
 
 		self.storage.set(&list_len_key, &list_len.encode());
+
+		(original_list_len - list_len) as usize
 	}
 }
 

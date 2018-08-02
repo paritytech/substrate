@@ -99,9 +99,11 @@ pub fn set_storage_prefix(prefix: &[u8]) {
 }
 
 /// Purge scheduled entries from the storage.
-pub fn purge_storage<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(f: F) {
+pub fn purge_storage<F: Fn(&[u8], Option<Vec<u8>>, Option<Vec<u8>>) -> PurgeFilterResult>(f: F) -> usize {
 	if is_prefix_configured() {
 		purge(f)
+	} else {
+		0
 	}
 }
 

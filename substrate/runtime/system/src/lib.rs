@@ -37,6 +37,9 @@ extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
+#[cfg(test)]
+extern crate substrate_primitives;
+
 use codec::{Decode, Encode};
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
@@ -46,6 +49,8 @@ use safe_mix::TripletMix;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities};
+
+mod tests;
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
