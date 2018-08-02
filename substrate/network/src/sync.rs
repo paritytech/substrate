@@ -30,7 +30,7 @@ use import_queue::ImportQueue;
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
 // Maximum blocks to store in the import queue.
-const MAX_IMPORING_BLOCKS: usize = 2048;
+const MAX_IMPORTING_BLOCKS: usize = 2048;
 
 struct PeerSync<B: BlockT> {
 	pub common_hash: B::Hash,
@@ -361,7 +361,7 @@ impl<B: BlockT> ChainSync<B> {
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			let import_status = self.import_queue.status();
 			// when there are too many blocks in the queue => do not try to download new blocks
-			if import_status.importing_count > MAX_IMPORING_BLOCKS {
+			if import_status.importing_count > MAX_IMPORTING_BLOCKS {
 				return;
 			}
 			// we should not download already queued blocks
