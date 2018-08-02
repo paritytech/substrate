@@ -25,6 +25,8 @@ use twox_hash::XxHash;
 use std::hash::Hasher;
 use parking_lot::{Mutex, MutexGuard};
 use RuntimeInfo;
+use hashdb;
+use primitives::BlakeHasher;
 
 // For the internal Runtime Cache:
 // Is it compatible enough to run this natively or do we need to fall back on the WasmModule
@@ -56,7 +58,7 @@ fn gen_cache_key(code: &[u8]) -> u64 {
 /// fetch a runtime version from the cache or if there is no cached version yet, create
 /// the runtime version entry for `code`, determines whether `Compatibility::IsCompatible`
 /// can be used by by comparing returned RuntimeVersion to `ref_version`
-fn fetch_cached_runtime_version<'a, E: Externalities>(
+fn fetch_cached_runtime_version<'a, E: Externalities<BlakeHasher>>(
 	wasm_executor: &WasmExecutor,
 	cache: &'a mut MutexGuard<CacheType>,
 	ext: &mut E,
@@ -94,8 +96,8 @@ fn safe_call<F, U>(f: F) -> Result<U>
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
 ///
 /// If the inner closure panics, it will be caught and return an error.
-pub fn with_native_environment<F, U>(ext: &mut Externalities, f: F) -> Result<U>
-	where F: ::std::panic::UnwindSafe + FnOnce() -> U
+pub fn with_native_environment<F, U>(ext: &mut Externalities<BlakeHasher>, f: F) -> Result<U>
+where F: ::std::panic::UnwindSafe + FnOnce() -> U
 {
 	::runtime_io::with_externalities(ext, move || safe_call(f))
 }
@@ -107,7 +109,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
-	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	fn dispatch<H: hashdb::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Get native runtime version.
 	const VERSION: RuntimeVersion;
@@ -150,7 +152,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	const NATIVE_VERSION: Option<RuntimeVersion> = Some(D::VERSION);
 
-	fn runtime_version<E: Externalities>(
+	fn runtime_version<E: Externalities<BlakeHasher>>(
 		&self,
 		ext: &mut E,
 		code: &[u8],
@@ -163,10 +165,10 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> CodeExecutor<BlakeHasher> for NativeExecutor<D> {
 	type Error = Error;
 
-	fn call<E: Externalities>(
+	fn call<E: Externalities<BlakeHasher>>(
 		&self,
 		ext: &mut E,
 		code: &[u8],
