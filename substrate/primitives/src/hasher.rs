@@ -22,6 +22,7 @@ use hash::H256;
 use hashing::blake2_256;
 
 /// Concrete implementation of Hasher using Blake2b 256-bit hashes
+#[derive(Debug)]
 pub struct BlakeHasher;
 impl Hasher for BlakeHasher {
 	type Out = H256;
