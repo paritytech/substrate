@@ -154,8 +154,7 @@ where
 		42
 	}
 
-	fn storage_root(&mut self) -> H::Out
-	{
+	fn storage_root(&mut self) -> H::Out {
 		if let Some((_, ref root)) =  self.transaction {
 			return root.clone();
 		}
