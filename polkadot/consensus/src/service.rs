@@ -38,7 +38,7 @@ use transaction_pool::TransactionPool;
 use tokio::executor::current_thread::TaskExecutor as LocalThreadHandle;
 use tokio::runtime::TaskExecutor as ThreadPoolHandle;
 use tokio::runtime::current_thread::Runtime as LocalRuntime;
-use tokio::timer::Interval;
+use tokio::timer::{Delay, Interval};
 
 use super::{Network, Collators, ProposerFactory};
 use error;
@@ -49,8 +49,8 @@ const TIMER_INTERVAL_MS: u64 = 500;
 // spin up an instance of BFT agreement on the current thread's executor.
 // panics if there is no current thread executor.
 fn start_bft<F, C>(
-	header: &Header,
-	bft_service: &BftService<Block, F, C>,
+	header: Header,
+	bft_service: Arc<BftService<Block, F, C>>,
 ) where
 	F: bft::Environment<Block> + 'static,
 	C: bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
@@ -58,14 +58,35 @@ fn start_bft<F, C>(
 	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
 	<F as bft::Environment<Block>>::Error: ::std::fmt::Display
 {
+	const DELAY_UNTIL: Duration = Duration::from_millis(5000);
+
 	let mut handle = LocalThreadHandle::current();
-	match bft_service.build_upon(&header) {
-		Ok(Some(bft)) => if let Err(e) = handle.spawn_local(Box::new(bft)) {
-			debug!(target: "bft", "Couldn't initialize BFT agreement: {:?}", e);
-		},
-		Ok(None) => {},
-		Err(e) => warn!(target: "bft", "BFT agreement error: {}", e),
-	}
+	let work = Delay::new(Instant::now() + DELAY_UNTIL)
+		.then(move |res| {
+			if let Err(e) = res {
+				warn!(target: "bft", "Failed to force delay of consensus: {:?}", e);
+			}
+
+			match bft_service.build_upon(&header) {
+				Ok(maybe_bft_work) => {
+					if maybe_bft_work.is_some() {
+						debug!(target: "bft", "Starting agreement. After forced delay for {:?}",
+							DELAY_UNTIL);
+					}
+
+					maybe_bft_work
+				}
+				Err(e) => {
+					warn!(target: "bft", "BFT agreement error: {}", e);
+					None
+				}
+			}
+		})
+		.map(|_| ());
+
+	if let Err(e) = handle.spawn_local(Box::new(work)) {
+    	debug!(target: "bft", "Couldn't initialize BFT agreement: {:?}", e);
+    }
 }
 
 /// Consensus service. Starts working when created.
@@ -113,7 +134,7 @@ impl Service {
 
 				client.import_notification_stream().for_each(move |notification| {
 					if notification.is_new_best {
-						start_bft(&notification.header, &*bft_service);
+						start_bft(notification.header, bft_service.clone());
 					}
 					Ok(())
 				})
@@ -139,9 +160,9 @@ impl Service {
 				interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 					if let Ok(best_block) = c.best_block_header() {
 						let hash = best_block.hash();
-						if hash == prev_best {
+						if hash == prev_best && s.live_agreement() != Some(hash) {
 							debug!("Starting consensus round after a timeout");
-							start_bft(&best_block, &*s);
+							start_bft(best_block, s.clone());
 						}
 						prev_best = hash;
 					}
