@@ -13,10 +13,6 @@ RUN apt-get update && \
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 	export PATH=$PATH:$HOME/.cargo/bin && \
-	# rustup update nightly && \
-	# rustup target add wasm32-unknown-unknown --toolchain nightly && \
-	# rustup update stable && \
-	# cargo install --git https://github.com/alexcrichton/wasm-gc && \
 	cargo build --$PROFILE
 
 # ===== SECOND STAGE ======

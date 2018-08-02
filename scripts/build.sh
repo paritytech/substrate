@@ -4,6 +4,7 @@
 
 set -e
 
+PROJECT_ROOT=`git rev-parse --show-toplevel`
 source `dirname "$0"`/common.sh
 
 export CARGO_INCREMENTAL=0
@@ -16,7 +17,7 @@ cd $ROOT
 for SRC in "${SRCS[@]}"
 do
   echo "*** Building wasm binaries in $SRC"
-  cd $SRC
+  cd "$PROJECT_ROOT/$SRC"
 
   ./build.sh
 
