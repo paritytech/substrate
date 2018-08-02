@@ -26,15 +26,22 @@ use std::marker::PhantomData;
 use std::iter::FromIterator;
 
 /// Simple HashMap-based Externalities impl.
+#[derive(Debug)]
 pub struct TestExternalities<H> {
 	inner: HashMap<Vec<u8>, Vec<u8>>,
-	hasher: PhantomData<H>,
+	_hasher: PhantomData<H>,
 }
 
 impl<H: Hasher> TestExternalities<H> {
 	/// Create a new instance of `TestExternalities`
 	pub fn new() -> Self {
-		TestExternalities {inner: HashMap::new(), hasher: PhantomData}
+		TestExternalities {inner: HashMap::new(), _hasher: PhantomData}
+	}
+}
+
+impl<H: Hasher> PartialEq for TestExternalities<H> {
+	fn eq(&self, other: &TestExternalities<H>) -> bool {
+		self.inner.eq(&other.inner)
 	}
 }
 
@@ -46,6 +53,10 @@ impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> {
 		}
 		t
 	}
+}
+
+impl<H: Hasher> Default for TestExternalities<H> {
+	fn default() -> Self { Self::new() }
 }
 
 impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + Encodable {
