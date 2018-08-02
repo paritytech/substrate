@@ -121,10 +121,9 @@ mod tests {
 	use backend::{InMemory};
 	use trie_backend::tests::test_trie;
 	use super::*;
-	use keccak_hasher::KeccakHasher;
-	use ethtrie::RlpCodec;
+	use primitives::{BlakeHasher, BlakeRlpCodec};
 
-	fn test_proving() -> ProvingBackend<KeccakHasher, RlpCodec> {
+	fn test_proving() -> ProvingBackend<BlakeHasher, BlakeRlpCodec> {
 		ProvingBackend::new(test_trie())
 	}
 
@@ -142,7 +141,7 @@ mod tests {
 
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
-		assert!(create_proof_check_backend::<KeccakHasher, RlpCodec>(1.into(), vec![]).is_err());
+		assert!(create_proof_check_backend::<BlakeHasher, BlakeRlpCodec>(1.into(), vec![]).is_err());
 	}
 
 	#[test]
@@ -161,7 +160,7 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
-		let in_memory = InMemory::<KeccakHasher, RlpCodec>::default();
+		let in_memory = InMemory::<BlakeHasher, BlakeRlpCodec>::default();
 		let in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -176,7 +175,7 @@ mod tests {
 
 		let proof = proving.extract_proof();
 
-		let proof_check = create_proof_check_backend::<KeccakHasher, RlpCodec>(in_memory_root.into(), proof).unwrap();
+		let proof_check = create_proof_check_backend::<BlakeHasher, BlakeRlpCodec>(in_memory_root.into(), proof).unwrap();
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 	}
 }

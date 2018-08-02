@@ -24,7 +24,6 @@ extern crate hex_literal;
 #[macro_use]
 extern crate log;
 
-extern crate ethereum_types;
 extern crate hashdb;
 extern crate memorydb;
 extern crate triehash;
@@ -32,8 +31,8 @@ extern crate patricia_trie;
 extern crate byteorder;
 extern crate parking_lot;
 extern crate rlp;
-#[cfg(test)] extern crate keccak_hasher;
-#[cfg(test)] extern crate patricia_trie_ethereum as ethtrie;
+#[cfg(test)]
+extern crate substrate_primitives as primitives;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -440,9 +439,7 @@ mod tests {
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
-	use keccak_hasher::KeccakHasher;
-	use ethtrie::RlpCodec;
-	use ethereum_types::H256;
+	use primitives::{BlakeHasher, BlakeRlpCodec, H256};
 
 	struct DummyCodeExecutor {
 		native_available: bool,
@@ -514,7 +511,7 @@ mod tests {
 			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
 			b"doug".to_vec() => b"notadog".to_vec()
 		];
-		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial);
+		let backend = InMemory::<BlakeHasher, BlakeRlpCodec>::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"dog".to_vec() => Some(b"puppy".to_vec()),
@@ -527,7 +524,7 @@ mod tests {
 			],
 		};
 		let mut ext = Ext::new(&mut overlay, &backend);
-		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+		const ROOT: [u8; 32] = hex!("6ca394ff9b13d6690a51dea30b1b5c43108e52944d30b9095227c49bae03ff8b");
 		assert_eq!(ext.storage_root(), H256(ROOT));
 	}
 
@@ -584,7 +581,7 @@ mod tests {
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check proof locally
-        let (local_result, _) = execution_proof_check::<KeccakHasher, RlpCodec,_,>(remote_root, remote_proof,
+        let (local_result, _) = execution_proof_check::<BlakeHasher, BlakeRlpCodec,_,>(remote_root, remote_proof,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check that both results are correct
@@ -600,7 +597,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial).try_into_trie_backend().unwrap();
+		let backend = InMemory::<BlakeHasher, BlakeRlpCodec>::from(initial).try_into_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"aba".to_vec() => Some(b"1312".to_vec()),

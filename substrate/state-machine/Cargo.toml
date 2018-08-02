@@ -6,7 +6,6 @@ description = "Substrate State Machine"
 
 [dependencies]
 byteorder = "1.1"
-ethereum-types = "0.3"
 hex-literal = "0.1.0"
 log = "0.3"
 parking_lot = "0.4"
@@ -18,7 +17,3 @@ memorydb = { git = "https://github.com/paritytech/parity-common" }
 patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 triehash = { git = "https://github.com/paritytech/parity-common" }
 rlp = { git = "https://github.com/paritytech/parity-common" }
-
-[dev-dependencies]
-keccak-hasher = { git = "https://github.com/paritytech/parity" } # REVIEW: We need `KeccakHasher` from here – better way?
-patricia-trie-ethereum = { git = "https://github.com/paritytech/parity" } # REVIEW: We need `RlpCodec` from here – better way?

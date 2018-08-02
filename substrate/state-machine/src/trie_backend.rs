@@ -277,15 +277,13 @@ impl<H: Hasher> TrieBackendStorage<H> {
 pub mod tests {
 	use super::*;
 	use std::collections::HashSet;
-	use ethereum_types::H256 as TrieH256;
-	use keccak_hasher::KeccakHasher;
-	use ethtrie::RlpCodec;
+	use primitives::{BlakeHasher, BlakeRlpCodec, H256};
 
-	fn test_db() -> (MemoryDB<KeccakHasher>, TrieH256) {
-		let mut root = TrieH256::default();
-		let mut mdb = MemoryDB::<KeccakHasher>::new();
+	fn test_db() -> (MemoryDB<BlakeHasher>, H256) {
+		let mut root = H256::default();
+		let mut mdb = MemoryDB::<BlakeHasher>::new();
 		{
-			let mut trie = TrieDBMut::<_, RlpCodec>::new(&mut mdb, &mut root);
+			let mut trie = TrieDBMut::<_, BlakeRlpCodec>::new(&mut mdb, &mut root);
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
@@ -294,7 +292,7 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<KeccakHasher, RlpCodec> {
+	pub(crate) fn test_trie() -> TrieBackend<BlakeHasher, BlakeRlpCodec> {
 		let (mdb, root) = test_db();
 		TrieBackend::with_memorydb(mdb, root)
 	}
@@ -316,7 +314,7 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		let db = TrieBackend::<KeccakHasher, RlpCodec>::with_memorydb(
+		let db = TrieBackend::<BlakeHasher, BlakeRlpCodec>::with_memorydb(
 			MemoryDB::new(),
 			Default::default()
 		);
@@ -325,7 +323,7 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		assert!(test_trie().storage_root(::std::iter::empty()).0 != TrieH256([0; 32]));
+		assert!(test_trie().storage_root(::std::iter::empty()).0 != H256([0; 32]));
 	}
 
 	#[test]
