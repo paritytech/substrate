@@ -33,6 +33,7 @@ use light::backend::Backend;
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::RemoteCallExecutor;
 use light::fetcher::{Fetcher, LightDataChecker};
+use hashdb::Hasher;
 
 /// Create an instance of light client blockchain backend.
 pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>, F>(storage: S) -> Arc<Blockchain<S, F>> {
@@ -62,14 +63,15 @@ pub fn new_light<B, S, F, GS>(
 }
 
 /// Create an instance of fetch data checker.
-pub fn new_fetch_checker<B, S, E, F>(
+pub fn new_fetch_checker<B, S, E, F, H>(
 	blockchain: Arc<Blockchain<S, F>>,
 	executor: E,
 ) -> LightDataChecker<S, E, F>
 	where
 		B: BlockT,
 		S: BlockchainStorage<B>,
-		E: CodeExecutor,
+		E: CodeExecutor<H>,
+		H: Hasher
 {
 	LightDataChecker::new(blockchain, executor)
 }

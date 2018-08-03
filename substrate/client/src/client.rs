@@ -17,6 +17,7 @@
 //! Substrate Client
 
 use std::sync::Arc;
+use std::cmp::Ord;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
@@ -33,6 +34,9 @@ use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
 use {error, in_mem, block_builder, runtime_io, bft, genesis};
+use patricia_trie::NodeCodec;
+use hashdb::Hasher;
+use rlp::Encodable;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -151,24 +155,30 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 }
 
 /// Create an instance of in-memory client.
-pub fn new_in_mem<E, Block, S>(
+pub fn new_in_mem<E, Block, S, H, C>(
 	executor: E,
 	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
+) -> error::Result<Client<in_mem::Backend<Block, H, C>, LocalCallExecutor<in_mem::Backend<Block, H, C>, E>, Block>>
 	where
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor<H> + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT,
+		H: Hasher,
+		H::Out: Encodable + Ord,
+		C: NodeCodec<H> + Send + Sync,
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
 }
 
-impl<B, E, Block> Client<B, E, Block> where
-	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+impl<B, E, Block, H, C> Client<B, E, Block> where
+	B: backend::Backend<Block, H, C>,
+	E: CallExecutor<Block, H, C>,
 	Block: BlockT,
+	H: Hasher,
+	H::Out: Encodable + Ord,
+	C: NodeCodec<H>,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new<S: BuildStorage>(
@@ -267,12 +277,12 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, H, C>> where E: Clone {
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
+	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, H, C>> where E: Clone {
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
@@ -485,11 +495,14 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
+impl<B, E, Block, H, C> bft::BlockImport<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
+		B: backend::Backend<Block, H, C>,
+		E: CallExecutor<Block, H, C>,
 		Block: BlockT,
+		H: Hasher,
+		H::Out: Encodable + Ord,
+		C: NodeCodec<H>,
 {
 	fn import_block(
 		&self,
@@ -508,11 +521,14 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 	}
 }
 
-impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
+impl<B, E, Block, H, C> bft::Authorities<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
+		B: backend::Backend<Block, H, C>,
+		E: CallExecutor<Block, H, C>,
 		Block: BlockT,
+		H: Hasher,
+		H::Out: Encodable + Ord,
+		C: NodeCodec<H>,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
 		let on_chain_version: Result<_, bft::Error> = self.runtime_version_at(at)
@@ -531,10 +547,12 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 	}
 }
 
-impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
+impl<B, E, Block, H, C> BlockchainEvents<Block> for Client<B, E, Block>
 	where
-		E: CallExecutor<Block>,
+		E: CallExecutor<Block, H, C>,
 		Block: BlockT,
+		H: Hasher,
+		C: NodeCodec<H>,
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> BlockchainEventStream<Block> {
@@ -549,11 +567,14 @@ impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 	}
 }
 
-impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
+impl<B, E, Block, H, C> ChainHead<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
+		B: backend::Backend<Block, H, C>,
+		E: CallExecutor<Block, H, C>,
 		Block: BlockT,
+		H: Hasher,
+		H::Out: Encodable + Ord,
+		C: NodeCodec<H>,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
