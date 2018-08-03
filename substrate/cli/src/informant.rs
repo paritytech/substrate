@@ -22,6 +22,7 @@ use futures::{Future, Stream};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Interval;
+use sysinfo::{ProcessorExt, System, SystemExt};
 use network::{SyncState, SyncProvider};
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
@@ -40,6 +41,8 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let client = service.client();
 	let txpool = service.extrinsic_pool();
 	let mut last_number = None;
+
+	let mut sys = System::new();
 
 	let display_notifications = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 		let sync_status = network.status();
@@ -65,17 +68,27 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				Colour::White.paint(format!("{}", best_number)),
 				hash
 			);
+
+			// get cpu usage and memory usage
+			sys.refresh_system();
+			let memory_usage = if sys.get_total_memory() == 0 { 0.0 } else { sys.get_used_memory() as f64 / sys.get_total_memory() as f64 };
+			let procs = sys.get_processor_list();
+			let cpu_usage = if procs.is_empty() { 0.0 } else { procs[0].get_cpu_usage() };
+
 			telemetry!(
 				"system.interval";
 				"status" => format!("{}{}", status, target),
 				"peers" => num_peers,
 				"height" => best_number,
 				"best" => ?hash,
-				"txcount" => txpool_status.transaction_count
+				"txcount" => txpool_status.transaction_count,
+				"memory" => memory_usage,
+				"cpu" => cpu_usage
 			);
 		} else {
 			warn!("Error getting best block information");
 		}
+
 		Ok(())
 	});
 
