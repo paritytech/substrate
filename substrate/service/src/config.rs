@@ -105,10 +105,15 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 		format!("{}-{}{}{}", Target::arch(), Target::os(), env_dash, env)
 	}
 
-	/// Returns full version string.
+	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
-		let commit_dash = if self.impl_commit.is_empty() { "" } else { "-" };
-		format!("{}{}{}-{}", self.impl_version, commit_dash, self.impl_commit, Self::platform())
+		Self::full_version_from_strs(self.impl_version, self.impl_commit)
+	}
+	
+	/// Returns full version string, using supplied version and commit.
+	pub fn full_version_from_strs(impl_version: &str, impl_commit: &str) -> String {
+		let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
+		format!("{}{}{}-{}", impl_version, commit_dash, impl_commit, Self::platform())
 	}
 
 	/// Implementation id and version.
