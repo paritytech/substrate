@@ -16,9 +16,12 @@
 
 use super::*;
 use self::error::{Error, ErrorKind};
-use jsonrpc_macros::pubsub;
+
 use client::BlockOrigin;
-use test_client::{self, TestClient};
+use jsonrpc_macros::pubsub;
+use rustc_hex::FromHex;
+use test_client::{self, runtime, keyring::Keyring, TestClient, BlockBuilderExt};
+
 
 #[test]
 fn should_return_storage() {
@@ -63,12 +66,57 @@ fn should_notify_about_storage_changes() {
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(0))));
 
-		let builder = api.client.new_block().unwrap();
+		let mut builder = api.client.new_block().unwrap();
+		builder.push_transfer(runtime::Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		}).unwrap();
 		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
-	// assert notification send to transport
+	// assert notification sent to transport
 	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	assert!(notification.is_some());
+	// no more notifications on this channel
+	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+}
+
+#[test]
+fn should_send_initial_storage_changes_and_notifications() {
+	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+	let (subscriber, id, transport) = pubsub::Subscriber::new_test("test");
+
+	{
+		let api = State {
+			client: Arc::new(test_client::new()),
+			subscriptions: Subscriptions::new(remote),
+		};
+
+		api.subscribe_storage(Default::default(), subscriber, Some(vec![
+			StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap()),
+		]).into());
+
+		// assert id assigned
+		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(0))));
+
+		let mut builder = api.client.new_block().unwrap();
+		builder.push_transfer(runtime::Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		}).unwrap();
+		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+	}
+
+	// assert initial values sent to transport
+	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	assert!(notification.is_some());
+	// assert notification sent to transport
+	let (notification, next) = core.block_on(next.into_future()).unwrap();
 	assert!(notification.is_some());
 	// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);

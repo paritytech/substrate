@@ -554,7 +554,8 @@ mod tests {
 	use keyring::Keyring;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
-	use test_client::runtime as test_runtime;
+	use test_client::client::backend::Backend as TestBackend;
+	use test_client::{runtime as test_runtime, BlockBuilderExt};
 	use test_client::runtime::{Transfer, Extrinsic};
 
 	#[test]
@@ -588,23 +589,18 @@ mod tests {
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 	}
 
-	fn sign_tx(tx: Transfer) -> Extrinsic {
-		let signature = Keyring::from_raw_public(tx.from.0.clone()).unwrap().sign(&tx.encode()).into();
-		Extrinsic { transfer: tx, signature }
-	}
-
 	#[test]
 	fn block_builder_works_with_transactions() {
 		let client = test_client::new();
 
 		let mut builder = client.new_block().unwrap();
 
-		builder.push(sign_tx(Transfer {
+		builder.push_transfer(Transfer {
 			from: Keyring::Alice.to_raw_public().into(),
 			to: Keyring::Ferdie.to_raw_public().into(),
 			amount: 42,
 			nonce: 0,
-		})).unwrap();
+		}).unwrap();
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
@@ -620,19 +616,19 @@ mod tests {
 
 		let mut builder = client.new_block().unwrap();
 
-		builder.push(sign_tx(Transfer {
+		builder.push_transfer(Transfer {
 			from: Keyring::Alice.to_raw_public().into(),
 			to: Keyring::Ferdie.to_raw_public().into(),
 			amount: 42,
 			nonce: 0,
-		})).unwrap();
+		}).unwrap();
 
-		assert!(builder.push(sign_tx(Transfer {
+		assert!(builder.push_transfer(Transfer {
 			from: Keyring::Eve.to_raw_public().into(),
 			to: Keyring::Alice.to_raw_public().into(),
 			amount: 42,
 			nonce: 0,
-		})).is_err());
+		}).is_err());
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
