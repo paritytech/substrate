@@ -92,7 +92,7 @@ Then build the code:
 
 [source, shell]
 ----
-./build.sh  # Builds the WebAssembly binaries
+./scripts/build.sh  # Builds the WebAssembly binaries
 cargo build # Builds all native code
 ----
 
@@ -118,7 +118,7 @@ The easiest/faster option is to use the latest image.
 Let´s first check the version we have. The first time you run this command, the polkadot docker image will be downloaded. This takes a bit of time and bandwidth, be patient:
 
 [source, shell]
-docker run --rm -it chevdor/polkadot:latest ./version
+docker run --rm -it chevdor/polkadot:latest pokadot --version
 
 
 .Polkadot arguments
@@ -149,8 +149,7 @@ You can either build it yourself (it takes a while...):
 
 [source, shell]
 ----
-cd docker
-./build.sh
+./docker/build.sh
 ----
 
 === Reporting issues
@@ -159,7 +158,7 @@ If you run into issues with polkadot when using docker, please run the following
 (replace the tag with the appropriate one if you do not use latest):
 
 [source, shell]
-docker run --rm -it chevdor/polkadot:latest version
+docker run --rm -it chevdor/polkadot:latest polkadot --version
 
 This will show you the polkadot version as well as the git commit ref that was used to build your container.
 Just paste that in the issue you create.
