@@ -70,7 +70,7 @@ fn should_notify_about_latest_block() {
 	// assert initial head sent.
 	let (notification, next) = core.block_on(transport.into_future()).unwrap();
 	assert!(notification.is_some());
-	// assert notification send to transport
+	// assert notification sent to transport
 	let (notification, next) = core.block_on(next.into_future()).unwrap();
 	assert!(notification.is_some());
 	// no more notifications on this channel
