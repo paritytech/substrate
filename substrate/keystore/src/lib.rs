@@ -156,7 +156,7 @@ impl Store {
 	// TODO: Remove this
 	pub fn generate_from_seed(&mut self, seed: &str) -> Result<Pair> {
 		let mut s: [u8; 32] = [' ' as u8; 32];
-		
+
 		let was_hex = if seed.len() == 66 && &seed[0..2] == "0x" {
 			if let Ok(d) = hex::decode(&seed[2..]) {
 				s.copy_from_slice(&d);
@@ -270,5 +270,23 @@ mod tests {
 		assert_eq!(key.public(), key2.public());
 
 		assert_eq!(store.contents().unwrap()[0], key.public());
+	}
+
+	#[test]
+	fn test_generate_from_seed() {
+		let temp_dir = TempDir::new("keystore").unwrap();
+		let mut store = Store::open(temp_dir.path().to_owned()).unwrap();
+
+		let pair = store.generate_from_seed("0x1").unwrap();
+		assert_eq!("5GqhgbUd2S9uc5Tm7hWhw29Tw2jBnuHshmTV1fDF4V1w3G2z", pair.public().to_ss58check());
+
+		let pair = store.generate_from_seed("0x3d97c819d68f9bafa7d6e79cb991eebcd77d966c5334c0b94d9e1fa7ad0869dc").unwrap();
+		assert_eq!("5DKUrgFqCPV8iAXx9sjy1nyBygQCeiUYRFWurZGhnrn3HBL8", pair.public().to_ss58check());
+
+		let pair = store.generate_from_seed("12345678901234567890123456789022").unwrap();
+		assert_eq!("5DscZvfjnM5im7oKRXXP9xtCG1SEwfMb8J5eGLmw5EHhoHR3", pair.public().to_ss58check());
+
+		let pair = store.generate_from_seed("1").unwrap();
+		assert_eq!("5DYnksEZFc7kgtfyNM1xK2eBtW142gZ3Ho3NQubrF2S6B2fq", pair.public().to_ss58check());
 	}
 }

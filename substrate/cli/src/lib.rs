@@ -44,7 +44,6 @@ extern crate exit_future;
 
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
 extern crate clap;
 #[macro_use]
 extern crate error_chain;
@@ -164,6 +163,9 @@ where
 {
 	panic_hook::set();
 
+	let full_version = service::Configuration::<<F>::Configuration, <F>::Genesis>
+		::full_version_from_strs(version.version, version.commit);
+
 	let yaml = format!(include_str!("./cli.yml"),
 		name = version.executable_name,
 		description = version.description,
@@ -171,7 +173,7 @@ where
 	);
 	let yaml = &clap::YamlLoader::load_from_str(&yaml).expect("Invalid yml file")[0];
 	let matches = match clap::App::from_yaml(yaml)
-		.version(&(crate_version!().to_owned() + "\n")[..])
+		.version(&(full_version + "\n")[..])
 		.get_matches_from_safe(args) {
 			Ok(m) => m,
 			Err(e) => e.exit(),
