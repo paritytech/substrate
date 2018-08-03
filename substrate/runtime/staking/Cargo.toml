@@ -20,6 +20,7 @@ substrate-runtime-consensus = { path = "../consensus", default_features = false 
 substrate-runtime-system = { path = "../system", default_features = false }
 substrate-runtime-session = { path = "../session", default_features = false }
 substrate-runtime-timestamp = { path = "../timestamp", default_features = false }
+log = "0.3"
 
 [dev-dependencies]
 wabt = "0.4"

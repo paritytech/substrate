@@ -44,6 +44,9 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
 use rstd::{cmp, result};
@@ -495,6 +498,7 @@ impl<T: Trait> Module<T> {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
 		Self::set_free_balance(who, free_balance - free_slash);
+		info!("STAKING: Account {} has been slashed. Value: {:?}", who, value);
 		if free_slash < value {
 			Self::slash_reserved(who, value - free_slash)
 		} else {
@@ -509,6 +513,7 @@ impl<T: Trait> Module<T> {
 		if Self::voting_balance(who).is_zero() {
 			return Err("beneficiary account must pre-exist");
 		}
+		info!("STAKING: Account {} credited. Value: {:?}", who, value);
 		Self::set_free_balance(who, Self::free_balance(who) + value);
 		Ok(())
 	}
