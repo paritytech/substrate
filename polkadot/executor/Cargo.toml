@@ -6,4 +6,5 @@ description = "Polkadot node implementation in Rust."
 
 [dependencies]
 substrate-executor = { path = "../../substrate/executor" }
+substrate-primitives = { path = "../../substrate/primitives" }
 polkadot-runtime = { path = "../runtime" }

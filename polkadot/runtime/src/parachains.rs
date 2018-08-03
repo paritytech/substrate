@@ -30,7 +30,10 @@ use substrate_runtime_support::dispatch::Result;
 use rstd::marker::PhantomData;
 
 #[cfg(any(feature = "std", test))]
-use {runtime_io, runtime_primitives};
+use {runtime_primitives};
+
+#[cfg(any(feature = "std", test))]
+use std::collections::HashMap;
 
 pub trait Trait: system::Trait<Hash = ::primitives::Hash> + session::Trait {
 	/// The position of the set_heads call in the block.
@@ -214,8 +217,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(mut self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use std::collections::HashMap;
+	fn build_storage(mut self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
 		use codec::Encode;
 
 		self.parachains.sort_unstable_by_key(|&(ref id, _, _)| id.clone());
@@ -235,7 +237,7 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 			map.insert(head_key, genesis.encode());
 		}
 
-		Ok(map.into())
+		Ok(map)
 	}
 }
 
