@@ -24,6 +24,7 @@ use runtime_primitives::generic::BlockId;
 use {backend, error, Client, CallExecutor};
 use runtime_primitives::{ApplyResult, ApplyOutcome};
 use patricia_trie::NodeCodec;
+use primitives::{BlakeHasher, BlakeRlpCodec};
 use hashdb::Hasher;
 use rlp::Encodable;
 
@@ -34,6 +35,7 @@ where
 	E: CallExecutor<Block, H, C> + Clone,
 	Block: BlockT,
 	H: Hasher,
+	H::Out: Encodable + Ord,
 	C: NodeCodec<H>,
 {
 	header: <Block as BlockT>::Header,
@@ -43,14 +45,11 @@ where
 	changes: state_machine::OverlayedChanges,
 }
 
-impl<B, E, Block, H, C> BlockBuilder<B, E, Block, H, C>
+impl<B, E, Block> BlockBuilder<B, E, Block, BlakeHasher, BlakeRlpCodec>
 where
-	B: backend::Backend<Block, H, C>,
-	E: CallExecutor<Block, H, C> + Clone,
+	B: backend::Backend<Block, BlakeHasher, BlakeRlpCodec>,
+	E: CallExecutor<Block, BlakeHasher, BlakeRlpCodec> + Clone,
 	Block: BlockT,
-	H: Hasher,
-	H::Out: Encodable + Ord,
-	C: NodeCodec<H>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {

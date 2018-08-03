@@ -24,7 +24,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	execution_proof_check, ExecutionManager};
-use primitives::H256;
+use primitives::{H256, BlakeHasher, BlakeRlpCodec};
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use rlp::Encodable;
@@ -50,13 +50,11 @@ impl<B, F> RemoteCallExecutor<B, F> {
 	}
 }
 
-impl<B, F, Block, H, C> CallExecutor<Block, H, C> for RemoteCallExecutor<B, F>
+impl<B, F, Block> CallExecutor<Block, BlakeHasher, BlakeRlpCodec> for RemoteCallExecutor<B, F>
 where
 	Block: BlockT,
 	B: ChainBackend<Block>,
 	F: Fetcher<Block>,
-	H: Hasher,
-	C: NodeCodec<H>,
 {
 	type Error = ClientError;
 
@@ -81,19 +79,19 @@ where
 	}
 
 	fn call_at_state<
-		S: StateBackend<H, C>,
-		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
+		S: StateBackend<BlakeHasher, BlakeRlpCodec>,
+		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
-		_m: ExecutionManager<F>
+		_m: ExecutionManager<FF>
 	) -> ClientResult<(Vec<u8>, S::Transaction)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend<H, C>>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
+	fn prove_at_state<S: StateBackend<BlakeHasher, BlakeRlpCodec>>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
@@ -103,7 +101,7 @@ where
 }
 
 /// Check remote execution proof using given backend.
-pub fn check_execution_proof<Block, B, E, H>(
+pub fn check_execution_proof<Block, B, E, H, C>(
 	blockchain: &B,
 	executor: &E,
 	request: &RemoteCallRequest<Block::Hash>,
@@ -113,17 +111,19 @@ pub fn check_execution_proof<Block, B, E, H>(
 		Block: BlockT,
 		B: ChainBackend<Block>,
 		E: CodeExecutor<H>,
+		// E: CodeExecutor<BlakeHasher>,
 		H: Hasher,
 		H::Out: Encodable + Ord + From<H256>,
+		C: NodeCodec<H>,
 {
 	let local_header = blockchain.header(BlockId::Hash(request.block))?;
 	let local_header = local_header.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", request.block)))?;
 	let local_state_root = *local_header.state_root();
-	do_check_execution_proof(local_state_root.into(), executor, request, remote_proof)
+	do_check_execution_proof::<_, E, H, C>(local_state_root.into(), executor, request, remote_proof)
 }
 
 /// Check remote execution proof using given state root.
-fn do_check_execution_proof<Hash, E, H>(
+fn do_check_execution_proof<Hash, E, H, C>(
 	local_state_root: Hash,
 	executor: &E,
 	request: &RemoteCallRequest<Hash>,
@@ -132,14 +132,14 @@ fn do_check_execution_proof<Hash, E, H>(
 	where
 		Hash: ::std::fmt::Display + ::std::convert::AsRef<[u8]>,
 		E: CodeExecutor<H>,
+		// E: CodeExecutor<BlakeHasher>,
 		H: Hasher,
 		H::Out: Encodable + Ord + From<H256>,
+		C: NodeCodec<H>,
 {
 	let mut changes = OverlayedChanges::default();
-	let (local_result, _) = execution_proof_check(
-		// TrieH256::from_slice(local_state_root.as_ref()).into(),
-		// H256::from_slice(local_state_root.as_ref()).into(),
-		// <H as Hasher>::Out::from_slice(local_state_root.as_ref()), // TODO: H::Out doesn't know it's a H256 so it can't find the `from_slice`
+	// let (local_result, _) = execution_proof_check::<_, BlakeRlpCodec, _>(
+	let (local_result, _) = execution_proof_check::<H, C, E>(
 		H256::from_slice(local_state_root.as_ref()).into(),
 		remote_proof,
 		&mut changes,

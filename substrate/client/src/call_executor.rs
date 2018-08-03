@@ -23,6 +23,7 @@ use state_machine::{self, OverlayedChanges, Ext,
 use runtime_io::Externalities;
 use executor::{RuntimeVersion, RuntimeInfo};
 use patricia_trie::NodeCodec;
+use primitives::{BlakeHasher, BlakeRlpCodec};
 use hashdb::Hasher;
 use rlp::Encodable;
 
@@ -114,14 +115,11 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 	}
 }
 
-impl<B, E, Block, H, C> CallExecutor<Block, H, C> for LocalCallExecutor<B, E>
+impl<B, E, Block> CallExecutor<Block, BlakeHasher, BlakeRlpCodec> for LocalCallExecutor<B, E>
 where
-	B: backend::LocalBackend<Block, H, C>,
-	E: CodeExecutor<H> + RuntimeInfo,
+	B: backend::LocalBackend<Block, BlakeHasher, BlakeRlpCodec>,
+	E: CodeExecutor<BlakeHasher> + RuntimeInfo,
 	Block: BlockT,
-	H: Hasher,
-	H::Out: Encodable + Ord,
-	C: NodeCodec<H>,
 {
 	type Error = E::Error;
 
@@ -153,7 +151,7 @@ where
 	}
 
 	fn call_at_state<
-		S: state_machine::Backend<H, C>,
+		S: state_machine::Backend<BlakeHasher, BlakeRlpCodec>,
 		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
 	>(&self,
 		state: &S,
@@ -172,7 +170,7 @@ where
 		).map_err(Into::into)
 	}
 
-	fn prove_at_state<S: state_machine::Backend<H, C>>(&self,
+	fn prove_at_state<S: state_machine::Backend<BlakeHasher, BlakeRlpCodec>>(&self,
 		state: S,
 		changes: &mut OverlayedChanges,
 		method: &str,

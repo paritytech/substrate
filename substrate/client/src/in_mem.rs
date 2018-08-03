@@ -356,7 +356,7 @@ where
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
 
-			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| *old_state.clone())); // REVIEW: this was `.unwrap_or_else(|| old_state.clone())` – but ther compiler complained about trying to insert a rference into the hash map. Not sure how that could have worked before?
+			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone())); // REVIEW: this was `.unwrap_or_else(|| old_state.clone())` – but ther compiler complained about trying to insert a rference into the hash map. Not sure how that could have worked before?
 			self.blockchain.insert(hash, header, justification, body, pending_block.is_best);
 			// dumb implementation - store value for each block
 			if pending_block.is_best {
@@ -386,7 +386,7 @@ impl<Block, H, C> backend::LocalBackend<Block, H, C> for Backend<Block, H, C>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>,
+	C: NodeCodec<H> + Send + Sync,
 {}
 
 impl<Block: BlockT> Cache<Block> {

@@ -78,7 +78,8 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-#[derive(Clone, PartialEq, Eq)]
+// #[derive(Clone, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct InMemory<H, C> {
 	inner: Arc<HashMap<Vec<u8>, Vec<u8>>>,
 	_hasher: PhantomData<H>,
@@ -91,6 +92,14 @@ impl<H, C> Default for InMemory<H, C> {
 			inner: Arc::new(Default::default()),
 			_hasher: PhantomData,
 			_codec: PhantomData,
+		}
+	}
+}
+
+impl<H, C> Clone for InMemory<H, C> {
+	fn clone(&self) -> Self {
+		InMemory {
+			inner: self.inner.clone(), _hasher: PhantomData, _codec: PhantomData,
 		}
 	}
 }

@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 use futures::IntoFuture;
-
+use primitives::{BlakeHasher, BlakeRlpCodec};
 use runtime_primitives::traits::{Block as BlockT};
 use state_machine::CodeExecutor;
 
@@ -26,8 +26,6 @@ use call_executor::CallResult;
 use error::{Error as ClientError, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::check_execution_proof;
-use hashdb::Hasher;
-use rlp::Encodable;
 
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -77,16 +75,14 @@ impl<S, E, F> LightDataChecker<S, E, F> {
 	}
 }
 
-impl<S, E, F, Block, H> FetchChecker<Block> for LightDataChecker<S, E, F>
+impl<S, E, F, Block> FetchChecker<Block> for LightDataChecker<S, E, F>
 	where
 		Block: BlockT,
 		S: BlockchainStorage<Block>,
-		E: CodeExecutor<H>,
+		E: CodeExecutor<BlakeHasher>,
 		F: Fetcher<Block>,
-		H: Hasher,
-		H::Out: Encodable + Ord + From<H256>,
 {
 	fn check_execution_proof(&self, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult> {
-		check_execution_proof(&*self.blockchain, &self.executor, request, remote_proof)
+		check_execution_proof::<_, _, _, _, BlakeRlpCodec>(&*self.blockchain, &self.executor, request, remote_proof)
 	}
 }

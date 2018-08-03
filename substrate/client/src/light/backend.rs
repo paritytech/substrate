@@ -22,8 +22,11 @@ use std::sync::{Arc, Weak};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use state_machine::{Backend as StateBackend, TrieBackend as StateTrieBackend,
-	TryIntoTrieBackend as TryIntoStateTrieBackend};
+use state_machine::{
+	Backend as StateBackend,
+	TrieBackend as StateTrieBackend,
+	TryIntoTrieBackend as TryIntoStateTrieBackend
+};
 
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -32,7 +35,6 @@ use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::fetcher::Fetcher;
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
-use rlp::Encodable;
 
 /// Light client backend.
 pub struct Backend<S, F> {
@@ -188,9 +190,9 @@ where
 		// whole state is not available on light node
 	}
 
-	fn storage_root<I>(&self, _delta: I) -> ([u8; 32], Self::Transaction)
+	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
-		([0; 32], ())
+		(H::Out::default(), ())
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
