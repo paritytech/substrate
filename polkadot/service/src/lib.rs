@@ -44,7 +44,7 @@ pub mod chain_spec;
 use std::sync::Arc;
 use std::collections::HashMap;
 
-use codec::Encode;
+use codec::{Encode, Decode};
 use transaction_pool::TransactionPool;
 use polkadot_api::{PolkadotApi, light::RemotePolkadotApiWrapper};
 use polkadot_primitives::{parachain, AccountId, Block, BlockId, Hash};
@@ -313,7 +313,7 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 		}
 
 		let encoded = transaction.encode();
-		if let Some(uxt) = codec::Decode::decode(&mut &encoded[..]) {
+		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
 			let best_block_id = self.best_block_id()?;
 			match self.pool.import_unchecked_extrinsic(best_block_id, uxt) {
 				Ok(xt) => Some(*xt.hash()),
