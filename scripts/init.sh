@@ -2,7 +2,7 @@
 
 set -e
 
-echo "*** Initilising WASM build environment"
+echo "*** Initialising WASM build environment"
 
 if [ -z $CI_PROJECT_NAME ] ; then
    rustup update nightly

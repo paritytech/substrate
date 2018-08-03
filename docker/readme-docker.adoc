@@ -5,12 +5,12 @@
 
 Run the following command
 
-	docker run -d chevdor/polkadot:latest polkadot
+	docker run -d -P --name polkadot chevdor/polkadot:latest
 
 === Building the image
 
 To build your own image from the source, you can run the following command:
 
-	./build.sh
+	./docker/build.sh
 
 NOTE: Building the image takes a while. Count at least 30min on a good machine.
