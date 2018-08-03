@@ -80,7 +80,7 @@ impl Output for Vec<u8> {
 #[cfg(feature = "std")]
 impl<W: ::std::io::Write> Output for W {
 	fn write(&mut self, bytes: &[u8]) {
-		(self as &mut ::std::io::Write).write(bytes).expect("Codec outputs are infallible");
+		(self as &mut ::std::io::Write).write_all(bytes).expect("Codec outputs are infallible");
 	}
 }
 
