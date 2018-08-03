@@ -44,7 +44,6 @@ extern crate exit_future;
 
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
 extern crate clap;
 #[macro_use]
 extern crate error_chain;
@@ -164,6 +163,9 @@ where
 {
 	panic_hook::set();
 
+	let full_version = service::Configuration::<<F>::Configuration, <F>::Genesis>
+		::full_version_from_strs(version.version, version.commit);
+
 	let yaml = format!(include_str!("./cli.yml"),
 		name = version.executable_name,
 		description = version.description,
@@ -171,7 +173,7 @@ where
 	);
 	let yaml = &clap::YamlLoader::load_from_str(&yaml).expect("Invalid yml file")[0];
 	let matches = match clap::App::from_yaml(yaml)
-		.version(&(crate_version!().to_owned() + "\n")[..])
+		.version(&(full_version + "\n")[..])
 		.get_matches_from_safe(args) {
 			Ok(m) => m,
 			Err(e) => e.exit(),
@@ -252,9 +254,6 @@ where
 			service::Roles::FULL
 		};
 
-	if let Some(v) = matches.value_of("min-heap-pages") {
-		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
-	}
 	if let Some(v) = matches.value_of("max-heap-pages") {
 		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
 	}
@@ -352,9 +351,6 @@ fn import_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesi
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 
-	if let Some(v) = matches.value_of("min-heap-pages") {
-		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
-	}
 	if let Some(v) = matches.value_of("max-heap-pages") {
 		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
 	}

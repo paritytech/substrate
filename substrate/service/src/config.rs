@@ -59,8 +59,6 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub name: String,
 	/// Execution strategy.
 	pub execution_strategy: ExecutionStrategy,
-	/// Minimum number of heap pages to allocate for Wasm execution.
-	pub min_heap_pages: usize,
 	/// Maximum number of heap pages to allocate for Wasm execution.
 	pub max_heap_pages: usize,
 	/// RPC over HTTP binding address. `None` if disabled.
@@ -90,7 +88,6 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			telemetry: Default::default(),
 			pruning: PruningMode::default(),
 			execution_strategy: ExecutionStrategy::Both,
-			min_heap_pages: 8,
 			max_heap_pages: 1024,
 			rpc_http: None,
 			rpc_ws: None,
@@ -108,10 +105,15 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 		format!("{}-{}{}{}", Target::arch(), Target::os(), env_dash, env)
 	}
 
-	/// Returns full version string.
+	/// Returns full version string of this configuration.
 	pub fn full_version(&self) -> String {
-		let commit_dash = if self.impl_commit.is_empty() { "" } else { "-" };
-		format!("{}{}{}-{}", self.impl_version, commit_dash, self.impl_commit, Self::platform())
+		Self::full_version_from_strs(self.impl_version, self.impl_commit)
+	}
+	
+	/// Returns full version string, using supplied version and commit.
+	pub fn full_version_from_strs(impl_version: &str, impl_commit: &str) -> String {
+		let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
+		format!("{}{}{}-{}", impl_version, commit_dash, impl_commit, Self::platform())
 	}
 
 	/// Implementation id and version.

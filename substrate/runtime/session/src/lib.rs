@@ -79,6 +79,7 @@ decl_module! {
 		fn force_new_session(normal_rotation: bool) -> Result = 1;
 	}
 }
+
 decl_storage! {
 	trait Store for Module<T: Trait>;
 
@@ -93,6 +94,9 @@ decl_storage! {
 	// Percent by which the session must necessarily finish late before we early-exit the session.
 	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Moment;
 
+	// New session is being forced is this entry exists; in which case, the boolean value is whether
+	// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
+	pub ForcingNewSession get(forcing_new_session): b"ses:forcing_new_session" => bool;
 	// Block at which the session length last changed.
 	LastLengthChange: b"ses:llc" => T::BlockNumber;
 	// The next key for a given validator.
@@ -127,8 +131,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Forces a new session.
-	fn force_new_session(normal_rotation: bool) -> Result {
-		Self::rotate_session(normal_rotation);
+	pub fn force_new_session(normal_rotation: bool) -> Result {
+		<ForcingNewSession<T>>::put(normal_rotation);
 		Ok(())
 	}
 
@@ -153,13 +157,16 @@ impl<T: Trait> Module<T> {
 		let block_number = <system::Module<T>>::block_number();
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
 		let broken_validation = Self::broken_validation();
-		if is_final_block || broken_validation {
-			Self::rotate_session(!broken_validation);
+		if let Some(normal_rotation) = Self::forcing_new_session() {
+			Self::rotate_session(normal_rotation, is_final_block);
+			<ForcingNewSession<T>>::kill();
+		} else if is_final_block || broken_validation {
+			Self::rotate_session(!broken_validation, is_final_block);
 		}
 	}
 
 	/// Move onto next session: register the new authority set.
-	pub fn rotate_session(normal_rotation: bool) {
+	pub fn rotate_session(normal_rotation: bool, is_final_block: bool) {
 		let now = <timestamp::Module<T>>::get();
 		let time_elapsed = now.clone() - Self::current_start();
 
@@ -168,9 +175,14 @@ impl<T: Trait> Module<T> {
 		<CurrentStart<T>>::put(now);
 
 		// Enact era length change.
-		if let Some(next_len) = <NextSessionLength<T>>::take() {
-			let block_number = <system::Module<T>>::block_number();
+		let len_changed = if let Some(next_len) = <NextSessionLength<T>>::take() {
 			<SessionLength<T>>::put(next_len);
+			true
+		} else {
+			false
+		};
+		if len_changed || !is_final_block {
+			let block_number = <system::Module<T>>::block_number();
 			<LastLengthChange<T>>::put(block_number);
 		}
 
@@ -351,6 +363,40 @@ mod tests {
 			assert!(Session::broken_validation());
 			Session::check_rotate_session();
 			assert_eq!(Session::current_index(), 2);
+		});
+	}
+
+	#[test]
+	fn should_work_with_early_exit() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			assert_ok!(Session::set_length(10));
+			assert_eq!(Session::blocks_remaining(), 1);
+			Session::check_rotate_session();
+
+			System::set_block_number(2);
+			assert_eq!(Session::blocks_remaining(), 0);
+			Session::check_rotate_session();
+			assert_eq!(Session::length(), 10);
+		
+			System::set_block_number(7);
+			assert_eq!(Session::current_index(), 1);
+			assert_eq!(Session::blocks_remaining(), 5);
+			assert_ok!(Session::force_new_session(false));
+			Session::check_rotate_session();
+
+			System::set_block_number(8);
+			assert_eq!(Session::current_index(), 2);
+			assert_eq!(Session::blocks_remaining(), 9);
+			Session::check_rotate_session();
+
+			System::set_block_number(17);
+			assert_eq!(Session::current_index(), 2);
+			assert_eq!(Session::blocks_remaining(), 0);
+			Session::check_rotate_session();
+
+			System::set_block_number(18);
+			assert_eq!(Session::current_index(), 3);
 		});
 	}
 
