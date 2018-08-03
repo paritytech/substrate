@@ -9,12 +9,12 @@ substrate-runtime-std = { path = "../runtime-std", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
 elastic-array = "0.10"
 # TODO: I think we can go back to `default_features = false` when we have a proper impl of `Hasher` to use
-fixed-hash = { git = "https://github.com/paritytech/parity-common", branch = "add-fixed-hash", features = ["heapsizeof"] }
+fixed-hash = { git = "https://github.com/paritytech/parity-common", features = ["heapsizeof"] }
 rustc-hex = { version = "2.0", default_features = false }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 # TODO: Used to fetch `uint` from "https://github.com/rphmeier/primitives.git" – what was `compile-for-wasm` adding?
-uint = { git = "https://github.com/paritytech/parity-common", branch = "add-fixed-hash", default_features = false }
+uint = { git = "https://github.com/paritytech/parity-common", default_features = false }
 rlp = { git = "https://github.com/paritytech/parity-common" }
 twox-hash = { version = "1.1.0", optional = true }
 byteorder = { version = "1.1", default_features = false }
