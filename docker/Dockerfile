@@ -1,5 +1,7 @@
 FROM phusion/baseimage:0.10.1
-LABEL maintainer "chevdor@gmail.com"
+
+LABEL author="chevdor <chevdor@gmail.com>" maintainer="chevdor <chevdor@gmail.com> Akagi201 <akagi201@gmail.com>" \
+  description="This is a base image for building Polkadot"
 
 ARG PROFILE=release
 
@@ -13,12 +15,9 @@ RUN mkdir -p polkadot && \
 
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
 	export PATH=$PATH:$HOME/.cargo/bin && \
-	rustup update nightly && \
-	rustup target add wasm32-unknown-unknown --toolchain nightly && \
-	rustup update stable && \
-	cargo install --git https://github.com/alexcrichton/wasm-gc && \
 	git clone https://github.com/paritytech/polkadot.git && \
 	cd polkadot && \
+	./init.sh && \
 	./build.sh && \
 	cargo build --$PROFILE && \
 	mv target/$PROFILE/polkadot /usr/local/bin && \
