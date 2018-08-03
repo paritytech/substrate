@@ -2848,6 +2848,7 @@ dependencies = [
  "patricia-trie 0.2.1 (git+https://github.com/paritytech/parity-common)",
  "plain_hasher 0.1.0 (git+https://github.com/paritytech/parity-common)",
  "pretty_assertions 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rlp 0.2.1 (git+https://github.com/paritytech/parity-common)",
  "rustc-hex 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
