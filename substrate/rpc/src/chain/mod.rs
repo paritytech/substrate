@@ -22,7 +22,7 @@ use client::{self, Client, BlockchainEvents};
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use rpc::Result as RpcResult;
-use rpc::futures::{Future, Sink, Stream};
+use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use tokio::runtime::TaskExecutor;
@@ -33,7 +33,7 @@ mod error;
 #[cfg(test)]
 mod tests;
 
-use self::error::{Result, ResultExt};
+use self::error::Result;
 
 build_rpc_trait! {
 	/// Polkadot blockchain API
@@ -86,22 +86,35 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> wh
 	type Metadata = ::metadata::Metadata;
 
 	fn header(&self, hash: Block::Hash) -> Result<Option<Block::Header>> {
-		self.client.header(&BlockId::Hash(hash)).chain_err(|| "Blockchain error")
+		Ok(self.client.header(&BlockId::Hash(hash))?)
 	}
 
 	fn head(&self) -> Result<Block::Hash> {
-		Ok(self.client.info().chain_err(|| "Blockchain error")?.chain.best_hash)
+		Ok(self.client.info()?.chain.best_hash)
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
 		self.subscriptions.add(subscriber, |sink| {
+			// send current head right at the start.
+			let header = self.head()
+				.and_then(|hash| self.header(hash))
+				.and_then(|header| {
+					header.ok_or_else(|| self::error::ErrorKind::Unimplemented.into())
+				})
+				.map_err(Into::into);
+
+			// send further subscriptions
 			let stream = self.client.import_notification_stream()
 				.filter(|notification| notification.is_new_best)
 				.map(|notification| Ok(notification.header))
 				.map_err(|e| warn!("Block notification stream error: {:?}", e));
+
 			sink
 				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(stream)
+				.send_all(
+					stream::iter_result(vec![Ok(header)])
+						.chain(stream)
+				)
 				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
 				.map(|_| ())
 		});
