@@ -616,6 +616,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 
 #[cfg(test)]
 mod tests {
+	// These `pub` are here for a reason, edit with care
 	pub use super::*;
 	pub use runtime_io::with_externalities;
 	pub use substrate_primitives::H256;
