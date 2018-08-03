@@ -78,7 +78,7 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-#[derive(PartialEq, Eq)]
+#[derive(Eq)]
 pub struct InMemory<H, C> {
 	inner: Arc<HashMap<Vec<u8>, Vec<u8>>>,
 	_hasher: PhantomData<H>,
@@ -100,6 +100,12 @@ impl<H, C> Clone for InMemory<H, C> {
 		InMemory {
 			inner: self.inner.clone(), _hasher: PhantomData, _codec: PhantomData,
 		}
+	}
+}
+
+impl<H, C> PartialEq for InMemory<H, C> {
+	fn eq(&self, other: &Self) -> bool {
+		self.inner.eq(&other.inner)
 	}
 }
 

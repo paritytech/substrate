@@ -3240,6 +3240,7 @@ dependencies = [
 name = "substrate-test-client"
 version = "0.1.0"
 dependencies = [
+ "hashdb 0.2.0 (git+https://github.com/paritytech/parity-common)",
  "rhododendron 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-bft 0.1.0",
  "substrate-client 0.1.0",

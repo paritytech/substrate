@@ -26,6 +26,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 #[macro_use] extern crate substrate_executor as executor;
+extern crate hashdb;
 
 pub extern crate substrate_test_runtime as runtime;
 pub extern crate substrate_client as client;
@@ -34,10 +35,12 @@ mod client_ext;
 
 pub use client_ext::TestClient;
 
+use primitives::{BlakeHasher, BlakeRlpCodec};
+
 mod local_executor {
 	#![allow(missing_docs)]
 	use super::runtime;
-
+	// TODO: change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
 	native_executor_instance!(pub LocalExecutor, runtime::api::dispatch, runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 }
 
@@ -45,7 +48,7 @@ mod local_executor {
 pub use local_executor::LocalExecutor;
 
 /// Test client database backend.
-pub type Backend = client::in_mem::Backend<runtime::Block>;
+pub type Backend = client::in_mem::Backend<runtime::Block, BlakeHasher, BlakeRlpCodec>;
 
 /// Test client executor.
 pub type Executor = client::LocalCallExecutor<Backend, executor::NativeExecutor<LocalExecutor>>;

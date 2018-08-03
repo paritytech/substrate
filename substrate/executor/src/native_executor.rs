@@ -25,7 +25,6 @@ use twox_hash::XxHash;
 use std::hash::Hasher;
 use parking_lot::{Mutex, MutexGuard};
 use RuntimeInfo;
-use hashdb;
 use primitives::BlakeHasher;
 
 // For the internal Runtime Cache:
@@ -109,7 +108,8 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
-	fn dispatch<H: hashdb::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	// fn dispatch<H: hashdb::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	fn dispatch(ext: &mut Externalities<BlakeHasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Get native runtime version.
 	const VERSION: RuntimeVersion;
@@ -197,6 +197,8 @@ macro_rules! native_executor_instance {
 		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
 	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
+		// TODO: this is not so great – I think I should go back to have dispatch take a type param and modify this macro to accept a type param and then pass it in from the test-client instead
+		use primitives::BlakeHasher as _BlakeHasher;
 		impl $crate::NativeExecutionDispatch for $name {
 			const VERSION: $crate::RuntimeVersion = $version;
 			fn native_equivalent() -> &'static [u8] {
@@ -204,8 +206,7 @@ macro_rules! native_executor_instance {
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
 				$code
 			}
-
-			fn dispatch(ext: &mut $crate::Externalities, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
+			fn dispatch(ext: &mut $crate::Externalities<_BlakeHasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}

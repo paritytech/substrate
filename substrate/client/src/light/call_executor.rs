@@ -166,7 +166,8 @@ mod tests {
 
 		// check remote execution proof locally
 		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
-		do_check_execution_proof(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
+
+		do_check_execution_proof::<_, _, _, BlakeRlpCodec>(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
 			method: "authorities".into(),
 			call_data: vec![],
