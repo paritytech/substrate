@@ -37,6 +37,10 @@ impl<H: Hasher> TestExternalities<H> {
 	pub fn new() -> Self {
 		TestExternalities {inner: HashMap::new(), _hasher: PhantomData}
 	}
+	/// Insert key/value
+	pub fn insert(&mut self, k: Vec<u8>, v: Vec<u8>) -> Option<Vec<u8>> {
+		self.inner.insert(k, v)
+	}
 }
 
 impl<H: Hasher> PartialEq for TestExternalities<H> {
@@ -58,6 +62,19 @@ impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> {
 impl<H: Hasher> Default for TestExternalities<H> {
 	fn default() -> Self { Self::new() }
 }
+
+impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> {
+	fn from(tex: TestExternalities<H>) -> Self {
+		tex.inner.into()
+	}
+}
+
+impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> {
+	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		TestExternalities { inner: hashmap, _hasher: PhantomData }
+	}
+}
+
 
 impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + Encodable {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
