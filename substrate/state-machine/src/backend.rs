@@ -78,7 +78,6 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-// #[derive(Clone, PartialEq, Eq)]
 #[derive(PartialEq, Eq)]
 pub struct InMemory<H, C> {
 	inner: Arc<HashMap<Vec<u8>, Vec<u8>>>,

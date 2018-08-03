@@ -111,7 +111,6 @@ pub fn check_execution_proof<Block, B, E, H, C>(
 		Block: BlockT,
 		B: ChainBackend<Block>,
 		E: CodeExecutor<H>,
-		// E: CodeExecutor<BlakeHasher>,
 		H: Hasher,
 		H::Out: Encodable + Ord + From<H256>,
 		C: NodeCodec<H>,
@@ -132,13 +131,11 @@ fn do_check_execution_proof<Hash, E, H, C>(
 	where
 		Hash: ::std::fmt::Display + ::std::convert::AsRef<[u8]>,
 		E: CodeExecutor<H>,
-		// E: CodeExecutor<BlakeHasher>,
 		H: Hasher,
 		H::Out: Encodable + Ord + From<H256>,
 		C: NodeCodec<H>,
 {
 	let mut changes = OverlayedChanges::default();
-	// let (local_result, _) = execution_proof_check::<_, BlakeRlpCodec, _>(
 	let (local_result, _) = execution_proof_check::<H, C, E>(
 		H256::from_slice(local_state_root.as_ref()).into(),
 		remote_proof,
