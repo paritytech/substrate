@@ -50,7 +50,7 @@ extern crate serde_derive;
 
 mod components;
 mod error;
-mod config;
+pub mod config;
 mod chain_spec;
 pub mod chain_ops;
 
