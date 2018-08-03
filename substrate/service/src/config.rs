@@ -121,3 +121,4 @@ pub fn full_version_from_strs(impl_version: &str, impl_commit: &str) -> String {
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };
 	format!("{}{}{}-{}", impl_version, commit_dash, impl_commit, platform())
 }
+
