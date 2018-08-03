@@ -103,6 +103,11 @@ impl<Block: BlockT> StorageNotifications<Block> {
 			}
 		}
 
+		// Don't send empty notifications
+		if changes.is_empty() {
+			return;
+		}
+
 		let changes = Arc::new(changes);
 		// Trigger the events
 		for subscriber in subscribers {
@@ -263,5 +268,22 @@ mod tests {
 		// then
 		assert_eq!(notifications.listeners.len(), 0);
 		assert_eq!(notifications.wildcard_listeners.len(), 0);
+	}
+
+	#[test]
+	fn should_not_send_empty_notifications() {
+		// given
+		let mut recv = {
+			let mut notifications = StorageNotifications::<Block>::default();
+			let recv = notifications.listen(None).wait();
+
+			// when
+			let changeset = vec![];
+			notifications.trigger(&1.into(), changeset.into_iter());
+			recv
+		};
+
+		// then
+		assert_eq!(recv.next(), None);
 	}
 }
