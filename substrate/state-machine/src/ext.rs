@@ -57,7 +57,7 @@ pub struct Ext<'a, H, C, B>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
-	B: 'a + Backend<H,C>,
+	B: 'a + Backend<H, C>,
 {
 	// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
