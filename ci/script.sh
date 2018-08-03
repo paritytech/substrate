@@ -12,17 +12,21 @@ rustc --version
 rustup --version
 cargo --version
 
-case $TARGET in
-	"native")
-		sudo apt-get -y update
-		sudo apt-get install -y cmake pkg-config libssl-dev
+sudo apt-get -y update
+sudo apt-get install -y cmake pkg-config libssl-dev
 
+case $TARGET in
+	"checked_in_runtime")
 		cargo test --all
 		;;
 
-	"wasm")
+	"rebuild_runtime")
+		# NOTE this build target requires nightly compiler.
+
 		# Install prerequisites and build all wasm projects
 		./init.sh
 		./build.sh
+
+		cargo test --all
 		;;
 esac
