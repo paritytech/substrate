@@ -50,8 +50,8 @@ extern crate serde_derive;
 
 mod components;
 mod error;
-mod config;
 mod chain_spec;
+pub mod config;
 pub mod chain_ops;
 
 use std::io;
