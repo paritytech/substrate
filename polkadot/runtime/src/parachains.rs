@@ -244,8 +244,8 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
+	use runtime_io::{TestExternalities, with_externalities};
+	use substrate_primitives::{H256, BlakeHasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
@@ -285,7 +285,7 @@ mod tests {
 
 	type Parachains = Module<Test>;
 
-	fn new_test_ext(parachains: Vec<(Id, Vec<u8>, Vec<u8>)>) -> runtime_io::TestExternalities {
+	fn new_test_ext(parachains: Vec<(Id, Vec<u8>, Vec<u8>)>) -> TestExternalities<BlakeHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -300,7 +300,7 @@ mod tests {
 			parachains: parachains,
 			phantom: PhantomData,
 		}.build_storage().unwrap());
-		t
+		t.into()
 	}
 
 	#[test]
