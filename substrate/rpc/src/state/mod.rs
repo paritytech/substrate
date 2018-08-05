@@ -26,7 +26,7 @@ use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
 use primitives::{BlakeHasher, BlakeRlpCodec};
 use rpc::Result as RpcResult;
-use rpc::futures::{Future, Sink, Stream};
+use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use tokio::runtime::TaskExecutor;
@@ -142,6 +142,7 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 
 	fn storage(&self, key: StorageKey) -> Result<StorageData> {
 		self.storage_at(key, self.client.info()?.chain.best_hash)
+
 	}
 
 	fn call(&self, method: String, data: Vec<u8>) -> Result<Vec<u8>> {
@@ -163,6 +164,20 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 			},
 		};
 
+		// initial values
+		let initial = stream::iter_result(keys
+			.map(|keys| {
+				let changes = keys
+					.into_iter()
+					.map(|key| self.storage(key.clone())
+						.map(|val| (key.clone(), Some(val)))
+						.unwrap_or_else(|_| (key, None))
+					)
+					.collect();
+				let block = self.client.info().map(|info| info.chain.best_hash).unwrap_or_default();
+				vec![Ok(Ok(StorageChangeSet { block, changes }))]
+			}).unwrap_or_default());
+
 		self.subscriptions.add(subscriber, |sink| {
 			let stream = stream
 				.map_err(|e| warn!("Error creating storage notification stream: {:?}", e))
@@ -170,9 +185,10 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 					block,
 					changes: changes.iter().cloned().collect(),
 				}));
+
 			sink
 				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(stream)
+				.send_all(initial.chain(stream))
 				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
 				.map(|_| ())
 		})

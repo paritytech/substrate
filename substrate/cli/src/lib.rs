@@ -163,9 +163,10 @@ where
 {
 	panic_hook::set();
 
-	let full_version = service::Configuration::<<F>::Configuration, <F>::Genesis>
-		::full_version_from_strs(version.version, version.commit);
-
+	let full_version = service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
 	let yaml = format!(include_str!("./cli.yml"),
 		name = version.executable_name,
 		description = version.description,
