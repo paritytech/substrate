@@ -82,7 +82,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	network: Arc<components::NetworkService<Components::Factory>>,
+	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	extrinsic_pool: Arc<Components::ExtrinsicPool>,
 	keystore: Keystore,
 	signal: Option<Signal>,
@@ -239,7 +239,7 @@ impl<Components> Service<Components>
 
 		Ok(Service {
 			client: client,
-			network: network,
+			network: Some(network),
 			extrinsic_pool: extrinsic_pool,
 			signal: Some(signal),
 			keystore: keystore,
@@ -256,7 +256,7 @@ impl<Components> Service<Components>
 
 	/// Get shared network instance.
 	pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
-		self.network.clone()
+		self.network.as_ref().expect("self.network always Some").clone()
 	}
 
 	/// Get shared extrinsic pool instance.
@@ -273,6 +273,8 @@ impl<Components> Service<Components>
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
+
+		drop(self.network.take());
 
 		if let Some(signal) = self.signal.take() {
 			signal.fire();
