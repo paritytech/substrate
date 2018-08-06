@@ -67,8 +67,11 @@ fn should_notify_about_latest_block() {
 		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 	}
 
-	// assert notification send to transport
+	// assert initial head sent.
 	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	assert!(notification.is_some());
+	// assert notification sent to transport
+	let (notification, next) = core.block_on(next.into_future()).unwrap();
 	assert!(notification.is_some());
 	// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
