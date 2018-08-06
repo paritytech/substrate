@@ -20,6 +20,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use core::{mem, slice};
 use arrayvec::ArrayVec;
+
 /// Trait that allows reading of data into a slice.
 pub trait Input {
 	/// Read into the provided input slice. Returns the number of bytes read.
@@ -113,6 +114,7 @@ pub trait Decode: Sized {
 
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
 pub trait Codec: Decode + Encode {}
+
 impl<S: Decode + Encode> Codec for S {}
 
 impl<T: Encode, E: Encode> Encode for Result<T, E> {
