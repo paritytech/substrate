@@ -19,7 +19,12 @@
 use hashdb::Hasher;
 use plain_hasher::PlainHasher;
 use hash::H256;
+#[cfg(feature = "std")]
 use hashing::blake2_256;
+#[cfg(not(feature = "std"))]
+fn blake2_256(x: &[u8]) -> [u8; 32] {
+	unimplemented!()
+}
 
 /// Concrete implementation of Hasher using Blake2b 256-bit hashes
 #[derive(Debug)]
