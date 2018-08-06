@@ -86,6 +86,7 @@ pub struct Service<Components: components::Components> {
 	network: Arc<components::NetworkService<Components::Factory>>,
 	extrinsic_pool: Arc<Components::ExtrinsicPool>,
 	keystore: Keystore,
+	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<rpc::WsServer>,
@@ -246,6 +247,7 @@ impl<Components> Service<Components>
 			extrinsic_pool: extrinsic_pool,
 			signal: Some(signal),
 			keystore: keystore,
+			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws,
 			_telemetry: telemetry,
@@ -270,6 +272,11 @@ impl<Components> Service<Components>
 	/// Get shared keystore.
 	pub fn keystore(&self) -> &Keystore {
 		&self.keystore
+	}
+
+	/// Get a handle to a future that will resolve on exit.
+	pub fn on_exit(&self) -> ::exit_future::Exit {
+		self.exit.clone()
 	}
 }
 

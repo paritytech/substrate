@@ -294,6 +294,20 @@ impl Encode for () {
 	}
 }
 
+impl<'a, T: 'a + Encode + ?Sized> Encode for &'a T {
+	fn encode_to<D: Output>(&self, dest: &mut D) {
+		(&**self).encode_to(dest)
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		(&**self).using_encoded(f)
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		(&**self).encode()
+	}
+}
+
 impl Decode for () {
 	fn decode<I: Input>(_: &mut I) -> Option<()> {
 		Some(())
@@ -476,5 +490,15 @@ mod tests {
 		v.using_encoded(|ref slice|
 			assert_eq!(slice, &b"\x0b\0\0\0Hello world")
 		);
+	}
+
+	#[test]
+	fn encode_borrowed_tuple() {
+		let x = vec![1u8, 2, 3, 4];
+		let y = 128i64;
+
+		let encoded = (&x, &y).encode();
+
+		assert_eq!((x, y), Decode::decode(&mut &encoded[..]).unwrap());
 	}
 }

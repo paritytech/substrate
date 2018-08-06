@@ -32,6 +32,7 @@
 extern crate ed25519;
 extern crate parking_lot;
 extern crate polkadot_api;
+extern crate polkadot_availability_store as extrinsic_store;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
 extern crate polkadot_transaction_pool as transaction_pool;
@@ -66,6 +67,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use codec::{Decode, Encode};
+use extrinsic_store::Store as ExtrinsicStore;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt, CandidateSignature};
@@ -236,6 +238,8 @@ pub struct ProposerFactory<C, N, P> {
 	pub handle: TaskExecutor,
 	/// The duration after which parachain-empty blocks will be allowed.
 	pub parachain_empty_duration: Duration,
+	/// Store for extrinsic data.
+	pub extrinsic_store: ExtrinsicStore,
 }
 
 impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
@@ -279,7 +283,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		debug!(target: "consensus", "Active parachains: {:?}", active_parachains);
 
 		let n_parachains = active_parachains.len();
-		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
+		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash, self.extrinsic_store.clone()));
 		let (router, input, output) = self.network.communication_for(
 			authorities,
 			table.clone(),
@@ -309,6 +313,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			router.clone(),
 			&self.handle,
 			collation_work,
+			self.extrinsic_store.clone(),
 		);
 
 		let proposer = Proposer {
@@ -334,19 +339,42 @@ fn dispatch_collation_work<R, C, P>(
 	router: R,
 	handle: &TaskExecutor,
 	work: Option<CollationFetch<C, P>>,
+	extrinsic_store: ExtrinsicStore,
 ) -> exit_future::Signal where
 	C: Collators + Send + 'static,
 	P: PolkadotApi + Send + Sync + 'static,
 	<C::Collation as IntoFuture>::Future: Send + 'static,
 	R: TableRouter + Send + 'static,
 {
+	use extrinsic_store::Data;
+
 	let (signal, exit) = exit_future::signal();
+
+	let work = match work {
+		Some(w) => w,
+		None => return signal,
+	};
+
+	let relay_parent = work.relay_parent();
 	let handled_work = work.then(move |result| match result {
-		Ok(Some((collation, extrinsic))) => {
-			router.local_candidate(collation.receipt, collation.block_data, extrinsic);
+		Ok((collation, extrinsic)) => {
+			let res = extrinsic_store.make_available(Data {
+				relay_parent,
+				parachain_id: collation.receipt.parachain_index,
+				candidate_hash: collation.receipt.hash(),
+				block_data: collation.block_data.clone(),
+				extrinsic: Some(extrinsic.clone()),
+			});
+
+			match res {
+				Ok(()) =>
+					router.local_candidate(collation.receipt, collation.block_data, extrinsic),
+				Err(e) =>
+					warn!(target: "consensus", "Failed to make collation data available: {:?}", e),
+			}
+
 			Ok(())
 		}
-		Ok(None) => Ok(()),
 		Err(_e) => {
 			warn!(target: "consensus", "Failed to collate candidate");
 			Ok(())

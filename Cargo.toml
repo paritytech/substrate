@@ -20,6 +20,7 @@ vergen = "0.1"
 [workspace]
 members = [
 	"polkadot/api",
+	"polkadot/availability-store",
 	"polkadot/cli",
 	"polkadot/collator",
 	"polkadot/consensus",
