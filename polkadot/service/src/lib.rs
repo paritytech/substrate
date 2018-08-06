@@ -19,6 +19,7 @@
 //! Polkadot service. Specialized wrapper over substrate service.
 
 extern crate ed25519;
+extern crate polkadot_availability_store as av_store;
 extern crate polkadot_primitives;
 extern crate polkadot_runtime;
 extern crate polkadot_executor;
@@ -43,7 +44,7 @@ pub mod chain_spec;
 use std::sync::Arc;
 use std::collections::HashMap;
 
-use codec::Encode;
+use codec::{Encode, Decode};
 use transaction_pool::TransactionPool;
 use polkadot_api::{PolkadotApi, light::RemotePolkadotApiWrapper};
 use polkadot_primitives::{parachain, AccountId, Block, BlockId, Hash};
@@ -195,8 +196,22 @@ pub fn new_light(config: Configuration, executor: TaskExecutor)
 pub fn new_full(config: Configuration, executor: TaskExecutor)
 	-> Result<Service<FullComponents<Factory>>, Error>
 {
+	// open availability store.
+	let av_store = {
+		use std::path::PathBuf;
+
+		let mut path = PathBuf::from(config.database_path.clone());
+		path.push("availability");
+
+		::av_store::Store::new(::av_store::Config {
+			cache_size: None,
+			path,
+		})?
+	};
+
 	let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
 	let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
+
 	// Spin consensus service if configured
 	let consensus = if is_validator {
 		// Load the first available key
@@ -214,10 +229,13 @@ pub fn new_full(config: Configuration, executor: TaskExecutor)
 			executor,
 			::std::time::Duration::from_secs(4), // TODO: dynamic
 			key,
+			av_store.clone(),
 		))
 	} else {
 		None
 	};
+
+	service.network().with_spec(|spec, _| spec.register_availability_store(av_store));
 
 	Ok(Service {
 		client: service.client(),
@@ -295,7 +313,7 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 		}
 
 		let encoded = transaction.encode();
-		if let Some(uxt) = codec::Decode::decode(&mut &encoded[..]) {
+		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
 			let best_block_id = self.best_block_id()?;
 			match self.pool.import_unchecked_extrinsic(best_block_id, uxt) {
 				Ok(xt) => Some(*xt.hash()),

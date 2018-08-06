@@ -1841,6 +1841,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "polkadot-availability-store"
+version = "0.1.0"
+dependencies = [
+ "kvdb 0.1.0 (git+https://github.com/paritytech/parity.git)",
+ "kvdb-memorydb 0.1.0 (git+https://github.com/paritytech/parity.git)",
+ "kvdb-rocksdb 0.1.0 (git+https://github.com/paritytech/parity.git)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "polkadot-primitives 0.1.0",
+ "substrate-codec 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "polkadot-cli"
 version = "0.3.0"
 dependencies = [
@@ -1899,6 +1913,7 @@ dependencies = [
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
+ "polkadot-availability-store 0.1.0",
  "polkadot-parachain 0.1.0",
  "polkadot-primitives 0.1.0",
  "polkadot-runtime 0.1.0",
@@ -1932,6 +1947,7 @@ dependencies = [
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
+ "polkadot-availability-store 0.1.0",
  "polkadot-consensus 0.1.0",
  "polkadot-primitives 0.1.0",
  "rhododendron 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2007,6 +2023,7 @@ dependencies = [
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "polkadot-api 0.1.0",
+ "polkadot-availability-store 0.1.0",
  "polkadot-consensus 0.1.0",
  "polkadot-executor 0.1.0",
  "polkadot-network 0.1.0",

@@ -174,7 +174,7 @@ fn fetches_from_those_with_knowledge() {
 		let mut ctx = TestContext::default();
 		on_message(&mut protocol, &mut ctx, peer_a, Message::SessionKey(a_key));
 		assert!(protocol.validators.contains_key(&a_key));
-		assert!(ctx.has_message(peer_a, Message::RequestBlockData(1, candidate_hash)));
+		assert!(ctx.has_message(peer_a, Message::RequestBlockData(1, parent_hash, candidate_hash)));
 	}
 
 	knowledge.lock().note_statement(b_key, &GenericStatement::Valid(candidate_hash));
@@ -184,7 +184,7 @@ fn fetches_from_those_with_knowledge() {
 		let mut ctx = TestContext::default();
 		protocol.on_connect(&mut ctx, peer_b, make_status(&status, Roles::AUTHORITY));
 		on_message(&mut protocol, &mut ctx, peer_b, Message::SessionKey(b_key));
-		assert!(!ctx.has_message(peer_b, Message::RequestBlockData(2, candidate_hash)));
+		assert!(!ctx.has_message(peer_b, Message::RequestBlockData(2, parent_hash, candidate_hash)));
 
 	}
 
@@ -193,7 +193,7 @@ fn fetches_from_those_with_knowledge() {
 		let mut ctx = TestContext::default();
 		protocol.on_disconnect(&mut ctx, peer_a);
 		assert!(!protocol.validators.contains_key(&a_key));
-		assert!(ctx.has_message(peer_b, Message::RequestBlockData(2, candidate_hash)));
+		assert!(ctx.has_message(peer_b, Message::RequestBlockData(2, parent_hash, candidate_hash)));
 	}
 
 	// peer B comes back with block data.
@@ -202,6 +202,56 @@ fn fetches_from_those_with_knowledge() {
 		on_message(&mut protocol, &mut ctx, peer_b, Message::BlockData(2, Some(block_data.clone())));
 		drop(protocol);
 		assert_eq!(recv.wait().unwrap(), block_data);
+	}
+}
+
+#[test]
+fn fetches_available_block_data() {
+	let mut protocol = PolkadotProtocol::new(None);
+
+	let peer_a = 1;
+	let parent_hash = [0; 32].into();
+
+	let block_data = BlockData(vec![1, 2, 3, 4]);
+	let block_data_hash = block_data.hash();
+	let para_id = 5.into();
+	let candidate_receipt = CandidateReceipt {
+		parachain_index: para_id,
+		collator: [255; 32].into(),
+		head_data: HeadData(vec![9, 9, 9]),
+		signature: H512::from([1; 64]).into(),
+		balance_uploads: Vec::new(),
+		egress_queue_roots: Vec::new(),
+		fees: 1_000_000,
+		block_data_hash,
+	};
+
+	let candidate_hash = candidate_receipt.hash();
+	let av_store = ::av_store::Store::new_in_memory();
+
+	let status = Status { collating_for: None };
+
+	protocol.register_availability_store(av_store.clone());
+
+	av_store.make_available(::av_store::Data {
+		relay_parent: parent_hash,
+		parachain_id: para_id,
+		candidate_hash,
+		block_data: block_data.clone(),
+		extrinsic: None,
+	}).unwrap();
+
+	// connect peer A
+	{
+		let mut ctx = TestContext::default();
+		protocol.on_connect(&mut ctx, peer_a, make_status(&status, Roles::FULL));
+	}
+
+	// peer A asks for historic block data and gets response
+	{
+		let mut ctx = TestContext::default();
+		on_message(&mut protocol, &mut ctx, peer_a, Message::RequestBlockData(1, parent_hash, candidate_hash));
+		assert!(ctx.has_message(peer_a, Message::BlockData(1, Some(block_data))));
 	}
 }
 

@@ -28,12 +28,13 @@ use std::time::{Duration, Instant};
 use std::sync::Arc;
 
 use bft::{self, BftService};
-use client::{BlockchainEvents, ChainHead};
+use client::{BlockchainEvents, ChainHead, BlockBody};
 use ed25519;
 use futures::prelude::*;
 use polkadot_api::LocalPolkadotApi;
 use polkadot_primitives::{Block, Header};
 use transaction_pool::TransactionPool;
+use extrinsic_store::Store as ExtrinsicStore;
 
 use tokio::executor::current_thread::TaskExecutor as LocalThreadHandle;
 use tokio::runtime::TaskExecutor as ThreadPoolHandle;
@@ -89,6 +90,56 @@ fn start_bft<F, C>(
     }
 }
 
+// creates a task to prune redundant entries in availability store upon block finalization
+//
+// NOTE: this will need to be changed to finality notification rather than
+// block import notifications when the consensus switches to non-instant finality.
+fn prune_unneeded_availability<C>(client: Arc<C>, extrinsic_store: ExtrinsicStore)
+	-> impl Future<Item=(),Error=()> + Send
+	where C: Send + Sync + BlockchainEvents<Block> + BlockBody<Block> + 'static
+{
+	use codec::{Encode, Decode};
+	use polkadot_primitives::BlockId;
+	use polkadot_runtime::CheckedBlock;
+
+	enum NotifyError {
+		NoBody(::client::error::Error),
+		UnexpectedFormat,
+		ExtrinsicsWrong,
+	}
+
+	impl NotifyError {
+		fn log(&self, hash: &::polkadot_primitives::Hash) {
+			match *self {
+				NotifyError::NoBody(ref err) => warn!("Failed to fetch block body for imported block {:?}: {:?}", hash, err),
+				NotifyError::UnexpectedFormat => warn!("Consensus outdated: Block {:?} has unexpected body format", hash),
+				NotifyError::ExtrinsicsWrong => warn!("Consensus outdated: Failed to fetch block body for imported block {:?}", hash),
+			}
+		}
+	}
+
+	client.import_notification_stream()
+		.for_each(move |notification| {
+			let checked_block = client.block_body(&BlockId::hash(notification.hash))
+				.map_err(NotifyError::NoBody)
+				.map(|b| ::polkadot_runtime::Block::decode(&mut b.encode().as_slice()))
+				.and_then(|maybe_block| maybe_block.ok_or(NotifyError::UnexpectedFormat))
+				.and_then(|block| CheckedBlock::new(block).map_err(|_| NotifyError::ExtrinsicsWrong));
+
+			match checked_block {
+				Ok(block) => {
+					let candidate_hashes = block.parachain_heads().iter().map(|c| c.hash()).collect();
+					if let Err(e) = extrinsic_store.candidates_finalized(notification.header.parent_hash, candidate_hashes) {
+						warn!(target: "consensus", "Failed to prune unneeded available data: {:?}", e);
+					}
+				}
+				Err(e) => e.log(&notification.hash)
+			}
+
+			Ok(())
+		})
+}
+
 /// Consensus service. Starts working when created.
 pub struct Service {
 	thread: Option<thread::JoinHandle<()>>,
@@ -105,10 +156,11 @@ impl Service {
 		thread_pool: ThreadPoolHandle,
 		parachain_empty_duration: Duration,
 		key: ed25519::Pair,
+		extrinsic_store: ExtrinsicStore,
 	) -> Service
 		where
 			A: LocalPolkadotApi + Send + Sync + 'static,
-			C: BlockchainEvents<Block> + ChainHead<Block> + bft::BlockImport<Block> + bft::Authorities<Block> + Send + Sync + 'static,
+			C: BlockchainEvents<Block> + ChainHead<Block> + BlockBody<Block> + bft::BlockImport<Block> + bft::Authorities<Block> + Send + Sync + 'static,
 			N: Network + Collators + Send + 'static,
 			N::TableRouter: Send + 'static,
 			<N::Collation as IntoFuture>::Future: Send + 'static,
@@ -124,7 +176,8 @@ impl Service {
 				collators: network.clone(),
 				network,
 				parachain_empty_duration,
-				handle: thread_pool,
+				handle: thread_pool.clone(),
+				extrinsic_store: extrinsic_store.clone(),
 			};
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
 
@@ -172,6 +225,14 @@ impl Service {
 
 			runtime.spawn(notifications);
 			runtime.spawn(timed);
+
+			let prune_available = prune_unneeded_availability(client, extrinsic_store)
+				.select(exit.clone())
+				.then(|_| Ok(()));
+
+			// spawn this on the tokio executor since it's fine on a thread pool.
+			thread_pool.spawn(prune_available);
+
 			if let Err(e) = runtime.block_on(exit) {
 				debug!("BFT event loop error {:?}", e);
 			}

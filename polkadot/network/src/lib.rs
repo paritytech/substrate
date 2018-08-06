@@ -26,6 +26,7 @@ extern crate substrate_network;
 extern crate substrate_primitives;
 
 extern crate polkadot_api;
+extern crate polkadot_availability_store as av_store;
 extern crate polkadot_consensus;
 extern crate polkadot_primitives;
 
@@ -197,7 +198,9 @@ struct CurrentConsensus {
 
 impl CurrentConsensus {
 	// get locally stored block data for a candidate.
-	fn block_data(&self, hash: &Hash) -> Option<BlockData> {
+	fn block_data(&self, relay_parent: &Hash, hash: &Hash) -> Option<BlockData> {
+		if relay_parent != &self.parent_hash { return None }
+
 		self.knowledge.lock().candidates.get(hash)
 			.and_then(|entry| entry.block_data.clone())
 	}
@@ -211,8 +214,8 @@ pub enum Message {
 	/// As a validator, tell the peer your current session key.
 	// TODO: do this with a cryptographic proof of some kind
 	SessionKey(SessionKey),
-	/// Requesting parachain block data by candidate hash.
-	RequestBlockData(RequestId, Hash),
+	/// Requesting parachain block data by (relay_parent, candidate_hash).
+	RequestBlockData(RequestId, Hash, Hash),
 	/// Provide block data by candidate hash or nothing if unknown.
 	BlockData(RequestId, Option<BlockData>),
 	/// Tell a collator their role.
@@ -233,9 +236,10 @@ impl Encode for Message {
 				dest.push_byte(1);
 				dest.push(k);
 			}
-			Message::RequestBlockData(ref id, ref d) => {
+			Message::RequestBlockData(ref id, ref r, ref d) => {
 				dest.push_byte(2);
 				dest.push(id);
+				dest.push(r);
 				dest.push(d);
 			}
 			Message::BlockData(ref id, ref d) => {
@@ -261,7 +265,10 @@ impl Decode for Message {
 		match input.read_byte()? {
 			0 => Some(Message::Statement(Decode::decode(input)?, Decode::decode(input)?)),
 			1 => Some(Message::SessionKey(Decode::decode(input)?)),
-			2 => Some(Message::RequestBlockData(Decode::decode(input)?, Decode::decode(input)?)),
+			2 => {
+				let x: (_, _, _) = Decode::decode(input)?;
+				Some(Message::RequestBlockData(x.0, x.1, x.2))
+			}
 			3 => Some(Message::BlockData(Decode::decode(input)?, Decode::decode(input)?)),
 			4 => Some(Message::CollatorRole(Decode::decode(input)?)),
 			5 => Some(Message::Collation(Decode::decode(input)?, Decode::decode(input)?)),
@@ -287,6 +294,7 @@ pub struct PolkadotProtocol {
 	live_consensus: Option<CurrentConsensus>,
 	in_flight: HashMap<(RequestId, NodeIndex), BlockDataRequest>,
 	pending: Vec<BlockDataRequest>,
+	extrinsic_store: Option<::av_store::Store>,
 	next_req_id: u64,
 }
 
@@ -303,6 +311,7 @@ impl PolkadotProtocol {
 			live_consensus: None,
 			in_flight: HashMap::new(),
 			pending: Vec::new(),
+			extrinsic_store: None,
 			next_req_id: 1,
 		}
 	}
@@ -385,7 +394,7 @@ impl PolkadotProtocol {
 					send_polkadot_message(
 						ctx,
 						who,
-						Message::RequestBlockData(req_id, pending.candidate_hash)
+						Message::RequestBlockData(req_id, pending.consensus_parent, pending.candidate_hash)
 					);
 
 					self.in_flight.insert((req_id, who), pending);
@@ -406,9 +415,12 @@ impl PolkadotProtocol {
 			Message::Statement(parent_hash, _statement) =>
 				self.consensus_gossip.on_chain_specific(ctx, who, raw, parent_hash),
 			Message::SessionKey(key) => self.on_session_key(ctx, who, key),
-			Message::RequestBlockData(req_id, hash) => {
+			Message::RequestBlockData(req_id, relay_parent, candidate_hash) => {
 				let block_data = self.live_consensus.as_ref()
-					.and_then(|c| c.block_data(&hash));
+					.and_then(|c| c.block_data(&relay_parent, &candidate_hash))
+					.or_else(|| self.extrinsic_store.as_ref()
+						.and_then(|s| s.block_data(relay_parent, candidate_hash))
+					);
 
 				send_polkadot_message(ctx, who, Message::BlockData(req_id, block_data));
 			}
@@ -719,5 +731,10 @@ impl PolkadotProtocol {
 					warn!(target: "polkadot_network", "Encountered tracked but disconnected validator {:?}", primary),
 			}
 		}
+	}
+
+	/// register availability store.
+	pub fn register_availability_store(&mut self, extrinsic_store: ::av_store::Store) {
+		self.extrinsic_store = Some(extrinsic_store);
 	}
 }
