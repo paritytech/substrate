@@ -54,7 +54,8 @@ extern crate substrate_runtime_std as rstd;
 
 #[cfg(test)]
 extern crate substrate_serializer;
-#[cfg(test)]
+
+#[cfg(any(test, target_arch = "wasm32"))]
 extern crate heapsize;
 
 #[cfg(test)]
