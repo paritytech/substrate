@@ -268,8 +268,7 @@ impl<D, E, C, Err> Future for PrimedStatementProducer<D, E, C>
 				debug!(target: "consensus", "Claiming candidate {} available.", hash);
 
 				statements.extrinsic = Some(extrinsic);
-				statements.availability =
-					Some(GenericStatement::Available(hash));
+				statements.availability = Some(GenericStatement::Available(hash));
 
 				work.ensure_available = false;
 			}
