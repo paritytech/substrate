@@ -182,7 +182,7 @@ mod tests {
 		]
 	}
 
-	fn client() -> Client<InMemory<Block>, LocalCallExecutor<InMemory<Block>, NativeExecutor<LocalDispatch>>, Block> {
+	fn client() -> Client<InMemory<Block, BlakeHasher, BlakeRlpCodec>, LocalCallExecutor<InMemory<Block, BlakeHasher, BlakeRlpCodec>, NativeExecutor<LocalDispatch>>, Block> {
 		let genesis_config = GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: LocalDispatch::native_equivalent().to_vec(),
