@@ -31,6 +31,13 @@ extern crate serde_derive;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
+#[macro_use]
+extern crate substrate_codec_derive;
+#[macro_use]
+extern crate substrate_runtime_io as runtime_io;
+#[macro_use]
+extern crate substrate_runtime_version as runtime_version;
+
 
 #[cfg(test)]
 #[macro_use]
@@ -41,11 +48,6 @@ extern crate ed25519;
 extern crate substrate_keyring as keyring;
 #[cfg_attr(test, macro_use)]
 extern crate substrate_primitives as primitives;
-#[macro_use]
-extern crate substrate_runtime_io as runtime_io;
-#[macro_use]
-extern crate substrate_runtime_version as runtime_version;
-
 
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
@@ -72,28 +74,13 @@ fn version() -> RuntimeVersion {
 }
 
 /// Calls in transactions.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Transfer {
 	pub from: AccountId,
 	pub to: AccountId,
 	pub amount: u64,
 	pub nonce: u64,
-}
-
-impl Encode for Transfer {
-	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
-		self.from.encode_to(dest);
-		self.to.encode_to(dest);
-		self.amount.encode_to(dest);
-		self.nonce.encode_to(dest);
-	}
-}
-
-impl Decode for Transfer {
-	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Decode::decode(input).map(|(from, to, amount, nonce)| Transfer { from, to, amount, nonce })
-	}
 }
 
 /// Extrinsic for test-runtime.

@@ -32,14 +32,12 @@ extern crate substrate_runtime_std as rstd;
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 extern crate substrate_codec as codec;
 
 use rstd::prelude::*;
-use codec::{Encode, Output};
-#[cfg(feature = "std")]
-use codec::{Decode, Input};
-#[cfg(feature = "std")]
-use std::borrow::Cow;
 
 #[cfg(feature = "std")]
 use std::fmt;
@@ -66,25 +64,25 @@ macro_rules! ver_str {
 /// This triplet have different semantics and mis-interpretation could cause problems.
 /// In particular: bug fixes should result in an increment of `spec_version` and possibly `authoring_version`,
 /// absolutely not `impl_version` since they change the semantics of the runtime.
-#[derive(Clone)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[derive(Clone, Encode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize, Decode))]
 pub struct RuntimeVersion {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and demo.
 	/// A different on-chain spec_name to that of the native runtime would normally result
 	/// in node not attempting to sync or author blocks.
 	pub spec_name: VersionString,
-	
+
 	/// Name of the implementation of the spec. This is of little consequence for the node
 	/// and serves only to differentiate code of different implementation teams. For this
 	/// codebase, it will be parity-polkadot. If there were a non-Rust implementation of the
 	/// Polkadot runtime (e.g. C++), then it would identify itself with an accordingly different
 	/// `impl_name`.
 	pub impl_name: VersionString,
-	
+
 	/// `authoring_version` is the version of the authorship interface. An authoring node
 	/// will not attempt to author blocks unless this is equal to its native runtime.
 	pub authoring_version: u32,
-	
+
 	/// Version of the runtime specification. A full-node will not attempt to use its native
 	/// runtime in substitute for the on-chain Wasm runtime unless all of `spec_name`,
 	/// `spec_version` and `authoring_version` are the same between Wasm and native.
@@ -133,29 +131,6 @@ impl RuntimeVersion {
 	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
 		self.authoring_version == other.authoring_version &&
 		self.spec_name == other.spec_name
-	}
-}
-
-impl Encode for RuntimeVersion {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(self.spec_name.as_bytes());
-		dest.push(self.impl_name.as_bytes());
-		dest.push(&self.authoring_version);
-		dest.push(&self.spec_version);
-		dest.push(&self.impl_version);
-	}
-}
-
-#[cfg(feature = "std")]
-impl Decode for RuntimeVersion {
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		Some(RuntimeVersion {
-			spec_name: Cow::Owned(String::from_utf8_lossy(&Vec::decode(value)?).into()),
-			impl_name: Cow::Owned(String::from_utf8_lossy(&Vec::decode(value)?).into()),
-			authoring_version: Decode::decode(value)?,
-			spec_version: Decode::decode(value)?,
-			impl_version: Decode::decode(value)?,
-		})
 	}
 }
 

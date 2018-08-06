@@ -14,12 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-extern crate substrate_codec;
+extern crate substrate_codec as codec;
 
 #[macro_use]
 extern crate substrate_codec_derive;
 
-use substrate_codec::{Encode, Decode};
+use codec::{Encode, Decode};
+
+#[derive(Debug, PartialEq, Encode, Decode)]
+struct Unit;
+
+
+#[derive(Debug, PartialEq, Encode, Decode)]
+struct Indexed(u32, u64);
 
 #[derive(Debug, PartialEq, Encode, Decode)]
 struct Struct<A, B, C> {
@@ -54,3 +61,26 @@ fn should_derive_decode() {
 	assert_eq!(v, Some(TestType::new(15, 9, b"Hello world".to_vec())));
 }
 
+#[test]
+fn should_work_for_unit() {
+	let v = Unit;
+
+	v.using_encoded(|ref slice| {
+		assert_eq!(slice, &[]);
+	});
+
+	let mut a: &[u8] = &[];
+	assert_eq!(Unit::decode(&mut a), Some(Unit));
+}
+
+#[test]
+fn should_work_for_indexed() {
+	let v = Indexed(1, 2);
+
+	v.using_encoded(|ref slice| {
+		assert_eq!(slice, &b"\x01\0\0\0\x02\0\0\0\0\0\0\0")
+	});
+
+	let mut v: &[u8] = b"\x01\0\0\0\x02\0\0\0\0\0\0\0";
+	assert_eq!(Indexed::decode(&mut v), Some(Indexed(1, 2)));
+}

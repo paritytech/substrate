@@ -563,13 +563,12 @@ impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Encode;
 	use keyring::Keyring;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::{runtime as test_runtime, BlockBuilderExt};
-	use test_client::runtime::{Transfer, Extrinsic};
+	use test_client::runtime::Transfer;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {

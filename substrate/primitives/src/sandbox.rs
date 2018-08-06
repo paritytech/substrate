@@ -20,24 +20,8 @@ use codec::{Encode, Decode, Input, Output};
 use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.
-#[cfg_attr(feature = "std", derive(Debug))]
+#[cfg_attr(feature = "std", derive(Debug, Encode, Decode))]
 pub struct HostError;
-
-impl Encode for HostError {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&[])
-	}
-
-	fn encode(&self) -> Vec<u8> {
-		Vec::new()
-	}
-}
-
-impl Decode for HostError {
-	fn decode<I: Input>(_: &mut I) -> Option<Self> {
-		Some(HostError)
-	}
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -49,6 +33,7 @@ enum ValueType {
 	F64 = 4,
 }
 
+// TODO [ToDr] as u8
 /// Representation of a typed wasm value.
 #[derive(Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -139,17 +124,17 @@ impl Decode for TypedValue {
 	}
 }
 
+// TODO [ToDr] as u8
 /// Typed value that can be returned from a function.
 ///
 /// Basically a `TypedValue` plus `Unit`, for functions which return nothing.
 #[derive(Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum ReturnValue {
-	/// For returning some concrete value.
-	Value(TypedValue),
-
 	/// For returning nothing.
 	Unit,
+	/// For returning some concrete value.
+	Value(TypedValue),
 }
 
 impl From<TypedValue> for ReturnValue {
@@ -207,6 +192,7 @@ enum ExternEntityKind {
 	Memory = 2,
 }
 
+// TODO [ToDr] as u8
 /// Describes an entity to define or import into the environment.
 #[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
@@ -255,7 +241,7 @@ impl Decode for ExternEntity {
 ///
 /// Each entry has a two-level name and description of an entity
 /// being defined.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct Entry {
 	/// Module name of which corresponding entity being defined.
@@ -266,50 +252,12 @@ pub struct Entry {
 	pub entity: ExternEntity,
 }
 
-impl Encode for Entry {
-	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
-		dest.push(&self.module_name);
-		dest.push(&self.field_name);
-		dest.push(&self.entity);
-	}
-}
-
-impl Decode for Entry {
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		let module_name = Vec::decode(value)?;
-		let field_name = Vec::decode(value)?;
-		let entity = ExternEntity::decode(value)?;
-
-		Some(Entry {
-			module_name,
-			field_name,
-			entity,
-		})
-	}
-}
-
 /// Definition of runtime that could be used by sandboxed code.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EnvironmentDefinition {
 	/// Vector of all entries in the environment defintion.
 	pub entries: Vec<Entry>,
-}
-
-impl Encode for EnvironmentDefinition {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		self.entries.encode_to(dest)
-	}
-}
-
-impl Decode for EnvironmentDefinition {
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		let entries = Vec::decode(value)?;
-
-		Some(EnvironmentDefinition {
-			entries,
-		})
-	}
 }
 
 /// Constant for specifying no limit when creating a sandboxed

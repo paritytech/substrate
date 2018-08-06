@@ -52,7 +52,9 @@ pub fn quote(data: &Data, self_: &TokenStream, dest_: &TokenStream) -> TokenStre
 				}
 			},
 			// Do nothing, we don't encode unit types?
-			Fields::Unit => quote! {},
+			Fields::Unit => quote! {
+				drop(#dest_);
+			},
 		},
 		// TODO [ToDr] Encode enums and unions
 		Data::Enum(_) | Data::Union(_) => unimplemented!(),

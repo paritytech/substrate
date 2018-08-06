@@ -254,6 +254,38 @@ impl Decode for Vec<u8> {
 	}
 }
 
+impl<'a> Encode for &'a str {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_bytes().encode_to(dest)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a > Encode for ::std::borrow::Cow<'a, str> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_bytes().encode_to(dest)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a> Decode for ::std::borrow::Cow<'a, str> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(::std::borrow::Cow::Owned(String::from_utf8_lossy(&Vec::decode(input)?).into()))
+	}
+}
+
+impl Encode for String {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_bytes().encode_to(dest)
+	}
+}
+
+impl Decode for String {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(Self::from_utf8_lossy(&Vec::decode(input)?).into())
+	}
+}
+
 impl<T: Encode> Encode for [T] {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		let len = self.len();

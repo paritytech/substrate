@@ -19,7 +19,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate substrate_codec;
 extern crate proc_macro;
 extern crate proc_macro2;
 
@@ -42,7 +41,7 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 	let input: DeriveInput = syn::parse(input).expect(ENCODE_ERR);
 	let name = &input.ident;
 
-	let generics = add_trait_bounds(input.generics, parse_quote!(::substrate_codec::Encode));
+	let generics = add_trait_bounds(input.generics, parse_quote!(::codec::Encode));
 	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
 	let self_ = quote!(self);
@@ -50,8 +49,8 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 	let encoding = encode::quote(&input.data, &self_, &dest_);
 
 	let expanded = quote! {
-		impl #impl_generics ::substrate_codec::Encode for #name #ty_generics #where_clause {
-			fn encode_to<T: ::substrate_codec::Output>(&#self_, #dest_: &mut T) {
+		impl #impl_generics ::codec::Encode for #name #ty_generics #where_clause {
+			fn encode_to<EncOut: ::codec::Output>(&#self_, #dest_: &mut EncOut) {
 				#encoding
 			}
 		}
@@ -65,15 +64,15 @@ pub fn decode_derive(input: TokenStream) -> TokenStream {
 	let input: DeriveInput = syn::parse(input).expect(ENCODE_ERR);
 	let name = &input.ident;
 
-	let generics = add_trait_bounds(input.generics, parse_quote!(::substrate_codec::Decode));
+	let generics = add_trait_bounds(input.generics, parse_quote!(::codec::Decode));
 	let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
 	let input_ = quote!(input);
-	let decoding = decode::quote(&input.data, &input_);
+	let decoding = decode::quote(&input.data, name, &input_);
 
 	let expanded = quote! {
-		impl #impl_generics ::substrate_codec::Decode for #name #ty_generics #where_clause {
-			fn decode<I: ::substrate_codec::Input>(#input_: &mut I) -> Option<Self> {
+		impl #impl_generics ::codec::Decode for #name #ty_generics #where_clause {
+			fn decode<DecIn: ::codec::Input>(#input_: &mut DecIn) -> Option<Self> {
 				#decoding
 			}
 		}

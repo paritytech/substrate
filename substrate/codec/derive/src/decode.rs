@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use proc_macro2::{Span, TokenStream};
+use proc_macro2::{Span, TokenStream, Ident};
 use syn::{
 	Data, Fields,
 	spanned::Spanned,
 };
 
-pub fn quote(data: &Data, input_: &TokenStream) -> TokenStream {
+pub fn quote(data: &Data, name: &Ident, input_: &TokenStream) -> TokenStream {
 	let call_site = Span::call_site();
 	match *data {
 		Data::Struct(ref data) => match data.fields {
@@ -30,7 +30,7 @@ pub fn quote(data: &Data, input_: &TokenStream) -> TokenStream {
 					let field = quote_spanned!(call_site => #name);
 
 					quote_spanned! { f.span() =>
-						#field: ::substrate_codec::Decode::decode(#input_)?
+						#field: ::codec::Decode::decode(#input_)?
 					}
 				});
 
@@ -43,19 +43,20 @@ pub fn quote(data: &Data, input_: &TokenStream) -> TokenStream {
 			Fields::Unnamed(ref fields) => {
 				let recurse = fields.unnamed.iter().map(|f| {
 					quote_spanned! { f.span() =>
-						::substrate_codec::Decode::decode(#input_)?
+						::codec::Decode::decode(#input_)?
 					}
 				});
 
 				quote! {
-					Some(Self(
+					Some(#name(
 						#( #recurse, )*
 					))
 				}
 			},
 			Fields::Unit => {
 				quote! {
-					None
+					drop(#input_);
+					Some(#name)
 				}
 			},
 		},

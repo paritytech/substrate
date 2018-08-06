@@ -113,7 +113,7 @@ impl<Block: Decode, Hash: Decode> Decode for Action<Block, Hash> {
 pub type MessageFor<B> = Message<B, <B as ::traits::Block>::Hash>;
 
 /// Messages exchanged between participants in the BFT consensus.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Message<Block, Hash> {
 	/// The parent header hash this action is relative to.
@@ -122,24 +122,8 @@ pub struct Message<Block, Hash> {
 	pub action: Action<Block, Hash>,
 }
 
-impl<Block: Encode, Hash: Encode> Encode for Message<Block, Hash> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.parent);
-		dest.push(&self.action);
-	}
-}
-
-impl<Block: Decode, Hash: Decode> Decode for Message<Block, Hash> {
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		Some(Message {
-			parent: Decode::decode(value)?,
-			action: Decode::decode(value)?,
-		})
-	}
-}
-
 /// Justification of a block.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Justification<H> {
 	/// The round consensus was reached in.
@@ -148,24 +132,6 @@ pub struct Justification<H> {
 	pub hash: H,
 	/// The signatures and signers of the hash.
 	pub signatures: Vec<(AuthorityId, Signature)>
-}
-
-impl<H: Encode> Encode for Justification<H> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.round_number);
-		dest.push(&self.hash);
-		dest.push(&self.signatures);
-	}
-}
-
-impl<H: Decode> Decode for Justification<H> {
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		Some(Justification {
-			round_number: Decode::decode(value)?,
-			hash: Decode::decode(value)?,
-			signatures: Decode::decode(value)?,
-		})
-	}
 }
 
 // single-byte code to represent misbehavior kind.
@@ -197,27 +163,9 @@ pub enum MisbehaviorKind<Hash> {
 	BftDoubleCommit(u32, (Hash, Signature), (Hash, Signature)),
 }
 
-/// A report of misbehavior by an authority.
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct MisbehaviorReport<Hash, Number> {
-	/// The parent hash of the block where the misbehavior occurred.
-	pub parent_hash: Hash,
-	/// The parent number of the block where the misbehavior occurred.
-	pub parent_number: Number,
-	/// The authority who misbehavior.
-	pub target: AuthorityId,
-	/// The misbehavior kind.
-	pub misbehavior: MisbehaviorKind<Hash>,
-}
-
-impl<Hash: Encode, Number: Encode> Encode for MisbehaviorReport<Hash, Number> {
+impl<Hash: Encode> Encode for MisbehaviorKind<Hash> {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.parent_hash);
-		dest.push(&self.parent_number);
-		dest.push(&self.target);
-
-		match self.misbehavior {
+		match *self {
 			MisbehaviorKind::BftDoublePrepare(ref round, (ref h_a, ref s_a), (ref h_b, ref s_b)) => {
 				dest.push(&(MisbehaviorCode::BftDoublePrepare as i8));
 				dest.push(round);
@@ -237,14 +185,9 @@ impl<Hash: Encode, Number: Encode> Encode for MisbehaviorReport<Hash, Number> {
 		}
 	}
 }
-
-impl<Hash: Decode, Number: Decode> Decode for MisbehaviorReport<Hash, Number> {
+impl<Hash: Decode> Decode for MisbehaviorKind<Hash> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let parent_hash = Hash::decode(input)?;
-		let parent_number = Number::decode(input)?;
-		let target = AuthorityId::decode(input)?;
-
-		let misbehavior = match i8::decode(input).and_then(MisbehaviorCode::from_i8)? {
+		Some(match i8::decode(input).and_then(MisbehaviorCode::from_i8)? {
 			MisbehaviorCode::BftDoublePrepare => {
 				MisbehaviorKind::BftDoublePrepare(
 					u32::decode(input)?,
@@ -259,15 +202,23 @@ impl<Hash: Decode, Number: Decode> Decode for MisbehaviorReport<Hash, Number> {
 					(Hash::decode(input)?, Signature::decode(input)?),
 				)
 			}
-		};
-
-		Some(MisbehaviorReport {
-			parent_hash,
-			parent_number,
-			target,
-			misbehavior,
 		})
 	}
+}
+
+
+/// A report of misbehavior by an authority.
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct MisbehaviorReport<Hash, Number> {
+	/// The parent hash of the block where the misbehavior occurred.
+	pub parent_hash: Hash,
+	/// The parent number of the block where the misbehavior occurred.
+	pub parent_number: Number,
+	/// The authority who misbehavior.
+	pub target: AuthorityId,
+	/// The misbehavior kind.
+	pub misbehavior: MisbehaviorKind<Hash>,
 }
 
 #[cfg(test)]

@@ -37,6 +37,8 @@ extern crate rhododendron;
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate substrate_codec_derive;
 
 mod collator_pool;
 mod local_collations;
@@ -73,34 +75,9 @@ type FullStatus = GenericFullStatus<Block>;
 pub type NetworkService = ::substrate_network::Service<Block, PolkadotProtocol>;
 
 /// Status of a Polkadot node.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Status {
 	collating_for: Option<(AccountId, ParaId)>,
-}
-
-impl Encode for Status {
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
-		match self.collating_for {
-			Some(ref details) => {
-				dest.push_byte(1);
-				dest.push(details);
-			}
-			None => {
-				dest.push_byte(0);
-			}
-		}
-	}
-}
-
-impl Decode for Status {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		let collating_for = match input.read_byte()? {
-			0 => None,
-			1 => Some(Decode::decode(input)?),
-			_ => return None,
-		};
-		Some(Status { collating_for })
-	}
 }
 
 struct BlockDataRequest {

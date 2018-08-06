@@ -102,6 +102,19 @@ bitflags! {
 	}
 }
 
+impl Encode for BlockAttributes {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push_byte(self.bits())
+	}
+}
+
+impl Decode for BlockAttributes {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Self::from_bits(input.read_byte()?)
+	}
+}
+
+// TODO [ToDr] as u8?
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 /// Block enumeration direction.
 pub enum Direction {
@@ -111,8 +124,24 @@ pub enum Direction {
 	Descending = 1,
 }
 
+impl Encode for Direction {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		dest.push_byte(*self as u8)
+	}
+}
+
+impl Decode for Direction {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		match input.read_byte()? {
+			x if x == Direction::Ascending as u8 => Some(Direction::Ascending),
+			x if x == Direction::Descending as u8 => Some(Direction::Descending),
+			_ => None,
+		}
+	}
+}
+
 /// Remote call response.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct RemoteCallResponse {
 	/// Id of a request this response was made for.
 	pub id: RequestId,
@@ -120,22 +149,6 @@ pub struct RemoteCallResponse {
 	pub proof: Vec<Vec<u8>>,
 }
 
-impl Encode for RemoteCallResponse {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.id);
-		dest.push(&self.proof);
-	}
-}
-
-impl Decode for RemoteCallResponse {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(RemoteCallResponse {
-			id: Decode::decode(input)?,
-			proof: Decode::decode(input)?,
-		})
-	}
-}
-	
 /// Generic types.
 pub mod generic {
 	use primitives::AuthorityId;
@@ -147,7 +160,7 @@ pub mod generic {
 
 
 	/// Block data sent in the response.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct BlockData<Header, Hash, Extrinsic> {
 		/// Block header hash.
 		pub hash: Hash,
@@ -163,30 +176,7 @@ pub mod generic {
 		pub justification: Option<Justification<Hash>>,
 	}
 
-	impl<Header: Encode, Hash: Encode, Extrinsic: Encode> Encode for BlockData<Header, Hash, Extrinsic> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			dest.push(&self.hash);
-			dest.push(&self.header);
-			dest.push(&self.body);
-			dest.push(&self.receipt);
-			dest.push(&self.message_queue);
-			dest.push(&self.justification);
-		}
-	}
-
-	impl<Header: Decode, Hash: Decode, Extrinsic: Decode> Decode for BlockData<Header, Hash, Extrinsic> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			Some(BlockData {
-				hash: Decode::decode(input)?,
-				header: Decode::decode(input)?,
-				body: Decode::decode(input)?,
-				receipt: Decode::decode(input)?,
-				message_queue: Decode::decode(input)?,
-				justification: Decode::decode(input)?,
-			})
-		}
-	}
-
+	// TODO [ToDr] Order-based derival
 	/// Identifies starting point of a block sequence.
 	#[derive(Debug, PartialEq, Eq, Clone)]
 	pub enum FromBlock<Hash, Number> {
@@ -221,6 +211,7 @@ pub mod generic {
 		}
 	}
 
+	// TODO [ToDr] Order-based derival
 	/// Communication that can occur between participants in consensus.
 	#[derive(Debug, PartialEq, Eq, Clone)]
 	pub enum BftMessage<Block, Hash> {
@@ -256,7 +247,7 @@ pub mod generic {
 	}
 
 	/// BFT Consensus message with parent header hash attached to it.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct LocalizedBftMessage<Block, Hash> {
 		/// Consensus message.
 		pub message: BftMessage<Block, Hash>,
@@ -264,24 +255,8 @@ pub mod generic {
 		pub parent_hash: Hash,
 	}
 
-	impl<Block: Encode, Hash: Encode> Encode for LocalizedBftMessage<Block, Hash> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			dest.push(&self.message);
-			dest.push(&self.parent_hash);
-		}
-	}
-
-	impl<Block: Decode, Hash: Decode> Decode for LocalizedBftMessage<Block, Hash> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			Some(LocalizedBftMessage {
-				message: Decode::decode(input)?,
-				parent_hash: Decode::decode(input)?,
-			})
-		}
-	}
-	
 	/// A localized proposal message. Contains two signed pieces of data.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct SignedConsensusProposal<Block, Hash> {
 		/// The round number.
 		pub round_number: u32,
@@ -297,32 +272,8 @@ pub mod generic {
 		pub full_signature: ed25519::Signature,
 	}
 
-	impl<Block: Encode, Hash: Encode> Encode for SignedConsensusProposal<Block, Hash> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			dest.push(&self.round_number);
-			dest.push(&self.proposal);
-			dest.push(&self.digest);
-			dest.push(&self.sender);
-			dest.push(&self.digest_signature);
-			dest.push(&self.full_signature);
-		}
-	}
-
-	impl<Block: Decode, Hash: Decode> Decode for SignedConsensusProposal<Block, Hash> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			Some(SignedConsensusProposal {
-				round_number: Decode::decode(input)?,
-				proposal: Decode::decode(input)?,
-				digest: Decode::decode(input)?,
-				sender: Decode::decode(input)?,
-				digest_signature: Decode::decode(input)?,
-				full_signature: Decode::decode(input)?,
-			})
-		}
-	}
-
 	/// A localized vote message, including the sender.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct SignedConsensusVote<H> {
 		/// The message sent.
 		pub vote: ConsensusVote<H>,
@@ -332,24 +283,7 @@ pub mod generic {
 		pub signature: ed25519::Signature,
 	}
 
-	impl<Hash: Encode> Encode for SignedConsensusVote<Hash> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			dest.push(&self.vote);
-			dest.push(&self.sender);
-			dest.push(&self.signature);
-		}
-	}
-
-	impl<Hash: Decode> Decode for SignedConsensusVote<Hash> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			Some(SignedConsensusVote {
-				vote: Decode::decode(input)?,
-				sender: Decode::decode(input)?,
-				signature: Decode::decode(input)?,
-			})
-		}
-	}
-	
+	// TODO [ToDr] Order-based derival
 	/// Votes during a consensus round.
 	#[derive(Debug, PartialEq, Eq, Clone)]
 	pub enum ConsensusVote<H> {
@@ -393,6 +327,7 @@ pub mod generic {
 		}
 	}
 
+	// TODO [ToDr] Order-based derival
 	/// A localized message.
 	#[derive(Debug, PartialEq, Eq, Clone)]
 	pub enum SignedConsensusMessage<Block, Hash> {
@@ -426,7 +361,8 @@ pub mod generic {
 			}
 		}
 	}
-	
+
+	// TODO [ToDr] Order-based derival
 	/// A network message.
 	#[derive(Debug, PartialEq, Eq, Clone)]
 	pub enum Message<Block, Header, Hash, Number, Extrinsic> {
@@ -515,7 +451,7 @@ pub mod generic {
 	}
 
 	/// Status sent on connection.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct Status<Hash, Number> {
 		/// Protocol version.
 		pub version: u32,
@@ -531,32 +467,8 @@ pub mod generic {
 		pub chain_status: Vec<u8>,
 	}
 
-	impl<Hash: Encode, Number: Encode> Encode for Status<Hash, Number> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			dest.push(&self.version);
-			dest.push_byte(self.roles.bits());
-			dest.push(&self.best_number);
-			dest.push(&self.best_hash);
-			dest.push(&self.genesis_hash);
-			dest.push(&self.chain_status);
-		}
-	}
-
-	impl<Hash: Decode, Number: Decode> Decode for Status<Hash, Number> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			Some(Status {
-				version: Decode::decode(input)?,
-				roles: Roles::from_bits(input.read_byte()?)?,
-				best_number: Decode::decode(input)?,
-				best_hash: Decode::decode(input)?,
-				genesis_hash: Decode::decode(input)?,
-				chain_status: Decode::decode(input)?,
-			})
-		}
-	}
-	
 	/// Request block data from a peer.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct BlockRequest<Hash, Number> {
 		/// Unique request id.
 		pub id: RequestId,
@@ -572,36 +484,8 @@ pub mod generic {
 		pub max: Option<u32>,
 	}
 
-	impl<Hash: Encode, Number: Encode> Encode for BlockRequest<Hash, Number> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			dest.push(&self.id);
-			dest.push_byte(self.fields.bits());
-			dest.push(&self.from);
-			dest.push(&self.to);
-			dest.push_byte(self.direction as u8);
-			dest.push(&self.max);
-		}
-	}
-
-	impl<Hash: Decode, Number: Decode> Decode for BlockRequest<Hash, Number> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			Some(BlockRequest {
-				id: Decode::decode(input)?,
-				fields: BlockAttributes::from_bits(input.read_byte()?)?,
-				from: Decode::decode(input)?,
-				to: Decode::decode(input)?,
-				direction: match input.read_byte()? {
-					x if x == Direction::Ascending as u8 => Some(Direction::Ascending),
-					x if x == Direction::Descending as u8 => Some(Direction::Descending),
-					_ => None,
-				}?,
-				max: Decode::decode(input)?,
-			})
-		}
-	}
-
 	/// Response to `BlockRequest`
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct BlockResponse<Header, Hash, Extrinsic> {
 		/// Id of a request this response was made for.
 		pub id: RequestId,
@@ -609,44 +493,14 @@ pub mod generic {
 		pub blocks: Vec<BlockData<Header, Hash, Extrinsic>>,
 	}
 
-	impl<Header: Encode, Hash: Encode, Extrinsic: Encode> Encode for BlockResponse<Header, Hash, Extrinsic> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			dest.push(&self.id);
-			dest.push(&self.blocks)
-		}
-	}
-
-	impl<Header: Decode, Hash: Decode, Extrinsic: Decode> Decode for BlockResponse<Header, Hash, Extrinsic> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			Some(BlockResponse {
-				id: Decode::decode(input)?,
-				blocks: Decode::decode(input)?,
-			})
-		}
-	}
-
 	/// Announce a new complete relay chain block on the network.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub struct BlockAnnounce<H> {
 		/// New block header.
 		pub header: H,
 	}
 
-	impl<Header: Encode> Encode for BlockAnnounce<Header> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			dest.push(&self.header);
-		}
-	}
-
-	impl<Header: Decode> Decode for BlockAnnounce<Header> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			Some(BlockAnnounce {
-				header: Decode::decode(input)?,
-			})
-		}
-	}
-
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	/// Remote call request.
 	pub struct RemoteCallRequest<H> {
 		/// Unique request id.
@@ -657,25 +511,5 @@ pub mod generic {
 		pub method: String,
 		/// Call data.
 		pub data: Vec<u8>,
-	}
-
-	impl<Hash: Encode> Encode for RemoteCallRequest<Hash> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			dest.push(&self.id);
-			dest.push(&self.block);
-			dest.push(self.method.as_bytes());
-			dest.push(&self.data);
-		}
-	}
-
-	impl<Hash: Decode> Decode for RemoteCallRequest<Hash> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			Some(RemoteCallRequest {
-				id: Decode::decode(input)?,
-				block: Decode::decode(input)?,
-				method: String::from_utf8_lossy(&Vec::decode(input)?).into(),
-				data: Decode::decode(input)?,
-			})
-		}
 	}
 }

@@ -8,11 +8,13 @@ authors = ["Parity Technologies <admin@parity.io>"]
 proc-macro = true
 
 [dependencies]
-substrate-codec = { path = "../" }
 syn = "0.14"
 quote = "0.6"
 proc-macro2 = "0.4"
 
+[dev-dependencies]
+substrate-codec = { path = "../" }
+
 [features]
 default = ["std"]
-std = ["substrate-codec/std"]
+std = []

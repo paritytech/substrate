@@ -30,6 +30,9 @@ extern crate serde_derive;
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 extern crate num_traits;
 extern crate integer_sqrt;
 extern crate substrate_runtime_std as rstd;
@@ -173,7 +176,7 @@ impl codec::Encode for ApplyError {
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
 
 /// Potentially "unsigned" signature verification.
-#[derive(Eq, PartialEq, Clone, Default)]
+#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct MaybeUnsigned<T>(pub T);
 
@@ -201,18 +204,6 @@ impl<T: Verify> Verify for MaybeUnsigned<T> where
 		} else {
 			self.0.verify(msg, signer)
 		}
-	}
-}
-
-impl<T: codec::Decode> codec::Decode for MaybeUnsigned<T> {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		Some(MaybeUnsigned(codec::Decode::decode(input)?))
-	}
-}
-
-impl<T: codec::Encode> codec::Encode for MaybeUnsigned<T> {
-	fn encode_to<W: codec::Output>(&self, dest: &mut W) {
-		self.0.encode_to(dest)
 	}
 }
 

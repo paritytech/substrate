@@ -16,64 +16,33 @@
 
 //! Basic parachain that adds a number as part of its state.
 
+#[macro_use]
+extern crate substrate_codec_derive;
+extern crate substrate_codec as codec;
 extern crate polkadot_parachain as parachain;
 extern crate tiny_keccak;
 
 use parachain::ValidationParams;
-use parachain::codec::{Decode, Encode, Input, Output};
+use codec::{Decode, Encode};
 
-// Head data for this parachain.
-#[derive(Default, Clone)]
+/// Head data for this parachain.
+#[derive(Default, Clone, Encode, Decode)]
 struct HeadData {
-	// Block number
+	/// Block number
 	number: u64,
-	// parent block keccak256
+	/// parent block keccak256
 	parent_hash: [u8; 32],
-	// hash of post-execution state.
+	/// hash of post-execution state.
 	post_state: [u8; 32],
 }
 
-impl Encode for HeadData {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.number);
-		dest.push(&self.parent_hash);
-		dest.push(&self.post_state);
-	}
-}
-
-impl Decode for HeadData {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(HeadData {
-			number: Decode::decode(input)?,
-			parent_hash: Decode::decode(input)?,
-			post_state: Decode::decode(input)?,
-		})
-	}
-}
-
-// Block data for this parachain.
-#[derive(Default, Clone)]
+/// Block data for this parachain.
+#[derive(Default, Clone, Encode, Decode)]
 struct BlockData {
-	// State to begin from.
+	/// State to begin from.
 	state: u64,
-	// Amount to add (overflowing)
+	/// Amount to add (overflowing)
 	add: u64,
-}
-
-impl Encode for BlockData {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.state);
-		dest.push(&self.add);
-	}
-}
-
-impl Decode for BlockData {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(BlockData {
-			state: Decode::decode(input)?,
-			add: Decode::decode(input)?,
-		})
-	}
 }
 
 const TEST_CODE: &[u8] = include_bytes!("res/adder.wasm");
