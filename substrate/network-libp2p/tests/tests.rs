@@ -93,17 +93,11 @@ impl NetworkProtocolHandler for TestProtocol {
 
 #[test]
 fn net_service() {
-	let service = NetworkService::new(NetworkConfiguration::new_local(), None).expect("Error creating network service");
-	service.start(vec![(Arc::new(TestProtocol::new(false)), *b"myp", &[(1u8, 1)])]).unwrap();
-}
-
-#[test]
-fn net_start_stop() {
-	let config = NetworkConfiguration::new_local();
-	let service = NetworkService::new(config, None).unwrap();
-	service.start(vec![]).unwrap();
-	service.stop();
-	service.start(vec![]).unwrap();
+	let _service = NetworkService::new(
+		NetworkConfiguration::new_local(),
+		vec![(Arc::new(TestProtocol::new(false)), *b"myp", &[(1u8, 1)])],
+		None
+	).expect("Error creating network service");
 }
 
 #[test]
@@ -113,14 +107,12 @@ fn net_disconnect() {
 	let mut config1 = NetworkConfiguration::new_local();
 	config1.use_secret = Some(key1.secret().clone());
 	config1.boot_nodes = vec![ ];
-	let service1 = NetworkService::new(config1, None).unwrap();
 	let handler1 = Arc::new(TestProtocol::new(false));
-	service1.start(vec![(handler1.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])]).unwrap();
+	let service1 = NetworkService::new(config1, vec![(handler1.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])], None).unwrap();
 	let mut config2 = NetworkConfiguration::new_local();
 	config2.boot_nodes = vec![ service1.external_url().unwrap() ];
-	let service2 = NetworkService::new(config2, None).unwrap();
 	let handler2 = Arc::new(TestProtocol::new(true));
-	service2.start(vec![(handler2.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])]).unwrap();
+	let _service2 = NetworkService::new(config2, vec![(handler2.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])], None).unwrap();
 	while !(handler1.got_disconnect() && handler2.got_disconnect()) {
 		thread::sleep(Duration::from_millis(50));
 	}
@@ -131,9 +123,8 @@ fn net_disconnect() {
 #[test]
 fn net_timeout() {
 	let config = NetworkConfiguration::new_local();
-	let service = NetworkService::new(config, None).unwrap();
 	let handler = Arc::new(TestProtocol::new(false));
-	service.start(vec![(handler.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])]).unwrap();
+	let _service = NetworkService::new(config, vec![(handler.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])], None).unwrap();
 	while !handler.got_timeout() {
 		thread::sleep(Duration::from_millis(50));
 	}
