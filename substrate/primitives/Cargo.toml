@@ -8,7 +8,6 @@ crunchy = "0.1"
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
 elastic-array = "0.10"
-# TODO: I think we can go back to `default_features = false` when we have a proper impl of `Hasher` to use
 fixed-hash = { git = "https://github.com/paritytech/parity-common", features = ["heapsizeof"] }
 rustc-hex = { version = "2.0", default_features = false }
 serde = { version = "1.0", default_features = false }
@@ -23,6 +22,9 @@ wasmi = { version = "0.4", optional = true }
 hashdb = { git = "https://github.com/paritytech/parity-common" }
 patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 plain_hasher = { git = "https://github.com/paritytech/parity-common" }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+heapsize = { version = "0.4"}
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }

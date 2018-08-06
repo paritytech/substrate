@@ -82,6 +82,17 @@ impl_rest!(H160, 20);
 impl_rest!(H256, 32);
 impl_rest!(H512, 64);
 
+// REVIEW: The wasm build was broken and would not load `fixed-hash` passing the
+// `heapsizeof` feature so resorted to this. `Hasher` binds the `Out` assoc type
+// with `HeapSizeOf` (why? I'd say it's only used by `memorydb` to implement `mem_used`).
+// An alternative way to fix this would be to use `default_features = false` to load
+// `fixed-hash` (instead of the current `features = ["heapsizeof"]` and remove this `#[cfg…`
+#[cfg(target_arch = "wasm32")]
+impl ::heapsize::HeapSizeOf for H256 {
+	fn heap_size_of_children(&self) -> usize { 0 }
+}
+
+
 #[cfg(test)]
 mod tests {
 	use super::*;
