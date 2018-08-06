@@ -19,7 +19,7 @@
 use elastic_array::{ElasticArray1024, ElasticArray128};
 use hashdb::Hasher;
 use rlp::{DecoderError, RlpStream, Rlp, Prototype};
-use std::marker::PhantomData; // TODO: should `use` from core instead?
+use core::marker::PhantomData;
 use patricia_trie::{NibbleSlice, NodeCodec, node::Node, ChildReference};
 
 use hash::H256;
@@ -34,7 +34,7 @@ pub type BlakeRlpCodec = RlpCodec<BlakeHasher>;
 impl NodeCodec<BlakeHasher> for RlpCodec<BlakeHasher> {
 	type Error = DecoderError;
 	const HASHED_NULL_NODE : H256 = H256( [0x45, 0xb0, 0xcf, 0xc2, 0x20, 0xce, 0xec, 0x5b, 0x7c, 0x1c, 0x62, 0xc4, 0xd4, 0x19, 0x3d, 0x38, 0xe4, 0xeb, 0xa4, 0x8e, 0x88, 0x15, 0x72, 0x9c, 0xe7, 0x5f, 0x9c, 0xa, 0xb0, 0xe4, 0xc1, 0xc0] );
-	fn decode(data: &[u8]) -> ::std::result::Result<Node, Self::Error> {
+	fn decode(data: &[u8]) -> ::core::result::Result<Node, Self::Error> {
 		let r = Rlp::new(data);
 		match r.prototype()? {
 			// either leaf or extension - decode first item with NibbleSlice::???
