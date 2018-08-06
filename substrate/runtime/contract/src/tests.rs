@@ -121,7 +121,7 @@ fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExt
 			call_base_fee: 135,
 			create_base_fee: 175,
 			gas_price,
-			max_depth: 1024,
+			max_depth: 100,
 		}.build_storage()
 			.unwrap(),
 	);
@@ -219,6 +219,38 @@ fn contract_transfer_oog() {
 		);
 	});
 
+}
+
+#[test]
+fn contract_transfer_max_depth() {
+	const CONTRACT_SHOULD_TRANSFER_TO: u64 = 9;
+
+	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+	with_externalities(&mut new_test_ext(0, 2), || {
+		<CodeOf<Test>>::insert(CONTRACT_SHOULD_TRANSFER_TO, code_transfer.to_vec());
+
+		Staking::set_free_balance(&0, 100_000_000);
+		Staking::set_free_balance(&CONTRACT_SHOULD_TRANSFER_TO, 11);
+
+		assert_err!(
+			Contract::call(&0, CONTRACT_SHOULD_TRANSFER_TO, 3, 100_000, Vec::new()),
+			"vm execute returned error while call"
+		);
+
+		assert_eq!(
+			Staking::free_balance(&0),
+			// 3 - value sent with the transaction
+			// 2 * 6 * 100 - gas used by the contract (6) multiplied by gas price (2)
+			//               multiplied by max depth (100).
+			// 2 * 135 * 100 - base gas fee for call (by transaction) multiplied by max depth (100).
+			100_000_000 - (2 * 135 * 100) - (2 * 6 * 100),
+		);
+		assert_eq!(
+			Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
+			11,
+		);
+	});
 }
 
 /// Convert a byte slice to a string with hex values.
