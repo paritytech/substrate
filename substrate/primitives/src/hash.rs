@@ -21,12 +21,8 @@ use serde::{Serialize, Serializer, Deserialize, Deserializer};
 
 #[cfg(feature = "std")]
 use bytes;
-
-#[cfg(feature = "std")]
-use std::cmp;
-
-#[cfg(feature = "std")]
-use rlp::{self, Rlp, RlpStream, DecoderError};
+use core::cmp;
+use rlp::{Rlp, RlpStream, DecoderError};
 
 macro_rules! impl_rest {
 	($name: ident, $len: expr) => {
@@ -56,13 +52,13 @@ macro_rules! impl_rest {
 			}
 		}
 
-		impl rlp::Encodable for $name {
+		impl ::rlp::Encodable for $name {
 			fn rlp_append(&self, s: &mut RlpStream) {
 				s.encoder().encode_value(self);
 			}
 		}
 
-		impl rlp::Decodable for $name {
+		impl ::rlp::Decodable for $name {
 			fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 				rlp.decoder().decode_value(|bytes| match bytes.len().cmp(&$len) {
 					cmp::Ordering::Less => Err(DecoderError::RlpIsTooShort),
@@ -103,11 +99,11 @@ mod tests {
 	#[test]
 	fn test_hash_is_decodable() {
 		let data = vec![148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123];
-		let res = rlp::decode::<H160>(&data);
+		let res = ::rlp::decode::<H160>(&data);
 		assert!(res.is_ok());
 		assert_eq!(res.unwrap(), H160::from(123));
 
-		let res = rlp::decode::<H256>(&data);
+		let res = ::rlp::decode::<H256>(&data);
 		assert!(res.is_err());
 	}
 
