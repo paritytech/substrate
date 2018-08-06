@@ -60,7 +60,6 @@ use std::sync::Arc;
 use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
-use network::ManageNetwork;
 use runtime_primitives::traits::{Header, As};
 use exit_future::Signal;
 use tokio::runtime::TaskExecutor;
@@ -83,7 +82,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	network: Arc<components::NetworkService<Components::Factory>>,
+	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	extrinsic_pool: Arc<Components::ExtrinsicPool>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
@@ -158,8 +157,6 @@ impl<Components> Service<Components>
 
 		let network = network::Service::new(network_params, Components::Factory::NETWORK_PROTOCOL_ID)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
-
-		network.start_network();
 
 		{
 			// block notifications
@@ -243,7 +240,7 @@ impl<Components> Service<Components>
 
 		Ok(Service {
 			client: client,
-			network: network,
+			network: Some(network),
 			extrinsic_pool: extrinsic_pool,
 			signal: Some(signal),
 			keystore: keystore,
@@ -261,7 +258,7 @@ impl<Components> Service<Components>
 
 	/// Get shared network instance.
 	pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
-		self.network.clone()
+		self.network.as_ref().expect("self.network always Some").clone()
 	}
 
 	/// Get shared extrinsic pool instance.
@@ -284,7 +281,7 @@ impl<Components> Drop for Service<Components> where Components: components::Comp
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
 
-		self.network.stop_network();
+		drop(self.network.take());
 
 		if let Some(signal) = self.signal.take() {
 			signal.fire();
