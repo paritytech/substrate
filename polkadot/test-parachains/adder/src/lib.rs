@@ -18,15 +18,13 @@
 
 #![no_std]
 
-// TODO [ToDr] Shitty, that you need to import it separately!
 #[macro_use]
 extern crate substrate_codec_derive;
-extern crate substrate_codec as codec;
 
 extern crate polkadot_parachain as parachain;
 extern crate tiny_keccak;
 
-use codec::Encode;
+use parachain::codec::{self, Encode};
 
 /// Head data for this parachain.
 #[derive(Default, Clone, Hash, Eq, PartialEq, Encode, Decode)]
