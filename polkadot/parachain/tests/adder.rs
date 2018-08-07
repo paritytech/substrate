@@ -148,7 +148,7 @@ fn execute_good_chain_on_parent() {
 
 #[test]
 fn execute_bad_on_parent() {
-		let parent_head = HeadData {
+	let parent_head = HeadData {
 		number: 0,
 		parent_hash: [0; 32],
 		post_state: hash_state(0),
