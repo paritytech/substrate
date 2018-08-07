@@ -274,12 +274,14 @@ impl<'a> Decode for ::std::borrow::Cow<'a, str> {
 	}
 }
 
+#[cfg(feature = "std")]
 impl Encode for String {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		self.as_bytes().encode_to(dest)
 	}
 }
 
+#[cfg(feature = "std")]
 impl Decode for String {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Self::from_utf8_lossy(&Vec::decode(input)?).into())

@@ -21,7 +21,8 @@ use codec::Encode;
 use rstd::vec::Vec;
 
 /// Error error that can be returned from host function.
-#[cfg_attr(feature = "std", derive(Debug, Encode, Decode))]
+#[derive(Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct HostError;
 
 /// Representation of a typed wasm value.

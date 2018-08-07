@@ -14,6 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#[cfg(not(feature = "std"))]
+use core::str::from_utf8;
+#[cfg(feature = "std")]
+use std::str::from_utf8;
+
 use proc_macro2::{Span, TokenStream};
 use syn::{
 	Data, Field, Fields, Ident, Index,
@@ -95,7 +100,9 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest: &TokenSt
 					},
 					Fields::Unnamed(ref fields) => {
 						let field_name = |i, _: &Option<Ident>| {
-							let ident = Ident::new(&format!("f_{}", i), call_site);
+							let data = stringify(i as u8);
+							let ident = from_utf8(&data).expect("We never go beyond ASCII");
+							let ident = Ident::new(ident, call_site);
 							quote_spanned!(call_site => #ident)
 						};
 						let names = fields.unnamed
@@ -136,5 +143,12 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest: &TokenSt
 		Data::Union(_) => unimplemented!(),
 	}
 }
+pub fn stringify(id: u8) -> [u8; 2] {
+	const CHARS: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
+	let len = CHARS.len() as u8;
+	let symbol = |id: u8| CHARS[(id % len) as usize];
+	let a = symbol(id);
+	let b = symbol(id / len);
 
-
+	[a, b]
+}
