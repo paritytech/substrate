@@ -32,6 +32,7 @@ use tokio::runtime::TaskExecutor;
 use parking_lot::Mutex;
 
 use std::collections::{HashMap, HashSet};
+use std::io;
 use std::sync::Arc;
 
 use super::{NetworkService, Knowledge};
@@ -135,8 +136,8 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 	}
 
 	fn dispatch_work<D, E>(&self, candidate_hash: Hash, producer: StatementProducer<D, E>) where
-		D: Future<Item=BlockData,Error=()> + Send + 'static,
-		E: Future<Item=Extrinsic,Error=()> + Send + 'static,
+		D: Future<Item=BlockData,Error=io::Error> + Send + 'static,
+		E: Future<Item=Extrinsic,Error=io::Error> + Send + 'static,
 	{
 		let parent_hash = self.parent_hash.clone();
 
@@ -156,28 +157,34 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 		let network = self.network.clone();
 		let knowledge = self.knowledge.clone();
 
-		let work = producer.prime(validate).map(move |produced| {
-			// store the data before broadcasting statements, so other peers can fetch.
-			knowledge.lock().note_candidate(candidate_hash, produced.block_data, produced.extrinsic);
+		let work = producer.prime(validate)
+			.map(move |produced| {
+				// store the data before broadcasting statements, so other peers can fetch.
+				knowledge.lock().note_candidate(
+					candidate_hash,
+					produced.block_data,
+					produced.extrinsic
+				);
 
-			// propagate the statements
-			if let Some(validity) = produced.validity {
-				let signed = table.sign_and_import(validity.clone()).0;
-				network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
-			}
+				// propagate the statements
+				if let Some(validity) = produced.validity {
+					let signed = table.sign_and_import(validity.clone()).0;
+					network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
+				}
 
-			if let Some(availability) = produced.availability {
-				let signed = table.sign_and_import(availability).0;
-				network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
-			}
-		});
+				if let Some(availability) = produced.availability {
+					let signed = table.sign_and_import(availability).0;
+					network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
+				}
+			})
+			.map_err(|e| debug!(target: "p_net", "Failed to produce statements: {:?}", e));
 
 		self.task_executor.spawn(work);
 	}
 }
 
 impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> {
-	type Error = ();
+	type Error = io::Error;
 	type FetchCandidate = BlockDataReceiver;
 	type FetchExtrinsic = Result<Extrinsic, Self::Error>;
 
@@ -213,12 +220,18 @@ pub struct BlockDataReceiver {
 
 impl Future for BlockDataReceiver {
 	type Item = BlockData;
-	type Error = ();
+	type Error = io::Error;
 
-	fn poll(&mut self) -> Poll<BlockData, ()> {
+	fn poll(&mut self) -> Poll<BlockData, io::Error> {
 		match self.inner {
-			Some(ref mut inner) => inner.poll().map_err(|_| ()),
-			None => return Err(()),
+			Some(ref mut inner) => inner.poll().map_err(|_| io::Error::new(
+				io::ErrorKind::Other,
+				"Sending end of channel hung up",
+			)),
+			None => return Err(io::Error::new(
+				io::ErrorKind::Other,
+				"Network service is unavailable",
+			)),
 		}
 	}
 }

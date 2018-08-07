@@ -27,6 +27,8 @@ You'll now have a `polkadot` binary installed to your `PATH`. You can drop the
 `--branch v0.2` or run `cargo install --git https://github.com/paritytech/polkadot.git polkadot`
 to get the very latest version of Polkadot, but these instructions might not work in that case.
 
+If you want a specific version of polkadot, say `0.2.2`, you may run `cargo install --git https://github.com/paritytech/polkadot.git --tag v0.2.2 polkadot`.
+
 === Krumme Lanke Testnet
 
 You will connect to the global Krumme Lanke testnet by default. To do this, just use:

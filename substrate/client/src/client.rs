@@ -66,6 +66,12 @@ pub trait ChainHead<Block: BlockT> {
 	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, error::Error>;
 }
 
+/// Fetch block body by ID.
+pub trait BlockBody<Block: BlockT> {
+	/// Get block body by ID. Returns `None` if the body is not stored.
+	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+}
+
 /// Client info
 // TODO: split queue info from chain info and amalgamate into single struct.
 #[derive(Debug)]
@@ -562,6 +568,17 @@ where
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
+	}
+}
+
+impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
+	where
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
+{
+	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
+		self.body(id)
 	}
 }
 

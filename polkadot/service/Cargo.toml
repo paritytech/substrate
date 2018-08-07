@@ -12,6 +12,7 @@ slog = "^2"
 tokio = "0.1.7"
 hex-literal = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
+polkadot-availability-store = { path = "../availability-store" }
 polkadot-primitives = { path = "../primitives" }
 polkadot-runtime = { path = "../runtime" }
 polkadot-consensus = { path = "../consensus" }
