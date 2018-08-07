@@ -149,6 +149,15 @@ impl NetworkConfiguration {
 			client_version: "Parity-network".into(),
 		}
 	}
+
+	/// Create new default configuration for localhost-only connection with random port (useful for testing)
+	pub fn new_local() -> NetworkConfiguration {
+		let mut config = NetworkConfiguration::new();
+		config.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(127, 0, 0, 1)))
+			.chain(iter::once(AddrComponent::TCP(30333)))
+			.collect();
+		config
+	}
 }
 
 /// The severity of misbehaviour of a peer that is reported.
