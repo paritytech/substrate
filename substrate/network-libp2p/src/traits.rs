@@ -154,7 +154,7 @@ impl NetworkConfiguration {
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new();
 		config.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(127, 0, 0, 1)))
-			.chain(iter::once(AddrComponent::TCP(30333)))
+			.chain(iter::once(AddrComponent::TCP(0)))
 			.collect();
 		config
 	}
