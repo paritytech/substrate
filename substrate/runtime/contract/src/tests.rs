@@ -77,62 +77,95 @@ impl ContractAddressFor<u64> for DummyContractAddressFor {
 	}
 }
 
-fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExternalities<KeccakHasher> {
-	let mut t = system::GenesisConfig::<Test>::default()
-		.build_storage()
-		.unwrap();
-	t.extend(
-		consensus::GenesisConfig::<Test> {
-			code: vec![],
-			authorities: vec![],
-		}.build_storage()
-			.unwrap(),
-	);
-	t.extend(
-		session::GenesisConfig::<Test> {
-			session_length: 1,
-			validators: vec![10, 20],
-		}.build_storage()
-			.unwrap(),
-	);
-	t.extend(
-		staking::GenesisConfig::<Test> {
-			sessions_per_era: 1,
-			current_era: 0,
-			balances: vec![],
-			intentions: vec![],
-			validator_count: 2,
-			minimum_validator_count: 0,
-			bonding_duration: 0,
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
-			existential_deposit: existential_deposit,
-			transfer_fee: 0,
-			creation_fee: 0,
-			reclaim_rebate: 0,
-			early_era_slash: 0,
-			session_reward: 0,
-			offline_slash_grace: 0,
-		}.build_storage()
-			.unwrap(),
-	);
-	t.extend(
-		timestamp::GenesisConfig::<Test>::default()
-			.build_storage()
-			.unwrap(),
-	);
-	t.extend(
-		GenesisConfig::<Test> {
-			contract_fee: 21,
-			call_base_fee: 135,
-			create_base_fee: 175,
-			gas_price,
-			max_depth: 100,
+struct ExtBuilder {
+	existential_deposit: u64,
+	gas_price: u64,
+	block_gas_limit: u64,
+}
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			existential_deposit: 0,
+			gas_price: 2,
 			block_gas_limit: 100_000_000,
-		}.build_storage()
+		}
+	}
+}
+impl ExtBuilder {
+	fn existential_deposit(mut self, existential_deposit: u64) -> Self {
+		self.existential_deposit = existential_deposit;
+		self
+	}
+	fn gas_price(mut self, gas_price: u64) -> Self {
+		self.gas_price = gas_price;
+		self
+	}
+	fn block_gas_limit(mut self, block_gas_limit: u64) -> Self {
+		self.block_gas_limit = block_gas_limit;
+		self
+	}
+	fn build(self) -> runtime_io::TestExternalities<KeccakHasher> {
+		let mut t = system::GenesisConfig::<Test>::default()
+			.build_storage()
+			.unwrap();
+		t.extend(
+			consensus::GenesisConfig::<Test> {
+				code: vec![],
+				authorities: vec![],
+			}.build_storage()
 			.unwrap(),
-	);
-	t.into()
+		);
+		t.extend(
+			session::GenesisConfig::<Test> {
+				session_length: 1,
+				validators: vec![10, 20],
+			}.build_storage()
+			.unwrap(),
+		);
+		t.extend(
+			staking::GenesisConfig::<Test> {
+				sessions_per_era: 1,
+				current_era: 0,
+				balances: vec![],
+				intentions: vec![],
+				validator_count: 2,
+				bonding_duration: 0,
+				transaction_base_fee: 0,
+				transaction_byte_fee: 0,
+				existential_deposit: self.existential_deposit,
+				transfer_fee: 0,
+				creation_fee: 0,
+				reclaim_rebate: 0,
+				early_era_slash: 0,
+				session_reward: 0,
+			}.build_storage()
+			.unwrap(),
+		);
+		t.extend(
+			timestamp::GenesisConfig::<Test>::default()
+				.build_storage()
+				.unwrap(),
+		);
+		t.extend(
+			GenesisConfig::<Test> {
+				contract_fee: 21,
+				call_base_fee: 135,
+				create_base_fee: 175,
+				gas_price: self.gas_price,
+				max_depth: 100,
+				block_gas_limit: self.block_gas_limit,
+			}.build_storage()
+			.unwrap(),
+		);
+		t.into()
+	}
+}
+
+fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExternalities<KeccakHasher> {
+	ExtBuilder::default()
+		.existential_deposit(existential_deposit)
+		.gas_price(gas_price)
+		.build()
 }
 
 const CODE_TRANSFER: &str = r#"
@@ -220,16 +253,9 @@ fn contract_transfer_oog() {
 			// 2 * 135 - base gas fee for call (by contract)
 			100_000_000 - (2 * 6) - (2 * 135) - (2 * 135),
 		);
-		assert_eq!(
-			Staking::free_balance(&1),
-			11,
-		);
-		assert_eq!(
-			Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
-			0,
-		);
+		assert_eq!(Staking::free_balance(&1), 11,);
+		assert_eq!(Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 0,);
 	});
-
 }
 
 #[test]
@@ -259,10 +285,7 @@ fn contract_transfer_max_depth() {
 			// 2 * 135 * 100 - base gas fee for call (by transaction) multiplied by max depth (100).
 			100_000_000 - (2 * 135 * 100) - (2 * 6 * 100),
 		);
-		assert_eq!(
-			Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
-			11,
-		);
+		assert_eq!(Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 11,);
 	});
 }
 
@@ -545,4 +568,46 @@ fn top_level_call_refunds_even_if_fails() {
 
 		assert_eq!(Staking::free_balance(&0), 100_000_000 - (4 * 3) - (4 * 135));
 	});
+}
+
+const CODE_LOOP: &'static str = r#"
+(module
+	(func (export "call")
+		(loop
+			(br 0)
+		)
+	)
+)
+"#;
+
+#[test]
+fn block_gas_limit() {
+	let code_loop = wabt::wat2wasm(CODE_LOOP).unwrap();
+	with_externalities(
+		&mut ExtBuilder::default().block_gas_limit(100_000).build(),
+		|| {
+			<CodeOf<Test>>::insert(1, code_loop.to_vec());
+
+			Staking::set_free_balance(&0, 100_000_000);
+			Staking::increase_total_stake_by(100_000_000);
+
+			// Spend 50_000 units of gas (OOG).
+			assert_err!(
+				Contract::call(&0, 1, 0, 50_000, Vec::new()),
+				"vm execute returned error while call"
+			);
+
+			// Ensure we can't spend more gas than available in block gas limit.
+			assert_err!(
+				Contract::call(&0, 1, 0, 50_001, Vec::new()),
+				"block gas limit is reached"
+			);
+
+			// However, we can spend another 50_000
+			assert_err!(
+				Contract::call(&0, 1, 0, 50_000, Vec::new()),
+				"vm execute returned error while call"
+			);
+		},
+	);
 }
