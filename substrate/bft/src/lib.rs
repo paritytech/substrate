@@ -260,6 +260,15 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 
 		Box::new(fut)
 	}
+
+	// dummy impl – remove and replace with whatever the proper impl needs to be
+	fn on_advance_round(
+		&self,
+		_propolsal: Option<&Self::Candidate>,
+		_round: usize,
+		_next_round: usize,
+		_reason: rhododendron::AdvanceRoundReason,
+	) {}
 }
 
 /// A future that resolves either when canceled (witnessing a block from the network at same height)
