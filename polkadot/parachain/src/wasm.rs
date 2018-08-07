@@ -25,6 +25,7 @@ use codec::{Decode, Encode};
 use wasmi::{self, Module, ModuleInstance,  MemoryInstance, MemoryDescriptor, MemoryRef, ModuleImportResolver};
 use wasmi::{memory_units, RuntimeValue};
 use wasmi::Error as WasmError;
+use wasmi::memory_units::{Bytes, Pages, RoundUpTo};
 
 use super::{ValidationParams, ValidationResult};
 
@@ -101,7 +102,7 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 			&wasmi::ImportsBuilder::new().with_resolver("env", &module_resolver),
 		)?.run_start(&mut wasmi::NopExternals).map_err(WasmError::Trap)?;
 
-		let memory = module_resolver.memory.borrow_mut()
+		let memory = module_resolver.memory.borrow()
 			.as_ref()
 			.ok_or_else(|| WasmError::Instantiation("No imported memory instance".to_owned()))?
 			.clone();
@@ -118,24 +119,22 @@ pub fn validate_candidate(validation_code: &[u8], params: ValidationParams) -> R
 			bail!(ErrorKind::ParamsTooLarge(encoded_call_data.len()));
 		}
 
-		let call_data_pages = (encoded_call_data.len() / LINEAR_MEMORY_PAGE_SIZE.0) +
-			(encoded_call_data.len() % LINEAR_MEMORY_PAGE_SIZE.0);
+		// allocate sufficient amount of wasm pages to fit encoded call data.
+		let call_data_pages: Pages = Bytes(encoded_call_data.len()).round_up_to();
+		let allocated_mem_start: Bytes = memory.grow(call_data_pages)?.into();
 
-		let call_data_pages = wasmi::memory_units::Pages(call_data_pages);
+		memory.set(allocated_mem_start.0 as u32, &encoded_call_data)
+			.expect(
+				"enough memory allocated just before this; \
+				copying never fails if memory is large enough; qed"
+			);
 
-		if memory.current_size() < call_data_pages {
-			memory.grow(call_data_pages - memory.current_size())?;
-		}
-
-		memory.set(0, &encoded_call_data).expect("enough memory allocated just before this; \
-			copying never fails if memory is large enough; qed");
-
-		(0, encoded_call_data.len() as i32)
+		(allocated_mem_start.0, encoded_call_data.len())
 	};
 
 	let output = module.invoke_export(
 		"validate",
-		&[RuntimeValue::I32(offset), RuntimeValue::I32(len)],
+		&[RuntimeValue::I32(offset as i32), RuntimeValue::I32(len as i32)],
 		&mut wasmi::NopExternals,
 	)?;
 
