@@ -215,7 +215,7 @@ pub struct LightComponents<Factory: ServiceFactory> {
 
 impl<Factory: ServiceFactory> Components for LightComponents<Factory>
 	where
-		<<Factory as ServiceFactory>::Block as BlockT>::Hash: Into<[u8; 32]>,
+		<<Factory as ServiceFactory>::Block as BlockT>::Hash: Into<[u8; 32]> + From<[u8; 32]>,
 {
 	type Factory = Factory;
 	type Executor = LightExecutor<Factory>;

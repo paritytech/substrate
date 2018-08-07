@@ -20,7 +20,8 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use codec::{Encode, Decode, Input, Output};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
-	ConsensusVote, SignedConsensusVote, FromBlock
+	RemoteHeaderRequest, RemoteHeaderResponse, ConsensusVote,
+	SignedConsensusVote, FromBlock
 };
 
 /// A unique ID of a request.
@@ -480,6 +481,10 @@ pub mod generic {
 		RemoteReadRequest(RemoteReadRequest<Hash>),
 		/// Remote storage read response.
 		RemoteReadResponse(RemoteReadResponse),
+		/// Remote header request.
+		RemoteHeaderRequest(RemoteHeaderRequest<Number>),
+		/// Remote header response.
+		RemoteHeaderResponse(RemoteHeaderResponse<Header>),
 		/// Chain-specific message
 		ChainSpecific(Vec<u8>),
 	}
@@ -529,6 +534,14 @@ pub mod generic {
 					dest.push_byte(9);
 					dest.push(m);
 				}
+				Message::RemoteHeaderRequest(ref m) => {
+					dest.push_byte(10);
+					dest.push(m);
+				}
+				Message::RemoteHeaderResponse(ref m) => {
+					dest.push_byte(11);
+					dest.push(m);
+				}
 				Message::ChainSpecific(ref m) => {
 					dest.push_byte(255);
 					dest.push(m);
@@ -552,6 +565,8 @@ pub mod generic {
 				7 => Some(Message::RemoteCallResponse(Decode::decode(input)?)),
 				8 => Some(Message::RemoteReadRequest(Decode::decode(input)?)),
 				9 => Some(Message::RemoteReadResponse(Decode::decode(input)?)),
+				10 => Some(Message::RemoteHeaderRequest(Decode::decode(input)?)),
+				11 => Some(Message::RemoteHeaderResponse(Decode::decode(input)?)),
 				255 => Some(Message::ChainSpecific(Decode::decode(input)?)),
 				_ => None,
 			}
@@ -748,6 +763,60 @@ pub mod generic {
 				id: Decode::decode(input)?,
 				block: Decode::decode(input)?,
 				key: Decode::decode(input)?,
+			})
+		}
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone)]
+	/// Remote header request.
+	pub struct RemoteHeaderRequest<N> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Block number to request header for.
+		pub block: N,
+	}
+
+	impl<N: Encode> Encode for RemoteHeaderRequest<N> {
+		fn encode_to<T: Output>(&self, dest: &mut T) {
+			dest.push(&self.id);
+			dest.push(&self.block);
+		}
+	}
+
+	impl<N: Decode> Decode for RemoteHeaderRequest<N> {
+		fn decode<I: Input>(input: &mut I) -> Option<Self> {
+			Some(RemoteHeaderRequest {
+				id: Decode::decode(input)?,
+				block: Decode::decode(input)?,
+			})
+		}
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone)]
+	/// Remote header response.
+	pub struct RemoteHeaderResponse<Header> {
+		/// Id of a request this response was made for.
+		pub id: RequestId,
+		/// Header. None if proof generation has failed (e.g. header is unknown).
+		pub header: Option<Header>,
+		/// Header proof.
+		pub proof: Vec<Vec<u8>>,
+	}
+
+	impl<Header: Encode> Encode for RemoteHeaderResponse<Header> {
+		fn encode_to<T: Output>(&self, dest: &mut T) {
+			dest.push(&self.id);
+			dest.push(&self.header);
+			dest.push(&self.proof);
+		}
+	}
+
+	impl<Header: Decode> Decode for RemoteHeaderResponse<Header> {
+		fn decode<I: Input>(input: &mut I) -> Option<Self> {
+			Some(RemoteHeaderResponse {
+				id: Decode::decode(input)?,
+				header: Decode::decode(input)?,
+				proof: Decode::decode(input)?,
 			})
 		}
 	}
