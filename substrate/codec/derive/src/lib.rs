@@ -29,14 +29,14 @@ extern crate syn;
 extern crate quote;
 
 use proc_macro::TokenStream;
-use syn::{DeriveInput, Generics, GenericParam};
+use syn::{DeriveInput, Generics, GenericParam, Ident};
 
 mod decode;
 mod encode;
 
 const ENCODE_ERR: &str = "derive(Encode) failed";
 
-#[proc_macro_derive(Encode)]
+#[proc_macro_derive(Encode, attributes(codec))]
 pub fn encode_derive(input: TokenStream) -> TokenStream {
 	let input: DeriveInput = syn::parse(input).expect(ENCODE_ERR);
 	let name = &input.ident;
@@ -59,7 +59,7 @@ pub fn encode_derive(input: TokenStream) -> TokenStream {
 	expanded.into()
 }
 
-#[proc_macro_derive(Decode)]
+#[proc_macro_derive(Decode, attributes(codec))]
 pub fn decode_derive(input: TokenStream) -> TokenStream {
 	let input: DeriveInput = syn::parse(input).expect(ENCODE_ERR);
 	let name = &input.ident;
@@ -89,3 +89,39 @@ fn add_trait_bounds(mut generics: Generics, bounds: syn::TypeParamBound) -> Gene
 	}
 	generics
 }
+
+fn index(v: &syn::Variant, i: usize) -> proc_macro2::TokenStream {
+	// look for an index in attributes
+	let index = v.attrs.iter().filter_map(|attr| {
+		let pair = attr.path.segments.first()?;
+		let seg = pair.value();
+
+		if seg.ident == Ident::new("codec", seg.ident.span()) {
+			assert_eq!(attr.path.segments.len(), 1);
+
+			let meta = attr.interpret_meta();
+			if let Some(syn::Meta::List(ref l)) = meta {
+				if let syn::NestedMeta::Meta(syn::Meta::NameValue(ref nv)) = l.nested.last().unwrap().value() {
+					assert_eq!(nv.ident, Ident::new("index", nv.ident.span()));
+					if let syn::Lit::Str(ref s) = nv.lit {
+						let byte: u8 = s.value().parse().expect("Numeric index expected.");
+						return Some(byte)
+					}
+					panic!("Invalid syntax for `codec` attribute: Expected string literal.")
+				}
+			}
+			panic!("Invalid syntax for `codec` attribute: Expected `name = value` pair.")
+		} else {
+			None
+		}
+	}).next();
+
+	// then fallback to discriminant or just index
+	index.map(|i| quote! { #i })
+		.unwrap_or_else(|| v.discriminant
+			.as_ref()
+			.map(|&(_, ref expr)| quote! { #expr })
+			.unwrap_or_else(|| quote! { #i })
+		)
+}
+

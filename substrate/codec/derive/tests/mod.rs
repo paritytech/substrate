@@ -44,6 +44,7 @@ impl <A, B, C> Struct<A, B, C> {
 
 #[derive(Debug, PartialEq, Encode, Decode)]
 enum EnumType {
+	#[codec(index = "15")]
 	A,
 	B(u32, u64),
 	C {
@@ -66,7 +67,7 @@ fn should_work_for_simple_enum() {
 	let c = EnumType::C { a: 1, b: 2 };
 
 	a.using_encoded(|ref slice| {
-		assert_eq!(slice, &b"\0");
+		assert_eq!(slice, &b"\x0f");
 	});
 	b.using_encoded(|ref slice| {
 		assert_eq!(slice, &b"\x01\x01\0\0\0\x02\0\0\0\0\0\0\0");
@@ -75,13 +76,13 @@ fn should_work_for_simple_enum() {
 		assert_eq!(slice, &b"\x02\x01\0\0\0\x02\0\0\0\0\0\0\0");
 	});
 
-	let mut da: &[u8] = b"\0";
+	let mut da: &[u8] = b"\x0f";
 	assert_eq!(EnumType::decode(&mut da), Some(a));
 	let mut db: &[u8] = b"\x01\x01\0\0\0\x02\0\0\0\0\0\0\0";
 	assert_eq!(EnumType::decode(&mut db), Some(b));
 	let mut dc: &[u8] = b"\x02\x01\0\0\0\x02\0\0\0\0\0\0\0";
 	assert_eq!(EnumType::decode(&mut dc), Some(c));
-	let mut dz: &[u8] = &[4];
+	let mut dz: &[u8] = &[0];
 	assert_eq!(EnumType::decode(&mut dz), None);
 }
 

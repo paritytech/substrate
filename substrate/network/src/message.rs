@@ -159,9 +159,8 @@ pub mod generic {
 		pub justification: Option<Justification<Hash>>,
 	}
 
-	// TODO [ToDr] Order-based derival
 	/// Identifies starting point of a block sequence.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub enum FromBlock<Hash, Number> {
 		/// Start with given hash.
 		Hash(Hash),
@@ -169,64 +168,13 @@ pub mod generic {
 		Number(Number),
 	}
 
-	impl<Hash: Encode, Number: Encode> Encode for FromBlock<Hash, Number> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			match *self {
-				FromBlock::Hash(ref h) => {
-					dest.push_byte(0);
-					dest.push(h);
-				}
-				FromBlock::Number(ref n) => {
-					dest.push_byte(1);
-					dest.push(n);
-				}
-			}
-		}
-	}
-
-	impl<Hash: Decode, Number: Decode> Decode for FromBlock<Hash, Number> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			match input.read_byte()? {
-				0 => Some(FromBlock::Hash(Decode::decode(input)?)),
-				1 => Some(FromBlock::Number(Decode::decode(input)?)),
-				_ => None,
-			}
-		}
-	}
-
-	// TODO [ToDr] Order-based derival
 	/// Communication that can occur between participants in consensus.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub enum BftMessage<Block, Hash> {
 		/// A consensus message (proposal or vote)
 		Consensus(SignedConsensusMessage<Block, Hash>),
 		/// Auxiliary communication (just proof-of-lock for now).
 		Auxiliary(Justification<Hash>),
-	}
-
-	impl<Block: Encode, Hash: Encode> Encode for BftMessage<Block, Hash> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			match *self {
-				BftMessage::Consensus(ref h) => {
-					dest.push_byte(0);
-					dest.push(h);
-				}
-				BftMessage::Auxiliary(ref n) => {
-					dest.push_byte(1);
-					dest.push(n);
-				}
-			}
-		}
-	}
-
-	impl<Block: Decode, Hash: Decode> Decode for BftMessage<Block, Hash> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			match input.read_byte()? {
-				0 => Some(BftMessage::Consensus(Decode::decode(input)?)),
-				1 => Some(BftMessage::Auxiliary(Decode::decode(input)?)),
-				_ => None,
-			}
-		}
 	}
 
 	/// BFT Consensus message with parent header hash attached to it.
@@ -266,9 +214,8 @@ pub mod generic {
 		pub signature: ed25519::Signature,
 	}
 
-	// TODO [ToDr] Order-based derival
 	/// Votes during a consensus round.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub enum ConsensusVote<H> {
 		/// Prepare to vote for proposal with digest D.
 		Prepare(u32, H),
@@ -278,41 +225,8 @@ pub mod generic {
 		AdvanceRound(u32),
 	}
 
-	impl<Hash: Encode> Encode for ConsensusVote<Hash> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			match *self {
-				ConsensusVote::Prepare(ref r, ref h) => {
-					dest.push_byte(0);
-					dest.push(r);
-					dest.push(h);
-				}
-				ConsensusVote::Commit(ref r, ref h) => {
-					dest.push_byte(1);
-					dest.push(r);
-					dest.push(h);
-				}
-				ConsensusVote::AdvanceRound(ref r) => {
-					dest.push_byte(2);
-					dest.push(r);
-				}
-			}
-		}
-	}
-
-	impl<Hash: Decode> Decode for ConsensusVote<Hash> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			match input.read_byte()? {
-				0 => Some(ConsensusVote::Prepare(Decode::decode(input)?, Decode::decode(input)?)),
-				1 => Some(ConsensusVote::Commit(Decode::decode(input)?, Decode::decode(input)?)),
-				2 => Some(ConsensusVote::AdvanceRound(Decode::decode(input)?)),
-				_ => None,
-			}
-		}
-	}
-
-	// TODO [ToDr] Order-based derival
 	/// A localized message.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub enum SignedConsensusMessage<Block, Hash> {
 		/// A proposal.
 		Propose(SignedConsensusProposal<Block, Hash>),
@@ -320,34 +234,8 @@ pub mod generic {
 		Vote(SignedConsensusVote<Hash>),
 	}
 
-	impl<Block: Encode, Hash: Encode> Encode for SignedConsensusMessage<Block, Hash> {
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			match *self {
-				SignedConsensusMessage::Propose(ref m) => {
-					dest.push_byte(0);
-					dest.push(m);
-				}
-				SignedConsensusMessage::Vote(ref m) => {
-					dest.push_byte(1);
-					dest.push(m);
-				}
-			}
-		}
-	}
-
-	impl<Block: Decode, Hash: Decode> Decode for SignedConsensusMessage<Block, Hash> {
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			match input.read_byte()? {
-				0 => Some(SignedConsensusMessage::Propose(Decode::decode(input)?)),
-				1 => Some(SignedConsensusMessage::Vote(Decode::decode(input)?)),
-				_ => None,
-			}
-		}
-	}
-
-	// TODO [ToDr] Order-based derival
 	/// A network message.
-	#[derive(Debug, PartialEq, Eq, Clone)]
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 	pub enum Message<Block, Header, Hash, Number, Extrinsic> {
 		/// Status packet.
 		Status(Status<Hash, Number>),
@@ -366,71 +254,8 @@ pub mod generic {
 		/// Remote method call response.
 		RemoteCallResponse(RemoteCallResponse),
 		/// Chain-specific message
+		#[codec(index = "15")]
 		ChainSpecific(Vec<u8>),
-	}
-
-	impl<Block: Encode, Header: Encode, Hash: Encode, Number: Encode, Extrinsic: Encode> Encode
-		for Message<Block, Header, Hash, Number, Extrinsic>
-	{
-		fn encode_to<T: Output>(&self, dest: &mut T) {
-			match *self {
-				Message::Status(ref m) => {
-					dest.push_byte(0);
-					dest.push(m);
-				}
-				Message::BlockRequest(ref m) => {
-					dest.push_byte(1);
-					dest.push(m);
-				}
-				Message::BlockResponse(ref m) => {
-					dest.push_byte(2);
-					dest.push(m);
-				}
-				Message::BlockAnnounce(ref m) => {
-					dest.push_byte(3);
-					dest.push(m);
-				}
-				Message::Transactions(ref m) => {
-					dest.push_byte(4);
-					dest.push(m);
-				}
-				Message::BftMessage(ref m) => {
-					dest.push_byte(5);
-					dest.push(m);
-				}
-				Message::RemoteCallRequest(ref m) => {
-					dest.push_byte(6);
-					dest.push(m);
-				}
-				Message::RemoteCallResponse(ref m) => {
-					dest.push_byte(7);
-					dest.push(m);
-				}
-				Message::ChainSpecific(ref m) => {
-					dest.push_byte(255);
-					dest.push(m);
-				}
-			}
-		}
-	}
-
-	impl<Block: Decode, Header: Decode, Hash: Decode, Number: Decode, Extrinsic: Decode> Decode
-		for Message<Block, Header, Hash, Number, Extrinsic>
-	{
-		fn decode<I: Input>(input: &mut I) -> Option<Self> {
-			match input.read_byte()? {
-				0 => Some(Message::Status(Decode::decode(input)?)),
-				1 => Some(Message::BlockRequest(Decode::decode(input)?)),
-				2 => Some(Message::BlockResponse(Decode::decode(input)?)),
-				3 => Some(Message::BlockAnnounce(Decode::decode(input)?)),
-				4 => Some(Message::Transactions(Decode::decode(input)?)),
-				5 => Some(Message::BftMessage(Decode::decode(input)?)),
-				6 => Some(Message::RemoteCallRequest(Decode::decode(input)?)),
-				7 => Some(Message::RemoteCallResponse(Decode::decode(input)?)),
-				255 => Some(Message::ChainSpecific(Decode::decode(input)?)),
-				_ => None,
-			}
-		}
 	}
 
 	/// Status sent on connection.

@@ -42,10 +42,7 @@ pub fn quote(data: &Data, type_name: &Ident, input: &TokenStream) -> TokenStream
 
 			let recurse = data.variants.iter().enumerate().map(|(i, v)| {
 				let name = &v.ident;
-				let index = v.discriminant
-					.as_ref()
-					.map(|&(_, ref expr)| quote! { #expr })
-					.unwrap_or_else(|| quote! { #i });
+				let index = super::index(v, i);
 
 				let create = create_instance(
 					call_site,

@@ -70,10 +70,7 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest: &TokenSt
 
 			let recurse = data.variants.iter().enumerate().map(|(i, f)| {
 				let name = &f.ident;
-				let index = f.discriminant
-					.as_ref()
-					.map(|&(_, ref expr)| quote! { #expr })
-					.unwrap_or_else(|| quote! { #i });
+				let index = super::index(f, i);
 
 				match f.fields {
 					Fields::Named(ref fields) => {
