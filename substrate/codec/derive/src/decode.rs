@@ -16,11 +16,11 @@
 
 use proc_macro2::{Span, TokenStream, Ident};
 use syn::{
-	Data, Fields,
+	Data, Fields, Index,
 	spanned::Spanned,
 };
 
-pub fn quote(data: &Data, name: &Ident, input_: &TokenStream) -> TokenStream {
+pub fn quote(data: &Data, type_name: &Ident, input_: &TokenStream) -> TokenStream {
 	let call_site = Span::call_site();
 	match *data {
 		Data::Struct(ref data) => match data.fields {
@@ -34,7 +34,7 @@ pub fn quote(data: &Data, name: &Ident, input_: &TokenStream) -> TokenStream {
 					}
 				});
 
-				quote! {
+				quote_spanned! {call_site =>
 					Some(Self {
 						#( #recurse, )*
 					})
@@ -47,20 +47,81 @@ pub fn quote(data: &Data, name: &Ident, input_: &TokenStream) -> TokenStream {
 					}
 				});
 
-				quote! {
-					Some(#name(
+				quote_spanned! {call_site =>
+					Some(#type_name (
 						#( #recurse, )*
 					))
 				}
 			},
 			Fields::Unit => {
-				quote! {
+				quote_spanned! {call_site =>
 					drop(#input_);
-					Some(#name)
+					Some(#type_name)
 				}
 			},
 		},
-		Data::Enum(_) | Data::Union(_) => unimplemented!(),
+		Data::Enum(ref data) => {
+			assert!(data.variants.len() < 256, "Currently only enums with less than 255 variants are encodable.");
+
+			let recurse = data.variants.iter().enumerate().map(|(i, v)| {
+				let name = &v.ident;
+				let index = Index { index: i as u32, span: call_site };
+
+				let create = match v.fields {
+					Fields::Named(ref fields) => {
+						let recurse = fields.named.iter().map(|f| {
+							let name = &f.ident;
+							let field = quote_spanned!(call_site => #name);
+
+							quote_spanned! { f.span() =>
+								#field: ::codec::Decode::decode(#input_)?
+							}
+						});
+
+						quote_spanned! {call_site =>
+							Some(#type_name :: #name {
+								#( #recurse, )*
+							})
+						}
+					},
+					Fields::Unnamed(ref fields) => {
+						let recurse = fields.unnamed.iter().map(|f| {
+							quote_spanned! { f.span() =>
+								::codec::Decode::decode(#input_)?
+							}
+						});
+
+						quote_spanned! {call_site =>
+							Some(#type_name :: #name (
+								#( #recurse, )*
+							))
+						}
+					},
+					Fields::Unit => {
+						quote_spanned! {call_site =>
+							Some(#type_name :: #name)
+						}
+					},
+				};
+
+				quote_spanned! { v.span() =>
+					x if x == #index as u8 => {
+						#create
+					},
+				}
+			});
+
+			quote! {
+				match #input_.read_byte()? {
+					#( #recurse )*
+					_ => None,
+				}
+
+			}
+
+		},
+		// NOTE [ToDr] we currently don't use unions at all.
+		Data::Union(_) => unimplemented!(),
 	}
 }
 

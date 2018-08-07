@@ -114,30 +114,13 @@ impl Decode for BlockAttributes {
 	}
 }
 
-// TODO [ToDr] as u8?
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Encode, Decode)]
 /// Block enumeration direction.
 pub enum Direction {
 	/// Enumerate in ascending order (from child to parent).
 	Ascending = 0,
 	/// Enumerate in descendfing order (from parent to canonical child).
 	Descending = 1,
-}
-
-impl Encode for Direction {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push_byte(*self as u8)
-	}
-}
-
-impl Decode for Direction {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		match input.read_byte()? {
-			x if x == Direction::Ascending as u8 => Some(Direction::Ascending),
-			x if x == Direction::Descending as u8 => Some(Direction::Descending),
-			_ => None,
-		}
-	}
 }
 
 /// Remote call response.

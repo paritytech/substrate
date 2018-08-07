@@ -16,11 +16,11 @@
 
 use proc_macro2::{Span, TokenStream};
 use syn::{
-	Data, Fields, Index,
+	Data, Fields, Ident, Index,
 	spanned::Spanned,
 };
 
-pub fn quote(data: &Data, self_: &TokenStream, dest_: &TokenStream) -> TokenStream {
+pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest_: &TokenStream) -> TokenStream {
 	let call_site = Span::call_site();
 	match *data {
 		Data::Struct(ref data) => match data.fields {
@@ -34,7 +34,7 @@ pub fn quote(data: &Data, self_: &TokenStream, dest_: &TokenStream) -> TokenStre
 					}
 				});
 
-				quote! {
+				quote_spanned! { call_site =>
 					#( #recurse )*
 				}
 			},
@@ -51,13 +51,73 @@ pub fn quote(data: &Data, self_: &TokenStream, dest_: &TokenStream) -> TokenStre
 					#( #recurse )*
 				}
 			},
-			// Do nothing, we don't encode unit types?
+			// Do nothing, we don't encode unit type and assume it's always decodable.
 			Fields::Unit => quote! {
 				drop(#dest_);
 			},
 		},
-		// TODO [ToDr] Encode enums and unions
-		Data::Enum(_) | Data::Union(_) => unimplemented!(),
+		Data::Enum(ref data) => {
+			assert!(data.variants.len() < 256, "Currently only enums with less than 255 variants are encodable.");
+
+			let recurse = data.variants.iter().enumerate().map(|(i, f)| {
+				let name = &f.ident;
+
+				match f.fields {
+					Fields::Named(ref fields) => {
+						let names = fields.named.iter().map(|f| {
+							let field_name = &f.ident;
+							quote_spanned!(call_site => #field_name)
+						}).collect::<Vec<_>>();
+
+						let fields = names.iter();
+						let encode_fields = names.iter().map(|f| {
+							quote_spanned! { call_site => #dest_.push(#f); }
+						});
+
+						quote_spanned! { f.span() =>
+							#type_name :: #name { #( ref #fields, )* } => {
+								#dest_.push_byte(#i as u8);
+								#( #encode_fields )*
+							}
+						}
+					},
+					Fields::Unnamed(ref fields) => {
+						let names = fields.unnamed.iter().enumerate().map(|(i, _f)| {
+							let ident = Ident::new(&format!("f_{}", i), call_site);
+							quote_spanned!(call_site => #ident)
+						}).collect::<Vec<_>>();
+
+						let fields = names.iter();
+						let encode_fields = names.iter().map(|f| {
+							quote_spanned! { call_site => #dest_.push(#f); }
+						});
+
+						quote_spanned! { f.span() =>
+							#type_name :: #name ( #( ref #fields, )* ) => {
+								#dest_.push_byte(#i as u8);
+								#( #encode_fields )*
+							}
+						}
+					},
+					Fields::Unit => {
+						quote_spanned! { f.span() =>
+							#type_name :: #name => {
+								#dest_.push_byte(#i as u8);
+							}
+						}
+					},
+				}
+			});
+
+			quote! {
+				match *#self_ {
+					#( #recurse )*,
+					_ => unreachable!(),
+				}
+			}
+		},
+		// NOTE [ToDr] we currently don't use unions at all.
+		Data::Union(_) => unimplemented!(),
 	}
 }
 
