@@ -20,93 +20,29 @@ use rstd::prelude::*;
 use codec::{Decode, Encode, Input, Output};
 use substrate_primitives::{AuthorityId, Signature};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-#[repr(i8)]
-enum ActionKind {
-	Propose = 1,
-	ProposeHeader = 2,
-	Prepare = 3,
-	Commit = 4,
-	AdvanceRound = 5,
-}
-
 /// Type alias for extracting message type from block.
 pub type ActionFor<B> = Action<B, <B as ::traits::Block>::Hash>;
 
 /// Actions which can be taken during the BFT process.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum Action<Block, H> {
 	/// Proposal of a block candidate.
+	#[codec(index = "1")]
 	Propose(u32, Block),
 	/// Proposal header of a block candidate. Accompanies any proposal,
 	/// but is used for misbehavior reporting since blocks themselves are big.
+	#[codec(index = "2")]
 	ProposeHeader(u32, H),
 	/// Preparation to commit for a candidate.
+	#[codec(index = "3")]
 	Prepare(u32, H),
 	/// Vote to commit to a candidate.
+	#[codec(index = "4")]
 	Commit(u32, H),
 	/// Vote to advance round after inactive primary.
+	#[codec(index = "5")]
 	AdvanceRound(u32),
-}
-
-impl<Block: Encode, Hash: Encode> Encode for Action<Block, Hash> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		match *self {
-			Action::Propose(ref round, ref block) => {
-				dest.push_byte(ActionKind::Propose as u8);
-				dest.push(round);
-				dest.push(block);
-			}
-			Action::ProposeHeader(ref round, ref hash) => {
-				dest.push_byte(ActionKind::ProposeHeader as u8);
-				dest.push(round);
-				dest.push(hash);
-			}
-			Action::Prepare(ref round, ref hash) => {
-				dest.push_byte(ActionKind::Prepare as u8);
-				dest.push(round);
-				dest.push(hash);
-			}
-			Action::Commit(ref round, ref hash) => {
-				dest.push_byte(ActionKind::Commit as u8);
-				dest.push(round);
-				dest.push(hash);
-			}
-			Action::AdvanceRound(ref round) => {
-				dest.push_byte(ActionKind::AdvanceRound as u8);
-				dest.push(round);
-			}
-		}
-	}
-}
-
-impl<Block: Decode, Hash: Decode> Decode for Action<Block, Hash> {
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		match i8::decode(value) {
-			Some(x) if x == ActionKind::Propose as i8 => {
-				let (round, block) = Decode::decode(value)?;
-				Some(Action::Propose(round, block))
-			}
-			Some(x) if x == ActionKind::ProposeHeader as i8 => {
-				let (round, hash) = Decode::decode(value)?;
-				Some(Action::ProposeHeader(round, hash))
-			}
-			Some(x) if x == ActionKind::Prepare as i8 => {
-				let (round, hash) = Decode::decode(value)?;
-				Some(Action::Prepare(round, hash))
-			}
-			Some(x) if x == ActionKind::Commit as i8 => {
-				let (round, hash) = Decode::decode(value)?;
-				Some(Action::Commit(round, hash))
-			}
-			Some(x) if x == ActionKind::AdvanceRound as i8 => {
-				Decode::decode(value).map(Action::AdvanceRound)
-			}
-			_ => None,
-		}
-	}
 }
 
 /// Type alias for extracting message type from block.

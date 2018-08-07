@@ -135,7 +135,6 @@ pub struct RemoteCallResponse {
 /// Generic types.
 pub mod generic {
 	use primitives::AuthorityId;
-	use codec::{Decode, Encode, Input, Output};
 	use runtime_primitives::bft::Justification;
 	use ed25519;
 	use service::Roles;

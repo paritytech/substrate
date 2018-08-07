@@ -16,7 +16,6 @@
 
 //! Polkadot parachain types.
 
-use codec::{Encode, Decode, Input, Output};
 use rstd::prelude::*;
 use rstd::cmp::Ordering;
 use super::Hash;
@@ -28,7 +27,7 @@ use primitives::bytes;
 pub type CandidateSignature = ::runtime_primitives::Ed25519Signature;
 
 /// Unique identifier of a parachain.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Id(u32);
 
@@ -47,49 +46,14 @@ impl Id {
 	}
 }
 
-impl Decode for Id {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		u32::decode(input).map(Id)
-	}
-}
-
-impl Encode for Id {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.using_encoded(f)
-	}
-}
-
 /// Identifier for a chain, either one of a number of parachains or the relay chain.
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Chain {
 	/// The relay chain.
 	Relay,
 	/// A parachain of the given index.
 	Parachain(Id),
-}
-
-impl Decode for Chain {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let disc = input.read_byte()?;
-		match disc {
-			0 => Some(Chain::Relay),
-			1 => Some(Chain::Parachain(Decode::decode(input)?)),
-			_ => None,
-		}
-	}
-}
-
-impl Encode for Chain {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		match *self {
-			Chain::Relay => { dest.push_byte(0); }
-			Chain::Parachain(id) => {
-				dest.push_byte(1u8);
-				dest.push(&id);
-			}
-		}
-	}
 }
 
 /// The duty roster specifying what jobs each validator must do.

@@ -85,7 +85,7 @@ impl BuildStorage for StorageMap {
 }
 
 /// Ed25519 signature verify.
-#[derive(Eq, PartialEq, Clone, Default)]
+#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Ed25519Signature(pub H512);
 
@@ -96,25 +96,13 @@ impl Verify for Ed25519Signature {
 	}
 }
 
-impl codec::Decode for Ed25519Signature {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		Some(Ed25519Signature(codec::Decode::decode(input)?,))
-	}
-}
-
-impl codec::Encode for Ed25519Signature {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.using_encoded(f)
-	}
-}
-
 impl From<H512> for Ed25519Signature {
 	fn from(h: H512) -> Ed25519Signature {
 		Ed25519Signature(h)
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
 /// Outcome of a valid extrinsic application. Capable of being sliced.
@@ -124,22 +112,14 @@ pub enum ApplyOutcome {
 	/// Failed application (extrinsic was probably a no-op other than fees).
 	Fail = 1,
 }
-impl codec::Decode for ApplyOutcome {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		match input.read_byte()? {
-			x if x == ApplyOutcome::Success as u8 => Some(ApplyOutcome::Success),
-			x if x == ApplyOutcome::Fail as u8 => Some(ApplyOutcome::Fail),
-			_ => None,
-		}
-	}
-}
+
 impl codec::Encode for ApplyOutcome {
 	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
 		f(&[*self as u8])
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Eq, PartialEq, Clone, Copy, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[repr(u8)]
 /// Reason why an extrinsic couldn't be applied (i.e. invalid extrinsic).
@@ -152,18 +132,6 @@ pub enum ApplyError {
 	Future = 2,
 	/// Sending account had too low a balance.
 	CantPay = 3,
-}
-
-impl codec::Decode for ApplyError {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		match input.read_byte()? {
-			x if x == ApplyError::BadSignature as u8 => Some(ApplyError::BadSignature),
-			x if x == ApplyError::Stale as u8 => Some(ApplyError::Stale),
-			x if x == ApplyError::Future as u8 => Some(ApplyError::Future),
-			x if x == ApplyError::CantPay as u8 => Some(ApplyError::CantPay),
-			_ => None,
-		}
-	}
 }
 
 impl codec::Encode for ApplyError {

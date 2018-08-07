@@ -45,7 +45,7 @@ mod local_collations;
 mod router;
 pub mod consensus;
 
-use codec::{Decode, Encode, Input, Output};
+use codec::{Decode, Encode};
 use futures::sync::oneshot;
 use parking_lot::Mutex;
 use polkadot_consensus::{Statement, SignedStatement, GenericStatement};
@@ -181,7 +181,7 @@ impl CurrentConsensus {
 }
 
 /// Polkadot-specific messages.
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode)]
 pub enum Message {
 	/// signed statement and localized parent hash.
 	Statement(Hash, SignedStatement),
@@ -196,55 +196,6 @@ pub enum Message {
 	CollatorRole(Role),
 	/// A collation provided by a peer. Relay parent and collation.
 	Collation(Hash, Collation),
-}
-
-impl Encode for Message {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		match *self {
-			Message::Statement(ref h, ref s) => {
-				dest.push_byte(0);
-				dest.push(h);
-				dest.push(s);
-			}
-			Message::SessionKey(ref k) => {
-				dest.push_byte(1);
-				dest.push(k);
-			}
-			Message::RequestBlockData(ref id, ref d) => {
-				dest.push_byte(2);
-				dest.push(id);
-				dest.push(d);
-			}
-			Message::BlockData(ref id, ref d) => {
-				dest.push_byte(3);
-				dest.push(id);
-				dest.push(d);
-			}
-			Message::CollatorRole(ref r) => {
-				dest.push_byte(4);
-				dest.push(r);
-			}
-			Message::Collation(ref h, ref c) => {
-				dest.push_byte(5);
-				dest.push(h);
-				dest.push(c);
-			}
-		}
-	}
-}
-
-impl Decode for Message {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		match input.read_byte()? {
-			0 => Some(Message::Statement(Decode::decode(input)?, Decode::decode(input)?)),
-			1 => Some(Message::SessionKey(Decode::decode(input)?)),
-			2 => Some(Message::RequestBlockData(Decode::decode(input)?, Decode::decode(input)?)),
-			3 => Some(Message::BlockData(Decode::decode(input)?, Decode::decode(input)?)),
-			4 => Some(Message::CollatorRole(Decode::decode(input)?)),
-			5 => Some(Message::Collation(Decode::decode(input)?, Decode::decode(input)?)),
-			_ => None,
-		}
-	}
 }
 
 fn send_polkadot_message(ctx: &mut Context<Block>, to: NodeIndex, message: Message) {

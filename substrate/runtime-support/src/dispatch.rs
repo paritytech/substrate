@@ -395,7 +395,6 @@ macro_rules! __decl_dispatch_module_common {
 			}
 		}
 
-		// TODO [ToDr] as u8
 		impl<$trait_instance: $trait_name> $crate::dispatch::Decode for $call_type<$trait_instance> {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
 				match input.read_byte()? {
@@ -431,7 +430,6 @@ macro_rules! __decl_dispatch_module_common {
 				}
 			}
 		}
-
 	}
 }
 

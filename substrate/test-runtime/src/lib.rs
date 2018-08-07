@@ -84,24 +84,11 @@ pub struct Transfer {
 }
 
 /// Extrinsic for test-runtime.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Extrinsic {
 	pub transfer: Transfer,
 	pub signature: Ed25519Signature,
-}
-
-impl Encode for Extrinsic {
-	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
-		self.transfer.encode_to(dest);
-		self.signature.encode_to(dest);
-	}
-}
-
-impl Decode for Extrinsic {
-	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Decode::decode(input).map(|(transfer, signature)| Extrinsic { transfer, signature })
-	}
 }
 
 impl BlindCheckable for Extrinsic {

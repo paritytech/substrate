@@ -400,7 +400,7 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 }
 
 /// Abstraction over a substrate block.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -409,22 +409,6 @@ pub struct Block<Header, Extrinsic> {
 	pub header: Header,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<Extrinsic>,
-}
-
-impl<Header: Decode, Extrinsic: Decode> Decode for Block<Header, Extrinsic> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Block {
-			header: Decode::decode(input)?,
-			extrinsics: Decode::decode(input)?,
-		})
-	}
-}
-
-impl<Header: Encode, Extrinsic: Encode> Encode for Block<Header, Extrinsic> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.header);
-		dest.push(&self.extrinsics);
-	}
 }
 
 impl<Header, Extrinsic> traits::Block for Block<Header, Extrinsic>
@@ -451,7 +435,7 @@ where
 }
 
 /// Abstraction over a substrate block and justification.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -460,26 +444,6 @@ pub struct SignedBlock<Header, Extrinsic, Hash> {
 	pub block: Block<Header, Extrinsic>,
 	/// Block header justification.
 	pub justification: Justification<Hash>,
-}
-
-impl<Header: Decode, Extrinsic: Decode, Hash: Decode> Decode
-	for SignedBlock<Header, Extrinsic, Hash>
-{
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(SignedBlock {
-			block: Decode::decode(input)?,
-			justification: Decode::decode(input)?,
-		})
-	}
-}
-
-impl<Header: Encode, Extrinsic: Encode, Hash: Encode> Encode
-	for SignedBlock<Header, Extrinsic, Hash>
-{
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.block);
-		dest.push(&self.justification);
-	}
 }
 
 #[cfg(test)]

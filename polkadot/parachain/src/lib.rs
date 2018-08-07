@@ -64,7 +64,7 @@ extern crate error_chain;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use codec::{Encode, Decode, Input, Output};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 pub mod wasm;
