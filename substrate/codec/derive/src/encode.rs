@@ -61,6 +61,10 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest_: &TokenS
 
 			let recurse = data.variants.iter().enumerate().map(|(i, f)| {
 				let name = &f.ident;
+				let index = f.discriminant
+					.as_ref()
+					.map(|&(_, ref expr)| quote! { #expr })
+					.unwrap_or_else(|| quote! { #i });
 
 				match f.fields {
 					Fields::Named(ref fields) => {
@@ -76,7 +80,7 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest_: &TokenS
 
 						quote_spanned! { f.span() =>
 							#type_name :: #name { #( ref #fields, )* } => {
-								#dest_.push_byte(#i as u8);
+								#dest_.push_byte(#index as u8);
 								#( #encode_fields )*
 							}
 						}
@@ -94,7 +98,7 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest_: &TokenS
 
 						quote_spanned! { f.span() =>
 							#type_name :: #name ( #( ref #fields, )* ) => {
-								#dest_.push_byte(#i as u8);
+								#dest_.push_byte(#index as u8);
 								#( #encode_fields )*
 							}
 						}
@@ -102,7 +106,7 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest_: &TokenS
 					Fields::Unit => {
 						quote_spanned! { f.span() =>
 							#type_name :: #name => {
-								#dest_.push_byte(#i as u8);
+								#dest_.push_byte(#index as u8);
 							}
 						}
 					},
@@ -112,7 +116,6 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest_: &TokenS
 			quote! {
 				match *#self_ {
 					#( #recurse )*,
-					_ => unreachable!(),
 				}
 			}
 		},

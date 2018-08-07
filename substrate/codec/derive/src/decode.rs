@@ -16,7 +16,7 @@
 
 use proc_macro2::{Span, TokenStream, Ident};
 use syn::{
-	Data, Fields, Index,
+	Data, Fields,
 	spanned::Spanned,
 };
 
@@ -65,7 +65,10 @@ pub fn quote(data: &Data, type_name: &Ident, input_: &TokenStream) -> TokenStrea
 
 			let recurse = data.variants.iter().enumerate().map(|(i, v)| {
 				let name = &v.ident;
-				let index = Index { index: i as u32, span: call_site };
+				let index = v.discriminant
+					.as_ref()
+					.map(|&(_, ref expr)| quote! { #expr })
+					.unwrap_or_else(|| quote! { #i });
 
 				let create = match v.fields {
 					Fields::Named(ref fields) => {
