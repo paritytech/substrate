@@ -573,8 +573,8 @@ where
 
 impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
+		B: backend::Backend<Block, BlakeHasher, BlakeRlpCodec>,
+		E: CallExecutor<Block, BlakeHasher, BlakeRlpCodec>,
 		Block: BlockT,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
