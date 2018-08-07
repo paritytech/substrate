@@ -25,13 +25,31 @@
 //! create smart-contracts or send messages to existing smart-contracts.
 //!
 //! For any actions invoked by the smart-contracts fee must be paid. The fee is paid in gas.
-//! Gas is bought upfront. Any unused is refunded after the transaction (regardless of the
-//! execution outcome). If all gas is used, then changes made for the specific call or create
-//! are reverted (including balance transfers).
+//! Gas is bought upfront up to the, specified in transaction, limit. Any unused gas is refunded
+//! after the transaction (regardless of the execution outcome). If all gas is used,
+//! then changes made for the specific call or create are reverted (including balance transfers).
 //!
 //! Failures are typically not cascading. That, for example, means that if contract A calls B and B errors
 //! somehow, then A can decide if it should proceed or error.
 //! TODO: That is not the case now, since call/create externalities traps on any error now.
+//!
+//! # Interaction with the system
+//!
+//! ## Finalization
+//!
+//! This module requires performing some finalization steps at the end of the block. If not performed
+//! the module will have incorrect behavior.
+//!
+//! Call [`Module::execute`] at the end of the block. The order in relation to
+//! the other module doesn't matter.
+//!
+//! ## Account killing
+//!
+//! When `staking` module determines that account is dead (e.g. account's balance fell below
+//! exsistential deposit) then it reaps the account. That will lead to deletion of the associated
+//! code and storage of the account.
+//!
+//! [`Module::execute`]: struct.Module.html#impl-Executable
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -150,7 +168,7 @@ decl_storage! {
 	GasSpent get(gas_spent): b"con:gas_spent" => default T::Gas;
 
 	// The code associated with an account.
-	pub CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+	CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
 }
 
 // TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
@@ -258,7 +276,7 @@ impl<T: Trait> staking::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
-/// Finalisation hook for the smart-contract module.
+/// Finalization hook for the smart-contract module.
 impl<T: Trait> Executable for Module<T> {
 	fn execute() {
 		<GasSpent<T>>::kill();
