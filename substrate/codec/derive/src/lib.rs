@@ -82,10 +82,10 @@ pub fn decode_derive(input: TokenStream) -> TokenStream {
 }
 
 fn add_trait_bounds(mut generics: Generics, bounds: syn::TypeParamBound) -> Generics {
-    for param in &mut generics.params {
-        if let GenericParam::Type(ref mut type_param) = *param {
-            type_param.bounds.push(bounds.clone());
-        }
-    }
-    generics
+	for param in &mut generics.params {
+		if let GenericParam::Type(ref mut type_param) = *param {
+			type_param.bounds.push(bounds.clone());
+		}
+	}
+	generics
 }

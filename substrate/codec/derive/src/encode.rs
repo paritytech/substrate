@@ -16,44 +16,53 @@
 
 use proc_macro2::{Span, TokenStream};
 use syn::{
-	Data, Fields, Ident, Index,
+	Data, Field, Fields, Ident, Index,
+	punctuated::Punctuated,
 	spanned::Spanned,
+	token::Comma,
 };
 
-pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest_: &TokenStream) -> TokenStream {
+type FieldsList = Punctuated<Field, Comma>;
+
+fn encode_fields<F>(
+	dest: &TokenStream,
+	fields: &FieldsList,
+	field_name: F,
+) -> TokenStream where
+	F: Fn(usize, &Option<Ident>) -> TokenStream,
+{
+	let recurse = fields.iter().enumerate().map(|(i, f)| {
+		let field = field_name(i, &f.ident);
+
+		quote_spanned! { f.span() =>
+			#dest.push(#field);
+		}
+	});
+
+	quote! {
+		#( #recurse )*
+	}
+}
+
+pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest: &TokenStream) -> TokenStream {
 	let call_site = Span::call_site();
 	match *data {
 		Data::Struct(ref data) => match data.fields {
-			Fields::Named(ref fields) => {
-				let recurse = fields.named.iter().map(|f| {
-					let name = &f.ident;
-					let field = quote_spanned!(call_site => #self_.#name);
-
-					quote_spanned! { f.span() =>
-						#dest_.push(&#field);
-					}
-				});
-
-				quote_spanned! { call_site =>
-					#( #recurse )*
-				}
-			},
-			Fields::Unnamed(ref fields) => {
-				let recurse = fields.unnamed.iter().enumerate().map(|(i, f)| {
+			Fields::Named(ref fields) => encode_fields(
+				dest,
+				&fields.named,
+				|_, name| quote_spanned!(call_site => &#self_.#name),
+			),
+			Fields::Unnamed(ref fields) => encode_fields(
+				dest,
+				&fields.unnamed,
+				|i, _| {
 					let index = Index { index: i as u32, span: call_site };
-					let field = quote_spanned!(call_site => #self_.#index);
-					quote_spanned! { f.span() =>
-						#dest_.push(&#field);
-					}
-				});
-
-				quote! {
-					#( #recurse )*
-				}
-			},
-			// Do nothing, we don't encode unit type and assume it's always decodable.
-			Fields::Unit => quote! {
-				drop(#dest_);
+					quote_spanned!(call_site => &#self_.#index)
+				},
+			),
+			Fields::Unit => quote_spanned! { call_site =>
+				drop(#dest);
 			},
 		},
 		Data::Enum(ref data) => {
@@ -68,45 +77,52 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest_: &TokenS
 
 				match f.fields {
 					Fields::Named(ref fields) => {
-						let names = fields.named.iter().map(|f| {
-							let field_name = &f.ident;
-							quote_spanned!(call_site => #field_name)
-						}).collect::<Vec<_>>();
+						let field_name = |_, ident: &Option<Ident>| quote_spanned!(call_site => #ident);
+						let names = fields.named
+							.iter()
+							.enumerate()
+							.map(|(i, f)| field_name(i, &f.ident));
 
-						let fields = names.iter();
-						let encode_fields = names.iter().map(|f| {
-							quote_spanned! { call_site => #dest_.push(#f); }
-						});
+						let encode_fields = encode_fields(
+							dest,
+							&fields.named,
+							|a, b| field_name(a, b),
+						);
 
 						quote_spanned! { f.span() =>
-							#type_name :: #name { #( ref #fields, )* } => {
-								#dest_.push_byte(#index as u8);
-								#( #encode_fields )*
+							#type_name :: #name { #( ref #names, )* } => {
+								#dest.push_byte(#index as u8);
+								#encode_fields
 							}
 						}
 					},
 					Fields::Unnamed(ref fields) => {
-						let names = fields.unnamed.iter().enumerate().map(|(i, _f)| {
+						let field_name = |i, _: &Option<Ident>| {
 							let ident = Ident::new(&format!("f_{}", i), call_site);
 							quote_spanned!(call_site => #ident)
-						}).collect::<Vec<_>>();
+						};
+						let names = fields.unnamed
+							.iter()
+							.enumerate()
+							.map(|(i, f)| field_name(i, &f.ident));
 
-						let fields = names.iter();
-						let encode_fields = names.iter().map(|f| {
-							quote_spanned! { call_site => #dest_.push(#f); }
-						});
+						let encode_fields = encode_fields(
+							dest,
+							&fields.unnamed,
+							|a, b| field_name(a, b),
+						);
 
 						quote_spanned! { f.span() =>
-							#type_name :: #name ( #( ref #fields, )* ) => {
-								#dest_.push_byte(#index as u8);
-								#( #encode_fields )*
+							#type_name :: #name ( #( ref #names, )* ) => {
+								#dest.push_byte(#index as u8);
+								#encode_fields
 							}
 						}
 					},
 					Fields::Unit => {
 						quote_spanned! { f.span() =>
 							#type_name :: #name => {
-								#dest_.push_byte(#index as u8);
+								#dest.push_byte(#index as u8);
 							}
 						}
 					},

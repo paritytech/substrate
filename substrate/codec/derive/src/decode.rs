@@ -20,42 +20,19 @@ use syn::{
 	spanned::Spanned,
 };
 
-pub fn quote(data: &Data, type_name: &Ident, input_: &TokenStream) -> TokenStream {
+pub fn quote(data: &Data, type_name: &Ident, input: &TokenStream) -> TokenStream {
 	let call_site = Span::call_site();
 	match *data {
 		Data::Struct(ref data) => match data.fields {
-			Fields::Named(ref fields) => {
-				let recurse = fields.named.iter().map(|f| {
-					let name = &f.ident;
-					let field = quote_spanned!(call_site => #name);
-
-					quote_spanned! { f.span() =>
-						#field: ::codec::Decode::decode(#input_)?
-					}
-				});
-
-				quote_spanned! {call_site =>
-					Some(Self {
-						#( #recurse, )*
-					})
-				}
-			},
-			Fields::Unnamed(ref fields) => {
-				let recurse = fields.unnamed.iter().map(|f| {
-					quote_spanned! { f.span() =>
-						::codec::Decode::decode(#input_)?
-					}
-				});
-
-				quote_spanned! {call_site =>
-					Some(#type_name (
-						#( #recurse, )*
-					))
-				}
-			},
+			Fields::Named(_) | Fields::Unnamed(_) => create_instance(
+				call_site,
+				quote! { #type_name },
+				input,
+				&data.fields,
+			),
 			Fields::Unit => {
 				quote_spanned! {call_site =>
-					drop(#input_);
+					drop(#input);
 					Some(#type_name)
 				}
 			},
@@ -70,42 +47,12 @@ pub fn quote(data: &Data, type_name: &Ident, input_: &TokenStream) -> TokenStrea
 					.map(|&(_, ref expr)| quote! { #expr })
 					.unwrap_or_else(|| quote! { #i });
 
-				let create = match v.fields {
-					Fields::Named(ref fields) => {
-						let recurse = fields.named.iter().map(|f| {
-							let name = &f.ident;
-							let field = quote_spanned!(call_site => #name);
-
-							quote_spanned! { f.span() =>
-								#field: ::codec::Decode::decode(#input_)?
-							}
-						});
-
-						quote_spanned! {call_site =>
-							Some(#type_name :: #name {
-								#( #recurse, )*
-							})
-						}
-					},
-					Fields::Unnamed(ref fields) => {
-						let recurse = fields.unnamed.iter().map(|f| {
-							quote_spanned! { f.span() =>
-								::codec::Decode::decode(#input_)?
-							}
-						});
-
-						quote_spanned! {call_site =>
-							Some(#type_name :: #name (
-								#( #recurse, )*
-							))
-						}
-					},
-					Fields::Unit => {
-						quote_spanned! {call_site =>
-							Some(#type_name :: #name)
-						}
-					},
-				};
+				let create = create_instance(
+					call_site,
+					quote! { #type_name :: #name },
+					input,
+					&v.fields,
+				);
 
 				quote_spanned! { v.span() =>
 					x if x == #index as u8 => {
@@ -115,7 +62,7 @@ pub fn quote(data: &Data, type_name: &Ident, input_: &TokenStream) -> TokenStrea
 			});
 
 			quote! {
-				match #input_.read_byte()? {
+				match #input.read_byte()? {
 					#( #recurse )*
 					_ => None,
 				}
@@ -128,4 +75,41 @@ pub fn quote(data: &Data, type_name: &Ident, input_: &TokenStream) -> TokenStrea
 	}
 }
 
+fn create_instance(call_site: Span, name: TokenStream, input: &TokenStream, fields: &Fields) -> TokenStream {
+	match *fields {
+		Fields::Named(ref fields) => {
+			let recurse = fields.named.iter().map(|f| {
+				let name = &f.ident;
+				let field = quote_spanned!(call_site => #name);
 
+				quote_spanned! { f.span() =>
+					#field: ::codec::Decode::decode(#input)?
+				}
+			});
+
+			quote_spanned! {call_site =>
+				Some(#name {
+					#( #recurse, )*
+				})
+			}
+		},
+		Fields::Unnamed(ref fields) => {
+			let recurse = fields.unnamed.iter().map(|f| {
+				quote_spanned! { f.span() =>
+					::codec::Decode::decode(#input)?
+				}
+			});
+
+			quote_spanned! {call_site =>
+				Some(#name (
+					#( #recurse, )*
+				))
+			}
+		},
+		Fields::Unit => {
+			quote_spanned! {call_site =>
+				Some(#name)
+			}
+		},
+	}
+}
