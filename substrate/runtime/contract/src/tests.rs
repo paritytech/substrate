@@ -129,6 +129,7 @@ impl ExtBuilder {
 				balances: vec![],
 				intentions: vec![],
 				validator_count: 2,
+				minimum_validator_count: 0,
 				bonding_duration: 0,
 				transaction_base_fee: 0,
 				transaction_byte_fee: 0,
@@ -138,6 +139,7 @@ impl ExtBuilder {
 				reclaim_rebate: 0,
 				early_era_slash: 0,
 				session_reward: 0,
+				offline_slash_grace: 0,
 			}.build_storage()
 			.unwrap(),
 		);
@@ -159,13 +161,6 @@ impl ExtBuilder {
 		);
 		t.into()
 	}
-}
-
-fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExternalities<KeccakHasher> {
-	ExtBuilder::default()
-		.existential_deposit(existential_deposit)
-		.gas_price(gas_price)
-		.build()
 }
 
 const CODE_TRANSFER: &str = r#"
@@ -197,7 +192,7 @@ fn contract_transfer() {
 
 	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
-	with_externalities(&mut new_test_ext(0, 2), || {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
@@ -232,7 +227,7 @@ fn contract_transfer_oog() {
 
 	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
-	with_externalities(&mut new_test_ext(0, 2), || {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
@@ -264,7 +259,7 @@ fn contract_transfer_max_depth() {
 
 	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 
-	with_externalities(&mut new_test_ext(0, 2), || {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(CONTRACT_SHOULD_TRANSFER_TO, code_transfer.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
@@ -364,7 +359,7 @@ fn contract_create() {
 	let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
 	let code_create = wabt::wat2wasm(&code_create(&code_ctor_transfer)).unwrap();
 
-	with_externalities(&mut new_test_ext(0, 2), || {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		Staking::set_free_balance(&0, 100_000_000);
 		Staking::increase_total_stake_by(100_000_000);
 		Staking::set_free_balance(&1, 0);
@@ -413,7 +408,7 @@ fn top_level_create() {
 	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
 	let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
 
-	with_externalities(&mut new_test_ext(0, 3), || {
+	with_externalities(&mut ExtBuilder::default().gas_price(3).build(), || {
 		let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 			&code_ctor_transfer,
 			&0,
@@ -458,7 +453,7 @@ const CODE_NOP: &'static str = r#"
 fn refunds_unused_gas() {
 	let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
 
-	with_externalities(&mut new_test_ext(0, 2), || {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(1, code_nop.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
@@ -472,7 +467,7 @@ fn refunds_unused_gas() {
 
 #[test]
 fn call_with_zero_value() {
-	with_externalities(&mut new_test_ext(0, 2), || {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(1, vec![]);
 
 		Staking::set_free_balance(&0, 100_000_000);
@@ -488,7 +483,7 @@ fn call_with_zero_value() {
 fn create_with_zero_endowment() {
 	let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
 
-	with_externalities(&mut new_test_ext(0, 2), || {
+	with_externalities(&mut ExtBuilder::default().build(), || {
 		Staking::set_free_balance(&0, 100_000_000);
 		Staking::increase_total_stake_by(100_000_000);
 
@@ -505,42 +500,45 @@ fn create_with_zero_endowment() {
 
 #[test]
 fn account_removal_removes_storage() {
-	with_externalities(&mut new_test_ext(100, 2), || {
-		// Setup two accounts with free balance above than exsistential threshold.
-		{
-			Staking::set_free_balance(&1, 110);
-			Staking::increase_total_stake_by(110);
-			<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
-			<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
+	with_externalities(
+		&mut ExtBuilder::default().existential_deposit(100).build(),
+		|| {
+			// Setup two accounts with free balance above than exsistential threshold.
+			{
+				Staking::set_free_balance(&1, 110);
+                Staking::increase_total_stake_by(110);
+				<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
+				<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
 
-			Staking::set_free_balance(&2, 110);
-			Staking::increase_total_stake_by(110);
-			<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
-			<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
-		}
+				Staking::set_free_balance(&2, 110);
+                Staking::increase_total_stake_by(110);
+				<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
+				<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
+			}
 
-		// Transfer funds from account 1 of such amount that after this transfer
-		// the balance of account 1 is will be below than exsistential threshold.
-		//
-		// This should lead to the removal of all storage associated with this account.
-		assert_ok!(Staking::transfer(&1, 2.into(), 20));
+			// Transfer funds from account 1 of such amount that after this transfer
+			// the balance of account 1 is will be below than exsistential threshold.
+			//
+			// This should lead to the removal of all storage associated with this account.
+			assert_ok!(Staking::transfer(&1, 2.into(), 20));
 
-		// Verify that all entries from account 1 is removed, while
-		// entries from account 2 is in place.
-		{
-			assert_eq!(<StorageOf<Test>>::get(1, b"foo".to_vec()), None);
-			assert_eq!(<StorageOf<Test>>::get(1, b"bar".to_vec()), None);
+			// Verify that all entries from account 1 is removed, while
+			// entries from account 2 is in place.
+			{
+				assert_eq!(<StorageOf<Test>>::get(1, b"foo".to_vec()), None);
+				assert_eq!(<StorageOf<Test>>::get(1, b"bar".to_vec()), None);
 
-			assert_eq!(
-				<StorageOf<Test>>::get(2, b"hello".to_vec()),
-				Some(b"3".to_vec())
-			);
-			assert_eq!(
-				<StorageOf<Test>>::get(2, b"world".to_vec()),
-				Some(b"4".to_vec())
-			);
-		}
-	});
+				assert_eq!(
+					<StorageOf<Test>>::get(2, b"hello".to_vec()),
+					Some(b"3".to_vec())
+				);
+				assert_eq!(
+					<StorageOf<Test>>::get(2, b"world".to_vec()),
+					Some(b"4".to_vec())
+				);
+			}
+		},
+	);
 }
 
 const CODE_UNREACHABLE: &'static str = r#"
@@ -555,7 +553,7 @@ const CODE_UNREACHABLE: &'static str = r#"
 #[test]
 fn top_level_call_refunds_even_if_fails() {
 	let code_unreachable = wabt::wat2wasm(CODE_UNREACHABLE).unwrap();
-	with_externalities(&mut new_test_ext(0, 4), || {
+	with_externalities(&mut ExtBuilder::default().gas_price(4).build(), || {
 		<CodeOf<Test>>::insert(1, code_unreachable.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
