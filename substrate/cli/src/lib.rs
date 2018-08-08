@@ -33,6 +33,7 @@ extern crate backtrace;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+extern crate substrate_network_libp2p as network_libp2p;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_extrinsic_pool;
 extern crate substrate_service as service;
@@ -54,6 +55,7 @@ pub mod error;
 pub mod informant;
 mod panic_hook;
 
+use network_libp2p::AddrComponent;
 use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
@@ -61,8 +63,9 @@ use service::{
 };
 
 use std::io::{Write, Read, stdin, stdout};
+use std::iter;
 use std::fs::File;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use names::{Generator, Name};
 use regex::Regex;
@@ -281,7 +284,9 @@ where
 			None => 30333,
 		};
 
-		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
+		config.network.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
+			.chain(iter::once(AddrComponent::TCP(port)))
+			.collect();
 		config.network.public_address = None;
 		config.network.client_version = config.client_id();
 		config.network.use_secret = match matches.value_of("node-key").map(|s| s.parse()) {

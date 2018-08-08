@@ -30,11 +30,10 @@ use libp2p::core::{Endpoint, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::core::{SwarmController, UniqueConnecState};
 use libp2p::ping;
 use libp2p::transport_timeout::TransportTimeout;
-use {PacketId, SessionInfo, ConnectionFilter, TimerToken};
+use {PacketId, SessionInfo, TimerToken};
 use rand;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
-use std::iter;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::mpsc as sync_mpsc;
 use std::thread;
@@ -104,17 +103,13 @@ impl NetworkService {
 	/// generic here is too much and crashes the Rust compiler.
 	pub fn new(
 		config: NetworkConfiguration,
-		protocols: Vec<(Arc<NetworkProtocolHandler + Send + Sync>, ProtocolId, &[(u8, u8)])>,
-		filter: Option<Arc<ConnectionFilter>>
+		protocols: Vec<(Arc<NetworkProtocolHandler + Send + Sync>, ProtocolId, &[(u8, u8)])>
 	) -> Result<NetworkService, Error> {
-		// TODO: for now `filter` is always `None` ; remove it from the code or implement it
-		assert!(filter.is_none());
-
 		let network_state = NetworkState::new(&config)?;
 
 		let local_peer_id = network_state.local_public_key().clone()
 			.into_peer_id();
-		let mut listen_addr = config_to_listen_addr(&config);
+		let mut listen_addr = config.listen_address.clone();
 		listen_addr.append(AddrComponent::P2P(local_peer_id.clone().into_bytes()));
 		info!(target: "sub-libp2p", "Local node address is: {}", listen_addr);
 
@@ -134,6 +129,11 @@ impl NetworkService {
 		let (close_tx, close_rx) = oneshot::channel();
 		let (timeouts_register_tx, timeouts_register_rx) = mpsc::unbounded();
 
+		let mut listened_addrs = Vec::new();
+		if let Some(ref addr) = config.public_address {
+			listened_addrs.push(addr.clone());
+		}
+
 		let shared = Arc::new(Shared {
 			network_state,
 			protocols: RegisteredProtocols(protocols.into_iter()
@@ -146,7 +146,7 @@ impl NetworkService {
 			config,
 			timeouts_register_tx,
 			original_listened_addr: RwLock::new(None),
-			listened_addrs: RwLock::new(Vec::new()),
+			listened_addrs: RwLock::new(listened_addrs),
 		});
 
 		// Initialize all the protocols now.
@@ -446,20 +446,18 @@ fn init_thread(
 	};
 
 	// Listen on multiaddress.
-	// TODO: change the network config to directly contain a `Multiaddr`
-	{
-		let listen_addr = config_to_listen_addr(&shared.config);
-		debug!(target: "sub-libp2p", "Libp2p listening on {}", listen_addr);
-		match swarm_controller.listen_on(listen_addr.clone()) {
-			Ok(new_addr) => {
-				*shared.original_listened_addr.write() = Some(new_addr.clone());
-			},
-			Err(_) => {
-				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported", listen_addr);
-				return Err(ErrorKind::BadProtocol.into())
-			},
-		}
+	match swarm_controller.listen_on(shared.config.listen_address.clone()) {
+		Ok(new_addr) => {
+			debug!(target: "sub-libp2p", "Libp2p listening on {}", new_addr);
+			*shared.original_listened_addr.write() = Some(new_addr.clone());
+		},
+		Err(_) => {
+			warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported",
+				shared.config.listen_address);
+			return Err(ErrorKind::BadProtocol.into())
+		},
 	}
+
 	// Explicitely connect to _all_ the boostrap nodes as a temporary measure.
 	for bootnode in shared.config.boot_nodes.iter() {
 		match shared.network_state.add_peer(bootnode) {
@@ -839,23 +837,6 @@ fn handle_custom_connection(
 	}, &who);
 
 	future::Either::B(final_fut)
-}
-
-/// Builds the multiaddress corresponding to the address we need to listen to
-/// according to the config.
-// TODO: put the `Multiaddr` directly in the `NetworkConfiguration`
-fn config_to_listen_addr(config: &NetworkConfiguration) -> Multiaddr {
-	if let Some(addr) = config.listen_address {
-		let ip = match addr.ip() {
-			IpAddr::V4(addr) => AddrComponent::IP4(addr),
-			IpAddr::V6(addr) => AddrComponent::IP6(addr),
-		};
-		iter::once(ip).chain(iter::once(AddrComponent::TCP(addr.port()))).collect()
-	} else {
-		let host = AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0));
-		let port = AddrComponent::TCP(0);
-		iter::once(host).chain(iter::once(port)).collect()
-	}
 }
 
 /// Randomly discovers peers to connect to.
@@ -1402,6 +1383,6 @@ mod tests {
 	#[test]
 	fn builds_and_finishes_in_finite_time() {
 		// Checks that merely starting the network doesn't end up in an infinite loop.
-		let _service = NetworkService::new(Default::default(), vec![], None).unwrap();
+		let _service = NetworkService::new(Default::default(), vec![]).unwrap();
 	}
 }
