@@ -214,16 +214,16 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
-	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<StorageData> {
-		Ok(StorageData(self.state_at(id)?
+	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
+		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
-			.ok_or_else(|| error::ErrorKind::NoValueForKey(key.0.clone()))?
-			.to_vec()))
+			.map(StorageData))
 	}
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0)
+		Ok(self.storage(id, &StorageKey(b":code".to_vec()))?
+			.expect("None is returned if there's no value stored for the given key; ':code' key is always defined; qed").0)
 	}
 
 	/// Get the set of authorities at a given block.
@@ -580,13 +580,12 @@ impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Encode;
 	use keyring::Keyring;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::{runtime as test_runtime, BlockBuilderExt};
-	use test_client::runtime::{Transfer, Extrinsic};
+	use test_client::runtime::Transfer;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {

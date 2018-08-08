@@ -18,7 +18,6 @@
 
 use std;
 use state_machine;
-use primitives::hexdisplay::HexDisplay;
 use runtime_primitives::ApplyError;
 
 error_chain! {
@@ -51,12 +50,6 @@ error_chain! {
 		Blockchain(e: Box<std::error::Error + Send>) {
 			description("Blockchain error"),
 			display("Blockchain: {}", e),
-		}
-
-		/// Attempt to read storage yet nothing set for that key.
-		NoValueForKey(key: Vec<u8>) {
-			description("storage doesn't contain key"),
-			display("Storage does not contain the key entry: {}", HexDisplay::from(key)),
 		}
 
 		/// Invalid state data.
