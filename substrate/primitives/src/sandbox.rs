@@ -176,7 +176,7 @@ pub const ERR_MODULE: u32 = -1i32 as u32;
 /// For FFI purposes.
 pub const ERR_OUT_OF_BOUNDS: u32 = -2i32 as u32;
 
-/// Execution error occured (typically trap).
+/// Execution error occurred (typically trap).
 ///
 /// For FFI purposes.
 pub const ERR_EXECUTION: u32 = -3i32 as u32;

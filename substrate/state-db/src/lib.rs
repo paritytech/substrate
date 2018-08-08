@@ -73,7 +73,6 @@ pub trait HashDb {
 }
 
 /// Error type.
-/// Error type.
 pub enum Error<E: fmt::Debug> {
 	/// Database backend error.
 	Db(E),

@@ -32,7 +32,7 @@ use DatabaseSettings;
 /// Number of columns in the db. Must be the same for both full && light dbs.
 /// Otherwise RocksDb will fail to open database && check its type.
 pub const NUM_COLUMNS: u32 = 7;
-/// Meta column. Thes set of keys in the column is shared by full && light storages.
+/// Meta column. The set of keys in the column is shared by full && light storages.
 pub const COLUMN_META: Option<u32> = Some(0);
 
 /// Keys of entries in COLUMN_META.
