@@ -152,7 +152,7 @@ pub struct Entry {
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EnvironmentDefinition {
-	/// Vector of all entries in the environment defintion.
+	/// Vector of all entries in the environment definition.
 	pub entries: Vec<Entry>,
 }
 
