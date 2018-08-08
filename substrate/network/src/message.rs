@@ -253,7 +253,7 @@ pub mod generic {
 		/// Remote method call response.
 		RemoteCallResponse(RemoteCallResponse),
 		/// Chain-specific message
-		#[codec(index = "15")]
+		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
 	}
 

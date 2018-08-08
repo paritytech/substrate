@@ -71,7 +71,7 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest: &TokenSt
 			},
 		},
 		Data::Enum(ref data) => {
-			assert!(data.variants.len() < 256, "Currently only enums with less than 255 variants are encodable.");
+			assert!(data.variants.len() < 256, "Currently only enums with at most 256 variants are encodable.");
 
 			let recurse = data.variants.iter().enumerate().map(|(i, f)| {
 				let name = &f.ident;
@@ -139,8 +139,7 @@ pub fn quote(data: &Data, type_name: &Ident, self_: &TokenStream, dest: &TokenSt
 				}
 			}
 		},
-		// NOTE [ToDr] we currently don't use unions at all.
-		Data::Union(_) => unimplemented!(),
+		Data::Union(_) => panic!("Union types are not supported."),
 	}
 }
 pub fn stringify(id: u8) -> [u8; 2] {
