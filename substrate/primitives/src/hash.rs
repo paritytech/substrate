@@ -21,7 +21,9 @@ use serde::{Serialize, Serializer, Deserialize, Deserializer};
 
 #[cfg(feature = "std")]
 use bytes;
+#[cfg(feature = "std")]
 use core::cmp;
+#[cfg(feature = "std")]
 use rlp::{Rlp, RlpStream, DecoderError};
 
 macro_rules! impl_rest {
@@ -52,12 +54,14 @@ macro_rules! impl_rest {
 			}
 		}
 
+		#[cfg(feature = "std")]
 		impl ::rlp::Encodable for $name {
 			fn rlp_append(&self, s: &mut RlpStream) {
 				s.encoder().encode_value(self);
 			}
 		}
 
+		#[cfg(feature = "std")]
 		impl ::rlp::Decodable for $name {
 			fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
 				rlp.decoder().decode_value(|bytes| match bytes.len().cmp(&$len) {
@@ -81,16 +85,6 @@ construct_hash!(H512, 64);
 impl_rest!(H160, 20);
 impl_rest!(H256, 32);
 impl_rest!(H512, 64);
-
-// REVIEW: The wasm build was broken and would not load `fixed-hash` passing the
-// `heapsizeof` feature so resorted to this. `Hasher` binds the `Out` assoc type
-// with `HeapSizeOf` (why? I'd say it's only used by `memorydb` to implement `mem_used`).
-// An alternative way to fix this would be to use `default_features = false` to load
-// `fixed-hash` (instead of the current `features = ["heapsizeof"]` and remove this `#[cfg…`
-#[cfg(target_arch = "wasm32")]
-impl ::heapsize::HeapSizeOf for H256 {
-	fn heap_size_of_children(&self) -> usize { 0 }
-}
 
 
 #[cfg(test)]

@@ -30,6 +30,7 @@ extern crate fixed_hash;
 #[macro_use]
 extern crate uint as uint_crate;
 extern crate substrate_codec as codec;
+#[cfg(feature = "std")]
 extern crate rlp;
 
 #[cfg(feature = "std")]
@@ -47,7 +48,9 @@ extern crate core;
 extern crate wasmi;
 extern crate hashdb;
 extern crate plain_hasher;
+#[cfg(feature = "std")]
 extern crate patricia_trie;
+#[cfg(feature = "std")]
 extern crate elastic_array;
 
 extern crate substrate_runtime_std as rstd;
@@ -55,7 +58,7 @@ extern crate substrate_runtime_std as rstd;
 #[cfg(test)]
 extern crate substrate_serializer;
 
-#[cfg(any(test, target_arch = "wasm32"))]
+#[cfg(test)]
 extern crate heapsize;
 
 #[cfg(test)]
@@ -87,6 +90,7 @@ pub mod sandbox;
 pub mod storage;
 pub mod uint;
 mod authority_id;
+#[cfg(feature = "std")]
 mod rlp_codec;
 
 #[cfg(test)]
@@ -96,6 +100,7 @@ pub use self::hash::{H160, H256, H512};
 pub use self::uint::U256;
 pub use authority_id::AuthorityId;
 pub use self::hasher::BlakeHasher;
+#[cfg(feature = "std")]
 pub use self::rlp_codec::BlakeRlpCodec;
 
 /// A 512-bit value interpreted as a signature.

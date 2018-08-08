@@ -21,8 +21,10 @@ use plain_hasher::PlainHasher;
 use hash::H256;
 #[cfg(feature = "std")]
 use hashing::blake2_256;
+
+// TODO: implement this – might be tricky due to circular dependencies (the external function linking happens in runtime-io)
 #[cfg(not(feature = "std"))]
-fn blake2_256(x: &[u8]) -> [u8; 32] {
+fn blake2_256(_x: &[u8]) -> [u8; 32] {
 	unimplemented!()
 }
 
