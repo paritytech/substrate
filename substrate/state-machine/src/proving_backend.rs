@@ -23,6 +23,7 @@ use patricia_trie::{TrieDB, Trie, Recorder, NodeCodec};
 use trie_backend::{TrieBackend, Ephemeral};
 use {Error, ExecutionError, Backend, TryIntoTrieBackend};
 use rlp::Encodable;
+use heapsize::HeapSizeOf;
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -54,7 +55,7 @@ impl<H, C> Backend<H, C> for ProvingBackend<H, C>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
-	H::Out: Ord + Encodable
+	H::Out: Ord + Encodable + HeapSizeOf
 {
 	type Error = String;
 	type Transaction = MemoryDB<H>;
@@ -102,6 +103,7 @@ pub fn create_proof_check_backend<H, C>(
 where
 	H: Hasher,
 	C: NodeCodec<H>,
+	H::Out: HeapSizeOf,
 {
 	let mut db = MemoryDB::new();
 	for item in proof {

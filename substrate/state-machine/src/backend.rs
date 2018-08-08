@@ -26,6 +26,7 @@ use hashdb::Hasher;
 use rlp::Encodable;
 use trie_backend::{TryIntoTrieBackend, TrieBackend};
 use patricia_trie::{TrieDBMut, TrieMut, NodeCodec};
+use heapsize::HeapSizeOf;
 
 /// A state backend is used to read state data and can have changes committed
 /// to it.
@@ -109,7 +110,7 @@ impl<H, C> PartialEq for InMemory<H, C> {
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> InMemory<H, C> {
+impl<H: Hasher, C: NodeCodec<H>> InMemory<H, C> where H::Out: HeapSizeOf {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H, C>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = (&*self.inner).clone();
@@ -134,7 +135,7 @@ impl<H, C> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H, C> {
 
 impl super::Error for Void {}
 
-impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> {
+impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> where H::Out: HeapSizeOf {
 	type Error = Void;
 	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 
@@ -172,7 +173,7 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> {
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for InMemory<H, C> {
+impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for InMemory<H, C> where H::Out: HeapSizeOf {
 	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
 		use memorydb::MemoryDB;
 		let mut root = <H as Hasher>::Out::default();

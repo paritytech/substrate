@@ -23,6 +23,7 @@ use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, NodeCodec};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::marker::PhantomData;
+use heapsize::HeapSizeOf;
 
 pub use hashdb::DBValue;
 
@@ -46,7 +47,7 @@ pub struct TrieBackend<H: Hasher, C: NodeCodec<H>> {
 	_codec: PhantomData<C>
 }
 
-impl<H: Hasher, C: NodeCodec<H>> TrieBackend<H, C> {
+impl<H: Hasher, C: NodeCodec<H>> TrieBackend<H, C> where H::Out: HeapSizeOf {
 	/// Create new trie-based backend.
 	pub fn with_storage(db: Arc<Storage<H>>, root: H::Out) -> Self {
 		TrieBackend {
@@ -88,7 +89,7 @@ impl<H: Hasher, C: NodeCodec<H>> TrieBackend<H, C> {
 
 impl super::Error for String {}
 
-impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> {
+impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> where H::Out: HeapSizeOf {
 	type Error = String;
 	type Transaction = MemoryDB<H>;
 
@@ -198,7 +199,7 @@ pub struct Ephemeral<'a, H: 'a + Hasher> {
 }
 
 // REVIEW: this is boiler plate, need macro?
-impl<'a, H: Hasher> AsHashDB<H> for Ephemeral<'a, H> {
+impl<'a, H: Hasher> AsHashDB<H> for Ephemeral<'a, H> where H::Out: HeapSizeOf {
 	fn as_hashdb(&self) -> &HashDB<H> { self }
 	fn as_hashdb_mut(&mut self) -> &mut HashDB<H> { self }
 }
@@ -212,7 +213,7 @@ impl<'a, H: Hasher> Ephemeral<'a, H> {
 	}
 }
 
-impl<'a, H: Hasher> HashDB<H> for Ephemeral<'a, H> {
+impl<'a, H: Hasher> HashDB<H> for Ephemeral<'a, H> where H::Out: HeapSizeOf {
 	fn keys(&self) -> HashMap<H::Out, i32> {
 		self.overlay.keys() // TODO: iterate backing
 	}

@@ -31,6 +31,7 @@ extern crate patricia_trie;
 extern crate byteorder;
 extern crate parking_lot;
 extern crate rlp;
+extern crate heapsize;
 #[cfg(test)]
 extern crate substrate_primitives as primitives;
 
@@ -39,6 +40,7 @@ use std::fmt;
 use hashdb::Hasher;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
+use heapsize::HeapSizeOf;
 
 pub mod backend;
 mod ext;
@@ -405,7 +407,7 @@ where
 	Exec: CodeExecutor<H>,
 	C: NodeCodec<H>,
 	B: TryIntoTrieBackend<H, C>,
-	H::Out: Ord + Encodable
+	H::Out: Ord + Encodable + HeapSizeOf,
 {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
@@ -428,7 +430,7 @@ where
 H: Hasher,
 C: NodeCodec<H>,
 Exec: CodeExecutor<H>,
-H::Out: Ord + Encodable
+H::Out: Ord + Encodable + HeapSizeOf,
 {
 	let backend = proving_backend::create_proof_check_backend::<H, C>(root.into(), proof)?;
 	execute::<H, C, _, _>(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
