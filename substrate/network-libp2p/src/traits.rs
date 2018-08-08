@@ -16,13 +16,12 @@
 
 use std::fmt;
 use std::cmp::Ordering;
-use std::collections::HashMap;
-use std::net::{SocketAddr, SocketAddrV4, Ipv4Addr};
-use std::str::{self, FromStr};
-use std::sync::Arc;
+use std::iter;
+use std::net::Ipv4Addr;
+use std::str;
 use std::time::Duration;
 use io::TimerToken;
-use ipnetwork::{IpNetwork, IpNetworkError};
+use libp2p::{multiaddr::AddrComponent, Multiaddr};
 use error::Error;
 use ethkey::Secret;
 use ethereum_types::H512;
@@ -36,39 +35,7 @@ pub type ProtocolId = [u8; 3];
 pub type NodeId = H512;
 
 /// Local (temporary) peer session ID.
-/// RENAME TO NodeIndex
 pub type NodeIndex = usize;
-
-/// Messages used to communitate with the event loop from other threads.
-#[derive(Clone)]
-pub enum NetworkIoMessage {
-	/// Register a new protocol handler.
-	AddHandler {
-		/// Handler shared instance.
-		handler: Arc<NetworkProtocolHandler + Sync>,
-		/// Protocol Id.
-		protocol: ProtocolId,
-		/// Supported protocol versions and number of packet IDs reserved by the protocol (packet count).
-		versions: Vec<(u8, u8)>,
-	},
-	/// Register a new protocol timer
-	AddTimer {
-		/// Protocol Id.
-		protocol: ProtocolId,
-		/// Timer token.
-		token: TimerToken,
-		/// Timer delay.
-		delay: Duration,
-	},
-	/// Initliaze public interface.
-	InitPublicInterface,
-	/// Disconnect a peer.
-	Disconnect(NodeIndex),
-	/// Disconnect and temporary disable peer.
-	DisablePeer(NodeIndex),
-	/// Network has been started with the host as the given enode.
-	NetworkStarted(String),
-}
 
 /// Shared session information
 #[derive(Debug, Clone)]
@@ -138,15 +105,9 @@ pub struct NetworkConfiguration {
 	/// Directory path to store network-specific configuration. None means nothing will be saved
 	pub net_config_path: Option<String>,
 	/// IP address to listen for incoming connections. Listen to all connections by default
-	pub listen_address: Option<SocketAddr>,
+	pub listen_address: Multiaddr,
 	/// IP address to advertise. Detected automatically if none.
-	pub public_address: Option<SocketAddr>,
-	/// Port for UDP connections, same as TCP by default
-	pub udp_port: Option<u16>,
-	/// Enable NAT configuration
-	pub nat_enabled: bool,
-	/// Enable discovery
-	pub discovery_enabled: bool,
+	pub public_address: Option<Multiaddr>,
 	/// List of initial node addresses
 	pub boot_nodes: Vec<String>,
 	/// Use provided node key instead of default
@@ -155,16 +116,10 @@ pub struct NetworkConfiguration {
 	pub min_peers: u32,
 	/// Maximum allowed number of peers
 	pub max_peers: u32,
-	/// Maximum handshakes
-	pub max_handshakes: u32,
-	/// Reserved protocols. Peers with <key> protocol get additional <value> connection slots.
-	pub reserved_protocols: HashMap<ProtocolId, u32>,
 	/// List of reserved node addresses.
 	pub reserved_nodes: Vec<String>,
 	/// The non-reserved peer mode.
 	pub non_reserved_mode: NonReservedPeerMode,
-	/// IP filter
-	pub ip_filter: IpFilter,
 	/// Client identifier
 	pub client_version: String,
 }
@@ -181,36 +136,26 @@ impl NetworkConfiguration {
 		NetworkConfiguration {
 			config_path: None,
 			net_config_path: None,
-			listen_address: None,
+			listen_address: iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
+				.chain(iter::once(AddrComponent::TCP(30333)))
+				.collect(),
 			public_address: None,
-			udp_port: None,
-			nat_enabled: true,
-			discovery_enabled: true,
 			boot_nodes: Vec::new(),
 			use_secret: None,
 			min_peers: 25,
 			max_peers: 50,
-			max_handshakes: 64,
-			reserved_protocols: HashMap::new(),
-			ip_filter: IpFilter::default(),
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
 			client_version: "Parity-network".into(),
 		}
 	}
 
-	/// Create new default configuration with specified listen port.
-	pub fn new_with_port(port: u16) -> NetworkConfiguration {
-		let mut config = NetworkConfiguration::new();
-		config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port)));
-		config
-	}
-
-	/// Create new default configuration for localhost-only connection with random port (usefull for testing)
+	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new();
-		config.listen_address = Some(SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 0)));
-		config.nat_enabled = false;
+		config.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(127, 0, 0, 1)))
+			.chain(iter::once(AddrComponent::TCP(0)))
+			.collect();
 		config
 	}
 }
@@ -347,57 +292,4 @@ impl NonReservedPeerMode {
 			_ => None,
 		}
 	}
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IpFilter {
-	pub predefined: AllowIP,
-	pub custom_allow: Vec<IpNetwork>,
-	pub custom_block: Vec<IpNetwork>,
-}
-
-impl Default for IpFilter {
-	fn default() -> Self {
-		IpFilter {
-			predefined: AllowIP::All,
-			custom_allow: vec![],
-			custom_block: vec![],
-		}
-	}
-}
-
-impl IpFilter {
-	/// Attempt to parse the peer mode from a string.
-	pub fn parse(s: &str) -> Result<IpFilter, IpNetworkError> {
-		let mut filter = IpFilter::default();
-		for f in s.split_whitespace() {
-			match f {
-				"all" => filter.predefined = AllowIP::All,
-				"private" => filter.predefined = AllowIP::Private,
-				"public" => filter.predefined = AllowIP::Public,
-				"none" => filter.predefined = AllowIP::None,
-				custom => {
-					if custom.starts_with("-") {
-						filter.custom_block.push(IpNetwork::from_str(&custom.to_owned().split_off(1))?)
-					} else {
-						filter.custom_allow.push(IpNetwork::from_str(custom)?)
-					}
-				}
-			}
-		}
-		Ok(filter)
-	}
-}
-
-/// IP fiter
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum AllowIP {
-	/// Connect to any address
-	All,
-	/// Connect to private network only
-	Private,
-	/// Connect to public network only
-	Public,
-	/// Block all addresses
-	None,
 }

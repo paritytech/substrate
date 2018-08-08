@@ -25,6 +25,7 @@ exit-future = "0.1"
 substrate-client = { path = "../../substrate/client" }
 substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-network = { path = "../../substrate/network" }
+substrate-network-libp2p = { path = "../../substrate/network-libp2p" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-service = { path = "../../substrate/service" }
 substrate-telemetry = { path = "../../substrate/telemetry" }
