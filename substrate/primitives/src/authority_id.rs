@@ -17,11 +17,10 @@
 
 #[cfg(feature = "std")]
 use serde::{Serialize, Serializer, Deserialize, Deserializer};
-use codec;
 use H256;
 
 /// An identifier for an authority in the consensus algorithm. The same size as ed25519::Public.
-#[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default, Encode, Decode)]
 pub struct AuthorityId(pub [u8; 32]);
 
 impl AuthorityId {
@@ -105,16 +104,3 @@ impl<'de> Deserialize<'de> for AuthorityId {
 			.map(|x| AuthorityId::from_slice(&x))
 	}
 }
-
-impl codec::Encode for AuthorityId {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.0.using_encoded(f)
-	}
-}
-
-impl codec::Decode for AuthorityId {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		<[u8; 32] as codec::Decode>::decode(input).map(AuthorityId)
-	}
-}
-

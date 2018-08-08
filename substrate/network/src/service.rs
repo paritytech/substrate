@@ -59,6 +59,18 @@ bitflags! {
 	}
 }
 
+impl ::codec::Encode for Roles {
+	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
+		dest.push_byte(self.bits())
+	}
+}
+
+impl ::codec::Decode for Roles {
+	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+		Self::from_bits(input.read_byte()?)
+	}
+}
+
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status

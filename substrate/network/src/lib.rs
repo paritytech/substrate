@@ -33,6 +33,7 @@ extern crate ed25519;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate error_chain;
+#[macro_use] extern crate substrate_codec_derive;
 
 #[cfg(test)] extern crate env_logger;
 #[cfg(test)] extern crate substrate_keyring as keyring;

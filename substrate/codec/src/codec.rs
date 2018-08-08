@@ -20,6 +20,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use core::{mem, slice};
 use arrayvec::ArrayVec;
+
 /// Trait that allows reading of data into a slice.
 pub trait Input {
 	/// Read into the provided input slice. Returns the number of bytes read.
@@ -113,6 +114,7 @@ pub trait Decode: Sized {
 
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
 pub trait Codec: Decode + Encode {}
+
 impl<S: Decode + Encode> Codec for S {}
 
 impl<T: Encode, E: Encode> Encode for Result<T, E> {
@@ -249,6 +251,40 @@ impl Decode for Vec<u8> {
 				Some(vec)
 			}
 		})
+	}
+}
+
+impl<'a> Encode for &'a str {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_bytes().encode_to(dest)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a > Encode for ::std::borrow::Cow<'a, str> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_bytes().encode_to(dest)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a> Decode for ::std::borrow::Cow<'a, str> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(::std::borrow::Cow::Owned(String::from_utf8_lossy(&Vec::decode(input)?).into()))
+	}
+}
+
+#[cfg(feature = "std")]
+impl Encode for String {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_bytes().encode_to(dest)
+	}
+}
+
+#[cfg(feature = "std")]
+impl Decode for String {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(Self::from_utf8_lossy(&Vec::decode(input)?).into())
 	}
 }
 

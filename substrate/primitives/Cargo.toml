@@ -7,6 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crunchy = "0.1"
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
+substrate-codec-derive = { path = "../codec/derive", default_features = false }
 fixed-hash = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-for-wasm", default_features = false }
 rustc-hex = { version = "2.0", default_features = false }
 serde = { version = "1.0", default_features = false }
