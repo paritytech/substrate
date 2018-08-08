@@ -35,6 +35,7 @@ use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as Client
 use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
 use codec::Decode;
+use heapsize::HeapSizeOf;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -112,7 +113,7 @@ pub fn check_execution_proof<Block, B, E, H, C>(
 		B: ChainBackend<Block>,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Encodable + Ord + From<H256>,
+		H::Out: Encodable + Ord + From<H256> + HeapSizeOf,
 		C: NodeCodec<H>,
 {
 	let local_header = blockchain.header(BlockId::Hash(request.block))?;
@@ -132,7 +133,7 @@ fn do_check_execution_proof<Hash, E, H, C>(
 		Hash: ::std::fmt::Display + ::std::convert::AsRef<[u8]>,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Encodable + Ord + From<H256>,
+		H::Out: Encodable + Ord + From<H256> + HeapSizeOf,
 		C: NodeCodec<H>,
 {
 	let mut changes = OverlayedChanges::default();

@@ -30,6 +30,7 @@ use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
+use heapsize::HeapSizeOf;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -262,6 +263,7 @@ where
 	Block: BlockT,
 	H: Hasher,
 	C: NodeCodec<H>,
+	H::Out: HeapSizeOf,
 {
 	type State = InMemory<H, C>;
 
@@ -329,7 +331,8 @@ impl<Block, H, C> backend::Backend<Block, H, C> for Backend<Block, H, C>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H> + Send + Sync
+	H::Out: HeapSizeOf,
+	C: NodeCodec<H> + Send + Sync,
 {
 	type BlockImportOperation = BlockImportOperation<Block, H, C>;
 	type Blockchain = Blockchain<Block>;
@@ -386,6 +389,7 @@ impl<Block, H, C> backend::LocalBackend<Block, H, C> for Backend<Block, H, C>
 where
 	Block: BlockT,
 	H: Hasher,
+	H::Out: HeapSizeOf,
 	C: NodeCodec<H> + Send + Sync,
 {}
 
