@@ -17,11 +17,10 @@
 //! Voting thresholds.
 
 use primitives::traits::{Zero, IntegerSquareRoot};
-use codec::{Decode, Encode, Input};
 use rstd::ops::{Add, Mul, Div, Rem};
 
 /// A means of determining if a vote is past pass threshold.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum VoteThreshold {
 	/// A supermajority of approvals is needed to pass this vote.
@@ -30,27 +29,6 @@ pub enum VoteThreshold {
 	SuperMajorityAgainst,
 	/// A simple majority of approvals is needed to pass this vote.
 	SimpleMajority,
-}
-
-impl Decode for VoteThreshold {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		input.read_byte().and_then(|v| match v {
-			0 => Some(VoteThreshold::SuperMajorityApprove),
-			1 => Some(VoteThreshold::SuperMajorityAgainst),
-			2 => Some(VoteThreshold::SimpleMajority),
-			_ => None,
-		})
-	}
-}
-
-impl Encode for VoteThreshold {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		f(&[match *self {
-			VoteThreshold::SuperMajorityApprove => 0u8,
-			VoteThreshold::SuperMajorityAgainst => 1u8,
-			VoteThreshold::SimpleMajority => 2u8,
-		}])
-	}
 }
 
 pub trait Approved<Balance> {

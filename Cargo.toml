@@ -41,6 +41,7 @@ members = [
 	"substrate/client",
 	"substrate/client/db",
 	"substrate/codec",
+	"substrate/codec/derive",
 	"substrate/environmental",
 	"substrate/executor",
 	"substrate/extrinsic-pool",

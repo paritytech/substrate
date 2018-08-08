@@ -3,6 +3,7 @@ name = "adder"
 version = "0.1.0"
 dependencies = [
  "polkadot-parachain 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1953,6 +1954,7 @@ dependencies = [
  "rhododendron 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-bft 0.1.0",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1964,6 +1966,7 @@ version = "0.1.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1976,6 +1979,7 @@ dependencies = [
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-std 0.1.0",
@@ -2047,6 +2051,7 @@ version = "0.1.0"
 dependencies = [
  "polkadot-primitives 0.1.0",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -2722,6 +2727,7 @@ dependencies = [
  "patricia-trie 0.1.0 (git+https://github.com/paritytech/parity.git)",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-primitives 0.1.0",
@@ -2735,6 +2741,16 @@ name = "substrate-codec"
 version = "0.1.0"
 dependencies = [
  "arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "substrate-codec-derive"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "syn 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2829,6 +2845,7 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-network-libp2p 0.1.0",
  "substrate-primitives 0.1.0",
@@ -2875,6 +2892,7 @@ dependencies = [
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-serializer 0.1.0",
  "twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2990,6 +3008,7 @@ dependencies = [
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-io 0.1.0",
@@ -3047,6 +3066,7 @@ dependencies = [
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.22 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-std 0.1.0",
@@ -3172,6 +3192,7 @@ dependencies = [
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
 ]
@@ -3223,6 +3244,7 @@ dependencies = [
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3282,6 +3304,7 @@ dependencies = [
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",
