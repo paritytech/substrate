@@ -174,7 +174,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 		});
 		let versions = [(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)];
 		let protocols = vec![(handler.clone() as Arc<_>, protocol_id, &versions[..])];
-		let service = match NetworkService::new(params.network_config.clone(), protocols, None) {
+		let service = match NetworkService::new(params.network_config.clone(), protocols) {
 			Ok(service) => service,
 			Err(err) => {
 				match err.kind() {
