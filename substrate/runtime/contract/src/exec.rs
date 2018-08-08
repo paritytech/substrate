@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeOf, ContractAddressFor, Module, Trait};
+use super::{CodeOf, MaxDepth, ContractAddressFor, Module, Trait};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use vm;
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
-use runtime_support::StorageMap;
+use runtime_support::{StorageMap, StorageValue};
 use staking;
 use system;
 
@@ -50,14 +50,16 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		gas_meter: &mut GasMeter<T>,
 		_data: &[u8],
 	) -> Result<CallReceipt, &'static str> {
-		let dest_code = <CodeOf<T>>::get(&dest);
-
-		// TODO: check the new depth
+		if self.depth == <MaxDepth<T>>::get() as usize {
+			return Err("reached maximum depth, cannot make a call");
+		}
 
 		let call_base_fee = <Module<T>>::call_base_fee();
 		if gas_meter.charge(call_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base call fee");
 		}
+
+		let dest_code = <CodeOf<T>>::get(&dest);
 
 		let (exec_result, change_set) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
@@ -112,6 +114,10 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		ctor: &[u8],
 		_data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
+		if self.depth == <MaxDepth<T>>::get() as usize {
+			return Err("reached maximum depth, cannot create");
+		}
+
 		let create_base_fee = <Module<T>>::create_base_fee();
 		if gas_meter.charge(create_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base create fee");
