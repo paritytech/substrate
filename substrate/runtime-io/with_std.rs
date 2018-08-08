@@ -24,11 +24,6 @@ extern crate substrate_state_machine;
 extern crate triehash;
 extern crate ed25519;
 
-#[cfg(test)]
-extern crate rlp;
-#[cfg(test)]
-extern crate heapsize;
-
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
 // re-export hashing functions.
@@ -199,33 +194,6 @@ macro_rules! impl_stubs {
 #[cfg(test)]
 mod std_tests {
 	use super::*;
-	use rlp::{Encodable, Decodable, RlpStream, Rlp};
-
-	// TODO: remove these tests (heapsizeof, encodable, decodable)
-	#[test]
-	fn test_heapsizeof() {
-		use heapsize::HeapSizeOf;
-		let h = H256::new();
-		assert_eq!(h.heap_size_of_children(), 0);
-	}
-
-	// TODO: remove these tests (heapsizeof, encodable, decodable)
-	#[test]
-	fn test_hash_is_encodable() {
-		let h = H256::from(32);
-		let mut s = RlpStream::new();
-		h.rlp_append(&mut s);
-		let rlp_bytes = s.drain();
-		assert_eq!(rlp_bytes.into_vec(), vec![160, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32] );
-	}
-
-	// TODO: remove these tests (heapsizeof, encodable, decodable)
-	#[test]
-	fn test_hash_is_decodable() {
-		let data = Rlp::new(&[160, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 32]);
-		let h = H256::decode(&data).unwrap();
-		assert_eq!(h, H256::from(32));
-	}
 
 	#[test]
 	fn storage_works() {
