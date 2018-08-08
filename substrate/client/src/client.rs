@@ -214,16 +214,15 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
-	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<StorageData> {
-		Ok(StorageData(self.state_at(id)?
+	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
+		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
-			.ok_or_else(|| error::ErrorKind::NoValueForKey(key.0.clone()))?
-			.to_vec()))
+			.map(StorageData))
 	}
 
 	/// Get the code at a given block.
-	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0)
+	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<u8>>> {
+		Ok(self.storage(id, &StorageKey(b":code".to_vec()))?.map(|data| data.0))
 	}
 
 	/// Get the set of authorities at a given block.
