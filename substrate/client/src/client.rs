@@ -221,8 +221,9 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Get the code at a given block.
-	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<u8>>> {
-		Ok(self.storage(id, &StorageKey(b":code".to_vec()))?.map(|data| data.0))
+	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
+		Ok(self.storage(id, &StorageKey(b":code".to_vec()))?
+			.expect("None is returned if there's no value stored for the given key; ':code' key is always defined; qed").0)
 	}
 
 	/// Get the set of authorities at a given block.
