@@ -80,13 +80,38 @@ impl OfflineTracker {
 			.note_round_end(was_online);
 	}
 
-	/// Generate a vector of reports for the given account IDs.
-	/// The length of the vector will be the same as the length of the validator
-	/// list.
-	/// `None` is "not enough data", `true` is "online", and `false` is "offline".
-	pub fn reports(&self, validators: &[AccountId]) -> Vec<Option<bool>> {
+	/// Generate a vector of indices for offline account IDs.
+	pub fn reports(&self, validators: &[AccountId]) -> Vec<u32> {
 		validators.iter()
-			.map(|v| self.observed.get(v).map(Observed::is_active))
+			.enumerate()
+			.filter_map(|(i, v)| if self.is_online(v) {
+				None
+			} else {
+				Some(i as u32)
+			})
 			.collect()
 	}
+
+	/// Whether reports on a validator set are consistent with our view of things.
+	pub fn check_consistency(&self, validators: &[AccountId], reports: &[u32]) -> bool {
+		reports.iter().all(|r| {
+			let v = match validators.get(r as usize) {
+				Some(v) => v,
+				None => return false,
+			};
+
+			// we must think all validators reported externally are offline.
+			let thinks_online = self.is_online(v);
+			!thinks_online
+		})
+	}
+
+	fn is_online(&self, v: &AccountId) -> bool {
+		self.observed.get(v).map(Observed::is_active).unwrap_or(true)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+
 }
