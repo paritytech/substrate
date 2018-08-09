@@ -21,13 +21,16 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate substrate_runtime_std as rstd;
+extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_runtime_std as rstd;
+
 #[cfg(test)]
 extern crate substrate_serializer;
 
-extern crate substrate_codec as codec;
+#[macro_use]
+extern crate substrate_codec_derive;
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -42,7 +45,6 @@ use primitives::bytes;
 use rstd::prelude::*;
 use runtime_primitives::traits::BlakeTwo256;
 use runtime_primitives::generic;
-use codec::{Encode, Decode, Input, Output};
 
 pub mod parachain;
 
@@ -105,18 +107,6 @@ pub type Balance = u128;
 pub type BlockId = generic::BlockId<Block>;
 
 /// A log entry in the block.
-#[derive(PartialEq, Eq, Clone, Default)]
+#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
-
-impl Decode for Log {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Vec::<u8>::decode(input).map(Log)
-	}
-}
-
-impl Encode for Log {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		self.0.encode_to(dest)
-	}
-}

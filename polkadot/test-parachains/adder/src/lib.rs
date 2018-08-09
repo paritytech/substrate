@@ -18,13 +18,16 @@
 
 #![no_std]
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 extern crate polkadot_parachain as parachain;
 extern crate tiny_keccak;
 
-use parachain::codec::{Decode, Encode, Input, Output};
+use parachain::codec::{self, Encode};
 
 /// Head data for this parachain.
-#[derive(Default, Clone, Hash, Eq, PartialEq)]
+#[derive(Default, Clone, Hash, Eq, PartialEq, Encode, Decode)]
 pub struct HeadData {
 	/// Block number
 	pub number: u64,
@@ -40,47 +43,13 @@ impl HeadData {
 	}
 }
 
-impl Encode for HeadData {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.number);
-		dest.push(&self.parent_hash);
-		dest.push(&self.post_state);
-	}
-}
-
-impl Decode for HeadData {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(HeadData {
-			number: Decode::decode(input)?,
-			parent_hash: Decode::decode(input)?,
-			post_state: Decode::decode(input)?,
-		})
-	}
-}
-
 /// Block data for this parachain.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Encode, Decode)]
 pub struct BlockData {
 	/// State to begin from.
 	pub state: u64,
 	/// Amount to add (overflowing)
 	pub add: u64,
-}
-
-impl Encode for BlockData {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.state);
-		dest.push(&self.add);
-	}
-}
-
-impl Decode for BlockData {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(BlockData {
-			state: Decode::decode(input)?,
-			add: Decode::decode(input)?,
-		})
-	}
 }
 
 pub fn hash_state(state: u64) -> [u8; 32] {

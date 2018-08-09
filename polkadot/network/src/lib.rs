@@ -38,13 +38,15 @@ extern crate rhododendron;
 
 #[macro_use]
 extern crate log;
+#[macro_use]
+extern crate substrate_codec_derive;
 
 mod collator_pool;
 mod local_collations;
 mod router;
 pub mod consensus;
 
-use codec::{Decode, Encode, Input, Output};
+use codec::{Decode, Encode};
 use futures::sync::oneshot;
 use parking_lot::Mutex;
 use polkadot_consensus::{Statement, SignedStatement, GenericStatement};
@@ -74,34 +76,9 @@ type FullStatus = GenericFullStatus<Block>;
 pub type NetworkService = ::substrate_network::Service<Block, PolkadotProtocol>;
 
 /// Status of a Polkadot node.
-#[derive(Debug, PartialEq, Eq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Status {
 	collating_for: Option<(AccountId, ParaId)>,
-}
-
-impl Encode for Status {
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
-		match self.collating_for {
-			Some(ref details) => {
-				dest.push_byte(1);
-				dest.push(details);
-			}
-			None => {
-				dest.push_byte(0);
-			}
-		}
-	}
-}
-
-impl Decode for Status {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		let collating_for = match input.read_byte()? {
-			0 => None,
-			1 => Some(Decode::decode(input)?),
-			_ => return None,
-		};
-		Some(Status { collating_for })
-	}
 }
 
 struct BlockDataRequest {
@@ -207,7 +184,7 @@ impl CurrentConsensus {
 }
 
 /// Polkadot-specific messages.
-#[derive(Debug)]
+#[derive(Debug, Encode, Decode)]
 pub enum Message {
 	/// signed statement and localized parent hash.
 	Statement(Hash, SignedStatement),
@@ -222,59 +199,6 @@ pub enum Message {
 	CollatorRole(Role),
 	/// A collation provided by a peer. Relay parent and collation.
 	Collation(Hash, Collation),
-}
-
-impl Encode for Message {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		match *self {
-			Message::Statement(ref h, ref s) => {
-				dest.push_byte(0);
-				dest.push(h);
-				dest.push(s);
-			}
-			Message::SessionKey(ref k) => {
-				dest.push_byte(1);
-				dest.push(k);
-			}
-			Message::RequestBlockData(ref id, ref r, ref d) => {
-				dest.push_byte(2);
-				dest.push(id);
-				dest.push(r);
-				dest.push(d);
-			}
-			Message::BlockData(ref id, ref d) => {
-				dest.push_byte(3);
-				dest.push(id);
-				dest.push(d);
-			}
-			Message::CollatorRole(ref r) => {
-				dest.push_byte(4);
-				dest.push(r);
-			}
-			Message::Collation(ref h, ref c) => {
-				dest.push_byte(5);
-				dest.push(h);
-				dest.push(c);
-			}
-		}
-	}
-}
-
-impl Decode for Message {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		match input.read_byte()? {
-			0 => Some(Message::Statement(Decode::decode(input)?, Decode::decode(input)?)),
-			1 => Some(Message::SessionKey(Decode::decode(input)?)),
-			2 => {
-				let x: (_, _, _) = Decode::decode(input)?;
-				Some(Message::RequestBlockData(x.0, x.1, x.2))
-			}
-			3 => Some(Message::BlockData(Decode::decode(input)?, Decode::decode(input)?)),
-			4 => Some(Message::CollatorRole(Decode::decode(input)?)),
-			5 => Some(Message::Collation(Decode::decode(input)?, Decode::decode(input)?)),
-			_ => None,
-		}
-	}
 }
 
 fn send_polkadot_message(ctx: &mut Context<Block>, to: NodeIndex, message: Message) {

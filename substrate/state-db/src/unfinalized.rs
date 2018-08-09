@@ -22,7 +22,7 @@
 
 use std::collections::{HashMap, VecDeque};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
-use codec::{self, Decode, Encode};
+use codec::{Decode, Encode};
 
 const UNFINALIZED_JOURNAL: &[u8] = b"unfinalized_journal";
 const LAST_FINALIZED: &[u8] = b"last_finalized";
@@ -35,31 +35,12 @@ pub struct UnfinalizedOverlay<BlockHash: Hash, Key: Hash> {
 	last_finalized_overlay: HashMap<Key, DBValue>,
 }
 
+#[derive(Encode, Decode)]
 struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	parent_hash: BlockHash,
 	inserted: Vec<(Key, DBValue)>,
 	deleted: Vec<Key>,
-}
-
-impl<BlockHash: Hash, Key: Hash> Encode for JournalRecord<BlockHash, Key> {
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
-		dest.push(&self.hash);
-		dest.push(&self.parent_hash);
-		dest.push(&self.inserted);
-		dest.push(&self.deleted);
-	}
-}
-
-impl<BlockHash: Hash, Key: Hash> Decode for JournalRecord<BlockHash, Key> {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		Some(JournalRecord {
-			hash: Decode::decode(input)?,
-			parent_hash: Decode::decode(input)?,
-			inserted: Decode::decode(input)?,
-			deleted: Decode::decode(input)?,
-		})
-	}
 }
 
 fn to_journal_key(block: u64, index: u64) -> Vec<u8> {

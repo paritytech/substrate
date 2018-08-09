@@ -15,7 +15,6 @@ libp2p = { git = "https://github.com/tomaka/libp2p-rs", branch = "polkadot-2", d
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ethkey = { git = "https://github.com/paritytech/parity.git" }
 ethereum-types = "0.3"
-ipnetwork = "0.12.6"
 parking_lot = "0.5"
 libc = "0.2"
 log = "0.3"

@@ -22,17 +22,18 @@
 extern crate serde;
 
 #[cfg(feature = "std")]
+extern crate substrate_primitives;
+
+#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
 #[macro_use]
-extern crate substrate_runtime_support;
-
-#[cfg(feature = "std")]
-extern crate substrate_primitives;
-
+extern crate substrate_codec_derive;
 #[macro_use]
 extern crate substrate_runtime_std as rstd;
+#[macro_use]
+extern crate substrate_runtime_support;
 
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;

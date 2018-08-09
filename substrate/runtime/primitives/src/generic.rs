@@ -31,7 +31,7 @@ use rstd::ops;
 use bft::Justification;
 
 /// Definition of something that the external world might want to say.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Extrinsic<Address, Index, Call> {
 	/// Who signed it (note this is not a signature).
@@ -40,32 +40,6 @@ pub struct Extrinsic<Address, Index, Call> {
 	pub index: Index,
 	/// The function that should be called.
 	pub function: Call,
-}
-
-impl<Address, Index, Call> Decode for Extrinsic<Address, Index, Call> where
-	Address: Decode,
-	Index: Decode,
-	Call: Decode,
-{
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Extrinsic {
-			signed: Decode::decode(input)?,
-			index: Decode::decode(input)?,
-			function: Decode::decode(input)?,
-		})
-	}
-}
-
-impl<Address, Index, Call> Encode for Extrinsic<Address, Index, Call> where
-	Address: Encode,
-	Index: Encode,
-	Call: Encode,
-{
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.signed);
-		dest.push(&self.index);
-		dest.push(&self.function);
-	}
 }
 
 /// A extrinsic right from the external world. Unchecked.
@@ -234,22 +208,10 @@ where
 	}
 }
 
-#[derive(Default, PartialEq, Eq, Clone)]
+#[derive(Default, PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Digest<Item> {
 	pub logs: Vec<Item>,
-}
-
-impl<Item: Decode> Decode for Digest<Item> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Digest { logs: Decode::decode(input)? })
-	}
-}
-
-impl<Item: Encode> Encode for Digest<Item> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		self.logs.encode_to(dest)
-	}
 }
 
 impl<Item> traits::Digest for Digest<Item> where
@@ -285,7 +247,7 @@ pub struct Header<Number, Hash: HashT, DigestItem> {
 // dummy struct that uses the hash type directly.
 // https://github.com/serde-rs/serde/issues/1296
 #[cfg(feature = "std")]
-#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[serde(rename_all = "camelCase")]
 #[derive(Deserialize)]
 struct DeserializeHeader<N, H, D> {
 	parent_hash: H,
@@ -319,6 +281,7 @@ impl<'a, Number: 'a, Hash: 'a + HashT, DigestItem: 'a> Deserialize<'a> for Heade
 	}
 }
 
+// TODO [ToDr] Issue with bounds
 impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 	Number: Decode,
 	Hash: HashT,
@@ -437,7 +400,7 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 }
 
 /// Abstraction over a substrate block.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -446,22 +409,6 @@ pub struct Block<Header, Extrinsic> {
 	pub header: Header,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<Extrinsic>,
-}
-
-impl<Header: Decode, Extrinsic: Decode> Decode for Block<Header, Extrinsic> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Block {
-			header: Decode::decode(input)?,
-			extrinsics: Decode::decode(input)?,
-		})
-	}
-}
-
-impl<Header: Encode, Extrinsic: Encode> Encode for Block<Header, Extrinsic> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.header);
-		dest.push(&self.extrinsics);
-	}
 }
 
 impl<Header, Extrinsic> traits::Block for Block<Header, Extrinsic>
@@ -488,7 +435,7 @@ where
 }
 
 /// Abstraction over a substrate block and justification.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
@@ -497,26 +444,6 @@ pub struct SignedBlock<Header, Extrinsic, Hash> {
 	pub block: Block<Header, Extrinsic>,
 	/// Block header justification.
 	pub justification: Justification<Hash>,
-}
-
-impl<Header: Decode, Extrinsic: Decode, Hash: Decode> Decode
-	for SignedBlock<Header, Extrinsic, Hash>
-{
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(SignedBlock {
-			block: Decode::decode(input)?,
-			justification: Decode::decode(input)?,
-		})
-	}
-}
-
-impl<Header: Encode, Extrinsic: Encode, Hash: Encode> Encode
-	for SignedBlock<Header, Extrinsic, Hash>
-{
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.block);
-		dest.push(&self.justification);
-	}
 }
 
 #[cfg(test)]
