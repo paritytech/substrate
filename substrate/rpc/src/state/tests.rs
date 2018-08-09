@@ -31,7 +31,7 @@ fn should_return_storage() {
 	let client = State::new(client, core.executor());
 
 	assert_matches!(
-		client.storage_at(StorageKey(vec![10]), genesis_hash),
+		client.storage(StorageKey(vec![10]), Some(genesis_hash).into()),
 		Ok(None)
 	)
 }
@@ -44,7 +44,7 @@ fn should_call_contract() {
 	let client = State::new(client, core.executor());
 
 	assert_matches!(
-		client.call_at("balanceOf".into(), vec![1,2,3], genesis_hash),
+		client.call("balanceOf".into(), vec![1,2,3], Some(genesis_hash).into()),
 		Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
 	)
 }

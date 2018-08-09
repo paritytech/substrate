@@ -43,37 +43,21 @@ build_rpc_trait! {
 	pub trait StateApi<Hash> {
 		type Metadata;
 
-		/// Returns a storage entry at a specific block's state.
-		#[rpc(name = "state_getStorageAt")]
-		fn storage_at(&self, StorageKey, Hash) -> Result<Option<StorageData>>;
-
 		/// Call a contract at a block's state.
-		#[rpc(name = "state_callAt")]
-		fn call_at(&self, String, Vec<u8>, Hash) -> Result<Vec<u8>>;
+		#[rpc(name = "state_call", alias = ["state_callAt", ])]
+		fn call(&self, String, Vec<u8>, Trailing<Hash>) -> Result<Vec<u8>>;
+
+		/// Returns a storage entry at a specific block's state.
+		#[rpc(name = "state_getStorage", alias = ["state_getStorageAt", ])]
+		fn storage(&self, StorageKey, Trailing<Hash>) -> Result<Option<StorageData>>;
 
 		/// Returns the hash of a storage entry at a block's state.
-		#[rpc(name = "state_getStorageHashAt")]
-		fn storage_hash_at(&self, StorageKey, Hash) -> Result<Option<Hash>>;
+		#[rpc(name = "state_getStorageHash", alias = ["state_getStorageHashAt", ])]
+		fn storage_hash(&self, StorageKey, Trailing<Hash>) -> Result<Option<Hash>>;
 
 		/// Returns the size of a storage entry at a block's state.
-		#[rpc(name = "state_getStorageSizeAt")]
-		fn storage_size_at(&self, StorageKey, Hash) -> Result<Option<u64>>;
-
-		/// Returns the hash of a storage entry at the best block.
-		#[rpc(name = "state_getStorageHash")]
-		fn storage_hash(&self, StorageKey) -> Result<Option<Hash>>;
-
-		/// Returns the size of a storage entry at the best block.
-		#[rpc(name = "state_getStorageSize")]
-		fn storage_size(&self, StorageKey) -> Result<Option<u64>>;
-
-		/// Returns a storage entry at the best block.
-		#[rpc(name = "state_getStorage")]
-		fn storage(&self, StorageKey) -> Result<Option<StorageData>>;
-
-		/// Call a contract at the best block.
-		#[rpc(name = "state_call")]
-		fn call(&self, String, Vec<u8>) -> Result<Vec<u8>>;
+		#[rpc(name = "state_getStorageSize", alias = ["state_getStorageSizeAt", ])]
+		fn storage_size(&self, StorageKey, Trailing<Hash>) -> Result<Option<u64>>;
 
 		#[pubsub(name = "state_storage")] {
 			/// New storage subscription
@@ -105,6 +89,19 @@ impl<B, E, Block: BlockT> State<B, E, Block> {
 	}
 }
 
+impl<B, E, Block> State<B, E, Block> where
+	Block: BlockT + 'static,
+	B: client::backend::Backend<Block> + Send + Sync + 'static,
+	E: CallExecutor<Block> + Send + Sync + 'static,
+{
+	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
+		Ok(match hash.into() {
+			None => self.client.info()?.chain.best_hash,
+			Some(hash) => hash,
+		})
+	}
+}
+
 impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 	Block: BlockT + 'static,
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
@@ -112,40 +109,25 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 {
 	type Metadata = ::metadata::Metadata;
 
-	fn storage_at(&self, key: StorageKey, block: Block::Hash) -> Result<Option<StorageData>> {
-		trace!(target: "rpc", "Querying storage at {:?} for key {}", block, HexDisplay::from(&key.0));
-		Ok(self.client.storage(&BlockId::Hash(block), &key)?)
-	}
-
-	fn call_at(&self, method: String, data: Vec<u8>, block: Block::Hash) -> Result<Vec<u8>> {
+	fn call(&self, method: String, data: Vec<u8>, block: Trailing<Block::Hash>) -> Result<Vec<u8>> {
+		let block = self.unwrap_or_best(block)?;
 		trace!(target: "rpc", "Calling runtime at {:?} for method {} ({})", block, method, HexDisplay::from(&data));
 		Ok(self.client.executor().call(&BlockId::Hash(block), &method, &data)?.return_data)
 	}
 
-	fn storage_hash_at(&self, key: StorageKey, block: Block::Hash) -> Result<Option<Block::Hash>> {
+	fn storage(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<StorageData>> {
+		let block = self.unwrap_or_best(block)?;
+		trace!(target: "rpc", "Querying storage at {:?} for key {}", block, HexDisplay::from(&key.0));
+		Ok(self.client.storage(&BlockId::Hash(block), &key)?)
+	}
+
+	fn storage_hash(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<Block::Hash>> {
 		use runtime_primitives::traits::{Hash, Header as HeaderT};
-		Ok(self.storage_at(key, block)?.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0)))
+		Ok(self.storage(key, block)?.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0)))
 	}
 
-	fn storage_size_at(&self, key: StorageKey, block: Block::Hash) -> Result<Option<u64>> {
-		Ok(self.storage_at(key, block)?.map(|x| x.0.len() as u64))
-	}
-
-	fn storage_hash(&self, key: StorageKey) -> Result<Option<Block::Hash>> {
-		self.storage_hash_at(key, self.client.info()?.chain.best_hash)
-	}
-
-	fn storage_size(&self, key: StorageKey) -> Result<Option<u64>> {
-		self.storage_size_at(key, self.client.info()?.chain.best_hash)
-	}
-
-	fn storage(&self, key: StorageKey) -> Result<Option<StorageData>> {
-		self.storage_at(key, self.client.info()?.chain.best_hash)
-
-	}
-
-	fn call(&self, method: String, data: Vec<u8>) -> Result<Vec<u8>> {
-		self.call_at(method, data, self.client.info()?.chain.best_hash)
+	fn storage_size(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<u64>> {
+		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
 	fn subscribe_storage(
@@ -166,14 +148,14 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 		// initial values
 		let initial = stream::iter_result(keys
 			.map(|keys| {
+				let block = self.client.info().map(|info| info.chain.best_hash).unwrap_or_default();
 				let changes = keys
 					.into_iter()
-					.map(|key| self.storage(key.clone())
+					.map(|key| self.storage(key.clone(), Some(block.clone()).into())
 						.map(|val| (key.clone(), val))
 						.unwrap_or_else(|_| (key, None))
 					)
 					.collect();
-				let block = self.client.info().map(|info| info.chain.best_hash).unwrap_or_default();
 				vec![Ok(Ok(StorageChangeSet { block, changes }))]
 			}).unwrap_or_default());
 
