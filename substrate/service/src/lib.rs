@@ -57,7 +57,6 @@ pub mod chain_ops;
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::fmt::Write;
 use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
@@ -126,17 +125,10 @@ impl<Components> Service<Components>
 			keystore.generate_from_seed(seed)?;
 		}
 
-		// Keep the public key for telemetry
-		let public_key = match keystore.contents()?.get(0) {
-			Some(public_key) => public_key.clone(),
-			None => {
-				let key = keystore.generate("")?;
-				let public_key = key.public();
-				info!("Generated a new keypair: {:?}", public_key);
-
-				public_key
-			}
-		};
+		if keystore.contents()?.is_empty() {
+			let key = keystore.generate("")?;
+			info!("Generated a new keypair: {:?}", key.public());
+		}
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let best_header = client.best_block_header()?;
@@ -226,12 +218,6 @@ impl<Components> Service<Components>
 		// Telemetry
 		let telemetry = match config.telemetry_url {
 			Some(url) => {
-				let mut pubkey = String::new();
-
-				for ch in public_key.as_slice() {
-					write!(pubkey, "{:02x}", ch).expect("Cannot fail on u8 slices; qed");
-				}
-
 				let name = config.name.clone();
 				let impl_name = config.impl_name.to_owned();
 				let version = version.clone();
@@ -245,7 +231,6 @@ impl<Components> Service<Components>
 							"version" => version.clone(),
 							"config" => "",
 							"chain" => chain_name.clone(),
-							"pubkey" => &pubkey,
 						);
 					}),
 				}))
