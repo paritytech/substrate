@@ -92,8 +92,8 @@ impl<B, E, Block: BlockT> State<B, E, Block> {
 
 impl<B, E, Block> State<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block> + Send + Sync + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync + 'static,
+	E: CallExecutor<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync + 'static,
 {
 	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
 		Ok(match hash.into() {
