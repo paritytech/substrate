@@ -27,6 +27,7 @@ use runtime::Address;
 use runtime_primitives::traits::AuxLookup;
 use primitives::{AccountId, Block, Header, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
+use substrate_primitives::{BlakeHasher, BlakeRlpCodec};
 
 use {BlockBuilder, PolkadotApi, LocalPolkadotApi, ErrorKind, Error, Result};
 
@@ -57,7 +58,7 @@ macro_rules! with_runtime {
 	}}
 }
 
-impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block> {
+impl<B: LocalBackend<Block, BlakeHasher, BlakeRlpCodec>> BlockBuilder for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block, BlakeHasher, BlakeRlpCodec> {
 	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
 		self.push(extrinsic).map_err(Into::into)
 	}
@@ -68,8 +69,8 @@ impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExe
 	}
 }
 
-impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block> {
-	type BlockBuilder = ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>;
+impl<B: LocalBackend<Block, BlakeHasher, BlakeRlpCodec>> PolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block> {
+	type BlockBuilder = ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block, BlakeHasher, BlakeRlpCodec>;
 
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
 		with_runtime!(self, at, ::runtime::Consensus::authorities)
@@ -155,7 +156,7 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 }
 
-impl<B: LocalBackend<Block>> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
+impl<B: LocalBackend<Block, BlakeHasher, BlakeRlpCodec>> LocalPolkadotApi for Client<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block>
 {}
 
 #[cfg(test)]
@@ -181,7 +182,7 @@ mod tests {
 		]
 	}
 
-	fn client() -> Client<InMemory<Block>, LocalCallExecutor<InMemory<Block>, NativeExecutor<LocalDispatch>>, Block> {
+	fn client() -> Client<InMemory<Block, BlakeHasher, BlakeRlpCodec>, LocalCallExecutor<InMemory<Block, BlakeHasher, BlakeRlpCodec>, NativeExecutor<LocalDispatch>>, Block> {
 		let genesis_config = GenesisConfig {
 			consensus: Some(ConsensusConfig {
 				code: LocalDispatch::native_equivalent().to_vec(),

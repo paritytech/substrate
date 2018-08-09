@@ -26,6 +26,7 @@ use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use tokio::runtime::TaskExecutor;
+use primitives::{BlakeHasher, BlakeRlpCodec};
 
 use subscriptions::Subscriptions;
 
@@ -80,8 +81,8 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 
 impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block> + Send + Sync + 'static,
-	E: client::CallExecutor<Block> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 

@@ -33,6 +33,8 @@ extern crate substrate_codec_derive;
 extern crate rustc_hex;
 extern crate byteorder;
 extern crate substrate_codec as codec;
+#[cfg(feature = "std")]
+extern crate rlp;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -47,11 +49,20 @@ extern crate serde_derive;
 extern crate core;
 #[cfg(feature = "std")]
 extern crate wasmi;
+extern crate hashdb;
+extern crate plain_hasher;
+#[cfg(feature = "std")]
+extern crate patricia_trie;
+#[cfg(feature = "std")]
+extern crate elastic_array;
 
 extern crate substrate_runtime_std as rstd;
 
 #[cfg(test)]
 extern crate substrate_serializer;
+
+#[cfg(test)]
+extern crate heapsize;
 
 #[cfg(test)]
 #[macro_use]
@@ -77,17 +88,23 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 pub mod hexdisplay;
 
 pub mod hash;
+pub mod hasher;
 pub mod sandbox;
 pub mod storage;
 pub mod uint;
 mod authority_id;
+#[cfg(feature = "std")]
+mod rlp_codec;
 
 #[cfg(test)]
 mod tests;
 
 pub use self::hash::{H160, H256, H512};
-pub use self::uint::{U256, U512};
+pub use self::uint::U256;
 pub use authority_id::AuthorityId;
+pub use self::hasher::BlakeHasher;
+#[cfg(feature = "std")]
+pub use self::rlp_codec::BlakeRlpCodec;
 
 /// A 512-bit value interpreted as a signature.
 pub type Signature = hash::H512;

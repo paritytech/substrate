@@ -42,6 +42,8 @@ extern crate byteorder;
 extern crate triehash;
 extern crate parking_lot;
 extern crate twox_hash;
+extern crate hashdb;
+
 #[macro_use] extern crate log;
 
 #[macro_use]
@@ -73,6 +75,7 @@ pub use native_executor::{with_native_environment, NativeExecutor, NativeExecuti
 pub use state_machine::Externalities;
 pub use runtime_version::RuntimeVersion;
 pub use codec::Codec;
+use primitives::BlakeHasher;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
@@ -80,7 +83,7 @@ pub trait RuntimeInfo {
 	const NATIVE_VERSION: Option<RuntimeVersion>;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities> (
+	fn runtime_version<E: Externalities<BlakeHasher>> (
 		&self,
 		ext: &mut E,
 		code: &[u8]

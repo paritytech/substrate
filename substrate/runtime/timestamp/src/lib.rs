@@ -173,7 +173,7 @@ mod tests {
 	fn timestamp_works() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
-
+		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
@@ -186,7 +186,7 @@ mod tests {
 	fn double_timestamp_should_fail() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
-
+		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
@@ -199,7 +199,7 @@ mod tests {
 	fn block_period_is_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
-
+		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::aux_dispatch(Call::set(46), &0);

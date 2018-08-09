@@ -50,6 +50,9 @@ use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
+#[cfg(any(feature = "std", test))]
+use std::collections::HashMap;
+
 /// A session has changed.
 pub trait OnSessionChange<T> {
 	/// Session has changed.
@@ -256,7 +259,8 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
+
 		use codec::Encode;
 		use primitives::traits::As;
 		Ok(map![
@@ -273,7 +277,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
+	use substrate_primitives::{H256, BlakeHasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
@@ -310,7 +314,7 @@ mod tests {
 	type Timestamp = timestamp::Module<Test>;
 	type Session = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> runtime_io::TestExternalities<BlakeHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -324,7 +328,7 @@ mod tests {
 			validators: vec![1, 2, 3],
 			broken_percent_late: 30,
 		}.build_storage().unwrap());
-		t
+		t.into()
 	}
 
 	#[test]
@@ -350,7 +354,7 @@ mod tests {
 			assert_eq!(Session::ideal_session_duration(), 15);
 			// ideal end = 0 + 15 * 3 = 15
 			// broken_limit = 15 * 130 / 100 = 19
-		
+
 			System::set_block_number(3);
 			assert_eq!(Session::blocks_remaining(), 2);
 			Timestamp::set_timestamp(9);				// earliest end = 9 + 2 * 5 = 19; OK.
@@ -378,7 +382,7 @@ mod tests {
 			assert_eq!(Session::blocks_remaining(), 0);
 			Session::check_rotate_session();
 			assert_eq!(Session::length(), 10);
-		
+
 			System::set_block_number(7);
 			assert_eq!(Session::current_index(), 1);
 			assert_eq!(Session::blocks_remaining(), 5);

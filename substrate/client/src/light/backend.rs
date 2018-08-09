@@ -22,14 +22,19 @@ use std::sync::{Arc, Weak};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use state_machine::{Backend as StateBackend, TrieBackend as StateTrieBackend,
-	TryIntoTrieBackend as TryIntoStateTrieBackend};
+use state_machine::{
+	Backend as StateBackend,
+	TrieBackend as StateTrieBackend,
+	TryIntoTrieBackend as TryIntoStateTrieBackend
+};
 
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::fetcher::Fetcher;
+use patricia_trie::NodeCodec;
+use hashdb::Hasher;
 
 /// Light client backend.
 pub struct Backend<S, F> {
@@ -62,10 +67,12 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
+impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
 {
 	type BlockImportOperation = ImportOperation<Block, F>;
 	type Blockchain = Blockchain<S, F>;
@@ -106,9 +113,22 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
 	}
 }
 
-impl<S, F, Block> RemoteBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {}
+impl<S, F, Block, H, C> RemoteBackend<Block, H, C> for Backend<S, F>
+where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
+{}
 
-impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where Block: BlockT, F: Fetcher<Block> {
+impl<F, Block, H, C> BlockImportOperation<Block, H, C> for ImportOperation<Block, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
+{
 	type State = OnDemandState<Block, F>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
@@ -132,7 +152,7 @@ impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where B
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend>::Transaction) -> ClientResult<()> {
+	fn update_storage(&mut self, _update: <Self::State as StateBackend<H, C>>::Transaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -152,7 +172,13 @@ impl<Block: BlockT, F> Clone for OnDemandState<Block, F> {
 	}
 }
 
-impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: Fetcher<Block> {
+impl<Block, F, H, C> StateBackend<H, C> for OnDemandState<Block, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
+{
 	type Error = ClientError;
 	type Transaction = ();
 
@@ -164,9 +190,9 @@ impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: 
 		// whole state is not available on light node
 	}
 
-	fn storage_root<I>(&self, _delta: I) -> ([u8; 32], Self::Transaction)
+	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
-		([0; 32], ())
+		(H::Out::default(), ())
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -175,8 +201,14 @@ impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: 
 	}
 }
 
-impl<Block, F> TryIntoStateTrieBackend for OnDemandState<Block, F> where Block: BlockT, F: Fetcher<Block> {
-	fn try_into_trie_backend(self) -> Option<StateTrieBackend> {
+impl<Block, F, H, C> TryIntoStateTrieBackend<H, C> for OnDemandState<Block, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
+{
+	fn try_into_trie_backend(self) -> Option<StateTrieBackend<H, C>> {
 		None
 	}
 }

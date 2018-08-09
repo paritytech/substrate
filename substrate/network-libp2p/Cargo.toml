@@ -26,6 +26,6 @@ varint = { git = "https://github.com/tomaka/libp2p-rs", branch = "polkadot-2" }
 
 [dev-dependencies]
 assert_matches = "1.2"
-ethcore-bytes = { git = "https://github.com/paritytech/parity.git" }
+parity-bytes = { git = "https://github.com/paritytech/parity-common.git" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ethcore-logger = { git = "https://github.com/paritytech/parity.git" }
