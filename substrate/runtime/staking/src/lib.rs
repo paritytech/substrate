@@ -177,6 +177,9 @@ decl_storage! {
 	// The current era stake threshold
 	pub StakeThreshold get(stake_threshold): b"sta:stake_threshold" => required T::Balance;
 
+	// The current bad validator slash.
+	pub CurrentSlash get(current_slash): b"sta:current_slash" => default T::Balance;
+
 	// The next free enumeration set.
 	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required T::AccountIndex;
 	// The enumeration sets.
@@ -589,10 +592,30 @@ impl<T: Trait> Module<T> {
 
 	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
 	/// move to a new era.
-	fn new_session(normal_rotation: bool, actual_elapsed: T::Moment) {
+	fn new_session(actual_elapsed: T::Moment, bad_validators: Vec<T::AccountId>) {
 		let session_index = <session::Module<T>>::current_index();
+		let early_exit_era = bad_validators.len() > 0;
 
-		if normal_rotation {
+		if bad_validators.len() > 0 {
+			// slash
+			let slash = Self::current_slash() + Self::early_era_slash();
+			<CurrentSlash<T>>::put(&slash);
+			for v in bad_validators.into_iter() {
+				if let Some(rem) = Self::slash(&v, slash) {
+					let noms = Self::current_nominators_for(&v);
+					let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
+					if !total.is_zero() {
+						let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
+						for n in noms.iter() {
+							let _ = Self::slash(n, safe_mul_rational(Self::voting_balance(n)));	// best effort - not much that can be done on fail.
+						}
+					}
+				}
+			}
+		} else {
+			// Zero any cumulative slash since we're healthy now.
+			<CurrentSlash<T>>::kill();
+
 			// reward
 			let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
 			let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
@@ -609,25 +632,10 @@ impl<T: Trait> Module<T> {
 					let _ = Self::reward(v, safe_mul_rational(Self::voting_balance(v)));
 				}
 			}
-		} else {
-			// slash
-			let early_era_slash = Self::early_era_slash();
-			for v in <session::Module<T>>::validators().iter() {
-				if let Some(rem) = Self::slash(v, early_era_slash) {
-					let noms = Self::current_nominators_for(v);
-					let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
-					if !total.is_zero() {
-						let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
-						for n in noms.iter() {
-							let _ = Self::slash(n, safe_mul_rational(Self::voting_balance(n)));	// best effort - not much that can be done on fail.
-						}
-					}
-				}
-			}
 		}
 		if <ForcingNewEra<T>>::take().is_some()
 			|| ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero()
-			|| !normal_rotation
+			|| early_exit_era
 		{
 			Self::new_era();
 		}
@@ -797,9 +805,9 @@ impl<T: Trait> Executable for Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
-	fn on_session_change(normal_rotation: bool, elapsed: T::Moment) {
-		Self::new_session(normal_rotation, elapsed);
+impl<T: Trait> OnSessionChange<T::Moment, T::AccountId> for Module<T> {
+	fn on_session_change(elapsed: T::Moment, bad_validators: Vec<T::AccountId>) {
+		Self::new_session(elapsed, bad_validators);
 	}
 }
 
