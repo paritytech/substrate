@@ -51,18 +51,18 @@ use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
 /// A session has changed.
-pub trait OnSessionChange<T> {
+pub trait OnSessionChange<T, A> {
 	/// Session has changed.
-	fn on_session_change(normal_rotation: bool, time_elapsed: T);
+	fn on_session_change(time_elapsed: T, bad_validators: Vec<A>);
 }
 
-impl<T> OnSessionChange<T> for () {
-	fn on_session_change(_: bool, _: T) {}
+impl<T, A> OnSessionChange<T, A> for () {
+	fn on_session_change(_: T, _: Vec<A>) {}
 }
 
 pub trait Trait: timestamp::Trait {
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
-	type OnSessionChange: OnSessionChange<Self::Moment>;
+	type OnSessionChange: OnSessionChange<Self::Moment, Self::AccountId>;
 }
 
 decl_module! {
@@ -77,7 +77,7 @@ decl_module! {
 	pub enum PrivCall {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
 		fn force_new_session(normal_rotation: bool) -> Result = 1;
-		fn note_active(is_val_active: Vec<bool>) -> Result = 2;
+		fn note_offline(offline_val_indices: Vec<u32>) -> Result = 2;
 	}
 }
 
@@ -97,7 +97,7 @@ decl_storage! {
 
 	// Opinions of the current validator set about the activeness of their peers.
 	// Gets cleared when the validator set changes. If `None`, then should be assumed to be a vec of `true`.
-	pub ActivityOpinions get(activity_opinions): b"ses:activity_opinions" => map [ T::AccountId => Vec<bool> ];
+	pub BadValidators get(bad_validators): b"ses:bad_validators" => Vec<T::AccountId>;
 
 	// New session is being forced is this entry exists; in which case, the boolean value is whether
 	// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
@@ -142,8 +142,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Notes which of the validators appear to be online from the point of the view of the block author.
-	pub fn note_active(active: Vec<bool>) -> Result {
-
+	pub fn note_offline(offline_val_indices: Vec<u32>) -> Result {
+		let vs = Self::validators();
+		<BadValidators<T>>::put(offline_val_indices.into_iter().map(|i| vs[i as usize].clone()).collect::<Vec<T::AccountId>>());
+		Ok(())
 	}
 
 	// INTERNAL API (available to other runtime modules)
@@ -166,17 +168,15 @@ impl<T: Trait> Module<T> {
 		// check block number and call next_session if necessary.
 		let block_number = <system::Module<T>>::block_number();
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
-		let broken_validation = Self::broken_validation();
-		if let Some(normal_rotation) = Self::forcing_new_session() {
-			Self::rotate_session(normal_rotation, is_final_block);
-			<ForcingNewSession<T>>::kill();
-		} else if is_final_block || broken_validation {
-			Self::rotate_session(!broken_validation, is_final_block);
+		let bad_validators = <BadValidators<T>>::take();
+		let should_end_session = <ForcingNewSession<T>>::take().is_some() || bad_validators.is_some() || is_final_block;
+		if should_end_session {
+			Self::rotate_session(is_final_block, bad_validators.unwrap_or_default());
 		}
 	}
 
 	/// Move onto next session: register the new authority set.
-	pub fn rotate_session(normal_rotation: bool, is_final_block: bool) {
+	pub fn rotate_session(is_final_block: bool, bad_validators: Vec<T::AccountId>) {
 		let now = <timestamp::Module<T>>::get();
 		let time_elapsed = now.clone() - Self::current_start();
 
@@ -196,7 +196,7 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
-		T::OnSessionChange::on_session_change(normal_rotation, time_elapsed);
+		T::OnSessionChange::on_session_change(time_elapsed, bad_validators);
 
 		// Update any changes in session keys.
 		Self::validators().iter().enumerate().for_each(|(i, v)| {
