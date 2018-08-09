@@ -38,6 +38,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let network = service.network();
 	let client = service.client();
 	let txpool = service.extrinsic_pool();
+	let mut last_number = None;
 
 	let display_notifications = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 		let sync_status = network.status();
@@ -45,13 +46,15 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 		if let Ok(best_block) = client.best_block_header() {
 			let hash = best_block.hash();
 			let num_peers = sync_status.num_peers;
+			let best_number: u64 = best_block.number().as_();
+			let speed = move || speed(best_number, last_number);
 			let status = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
 				(SyncState::Idle, _) => "Idle".into(),
-				(SyncState::Downloading, None) => "Syncing".into(),
-				(SyncState::Downloading, Some(n)) => format!("Syncing, target=#{}", n),
+				(SyncState::Downloading, None) => format!("Syncing {:02.1} bps", speed()),
+				(SyncState::Downloading, Some(n)) => format!("Syncing {:02.1} bps, target=#{}", speed(), n),
 			};
+			last_number = Some(best_number);
 			let txpool_status = txpool.light_status();
-			let best_number: u64 = best_block.number().as_();
 			info!(target: "substrate", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_number, hash);
 			telemetry!("system.interval"; "status" => status, "peers" => num_peers, "height" => best_number, "best" => ?hash, "txcount" => txpool_status.transaction_count);
 		} else {
@@ -75,5 +78,12 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 
 	let informant_work = display_notifications.join3(display_block_import, display_txpool_import);
 	handle.spawn(exit.until(informant_work).map(|_| ()));
+}
+
+fn speed(best_number: u64, last_number: Option<u64>) -> f64 {
+	match last_number {
+		Some(num) => (best_number.saturating_sub(num) * 10_000 / TIMER_INTERVAL_MS) as f64 / 10.0,
+		None => 0.0
+	}
 }
 
