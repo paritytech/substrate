@@ -81,21 +81,21 @@ impl OfflineTracker {
 	}
 
 	/// Generate a vector of indices for offline account IDs.
-	pub fn reports(&self, validators: &[AccountId]) -> Vec<usize> {
+	pub fn reports(&self, validators: &[AccountId]) -> Vec<u32> {
 		validators.iter()
 			.enumerate()
 			.filter_map(|(i, v)| if self.is_online(v) {
 				None
 			} else {
-				Some(i)
+				Some(i as u32)
 			})
 			.collect()
 	}
 
 	/// Whether reports on a validator set are consistent with our view of things.
-	pub fn check_consistency(&self, validators: &[AccountId], reports: &[usize]) -> bool {
+	pub fn check_consistency(&self, validators: &[AccountId], reports: &[u32]) -> bool {
 		reports.iter().all(|r| {
-			let v = match validators.get(r) {
+			let v = match validators.get(r as usize) {
 				Some(v) => v,
 				None => return false,
 			};
