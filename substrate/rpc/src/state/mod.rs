@@ -16,7 +16,10 @@
 
 //! Polkadot state API.
 
-use std::sync::Arc;
+use std::{
+	collections::HashMap,
+	sync::Arc,
+};
 
 use client::{self, Client, CallExecutor, BlockchainEvents};
 use jsonrpc_macros::Trailing;
@@ -27,6 +30,7 @@ use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
+use runtime_primitives::generic::RangeIterator;
 use runtime_primitives::traits::Block as BlockT;
 use tokio::runtime::TaskExecutor;
 
@@ -58,6 +62,13 @@ build_rpc_trait! {
 		/// Returns the size of a storage entry at a block's state.
 		#[rpc(name = "state_getStorageSize", alias = ["state_getStorageSizeAt", ])]
 		fn storage_size(&self, StorageKey, Trailing<Hash>) -> Result<Option<u64>>;
+
+		/// Query historical storage entries (by key) starting from a block given as the second parameter.
+		///
+		/// NOTE This first returned result contains the initial state of storage for all keys.
+		/// Subsequent values in the vector represent changes to the previous state (diffs).
+		#[rpc(name = "state_queryStorage")]
+		fn query_storage(&self, Vec<StorageKey>, Hash, Trailing<Hash>) -> Result<Vec<StorageChangeSet<Hash>>>;
 
 		#[pubsub(name = "state_storage")] {
 			/// New storage subscription
@@ -128,6 +139,51 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 
 	fn storage_size(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<u64>> {
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
+	}
+
+	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
+		let to = self.unwrap_or_best(to)?;
+
+		let from = self.client.block_number_from_id(&BlockId::Hash(from))?;
+		let to = self.client.block_number_from_id(&BlockId::Hash(to))?;
+
+		match (from, to) {
+			(Some(from), Some(to)) if from <= to => {
+				// fetch all blocks and compute storage diffs for all keys
+				let mut result = Vec::new();
+				let mut last_state: HashMap<_, Option<_>> = Default::default();
+				for block in RangeIterator::new(from, to) {
+					let mut changes = vec![];
+
+					for key in &keys {
+						let (has_changed, data) = {
+							let curr_data = self.client.storage(&BlockId::number(block), key)?;
+							let prev_data = last_state.get(key).and_then(|x| x.as_ref());
+
+							(curr_data.as_ref() != prev_data, curr_data)
+						};
+
+						if has_changed {
+							changes.push((key.clone(), data.clone()));
+						}
+
+						last_state.insert(key.clone(), data);
+					}
+
+					result.push(StorageChangeSet {
+						block: self.client
+							.block_hash_from_id(&BlockId::number(block))?
+							.expect("`from` and `to` is in the chain; all blocks in between are in the chain; qed"),
+						changes,
+					});
+				}
+				Ok(result)
+			},
+			(from, to) => Err(error::ErrorKind::InvalidBlockRange(
+				from.map(|x| format!("{}", x)),
+				to.map(|x| format!("{}", x)),
+			).into()),
+		}
 	}
 
 	fn subscribe_storage(

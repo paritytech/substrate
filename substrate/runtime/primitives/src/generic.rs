@@ -446,6 +446,36 @@ pub struct SignedBlock<Header, Extrinsic, Hash> {
 	pub justification: Justification<Hash>,
 }
 
+/// Range iterator for types implementing `SimpleArithmetic`.
+///
+/// It's a half-open range (includes lower bound, excludes higher bound).
+/// A workaround for lack of `Step` trait stabilisation.
+/// See: https://github.com/rust-lang/rust/issues/42168
+pub struct RangeIterator<T>(pub T, pub T);
+
+impl<T> RangeIterator<T> {
+	/// Creates new range iterator.
+	///
+	/// NOTE if `from >= to` the iterator will not panic,
+	/// but rather will just be empty.
+	pub fn new(from: T, to: T) -> Self {
+		RangeIterator(from, to)
+	}
+}
+
+impl<T: SimpleArithmetic + Copy> Iterator for RangeIterator<T> {
+	type Item = T;
+
+	fn next(&mut self) -> Option<Self::Item> {
+		if self.0 >= self.1 {
+			return None;
+		}
+
+		self.0 = self.0 + T::one();
+		self.0.into()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use codec::{Decode, Encode};
@@ -499,5 +529,19 @@ mod tests {
 
 			assert_eq!(block, decoded);
 		}
+	}
+
+	#[test]
+	fn range_iterator() {
+		let mut it1 = RangeIterator::new(0, 3);
+		let mut it2 = RangeIterator::new(3, 3);
+		let mut it3 = RangeIterator::new(4, 3);
+
+		assert!(it1.next(), Some(0));
+		assert!(it1.next(), Some(1));
+		assert!(it1.next(), Some(2));
+		assert!(it1.next(), None);
+		assert!(it2.next(), None);
+		assert!(it3.next(), None);
 	}
 }
