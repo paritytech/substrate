@@ -86,13 +86,7 @@ pub fn db_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u
 /// Maps database error to client error
 pub fn db_err(err: io::Error) -> client::error::Error {
 	use std::error::Error;
-	// REVIEW: not sure what value the `Io`/`Msg` kinds had or what we want to do here
 	client::error::ErrorKind::Backend(err.description().into()).into()
-	// match err.kind() {
-	// 	&kvdb::ErrorKind::Io(ref err) => client::error::ErrorKind::Backend(err.description().into()).into(),
-	// 	&kvdb::ErrorKind::Msg(ref m) => client::error::ErrorKind::Backend(m.clone()).into(),
-	// 	_ => client::error::ErrorKind::Backend("Unknown backend error".into()).into(),
-	// }
 }
 
 /// Open RocksDB database.

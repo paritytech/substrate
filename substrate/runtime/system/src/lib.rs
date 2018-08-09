@@ -207,10 +207,6 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	// TODO: I don't think passing a StorageMap instead of a TextExternalities can work here, as
-	// StorageMap does not implement the Externalities trait, but it compiles and there are no tests
-	// so…
-	// fn build_storage(self) -> Result<runtime_io::TestExternalities<BlakeHasher>, String> {
 	fn build_storage(self) -> Result<primitives::StorageMap, String> {
 		use codec::Encode;
 

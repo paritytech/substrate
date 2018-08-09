@@ -13,8 +13,8 @@ heapsize = "0.4"
 
 substrate-primitives = { path = "../primitives", version = "0.1.0" }
 
-hashdb = { git = "https://github.com/paritytech/parity-common", branch = "refactor/no_std-friendly" }
-memorydb = { git = "https://github.com/paritytech/parity-common", branch = "refactor/no_std-friendly" }
-patricia-trie = { git = "https://github.com/paritytech/parity-common", branch = "refactor/no_std-friendly" }
-triehash = { git = "https://github.com/paritytech/parity-common", branch = "refactor/no_std-friendly" }
-rlp = { git = "https://github.com/paritytech/parity-common", branch = "refactor/no_std-friendly" }
+hashdb = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes" }
+memorydb = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes" }
+patricia-trie = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes" }
+triehash = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes" }
+rlp = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes" }

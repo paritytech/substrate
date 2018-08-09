@@ -198,7 +198,6 @@ pub struct Ephemeral<'a, H: 'a + Hasher> {
 	overlay: &'a mut MemoryDB<H>,
 }
 
-// REVIEW: this is boiler plate, need macro?
 impl<'a, H: Hasher> AsHashDB<H> for Ephemeral<'a, H> where H::Out: HeapSizeOf {
 	fn as_hashdb(&self) -> &HashDB<H> { self }
 	fn as_hashdb_mut(&mut self) -> &mut HashDB<H> { self }

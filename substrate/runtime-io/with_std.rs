@@ -36,8 +36,6 @@ use primitives::H256;
 
 // TODO: use the real error, not NoError.
 
-// REVIEW:	The `environmental!` machinery can't really work with generics so need a concrete impl here.
-// 			This means that consumers of the generated code can't use generics either?
 environmental!(ext: trait Externalities<BlakeHasher>);
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
@@ -94,7 +92,6 @@ pub fn chain_id() -> u64 {
 }
 
 /// "Commit" all existing operations and get the resultant storage root.
-// TODO: this used to be: `pub fn storage_root() -> [u8; 32]` – does it really need to use H256?
 pub fn storage_root() -> H256 {
 	ext::with(|ext|
 		ext.storage_root()
@@ -130,7 +127,7 @@ pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
-// TODO: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
+// NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
 pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<BlakeHasher>, f: F) -> R {
 	ext::using(ext, f)
 }

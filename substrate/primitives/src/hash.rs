@@ -86,7 +86,6 @@ impl_rest!(H160, 20);
 impl_rest!(H256, 32);
 impl_rest!(H512, 64);
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;

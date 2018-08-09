@@ -30,7 +30,7 @@ use substrate_runtime_support::dispatch::Result;
 use rstd::marker::PhantomData;
 
 #[cfg(any(feature = "std", test))]
-use {runtime_primitives};
+use runtime_primitives;
 
 #[cfg(any(feature = "std", test))]
 use std::collections::HashMap;
