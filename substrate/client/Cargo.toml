@@ -24,9 +24,9 @@ substrate-runtime-primitives = { path = "../runtime/primitives" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-telemetry = { path = "../telemetry" }
-hashdb = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes" }
-patricia-trie = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes" }
-rlp = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes" }
+hashdb = { git = "https://github.com/paritytech/parity-common" }
+patricia-trie = { git = "https://github.com/paritytech/parity-common" }
+rlp = { git = "https://github.com/paritytech/parity-common" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }

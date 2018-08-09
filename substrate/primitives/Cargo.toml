@@ -8,19 +8,19 @@ crunchy = "0.1"
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
 elastic-array = {version = "0.10", optional = true }
-fixed-hash = { git = "https://github.com/paritytech/parity-common", default_features = false, branch = "temp/combined-hashdb-plain_hasher-changes" }
+fixed-hash = { git = "https://github.com/paritytech/parity-common", default_features = false }
 rustc-hex = { version = "2.0", default_features = false }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-uint = { git = "https://github.com/paritytech/parity-common", default_features = false, branch = "temp/combined-hashdb-plain_hasher-changes" }
-rlp = { git = "https://github.com/paritytech/parity-common", optional = true, branch = "temp/combined-hashdb-plain_hasher-changes" }
+uint = { git = "https://github.com/paritytech/parity-common", default_features = false }
+rlp = { git = "https://github.com/paritytech/parity-common", optional = true }
 twox-hash = { version = "1.1.0", optional = true }
 byteorder = { version = "1.1", default_features = false }
 blake2-rfc = { version = "0.2.18", optional = true }
 wasmi = { version = "0.4", optional = true }
-hashdb = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes", default_features = false }
-patricia-trie = { git = "https://github.com/paritytech/parity-common", optional = true, branch = "temp/combined-hashdb-plain_hasher-changes" }
-plain_hasher = { git = "https://github.com/paritytech/parity-common", branch = "temp/combined-hashdb-plain_hasher-changes", default_features = false }
+hashdb = { git = "https://github.com/paritytech/parity-common", default_features = false }
+patricia-trie = { git = "https://github.com/paritytech/parity-common", optional = true }
+plain_hasher = { git = "https://github.com/paritytech/parity-common", default_features = false }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
