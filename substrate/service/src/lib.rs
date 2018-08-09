@@ -226,7 +226,6 @@ impl<Components> Service<Components>
 		// Telemetry
 		let telemetry = match config.telemetry_url {
 			Some(url) => {
-				println!("{:?}", keystore.contents().unwrap()[0]);
 				let mut pubkey = String::new();
 
 				for ch in public_key.as_slice() {
