@@ -77,7 +77,6 @@ members = [
 	"demo/executor",
 	"demo/primitives",
 	"demo/runtime",
-	"safe-mix",
 	"subkey",
 ]
 exclude = [
