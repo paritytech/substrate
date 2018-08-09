@@ -8,7 +8,7 @@ rustc-hex = "1.0"
 log = { version = "0.3", optional = true }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-safe-mix = { path = "../../safe-mix", default_features = false}
+safe-mix = { version = "1.0", default_features = false}
 polkadot-primitives = { path = "../primitives", default_features = false }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-serializer = { path = "../../substrate/serializer" }
