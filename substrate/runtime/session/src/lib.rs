@@ -77,6 +77,7 @@ decl_module! {
 	pub enum PrivCall {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
 		fn force_new_session(normal_rotation: bool) -> Result = 1;
+		fn note_active(is_val_active: Vec<bool>) -> Result = 2;
 	}
 }
 
@@ -93,6 +94,10 @@ decl_storage! {
 	pub CurrentStart get(current_start): b"ses:current_start" => required T::Moment;
 	// Percent by which the session must necessarily finish late before we early-exit the session.
 	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Moment;
+
+	// Opinions of the current validator set about the activeness of their peers.
+	// Gets cleared when the validator set changes. If `None`, then should be assumed to be a vec of `true`.
+	pub ActivityOpinions get(activity_opinions): b"ses:activity_opinions" => map [ T::AccountId => Vec<bool> ];
 
 	// New session is being forced is this entry exists; in which case, the boolean value is whether
 	// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
@@ -134,6 +139,11 @@ impl<T: Trait> Module<T> {
 	pub fn force_new_session(normal_rotation: bool) -> Result {
 		<ForcingNewSession<T>>::put(normal_rotation);
 		Ok(())
+	}
+
+	/// Notes which of the validators appear to be online from the point of the view of the block author.
+	pub fn note_active(active: Vec<bool>) -> Result {
+
 	}
 
 	// INTERNAL API (available to other runtime modules)

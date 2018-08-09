@@ -76,7 +76,6 @@ decl_module! {
 	pub enum PrivCall {
 		fn set_code(new: Vec<u8>) -> Result = 0;
 		fn set_storage(items: Vec<KeyValue>) -> Result = 1;
-		fn note_active(is_val_active: Vec<bool>) -> Result = 2;
 	}
 }
 
@@ -109,11 +108,6 @@ impl<T: Trait> Module<T> {
 	/// Make some on-chain remark.
 	fn remark(_aux: &T::PublicAux, _remark: Vec<u8>) -> Result {
 		Ok(())
-	}
-
-	/// Notes which of the validators appear to be online from the point of the view of the block author.
-	pub fn note_active(active: Vec<bool>) -> Result {
-		
 	}
 
 	/// Set the current set of authorities' session keys.
