@@ -55,7 +55,9 @@ pub fn build_transport(
 			upgrade::map(mplex::MplexConfig::new(), either::EitherOutput::First),
 			upgrade::map(yamux::Config::default(), either::EitherOutput::Second),
 		))
-		.into_connection_reuse();
+		.map(|out, _| ((), out))
+		.into_connection_reuse()
+		.map(|((), out), _| out);
 
 	TransportTimeout::new(base, Duration::from_secs(20))
 }
