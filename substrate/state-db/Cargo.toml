@@ -8,6 +8,7 @@ parking_lot = "0.5"
 log = "0.4"
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-codec = { path = "../../substrate/codec" }
+substrate-codec-derive = { path = "../../substrate/codec/derive" }
 
 [dev-dependencies]
 env_logger = "0.4"

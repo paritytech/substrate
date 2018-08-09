@@ -20,6 +20,7 @@ substrate-primitives = { path = "../../substrate/primitives" }
 substrate-client = { path = "../../substrate/client" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 substrate-codec = { path = "../../substrate/codec" }
+substrate-codec-derive = { path = "../../substrate/codec/derive" }
 substrate-network-libp2p = { path = "../../substrate/network-libp2p" }
 
 [dev-dependencies]

@@ -59,6 +59,18 @@ bitflags! {
 	}
 }
 
+impl ::codec::Encode for Roles {
+	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
+		dest.push_byte(self.bits())
+	}
+}
+
+impl ::codec::Decode for Roles {
+	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+		Self::from_bits(input.read_byte()?)
+	}
+}
+
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
@@ -162,7 +174,7 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 		});
 		let versions = [(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)];
 		let protocols = vec![(handler.clone() as Arc<_>, protocol_id, &versions[..])];
-		let service = match NetworkService::new(params.network_config.clone(), protocols, None) {
+		let service = match NetworkService::new(params.network_config.clone(), protocols) {
 			Ok(service) => service,
 			Err(err) => {
 				match err.kind() {

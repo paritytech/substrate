@@ -31,8 +31,6 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::hash::Hash;
 use std::fmt::Debug;
 
-use codec::{Decode, Encode, Input, Output};
-
 /// Context for the statement table.
 pub trait Context {
 	/// A authority ID
@@ -70,78 +68,30 @@ pub trait Context {
 }
 
 /// Statements circulated among peers.
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Encode, Decode)]
 pub enum Statement<C, D> {
 	/// Broadcast by a authority to indicate that this is his candidate for
 	/// inclusion.
 	///
 	/// Broadcasting two different candidate messages per round is not allowed.
+	#[codec(index = "1")]
 	Candidate(C),
 	/// Broadcast by a authority to attest that the candidate with given digest
 	/// is valid.
+	#[codec(index = "2")]
 	Valid(D),
-	/// Broadcast by a authority to attest that the auxiliary data for a candidate
-	/// with given digest is available.
-	Available(D),
 	/// Broadcast by a authority to attest that the candidate with given digest
 	/// is invalid.
+	#[codec(index = "3")]
 	Invalid(D),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-enum StatementKind {
-	Candidate = 1,
-	Valid = 2,
-	Invalid = 3,
-	Available = 4,
-}
-
-impl<C: Encode, D: Encode> Encode for Statement<C, D> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		match *self {
-			Statement::Candidate(ref candidate) => {
-				dest.push_byte(StatementKind::Candidate as u8);
-				dest.push(candidate);
-			}
-			Statement::Valid(ref digest) => {
-				dest.push_byte(StatementKind::Valid as u8);
-				dest.push(digest);
-			}
-			Statement::Invalid(ref digest) => {
-				dest.push_byte(StatementKind::Invalid as u8);
-				dest.push(digest);
-			}
-			Statement::Available(ref digest) => {
-				dest.push_byte(StatementKind::Available as u8);
-				dest.push(digest);
-			}
-		}
-	}
-}
-
-impl<C: Decode, D: Decode> Decode for Statement<C, D> {
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		match value.read_byte() {
-			Some(x) if x == StatementKind::Candidate as u8 => {
-				Decode::decode(value).map(Statement::Candidate)
-			}
-			Some(x) if x == StatementKind::Valid as u8 => {
-				Decode::decode(value).map(Statement::Valid)
-			}
-			Some(x) if x == StatementKind::Invalid as u8 => {
-				Decode::decode(value).map(Statement::Invalid)
-			}
-			Some(x) if x == StatementKind::Available as u8 => {
-				Decode::decode(value).map(Statement::Available)
-			}
-			_ => None,
-		}
-	}
+	/// Broadcast by a authority to attest that the auxiliary data for a candidate
+	/// with given digest is available.
+	#[codec(index = "4")]
+	Available(D),
 }
 
 /// A signed statement.
-#[derive(PartialEq, Eq, Debug, Clone)]
+#[derive(PartialEq, Eq, Debug, Clone, Encode, Decode)]
 pub struct SignedStatement<C, D, V, S> {
 	/// The statement.
 	pub statement: Statement<C, D>,
@@ -151,23 +101,6 @@ pub struct SignedStatement<C, D, V, S> {
 	pub sender: V,
 }
 
-impl<C: Encode, D: Encode, V: Encode, S: Encode> Encode for SignedStatement<C, D, V, S> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.statement);
-		dest.push(&self.signature);
-		dest.push(&self.sender);
-	}
-}
-
-impl<C: Decode, D: Decode, V: Decode, S: Decode> Decode for SignedStatement<C, D, V, S> {
-	fn decode<I: Input>(value: &mut I) -> Option<Self> {
-		Some(SignedStatement {
-			statement: Decode::decode(value)?,
-			signature: Decode::decode(value)?,
-			sender: Decode::decode(value)?,
-		})
-	}
-}
 /// Misbehavior: voting more than one way on candidate validity.
 ///
 /// Since there are three possible ways to vote, a double vote is possible in
