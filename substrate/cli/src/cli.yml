@@ -46,6 +46,14 @@ args:
       value_name: PORT
       help: Specify p2p protocol TCP port
       takes_value: true
+  - rpc-external:
+      long: rpc-external
+      help: Listen to all RPC interfaces (default is local)
+      takes_value: false
+  - ws-external:
+      long: ws-external
+      help: Listen to all Websocket interfaces (default is local)
+      takes_value: false
   - rpc-port:
       long: rpc-port
       value_name: PORT
