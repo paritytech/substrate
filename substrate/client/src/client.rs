@@ -17,6 +17,7 @@
 //! Substrate Client
 
 use std::sync::Arc;
+use std::collections::HashMap;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
@@ -46,6 +47,7 @@ pub struct Client<B, E, Block> where Block: BlockT {
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 	execution_strategy: ExecutionStrategy,
+	remap_keys: HashMap<AuthorityId, AuthorityId>,
 }
 
 /// A source of blockchain evenets.
@@ -168,7 +170,7 @@ pub fn new_in_mem<E, Block, S>(
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
+	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible, Default::default())
 }
 
 impl<B, E, Block> Client<B, E, Block> where
@@ -182,6 +184,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		executor: E,
 		build_genesis_storage: S,
 		execution_strategy: ExecutionStrategy,
+		remap_keys: HashMap<AuthorityId, AuthorityId>,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;
@@ -200,6 +203,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			import_lock: Default::default(),
 			importing_block: Default::default(),
 			execution_strategy,
+			remap_keys,
 		})
 	}
 
@@ -228,12 +232,13 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get the set of authorities at a given block.
 	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
-		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
+		let authorities = match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
 			None => self.executor.call(id, "authorities",&[])
 				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
 					.ok_or(error::ErrorKind::AuthLenInvalid.into()))
-		}
+		};
+		authorities.map(|list| self.remap_keys(list))
 	}
 
 	/// Get the RuntimeVersion at a given block.
@@ -488,6 +493,17 @@ impl<B, E, Block> Client<B, E, Block> where
 	pub fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
 		Ok(self.header(&BlockId::Hash(info.best_hash))?.expect("Best block header must always exist"))
+	}
+
+	/// Process key overrides.
+	pub fn remap_keys<T, I>(&self, list: I) -> Vec<T> where
+		I: IntoIterator<Item=T>,
+		T: From<AuthorityId> + Into<AuthorityId>,
+	{
+		list.into_iter().map(|a| {
+			let key: AuthorityId = a.into();
+			self.remap_keys.get(&key).cloned().unwrap_or(key).into()
+		}).collect()
 	}
 }
 

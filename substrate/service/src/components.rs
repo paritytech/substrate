@@ -198,7 +198,13 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
-		Ok((Arc::new(client_db::new_client(db_settings, executor, &config.chain_spec, config.execution_strategy)?), None))
+		Ok((Arc::new(client_db::new_client(
+			db_settings,
+			executor,
+			&config.chain_spec,
+			config.execution_strategy,
+			config.chain_spec.override_keys().clone(),
+		)?), None))
 	}
 
 	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>)
@@ -239,7 +245,12 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		let fetch_checker = Arc::new(client::light::new_fetch_checker(light_blockchain.clone(), executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
-		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec)?;
+		let client = client::light::new_light(
+			client_backend,
+			fetcher.clone(),
+			&config.chain_spec,
+			config.chain_spec.override_keys().clone(),
+		)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 

@@ -22,10 +22,12 @@ pub mod call_executor;
 pub mod fetcher;
 
 use std::sync::Arc;
+use std::collections::HashMap;
 
 use runtime_primitives::BuildStorage;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{CodeExecutor, ExecutionStrategy};
+use primitives::AuthorityId;
 
 use client::Client;
 use error::Result as ClientResult;
@@ -50,6 +52,7 @@ pub fn new_light<B, S, F, GS>(
 	backend: Arc<Backend<S, F>>,
 	fetcher: Arc<F>,
 	genesis_storage: GS,
+	override_keys: HashMap<AuthorityId, AuthorityId>,
 ) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F>, B>>
 	where
 		B: BlockT,
@@ -58,7 +61,7 @@ pub fn new_light<B, S, F, GS>(
 		GS: BuildStorage,
 {
 	let executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
-	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
+	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible, override_keys)
 }
 
 /// Create an instance of fetch data checker.

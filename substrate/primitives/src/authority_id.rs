@@ -84,9 +84,15 @@ impl AsRef<AuthorityId> for AuthorityId {
 	}
 }
 
-impl Into<H256> for AuthorityId {
-	fn into(self) -> H256 {
-		self.0.into()
+impl Into<AuthorityId> for H256 {
+	fn into(self) -> AuthorityId {
+		AuthorityId(self.into())
+	}
+}
+
+impl From<AuthorityId> for H256 {
+	fn from(a: AuthorityId) -> Self {
+		a.0.into()
 	}
 }
 
