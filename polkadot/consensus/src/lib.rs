@@ -541,6 +541,11 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			includability_tracker.join(temporary_delay)
 		};
 
+		// let offline = block.get_offline_reports();
+		// if !self.offline.read().check_consistency(&validators[..], &offline[..]) {
+		// 		return futures::empty()
+		// }
+
 		// evaluate whether the block is actually valid.
 		// TODO: is it better to delay this until the delays are finished?
 		let evaluated = self.client
