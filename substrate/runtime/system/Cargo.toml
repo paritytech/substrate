@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 hex-literal = "0.1.0"
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-safe-mix = { path = "../../../safe-mix", default_features = false}
+safe-mix = { version = "1.0", default_features = false}
 substrate-codec = { path = "../../codec", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
