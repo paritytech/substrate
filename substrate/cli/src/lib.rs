@@ -301,8 +301,11 @@ where
 		config.keys.push("Alice".into());
 	}
 
-	config.rpc_http = Some(parse_address("127.0.0.1:9933", "rpc-port", &matches)?);
-	config.rpc_ws = Some(parse_address("127.0.0.1:9944", "ws-port", &matches)?);
+	let rpc_interface: &str = if matches.is_present("rpc-external") { "0.0.0.0" } else { "127.0.0.1" };
+	let ws_interface: &str = if matches.is_present("ws-external") { "0.0.0.0" } else { "127.0.0.1" };
+
+	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), "rpc-port", &matches)?);
+	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), "ws-port", &matches)?);
 
 	// Override telemetry
 	if matches.is_present("no-telemetry") {
