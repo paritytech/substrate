@@ -94,7 +94,7 @@ impl OfflineTracker {
 
 	/// Whether reports on a validator set are consistent with our view of things.
 	pub fn check_consistency(&self, validators: &[AccountId], reports: &[u32]) -> bool {
-		reports.iter().all(|r| {
+		reports.iter().cloned().all(|r| {
 			let v = match validators.get(r as usize) {
 				Some(v) => v,
 				None => return false,

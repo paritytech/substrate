@@ -661,7 +661,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			forced_delay.is_some()
 		};
 
-		self.offline.write().note_round_end(primary_validaotr, consider_online);
+		self.offline.write().note_round_end(primary_validator, consider_online);
 	}
 }
 
