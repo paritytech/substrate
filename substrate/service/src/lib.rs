@@ -230,7 +230,7 @@ impl<Components> Service<Components>
 				let mut pubkey = String::new();
 
 				for ch in public_key.as_slice() {
-					write!(pubkey, "{:x}", ch).unwrap();
+					write!(pubkey, "{:x}", ch).expect("Cannot fail on u8 slices; qed");
 				}
 
 				let name = config.name.clone();
