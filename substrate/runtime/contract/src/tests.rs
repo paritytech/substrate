@@ -54,6 +54,7 @@ impl staking::Trait for Test {
 	type OnAccountKill = Contract;
 }
 impl session::Trait for Test {
+	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type ConvertAccountIdToSessionKey = Identity;
 	type OnSessionChange = Staking;
 }

@@ -45,6 +45,7 @@ impl system::Trait for Test {
 	type Header = Header;
 }
 impl session::Trait for Test {
+	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type ConvertAccountIdToSessionKey = Identity;
 	type OnSessionChange = Staking;
 }

@@ -15,7 +15,7 @@ tokio = "0.1.7"
 parking_lot = "0.4"
 error-chain = "0.12"
 log = "0.3"
-rhododendron = "0.2"
+rhododendron = "0.3"
 
 [dev-dependencies]
 substrate-keyring = { path = "../keyring" }

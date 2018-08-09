@@ -120,3 +120,32 @@ impl Encode for Log {
 		self.0.encode_to(dest)
 	}
 }
+
+/// Inherent data to include in a block.
+pub struct InherentData {
+	/// Current timestamp.
+	pub timestamp: Timestamp,
+	/// Parachain heads update.
+	pub parachain_heads: Vec<::parachain::CandidateReceipt>,
+	/// Indices of offline validators.
+	pub offline_indices: Vec<u32>,
+}
+
+impl Decode for InherentData {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		let (timestamp, parachain_heads, offline_indices) = Decode::decode(input)?;
+		Some(InherentData {
+			timestamp,
+			parachain_heads,
+			offline_indices,
+		})
+	}
+}
+
+impl Encode for InherentData {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		self.timestamp.encode_to(dest);
+		self.parachain_heads.encode_to(dest);
+		self.offline_indices.encode_to(dest);
+	}
+}

@@ -16,9 +16,10 @@
 
 //! Typesafe block interaction.
 
-use super::{Call, Block, TIMESTAMP_SET_POSITION, PARACHAINS_SET_POSITION};
+use super::{Call, Block, TIMESTAMP_SET_POSITION, PARACHAINS_SET_POSITION, NOTE_OFFLINE_POSITION};
 use timestamp::Call as TimestampCall;
 use parachains::Call as ParachainsCall;
+use session::Call as SessionCall;
 use primitives::parachain::CandidateReceipt;
 
 /// Provides a type-safe wrapper around a structurally valid block.
@@ -47,6 +48,7 @@ impl CheckedBlock {
 		});
 
 		if !has_heads { return Err(block) }
+
 		Ok(CheckedBlock {
 			inner: block,
 			file_line: None,
@@ -86,6 +88,14 @@ impl CheckedBlock {
 			Some(x) => x,
 			None => panic!("Invalid polkadot block asserted at {:?}", self.file_line),
 		}
+	}
+
+	/// Extract the noted offline validator indices (if any) from the block.
+	pub fn noted_offline(&self) -> &[u32] {
+		self.inner.extrinsics.get(NOTE_OFFLINE_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
+			Call::Session(SessionCall::note_offline(ref x)) => Some(&x[..]),
+			_ => None,
+		}).unwrap_or(&[])
 	}
 
 	/// Convert into inner block.
