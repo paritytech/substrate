@@ -406,6 +406,17 @@ pub struct Proposer<C: PolkadotApi> {
 	_drop_signal: exit_future::Signal,
 }
 
+impl<C: PolkadotApi + Send + Sync> Proposer<C> {
+	fn primary_index(&self, round_number: usize, len: usize) -> usize {
+		use primitives::uint::U256;
+
+		let big_len = U256::from(len);
+		let offset = U256::from_big_endian(&self.random_seed.0) % big_len;
+		let offset = offset.low_u64() as usize + round_number;
+		offset % len
+	}
+}
+
 impl<C> bft::Proposer<Block> for Proposer<C>
 	where
 		C: PolkadotApi + Send + Sync,
@@ -536,13 +547,8 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 	}
 
 	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId {
-		use primitives::uint::U256;
-
-		let len: U256 = authorities.len().into();
-		let offset = U256::from_big_endian(&self.random_seed.0) % len;
-		let offset = offset.low_u64() as usize + round_number;
-
-		let proposer = authorities[offset % authorities.len()].clone();
+		let offset = self.primary_index(round_number, authorities.len());
+		let proposer = authorities[offset].clone();
 		trace!(target: "bft", "proposer for round {} is {}", round_number, proposer);
 
 		proposer
@@ -609,6 +615,25 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 
 			self.transaction_pool.import_unchecked_extrinsic(BlockId::hash(self.parent_hash), uxt)
 				.expect("locally signed extrinsic is valid; qed");
+		}
+	}
+
+	fn on_empty_round(&self, round_number: usize) {
+		let validators = match self.client.validators(&self.parent_id) {
+			Ok(v) => v,
+			Err(e) => {
+				warn!("Failed to fetch validator set: {:?}", e);
+				return
+			}
+		};
+
+		let primary_validator = validators[self.primary_index(round_number, validators.len())];
+
+		// alter the message based on whether we think the empty proposer was forced to skip the round.
+		// this is determined by checking if our local validator would have been forced to skip the round.
+		match self.dynamic_inclusion.acceptable_in(Instant::now(), self.table.includable_count()) {
+			None => info!("Potential Offline Validator: {:?} failed to propose during assigned slot: {}", primary_validator, round_number),
+			Some(_) => info!("Potential Offline Validator {:?} potentially forced to skip assigned slot: {}", primary_validator, round_number),
 		}
 	}
 }

@@ -69,7 +69,7 @@ use futures::sync::oneshot;
 use tokio::timer::Delay;
 use parking_lot::Mutex;
 
-pub use rhododendron::InputStreamConcluded;
+pub use rhododendron::{InputStreamConcluded, AdvanceRoundReason};
 pub use error::{Error, ErrorKind};
 
 /// Messages over the proposal.
@@ -184,6 +184,9 @@ pub trait Proposer<B: Block> {
 	/// Determine the proposer for a given round. This should be a deterministic function
 	/// with consistent results across all authorities.
 	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId;
+
+	/// Hook called when a BFT round advances without a proposal.
+	fn on_empty_round(&self, _round_number: usize) { }
 }
 
 /// Block import trait.
@@ -259,6 +262,18 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 			.map_err(Into::into);
 
 		Box::new(fut)
+	}
+
+	fn on_advance_round(
+		&self,
+		_proposal: Option<&B>,
+		round: usize,
+		_next_round: usize,
+		reason: AdvanceRoundReason,
+	) {
+		if let AdvanceRoundReason::Timeout = reason {
+			self.proposer.on_empty_round(round);
+		}
 	}
 }
 
