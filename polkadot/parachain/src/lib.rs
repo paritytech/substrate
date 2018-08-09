@@ -46,6 +46,9 @@
 /// Re-export of substrate-codec.
 pub extern crate substrate_codec as codec;
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 #[cfg(not(feature = "std"))]
 extern crate alloc;
 
@@ -61,14 +64,14 @@ extern crate error_chain;
 
 #[cfg(not(feature = "std"))]
 use alloc::vec::Vec;
-use codec::{Encode, Decode, Input, Output};
+use codec::{Encode, Decode};
 
 #[cfg(feature = "std")]
 pub mod wasm;
 
 /// Validation parameters for evaluating the parachain validity function.
 // TODO: consolidated ingress and balance downloads
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidationParams {
 	/// The collation body.
@@ -77,43 +80,13 @@ pub struct ValidationParams {
 	pub parent_head: Vec<u8>,
 }
 
-impl Encode for ValidationParams {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.block_data);
-		dest.push(&self.parent_head);
-	}
-}
-
-impl Decode for ValidationParams {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(ValidationParams {
-			block_data: Decode::decode(input)?,
-			parent_head: Decode::decode(input)?,
-		})
-	}
-}
-
 /// The result of parachain validation.
 // TODO: egress and balance uploads
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidationResult {
 	/// New head data that should be included in the relay chain state.
 	pub head_data: Vec<u8>
-}
-
-impl Encode for ValidationResult {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.head_data);
-	}
-}
-
-impl Decode for ValidationResult {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(ValidationResult {
-			head_data: Decode::decode(input)?,
-		})
-	}
 }
 
 /// Load the validation params from memory when implementing a Rust parachain.

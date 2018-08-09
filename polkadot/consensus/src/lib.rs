@@ -32,6 +32,7 @@
 extern crate ed25519;
 extern crate parking_lot;
 extern crate polkadot_api;
+extern crate polkadot_availability_store as extrinsic_store;
 extern crate polkadot_statement_table as table;
 extern crate polkadot_parachain as parachain;
 extern crate polkadot_transaction_pool as transaction_pool;
@@ -66,6 +67,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use codec::{Decode, Encode};
+use extrinsic_store::Store as ExtrinsicStore;
 use polkadot_api::PolkadotApi;
 use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt, CandidateSignature};
@@ -236,6 +238,8 @@ pub struct ProposerFactory<C, N, P> {
 	pub handle: TaskExecutor,
 	/// The duration after which parachain-empty blocks will be allowed.
 	pub parachain_empty_duration: Duration,
+	/// Store for extrinsic data.
+	pub extrinsic_store: ExtrinsicStore,
 }
 
 impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
@@ -258,8 +262,6 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 
-		const DELAY_UNTIL: Duration = Duration::from_millis(5000);
-
 		let parent_hash = parent_header.hash().into();
 
 		let id = BlockId::hash(parent_hash);
@@ -273,10 +275,15 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			sign_with.public().into(),
 		)?;
 
+		info!("Starting consensus session on top of parent {:?}. Local parachain duty is {:?}",
+			parent_hash, local_duty.validation);
+
 		let active_parachains = self.client.active_parachains(&id)?;
 
+		debug!(target: "consensus", "Active parachains: {:?}", active_parachains);
+
 		let n_parachains = active_parachains.len();
-		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash));
+		let table = Arc::new(SharedTable::new(group_info, sign_with.clone(), parent_hash, self.extrinsic_store.clone()));
 		let (router, input, output) = self.network.communication_for(
 			authorities,
 			table.clone(),
@@ -289,9 +296,6 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			now,
 			self.parachain_empty_duration.clone(),
 		);
-
-		debug!(target: "bft", "Initialising consensus proposer. Refusing to evaluate for {:?} from now.",
-			DELAY_UNTIL);
 
 		let validation_para = match local_duty.validation {
 			Chain::Relay => None,
@@ -309,13 +313,13 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			router.clone(),
 			&self.handle,
 			collation_work,
+			self.extrinsic_store.clone(),
 		);
 
 		let proposer = Proposer {
 			client: self.client.clone(),
 			dynamic_inclusion,
 			local_key: sign_with,
-			minimum_delay: now + DELAY_UNTIL,
 			parent_hash,
 			parent_id: id,
 			parent_number: parent_header.number,
@@ -335,19 +339,42 @@ fn dispatch_collation_work<R, C, P>(
 	router: R,
 	handle: &TaskExecutor,
 	work: Option<CollationFetch<C, P>>,
+	extrinsic_store: ExtrinsicStore,
 ) -> exit_future::Signal where
 	C: Collators + Send + 'static,
 	P: PolkadotApi + Send + Sync + 'static,
 	<C::Collation as IntoFuture>::Future: Send + 'static,
 	R: TableRouter + Send + 'static,
 {
+	use extrinsic_store::Data;
+
 	let (signal, exit) = exit_future::signal();
+
+	let work = match work {
+		Some(w) => w,
+		None => return signal,
+	};
+
+	let relay_parent = work.relay_parent();
 	let handled_work = work.then(move |result| match result {
-		Ok(Some((collation, extrinsic))) => {
-			router.local_candidate(collation.receipt, collation.block_data, extrinsic);
+		Ok((collation, extrinsic)) => {
+			let res = extrinsic_store.make_available(Data {
+				relay_parent,
+				parachain_id: collation.receipt.parachain_index,
+				candidate_hash: collation.receipt.hash(),
+				block_data: collation.block_data.clone(),
+				extrinsic: Some(extrinsic.clone()),
+			});
+
+			match res {
+				Ok(()) =>
+					router.local_candidate(collation.receipt, collation.block_data, extrinsic),
+				Err(e) =>
+					warn!(target: "consensus", "Failed to make collation data available: {:?}", e),
+			}
+
 			Ok(())
 		}
-		Ok(None) => Ok(()),
 		Err(_e) => {
 			warn!(target: "consensus", "Failed to collate candidate");
 			Ok(())
@@ -370,7 +397,6 @@ pub struct Proposer<C: PolkadotApi> {
 	client: Arc<C>,
 	dynamic_inclusion: DynamicInclusion,
 	local_key: Arc<ed25519::Pair>,
-	minimum_delay: Instant,
 	parent_hash: Hash,
 	parent_id: BlockId,
 	parent_number: BlockNumber,
@@ -401,17 +427,10 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			initial_included,
 		).unwrap_or_else(|| now + Duration::from_millis(1));
 
-		let minimum_delay = if self.minimum_delay > now + ATTEMPT_PROPOSE_EVERY {
-			Some(Delay::new(self.minimum_delay))
-		} else {
-			None
-		};
-
 		let timing = ProposalTiming {
 			attempt_propose: Interval::new(now + ATTEMPT_PROPOSE_EVERY, ATTEMPT_PROPOSE_EVERY),
 			enough_candidates: Delay::new(enough_candidates),
 			dynamic_inclusion: self.dynamic_inclusion.clone(),
-			minimum_delay,
 			last_included: initial_included,
 		};
 
@@ -484,11 +503,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			// delay casting vote until able according to minimum block time,
 			// timestamp delay, and count delay.
 			// construct a future from the maximum of the two durations.
-			let max_delay = [timestamp_delay, count_delay, Some(self.minimum_delay)]
-				.iter()
-				.cloned()
-				.max()
-				.expect("iterator not empty; thus max returns `Some`; qed");
+			let max_delay = ::std::cmp::max(timestamp_delay, count_delay);
 
 			let temporary_delay = match max_delay {
 				Some(duration) => future::Either::A(
@@ -610,7 +625,6 @@ struct ProposalTiming {
 	attempt_propose: Interval,
 	dynamic_inclusion: DynamicInclusion,
 	enough_candidates: Delay,
-	minimum_delay: Option<Delay>,
 	last_included: usize,
 }
 
@@ -626,12 +640,6 @@ impl ProposalTiming {
 		if let Async::Ready(x) = self.attempt_propose.poll().map_err(ErrorKind::Timer)? {
 			x.expect("timer still alive; intervals never end; qed");
 		}
-
-		if let Some(ref mut min) = self.minimum_delay {
-			try_ready!(min.poll().map_err(ErrorKind::Timer));
-		}
-
-		self.minimum_delay = None; // after this point, the future must have completed.
 
 		if included == self.last_included {
 			return self.enough_candidates.poll().map_err(ErrorKind::Timer);

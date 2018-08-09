@@ -8,7 +8,7 @@ build = "build.rs"
 rustc_version = "0.2"
 
 [dependencies]
-wasmi = { version = "0.3", optional = true }
+wasmi = { version = "0.4", optional = true }
 substrate-primitives = { path = "../primitives", default_features = false }
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 substrate-runtime-io = { path = "../runtime-io", default_features = false }

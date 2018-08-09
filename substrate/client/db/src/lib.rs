@@ -33,6 +33,9 @@ extern crate substrate_state_db as state_db;
 #[macro_use]
 extern crate log;
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
@@ -453,7 +456,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 	}
 }
 
-impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block> 
+impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block>
 {}
 
 #[cfg(test)]

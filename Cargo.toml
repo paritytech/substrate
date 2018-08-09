@@ -20,6 +20,7 @@ vergen = "0.1"
 [workspace]
 members = [
 	"polkadot/api",
+	"polkadot/availability-store",
 	"polkadot/cli",
 	"polkadot/collator",
 	"polkadot/consensus",
@@ -32,11 +33,15 @@ members = [
 	"polkadot/transaction-pool",
 	"polkadot/service",
 
+	"polkadot/test-parachains/adder",
+	"polkadot/test-parachains/adder/collator",
+
 	"substrate/bft",
 	"substrate/cli",
 	"substrate/client",
 	"substrate/client/db",
 	"substrate/codec",
+	"substrate/codec/derive",
 	"substrate/environmental",
 	"substrate/executor",
 	"substrate/extrinsic-pool",
@@ -77,6 +82,7 @@ members = [
 ]
 exclude = [
 	"polkadot/runtime/wasm",
+	"polkadot/test-parachains/adder/wasm",
 	"demo/runtime/wasm",
 	"substrate/executor/wasm",
 	"substrate/pwasm-alloc",
@@ -92,4 +98,4 @@ is-it-maintained-open-issues = { repository = "paritytech/polkadot" }
 
 [profile.release]
 # Substrate runtime requires unwinding.
-panic = "unwind" 
+panic = "unwind"

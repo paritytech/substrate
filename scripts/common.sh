@@ -6,9 +6,12 @@ ROOT=`dirname "$0"`
 SRCS=(
 	"polkadot/runtime/wasm"
 	"substrate/executor/wasm"
+)
+
+DEMOS=(
 	"demo/runtime/wasm"
 	"substrate/test-runtime/wasm"
-	"polkadot/parachain/test-chains/basic_add"
+	"polkadot/test-parachains/"
 )
 
 # Make pushd/popd silent.

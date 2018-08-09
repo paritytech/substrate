@@ -66,7 +66,11 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {
+impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>
+{
 	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<Block, S, F>;
@@ -241,7 +245,7 @@ pub mod tests {
 		let remote_read_proof = remote_client.read_proof(&remote_block_id, b":auth:len").unwrap();
 
 		// check remote read proof locally
-		let local_executor = test_client::LocalExecutor::with_heap_pages(8, 8);
+		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
 		let local_checker = new_fetch_checker(local_executor);
 		let request = RemoteReadRequest {
 			block: remote_block_hash,

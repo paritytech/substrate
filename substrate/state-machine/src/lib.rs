@@ -34,7 +34,6 @@ extern crate byteorder;
 extern crate parking_lot;
 
 use std::collections::HashMap;
-use std::collections::hash_map::Drain;
 use std::fmt;
 
 pub mod backend;
@@ -113,19 +112,29 @@ impl OverlayedChanges {
 		}
 	}
 
-	/// Drain prospective changes to an iterator.
-	pub fn drain(&mut self) -> Drain<Vec<u8>, Option<Vec<u8>>> {
+	/// Drain committed changes to an iterator.
+	///
+	/// Panics:
+	/// Will panic if there are any uncommitted prospective changes.
+	pub fn drain<'a>(&'a mut self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> + 'a {
+		assert!(self.prospective.is_empty());
 		self.committed.drain()
+	}
+
+	/// Consume `OverlayedChanges` and take committed set.
+	///
+	/// Panics:
+	/// Will panic if there are any uncommitted prospective changes.
+	pub fn into_committed(self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
+		assert!(self.prospective.is_empty());
+		self.committed.into_iter()
 	}
 }
 
 /// State Machine Error bound.
 ///
 /// This should reflect WASM error type bound for future compatibility.
-pub trait Error: 'static + fmt::Debug + fmt::Display + Send {
-	/// Error implies execution should be retried.
-	fn needs_retry(&self) -> bool { false }
-}
+pub trait Error: 'static + fmt::Debug + fmt::Display + Send {}
 
 impl Error for ExecutionError {}
 
@@ -302,7 +311,7 @@ pub fn execute_using_consensus_failure_handler<
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
 
-		let (result, was_native, delta) = loop {
+		let (result, was_native, delta) = {
 			let ((result, was_native), delta) = {
 				let mut externalities = ext::Ext::new(overlay, backend);
 				(
@@ -317,12 +326,7 @@ pub fn execute_using_consensus_failure_handler<
 					externalities.transaction()
 				)
 			};
-
-			if result.as_ref().err().map_or(false, |e| e.needs_retry()) {
-				overlay.prospective = orig_prospective.clone();
-			} else {
-				break (result, was_native, delta)
-			}
+			(result, was_native, delta)
 		};
 
 		// run wasm separately if we did run native the first time and we're meant to run both
@@ -331,7 +335,7 @@ pub fn execute_using_consensus_failure_handler<
 		{
 			overlay.prospective = orig_prospective.clone();
 
-			let (wasm_result, wasm_delta) = loop {
+			let (wasm_result, wasm_delta) = {
 				let ((result, _), delta) = {
 					let mut externalities = ext::Ext::new(overlay, backend);
 					(
@@ -345,12 +349,7 @@ pub fn execute_using_consensus_failure_handler<
 						externalities.transaction()
 					)
 				};
-
-				if result.as_ref().err().map_or(false, |e| e.needs_retry()) {
-					overlay.prospective = orig_prospective.clone();
-				} else {
-					break (result, delta)
-				}
+				(result, delta)
 			};
 
 			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
@@ -367,14 +366,7 @@ pub fn execute_using_consensus_failure_handler<
 		result.map(move |out| (out, delta))
 	};
 
-	match result {
-		Ok(x) => {
-			Ok(x)
-		}
-		Err(e) => {
-			Err(Box::new(e))
-		}
-	}
+	result.map_err(|e| Box::new(e) as _)
 }
 
 /// Prove execution using the given state backend, overlayed changes, and call executor.

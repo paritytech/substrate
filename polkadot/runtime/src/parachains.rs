@@ -194,8 +194,8 @@ impl<T: Trait> Executable for Module<T> {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
-	/// The initial parachains, mapped to code.
-	pub parachains: Vec<(Id, Vec<u8>)>,
+	/// The initial parachains, mapped to code and initial head data
+	pub parachains: Vec<(Id, Vec<u8>, Vec<u8>)>,
 	/// Phantom data.
 	#[serde(skip)]
 	pub phantom: PhantomData<T>,
@@ -218,18 +218,21 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 		use std::collections::HashMap;
 		use codec::Encode;
 
-		self.parachains.sort_unstable_by_key(|&(ref id, _)| id.clone());
-		self.parachains.dedup_by_key(|&mut (ref id, _)| id.clone());
+		self.parachains.sort_unstable_by_key(|&(ref id, _, _)| id.clone());
+		self.parachains.dedup_by_key(|&mut (ref id, _, _)| id.clone());
 
-		let only_ids: Vec<_> = self.parachains.iter().map(|&(ref id, _)| id).cloned().collect();
+		let only_ids: Vec<_> = self.parachains.iter().map(|&(ref id, _, _)| id).cloned().collect();
 
 		let mut map: HashMap<_, _> = map![
 			Self::hash(<Parachains<T>>::key()).to_vec() => only_ids.encode()
 		];
 
-		for (id, code) in self.parachains {
-			let key = Self::hash(&<Code<T>>::key_for(&id)).to_vec();
-			map.insert(key, code.encode());
+		for (id, code, genesis) in self.parachains {
+			let code_key = Self::hash(&<Code<T>>::key_for(&id)).to_vec();
+			let head_key = Self::hash(&<Heads<T>>::key_for(&id)).to_vec();
+
+			map.insert(code_key, code.encode());
+			map.insert(head_key, genesis.encode());
 		}
 
 		Ok(map.into())
@@ -280,7 +283,7 @@ mod tests {
 
 	type Parachains = Module<Test>;
 
-	fn new_test_ext(parachains: Vec<(Id, Vec<u8>)>) -> runtime_io::TestExternalities {
+	fn new_test_ext(parachains: Vec<(Id, Vec<u8>, Vec<u8>)>) -> runtime_io::TestExternalities {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -301,8 +304,8 @@ mod tests {
 	#[test]
 	fn active_parachains_should_work() {
 		let parachains = vec![
-			(5u32.into(), vec![1,2,3]),
-			(100u32.into(), vec![4,5,6]),
+			(5u32.into(), vec![1,2,3], vec![1]),
+			(100u32.into(), vec![4,5,6], vec![2]),
 		];
 
 		with_externalities(&mut new_test_ext(parachains), || {
@@ -315,8 +318,8 @@ mod tests {
 	#[test]
 	fn register_deregister() {
 		let parachains = vec![
-			(5u32.into(), vec![1,2,3]),
-			(100u32.into(), vec![4,5,6]),
+			(5u32.into(), vec![1,2,3], vec![1]),
+			(100u32.into(), vec![4,5,6], vec![2,]),
 		];
 
 		with_externalities(&mut new_test_ext(parachains), || {
@@ -340,8 +343,8 @@ mod tests {
 	#[test]
 	fn duty_roster_works() {
 		let parachains = vec![
-			(0u32.into(), vec![]),
-			(1u32.into(), vec![]),
+			(0u32.into(), vec![], vec![]),
+			(1u32.into(), vec![], vec![]),
 		];
 
 		with_externalities(&mut new_test_ext(parachains), || {

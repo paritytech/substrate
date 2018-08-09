@@ -176,6 +176,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> MessageProcessTask<P> {
 				}
 			}
 			ConsensusMessage::ChainSpecific(msg, _) => {
+				debug!(target: "consensus", "Processing consensus statement for live consensus");
 				if let Some(Message::Statement(parent_hash, statement)) = Decode::decode(&mut msg.as_slice()) {
 					if ::polkadot_consensus::check_statement(&statement.statement, &statement.signature, statement.sender, &parent_hash) {
 						self.table_router.import_statement(statement);

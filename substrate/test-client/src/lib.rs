@@ -21,18 +21,20 @@
 extern crate rhododendron;
 extern crate substrate_bft as bft;
 extern crate substrate_codec as codec;
-extern crate substrate_keyring as keyring;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 #[macro_use] extern crate substrate_executor as executor;
 
-pub extern crate substrate_test_runtime as runtime;
 pub extern crate substrate_client as client;
+pub extern crate substrate_keyring as keyring;
+pub extern crate substrate_test_runtime as runtime;
 
 mod client_ext;
+mod block_builder_ext;
 
 pub use client_ext::TestClient;
+pub use block_builder_ext::BlockBuilderExt;
 
 mod local_executor {
 	#![allow(missing_docs)]

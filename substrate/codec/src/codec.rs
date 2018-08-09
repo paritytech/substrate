@@ -20,6 +20,7 @@ use alloc::vec::Vec;
 use alloc::boxed::Box;
 use core::{mem, slice};
 use arrayvec::ArrayVec;
+
 /// Trait that allows reading of data into a slice.
 pub trait Input {
 	/// Read into the provided input slice. Returns the number of bytes read.
@@ -80,7 +81,7 @@ impl Output for Vec<u8> {
 #[cfg(feature = "std")]
 impl<W: ::std::io::Write> Output for W {
 	fn write(&mut self, bytes: &[u8]) {
-		(self as &mut ::std::io::Write).write(bytes).expect("Codec outputs are infallible");
+		(self as &mut ::std::io::Write).write_all(bytes).expect("Codec outputs are infallible");
 	}
 }
 
@@ -113,6 +114,7 @@ pub trait Decode: Sized {
 
 /// Trait that allows zero-copy read/write of value-references to/from slices in LE format.
 pub trait Codec: Decode + Encode {}
+
 impl<S: Decode + Encode> Codec for S {}
 
 impl<T: Encode, E: Encode> Encode for Result<T, E> {
@@ -252,6 +254,40 @@ impl Decode for Vec<u8> {
 	}
 }
 
+impl<'a> Encode for &'a str {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_bytes().encode_to(dest)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a > Encode for ::std::borrow::Cow<'a, str> {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_bytes().encode_to(dest)
+	}
+}
+
+#[cfg(feature = "std")]
+impl<'a> Decode for ::std::borrow::Cow<'a, str> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(::std::borrow::Cow::Owned(String::from_utf8_lossy(&Vec::decode(input)?).into()))
+	}
+}
+
+#[cfg(feature = "std")]
+impl Encode for String {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.as_bytes().encode_to(dest)
+	}
+}
+
+#[cfg(feature = "std")]
+impl Decode for String {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(Self::from_utf8_lossy(&Vec::decode(input)?).into())
+	}
+}
+
 impl<T: Encode> Encode for [T] {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		let len = self.len();
@@ -291,6 +327,20 @@ impl Encode for () {
 
 	fn encode(&self) -> Vec<u8> {
 		Vec::new()
+	}
+}
+
+impl<'a, T: 'a + Encode + ?Sized> Encode for &'a T {
+	fn encode_to<D: Output>(&self, dest: &mut D) {
+		(&**self).encode_to(dest)
+	}
+
+	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+		(&**self).using_encoded(f)
+	}
+
+	fn encode(&self) -> Vec<u8> {
+		(&**self).encode()
 	}
 }
 
@@ -476,5 +526,15 @@ mod tests {
 		v.using_encoded(|ref slice|
 			assert_eq!(slice, &b"\x0b\0\0\0Hello world")
 		);
+	}
+
+	#[test]
+	fn encode_borrowed_tuple() {
+		let x = vec![1u8, 2, 3, 4];
+		let y = 128i64;
+
+		let encoded = (&x, &y).encode();
+
+		assert_eq!((x, y), Decode::decode(&mut &encoded[..]).unwrap());
 	}
 }
