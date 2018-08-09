@@ -638,7 +638,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 		}
 	}
 
-	fn on_empty_round(&self, round_number: usize) {
+	fn on_round_end(&self, round_number: usize, was_proposed: bool) {
 		let validators = match self.client.validators(&self.parent_id) {
 			Ok(v) => v,
 			Err(e) => {
@@ -651,10 +651,17 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 
 		// alter the message based on whether we think the empty proposer was forced to skip the round.
 		// this is determined by checking if our local validator would have been forced to skip the round.
-		match self.dynamic_inclusion.acceptable_in(Instant::now(), self.table.includable_count()) {
-			None => info!("Potential Offline Validator: {:?} failed to propose during assigned slot: {}", primary_validator, round_number),
-			Some(_) => info!("Potential Offline Validator {:?} potentially forced to skip assigned slot: {}", primary_validator, round_number),
-		}
+		let consider_online = was_proposed || {
+			let forced_delay = self.dynamic_inclusion.acceptable_in(Instant::now(), self.table.includable_count());
+			match forced_delay {
+				None => info!("Potential Offline Validator: {:?} failed to propose during assigned slot: {}", primary_validator, round_number),
+				Some(_) => info!("Potential Offline Validator {:?} potentially forced to skip assigned slot: {}", primary_validator, round_number),
+			}
+
+			forced_delay.is_some()
+		};
+
+		self.offline.write().note_round_end(primary_validator, consider_online);
 	}
 }
 
