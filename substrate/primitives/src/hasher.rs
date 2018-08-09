@@ -22,10 +22,17 @@ use hash::H256;
 #[cfg(feature = "std")]
 use hashing::blake2_256;
 
-// TODO: implement this – might be tricky due to circular dependencies (the external function linking happens in runtime-io)
 #[cfg(not(feature = "std"))]
-fn blake2_256(_x: &[u8]) -> [u8; 32] {
-	unimplemented!()
+extern "C" {
+	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
+}
+#[cfg(not(feature = "std"))]
+fn blake2_256(data: &[u8]) -> [u8; 32] {
+	let mut result: [u8; 32] = Default::default();
+	unsafe {
+		ext_blake2_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+	}
+	result
 }
 
 /// Concrete implementation of Hasher using Blake2b 256-bit hashes
