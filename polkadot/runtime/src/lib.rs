@@ -85,6 +85,8 @@ pub use primitives::Header;
 pub const TIMESTAMP_SET_POSITION: u32 = 0;
 /// The position of the parachains set extrinsic.
 pub const PARACHAINS_SET_POSITION: u32 = 1;
+/// The position of the offline nodes noting extrinsic.
+pub const NOTE_OFFLINE_POSITION: u32 = 2;
 
 /// The address format for describing accounts.
 pub type Address = staking::Address<Concrete>;
@@ -160,6 +162,7 @@ impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 }
 
 impl session::Trait for Concrete {
+	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
 	type OnSessionChange = Staking;
 }

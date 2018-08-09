@@ -46,7 +46,7 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
+use primitives::traits::{Zero, One, RefInto, MaybeEmpty, Executable, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
@@ -61,6 +61,9 @@ impl<T, A> OnSessionChange<T, A> for () {
 }
 
 pub trait Trait: timestamp::Trait {
+	// the position of the required timestamp-set extrinsic.
+	const NOTE_OFFLINE_POSITION: u32;
+
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
 	type OnSessionChange: OnSessionChange<Self::Moment, Self::AccountId>;
 }
@@ -71,13 +74,13 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set_key(aux, key: T::SessionKey) -> Result = 0;
+		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 1;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
 		fn force_new_session(normal_rotation: bool) -> Result = 1;
-		fn note_offline(offline_val_indices: Vec<u32>) -> Result = 2;
 	}
 }
 
@@ -142,7 +145,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Notes which of the validators appear to be online from the point of the view of the block author.
-	pub fn note_offline(offline_val_indices: Vec<u32>) -> Result {
+	pub fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
+		assert!(aux.is_empty());
+		assert!(
+			<system::Module<T>>::extrinsic_index() == T::NOTE_OFFLINE_POSITION,
+			"note_offline extrinsic must be at position {} in the block",
+			T::NOTE_OFFLINE_POSITION
+		);
+
 		let vs = Self::validators();
 		<BadValidators<T>>::put(offline_val_indices.into_iter().map(|i| vs[i as usize].clone()).collect::<Vec<T::AccountId>>());
 		Ok(())
