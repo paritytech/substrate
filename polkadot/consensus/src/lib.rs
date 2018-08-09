@@ -80,19 +80,25 @@ use futures::prelude::*;
 use futures::future;
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
+use parking_lot::RwLock;
 
 pub use self::collation::{validate_collation, Collators};
 pub use self::error::{ErrorKind, Error};
+pub use self::offline_tracker::OfflineTracker;
 pub use self::shared_table::{SharedTable, StatementProducer, ProducedStatements, Statement, SignedStatement, GenericStatement};
 pub use service::Service;
 
 mod dynamic_inclusion;
 mod evaluation;
 mod error;
+mod offline_tracker;
 mod service;
 mod shared_table;
 
 pub mod collation;
+
+/// Shared offline validator tracker.
+pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
@@ -240,6 +246,8 @@ pub struct ProposerFactory<C, N, P> {
 	pub parachain_empty_duration: Duration,
 	/// Store for extrinsic data.
 	pub extrinsic_store: ExtrinsicStore,
+	/// Offline-tracker.
+	pub offline: SharedOfflineTracker,
 }
 
 impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
@@ -255,10 +263,11 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 	type Output = N::Output;
 	type Error = Error;
 
-	fn init(&self,
+	fn init(
+		&self,
 		parent_header: &Header,
 		authorities: &[AuthorityId],
-		sign_with: Arc<ed25519::Pair>
+		sign_with: Arc<ed25519::Pair>,
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 
@@ -268,6 +277,9 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		let duty_roster = self.client.duty_roster(&id)?;
 		let random_seed = self.client.random_seed(&id)?;
 		let random_seed = BlakeTwo256::hash(&*random_seed);
+
+		let validators = self.client.validators(&id)?;
+		self.offline.write().note_new_block(&validators[..]);
 
 		let (group_info, local_duty) = make_group_info(
 			duty_roster,
@@ -326,6 +338,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			random_seed,
 			table,
 			transaction_pool: self.transaction_pool.clone(),
+			offline: self.offline.clone(),
 			_drop_signal: drop_signal,
 		};
 
@@ -403,6 +416,7 @@ pub struct Proposer<C: PolkadotApi> {
 	random_seed: Hash,
 	table: Arc<SharedTable>,
 	transaction_pool: Arc<TransactionPool<C>>,
+	offline: SharedOfflineTracker,
 	_drop_signal: exit_future::Signal,
 }
 
@@ -452,6 +466,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
 			table: self.table.clone(),
+			offline: self.offline.clone(),
 			timing,
 		})
 	}
@@ -692,6 +707,7 @@ pub struct CreateProposal<C: PolkadotApi>  {
 	transaction_pool: Arc<TransactionPool<C>>,
 	table: Arc<SharedTable>,
 	timing: ProposalTiming,
+	offline: SharedOfflineTracker,
 }
 
 impl<C> CreateProposal<C> where C: PolkadotApi {
@@ -701,6 +717,11 @@ impl<C> CreateProposal<C> where C: PolkadotApi {
 
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();
+
+		// TODO: include reports into block.
+		let validators = self.client.validators(&self.parent_id)?;
+		let _reports = self.offline.read().reports(&validators[..]);
+
 		let mut block_builder = self.client.build_block(&self.parent_id, timestamp, candidates)?;
 
 		{
