@@ -506,6 +506,16 @@ fn init_thread(
 		}
 	}
 
+	shared.network_state.set_non_reserved_mode(shared.config.non_reserved_mode.clone());
+	for reserved in shared.config.reserved_nodes.iter() {
+		match shared.network_state.add_reserved_peer(reserved) {
+			Ok(who) => {
+				trace!(target: "sub-libp2p", "Added reseved peer {:?}", who);
+			},
+			Err(err) => warn!(target:"sub-libp2p", "Couldn't parse reserved address: {}", err),
+		}
+	}
+
 	// Start connecting to nodes now.
 	connect_to_nodes(shared.clone(), transport.clone(), &swarm_controller);
 
