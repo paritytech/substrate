@@ -61,6 +61,7 @@ use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
+use network::NonReservedPeerMode;
 
 use std::io::{Write, Read, stdin, stdout};
 use std::iter;
@@ -278,6 +279,12 @@ where
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
 		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
+		config.network.reserved_nodes.extend(matches
+			 .values_of("reserved-nodes")
+			 .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
+		if !config.network.reserved_nodes.is_empty() {
+			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
+		}
 
 		let port = match matches.value_of("port") {
 			Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
