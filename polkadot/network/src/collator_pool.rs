@@ -18,7 +18,6 @@
 
 use polkadot_primitives::{AccountId, Hash};
 use polkadot_primitives::parachain::{Id as ParaId, Collation};
-use codec;
 
 use futures::sync::oneshot;
 
@@ -28,28 +27,12 @@ use std::time::{Duration, Instant};
 const COLLATION_LIFETIME: Duration = Duration::from_secs(60 * 5);
 
 /// The role of the collator. Whether they're the primary or backup for this parachain.
-#[derive(PartialEq, Debug, Clone, Copy)]
+#[derive(PartialEq, Debug, Clone, Copy, Encode, Decode)]
 pub enum Role {
 	/// Primary collators should send collations whenever it's time.
 	Primary = 0,
 	/// Backup collators should not.
 	Backup = 1,
-}
-
-impl codec::Encode for Role {
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
-		dest.push_byte(*self as u8);
-	}
-}
-
-impl codec::Decode for Role {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		match input.read_byte()? {
-			x if x == Role::Primary as u8 => Some(Role::Primary),
-			x if x == Role::Backup as u8 => Some(Role::Backup),
-			_ => None,
-		}
-	}
 }
 
 /// A maintenance action for the collator set.

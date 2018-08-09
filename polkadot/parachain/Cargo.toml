@@ -6,6 +6,7 @@ description = "Types and utilities for creating and working with parachains"
 
 [dependencies]
 substrate-codec = { path = "../../substrate/codec", default-features = false }
+substrate-codec-derive = { path = "../../substrate/codec/derive", default-features = false }
 wasmi = { version = "0.4", optional = true }
 error-chain = { version = "0.12", optional = true }
 

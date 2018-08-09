@@ -32,7 +32,7 @@ fn should_return_storage() {
 
 	assert_matches!(
 		client.storage(StorageKey(vec![10]), Some(genesis_hash).into()),
-		Err(Error(ErrorKind::Client(client::error::ErrorKind::NoValueForKey(ref k)), _)) if *k == vec![10]
+		Ok(None)
 	)
 }
 

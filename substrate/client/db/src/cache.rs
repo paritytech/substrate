@@ -23,7 +23,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 
 use client::blockchain::Cache as BlockchainCache;
 use client::error::Result as ClientResult;
-use codec::{Codec, Encode, Decode, Input, Output};
+use codec::{Codec, Encode, Decode};
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, As, NumberFor};
@@ -107,6 +107,7 @@ pub struct Entry<N, T: Clone> {
 
 /// Internal representation of the single cache entry. The entry points to the
 /// previous entry in the cache, allowing us to traverse back in time in list-style.
+#[derive(Encode, Decode)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 struct StorageEntry<N, T> {
 	/// None if valid from the beginning
@@ -296,22 +297,6 @@ fn read_storage_entry<Block, T>(
 			None => Ok(None),
 		})
 	.map_err(db_err)
-}
-
-impl<N: Encode, T: Encode> Encode for StorageEntry<N, T> {
-	fn encode_to<O: Output>(&self, dest: &mut O) {
-		dest.push(&self.prev_valid_from);
-		dest.push(&self.value);
-	}
-}
-
-impl<N: Decode, T: Decode> Decode for StorageEntry<N, T> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(StorageEntry {
-			prev_valid_from: Decode::decode(input)?,
-			value: Decode::decode(input)?,
-		})
-	}
 }
 
 #[cfg(test)]

@@ -20,7 +20,7 @@ use Codec;
 use core::iter::Extend;
 use alloc::vec::Vec;
 
-/// Trait to allow itselg to be serialised and prepended by a given slice.
+/// Trait to allow itself to be serialised and prepended by a given slice.
 pub trait KeyedVec {
 	fn to_keyed_vec(&self, prepend_key: &[u8]) -> Vec<u8>;
 }

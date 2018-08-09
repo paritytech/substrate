@@ -32,7 +32,6 @@ extern crate varint;
 
 extern crate ethcore_io as io;
 extern crate ethereum_types;
-extern crate ipnetwork;
 
 #[macro_use]
 extern crate error_chain;
@@ -44,6 +43,7 @@ extern crate assert_matches;
 pub use connection_filter::{ConnectionFilter, ConnectionDirection};
 pub use io::TimerToken;
 pub use error::{Error, ErrorKind, DisconnectReason};
+pub use libp2p::{Multiaddr, multiaddr::AddrComponent};
 pub use traits::*;
 
 mod connection_filter;

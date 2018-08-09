@@ -229,7 +229,7 @@ impl NetworkState {
 				peer_by_nodeid: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
 				info_by_peer: FnvHashMap::with_capacity_and_hasher(expected_max_peers, Default::default()),
 			}),
-			reserved_only: atomic::AtomicBool::new(false),
+			reserved_only: atomic::AtomicBool::new(config.non_reserved_mode == NonReservedPeerMode::Deny),
 			reserved_peers,
 			next_node_index: atomic::AtomicUsize::new(0),
 			disabled_nodes: Mutex::new(Default::default()),

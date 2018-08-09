@@ -438,7 +438,7 @@ impl<T: Trait> Module<T> {
 	/// Returns if the account was successfully updated or update has led to killing of the account.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for no - but consider it instructive.
-//		assert!(!Self::voting_balance(who).is_zero());
+		// assert!(!Self::voting_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
 			Self::on_free_too_low(who);
 			UpdateBalanceOutcome::AccountKilled
