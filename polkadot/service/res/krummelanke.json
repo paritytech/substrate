@@ -47,5 +47,11 @@
 	"/ip4/40.114.120.164/tcp/30333/p2p/QmWzYU5X1NpFrprD1YZF5Lcj9aE5WF4QEg5FpvQx5XGWG7",
 	"/ip4/40.117.153.33/tcp/30333/p2p/QmSz8qCADMmi92QB8dTqMPu56JYQQKZBAHz7y8KXjvqcvW"
 ],
-"telemetryUrl": "wss://telemetry.polkadot.io/submit/"
+"telemetryUrl": "wss://telemetry.polkadot.io/submit/",
+"overrideKeys" : {
+	"0x320a467e10143684d09dc25a48b213e2adaf6c3a445389de6d1c7523f7ab6d94": "0x7a1a7881f04bf11369648e90949b053566a71fe0a932a86f880c66c06babd5ab",
+	"0x46fe1c9ab8936d7bf7b560fa4c6dd37ef3769f3ec97a2ecfeeacb71f6c7d8d7e": "0x32bd34a45fababa927d9a1002d06abf13decc9a81234c817003394be3cd98d65",
+	"0x69b0017d689ac83cc6a508b0e2e9e944104406ed3e31c830dd49bac655eb55b6": "0x1dcd3f324064c31b9077e3ae7fe39272a123a5d4b3e7a4c9b5090afb8a44075e",
+	"0x60c663083eee3bbbf20ab0f1a634358dcf4fbf67fa3a470ec8bc78f26df8001a": "0x0b520b88d89e4f37ad9c05b63c4b738eeeaa6366715760305bc8b299d70a9ca0"
+}
 }
