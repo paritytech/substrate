@@ -777,17 +777,20 @@ fn handle_custom_connection(
 		who: NodeIndex,
 		node_id: PeerstorePeerId,
 		handler: Arc<NetworkProtocolHandler + Send + Sync>,
-		protocol: ProtocolId
+		protocol: ProtocolId,
+		print_log_message: bool,
 	}
 
 	impl Drop for ProtoDisconnectGuard {
 		fn drop(&mut self) {
-			info!(target: "sub-libp2p",
-				"Node {:?} with peer ID {} through protocol {:?} disconnected",
-				self.node_id,
-				self.who,
-				self.protocol
-			);
+			if self.print_log_message {
+				info!(target: "sub-libp2p",
+					"Node {:?} with peer ID {} through protocol {:?} disconnected",
+					self.node_id,
+					self.who,
+					self.protocol
+				);
+			}
 			self.handler.disconnected(&NetworkContextImpl {
 				inner: self.inner.clone(),
 				protocol: self.protocol,
@@ -800,12 +803,13 @@ fn handle_custom_connection(
 		}
 	}
 
-	let dc_guard = ProtoDisconnectGuard {
+	let mut dc_guard = ProtoDisconnectGuard {
 		inner: shared.clone(),
 		who,
 		node_id: node_id.clone(),
 		handler: handler.clone(),
 		protocol: protocol_id,
+		print_log_message: true,
 	};
 
 	let fut = custom_proto_out.incoming
@@ -826,10 +830,16 @@ fn handle_custom_connection(
 
 	let val = (custom_proto_out.outgoing, custom_proto_out.protocol_version);
 	let final_fut = unique_connec.tie_or_stop(val, fut)
-		.then(move |val| {
-			// Makes sure that `dc_guard` is kept alive until here.
-			drop(dc_guard);
-			val
+		.then({
+			let node_id = node_id.clone();
+			move |val| {
+				info!(target: "sub-libp2p", "Finishing future for proto {:?} with {:?} => {:?}",
+					protocol_id, node_id, val);
+				// Makes sure that `dc_guard` is kept alive until here.
+				dc_guard.print_log_message = false;
+				drop(dc_guard);
+				val
+			}
 		});
 
 	debug!(target: "sub-libp2p",
