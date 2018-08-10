@@ -230,14 +230,18 @@ impl<B, E, Block> Client<B, E, Block> where
 			.expect("None is returned if there's no value stored for the given key; ':code' key is always defined; qed").0)
 	}
 
-	/// Get the set of authorities at a given block.
-	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
-		let authorities = match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
+	fn original_authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
+		match self.backend.blockchain().cache().and_then(|cache| cache.authorities_at(*id)) {
 			Some(cached_value) => Ok(cached_value),
 			None => self.executor.call(id, "authorities",&[])
 				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
-					.ok_or(error::ErrorKind::AuthLenInvalid.into()))
-		};
+						  .ok_or(error::ErrorKind::AuthLenInvalid.into()))
+		}
+	}
+
+	/// Get the set of authorities at a given block.
+	pub fn authorities_at(&self, id: &BlockId<Block>) -> error::Result<Vec<AuthorityId>> {
+		let authorities = self.original_authorities_at(id);
 		authorities.map(|list| self.remap_keys(list))
 	}
 
@@ -294,7 +298,13 @@ impl<B, E, Block> Client<B, E, Block> where
 		justification: ::bft::UncheckedJustification<Block::Hash>,
 	) -> error::Result<JustifiedHeader<Block>> {
 		let parent_hash = header.parent_hash().clone();
-		let authorities = self.authorities_at(&BlockId::Hash(parent_hash))?;
+		let mut authorities = self.original_authorities_at(&BlockId::Hash(parent_hash))?;
+		for i in 0 .. authorities.len() {
+			if let Some(key) = self.remap_keys.get(&authorities[i]) {
+				authorities.push(*key);
+			}
+		}
+		authorities.extend(self.remap_keys.keys());
 		let just = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
 			.map_err(|_|
 				error::ErrorKind::BadJustification(
