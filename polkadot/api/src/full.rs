@@ -25,8 +25,11 @@ use state_machine;
 
 use runtime::Address;
 use runtime_primitives::traits::AuxLookup;
-use primitives::{AccountId, Block, Header, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
-use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
+use primitives::{
+	AccountId, Block, Header, BlockId, Hash, Index, InherentData,
+	SessionKey, Timestamp, UncheckedExtrinsic,
+};
+use primitives::parachain::{DutyRoster, Id as ParaId};
 
 use {BlockBuilder, PolkadotApi, LocalPolkadotApi, ErrorKind, Error, Result};
 
@@ -132,20 +135,20 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 		with_runtime!(self, at, || ::runtime::Parachains::parachain_head(parachain))
 	}
 
-	fn build_block(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
+	fn build_block(&self, at: &BlockId, inherent_data: InherentData) -> Result<Self::BlockBuilder> {
 		let mut block_builder = self.new_block_at(at)?;
-		for inherent in self.inherent_extrinsics(at, timestamp, new_heads)? {
+		for inherent in self.inherent_extrinsics(at, inherent_data)? {
 			block_builder.push(inherent)?;
 		}
 
 		Ok(block_builder)
 	}
 
-	fn inherent_extrinsics(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>> {
+	fn inherent_extrinsics(&self, at: &BlockId, inherent_data: InherentData) -> Result<Vec<UncheckedExtrinsic>> {
 		use codec::{Encode, Decode};
 
 		with_runtime!(self, at, || {
-			let extrinsics = ::runtime::inherent_extrinsics(timestamp, new_heads);
+			let extrinsics = ::runtime::inherent_extrinsics(inherent_data);
 			extrinsics.into_iter()
 				.map(|x| x.encode()) // get encoded representation
 				.map(|x| Decode::decode(&mut &x[..])) // get byte-vec equivalent to extrinsic

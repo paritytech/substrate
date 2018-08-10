@@ -91,11 +91,11 @@ impl CheckedBlock {
 	}
 
 	/// Extract the noted offline validator indices (if any) from the block.
-	pub fn noted_offline(&self) -> Vec<u32> {
+	pub fn noted_offline(&self) -> &[u32] {
 		self.inner.extrinsics.get(NOTE_OFFLINE_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
-			Call::Session(SessionCall::note_offline(ref x)) => Some(x.clone()),
+			Call::Session(SessionCall::note_offline(ref x)) => Some(&x[..]),
 			_ => None,
-		}).unwrap_or_else(Vec::new)
+		}).unwrap_or(&[])
 	}
 
 	/// Convert into inner block.

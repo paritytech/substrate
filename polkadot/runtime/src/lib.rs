@@ -250,7 +250,7 @@ pub mod api {
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),
 		finalise_block => |()| super::Executive::finalise_block(),
-		inherent_extrinsics => |(timestamp, heads)| super::inherent_extrinsics(timestamp, heads),
+		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
 		validator_count => |()| super::Session::validator_count(),
 		validators => |()| super::Session::validators()
 	);

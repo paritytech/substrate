@@ -69,7 +69,7 @@ use std::time::{Duration, Instant};
 use codec::{Decode, Encode};
 use extrinsic_store::Store as ExtrinsicStore;
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
+use polkadot_primitives::{AccountId, Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt, CandidateSignature};
 use primitives::AuthorityId;
 use transaction_pool::TransactionPool;
@@ -339,6 +339,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			table,
 			transaction_pool: self.transaction_pool.clone(),
 			offline: self.offline.clone(),
+			validators,
 			_drop_signal: drop_signal,
 		};
 
@@ -417,6 +418,7 @@ pub struct Proposer<C: PolkadotApi> {
 	table: Arc<SharedTable>,
 	transaction_pool: Arc<TransactionPool<C>>,
 	offline: SharedOfflineTracker,
+	validators: Vec<AccountId>,
 	_drop_signal: exit_future::Signal,
 }
 
@@ -467,6 +469,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			transaction_pool: self.transaction_pool.clone(),
 			table: self.table.clone(),
 			offline: self.offline.clone(),
+			validators: self.validators.clone(),
 			timing,
 		})
 	}
@@ -541,10 +544,12 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			includability_tracker.join(temporary_delay)
 		};
 
-		// let offline = block.get_offline_reports();
-		// if !self.offline.read().check_consistency(&validators[..], &offline[..]) {
-		// 		return futures::empty()
-		// }
+		// refuse to vote if this block says a validator is offline that we
+		// think isn't.
+		let offline = proposal.noted_offline();
+		if !self.offline.read().check_consistency(&self.validators[..], offline) {
+			return Box::new(futures::empty());
+		}
 
 		// evaluate whether the block is actually valid.
 		// TODO: is it better to delay this until the delays are finished?
@@ -639,23 +644,25 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 	}
 
 	fn on_round_end(&self, round_number: usize, was_proposed: bool) {
-		let validators = match self.client.validators(&self.parent_id) {
-			Ok(v) => v,
-			Err(e) => {
-				warn!("Failed to fetch validator set: {:?}", e);
-				return
-			}
-		};
-
-		let primary_validator = validators[self.primary_index(round_number, validators.len())];
+		let primary_validator = self.validators[
+			self.primary_index(round_number, self.validators.len())
+		];
 
 		// alter the message based on whether we think the empty proposer was forced to skip the round.
 		// this is determined by checking if our local validator would have been forced to skip the round.
 		let consider_online = was_proposed || {
 			let forced_delay = self.dynamic_inclusion.acceptable_in(Instant::now(), self.table.includable_count());
 			match forced_delay {
-				None => info!("Potential Offline Validator: {:?} failed to propose during assigned slot: {}", primary_validator, round_number),
-				Some(_) => info!("Potential Offline Validator {:?} potentially forced to skip assigned slot: {}", primary_validator, round_number),
+				None => info!(
+					"Potential Offline Validator: {:?} failed to propose during assigned slot: {}",
+					primary_validator,
+					round_number,
+				),
+				Some(_) => info!(
+					"Potential Offline Validator {:?} potentially forced to skip assigned slot: {}",
+					primary_validator,
+					round_number,
+				),
 			}
 
 			forced_delay.is_some()
@@ -719,6 +726,7 @@ pub struct CreateProposal<C: PolkadotApi>  {
 	transaction_pool: Arc<TransactionPool<C>>,
 	table: Arc<SharedTable>,
 	timing: ProposalTiming,
+	validators: Vec<AccountId>,
 	offline: SharedOfflineTracker,
 }
 
@@ -726,15 +734,18 @@ impl<C> CreateProposal<C> where C: PolkadotApi {
 	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<Block, Error> {
 		use polkadot_api::BlockBuilder;
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
+		use polkadot_primitives::InherentData;
 
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();
 
-		// TODO: include reports into block.
-		let validators = self.client.validators(&self.parent_id)?;
-		let _reports = self.offline.read().reports(&validators[..]);
+		let inherent_data = InherentData {
+			timestamp,
+			parachain_heads: candidates,
+			offline_indices: self.offline.read().reports(&self.validators[..]),
+		};
 
-		let mut block_builder = self.client.build_block(&self.parent_id, timestamp, candidates)?;
+		let mut block_builder = self.client.build_block(&self.parent_id, inherent_data)?;
 
 		{
 			let mut unqueue_invalid = Vec::new();
