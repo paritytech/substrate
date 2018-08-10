@@ -1,7 +1,7 @@
 
 #![allow(dead_code)]
 
-use blitz_primitives::{Amount, Hash, PublicKey, RoundId, Signature, Timestamp};
+use blitz_primitives::{Amount, Hash, PublicKey, RoundId, Signature, Timestamp, CTH};
 
 #[derive(Serialize, Deserialize)]
 pub enum StateType {
@@ -43,7 +43,7 @@ pub struct AccountHandler {
 	public_key: PublicKey,
 
 	/// CTH of the actual account's state
-	cth: Hash,
+	cth: CTH,
 
 	/// ?
 	signature: Signature,
@@ -53,19 +53,19 @@ pub struct AccountHandler {
 #[derive(Serialize, Deserialize)]
 pub struct TransactionHeader {
 	/// Round to which transaction belongs
-	round: RoundId,
+	pub round: RoundId,
 
 	/// Amount of funds owner pays for processing this transaction
-	fee: Amount,
+	pub fee: Amount,
 
 	/// ?
-	state: State,
+	pub state: State,
 
 	/// Account that created transaction
-	owner: AccountHandler,
+	pub owner: AccountHandler,
 
 	/// Owner's signature
-	signature: Signature,
+	pub signature: Signature,
 }
 
 /// Data of account creation transaction
@@ -101,16 +101,25 @@ pub struct NodeCreationTransaction {
 #[derive(Serialize, Deserialize)]
 pub enum Transaction {
 	/// Transaction that creates a new account
-	AccountCreation(AccountCreationTransaction),
+	// AccountCreation(AccountCreationTransaction),
 
 	/// Transaction that transfers funds between accounts
 	Transfer(TransferTransaction),
 
 	/// Transaction that provides data digest
-	DataDigest(DataDigestTransaction),
+	// DataDigest(DataDigestTransaction),
 
 	/// Transaction that creates a new node
 	NodeCreation(NodeCreationTransaction),
+}
+
+impl Transaction {
+	pub fn header(&self) -> &TransactionHeader {
+		match self {
+			Transaction::Transfer(t) => &t.header,
+			Transaction::NodeCreation(t) => &t.header,
+		}
+	}
 }
 
 /// Signature of a locker that verified a transaction
@@ -123,8 +132,8 @@ pub struct LockerSignature {
 /// Represents a transaction that was signed by one or more lockers
 #[derive(Serialize, Deserialize)]
 pub struct SignedTransaction {
-	transaction: Transaction,
-	locker_signatures: Vec<LockerSignature>,
+	pub transaction: Transaction,
+	pub locker_signatures: Vec<LockerSignature>,
 }
 
 /// Runtime data related to transaction that is not part of its payload
