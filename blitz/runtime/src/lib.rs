@@ -45,6 +45,7 @@ extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 extern crate blitz_primitives as primitives;
+extern crate blitz_network as network;
 #[macro_use]
 extern crate substrate_runtime_version as version;
 

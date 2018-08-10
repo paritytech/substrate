@@ -10,6 +10,7 @@ serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 safe-mix = { path = "../../safe-mix", default_features = false}
 blitz-primitives = { path = "../primitives", default_features = false }
+blitz-network = { path = "../network" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-serializer = { path = "../../substrate/serializer" }
 substrate-runtime-std = { path = "../../substrate/runtime-std" }

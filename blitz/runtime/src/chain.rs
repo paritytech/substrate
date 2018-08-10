@@ -23,7 +23,8 @@ use codec::Decode;
 
 use runtime_primitives::traits::{Hash, BlakeTwo256, Executable, RefInto, MaybeEmpty};
 // use primitives::parachain::{Id, Chain, DutyRoster, CandidateReceipt};
-use primitives::{NodeId, AccountId, Balance, Amount, CTH};
+use primitives::{NodeId, AccountId, Balance, Amount, CTH, Signature, RoundId};
+use network::transaction::{Transaction, SignedTransaction};
 use {system, session};
 
 use substrate_runtime_support::{StorageValue, StorageMap};
@@ -81,6 +82,9 @@ decl_storage! {
 	// How much does it cost to register a new node
 	pub NodeRegistrationFee get(node_registration_fee): b"blz:rpb" => Amount;
 
+	// Currently active round ID
+	pub ActiveRoundId get(round_id): b"blz:rid" => RoundId;
+
 	// How many rounds should be sealed within one block of the chain
 	pub RoundsPerBlock get(rounds_per_block): b"blz:rpb" => u32;
 
@@ -134,6 +138,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn transfer(_aux: &<T as Trait>::PublicAux, from: AccountId, to: AccountId, amount: Amount) -> Result {
+		// TODO Check that CTHs of the affected accounts matches match those in transaction
+
 		// Affected accounts should not be collateral
 		ensure!(!<CollateralToNode<T>>::exists(from), "source account is locked as collateral");
 		ensure!(!<CollateralToNode<T>>::exists(to), "destination account is locked as collateral");
@@ -145,7 +151,22 @@ impl<T: Trait> Module<T> {
 		<AccountBalance<T>>::insert(from, from_balance - amount);
 		<AccountBalance<T>>::insert(to, to_balance.checked_add(amount).expect("balance overflow"));
 
+		// TODO Change CTH of the affected accounts
+
 		Ok(())
+	}
+
+	fn validate_transaction(transaction: SignedTransaction) -> Result {
+		// - transaction should belong to active round id
+		// - CTH should match
+		// - lockers should match current round id
+		// - locker signatures should be correct
+
+		let round = <ActiveRoundId<T>>::get().expect("round id is not set");
+
+		ensure!(transaction.transaction.header().round == round, "round id should match");
+
+		unimplemented!()
 	}
 
 }

@@ -270,6 +270,7 @@ dependencies = [
 name = "blitz-runtime"
 version = "0.1.0"
 dependencies = [
+ "blitz-network 0.1.0",
  "blitz-primitives 0.1.0",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
