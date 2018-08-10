@@ -810,10 +810,15 @@ fn handle_custom_connection(
 
 	let val = (custom_proto_out.outgoing, custom_proto_out.protocol_version);
 	let final_fut = unique_connec.tie_or_stop(val, fut)
-		.then(move |val| {
-			// Makes sure that `dc_guard` is kept alive until here.
-			drop(dc_guard);
-			val
+		.then({
+			let node_id = node_id.clone();
+			move |val| {
+				info!(target: "sub-libp2p", "Finishing future for proto {:?} with {:?} => {:?}",
+					protocol_id, node_id, val);
+				// Makes sure that `dc_guard` is kept alive until here.
+				drop(dc_guard);
+				val
+			}
 		});
 
 	debug!(target: "sub-libp2p",
