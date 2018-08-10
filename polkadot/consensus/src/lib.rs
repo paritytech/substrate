@@ -748,6 +748,13 @@ impl<C> CreateProposal<C> where C: PolkadotApi {
 			self.offline.read().reports(&self.validators[..])
 		};
 
+		if !offline_indices.is_empty() {
+			info!(
+				"Submitting offline validators {:?} for slash-vote",
+				offline_indices.iter().map(|&i| self.validators[i as usize]).collect::<Vec<_>>(),
+			)
+		}
+
 		let inherent_data = InherentData {
 			timestamp,
 			parachain_heads: candidates,
