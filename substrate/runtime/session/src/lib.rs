@@ -179,7 +179,7 @@ impl<T: Trait> Module<T> {
 		let block_number = <system::Module<T>>::block_number();
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
 		let bad_validators = <BadValidators<T>>::take().unwrap_or_default();
-		let should_end_session = <ForcingNewSession<T>>::take().is_some() || bad_validators.len() > 0 || is_final_block;
+		let should_end_session = <ForcingNewSession<T>>::take().is_some() || !bad_validators.is_empty() || is_final_block;
 		if should_end_session {
 			Self::rotate_session(is_final_block, bad_validators);
 		}

@@ -594,9 +594,9 @@ impl<T: Trait> Module<T> {
 	/// move to a new era.
 	fn new_session(actual_elapsed: T::Moment, bad_validators: Vec<T::AccountId>) {
 		let session_index = <session::Module<T>>::current_index();
-		let early_exit_era = bad_validators.len() > 0;
+		let early_exit_era = !bad_validators.is_empty();
 
-		if bad_validators.len() > 0 {
+		if early_exit_era {
 			// slash
 			let slash = Self::current_slash() + Self::early_era_slash();
 			<CurrentSlash<T>>::put(&slash);
@@ -677,7 +677,7 @@ impl<T: Trait> Module<T> {
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
 		<StakeThreshold<T>>::put(
-			if intentions.len() > 0 {
+			if !intentions.is_empty() {
 				let i = (<ValidatorCount<T>>::get() as usize).min(intentions.len() - 1);
 				intentions[i].0.clone()
 			} else { Zero::zero() }
