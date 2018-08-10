@@ -26,10 +26,9 @@ error_chain! {
 
 	errors {
 		/// Provided block range couldn't be resolved to a list of blocks.
-		InvalidBlockRange(from: Option<String>, to: Option<String>) {
+		InvalidBlockRange(from: String, to: String, details: String) {
 			description("Invalid block range"),
-			display("Cannot resolve a block range ['{:?}' ... '{:?}]. \
-					Perhaps requested blocks are not in the canonical chain?", from, to),
+			display("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details),
 		}
 		/// Not implemented yet
 		Unimplemented {

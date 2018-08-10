@@ -30,8 +30,7 @@ use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::generic::RangeIterator;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, Header};
 use tokio::runtime::TaskExecutor;
 
 use subscriptions::Subscriptions;
@@ -144,20 +143,48 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
 		let to = self.unwrap_or_best(to)?;
 
-		let from = self.client.block_number_from_id(&BlockId::Hash(from))?;
-		let to = self.client.block_number_from_id(&BlockId::Hash(to))?;
+		let from_hdr = self.client.header(&BlockId::hash(from))?;
+		let to_hdr = self.client.header(&BlockId::hash(to))?;
 
-		match (from, to) {
-			(Some(from), Some(to)) if from <= to => {
-				// fetch all blocks and compute storage diffs for all keys
+		match (from_hdr, to_hdr) {
+			(Some(ref from), Some(ref to)) if from.number() <= to.number() => {
+				let from = from.clone();
+				let to = to.clone();
+				// check if we can get from `to` to `from` by going through parent_hashes.
+				let blocks = {
+					let mut blocks = vec![to.hash()];
+					let mut last = to.clone();
+					while last.number() > from.number() {
+						if let Some(hdr) = self.client.header(&BlockId::hash(*last.parent_hash()))? {
+							blocks.push(hdr.hash());
+							last = hdr;
+						} else {
+							bail!(invalid_block_range(
+								Some(from),
+								Some(to),
+								format!("Parent of {} ({}) not found", last.number(), last.hash()),
+							))
+						}
+					}
+					if last.hash() != from.hash() {
+						bail!(invalid_block_range(
+							Some(from),
+							Some(to),
+							format!("Expected to reach `from`, got {} ({})", last.number(), last.hash()),
+						))
+					}
+					blocks.reverse();
+					blocks
+				};
 				let mut result = Vec::new();
 				let mut last_state: HashMap<_, Option<_>> = Default::default();
-				for block in RangeIterator::new(from, to) {
+				for block in blocks {
 					let mut changes = vec![];
+					let id = BlockId::hash(block.clone());
 
 					for key in &keys {
 						let (has_changed, data) = {
-							let curr_data = self.client.storage(&BlockId::number(block), key)?;
+							let curr_data = self.client.storage(&id, key)?;
 							let prev_data = last_state.get(key).and_then(|x| x.as_ref());
 
 							(curr_data.as_ref() != prev_data, curr_data)
@@ -171,18 +198,13 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 					}
 
 					result.push(StorageChangeSet {
-						block: self.client
-							.block_hash_from_id(&BlockId::number(block))?
-							.expect("`from` and `to` is in the chain; all blocks in between are in the chain; qed"),
+						block,
 						changes,
 					});
 				}
 				Ok(result)
 			},
-			(from, to) => Err(error::ErrorKind::InvalidBlockRange(
-				from.map(|x| format!("{}", x)),
-				to.map(|x| format!("{}", x)),
-			).into()),
+			(from, to) => bail!(invalid_block_range(from, to, "Invalid range or unknown block".into())),
 		}
 	}
 
@@ -234,4 +256,13 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 	fn unsubscribe_storage(&self, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
+}
+
+fn invalid_block_range<H: Header>(from: Option<H>, to: Option<H>, reason: String) -> error::ErrorKind {
+	let to_string = |x: Option<H>| match x {
+		None => "unknown hash".into(),
+		Some(h) => format!("{} ({})", h.number(), h.hash()),
+	};
+
+	error::ErrorKind::InvalidBlockRange(to_string(from), to_string(to), reason)
 }
