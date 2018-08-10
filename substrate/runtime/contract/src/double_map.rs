@@ -57,7 +57,7 @@ fn full_key<M: StorageDoubleMap + ?Sized>(k1: M::Key1, k2: M::Key2) -> Vec<u8> {
 /// The first part is a XX hash of a concatenation of the `PREFIX` and `Key1`. And the second part
 /// is a blake2 hash of a `Key2`.
 ///
-/// Blake2 is used for `Key2` is because it will be used as a for a key for contract's storage and
+/// Blake2 is used for `Key2` is because it will be used as a key for contract's storage and
 /// thus will be susceptible for a untrusted input.
 pub trait StorageDoubleMap {
 	type Key1: Codec;
