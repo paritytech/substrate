@@ -95,8 +95,6 @@ pub fn run<I, T, W>(args: I, worker: W, version: cli::VersionInfo) -> error::Res
 				true => run_until_exit(&mut runtime, service::new_light(config, executor)?, worker)?,
 				false => run_until_exit(&mut runtime, service::new_full(config, executor)?, worker)?,
 			}
-			// TODO: hard exit if this stalls?
-			runtime.shutdown_on_idle().wait().expect("failed to shut down event loop");
 		}
 	}
 	Ok(())
