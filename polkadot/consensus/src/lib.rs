@@ -736,13 +736,22 @@ impl<C> CreateProposal<C> where C: PolkadotApi {
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 		use polkadot_primitives::InherentData;
 
+		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
+
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();
+
+		let elapsed_since_start = self.timing.dynamic_inclusion.started_at().elapsed();
+		let offline_indices = if elapsed_since_start > MAX_VOTE_OFFLINE_SECONDS {
+			Vec::new()
+		} else {
+			self.offline.read().reports(&self.validators[..])
+		};
 
 		let inherent_data = InherentData {
 			timestamp,
 			parachain_heads: candidates,
-			offline_indices: self.offline.read().reports(&self.validators[..]),
+			offline_indices,
 		};
 
 		let mut block_builder = self.client.build_block(&self.parent_id, inherent_data)?;
