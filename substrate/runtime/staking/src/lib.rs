@@ -662,6 +662,8 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
+		let minimum_allowed = Self::early_era_slash();
+
 		// evaluate desired staking amounts and nominations and optimise to find the best
 		// combination of validators, then use session::internal::set_validators().
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
@@ -670,6 +672,7 @@ impl<T: Trait> Module<T> {
 		let mut intentions = <Intentions<T>>::get()
 			.into_iter()
 			.map(|v| (Self::voting_balance(&v) + Self::nomination_balance(&v), v))
+			.filter(|&(b, _)| b >= minimum_allowed)
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
