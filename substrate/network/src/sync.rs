@@ -237,7 +237,8 @@ impl<B: BlockT> ChainSync<B> {
 		let is_best = new_blocks.first().and_then(|b| b.block.header.as_ref()).map(|h| best_seen.as_ref().map_or(false, |n| h.number() >= n));
 		let origin = if is_best.unwrap_or_default() { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
 		let import_queue = self.import_queue.clone();
-		import_queue.import_blocks(self, protocol, (origin, new_blocks))
+		import_queue.import_blocks(self, protocol, (origin, new_blocks));
+		self.maintain_sync(protocol);
 	}
 
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
