@@ -298,9 +298,9 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 		let sender = inner.as_ref().map(|x| x.signed.clone());
 
 		if encoded_size < 1024 {
-			info!(target: "transaction-pool", "Transaction verified: {} => {:?}", hash, uxt);
+			debug!(target: "transaction-pool", "Transaction verified: {} => {:?}", hash, uxt);
 		} else {
-			info!(target: "transaction-pool", "Transaction verified: {} ({} bytes is too large to display)", hash, encoded_size);
+			debug!(target: "transaction-pool", "Transaction verified: {} ({} bytes is too large to display)", hash, encoded_size);
 		}
 
 		Ok(VerifiedTransaction {
