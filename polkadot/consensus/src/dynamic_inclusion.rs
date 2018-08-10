@@ -74,6 +74,9 @@ impl DynamicInclusion {
 			Some(now + until)
 		}
 	}
+
+	/// Get the start instant.
+	pub fn started_at(&self) -> Instant { self.start }
 }
 
 #[cfg(test)]

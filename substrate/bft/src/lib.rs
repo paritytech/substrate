@@ -69,7 +69,7 @@ use futures::sync::oneshot;
 use tokio::timer::Delay;
 use parking_lot::Mutex;
 
-pub use rhododendron::InputStreamConcluded;
+pub use rhododendron::{InputStreamConcluded, AdvanceRoundReason};
 pub use error::{Error, ErrorKind};
 
 /// Messages over the proposal.
@@ -184,6 +184,9 @@ pub trait Proposer<B: Block> {
 	/// Determine the proposer for a given round. This should be a deterministic function
 	/// with consistent results across all authorities.
 	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId;
+
+	/// Hook called when a BFT round advances without a proposal.
+	fn on_round_end(&self, _round_number: usize, _proposed: bool) { }
 }
 
 /// Block import trait.
@@ -260,6 +263,18 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 
 		Box::new(fut)
 	}
+
+	fn on_advance_round(
+		&self,
+		accumulator: &::rhododendron::Accumulator<B, B::Hash, Self::AuthorityId, Self::Signature>,
+		round: usize,
+		_next_round: usize,
+		reason: AdvanceRoundReason,
+	) {
+		if let AdvanceRoundReason::Timeout = reason {
+			self.proposer.on_round_end(round, accumulator.proposal().is_some());
+		}
+	}
 }
 
 /// A future that resolves either when canceled (witnessing a block from the network at same height)
@@ -302,6 +317,9 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 
 		// TODO: handle and log this error in a way which isn't noisy on exit.
 		let committed = try_ready!(self.inner.poll().map_err(|_| ()));
+
+		// if something was committed, the round leader must have proposed.
+		self.inner.context().proposer.on_round_end(committed.round_number, true);
 
 		// If we didn't see the proposal (very unlikely),
 		// we will get the block from the network later.
