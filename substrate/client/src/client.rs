@@ -298,14 +298,14 @@ impl<B, E, Block> Client<B, E, Block> where
 		justification: ::bft::UncheckedJustification<Block::Hash>,
 	) -> error::Result<JustifiedHeader<Block>> {
 		let parent_hash = header.parent_hash().clone();
-		let mut authorities = self.original_authorities_at(&BlockId::Hash(parent_hash))?;
-		for i in 0 .. authorities.len() {
-			if let Some(key) = self.remap_keys.get(&authorities[i]) {
-				authorities.push(*key);
-			}
-		}
-		authorities.extend(self.remap_keys.keys());
+		let original_authorities = self.original_authorities_at(&BlockId::Hash(parent_hash))?;
+		let mut authorities = self.remap_keys(original_authorities.clone());
 		let just = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
+			.or_else(|justification| {
+				// retry with original authorities
+				authorities = original_authorities;
+				::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
+			})
 			.map_err(|_|
 				error::ErrorKind::BadJustification(
 					format!("{}", header.hash())
