@@ -85,7 +85,7 @@ pub trait SyncProvider<B: BlockT>: Send + Sync {
 pub trait TransactionPool<B: BlockT>: Send + Sync {
 	/// Get transactions from the pool that are ready to be propagated.
 	fn transactions(&self) -> Vec<(B::Hash, B::Extrinsic)>;
-	/// Import a transction into the pool.
+	/// Import a transaction into the pool.
 	fn import(&self, transaction: &B::Extrinsic) -> Option<B::Hash>;
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<B::Hash, Vec<String>>);
