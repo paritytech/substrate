@@ -103,7 +103,8 @@ fn prune_unneeded_availability<C>(client: Arc<C>, extrinsic_store: ExtrinsicStor
 	use polkadot_runtime::CheckedBlock;
 
 	enum NotifyError {
-		NoBody(::client::error::Error),
+		NoBody,
+		BodyFetch(::client::error::Error),
 		UnexpectedFormat,
 		ExtrinsicsWrong,
 	}
@@ -111,29 +112,34 @@ fn prune_unneeded_availability<C>(client: Arc<C>, extrinsic_store: ExtrinsicStor
 	impl NotifyError {
 		fn log(&self, hash: &::polkadot_primitives::Hash) {
 			match *self {
-				NotifyError::NoBody(ref err) => warn!("Failed to fetch block body for imported block {:?}: {:?}", hash, err),
+				NotifyError::NoBody => warn!("No block body for imported block {:?}", hash),
+				NotifyError::BodyFetch(ref err) => warn!("Failed to fetch block body for imported block {:?}: {:?}", hash, err),
 				NotifyError::UnexpectedFormat => warn!("Consensus outdated: Block {:?} has unexpected body format", hash),
-				NotifyError::ExtrinsicsWrong => warn!("Consensus outdated: Failed to fetch block body for imported block {:?}", hash),
+				NotifyError::ExtrinsicsWrong => warn!("Consensus outdated: Extrinsics cannot be decoded for {:?}", hash),
 			}
 		}
 	}
 
 	client.import_notification_stream()
 		.for_each(move |notification| {
-			let checked_block = client.block_body(&BlockId::hash(notification.hash))
-				.map_err(NotifyError::NoBody)
-				.map(|b| ::polkadot_runtime::Block::decode(&mut b.encode().as_slice()))
+			let hash = notification.hash;
+			let parent_hash = notification.header.parent_hash;
+			let checked_block = client.block_body(&BlockId::hash(hash))
+				.map_err(NotifyError::BodyFetch)
+				.and_then(|maybe_body| maybe_body.ok_or(NotifyError::NoBody))
+				.map(|extrinsics| Block { header: notification.header, extrinsics })
+				.map(|b: Block| ::polkadot_runtime::Block::decode(&mut b.encode().as_slice()))
 				.and_then(|maybe_block| maybe_block.ok_or(NotifyError::UnexpectedFormat))
 				.and_then(|block| CheckedBlock::new(block).map_err(|_| NotifyError::ExtrinsicsWrong));
 
 			match checked_block {
 				Ok(block) => {
 					let candidate_hashes = block.parachain_heads().iter().map(|c| c.hash()).collect();
-					if let Err(e) = extrinsic_store.candidates_finalized(notification.header.parent_hash, candidate_hashes) {
+					if let Err(e) = extrinsic_store.candidates_finalized(parent_hash, candidate_hashes) {
 						warn!(target: "consensus", "Failed to prune unneeded available data: {:?}", e);
 					}
 				}
-				Err(e) => e.log(&notification.hash)
+				Err(e) => e.log(&hash)
 			}
 
 			Ok(())
