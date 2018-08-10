@@ -4,7 +4,7 @@ path = "polkadot/src/main.rs"
 
 [package]
 name = "polkadot"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
 
@@ -92,4 +92,4 @@ is-it-maintained-open-issues = { repository = "paritytech/polkadot" }
 
 [profile.release]
 # Substrate runtime requires unwinding.
-panic = "unwind" 
+panic = "unwind"
