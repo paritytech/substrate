@@ -70,6 +70,12 @@ args:
       help: Specify a list of bootnodes
       takes_value: true
       multiple: true
+  - reserved-nodes:
+      long: reserved-nodes
+      value_name: URL
+      help: Specify a list of reserved node addresses
+      takes_value: true
+      multiple: true
   - chain:
       long: chain
       value_name: CHAIN_SPEC
