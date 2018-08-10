@@ -219,7 +219,11 @@ mod tests {
 		let client = client();
 
 		let id = BlockId::number(0);
-		let block_builder = client.build_block(&id, 1_000_000, Vec::new()).unwrap();
+		let block_builder = client.build_block(&id, InherentData {
+			timestamp: 1_000_000,
+			parachain_heads: Vec::new(),
+			offline_indices: Vec::new(),
+		}).unwrap();
 		let block = block_builder.bake().unwrap();
 
 		assert_eq!(block.header.number, 1);
@@ -231,7 +235,11 @@ mod tests {
 		let client = client();
 
 		let id = BlockId::number(0);
-		let inherent = client.inherent_extrinsics(&id, 1_000_000, Vec::new()).unwrap();
+		let inherent = client.inherent_extrinsics(&id, InherentData {
+			timestamp: 1_000_000,
+			parachain_heads: Vec::new(),
+			offline_indices: Vec::new(),
+		}).unwrap();
 
 		let mut block_builder = client.new_block_at(&id).unwrap();
 		for extrinsic in inherent {

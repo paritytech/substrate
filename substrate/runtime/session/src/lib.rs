@@ -99,7 +99,7 @@ decl_storage! {
 	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Moment;
 
 	// Opinions of the current validator set about the activeness of their peers.
-	// Gets cleared when the validator set changes. If `None`, then should be assumed to be a vec of `true`.
+	// Gets cleared when the validator set changes.
 	pub BadValidators get(bad_validators): b"ses:bad_validators" => Vec<T::AccountId>;
 
 	// New session is being forced is this entry exists; in which case, the boolean value is whether
@@ -321,6 +321,7 @@ mod tests {
 		type Moment = u64;
 	}
 	impl Trait for Test {
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = ();
 	}
@@ -370,7 +371,7 @@ mod tests {
 			assert_eq!(Session::ideal_session_duration(), 15);
 			// ideal end = 0 + 15 * 3 = 15
 			// broken_limit = 15 * 130 / 100 = 19
-		
+
 			System::set_block_number(3);
 			assert_eq!(Session::blocks_remaining(), 2);
 			Timestamp::set_timestamp(9);				// earliest end = 9 + 2 * 5 = 19; OK.
@@ -398,7 +399,7 @@ mod tests {
 			assert_eq!(Session::blocks_remaining(), 0);
 			Session::check_rotate_session();
 			assert_eq!(Session::length(), 10);
-		
+
 			System::set_block_number(7);
 			assert_eq!(Session::current_index(), 1);
 			assert_eq!(Session::blocks_remaining(), 5);
