@@ -76,7 +76,8 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn validators(&self, at: &BlockId) -> Result<Vec<AccountId>> {
-		with_runtime!(self, at, ::runtime::Session::validators)
+		let validators = with_runtime!(self, at, ::runtime::Session::validators);
+		validators.map(|list| self.remap_keys(list))
 	}
 
 	fn random_seed(&self, at: &BlockId) -> Result<Hash> {
