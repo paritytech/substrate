@@ -819,7 +819,7 @@ fn handle_custom_connection(
 		.then({
 			let node_id = node_id.clone();
 			move |val| {
-				trace!(target: "sub-libp2p", "Finishing future for proto {:?} with {:?} => {:?}",
+				info!(target: "sub-libp2p", "Finishing future for proto {:?} with {:?} => {:?}",
 					protocol_id, node_id, val);
 				// Makes sure that `dc_guard` is kept alive until here.
 				drop(dc_guard);
