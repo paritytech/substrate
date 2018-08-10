@@ -615,19 +615,21 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			self.primary_index(round_number, self.validators.len())
 		];
 
+
 		// alter the message based on whether we think the empty proposer was forced to skip the round.
 		// this is determined by checking if our local validator would have been forced to skip the round.
 		let consider_online = was_proposed || {
 			let forced_delay = self.dynamic_inclusion.acceptable_in(Instant::now(), self.table.includable_count());
+			let public = ::ed25519::Public::from_raw(primary_validator.0);
 			match forced_delay {
 				None => info!(
-					"Potential Offline Validator: {:?} failed to propose during assigned slot: {}",
-					primary_validator,
+					"Potential Offline Validator: {} failed to propose during assigned slot: {}",
+					public,
 					round_number,
 				),
 				Some(_) => info!(
-					"Potential Offline Validator {:?} potentially forced to skip assigned slot: {}",
-					primary_validator,
+					"Potential Offline Validator {} potentially forced to skip assigned slot: {}",
+					public,
 					round_number,
 				),
 			}
