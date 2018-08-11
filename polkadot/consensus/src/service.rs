@@ -172,6 +172,9 @@ impl Service {
 			N::TableRouter: Send + 'static,
 			<N::Collation as IntoFuture>::Future: Send + 'static,
 	{
+		use parking_lot::RwLock;
+		use super::OfflineTracker;
+
 		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {
 			let mut runtime = LocalRuntime::new().expect("Could not create local runtime");
@@ -185,6 +188,7 @@ impl Service {
 				parachain_empty_duration,
 				handle: thread_pool.clone(),
 				extrinsic_store: extrinsic_store.clone(),
+				offline: Arc::new(RwLock::new(OfflineTracker::new())),
 			};
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
 

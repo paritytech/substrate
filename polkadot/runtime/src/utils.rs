@@ -19,30 +19,33 @@
 use rstd::prelude::*;
 use super::{Call, UncheckedExtrinsic, Extrinsic, Staking};
 use runtime_primitives::traits::{Checkable, AuxLookup};
-use primitives::parachain::CandidateReceipt;
 use timestamp::Call as TimestampCall;
 use parachains::Call as ParachainsCall;
+use session::Call as SessionCall;
 
 /// Produces the list of inherent extrinsics.
-pub fn inherent_extrinsics(timestamp: ::primitives::Timestamp, parachain_heads: Vec<CandidateReceipt>) -> Vec<UncheckedExtrinsic> {
-	vec![
-		UncheckedExtrinsic::new(
-			Extrinsic {
-				signed: Default::default(),
-				function: Call::Timestamp(TimestampCall::set(timestamp)),
-				index: 0,
-			},
-			Default::default()
-		),
-		UncheckedExtrinsic::new(
-			Extrinsic {
-				signed: Default::default(),
-				function: Call::Parachains(ParachainsCall::set_heads(parachain_heads)),
-				index: 0,
-			},
-			Default::default()
-		)
-	]
+pub fn inherent_extrinsics(data: ::primitives::InherentData) -> Vec<UncheckedExtrinsic> {
+	let make_inherent = |function|	UncheckedExtrinsic::new(
+		Extrinsic {
+			signed: Default::default(),
+			function,
+			index: 0,
+		},
+		Default::default(),
+	);
+
+	let mut inherent = vec![
+		make_inherent(Call::Timestamp(TimestampCall::set(data.timestamp))),
+		make_inherent(Call::Parachains(ParachainsCall::set_heads(data.parachain_heads))),
+	];
+
+	if !data.offline_indices.is_empty() {
+		inherent.push(make_inherent(
+			Call::Session(SessionCall::note_offline(data.offline_indices))
+		));
+	}
+
+	inherent
 }
 
 /// Checks an unchecked extrinsic for validity.

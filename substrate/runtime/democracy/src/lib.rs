@@ -392,6 +392,7 @@ mod tests {
 		type Header = Header;
 	}
 	impl session::Trait for Test {
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = staking::Module<Test>;
 	}
@@ -495,7 +496,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (10, 0));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 
 			assert_eq!(Staking::era_length(), 2);
 		});
@@ -573,19 +574,19 @@ mod tests {
 			System::set_block_number(1);
 			assert_ok!(Democracy::vote(&1, 0, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 			assert_eq!(Staking::bonding_duration(), 4);
 
 			System::set_block_number(2);
 			assert_ok!(Democracy::vote(&1, 1, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 			assert_eq!(Staking::bonding_duration(), 3);
 
 			System::set_block_number(3);
 			assert_ok!(Democracy::vote(&1, 2, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 			assert_eq!(Staking::bonding_duration(), 2);
 		});
 	}
@@ -606,7 +607,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (10, 0));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 
 			assert_eq!(Staking::era_length(), 2);
 		});
@@ -621,7 +622,7 @@ mod tests {
 			assert_ok!(Democracy::cancel_referendum(r));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 
 			assert_eq!(Staking::era_length(), 1);
 		});
@@ -639,7 +640,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (0, 10));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 
 			assert_eq!(Staking::era_length(), 1);
 		});
@@ -660,7 +661,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (110, 100));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 
 			assert_eq!(Staking::era_length(), 2);
 		});
@@ -677,7 +678,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (60, 50));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 
 			assert_eq!(Staking::era_length(), 1);
 		});
@@ -698,7 +699,7 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (100, 50));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
+			Staking::on_session_change(0, Vec::new());
 
 			assert_eq!(Staking::era_length(), 2);
 		});

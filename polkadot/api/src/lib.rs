@@ -38,10 +38,12 @@ extern crate substrate_keyring as keyring;
 pub mod full;
 pub mod light;
 
-use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp,
-	UncheckedExtrinsic};
+use primitives::{
+	AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp,
+	UncheckedExtrinsic, InherentData,
+};
 use runtime::Address;
-use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
+use primitives::parachain::{DutyRoster, Id as ParaId};
 
 error_chain! {
 	errors {
@@ -128,11 +130,11 @@ pub trait PolkadotApi {
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool>;
 
 	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
-	fn build_block(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder>;
+	fn build_block(&self, at: &BlockId, inherent_data: InherentData) -> Result<Self::BlockBuilder>;
 
 	/// Attempt to produce the (encoded) inherent extrinsics for a block being built upon the given.
 	/// This may vary by runtime and will fail if a runtime doesn't follow the same API.
-	fn inherent_extrinsics(&self, at: &BlockId, timestamp: Timestamp, new_heads: Vec<CandidateReceipt>) -> Result<Vec<UncheckedExtrinsic>>;
+	fn inherent_extrinsics(&self, at: &BlockId, inherent_data: InherentData) -> Result<Vec<UncheckedExtrinsic>>;
 }
 
 /// Mark for all Polkadot API implementations, that are making use of state data, stored locally.

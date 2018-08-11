@@ -69,7 +69,7 @@ use std::time::{Duration, Instant};
 use codec::{Decode, Encode};
 use extrinsic_store::Store as ExtrinsicStore;
 use polkadot_api::PolkadotApi;
-use polkadot_primitives::{Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
+use polkadot_primitives::{AccountId, Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
 use polkadot_primitives::parachain::{Id as ParaId, Chain, DutyRoster, BlockData, Extrinsic as ParachainExtrinsic, CandidateReceipt, CandidateSignature};
 use primitives::AuthorityId;
 use transaction_pool::TransactionPool;
@@ -80,19 +80,25 @@ use futures::prelude::*;
 use futures::future;
 use collation::CollationFetch;
 use dynamic_inclusion::DynamicInclusion;
+use parking_lot::RwLock;
 
 pub use self::collation::{validate_collation, Collators};
 pub use self::error::{ErrorKind, Error};
+pub use self::offline_tracker::OfflineTracker;
 pub use self::shared_table::{SharedTable, StatementProducer, ProducedStatements, Statement, SignedStatement, GenericStatement};
 pub use service::Service;
 
 mod dynamic_inclusion;
 mod evaluation;
 mod error;
+mod offline_tracker;
 mod service;
 mod shared_table;
 
 pub mod collation;
+
+/// Shared offline validator tracker.
+pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
@@ -240,6 +246,8 @@ pub struct ProposerFactory<C, N, P> {
 	pub parachain_empty_duration: Duration,
 	/// Store for extrinsic data.
 	pub extrinsic_store: ExtrinsicStore,
+	/// Offline-tracker.
+	pub offline: SharedOfflineTracker,
 }
 
 impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
@@ -255,10 +263,11 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 	type Output = N::Output;
 	type Error = Error;
 
-	fn init(&self,
+	fn init(
+		&self,
 		parent_header: &Header,
 		authorities: &[AuthorityId],
-		sign_with: Arc<ed25519::Pair>
+		sign_with: Arc<ed25519::Pair>,
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 
@@ -268,6 +277,9 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		let duty_roster = self.client.duty_roster(&id)?;
 		let random_seed = self.client.random_seed(&id)?;
 		let random_seed = BlakeTwo256::hash(&*random_seed);
+
+		let validators = self.client.validators(&id)?;
+		self.offline.write().note_new_block(&validators[..]);
 
 		let (group_info, local_duty) = make_group_info(
 			duty_roster,
@@ -326,6 +338,8 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			random_seed,
 			table,
 			transaction_pool: self.transaction_pool.clone(),
+			offline: self.offline.clone(),
+			validators,
 			_drop_signal: drop_signal,
 		};
 
@@ -403,7 +417,20 @@ pub struct Proposer<C: PolkadotApi> {
 	random_seed: Hash,
 	table: Arc<SharedTable>,
 	transaction_pool: Arc<TransactionPool<C>>,
+	offline: SharedOfflineTracker,
+	validators: Vec<AccountId>,
 	_drop_signal: exit_future::Signal,
+}
+
+impl<C: PolkadotApi + Send + Sync> Proposer<C> {
+	fn primary_index(&self, round_number: usize, len: usize) -> usize {
+		use primitives::uint::U256;
+
+		let big_len = U256::from(len);
+		let offset = U256::from_big_endian(&self.random_seed.0) % big_len;
+		let offset = offset.low_u64() as usize + round_number;
+		offset % len
+	}
 }
 
 impl<C> bft::Proposer<Block> for Proposer<C>
@@ -441,6 +468,8 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			client: self.client.clone(),
 			transaction_pool: self.transaction_pool.clone(),
 			table: self.table.clone(),
+			offline: self.offline.clone(),
+			validators: self.validators.clone(),
 			timing,
 		})
 	}
@@ -515,6 +544,13 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			includability_tracker.join(temporary_delay)
 		};
 
+		// refuse to vote if this block says a validator is offline that we
+		// think isn't.
+		let offline = proposal.noted_offline();
+		if !self.offline.read().check_consistency(&self.validators[..], offline) {
+			return Box::new(futures::empty());
+		}
+
 		// evaluate whether the block is actually valid.
 		// TODO: is it better to delay this until the delays are finished?
 		let evaluated = self.client
@@ -536,13 +572,8 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 	}
 
 	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId {
-		use primitives::uint::U256;
-
-		let len: U256 = authorities.len().into();
-		let offset = U256::from_big_endian(&self.random_seed.0) % len;
-		let offset = offset.low_u64() as usize + round_number;
-
-		let proposer = authorities[offset % authorities.len()].clone();
+		let offset = self.primary_index(round_number, authorities.len());
+		let proposer = authorities[offset].clone();
 		trace!(target: "bft", "proposer for round {} is {}", round_number, proposer);
 
 		proposer
@@ -611,6 +642,36 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 				.expect("locally signed extrinsic is valid; qed");
 		}
 	}
+
+	fn on_round_end(&self, round_number: usize, was_proposed: bool) {
+		let primary_validator = self.validators[
+			self.primary_index(round_number, self.validators.len())
+		];
+
+
+		// alter the message based on whether we think the empty proposer was forced to skip the round.
+		// this is determined by checking if our local validator would have been forced to skip the round.
+		let consider_online = was_proposed || {
+			let forced_delay = self.dynamic_inclusion.acceptable_in(Instant::now(), self.table.includable_count());
+			let public = ::ed25519::Public::from_raw(primary_validator.0);
+			match forced_delay {
+				None => info!(
+					"Potential Offline Validator: {} failed to propose during assigned slot: {}",
+					public,
+					round_number,
+				),
+				Some(_) => info!(
+					"Potential Offline Validator {} potentially forced to skip assigned slot: {}",
+					public,
+					round_number,
+				),
+			}
+
+			forced_delay.is_some()
+		};
+
+		self.offline.write().note_round_end(primary_validator, consider_online);
+	}
 }
 
 fn current_timestamp() -> Timestamp {
@@ -667,16 +728,42 @@ pub struct CreateProposal<C: PolkadotApi>  {
 	transaction_pool: Arc<TransactionPool<C>>,
 	table: Arc<SharedTable>,
 	timing: ProposalTiming,
+	validators: Vec<AccountId>,
+	offline: SharedOfflineTracker,
 }
 
 impl<C> CreateProposal<C> where C: PolkadotApi {
 	fn propose_with(&self, candidates: Vec<CandidateReceipt>) -> Result<Block, Error> {
 		use polkadot_api::BlockBuilder;
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
+		use polkadot_primitives::InherentData;
+
+		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
 
 		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = current_timestamp();
-		let mut block_builder = self.client.build_block(&self.parent_id, timestamp, candidates)?;
+
+		let elapsed_since_start = self.timing.dynamic_inclusion.started_at().elapsed();
+		let offline_indices = if elapsed_since_start > MAX_VOTE_OFFLINE_SECONDS {
+			Vec::new()
+		} else {
+			self.offline.read().reports(&self.validators[..])
+		};
+
+		if !offline_indices.is_empty() {
+			info!(
+				"Submitting offline validators {:?} for slash-vote",
+				offline_indices.iter().map(|&i| self.validators[i as usize]).collect::<Vec<_>>(),
+			)
+		}
+
+		let inherent_data = InherentData {
+			timestamp,
+			parachain_heads: candidates,
+			offline_indices,
+		};
+
+		let mut block_builder = self.client.build_block(&self.parent_id, inherent_data)?;
 
 		{
 			let mut unqueue_invalid = Vec::new();
