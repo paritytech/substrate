@@ -85,6 +85,8 @@ pub use primitives::Header;
 pub const TIMESTAMP_SET_POSITION: u32 = 0;
 /// The position of the parachains set extrinsic.
 pub const PARACHAINS_SET_POSITION: u32 = 1;
+/// The position of the offline nodes noting extrinsic.
+pub const NOTE_OFFLINE_POSITION: u32 = 2;
 
 /// The address format for describing accounts.
 pub type Address = staking::Address<Concrete>;
@@ -110,7 +112,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("polkadot"),
 	impl_name: ver_str!("parity-polkadot"),
 	authoring_version: 1,
-	spec_version: 100,
+	spec_version: 101,
 	impl_version: 0,
 };
 
@@ -160,6 +162,7 @@ impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 }
 
 impl session::Trait for Concrete {
+	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
 	type OnSessionChange = Staking;
 }
@@ -247,7 +250,7 @@ pub mod api {
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),
 		finalise_block => |()| super::Executive::finalise_block(),
-		inherent_extrinsics => |(timestamp, heads)| super::inherent_extrinsics(timestamp, heads),
+		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
 		validator_count => |()| super::Session::validator_count(),
 		validators => |()| super::Session::validators()
 	);

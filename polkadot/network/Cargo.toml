@@ -19,4 +19,4 @@ ed25519 = { path = "../../substrate/ed25519" }
 futures = "0.1"
 tokio = "0.1.7"
 log = "0.4"
-rhododendron = "0.2"
+rhododendron = "0.3"

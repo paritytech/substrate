@@ -56,6 +56,7 @@ extern crate error_chain;
 use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::{Instant, Duration};
 
 use codec::Encode;
 use ed25519::LocalizedSignature;
@@ -69,7 +70,7 @@ use futures::sync::oneshot;
 use tokio::timer::Delay;
 use parking_lot::Mutex;
 
-pub use rhododendron::InputStreamConcluded;
+pub use rhododendron::{InputStreamConcluded, AdvanceRoundReason};
 pub use error::{Error, ErrorKind};
 
 /// Messages over the proposal.
@@ -184,6 +185,9 @@ pub trait Proposer<B: Block> {
 	/// Determine the proposer for a given round. This should be a deterministic function
 	/// with consistent results across all authorities.
 	fn round_proposer(&self, round_number: usize, authorities: &[AuthorityId]) -> AuthorityId;
+
+	/// Hook called when a BFT round advances without a proposal.
+	fn on_round_end(&self, _round_number: usize, _proposed: bool) { }
 }
 
 /// Block import trait.
@@ -205,6 +209,26 @@ struct BftInstance<B: Block, P> {
 	parent_hash: B::Hash,
 	round_timeout_multiplier: u64,
 	proposer: P,
+}
+
+impl<B: Block, P: Proposer<B>> BftInstance<B, P>
+	where
+		B: Clone + Eq,
+		B::Hash: ::std::hash::Hash
+
+{
+	fn round_timeout_duration(&self, round: usize) -> Duration {
+		const ROUND_INCREMENT_STEP: usize = 10000;
+
+		let round = round / ROUND_INCREMENT_STEP;
+		let round = ::std::cmp::min(63, round) as u32;
+
+		let timeout = 1u64.checked_shl(round)
+			.unwrap_or_else(u64::max_value)
+			.saturating_mul(self.round_timeout_multiplier);
+
+		Duration::from_secs(timeout)
+	}
 }
 
 impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
@@ -246,19 +270,38 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 	}
 
 	fn begin_round_timeout(&self, round: usize) -> Self::RoundTimeout {
-		use std::time::{Instant, Duration};
-
-		let round = round / 3;
-		let round = ::std::cmp::min(63, round) as u32;
-		let timeout = 1u64.checked_shl(round)
-			.unwrap_or_else(u64::max_value)
-			.saturating_mul(self.round_timeout_multiplier);
-
-		let fut = Delay::new(Instant::now() + Duration::from_secs(timeout))
+		let timeout = self.round_timeout_duration(round);
+		let fut = Delay::new(Instant::now() + timeout)
 			.map_err(|e| Error::from(ErrorKind::FaultyTimer(e)))
 			.map_err(Into::into);
 
 		Box::new(fut)
+	}
+
+	fn on_advance_round(
+		&self,
+		accumulator: &::rhododendron::Accumulator<B, B::Hash, Self::AuthorityId, Self::Signature>,
+		round: usize,
+		next_round: usize,
+		reason: AdvanceRoundReason,
+	) {
+		use std::collections::HashSet;
+
+		let collect_pubkeys = |participants: HashSet<&Self::AuthorityId>| participants.into_iter()
+			.map(|p| ::ed25519::Public::from_raw(p.0))
+			.collect::<Vec<_>>();
+
+		let round_timeout = self.round_timeout_duration(next_round);
+		debug!(target: "bft", "Advancing to round {} from {}", next_round, round);
+		debug!(target: "bft", "Participating authorities: {:?}",
+			collect_pubkeys(accumulator.participants()));
+		debug!(target: "bft", "Voting authorities: {:?}",
+			collect_pubkeys(accumulator.voters()));
+		debug!(target: "bft", "Round {} should end in at most {} seconds from now", next_round, round_timeout.as_secs());
+
+		if let AdvanceRoundReason::Timeout = reason {
+			self.proposer.on_round_end(round, accumulator.proposal().is_some());
+		}
 	}
 }
 
@@ -302,6 +345,9 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 
 		// TODO: handle and log this error in a way which isn't noisy on exit.
 		let committed = try_ready!(self.inner.poll().map_err(|_| ()));
+
+		// if something was committed, the round leader must have proposed.
+		self.inner.context().proposer.on_round_end(committed.round_number, true);
 
 		// If we didn't see the proposal (very unlikely),
 		// we will get the block from the network later.
