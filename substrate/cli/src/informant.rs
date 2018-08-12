@@ -22,7 +22,7 @@ use futures::{Future, Stream};
 use service::{Service, Components};
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Interval;
-use sysinfo::{ProcessorExt, System, SystemExt};
+use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use network::{SyncState, SyncProvider};
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
@@ -43,6 +43,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let mut last_number = None;
 
 	let mut sys = System::new();
+	let self_pid = get_current_pid();
 
 	let display_notifications = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 		let sync_status = network.status();
@@ -69,11 +70,11 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				hash
 			);
 
-			// get cpu usage and memory usage
-			sys.refresh_system();
-			let memory_usage = if sys.get_total_memory() == 0 { 0.0 } else { sys.get_used_memory() as f64 / sys.get_total_memory() as f64 };
-			let procs = sys.get_processor_list();
-			let cpu_usage = if procs.is_empty() { 0.0 } else { procs[0].get_cpu_usage() };
+			// get cpu usage and memory usage of this process
+			let (cpu_usage, memory) = if sys.refresh_process(self_pid) {
+				let proc = sys.get_process(self_pid).expect("Above refresh_process succeeds, this should be Some(), qed");
+				(proc.cpu_usage(), proc.memory())
+			} else { (0.0, 0) };
 
 			telemetry!(
 				"system.interval";
@@ -82,8 +83,8 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"height" => best_number,
 				"best" => ?hash,
 				"txcount" => txpool_status.transaction_count,
-				"memory" => memory_usage,
-				"cpu" => cpu_usage
+				"cpu" => format!("{}%", cpu_usage),
+				"memory" => format!("{}kB", memory)
 			);
 		} else {
 			warn!("Error getting best block information");
