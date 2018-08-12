@@ -500,7 +500,7 @@ impl<T: Trait> Module<T> {
 							apply_unstake can only fail if pos wrong; \
 							Self::intentions() doesn't change; qed");
 				}
-				Self::force_new_era(false);
+				let _ = Self::force_new_era(false);
 			}
 		}
 
