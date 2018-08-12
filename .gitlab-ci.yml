@@ -1,0 +1,88 @@
+stages:
+  - test
+  - build
+
+image:                             parity/rust:gitlab-ci
+
+variables:
+  CI_SERVER_NAME:                  "GitLab CI"
+  CARGO_HOME:                      "${CI_PROJECT_DIR}/cargo"
+
+  BUILD_TARGET:                    ubuntu
+  BUILD_ARCH:                      amd64
+  CARGO_TARGET:                    x86_64-unknown-linux-gnu
+
+cache:
+  key:                             "${CI_JOB_NAME}"
+  paths:
+    - ${CI_PROJECT_DIR}/target/
+    - ${CI_PROJECT_DIR}/cargo/
+
+.releaseable_branches:             # list of git refs for building GitLab artifacts (think "pre-release binaries")
+  only:                            &releaseable_branches
+    - master
+    - stable
+    - beta
+    - tags
+    - gitlab-next
+
+.publishable_branches:             # list of git refs for publishing builds to the "production" locations
+  only:                            &publishable_branches
+    - nightly # Our nightly builds from schedule, on `master`
+    - "v*" # Our version tags
+    - gitlab-next
+
+.collect_artifacts:                &collect_artifacts
+  artifacts:
+    name:                          "${CI_JOB_NAME}_${CI_COMMIT_REF_NAME}"
+    when:                          on_success
+    expire_in:                     1 mos
+    paths:
+    - target/release/polkadot 
+
+.determine_version: &determine_version |
+  export VERSION=$(grep -m 1 "version =" Cargo.toml | awk '{print $3}' | tr -d '"' | tr -d "\n")
+  echo "Version" $VERSION
+
+
+#### stage:                        test
+
+test:rust:stable:                  &test
+  stage:                           test
+  variables:
+    RUST_TOOLCHAIN: stable
+    TARGET: native
+  script:
+    - ./scripts/init.sh
+    - export PATH="${CI_PROJECT_DIR}/cargo/bin/:$PATH"
+    - ./scripts/build.sh
+    - ./scripts/build-demos.sh
+    - time cargo test --all
+  tags:
+    - rust-stable 
+
+.optional_test:                    &optional_test
+  <<:                              *test
+  allow_failure:                   true
+  only:
+    - master
+
+#### stage:                        build
+
+build:linux:ubuntu:amd64:          &build
+  stage:                           build
+  only:                            *releaseable_branches
+  variables:
+    CARGO_TARGET:                  x86_64-unknown-linux-gnu
+    TARGET:                        native
+    RUST_TOOLCHAIN:                stable
+  script:
+    - ./scripts/init.sh
+    - export PATH="${CI_PROJECT_DIR}/cargo/bin/:$PATH"
+    - ./scripts/build.sh 
+    - ./scripts/build-demos.sh 
+    - cargo build --release
+  <<:                              *collect_artifacts
+  tags:
+    - rust-stable
+  allow_failure: true
