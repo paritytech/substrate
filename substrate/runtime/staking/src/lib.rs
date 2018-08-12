@@ -194,7 +194,7 @@ decl_storage! {
 	pub SessionReward get(session_reward): b"sta:session_reward" => required T::Balance;
 	// Slash, per validator that is taken per abnormal era end.
 	pub EarlyEraSlash get(early_era_slash): b"sta:early_era_slash" => required T::Balance;
-	// Number of instances of grace period before slashing begins for offline validators.
+	// Number of instances of offline reports before slashing begins for validators.
 	pub OfflineSlashGrace get(offline_slash_grace): b"sta:offline_slash_grace" => default u32;
 
 	// The current era index.
@@ -216,9 +216,7 @@ decl_storage! {
 	// The current era stake threshold
 	pub StakeThreshold get(stake_threshold): b"sta:stake_threshold" => required T::Balance;
 
-	// Which of the validators are currently being slashed.
-	pub Slashing get(slashing): b"sta:slashing" => default Vec<T::AccountId>;
-	// The number of slashes a given validator has had in a row.
+	// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
 	pub SlashCount get(slash_count): b"sta:slash_count" => default map [ T::AccountId => u32 ];
 
 	// The next free enumeration set.
@@ -747,6 +745,7 @@ impl<T: Trait> Module<T> {
 		intentions.swap_remove(intentions_index);
 		<Intentions<T>>::put(intentions);
 		<SlashPreferenceOf<T>>::remove(who);
+		<SlashCount<T>>::remove(who);
 		<Bondage<T>>::insert(who, Self::current_era() + Self::bonding_duration());
 		Ok(())
 	}
@@ -793,8 +792,6 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-//		let minimum_allowed = Self::early_era_slash();
-
 		// evaluate desired staking amounts and nominations and optimise to find the best
 		// combination of validators, then use session::internal::set_validators().
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
@@ -803,7 +800,6 @@ impl<T: Trait> Module<T> {
 		let mut intentions = <Intentions<T>>::get()
 			.into_iter()
 			.map(|v| (Self::slashable_balance(&v), v))
-//			.filter(|&(b, _)| b >= minimum_allowed)
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
@@ -819,6 +815,10 @@ impl<T: Trait> Module<T> {
 				.collect::<Vec<_>>();
 		for v in <session::Module<T>>::validators().iter() {
 			<CurrentNominatorsFor<T>>::remove(v);
+			let slash_count = <SlashCount<T>>::take(v);
+			if slash_count > 1 {
+				<SlashCount<T>>::insert(v, slash_count - 1);
+			}
 		}
 		for v in vals.iter() {
 			<CurrentNominatorsFor<T>>::insert(v, Self::nominators_for(v));
