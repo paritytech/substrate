@@ -25,7 +25,10 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, 
 use runtime_primitives::BuildStorage;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Decode;
-use state_machine::{Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor, ExecutionStrategy, ExecutionManager};
+use state_machine::{
+	Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor,
+	ExecutionStrategy, ExecutionManager, prove_read
+};
 
 use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
@@ -245,6 +248,14 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// Get call executor reference.
 	pub fn executor(&self) -> &E {
 		&self.executor
+	}
+
+	/// Reads storage value at a given block + key, returning read proof.
+	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
+		self.state_at(id)
+			.and_then(|state| prove_read(state, key)
+				.map(|(_, proof)| proof)
+				.map_err(Into::into))
 	}
 
 	/// Execute a call to a contract on top of state in a block of given hash

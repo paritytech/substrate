@@ -14,6 +14,7 @@ error-chain = "0.12"
 bitflags = "1.0"
 futures = "0.1.17"
 linked-hash-map = "0.5"
+rustc-hex = "1.0"
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ed25519 = { path = "../../substrate/ed25519" }
 substrate-primitives = { path = "../../substrate/primitives" }

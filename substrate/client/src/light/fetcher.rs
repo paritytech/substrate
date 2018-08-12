@@ -16,73 +16,106 @@
 
 //! Light client data fetcher. Fetches requested data from remote full nodes.
 
-use std::sync::Arc;
 use futures::IntoFuture;
 
-use runtime_primitives::traits::{Block as BlockT};
-use state_machine::CodeExecutor;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use state_machine::{CodeExecutor, read_proof_check};
 
 use call_executor::CallResult;
 use error::{Error as ClientError, Result as ClientResult};
-use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::check_execution_proof;
 
 /// Remote call request.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct RemoteCallRequest<Hash: ::std::fmt::Display> {
+pub struct RemoteCallRequest<Header: HeaderT> {
 	/// Call at state of given block.
-	pub block: Hash,
+	pub block: Header::Hash,
+	/// Head of block at which call is perormed.
+	pub header: Header,
 	/// Method to call.
 	pub method: String,
 	/// Call data.
 	pub call_data: Vec<u8>,
 }
 
+/// Remote storage read request.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct RemoteReadRequest<Header: HeaderT> {
+	/// Read at state of given block.
+	pub block: Header::Hash,
+	/// Head of block at which read is perormed.
+	pub header: Header,
+	/// Storage key to read.
+	pub key: Vec<u8>,
+}
+
 /// Light client data fetcher. Implementations of this trait must check if remote data
 /// is correct (see FetchedDataChecker) and return already checked data.
 pub trait Fetcher<Block: BlockT>: Send + Sync {
+	/// Remote storage read future.
+	type RemoteReadResult: IntoFuture<Item=Option<Vec<u8>>, Error=ClientError>;
 	/// Remote call result future.
 	type RemoteCallResult: IntoFuture<Item=CallResult, Error=ClientError>;
 
+	/// Fetch remote storage value.
+	fn remote_read(&self, request: RemoteReadRequest<Block::Header>) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
-	fn remote_call(&self, request: RemoteCallRequest<Block::Hash>) -> Self::RemoteCallResult;
+	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
 }
 
 /// Light client remote data checker.
+///
+/// Implementations of this trait should not use any blockchain data except that is
+/// passed to its methods.
 pub trait FetchChecker<Block: BlockT>: Send + Sync {
+	/// Check remote storage read proof.
+	fn check_read_proof(
+		&self,
+		request: &RemoteReadRequest<Block::Header>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<Option<Vec<u8>>>;
 	/// Check remote method execution proof.
-	fn check_execution_proof(&self, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult>;
+	fn check_execution_proof(
+		&self,
+		request: &RemoteCallRequest<Block::Header>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<CallResult>;
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<S, E, F> {
-	blockchain: Arc<Blockchain<S, F>>,
+pub struct LightDataChecker<E> {
 	executor: E,
 }
 
-impl<S, E, F> LightDataChecker<S, E, F> {
+impl<E> LightDataChecker<E> {
 	/// Create new light data checker.
-	pub fn new(blockchain: Arc<Blockchain<S, F>>, executor: E) -> Self {
+	pub fn new(executor: E) -> Self {
 		Self {
-			blockchain,
 			executor,
 		}
 	}
-
-	/// Get blockchain reference.
-	pub fn blockchain(&self) -> &Arc<Blockchain<S, F>> {
-		&self.blockchain
-	}
 }
 
-impl<S, E, F, Block> FetchChecker<Block> for LightDataChecker<S, E, F>
+impl<E, Block> FetchChecker<Block> for LightDataChecker<E>
 	where
 		Block: BlockT,
-		S: BlockchainStorage<Block>,
+		Block::Hash: Into<[u8; 32]>,
 		E: CodeExecutor,
-		F: Fetcher<Block>,
 {
-	fn check_execution_proof(&self, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult> {
-		check_execution_proof(&*self.blockchain, &self.executor, request, remote_proof)
+	fn check_read_proof(
+		&self,
+		request: &RemoteReadRequest<Block::Header>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<Option<Vec<u8>>> {
+		let local_state_root = request.header.state_root().clone();
+		read_proof_check(local_state_root.into(), remote_proof, &request.key).map_err(Into::into)
+	}
+
+	fn check_execution_proof(
+		&self,
+		request: &RemoteCallRequest<Block::Header>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<CallResult> {
+		check_execution_proof(&self.executor, request, remote_proof)
 	}
 }

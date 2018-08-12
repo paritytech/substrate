@@ -282,6 +282,9 @@ pub mod tests {
 			trie.insert(b"value1", &[42]).unwrap();
 			trie.insert(b"value2", &[24]).unwrap();
 			trie.insert(b":code", b"return 42").unwrap();
+			for i in 128u8..255u8 {
+				trie.insert(&[i], &[i]).unwrap();
+			}
 		}
 		(mdb, root)
 	}
