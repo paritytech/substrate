@@ -42,11 +42,9 @@ impl Observed {
 		}
 	}
 
-	fn note_round_end(&mut self, was_online: bool) {
-		let now = Instant::now();
-
+	fn note_round_end(&mut self, now: Instant, was_online: Option<bool>) {
 		self.last_round_end = now;
-		if was_online {
+		if let Some(false) = was_online {
 			self.offline_since = now;
 		}
 	}
@@ -63,12 +61,13 @@ impl Observed {
 /// Tracks offline validators and can issue a report for those offline.
 pub struct OfflineTracker {
 	observed: HashMap<AccountId, Observed>,
+	block_instant: Instant,
 }
 
 impl OfflineTracker {
 	/// Create a new tracker.
 	pub fn new() -> Self {
-		OfflineTracker { observed: HashMap::new() }
+		OfflineTracker { observed: HashMap::new(), block_instant: Instant::now() }
 	}
 
 	/// Note new consensus is starting with the given set of validators.
@@ -77,13 +76,23 @@ impl OfflineTracker {
 
 		let set: HashSet<_> = validators.iter().cloned().collect();
 		self.observed.retain(|k, _| set.contains(k));
+
+		self.block_instant = Instant::now();
 	}
 
 	/// Note that a round has ended.
 	pub fn note_round_end(&mut self, validator: AccountId, was_online: bool) {
-		self.observed.entry(validator)
-			.or_insert_with(Observed::new)
-			.note_round_end(was_online);
+		self.observed.entry(validator).or_insert_with(Observed::new);
+		for (val, obs) in self.observed.iter_mut() {
+			obs.note_round_end(
+				self.block_instant,
+				if val == &validator {
+					Some(was_online)
+				} else {
+					None
+				}
+			)
+		}
 	}
 
 	/// Generate a vector of indices for offline account IDs.
@@ -115,7 +124,7 @@ impl OfflineTracker {
 	/// rounds where we can't say for sure that they're still offline, we give them the
 	/// benefit of the doubt.
 	fn is_known_offline_now(&self, v: &AccountId) -> bool {
-		self.observed.get(v).map(|o| o.activity() == Activity::Offline).unwrap_or(true)
+		self.observed.get(v).map(|o| o.activity() == Activity::Offline).unwrap_or(false)
 	}
 }
 
@@ -129,17 +138,29 @@ mod tests {
 		let v = [0; 32].into();
 		let v2 = [1; 32].into();
 		let v3 = [2; 32].into();
+		tracker.note_new_block(&[v, v2, v3]);
 		tracker.note_round_end(v, true);
 		tracker.note_round_end(v2, true);
 		tracker.note_round_end(v3, true);
+		assert_eq!(tracker.reports(&[v, v2, v3]), vec![0u32; 0]);
 
-		let slash_time = REPORT_TIME + Duration::from_secs(5);
-		tracker.observed.get_mut(&v).unwrap().offline_since -= slash_time;
-		tracker.observed.get_mut(&v2).unwrap().offline_since -= slash_time;
+		tracker.note_new_block(&[v, v2, v3]);
+		tracker.note_round_end(v, true);
+		tracker.note_round_end(v2, false);
+		tracker.note_round_end(v3, true);
+		assert_eq!(tracker.reports(&[v, v2, v3]), vec![1]);
 
-		assert_eq!(tracker.reports(&[v, v2, v3]), vec![0, 1]);
+		tracker.note_new_block(&[v, v2, v3]);
+		tracker.note_round_end(v, false);
+		assert_eq!(tracker.reports(&[v, v2, v3]), vec![0]);
 
-		tracker.note_new_block(&[v, v3]);
+		tracker.note_new_block(&[v, v2, v3]);
+		tracker.note_round_end(v, false);
+		tracker.note_round_end(v2, true);
+		tracker.note_round_end(v3, false);
+		assert_eq!(tracker.reports(&[v, v2, v3]), vec![0, 2]);
+
+		tracker.note_new_block(&[v, v2]);
 		assert_eq!(tracker.reports(&[v, v2, v3]), vec![0]);
 	}
 }
