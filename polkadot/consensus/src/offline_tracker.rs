@@ -21,12 +21,16 @@ use polkadot_primitives::AccountId;
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
 
-// time before we report a validator.
-const REPORT_TIME: Duration = Duration::from_secs(60 * 5);
-
 struct Observed {
 	last_round_end: Instant,
 	offline_since: Instant,
+}
+
+#[derive(Eq, PartialEq)]
+enum Activity {
+	Offline,
+	StillOffline(Duration),
+	Online,
 }
 
 impl Observed {
@@ -47,10 +51,12 @@ impl Observed {
 		}
 	}
 
-	fn is_active(&self) -> bool {
+	/// Returns what we have observed about the online/offline state of the validator.
+	fn activity(&self) -> Activity {
 		// can happen if clocks are not monotonic
-		if self.offline_since > self.last_round_end { return true }
-		self.last_round_end.duration_since(self.offline_since) < REPORT_TIME
+		if self.offline_since > self.last_round_end { return Activity::Online }
+		if self.offline_since == self.last_round_end { return Activity::Offline }
+		Activity::StillOffline(self.last_round_end.duration_since(self.offline_since))
 	}
 }
 
@@ -84,10 +90,10 @@ impl OfflineTracker {
 	pub fn reports(&self, validators: &[AccountId]) -> Vec<u32> {
 		validators.iter()
 			.enumerate()
-			.filter_map(|(i, v)| if self.is_online(v) {
-				None
-			} else {
+			.filter_map(|(i, v)| if self.is_known_offline_now(v) {
 				Some(i as u32)
+			} else {
+				None
 			})
 			.collect()
 	}
@@ -101,13 +107,15 @@ impl OfflineTracker {
 			};
 
 			// we must think all validators reported externally are offline.
-			let thinks_online = self.is_online(v);
-			!thinks_online
+			self.is_known_offline_now(v)
 		})
 	}
 
-	fn is_online(&self, v: &AccountId) -> bool {
-		self.observed.get(v).map(Observed::is_active).unwrap_or(true)
+	/// Rwturns true only if we have seen the validator miss the last round. For further
+	/// rounds where we can't say for sure that they're still offline, we give them the
+	/// benefit of the doubt.
+	fn is_known_offline_now(&self, v: &AccountId) -> bool {
+		self.observed.get(v).map(|o| o.activity() == Activity::Offline).unwrap_or(true)
 	}
 }
 

@@ -111,7 +111,7 @@ pub struct Concrete;
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("polkadot"),
 	impl_name: ver_str!("parity-polkadot"),
-	authoring_version: 1,
+	authoring_version: 2,
 	spec_version: 4,
 	impl_version: 0,
 };

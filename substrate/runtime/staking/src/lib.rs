@@ -130,7 +130,7 @@ impl Default for SlashPreference {
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The allowed extrinsic position for `missed_proposal` inherent.
-	const NOTE_MISSED_PROPOSAL_POSITION: u32;
+//	const NOTE_OFFLINE_POSITION: u32;	// TODO: uncomment when removed from session::Trait
 
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
@@ -154,7 +154,7 @@ decl_module! {
 		fn nominate(aux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result = 3;
 		fn unnominate(aux, target_index: u32) -> Result = 4;
 		fn register_slash_preference(aux, intentions_index: u32, p: SlashPreference) -> Result = 5;
-		fn note_missed_proposal(aux, intentions_index: u32) -> Result = 6;
+		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 6;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -470,38 +470,40 @@ impl<T: Trait> Module<T> {
 	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
 	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
 	/// for the previous block.
-	fn note_missed_proposal(aux: &T::PublicAux, validator_index: u32) -> Result {
+	fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
 		assert!(aux.is_empty());
 		assert!(
-			<system::Module<T>>::extrinsic_index() == T::NOTE_MISSED_PROPOSAL_POSITION,
-			"note_missed_proposal extrinsic must be at position {} in the block",
-			T::NOTE_MISSED_PROPOSAL_POSITION
+			<system::Module<T>>::extrinsic_index() == T::NOTE_OFFLINE_POSITION,
+			"note_offline extrinsic must be at position {} in the block",
+			T::NOTE_OFFLINE_POSITION
 		);
 
-		// TODO: slash or unstake
-		let v = <session::Module<T>>::validators()[validator_index as usize].clone();
-		let slash_count = Self::slash_count(&v);
-		<SlashCount<T>>::insert(v.clone(), slash_count + 1);
-		let grace = Self::offline_slash_grace();
+		for validator_index in offline_val_indices.into_iter() {
+			// TODO: slash or unstake
+			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
+			let slash_count = Self::slash_count(&v);
+			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
+			let grace = Self::offline_slash_grace();
 
-		if slash_count >= grace {
-			let instances = slash_count - grace;
-			let slash = Self::early_era_slash() << instances;
-			let next_slash = slash << 1u32;
-			let _ = Self::slash_validator(&v, slash);
-			if instances >= Self::slash_preference_of(&v).unstake_threshold
-				|| Self::slashable_balance(&v) < next_slash
-			{
-				if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
-					Self::apply_unstake(&v, pos)
-						.expect("pos derived correctly from Self::intentions(); \
-							apply_unstake can only fail if pos wrong; \
-							Self::intentions() doesn't change; qed");
+			if slash_count >= grace {
+				let instances = slash_count - grace;
+				let slash = Self::early_era_slash() << instances;
+				let next_slash = slash << 1u32;
+				let _ = Self::slash_validator(&v, slash);
+				if instances >= Self::slash_preference_of(&v).unstake_threshold
+					|| Self::slashable_balance(&v) < next_slash
+				{
+					if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
+						Self::apply_unstake(&v, pos)
+							.expect("pos derived correctly from Self::intentions(); \
+								apply_unstake can only fail if pos wrong; \
+								Self::intentions() doesn't change; qed");
+					}
+					let _ = Self::force_new_era(false);
 				}
-				let _ = Self::force_new_era(false);
 			}
 		}
-
+		
 		Ok(())
 	}
 
