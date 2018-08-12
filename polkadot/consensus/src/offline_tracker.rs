@@ -161,6 +161,7 @@ mod tests {
 		assert_eq!(tracker.reports(&[v, v2, v3]), vec![0, 2]);
 
 		tracker.note_new_block(&[v, v2]);
+		tracker.note_round_end(v, false);
 		assert_eq!(tracker.reports(&[v, v2, v3]), vec![0]);
 	}
 }
