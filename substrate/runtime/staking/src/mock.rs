@@ -54,6 +54,7 @@ impl timestamp::Trait for Test {
 	type Moment = u64;
 }
 impl Trait for Test {
+	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type Balance = u64;
 	type AccountIndex = u64;
 	type OnAccountKill = ();

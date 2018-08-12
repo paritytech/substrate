@@ -51,13 +51,13 @@ use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
 /// A session has changed.
-pub trait OnSessionChange<T, A> {
+pub trait OnSessionChange<T> {
 	/// Session has changed.
-	fn on_session_change(time_elapsed: T, bad_validators: Vec<A>);
+	fn on_session_change(time_elapsed: T, should_reward: bool);
 }
 
-impl<T, A> OnSessionChange<T, A> for () {
-	fn on_session_change(_: T, _: Vec<A>) {}
+impl<T> OnSessionChange<T> for () {
+	fn on_session_change(_: T, _: bool) {}
 }
 
 pub trait Trait: timestamp::Trait {
@@ -65,7 +65,7 @@ pub trait Trait: timestamp::Trait {
 	const NOTE_OFFLINE_POSITION: u32;
 
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
-	type OnSessionChange: OnSessionChange<Self::Moment, Self::AccountId>;
+	type OnSessionChange: OnSessionChange<Self::Moment>;
 }
 
 decl_module! {
@@ -80,7 +80,7 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
-		fn force_new_session(normal_rotation: bool) -> Result = 1;
+		fn force_new_session(apply_rewards: bool) -> Result = 1;
 	}
 }
 
@@ -139,8 +139,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Forces a new session.
-	pub fn force_new_session(normal_rotation: bool) -> Result {
-		<ForcingNewSession<T>>::put(normal_rotation);
+	pub fn force_new_session(apply_rewards: bool) -> Result {
+		<ForcingNewSession<T>>::put(apply_rewards);
 		Ok(())
 	}
 
@@ -178,15 +178,15 @@ impl<T: Trait> Module<T> {
 		// check block number and call next_session if necessary.
 		let block_number = <system::Module<T>>::block_number();
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
-		let bad_validators = <BadValidators<T>>::take().unwrap_or_default();
-		let should_end_session = <ForcingNewSession<T>>::take().is_some() || !bad_validators.is_empty() || is_final_block;
+		let (should_end_session, apply_rewards) = <ForcingNewSession<T>>::take()
+			.map_or((is_final_block, is_final_block), |apply_rewards| (true, apply_rewards));
 		if should_end_session {
-			Self::rotate_session(is_final_block, bad_validators);
+			Self::rotate_session(is_final_block, apply_rewards);
 		}
 	}
 
 	/// Move onto next session: register the new authority set.
-	pub fn rotate_session(is_final_block: bool, bad_validators: Vec<T::AccountId>) {
+	pub fn rotate_session(is_final_block: bool, apply_rewards: bool) {
 		let now = <timestamp::Module<T>>::get();
 		let time_elapsed = now.clone() - Self::current_start();
 
@@ -206,7 +206,7 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
-		T::OnSessionChange::on_session_change(time_elapsed, bad_validators);
+		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 
 		// Update any changes in session keys.
 		Self::validators().iter().enumerate().for_each(|(i, v)| {
