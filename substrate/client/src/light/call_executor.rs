@@ -60,9 +60,11 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 			BlockId::Number(number) => self.blockchain.hash(number)?
 				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", number)))?,
 		};
+		let block_header = self.blockchain.expect_header(id.clone())?;
 
 		self.fetcher.remote_call(RemoteCallRequest {
-			block: block_hash.clone(),
+			block: block_hash,
+			header: block_header,
 			method: method.into(),
 			call_data: call_data.to_vec(),
 		}).into_future().wait()
@@ -97,34 +99,17 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 }
 
 /// Check remote execution proof using given backend.
-pub fn check_execution_proof<Block, B, E>(
-	blockchain: &B,
+pub fn check_execution_proof<Header, E>(
 	executor: &E,
-	request: &RemoteCallRequest<Block::Hash>,
+	request: &RemoteCallRequest<Header>,
 	remote_proof: Vec<Vec<u8>>
 ) -> ClientResult<CallResult>
 	where
-		Block: BlockT,
-		B: ChainBackend<Block>,
+		Header: HeaderT,
 		E: CodeExecutor,
 {
-	let local_header = blockchain.header(BlockId::Hash(request.block))?;
-	let local_header = local_header.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", request.block)))?;
-	let local_state_root = *local_header.state_root();
-	do_check_execution_proof(local_state_root.into(), executor, request, remote_proof)
-}
+	let local_state_root = request.header.state_root();
 
-/// Check remote execution proof using given state root.
-fn do_check_execution_proof<Hash, E>(
-	local_state_root: Hash,
-	executor: &E,
-	request: &RemoteCallRequest<Hash>,
-	remote_proof: Vec<Vec<u8>>,
-) -> ClientResult<CallResult>
-	where
-		Hash: ::std::fmt::Display + ::std::convert::AsRef<[u8]>,
-		E: CodeExecutor,
-{
 	let mut changes = OverlayedChanges::default();
 	let (local_result, _) = execution_proof_check(
 		TrieH256::from_slice(local_state_root.as_ref()).into(),
@@ -156,8 +141,15 @@ mod tests {
 		
 		// check remote execution proof locally
 		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
-		do_check_execution_proof(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
+		check_execution_proof(&local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
+			header: test_client::runtime::Header {
+				state_root: remote_block_storage_root.into(),
+				parent_hash: Default::default(),
+				number: 0,
+				extrinsics_root: Default::default(),
+				digest: Default::default(),
+			},
 			method: "authorities".into(),
 			call_data: vec![],
 		}, remote_execution_proof).unwrap();

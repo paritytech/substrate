@@ -45,6 +45,9 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	/// Get block justification.
 	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, Error>;
 
+	/// Get storage read execution proof.
+	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error>;
+
 	/// Get method execution proof.
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
 }
@@ -82,6 +85,10 @@ impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
 
 	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, Error> {
 		(self as &SubstrateClient<B, E, Block>).justification(id)
+	}
+
+	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
+		(self as &SubstrateClient<B, E, Block>).read_proof(&BlockId::Hash(block.clone()), key)
 	}
 
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
