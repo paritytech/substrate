@@ -286,7 +286,7 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 
 		let encoded = uxt.encode();
 		let (encoded_size, hash) = (encoded.len(), BlakeTwo256::hash(&encoded));
-		
+
 		debug!(target: "transaction-pool", "Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
 
 		let inner = match uxt.clone().check_with(|a| self.lookup(a)) {
@@ -446,10 +446,10 @@ mod tests {
 	use substrate_keyring::Keyring::{self, *};
 	use codec::{Decode, Encode};
 	use polkadot_api::{PolkadotApi, BlockBuilder, Result};
-	use primitives::{AccountId, AccountIndex, Block, BlockId, Hash, Index, SessionKey, Timestamp,
+	use primitives::{AccountId, AccountIndex, Block, BlockId, Hash, Index, SessionKey,
 		UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 	use runtime::{RawAddress, Call, TimestampCall, BareExtrinsic, Extrinsic, UncheckedExtrinsic};
-	use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
+	use primitives::parachain::{DutyRoster, Id as ParaId};
 	use substrate_runtime_primitives::{MaybeUnsigned, generic};
 
 	struct TestBlockBuilder;
@@ -494,8 +494,8 @@ mod tests {
 		fn active_parachains(&self, _at: &BlockId) -> Result<Vec<ParaId>> { unimplemented!() }
 		fn parachain_code(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
 		fn parachain_head(&self, _at: &BlockId, _parachain: ParaId) -> Result<Option<Vec<u8>>> { unimplemented!() }
-		fn build_block(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> { unimplemented!() }
-		fn inherent_extrinsics(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> { unimplemented!() }
+		fn build_block(&self, _at: &BlockId, _inherent: ::primitives::InherentData) -> Result<Self::BlockBuilder> { unimplemented!() }
+		fn inherent_extrinsics(&self, _at: &BlockId, _inherent: ::primitives::InherentData) -> Result<Vec<Vec<u8>>> { unimplemented!() }
 
 		fn index(&self, _at: &BlockId, _account: AccountId) -> Result<Index> {
 			Ok((_account[0] as u32) + number_of(_at))

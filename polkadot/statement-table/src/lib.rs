@@ -18,6 +18,9 @@ extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 extern crate polkadot_primitives as primitives;
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 pub mod generic;
 
 pub use generic::Table;

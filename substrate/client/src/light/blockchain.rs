@@ -27,6 +27,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, 
 
 use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
+use cht;
 use error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::fetcher::{Fetcher, RemoteHeaderRequest};
 
@@ -98,6 +99,7 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 
 				self.fetcher().upgrade().ok_or(ClientErrorKind::NotAvailableOnLightClient)?
 					.remote_header(RemoteHeaderRequest {
+						cht_root: self.storage.cht_root(cht::SIZE, number)?,
 						block: number,
 					})
 					.into_future().wait()

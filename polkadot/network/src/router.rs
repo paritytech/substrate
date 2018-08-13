@@ -25,13 +25,14 @@
 use polkadot_api::{PolkadotApi, LocalPolkadotApi};
 use polkadot_consensus::{SharedTable, TableRouter, SignedStatement, GenericStatement, StatementProducer};
 use polkadot_primitives::{Hash, BlockId, SessionKey};
-use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt, Id as ParaId};
+use polkadot_primitives::parachain::{BlockData, Extrinsic, CandidateReceipt};
 
 use futures::prelude::*;
 use tokio::runtime::TaskExecutor;
 use parking_lot::Mutex;
 
 use std::collections::{HashMap, HashSet};
+use std::io;
 use std::sync::Arc;
 
 use super::{NetworkService, Knowledge};
@@ -89,14 +90,16 @@ impl<P: PolkadotApi> Clone for Router<P> {
 impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 	/// Import a statement whose signature has been checked already.
 	pub(crate) fn import_statement(&self, statement: SignedStatement) {
+		trace!(target: "p_net", "importing consensus statement {:?}", statement.statement);
+
 		// defer any statements for which we haven't imported the candidate yet
-		let (c_hash, parachain_index) = {
+		let c_hash = {
 			let candidate_data = match statement.statement {
-				GenericStatement::Candidate(ref c) => Some((c.hash(), c.parachain_index)),
+				GenericStatement::Candidate(ref c) => Some(c.hash()),
 				GenericStatement::Valid(ref hash)
 					| GenericStatement::Invalid(ref hash)
 					| GenericStatement::Available(ref hash)
-					=> self.table.with_candidate(hash, |c| c.map(|c| (*hash, c.parachain_index))),
+					=> self.table.with_candidate(hash, |c| c.map(|_| *hash)),
 			};
 			match candidate_data {
 				Some(x) => x,
@@ -115,6 +118,7 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 		};
 
 		// prepend the candidate statement.
+		debug!(target: "consensus", "Importing statements about candidate {:?}", c_hash);
 		statements.insert(0, statement);
 		let producers: Vec<_> = self.table.import_remote_statements(
 			self,
@@ -122,19 +126,18 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 		);
 		// dispatch future work as necessary.
 		for (producer, statement) in producers.into_iter().zip(statements) {
-			let producer = match producer {
-				Some(p) => p,
-				None => continue, // statement redundant
-			};
-
 			self.knowledge.lock().note_statement(statement.sender, &statement.statement);
-			self.dispatch_work(c_hash, producer, parachain_index);
+
+			if let Some(producer) = producer {
+				trace!(target: "consensus", "driving statement work to completion");
+				self.dispatch_work(c_hash, producer);
+			}
 		}
 	}
 
-	fn dispatch_work<D, E>(&self, candidate_hash: Hash, producer: StatementProducer<D, E>, parachain: ParaId) where
-		D: Future<Item=BlockData,Error=()> + Send + 'static,
-		E: Future<Item=Extrinsic,Error=()> + Send + 'static,
+	fn dispatch_work<D, E>(&self, candidate_hash: Hash, producer: StatementProducer<D, E>) where
+		D: Future<Item=BlockData,Error=io::Error> + Send + 'static,
+		E: Future<Item=Extrinsic,Error=io::Error> + Send + 'static,
 	{
 		let parent_hash = self.parent_hash.clone();
 
@@ -154,39 +157,49 @@ impl<P: LocalPolkadotApi + Send + Sync + 'static> Router<P> {
 		let network = self.network.clone();
 		let knowledge = self.knowledge.clone();
 
-		let work = producer.prime(validate).map(move |produced| {
-			// store the data before broadcasting statements, so other peers can fetch.
-			knowledge.lock().note_candidate(candidate_hash, produced.block_data, produced.extrinsic);
+		let work = producer.prime(validate)
+			.map(move |produced| {
+				// store the data before broadcasting statements, so other peers can fetch.
+				knowledge.lock().note_candidate(
+					candidate_hash,
+					produced.block_data,
+					produced.extrinsic
+				);
 
-			// propagate the statements
-			if let Some(validity) = produced.validity {
-				let signed = table.sign_and_import(validity.clone());
-				route_statement(&*network, &*table, parachain, parent_hash, signed);
-			}
+				// propagate the statements
+				if let Some(validity) = produced.validity {
+					let signed = table.sign_and_import(validity.clone()).0;
+					network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
+				}
 
-			if let Some(availability) = produced.availability {
-				let signed = table.sign_and_import(availability);
-				route_statement(&*network, &*table, parachain, parent_hash, signed);
-			}
-		});
+				if let Some(availability) = produced.availability {
+					let signed = table.sign_and_import(availability).0;
+					network.with_spec(|spec, ctx| spec.gossip_statement(ctx, parent_hash, signed));
+				}
+			})
+			.map_err(|e| debug!(target: "p_net", "Failed to produce statements: {:?}", e));
 
 		self.task_executor.spawn(work);
 	}
 }
 
 impl<P: LocalPolkadotApi + Send> TableRouter for Router<P> {
-	type Error = ();
+	type Error = io::Error;
 	type FetchCandidate = BlockDataReceiver;
 	type FetchExtrinsic = Result<Extrinsic, Self::Error>;
 
 	fn local_candidate(&self, receipt: CandidateReceipt, block_data: BlockData, extrinsic: Extrinsic) {
 		// give to network to make available.
 		let hash = receipt.hash();
-		let para_id = receipt.parachain_index;
-		let signed = self.table.sign_and_import(GenericStatement::Candidate(receipt));
+		let (candidate, availability) = self.table.sign_and_import(GenericStatement::Candidate(receipt));
 
 		self.knowledge.lock().note_candidate(hash, Some(block_data), Some(extrinsic));
-		route_statement(&*self.network, &*self.table, para_id, self.parent_hash, signed);
+		self.network.with_spec(|spec, ctx| {
+			spec.gossip_statement(ctx, self.parent_hash, candidate);
+			if let Some(availability) = availability {
+				spec.gossip_statement(ctx, self.parent_hash, availability);
+			}
+		});
 	}
 
 	fn fetch_block_data(&self, candidate: &CandidateReceipt) -> BlockDataReceiver {
@@ -207,39 +220,19 @@ pub struct BlockDataReceiver {
 
 impl Future for BlockDataReceiver {
 	type Item = BlockData;
-	type Error = ();
+	type Error = io::Error;
 
-	fn poll(&mut self) -> Poll<BlockData, ()> {
+	fn poll(&mut self) -> Poll<BlockData, io::Error> {
 		match self.inner {
-			Some(ref mut inner) => inner.poll().map_err(|_| ()),
-			None => return Err(()),
+			Some(ref mut inner) => inner.poll().map_err(|_| io::Error::new(
+				io::ErrorKind::Other,
+				"Sending end of channel hung up",
+			)),
+			None => return Err(io::Error::new(
+				io::ErrorKind::Other,
+				"Network service is unavailable",
+			)),
 		}
-	}
-}
-
-// get statement to relevant validators.
-fn route_statement(network: &NetworkService, table: &SharedTable, para_id: ParaId, parent_hash: Hash, statement: SignedStatement) {
-	let broadcast = |i: &mut Iterator<Item=&SessionKey>| {
-		let local_key = table.session_key();
-		network.with_spec(|spec, ctx| {
-			for val in i.filter(|&x| x != &local_key) {
-				spec.send_statement(ctx, *val, parent_hash, statement.clone());
-			}
-		});
-	};
-
-	let g_info = table
-		.group_info()
-		.get(&para_id)
-		.expect("statements only produced about groups which exist");
-
-	match statement.statement {
-		GenericStatement::Candidate(_) =>
-			broadcast(&mut g_info.validity_guarantors.iter().chain(g_info.availability_guarantors.iter())),
-		GenericStatement::Valid(_) | GenericStatement::Invalid(_) =>
-			broadcast(&mut g_info.validity_guarantors.iter()),
-		GenericStatement::Available(_) =>
-			broadcast(&mut g_info.availability_guarantors.iter()),
 	}
 }
 

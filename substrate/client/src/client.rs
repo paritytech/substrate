@@ -34,6 +34,7 @@ use backend::{self, BlockImportOperation};
 use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend as ChainHeaderBackend};
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
+use notifications::{StorageNotifications, StorageEventStream};
 use {cht, error, in_mem, block_builder, runtime_io, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
@@ -43,6 +44,7 @@ pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotif
 pub struct Client<B, E, Block> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
+	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
@@ -52,13 +54,24 @@ pub struct Client<B, E, Block> where Block: BlockT {
 /// A source of blockchain evenets.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
+	fn import_notification_stream(&self) -> BlockchainEventStream<Block>;
+
+	/// Get storage changes event stream.
+	///
+	/// Passing `None` as `filter_keys` subscribes to all storage changes.
+	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>>;
 }
 
 /// Chain head information.
 pub trait ChainHead<Block: BlockT> {
 	/// Get best block header.
 	fn best_block_header(&self) -> Result<<Block as BlockT>::Header, error::Error>;
+}
+
+/// Fetch block body by ID.
+pub trait BlockBody<Block: BlockT> {
+	/// Get block body by ID. Returns `None` if the body is not stored.
+	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 }
 
 /// Client info
@@ -185,9 +198,10 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok(Client {
 			backend,
 			executor,
-			import_notification_sinks: Mutex::new(Vec::new()),
-			import_lock: Mutex::new(()),
-			importing_block: RwLock::new(None),
+			storage_notifications: Default::default(),
+			import_notification_sinks: Default::default(),
+			import_lock: Default::default(),
+			importing_block: Default::default(),
 			execution_strategy,
 		})
 	}
@@ -203,16 +217,16 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Return single storage entry of contract under given address in state in a block of given hash.
-	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<StorageData> {
-		Ok(StorageData(self.state_at(id)?
+	pub fn storage(&self, id: &BlockId<Block>, key: &StorageKey) -> error::Result<Option<StorageData>> {
+		Ok(self.state_at(id)?
 			.storage(&key.0).map_err(|e| error::Error::from_state(Box::new(e)))?
-			.ok_or_else(|| error::ErrorKind::NoValueForKey(key.0.clone()))?
-			.to_vec()))
+			.map(StorageData))
 	}
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		self.storage(id, &StorageKey(b":code".to_vec())).map(|data| data.0)
+		Ok(self.storage(id, &StorageKey(b":code".to_vec()))?
+			.expect("None is returned if there's no value stored for the given key; ':code' key is always defined; qed").0)
 	}
 
 	/// Get the set of authorities at a given block.
@@ -361,7 +375,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
-		let storage_update = match transaction.state()? {
+		let (storage_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
 				let mut r = self.executor.call_at_state(
@@ -388,9 +402,10 @@ impl<B, E, Block> Client<B, E, Block> where
 					},
 				);
 				let (_, storage_update) = r?;
-				Some(storage_update)
+				overlay.commit_prospective();
+				(Some(storage_update), Some(overlay.into_committed()))
 			},
-			None => None,
+			None => (None, None)
 		};
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
@@ -402,7 +417,15 @@ impl<B, E, Block> Client<B, E, Block> where
 			transaction.update_storage(storage_update)?;
 		}
 		self.backend.commit_operation(transaction)?;
+
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
+
+			if let Some(storage_changes) = storage_changes {
+				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
+				self.storage_notifications.lock()
+					.trigger(&hash, storage_changes);
+			}
+
 			let notification = BlockImportNotification::<Block> {
 				hash: hash,
 				origin: origin,
@@ -545,15 +568,19 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
 		E: CallExecutor<Block>,
 		Block: BlockT,
 {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> mpsc::UnboundedReceiver<BlockImportNotification<Block>> {
+	fn import_notification_stream(&self) -> BlockchainEventStream<Block> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
 		stream
+	}
+
+	/// Get storage changes event stream.
+	fn storage_changes_notification_stream(&self, filter_keys: Option<&[StorageKey]>) -> error::Result<StorageEventStream<Block::Hash>> {
+		Ok(self.storage_notifications.lock().listen(filter_keys))
 	}
 }
 
@@ -568,16 +595,26 @@ impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 	}
 }
 
+impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
+	where
+		B: backend::Backend<Block>,
+		E: CallExecutor<Block>,
+		Block: BlockT,
+{
+	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
+		self.body(id)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Encode;
 	use keyring::Keyring;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
-	use test_client::runtime as test_runtime;
-	use test_client::runtime::{Transfer, Extrinsic};
+	use test_client::{runtime as test_runtime, BlockBuilderExt};
+	use test_client::runtime::Transfer;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
@@ -610,23 +647,18 @@ mod tests {
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 	}
 
-	fn sign_tx(tx: Transfer) -> Extrinsic {
-		let signature = Keyring::from_raw_public(tx.from.0.clone()).unwrap().sign(&tx.encode()).into();
-		Extrinsic { transfer: tx, signature }
-	}
-
 	#[test]
 	fn block_builder_works_with_transactions() {
 		let client = test_client::new();
 
 		let mut builder = client.new_block().unwrap();
 
-		builder.push(sign_tx(Transfer {
+		builder.push_transfer(Transfer {
 			from: Keyring::Alice.to_raw_public().into(),
 			to: Keyring::Ferdie.to_raw_public().into(),
 			amount: 42,
 			nonce: 0,
-		})).unwrap();
+		}).unwrap();
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
@@ -654,19 +686,19 @@ mod tests {
 
 		let mut builder = client.new_block().unwrap();
 
-		builder.push(sign_tx(Transfer {
+		builder.push_transfer(Transfer {
 			from: Keyring::Alice.to_raw_public().into(),
 			to: Keyring::Ferdie.to_raw_public().into(),
 			amount: 42,
 			nonce: 0,
-		})).unwrap();
+		}).unwrap();
 
-		assert!(builder.push(sign_tx(Transfer {
+		assert!(builder.push_transfer(Transfer {
 			from: Keyring::Eve.to_raw_public().into(),
 			to: Keyring::Alice.to_raw_public().into(),
 			amount: 42,
 			nonce: 0,
-		})).is_err());
+		}).is_err());
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 

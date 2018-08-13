@@ -75,21 +75,7 @@ error_chain! {
 			description("invalid memory reference"),
 			display("Invalid memory reference"),
 		}
-
-		/// Retry, please.
-		PleaseRetry {
-			description("retry needed"),
-			display("Retry needed"),
-		}
 	}
 }
 
-impl state_machine::Error for Error {
-	fn needs_retry(&self) -> bool {
-		if let ErrorKind::PleaseRetry = self.0 {
-			true
-		} else {
-			false
-		}
-	}
-}
+impl state_machine::Error for Error {}

@@ -18,27 +18,15 @@
 
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
-use codec::{Decode, Encode, Codec, Input, Output};
+use codec::Codec;
 use runtime_support::AuxDispatchable;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 
 pub use substrate_primitives::H256;
 
-#[derive(Default, PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
+#[derive(Default, PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 pub struct Digest {
 	pub logs: Vec<u64>,
-}
-
-impl Decode for Digest {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Vec::<u64>::decode(input).map(|logs| Digest { logs })
-	}
-}
-
-impl Encode for Digest {
-	fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
-		self.logs.using_encoded(f)
-	}
 }
 
 impl traits::Digest for Digest {
@@ -48,7 +36,7 @@ impl traits::Digest for Digest {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct Header {
@@ -57,28 +45,6 @@ pub struct Header {
 	pub state_root: H256,
 	pub extrinsics_root: H256,
 	pub digest: Digest,
-}
-
-impl Decode for Header {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Header {
-			parent_hash: Decode::decode(input)?,
-			number: Decode::decode(input)?,
-			state_root: Decode::decode(input)?,
-			extrinsics_root: Decode::decode(input)?,
-			digest: Decode::decode(input)?,
-		})
-	}
-}
-
-impl Encode for Header {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.parent_hash);
-		dest.push(&self.number);
-		dest.push(&self.state_root);
-		dest.push(&self.extrinsics_root);
-		dest.push(&self.digest);
-	}
 }
 
 impl traits::Header for Header {
@@ -115,25 +81,12 @@ impl traits::Header for Header {
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 pub struct Block<Xt> {
 	pub header: Header,
 	pub extrinsics: Vec<Xt>,
 }
-impl<Xt: Decode> Decode for Block<Xt> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(Block {
-			header: Decode::decode(input)?,
-			extrinsics: Decode::decode(input)?,
-		})
-	}
-}
-impl<Xt: Encode> Encode for Block<Xt> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		dest.push(&self.header);
-		dest.push(&self.extrinsics);
-	}
-}
+
 impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
 	type Extrinsic = Xt;
 	type Header = Header;
@@ -153,20 +106,8 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + 
 	}
 }
 
-#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug)]
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 pub struct TestXt<Call>(pub (u64, u64, Call));
-
-impl<Call: Decode> Decode for TestXt<Call> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(TestXt(Decode::decode(input)?))
-	}
-}
-
-impl<Call: Encode> Encode for TestXt<Call> {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		self.0.encode_to(dest)
-	}
-}
 
 impl<Call: Codec + Sync + Send + Serialize + AuxDispatchable, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;

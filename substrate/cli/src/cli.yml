@@ -46,6 +46,14 @@ args:
       value_name: PORT
       help: Specify p2p protocol TCP port
       takes_value: true
+  - rpc-external:
+      long: rpc-external
+      help: Listen to all RPC interfaces (default is local)
+      takes_value: false
+  - ws-external:
+      long: ws-external
+      help: Listen to all Websocket interfaces (default is local)
+      takes_value: false
   - rpc-port:
       long: rpc-port
       value_name: PORT
@@ -60,6 +68,12 @@ args:
       long: bootnodes
       value_name: URL
       help: Specify a list of bootnodes
+      takes_value: true
+      multiple: true
+  - reserved-nodes:
+      long: reserved-nodes
+      value_name: URL
+      help: Specify a list of reserved node addresses
       takes_value: true
       multiple: true
   - chain:
@@ -95,10 +109,6 @@ args:
       long: execution
       value_name: STRATEGY
       help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
-  - min-heap-pages:
-      long: min-heap-pages
-      value_name: COUNT
-      help: The number of 64KB pages to allocate for Wasm execution initially.
   - max-heap-pages:
       long: max-heap-pages
       value_name: COUNT
@@ -170,10 +180,6 @@ subcommands:
               long: execution
               value_name: STRATEGY
               help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
-          - min-heap-pages:
-              long: min-heap-pages
-              value_name: COUNT
-              help: The number of 64KB pages to allocate for Wasm execution initially.
           - max-heap-pages:
               long: max-heap-pages
               value_name: COUNT

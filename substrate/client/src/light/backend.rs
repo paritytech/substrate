@@ -19,6 +19,7 @@
 
 use std::sync::{Arc, Weak};
 use futures::{Future, IntoFuture};
+use parking_lot::RwLock;
 
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
@@ -38,17 +39,19 @@ pub struct Backend<S, F> {
 }
 
 /// Light block (header and justification) import operation.
-pub struct ImportOperation<Block: BlockT, F> {
+pub struct ImportOperation<Block: BlockT, S, F> {
 	is_new_best: bool,
 	header: Option<Block::Header>,
 	authorities: Option<Vec<AuthorityId>>,
-	_phantom: ::std::marker::PhantomData<F>,
+	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
 /// On-demand state.
-pub struct OnDemandState<Block: BlockT, F> {
+pub struct OnDemandState<Block: BlockT, S, F> {
 	fetcher: Weak<F>,
+	blockchain: Weak<Blockchain<S, F>>,
 	block: Block::Hash,
+	cached_header: RwLock<Option<Block::Header>>,
 }
 
 impl<S, F> Backend<S, F> {
@@ -63,10 +66,14 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {
-	type BlockImportOperation = ImportOperation<Block, F>;
+impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>
+{
+	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
-	type State = OnDemandState<Block, F>;
+	type State = OnDemandState<Block, S, F>;
 
 	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
@@ -93,8 +100,10 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S:
 		};
 
 		Ok(OnDemandState {
-			block: block_hash.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", block)))?,
 			fetcher: self.blockchain.fetcher(),
+			blockchain: Arc::downgrade(&self.blockchain),
+			block: block_hash.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", block)))?,
+			cached_header: RwLock::new(None),
 		})
 	}
 
@@ -105,8 +114,13 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where Block: BlockT, S:
 
 impl<S, F, Block> RemoteBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {}
 
-impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where Block: BlockT, F: Fetcher<Block> {
-	type State = OnDemandState<Block, F>;
+impl<S, F, Block> BlockImportOperation<Block> for ImportOperation<Block, S, F>
+	where
+		Block: BlockT,
+		S: BlockchainStorage<Block>,
+		F: Fetcher<Block>,
+{
+	type State = OnDemandState<Block, S, F>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		// None means 'locally-stateless' backend
@@ -140,23 +154,29 @@ impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where B
 	}
 }
 
-impl<Block: BlockT, F> Clone for OnDemandState<Block, F> {
-	fn clone(&self) -> Self {
-		OnDemandState {
-			fetcher: self.fetcher.clone(),
-			block: self.block,
-		}
-	}
-}
-
-impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: Fetcher<Block> {
+impl<Block, S, F> StateBackend for OnDemandState<Block, S, F>
+	where
+		Block: BlockT,
+		S: BlockchainStorage<Block>,
+		F: Fetcher<Block>,
+{
 	type Error = ClientError;
 	type Transaction = ();
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		let mut header = self.cached_header.read().clone();
+		if header.is_none() {
+			let cached_header = self.blockchain.upgrade()
+				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", self.block)).into())
+				.and_then(|blockchain| blockchain.expect_header(BlockId::Hash(self.block)))?;
+			header = Some(cached_header.clone());
+			*self.cached_header.write() = Some(cached_header);
+		}
+
 		self.fetcher.upgrade().ok_or(ClientErrorKind::NotAvailableOnLightClient)?
 			.remote_read(RemoteReadRequest {
 				block: self.block,
+				header: header.expect("if block above guarantees that header is_some(); qed"),
 				key: key.to_vec(),
 			})
 			.into_future().wait()
@@ -177,7 +197,7 @@ impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: 
 	}
 }
 
-impl<Block, F> TryIntoStateTrieBackend for OnDemandState<Block, F> where Block: BlockT, F: Fetcher<Block> {
+impl<Block, S, F> TryIntoStateTrieBackend for OnDemandState<Block, S, F> where Block: BlockT, F: Fetcher<Block> {
 	fn try_into_trie_backend(self) -> Option<StateTrieBackend> {
 		None
 	}

@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 error-chain = "0.12"
+fnv = "1.0"
 log = "0.3"
 parking_lot = "0.4"
 triehash = "0.1"

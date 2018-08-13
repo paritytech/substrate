@@ -23,7 +23,7 @@
 //! The changes are journaled in the DB.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use codec::{Decode, Encode, self};
+use codec::{Encode, Decode};
 use {CommitSet, Error, MetaDb, to_meta_key, Hash};
 
 const LAST_PRUNED: &[u8] = b"last_pruned";
@@ -43,28 +43,11 @@ struct DeathRow<BlockHash: Hash, Key: Hash> {
 	deleted: HashSet<Key>,
 }
 
+#[derive(Encode, Decode)]
 struct JournalRecord<BlockHash: Hash, Key: Hash> {
 	hash: BlockHash,
 	inserted: Vec<Key>,
 	deleted: Vec<Key>,
-}
-
-impl<BlockHash: Hash, Key: Hash> Encode for JournalRecord<BlockHash, Key> {
-	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
-		dest.push(&self.hash);
-		dest.push(&self.inserted);
-		dest.push(&self.deleted);
-	}
-}
-
-impl<BlockHash: Hash, Key: Hash> Decode for JournalRecord<BlockHash, Key> {
-	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
-		Some(JournalRecord {
-			hash: Decode::decode(input)?,
-			inserted: Decode::decode(input)?,
-			deleted: Decode::decode(input)?,
-		})
-	}
 }
 
 fn to_journal_key(block: u64) -> Vec<u8> {

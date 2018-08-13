@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -30,7 +30,7 @@ use import_queue::ImportQueue;
 // Maximum blocks to request in a single packet.
 const MAX_BLOCKS_TO_REQUEST: usize = 128;
 // Maximum blocks to store in the import queue.
-const MAX_IMPORING_BLOCKS: usize = 2048;
+const MAX_IMPORTING_BLOCKS: usize = 2048;
 
 struct PeerSync<B: BlockT> {
 	pub common_hash: B::Hash,
@@ -237,7 +237,8 @@ impl<B: BlockT> ChainSync<B> {
 		let is_best = new_blocks.first().and_then(|b| b.block.header.as_ref()).map(|h| best_seen.as_ref().map_or(false, |n| h.number() >= n));
 		let origin = if is_best.unwrap_or_default() { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
 		let import_queue = self.import_queue.clone();
-		import_queue.import_blocks(self, protocol, (origin, new_blocks))
+		import_queue.import_blocks(self, protocol, (origin, new_blocks));
+		self.maintain_sync(protocol);
 	}
 
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
@@ -361,7 +362,7 @@ impl<B: BlockT> ChainSync<B> {
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			let import_status = self.import_queue.status();
 			// when there are too many blocks in the queue => do not try to download new blocks
-			if import_status.importing_count > MAX_IMPORING_BLOCKS {
+			if import_status.importing_count > MAX_IMPORTING_BLOCKS {
 				return;
 			}
 			// we should not download already queued blocks

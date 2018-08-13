@@ -46,23 +46,26 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
+use primitives::traits::{Zero, One, RefInto, MaybeEmpty, Executable, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
 /// A session has changed.
-pub trait OnSessionChange<T> {
+pub trait OnSessionChange<T, A> {
 	/// Session has changed.
-	fn on_session_change(normal_rotation: bool, time_elapsed: T);
+	fn on_session_change(time_elapsed: T, bad_validators: Vec<A>);
 }
 
-impl<T> OnSessionChange<T> for () {
-	fn on_session_change(_: bool, _: T) {}
+impl<T, A> OnSessionChange<T, A> for () {
+	fn on_session_change(_: T, _: Vec<A>) {}
 }
 
 pub trait Trait: timestamp::Trait {
+	// the position of the required timestamp-set extrinsic.
+	const NOTE_OFFLINE_POSITION: u32;
+
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
-	type OnSessionChange: OnSessionChange<Self::Moment>;
+	type OnSessionChange: OnSessionChange<Self::Moment, Self::AccountId>;
 }
 
 decl_module! {
@@ -71,6 +74,7 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set_key(aux, key: T::SessionKey) -> Result = 0;
+		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 1;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -79,6 +83,7 @@ decl_module! {
 		fn force_new_session(normal_rotation: bool) -> Result = 1;
 	}
 }
+
 decl_storage! {
 	trait Store for Module<T: Trait>;
 
@@ -93,6 +98,13 @@ decl_storage! {
 	// Percent by which the session must necessarily finish late before we early-exit the session.
 	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Moment;
 
+	// Opinions of the current validator set about the activeness of their peers.
+	// Gets cleared when the validator set changes.
+	pub BadValidators get(bad_validators): b"ses:bad_validators" => Vec<T::AccountId>;
+
+	// New session is being forced is this entry exists; in which case, the boolean value is whether
+	// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
+	pub ForcingNewSession get(forcing_new_session): b"ses:forcing_new_session" => bool;
 	// Block at which the session length last changed.
 	LastLengthChange: b"ses:llc" => T::BlockNumber;
 	// The next key for a given validator.
@@ -127,8 +139,22 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Forces a new session.
-	fn force_new_session(normal_rotation: bool) -> Result {
-		Self::rotate_session(normal_rotation);
+	pub fn force_new_session(normal_rotation: bool) -> Result {
+		<ForcingNewSession<T>>::put(normal_rotation);
+		Ok(())
+	}
+
+	/// Notes which of the validators appear to be online from the point of the view of the block author.
+	pub fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
+		assert!(aux.is_empty());
+		assert!(
+			<system::Module<T>>::extrinsic_index() == T::NOTE_OFFLINE_POSITION,
+			"note_offline extrinsic must be at position {} in the block",
+			T::NOTE_OFFLINE_POSITION
+		);
+
+		let vs = Self::validators();
+		<BadValidators<T>>::put(offline_val_indices.into_iter().map(|i| vs[i as usize].clone()).collect::<Vec<T::AccountId>>());
 		Ok(())
 	}
 
@@ -152,14 +178,15 @@ impl<T: Trait> Module<T> {
 		// check block number and call next_session if necessary.
 		let block_number = <system::Module<T>>::block_number();
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
-		let broken_validation = Self::broken_validation();
-		if is_final_block || broken_validation {
-			Self::rotate_session(!broken_validation);
+		let bad_validators = <BadValidators<T>>::take().unwrap_or_default();
+		let should_end_session = <ForcingNewSession<T>>::take().is_some() || !bad_validators.is_empty() || is_final_block;
+		if should_end_session {
+			Self::rotate_session(is_final_block, bad_validators);
 		}
 	}
 
 	/// Move onto next session: register the new authority set.
-	pub fn rotate_session(normal_rotation: bool) {
+	pub fn rotate_session(is_final_block: bool, bad_validators: Vec<T::AccountId>) {
 		let now = <timestamp::Module<T>>::get();
 		let time_elapsed = now.clone() - Self::current_start();
 
@@ -168,13 +195,18 @@ impl<T: Trait> Module<T> {
 		<CurrentStart<T>>::put(now);
 
 		// Enact era length change.
-		if let Some(next_len) = <NextSessionLength<T>>::take() {
-			let block_number = <system::Module<T>>::block_number();
+		let len_changed = if let Some(next_len) = <NextSessionLength<T>>::take() {
 			<SessionLength<T>>::put(next_len);
+			true
+		} else {
+			false
+		};
+		if len_changed || !is_final_block {
+			let block_number = <system::Module<T>>::block_number();
 			<LastLengthChange<T>>::put(block_number);
 		}
 
-		T::OnSessionChange::on_session_change(normal_rotation, time_elapsed);
+		T::OnSessionChange::on_session_change(time_elapsed, bad_validators);
 
 		// Update any changes in session keys.
 		Self::validators().iter().enumerate().for_each(|(i, v)| {
@@ -289,6 +321,7 @@ mod tests {
 		type Moment = u64;
 	}
 	impl Trait for Test {
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = ();
 	}
@@ -338,7 +371,7 @@ mod tests {
 			assert_eq!(Session::ideal_session_duration(), 15);
 			// ideal end = 0 + 15 * 3 = 15
 			// broken_limit = 15 * 130 / 100 = 19
-		
+
 			System::set_block_number(3);
 			assert_eq!(Session::blocks_remaining(), 2);
 			Timestamp::set_timestamp(9);				// earliest end = 9 + 2 * 5 = 19; OK.
@@ -351,6 +384,40 @@ mod tests {
 			assert!(Session::broken_validation());
 			Session::check_rotate_session();
 			assert_eq!(Session::current_index(), 2);
+		});
+	}
+
+	#[test]
+	fn should_work_with_early_exit() {
+		with_externalities(&mut new_test_ext(), || {
+			System::set_block_number(1);
+			assert_ok!(Session::set_length(10));
+			assert_eq!(Session::blocks_remaining(), 1);
+			Session::check_rotate_session();
+
+			System::set_block_number(2);
+			assert_eq!(Session::blocks_remaining(), 0);
+			Session::check_rotate_session();
+			assert_eq!(Session::length(), 10);
+
+			System::set_block_number(7);
+			assert_eq!(Session::current_index(), 1);
+			assert_eq!(Session::blocks_remaining(), 5);
+			assert_ok!(Session::force_new_session(false));
+			Session::check_rotate_session();
+
+			System::set_block_number(8);
+			assert_eq!(Session::current_index(), 2);
+			assert_eq!(Session::blocks_remaining(), 9);
+			Session::check_rotate_session();
+
+			System::set_block_number(17);
+			assert_eq!(Session::current_index(), 2);
+			assert_eq!(Session::blocks_remaining(), 0);
+			Session::check_rotate_session();
+
+			System::set_block_number(18);
+			assert_eq!(Session::current_index(), 3);
 		});
 	}
 

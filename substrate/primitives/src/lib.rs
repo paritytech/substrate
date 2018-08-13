@@ -21,14 +21,17 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate rustc_hex;
-extern crate byteorder;
 #[macro_use]
 extern crate crunchy;
 #[macro_use]
 extern crate fixed_hash;
 #[macro_use]
 extern crate uint as uint_crate;
+#[macro_use]
+extern crate substrate_codec_derive;
+
+extern crate rustc_hex;
+extern crate byteorder;
 extern crate substrate_codec as codec;
 
 #[cfg(feature = "std")]

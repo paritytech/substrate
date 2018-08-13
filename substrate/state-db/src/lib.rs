@@ -31,6 +31,7 @@
 //!
 
 #[macro_use] extern crate log;
+#[macro_use] extern crate substrate_codec_derive;
 extern crate parking_lot;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives as primitives;
@@ -71,7 +72,6 @@ pub trait HashDb {
 	fn get(&self, key: &Self::Hash) -> Result<Option<DBValue>, Self::Error>;
 }
 
-/// Error type.
 /// Error type.
 pub enum Error<E: fmt::Debug> {
 	/// Database backend error.

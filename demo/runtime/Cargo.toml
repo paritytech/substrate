@@ -9,7 +9,7 @@ hex-literal = "0.1.0"
 log = { version = "0.3", optional = true }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-safe-mix = { path = "../../safe-mix", default_features = false}
+safe-mix = { version = "1.0", default_features = false}
 substrate-codec = { path = "../../substrate/codec" }
 substrate-runtime-std = { path = "../../substrate/runtime-std" }
 substrate-runtime-io = { path = "../../substrate/runtime-io" }

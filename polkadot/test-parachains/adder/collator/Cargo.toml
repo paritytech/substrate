@@ -1,0 +1,15 @@
+[package]
+name = "adder-collator"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+adder = { path = ".." }
+polkadot-parachain = { path = "../../../parachain" }
+polkadot-collator = { path = "../../../collator" }
+polkadot-primitives = { path = "../../../primitives" }
+ed25519 = { path = "../../../../substrate/ed25519" }
+parking_lot = "0.4"
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
+futures = "0.1"
+exit-future = "0.1.2"

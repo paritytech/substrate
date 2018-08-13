@@ -59,6 +59,18 @@ bitflags! {
 	}
 }
 
+impl ::codec::Encode for Roles {
+	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
+		dest.push_byte(self.bits())
+	}
+}
+
+impl ::codec::Decode for Roles {
+	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+		Self::from_bits(input.read_byte()?)
+	}
+}
+
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
@@ -73,7 +85,7 @@ pub trait SyncProvider<B: BlockT>: Send + Sync {
 pub trait TransactionPool<B: BlockT>: Send + Sync {
 	/// Get transactions from the pool that are ready to be propagated.
 	fn transactions(&self) -> Vec<(B::Hash, B::Extrinsic)>;
-	/// Import a transction into the pool.
+	/// Import a transaction into the pool.
 	fn import(&self, transaction: &B::Extrinsic) -> Option<B::Hash>;
 	/// Notify the pool about transactions broadcast.
 	fn on_broadcasted(&self, propagations: HashMap<B::Hash, Vec<String>>);
@@ -149,21 +161,34 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params<B, S>, protocol_id: ProtocolId) -> Result<Arc<Service<B, S>>, Error> {
 		let chain = params.chain.clone();
-		let service = NetworkService::new(params.network_config.clone(), None)?;
 		let import_queue = Arc::new(AsyncImportQueue::new());
+		let handler = Arc::new(ProtocolHandler {
+			protocol: Protocol::new(
+				params.config,
+				params.chain,
+				import_queue.clone(),
+				params.on_demand,
+				params.transaction_pool,
+				params.specialization,
+			)?,
+		});
+		let versions = [(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)];
+		let protocols = vec![(handler.clone() as Arc<_>, protocol_id, &versions[..])];
+		let service = match NetworkService::new(params.network_config.clone(), protocols) {
+			Ok(service) => service,
+			Err(err) => {
+				match err.kind() {
+					ErrorKind::Io(ref e) if e.kind() == io::ErrorKind::AddrInUse =>
+						warn!("Network port is already in use, make sure that another instance of Polkadot client is not running or change the port using the --port option."),
+					_ => warn!("Error starting network: {}", err),
+				};
+				return Err(err.into())
+			},
+		};
 		let sync = Arc::new(Service {
 			network: service,
 			protocol_id,
-			handler: Arc::new(ProtocolHandler {
-				protocol: Protocol::new(
-					params.config,
-					params.chain,
-					import_queue.clone(),
-					params.on_demand,
-					params.transaction_pool,
-					params.specialization,
-				)?,
-			}),
+			handler,
 		});
 
 		import_queue.start(
@@ -201,27 +226,11 @@ impl<B: BlockT + 'static, S: Specialization<B>> Service<B, S> {
 
 		res
 	}
-
-	fn start(&self) {
-		let versions = [(::protocol::CURRENT_VERSION as u8, ::protocol::CURRENT_PACKET_COUNT)];
-		let protocols = vec![(self.handler.clone() as Arc<_>, self.protocol_id, &versions[..])];
-		match self.network.start(protocols).map_err(|e| e.0.into()) {
-			Err(ErrorKind::Io(ref e)) if  e.kind() == io::ErrorKind::AddrInUse =>
-				warn!("Network port is already in use, make sure that another instance of Polkadot client is not running or change the port using the --port option."),
-			Err(err) => warn!("Error starting network: {}", err),
-			_ => {},
-		};
-	}
-
-	fn stop(&self) {
-		self.handler.protocol.stop();
-		self.network.stop();
-	}
 }
 
 impl<B: BlockT + 'static, S: Specialization<B>> Drop for Service<B, S> {
 	fn drop(&mut self) {
-		self.stop();
+		self.handler.protocol.stop();
 	}
 }
 
@@ -307,10 +316,6 @@ pub trait ManageNetwork: Send + Sync {
 	fn remove_reserved_peer(&self, peer: String) -> Result<(), String>;
 	/// Add reserved peer
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
-	/// Start network
-	fn start_network(&self);
-	/// Stop network
-	fn stop_network(&self);
 }
 
 
@@ -329,13 +334,5 @@ impl<B: BlockT + 'static, S: Specialization<B>> ManageNetwork for Service<B, S> 
 
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String> {
 		self.network.add_reserved_peer(&peer).map_err(|e| format!("{:?}", e))
-	}
-
-	fn start_network(&self) {
-		self.start();
-	}
-
-	fn stop_network(&self) {
-		self.stop();
 	}
 }

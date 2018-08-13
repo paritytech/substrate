@@ -33,6 +33,7 @@ extern crate backtrace;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
+extern crate substrate_network_libp2p as network_libp2p;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_extrinsic_pool;
 extern crate substrate_service as service;
@@ -44,7 +45,6 @@ extern crate exit_future;
 
 #[macro_use]
 extern crate lazy_static;
-#[macro_use]
 extern crate clap;
 #[macro_use]
 extern crate error_chain;
@@ -55,15 +55,18 @@ pub mod error;
 pub mod informant;
 mod panic_hook;
 
+use network_libp2p::AddrComponent;
 use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
+use network::NonReservedPeerMode;
 
 use std::io::{Write, Read, stdin, stdout};
+use std::iter;
 use std::fs::File;
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use names::{Generator, Name};
 use regex::Regex;
@@ -164,6 +167,10 @@ where
 {
 	panic_hook::set();
 
+	let full_version = service::config::full_version_from_strs(
+		version.version,
+		version.commit
+	);
 	let yaml = format!(include_str!("./cli.yml"),
 		name = version.executable_name,
 		description = version.description,
@@ -171,7 +178,7 @@ where
 	);
 	let yaml = &clap::YamlLoader::load_from_str(&yaml).expect("Invalid yml file")[0];
 	let matches = match clap::App::from_yaml(yaml)
-		.version(&(crate_version!().to_owned() + "\n")[..])
+		.version(&(full_version + "\n")[..])
 		.get_matches_from_safe(args) {
 			Ok(m) => m,
 			Err(e) => e.exit(),
@@ -252,9 +259,6 @@ where
 			service::Roles::FULL
 		};
 
-	if let Some(v) = matches.value_of("min-heap-pages") {
-		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
-	}
 	if let Some(v) = matches.value_of("max-heap-pages") {
 		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
 	}
@@ -275,13 +279,21 @@ where
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
 		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
+		config.network.reserved_nodes.extend(matches
+			 .values_of("reserved-nodes")
+			 .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
+		if !config.network.reserved_nodes.is_empty() {
+			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
+		}
 
 		let port = match matches.value_of("port") {
 			Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
 			None => 30333,
 		};
 
-		config.network.listen_address = Some(SocketAddr::new("0.0.0.0".parse().unwrap(), port));
+		config.network.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
+			.chain(iter::once(AddrComponent::TCP(port)))
+			.collect();
 		config.network.public_address = None;
 		config.network.client_version = config.client_id();
 		config.network.use_secret = match matches.value_of("node-key").map(|s| s.parse()) {
@@ -296,8 +308,11 @@ where
 		config.keys.push("Alice".into());
 	}
 
-	config.rpc_http = Some(parse_address("127.0.0.1:9933", "rpc-port", &matches)?);
-	config.rpc_ws = Some(parse_address("127.0.0.1:9944", "ws-port", &matches)?);
+	let rpc_interface: &str = if matches.is_present("rpc-external") { "0.0.0.0" } else { "127.0.0.1" };
+	let ws_interface: &str = if matches.is_present("ws-external") { "0.0.0.0" } else { "127.0.0.1" };
+
+	config.rpc_http = Some(parse_address(&format!("{}:{}", rpc_interface, 9933), "rpc-port", &matches)?);
+	config.rpc_ws = Some(parse_address(&format!("{}:{}", ws_interface, 9944), "ws-port", &matches)?);
 
 	// Override telemetry
 	if matches.is_present("no-telemetry") {
@@ -352,9 +367,6 @@ fn import_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesi
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 
-	if let Some(v) = matches.value_of("min-heap-pages") {
-		config.min_heap_pages = v.parse().map_err(|_| "Invalid --min-heap-pages argument")?;
-	}
 	if let Some(v) = matches.value_of("max-heap-pages") {
 		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
 	}

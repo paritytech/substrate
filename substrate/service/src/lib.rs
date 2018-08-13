@@ -50,17 +50,17 @@ extern crate serde_derive;
 
 mod components;
 mod error;
-mod config;
 mod chain_spec;
+pub mod config;
 pub mod chain_ops;
 
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::fmt::Write;
 use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
-use network::ManageNetwork;
 use runtime_primitives::traits::{Header, As};
 use exit_future::Signal;
 use tokio::runtime::TaskExecutor;
@@ -83,9 +83,10 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
-	network: Arc<components::NetworkService<Components::Factory>>,
+	network: Option<Arc<components::NetworkService<Components::Factory>>>,
 	extrinsic_pool: Arc<Components::ExtrinsicPool>,
 	keystore: Keystore,
+	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<rpc::WsServer>,
@@ -96,7 +97,7 @@ pub struct Service<Components: components::Components> {
 pub fn new_client<Factory: components::ServiceFactory>(config: FactoryFullConfiguration<Factory>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
-	let executor = NativeExecutor::with_heap_pages(config.min_heap_pages, config.max_heap_pages);
+	let executor = NativeExecutor::with_heap_pages(config.max_heap_pages);
 	let (client, _) = components::FullComponents::<Factory>::build_client(
 		&config,
 		executor,
@@ -118,17 +119,24 @@ impl<Components> Service<Components>
 		let (signal, exit) = ::exit_future::signal();
 
 		// Create client
-		let executor = NativeExecutor::with_heap_pages(config.min_heap_pages, config.max_heap_pages);
+		let executor = NativeExecutor::with_heap_pages(config.max_heap_pages);
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
 
-		if keystore.contents()?.is_empty() {
-			let key = keystore.generate("")?;
-			info!("Generated a new keypair: {:?}", key.public());
-		}
+		// Keep the public key for telemetry
+		let public_key = match keystore.contents()?.get(0) {
+			Some(public_key) => public_key.clone(),
+			None => {
+				let key = keystore.generate("")?;
+				let public_key = key.public();
+				info!("Generated a new keypair: {:?}", public_key);
+
+				public_key
+			}
+		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
 		let best_header = client.best_block_header()?;
@@ -157,8 +165,6 @@ impl<Components> Service<Components>
 
 		let network = network::Service::new(network_params, Components::Factory::NETWORK_PROTOCOL_ID)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
-
-		network.start_network();
 
 		{
 			// block notifications
@@ -202,13 +208,14 @@ impl<Components> Service<Components>
 			let handler = || {
 				let client = client.clone();
 				let chain = rpc::apis::chain::Chain::new(client.clone(), task_executor.clone());
+				let state = rpc::apis::state::State::new(client.clone(), task_executor.clone());
 				let author = rpc::apis::author::Author::new(client.clone(), extrinsic_pool.api(), task_executor.clone());
 				rpc::rpc_handler::<ComponentBlock<Components>, _, _, _, _>(
-					client,
+					state,
 					chain,
 					author,
 					rpc_config.clone(),
-					)
+				)
 			};
 			(
 				maybe_start_server(config.rpc_http, |address| rpc::start_http(address, handler()))?,
@@ -219,6 +226,12 @@ impl<Components> Service<Components>
 		// Telemetry
 		let telemetry = match config.telemetry_url {
 			Some(url) => {
+				let mut pubkey = String::new();
+
+				for ch in public_key.as_slice() {
+					write!(pubkey, "{:02x}", ch).expect("Cannot fail on u8 slices; qed");
+				}
+
 				let name = config.name.clone();
 				let impl_name = config.impl_name.to_owned();
 				let version = version.clone();
@@ -227,12 +240,13 @@ impl<Components> Service<Components>
 					url: url,
 					on_connect: Box::new(move || {
 						telemetry!("system.connected";
-								   "name" => name.clone(),
-								   "implementation" => impl_name.clone(),
-								   "version" => version.clone(),
-								   "config" => "",
-								   "chain" => chain_name.clone(),
-								   );
+							"name" => name.clone(),
+							"implementation" => impl_name.clone(),
+							"version" => version.clone(),
+							"config" => "",
+							"chain" => chain_name.clone(),
+							"pubkey" => &pubkey,
+						);
 					}),
 				}))
 			},
@@ -241,10 +255,11 @@ impl<Components> Service<Components>
 
 		Ok(Service {
 			client: client,
-			network: network,
+			network: Some(network),
 			extrinsic_pool: extrinsic_pool,
 			signal: Some(signal),
 			keystore: keystore,
+			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws,
 			_telemetry: telemetry,
@@ -258,7 +273,7 @@ impl<Components> Service<Components>
 
 	/// Get shared network instance.
 	pub fn network(&self) -> Arc<components::NetworkService<Components::Factory>> {
-		self.network.clone()
+		self.network.as_ref().expect("self.network always Some").clone()
 	}
 
 	/// Get shared extrinsic pool instance.
@@ -270,13 +285,18 @@ impl<Components> Service<Components>
 	pub fn keystore(&self) -> &Keystore {
 		&self.keystore
 	}
+
+	/// Get a handle to a future that will resolve on exit.
+	pub fn on_exit(&self) -> ::exit_future::Exit {
+		self.exit.clone()
+	}
 }
 
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
 		debug!(target: "service", "Substrate service shutdown");
 
-		self.network.stop_network();
+		drop(self.network.take());
 
 		if let Some(signal) = self.signal.take() {
 			signal.fire();

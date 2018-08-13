@@ -43,9 +43,9 @@ impl<'a> ::core::fmt::Display for HexDisplay<'a> {
 	}
 }
 
-/// Simple trait to transferm various types to `&[u8]`
+/// Simple trait to transform various types to `&[u8]`
 pub trait AsBytesRef {
-	/// Transferm `self` into `&[u8]`.
+	/// Transform `self` into `&[u8]`.
 	fn as_bytes_ref(&self) -> &[u8];
 }
 

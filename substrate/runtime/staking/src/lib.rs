@@ -127,7 +127,7 @@ decl_module! {
 		fn set_sessions_per_era(new: T::BlockNumber) -> Result = 0;
 		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;
 		fn set_validator_count(new: u32) -> Result = 2;
-		fn force_new_era() -> Result = 3;
+		fn force_new_era(should_slash: bool) -> Result = 3;
 	}
 }
 
@@ -177,10 +177,16 @@ decl_storage! {
 	// The current era stake threshold
 	pub StakeThreshold get(stake_threshold): b"sta:stake_threshold" => required T::Balance;
 
+	// The current bad validator slash.
+	pub CurrentSlash get(current_slash): b"sta:current_slash" => default T::Balance;
+
 	// The next free enumeration set.
 	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required T::AccountIndex;
 	// The enumeration sets.
 	pub EnumSet get(enum_set): b"sta:enum_set" => default map [ T::AccountIndex => Vec<T::AccountId> ];
+
+	// We are forcing a new era.
+	pub ForcingNewEra get(forcing_new_era): b"sta:forcing_new_era" => ();
 
 	// The "free" balance of a given account.
 	//
@@ -403,10 +409,11 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Force there to be a new era. This also forces a new session immediately after.
-	fn force_new_era() -> Result {
-		<session::Module<T>>::rotate_session(false);
-		Ok(())
+	/// Force there to be a new era. This also forces a new session immediately after by
+	/// setting `normal_rotation` to be false. Validators will get slashed.
+	fn force_new_era(should_slash: bool) -> Result {
+		<ForcingNewEra<T>>::put(());
+		<session::Module<T>>::force_new_session(!should_slash)
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
@@ -434,7 +441,7 @@ impl<T: Trait> Module<T> {
 	/// Returns if the account was successfully updated or update has led to killing of the account.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for no - but consider it instructive.
-//		assert!(!Self::voting_balance(who).is_zero());
+		// assert!(!Self::voting_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
 			Self::on_free_too_low(who);
 			UpdateBalanceOutcome::AccountKilled
@@ -585,10 +592,30 @@ impl<T: Trait> Module<T> {
 
 	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
 	/// move to a new era.
-	fn new_session(normal_rotation: bool, actual_elapsed: T::Moment) {
+	fn new_session(actual_elapsed: T::Moment, bad_validators: Vec<T::AccountId>) {
 		let session_index = <session::Module<T>>::current_index();
+		let early_exit_era = !bad_validators.is_empty();
 
-		if normal_rotation {
+		if early_exit_era {
+			// slash
+			let slash = Self::current_slash() + Self::early_era_slash();
+			<CurrentSlash<T>>::put(&slash);
+			for v in bad_validators.into_iter() {
+				if let Some(rem) = Self::slash(&v, slash) {
+					let noms = Self::current_nominators_for(&v);
+					let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
+					if !total.is_zero() {
+						let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
+						for n in noms.iter() {
+							let _ = Self::slash(n, safe_mul_rational(Self::voting_balance(n)));	// best effort - not much that can be done on fail.
+						}
+					}
+				}
+			}
+		} else {
+			// Zero any cumulative slash since we're healthy now.
+			<CurrentSlash<T>>::kill();
+
 			// reward
 			let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
 			let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
@@ -605,23 +632,11 @@ impl<T: Trait> Module<T> {
 					let _ = Self::reward(v, safe_mul_rational(Self::voting_balance(v)));
 				}
 			}
-		} else {
-			// slash
-			let early_era_slash = Self::early_era_slash();
-			for v in <session::Module<T>>::validators().iter() {
-				if let Some(rem) = Self::slash(v, early_era_slash) {
-					let noms = Self::current_nominators_for(v);
-					let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
-					if !total.is_zero() {
-						let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
-						for n in noms.iter() {
-							let _ = Self::slash(n, safe_mul_rational(Self::voting_balance(n)));	// best effort - not much that can be done on fail.
-						}
-					}
-				}
-			}
 		}
-		if ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero() || !normal_rotation {
+		if <ForcingNewEra<T>>::take().is_some()
+			|| ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero()
+			|| early_exit_era
+		{
 			Self::new_era();
 		}
 	}
@@ -647,6 +662,8 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
+		let minimum_allowed = Self::early_era_slash();
+
 		// evaluate desired staking amounts and nominations and optimise to find the best
 		// combination of validators, then use session::internal::set_validators().
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
@@ -655,11 +672,12 @@ impl<T: Trait> Module<T> {
 		let mut intentions = <Intentions<T>>::get()
 			.into_iter()
 			.map(|v| (Self::voting_balance(&v) + Self::nomination_balance(&v), v))
+			.filter(|&(b, _)| b >= minimum_allowed)
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
 		<StakeThreshold<T>>::put(
-			if intentions.len() > 0 {
+			if !intentions.is_empty() {
 				let i = (<ValidatorCount<T>>::get() as usize).min(intentions.len() - 1);
 				intentions[i].0.clone()
 			} else { Zero::zero() }
@@ -790,9 +808,9 @@ impl<T: Trait> Executable for Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
-	fn on_session_change(normal_rotation: bool, elapsed: T::Moment) {
-		Self::new_session(normal_rotation, elapsed);
+impl<T: Trait> OnSessionChange<T::Moment, T::AccountId> for Module<T> {
+	fn on_session_change(elapsed: T::Moment, bad_validators: Vec<T::AccountId>) {
+		Self::new_session(elapsed, bad_validators);
 	}
 }
 

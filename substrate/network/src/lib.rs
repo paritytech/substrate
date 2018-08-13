@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
@@ -34,6 +34,7 @@ extern crate rustc_hex;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate error_chain;
+#[macro_use] extern crate substrate_codec_derive;
 
 #[cfg(test)] extern crate env_logger;
 #[cfg(test)] extern crate substrate_keyring as keyring;
