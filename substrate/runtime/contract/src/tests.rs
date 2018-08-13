@@ -165,11 +165,11 @@ impl ExtBuilder {
 
 const CODE_TRANSFER: &str = r#"
 (module
-	;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	;; ext_call(callee_ptr: u32, callee_len: u32, value_ptr: u32, value_len: u32)
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(call $ext_transfer
+		(call $ext_call
 			(i32.const 4)  ;; Pointer to "Transfer to" address.
 			(i32.const 8)  ;; Length of "Transfer to" address.
 			(i32.const 12)  ;; Pointer to the buffer with value to transfer
@@ -377,12 +377,12 @@ fn contract_create() {
 		);
 
 		// 11 - value sent with the transaction
-		// 2 * 128 - gas spent by the deployer contract (128) multiplied by gas price (2)
+		// 2 * 124 - gas spent by the deployer contract (124) multiplied by gas price (2)
 		// 2 * 135 - base gas fee for call (top level)
 		// 2 * 175 - base gas fee for create (by contract)
 		// ((21 / 2) * 2) - price per account creation
 		let expected_gas_after_create =
-			100_000_000 - 11 - (2 * 128) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
+			100_000_000 - 11 - (2 * 124) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
 		assert_eq!(Staking::free_balance(&0), expected_gas_after_create);
 		assert_eq!(Staking::free_balance(&1), 8);
 		assert_eq!(Staking::free_balance(&derived_address), 3);
@@ -428,12 +428,12 @@ fn top_level_create() {
 		));
 
 		// 11 - value sent with the transaction
-		// (3 * 122) - gas spent by the ctor
+		// (3 * 118) - gas spent by the ctor
 		// (3 * 175) - base gas fee for create (175) (top level) multipled by gas price (3)
 		// ((21 / 3) * 3) - price for contract creation
 		assert_eq!(
 			Staking::free_balance(&0),
-			100_000_000 - 11 - (3 * 122) - (3 * 175) - ((21 / 3) * 3)
+			100_000_000 - 11 - (3 * 118) - (3 * 175) - ((21 / 3) * 3)
 		);
 		assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
 

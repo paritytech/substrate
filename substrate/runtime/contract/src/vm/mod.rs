@@ -332,13 +332,13 @@ mod tests {
 
 	const CODE_TRANSFER: &str = r#"
 (module
-	;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	;; ext_call(callee_ptr: u32, callee_len: u32, value_ptr: u32, value_len: u32)
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i32 i32)))
 
 	(import "env" "memory" (memory 1 1))
 
 	(func (export "call")
-		(call $ext_transfer
+		(call $ext_call
 			(i32.const 4)   ;; Pointer to "Transfer to" address.
 			(i32.const 8)   ;; Length of "Transfer to" address.
 			(i32.const 12)  ;; Pointer to the buffer with value to transfer

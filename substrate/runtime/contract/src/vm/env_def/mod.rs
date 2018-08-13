@@ -166,14 +166,13 @@ define_env!(init_env, <E: Ext>,
 		Ok(())
 	},
 
-	// TODO: Rename ext_transfer to ext_call.
-	// ext_transfer(transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	ext_transfer(ctx, transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32) => {
-		let mut transfer_to = Vec::new();
-		transfer_to.resize(transfer_to_len as usize, 0);
-		ctx.memory().get(transfer_to_ptr, &mut transfer_to)?;
-		let transfer_to =
-			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &transfer_to[..]).unwrap();
+	// ext_call(transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
+	ext_call(ctx, callee_ptr: u32, callee_len: u32, value_ptr: u32, value_len: u32) => {
+		let mut callee = Vec::new();
+		callee.resize(callee_len as usize, 0);
+		ctx.memory().get(callee_ptr, &mut callee)?;
+		let callee =
+			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee[..]).unwrap();
 
 		let mut value_buf = Vec::new();
 		value_buf.resize(value_len as usize, 0);
@@ -188,7 +187,7 @@ define_env!(init_env, <E: Ext>,
 		let ext = &mut ctx.ext;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.call(&transfer_to, value, nested_meter, &input_data),
+				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
