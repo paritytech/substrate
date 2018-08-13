@@ -76,6 +76,16 @@ args:
       help: Specify a list of reserved node addresses
       takes_value: true
       multiple: true
+  - min-peers:
+      long: min-peers
+      value_name: MIN_PEERS
+      help: Specify the minimum number of peers
+      takes_value: true
+  - max-peers:
+      long: max-peers
+      value_name: MAX_PEERS
+      help: Specify the maximum number of peers
+      takes_value: true
   - chain:
       long: chain
       value_name: CHAIN_SPEC
