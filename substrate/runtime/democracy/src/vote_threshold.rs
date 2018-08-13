@@ -38,7 +38,7 @@ pub trait Approved<Balance> {
 	fn approved(&self, approve: Balance, against: Balance, electorate: Balance) -> bool;
 }
 
-/// Return `true` iff `n1 / d1 < n2 / d2`. `d1` and `d2` may not be zero.
+/// Return `true` if `n1 / d1 < n2 / d2`. `d1` and `d2` may not be zero.
 fn compare_rationals<T: Zero + Mul<T, Output = T> + Div<T, Output = T> + Rem<T, Output = T> + Ord + Copy>(mut n1: T, mut d1: T, mut n2: T, mut d2: T) -> bool {
 	// Uses a continued fractional representation for a non-overflowing compare.
 	// Detailed at https://janmr.com/blog/2014/05/comparing-rational-numbers-without-overflow/.
