@@ -61,7 +61,7 @@ pub use error::{Error, ErrorKind, Result};
 
 /// Maximal size of a single encoded extrinsic.
 ///
-/// See also substrate-consensus::MAX_TRANSACTIONS_SIZE
+/// See also polkadot-consensus::MAX_TRANSACTIONS_SIZE
 const MAX_TRANSACTION_SIZE: usize = 4 * 1024 * 1024;
 
 /// Type alias for convenience.
