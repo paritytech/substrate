@@ -46,6 +46,7 @@ impl fmt::Display for Error {
 
 impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 	type Error = Error;
+	type InPool = ();
 
 	/// Submit extrinsic for inclusion in block.
 	fn submit(&self, _block: BlockHash, xt: Vec<Extrinsic>) -> Result<Vec<Hash>, Self::Error> {
@@ -78,6 +79,10 @@ impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 
 	fn import_notification_stream(&self) -> api::EventStream {
 		unreachable!()
+	}
+
+	fn all(&self) -> Vec<Self::InPool> {
+		vec![]
 	}
 }
 

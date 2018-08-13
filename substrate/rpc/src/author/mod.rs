@@ -41,7 +41,7 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate authoring RPC API
-	pub trait AuthorApi<Hash, Extrinsic> {
+	pub trait AuthorApi<Hash, Extrinsic, PendingExtrinsics> {
 		type Metadata;
 
 		/// Submit extrinsic for inclusion in block.
@@ -50,6 +50,10 @@ build_rpc_trait! {
 		/// Submit hex-encoded extrinsic for inclusion in block.
 		#[rpc(name = "author_submitExtrinsic")]
 		fn submit_extrinsic(&self, Bytes) -> Result<Hash>;
+
+		/// A list of pending extrinsics.
+		#[rpc(name = "author_pending")]
+		fn pending_extrinsics(&self) -> Result<PendingExtrinsics>;
 
 		#[pubsub(name = "author_extrinsicUpdate")] {
 			/// Submit an extrinsic to watch.
@@ -60,7 +64,6 @@ build_rpc_trait! {
 			#[rpc(name = "author_unwatchExtrinsic")]
 			fn unwatch_extrinsic(&self, SubscriptionId) -> Result<bool>;
 		}
-
 	}
 }
 
@@ -85,12 +88,13 @@ impl<B, E, Block: traits::Block, P> Author<B, E, Block, P> {
 	}
 }
 
-impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> where
+impl<B, E, Block, P, Ex, Hash, InPool> AuthorApi<Hash, Ex, InPool> for Author<B, E, Block, P> where
 	B: client::backend::Backend<Block> + Send + Sync + 'static,
 	E: client::CallExecutor<Block> + Send + Sync + 'static,
 	Block: traits::Block + 'static,
-	Hash: traits::MaybeSerializeDebug + Sync + Send + 'static,
-	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash>,
+	Hash: traits::MaybeSerializeDebug + Send + Sync + 'static,
+	InPool: traits::MaybeSerializeDebug + Send + Sync + 'static,
+	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash, InPool=InPool>,
 	P::Error: 'static,
 	Ex: Codec,
 {
@@ -144,5 +148,9 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 
 	fn unwatch_extrinsic(&self, id: SubscriptionId) -> Result<bool> {
 		Ok(self.subscriptions.cancel(id))
+	}
+
+	fn pending_extrinsics(&self) -> Result<InPool> {
+		Ok(self.pool.all())
 	}
 }
