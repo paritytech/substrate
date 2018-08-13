@@ -609,3 +609,76 @@ fn block_gas_limit() {
 		},
 	);
 }
+
+const CODE_INPUT_DATA: &'static str = r#"
+(module
+	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
+	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(block $fail
+			;; fail if ext_input_size != 4
+			(br_if $fail
+				(i32.ne
+					(i32.const 4)
+					(call $ext_input_size)
+				)
+			)
+
+			(call $ext_input_copy
+				(i32.const 0)
+				(i32.const 0)
+				(i32.const 4)
+			)
+
+
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 0))
+					(i32.const 0)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 1))
+					(i32.const 1)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 2))
+					(i32.const 2)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 3))
+					(i32.const 3)
+				)
+			)
+
+			(return)
+		)
+		unreachable
+	)
+)
+"#;
+
+#[test]
+fn input_data() {
+	let code_input_data = wabt::wat2wasm(CODE_INPUT_DATA).unwrap();
+	with_externalities(
+		&mut ExtBuilder::default().build(),
+		|| {
+			<CodeOf<Test>>::insert(1, code_input_data.to_vec());
+
+			Staking::set_free_balance(&0, 100_000_000);
+			Staking::increase_total_stake_by(100_000_000);
+
+			assert_ok!(Contract::call(&0, 1, 0, 50_000, vec![0, 1, 2, 3]));
+
+			// all asserts are made within contract code itself.
+		},
+	);
+}

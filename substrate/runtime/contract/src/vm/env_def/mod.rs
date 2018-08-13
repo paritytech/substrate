@@ -264,4 +264,33 @@ define_env!(init_env, <E: Ext>,
 		// to the user of this crate.
 		Err(sandbox::HostError)
 	},
+
+	// ext_input_size() -> u32
+	//
+	// Returns size of an input buffer.
+	ext_input_size(ctx) -> u32 => {
+		Ok(ctx.input_data.len() as u32)
+	},
+
+	// ext_input_copy(dest_ptr: u32, offset: u32, len: u32)
+	//
+	// Copy data from an input buffer starting from `offset` with length `len` into the contract memory.
+	// The region at which the data should be put is specified by `dest_ptr`.
+	ext_input_copy(ctx, dest_ptr: u32, offset: u32, len: u32) => {
+		let offset = offset as usize;
+		if offset > ctx.input_data.len() {
+			// Offset can't be larger than input buffer length.
+			return Err(sandbox::HostError);
+		}
+
+		// This can't panic since `offset <= ctx.input_data.len()`.
+		let src = &ctx.input_data[offset..];
+		if src.len() != len as usize {
+			return Err(sandbox::HostError);
+		}
+
+		ctx.memory().set(dest_ptr, src)?;
+
+		Ok(())
+	},
 );

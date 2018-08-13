@@ -123,14 +123,15 @@ enum SpecialTrap {
 	Return(Vec<u8>),
 }
 
-pub(crate) struct Runtime<'a, E: Ext + 'a> {
+pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	ext: &'a mut E,
+	input_data: &'data [u8],
 	config: &'a Config<E::T>,
 	memory: sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
 }
-impl<'a, E: Ext + 'a> Runtime<'a, E> {
+impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 	fn memory(&self) -> &sandbox::Memory {
 		&self.memory
 	}
@@ -192,11 +193,10 @@ pub struct ExecutionResult {
 /// Execute the given code as a contract.
 pub fn execute<'a, E: Ext>(
 	code: &[u8],
+	input_data: &[u8],
 	ext: &'a mut E,
 	gas_meter: &mut GasMeter<E::T>,
 ) -> Result<ExecutionResult, Error> {
-	// TODO: Receive data as an argument
-
 	let config = Config::default();
 	let env = env_def::init_env();
 
@@ -213,6 +213,7 @@ pub fn execute<'a, E: Ext>(
 
 	let mut runtime = Runtime {
 		ext,
+		input_data,
 		config: &config,
 		memory,
 		gas_meter,
@@ -363,6 +364,7 @@ mod tests {
 		let mut mock_ext = MockExt::default();
 		execute(
 			&code_transfer,
+			&[],
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
@@ -390,6 +392,7 @@ mod tests {
 		assert_matches!(
 			execute(
 				&code_mem,
+				&[],
 				&mut mock_ext,
 				&mut GasMeter::with_limit(100_000, 1)
 			),
