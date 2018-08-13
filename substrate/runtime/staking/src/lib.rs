@@ -536,7 +536,7 @@ impl<T: Trait> Module<T> {
 	/// Moves up to `value` from reserved balance to balance. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be retutned. Full completion is given by `None`.
+	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
 	/// NOTE: This is different to `reserve`.
 	pub fn unreserve(who: &T::AccountId, value: T::Balance) -> Option<T::Balance> {
 		let b = Self::reserved_balance(who);
