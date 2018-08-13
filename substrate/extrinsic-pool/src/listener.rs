@@ -80,7 +80,7 @@ impl<H, T> txpool::Listener<T> for Listener<H> where
 	}
 
 	fn invalid(&mut self, tx: &Arc<T>) {
-		debug!("Extrinsic invalid: {:?}", tx);
+		warn!("Extrinsic invalid: {:?}", tx);
 	}
 
 	fn canceled(&mut self, tx: &Arc<T>) {
