@@ -2828,6 +2828,7 @@ dependencies = [
 name = "substrate-runtime-staking"
 version = "0.1.0"
 dependencies = [
+ "base58 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",

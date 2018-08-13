@@ -28,6 +28,8 @@ extern crate serde_derive;
 #[cfg(test)]
 extern crate wabt;
 
+extern crate base58;
+
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 

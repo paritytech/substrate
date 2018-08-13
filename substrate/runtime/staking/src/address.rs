@@ -19,6 +19,7 @@
 #[cfg(feature = "std")]
 use std::fmt;
 use super::{Member, Decode, Encode, As, Input, Output};
+use base58::ToBase58;
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
@@ -41,7 +42,7 @@ impl<AccountId, AccountIndex> fmt::Display for Address<AccountId, AccountIndex> 
 	AccountIndex: Member,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		write!(f, "{:?}", self)
+		write!(f, "{:?}", self.to_base58())
 	}
 }
 
@@ -108,4 +109,17 @@ impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
 	fn default() -> Self {
 		Address::Id(Default::default())
 	}
+}
+
+impl<AccountId, AccountIndex> ToBase58 for Address<AccountId, AccountIndex> where
+	AccountId: Member + ToBase58,
+	AccountIndex: Member + ToBase58,
+{
+    fn to_base58(&self) -> String {
+		match self {
+            Address::Id(ref id) => id.to_base58(),
+            Address::Index(ref id) => id.to_base58(),
+        }
+
+    }
 }
