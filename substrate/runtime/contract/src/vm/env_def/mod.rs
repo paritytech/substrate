@@ -49,7 +49,23 @@ impl ConvertibleToWasm for u32 {
 		TypedValue::I32(self as i32)
 	}
 	fn from_typed_value(v: TypedValue) -> Option<Self> {
-		v.as_i32().map(|v| v as u32)
+		match v {
+			TypedValue::I32(v) => Some(v as u32),
+			_ => None,
+		}
+	}
+}
+impl ConvertibleToWasm for u64 {
+	type NativeType = u64;
+	const VALUE_TYPE: ValueType = ValueType::I64;
+	fn to_typed_value(self) -> TypedValue {
+		TypedValue::I64(self as i64)
+	}
+	fn from_typed_value(v: TypedValue) -> Option<Self> {
+		match v {
+			TypedValue::I64(v) => Some(v as u64),
+			_ => None,
+		}
 	}
 }
 
