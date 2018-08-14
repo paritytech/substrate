@@ -162,7 +162,9 @@ fn contract_transfer() {
 		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
+		Staking::increase_total_stake_by(100_000_000);
 		Staking::set_free_balance(&1, 11);
+		Staking::increase_total_stake_by(11);
 
 		assert_ok!(Contract::call(&0, 1, 3, 100_000, Vec::new()));
 
@@ -195,7 +197,9 @@ fn contract_transfer_oog() {
 		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
+		Staking::increase_total_stake_by(100_000_000);
 		Staking::set_free_balance(&1, 11);
+		Staking::increase_total_stake_by(11);
 
 		assert_err!(
 			Contract::call(&0, 1, 3, 276, Vec::new()),
@@ -232,7 +236,9 @@ fn contract_transfer_max_depth() {
 		<CodeOf<Test>>::insert(CONTRACT_SHOULD_TRANSFER_TO, code_transfer.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
+		Staking::increase_total_stake_by(100_000_000);
 		Staking::set_free_balance(&CONTRACT_SHOULD_TRANSFER_TO, 11);
+		Staking::increase_total_stake_by(11);
 
 		assert_err!(
 			Contract::call(&0, CONTRACT_SHOULD_TRANSFER_TO, 3, 100_000, Vec::new()),
@@ -331,8 +337,10 @@ fn contract_create() {
 
 	with_externalities(&mut new_test_ext(0, 2), || {
 		Staking::set_free_balance(&0, 100_000_000);
+		Staking::increase_total_stake_by(100_000_000);
 		Staking::set_free_balance(&1, 0);
 		Staking::set_free_balance(&9, 30);
+		Staking::increase_total_stake_by(30);
 
 		<CodeOf<Test>>::insert(1, code_create.to_vec());
 
@@ -383,7 +391,9 @@ fn top_level_create() {
 		);
 
 		Staking::set_free_balance(&0, 100_000_000);
+		Staking::increase_total_stake_by(100_000_000);
 		Staking::set_free_balance(&derived_address, 30);
+		Staking::increase_total_stake_by(30);
 
 		assert_ok!(Contract::create(
 			&0,
@@ -423,6 +433,7 @@ fn refunds_unused_gas() {
 		<CodeOf<Test>>::insert(1, code_nop.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
+		Staking::increase_total_stake_by(100_000_000);
 
 		assert_ok!(Contract::call(&0, 1, 0, 100_000, Vec::new(),));
 
@@ -436,6 +447,7 @@ fn call_with_zero_value() {
 		<CodeOf<Test>>::insert(1, vec![]);
 
 		Staking::set_free_balance(&0, 100_000_000);
+		Staking::increase_total_stake_by(100_000_000);
 
 		assert_ok!(Contract::call(&0, 1, 0, 100_000, Vec::new(),));
 
@@ -449,6 +461,7 @@ fn create_with_zero_endowment() {
 
 	with_externalities(&mut new_test_ext(0, 2), || {
 		Staking::set_free_balance(&0, 100_000_000);
+		Staking::increase_total_stake_by(100_000_000);
 
 		assert_ok!(Contract::create(&0, 0, 100_000, code_nop, Vec::new(),));
 
@@ -467,10 +480,12 @@ fn account_removal_removes_storage() {
 		// Setup two accounts with free balance above than exsistential threshold.
 		{
 			Staking::set_free_balance(&1, 110);
+			Staking::increase_total_stake_by(110);
 			<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
 			<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
 
 			Staking::set_free_balance(&2, 110);
+			Staking::increase_total_stake_by(110);
 			<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
 			<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
 		}
@@ -515,6 +530,7 @@ fn top_level_call_refunds_even_if_fails() {
 		<CodeOf<Test>>::insert(1, code_unreachable.to_vec());
 
 		Staking::set_free_balance(&0, 100_000_000);
+		Staking::increase_total_stake_by(100_000_000);
 
 		assert_err!(
 			Contract::call(&0, 1, 0, 100_000, Vec::new()),
