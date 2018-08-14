@@ -31,7 +31,7 @@ pub struct StorageKey(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<
 pub struct StorageData(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
 
 /// Storage change set
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, PartialEq, Eq))]
 pub struct StorageChangeSet<Hash> {
 	/// Block hash
 	pub block: Hash,
