@@ -82,5 +82,5 @@ pub struct BlitzRound {
 }
 
 pub struct BlitzBlock {
-	rounds: Vec<Round>,
+	rounds: Vec<RoundId>,
 }
