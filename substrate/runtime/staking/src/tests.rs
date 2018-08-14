@@ -87,7 +87,8 @@ fn slashing_should_work() {
 		assert_eq!(Staking::voting_balance(&10), 21);
 
 		System::set_block_number(7);
-		Timestamp::set_timestamp(100);	// way too late - early exit.
+		::system::ExtrinsicIndex::<Test>::put(1);
+		Session::note_offline(&0, vec![0]).unwrap(); // val 10 reported bad.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
@@ -310,9 +311,9 @@ fn nominating_slashes_should_work() {
 		assert_eq!(Staking::voting_balance(&4), 40);
 
 		System::set_block_number(5);
-		Timestamp::set_timestamp(100);	// late
+		::system::ExtrinsicIndex::<Test>::put(1);
+		Session::note_offline(&0, vec![0, 1]).unwrap(); // both get reported offline.
 		assert_eq!(Session::blocks_remaining(), 1);
-		assert!(Session::broken_validation());
 		Session::check_rotate_session();
 
 		assert_eq!(Staking::current_era(), 2);
@@ -388,7 +389,6 @@ fn staking_eras_work() {
 
 		// Block 6: No change.
 		System::set_block_number(6);
-		assert!(!Session::broken_validation());
 		Session::check_rotate_session();
 		assert_eq!(Session::current_index(), 6);
 		assert_eq!(Staking::sessions_per_era(), 3);
