@@ -14,202 +14,332 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot service. Starts a thread that spins the network, the client and the transaction pool.
-//! Manages communication between them.
+#![warn(unused_extern_crates)]
 
-extern crate futures;
+//! Blitz service. Specialized wrapper over substrate service.
+
 extern crate ed25519;
-extern crate parking_lot;
-extern crate tokio_timer;
 extern crate blitz_primitives;
 extern crate blitz_runtime;
 extern crate blitz_executor;
+extern crate blitz_api;
+extern crate blitz_consensus as consensus;
+extern crate polkadot_transaction_pool as transaction_pool;
 extern crate blitz_network;
-extern crate blitz_state;
-// extern crate polkadot_api;
-// extern crate polkadot_consensus as consensus;
-// extern crate polkadot_transaction_pool as transaction_pool;
-extern crate substrate_client as client;
-extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_codec as codec;
-extern crate substrate_client_db as client_db;
-extern crate substrate_executor;
-extern crate substrate_keystore as keystore;
+extern crate substrate_client as client;
+extern crate substrate_service as service;
+extern crate tokio;
 
-extern crate exit_future;
-extern crate tokio_core;
-
-#[macro_use]
-extern crate error_chain;
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate hex_literal;
 
-mod error;
-mod config;
+// TODO pub mod chain_spec;
 
-use blitz_primitives::RoundId;
 use std::sync::Arc;
-use std::thread;
-use futures::prelude::*;
-use parking_lot::Mutex;
-use tokio_core::reactor::Core;
-use codec::Slicable;
-use primitives::block::{Id as BlockId, Extrinsic, ExtrinsicHash, HeaderHash};
-use primitives::{AuthorityId, hashing};
-// use transaction_pool::TransactionPool;
-use substrate_executor::NativeExecutor;
-use blitz_executor::Executor as LocalDispatch;
-use keystore::Store as Keystore;
-// use polkadot_api::PolkadotApi;
-use blitz_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, BuildExternalities};
-use client::{genesis, BlockchainEvents};
-use network::ManageNetwork;
-use blitz_network::NetworkService;
-use exit_future::Signal;
-use blitz_state::GlobalState;
+use std::collections::HashMap;
 
-pub use self::error::{ErrorKind, Error};
-pub use config::{Configuration, Role, ChainSpec};
+use codec::Encode;
+use transaction_pool::TransactionPool;
+use blitz_api::{BlitzApi, light::RemoteBlitzApiWrapper};
+use blitz_primitives::{AccountId, Block, BlockId, Hash};
+use blitz_runtime::GenesisConfig;
+use client::Client;
+use blitz_network::{BlitzProtocol, consensus::ConsensusNetwork};
+use tokio::runtime::TaskExecutor;
+use service::FactoryFullConfiguration;
 
-type Client = client::Client<client_db::Backend, NativeExecutor<LocalDispatch>>;
+pub use service::{Roles, PruningMode, ExtrinsicPoolOptions,
+	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
+pub use client::ExecutionStrategy;
 
-/// Blitz service.
-pub struct Service {
-	thread: Option<thread::JoinHandle<()>>,
-	client: Arc<Client>,
-	network: Arc<NetworkService>,
-	// transaction_pool: Arc<Mutex<TransactionPool>>,
-	signal: Option<Signal>,
-	// _consensus: Option<consensus::Service>,
-	global_state: GlobalState,
+/// Specialised polkadot `ChainSpec`.
+pub type ChainSpec = service::ChainSpec<GenesisConfig>;
+/// Blitz client type for specialised `Components`.
+pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, Block>;
+pub type NetworkService = network::Service<Block, <Factory as service::ServiceFactory>::NetworkProtocol>;
+
+/// A collection of type to generalise Blitz specific components over full / light client.
+pub trait Components: service::Components {
+	/// Blitz API.
+	type Api: 'static + BlitzApi + Send + Sync;
+	/// Client backend.
+	type Backend: 'static + client::backend::Backend<Block>;
+	/// Client executor.
+	type Executor: 'static + client::CallExecutor<Block> + Send + Sync;
 }
 
-impl Service {
-	/// Creates and register protocol with the network service
-	pub fn new(mut config: Configuration) -> Result<Service, error::Error> {
-		use std::sync::Barrier;
+impl Components for service::LightComponents<Factory> {
+	type Api = RemoteBlitzApiWrapper<
+		<service::LightComponents<Factory> as service::Components>::Backend,
+		<service::LightComponents<Factory> as service::Components>::Executor,
+	>;
+	type Executor = service::LightExecutor<Factory>;
+	type Backend = service::LightBackend<Factory>;
+}
 
-		let (signal, exit) = ::exit_future::signal();
+impl Components for service::FullComponents<Factory> {
+	type Api = service::FullClient<Factory>;
+	type Executor = service::FullExecutor<Factory>;
+	type Backend = service::FullBackend<Factory>;
+}
 
-		// Create client
-		let executor = blitz_executor::Executor::new();
-		let mut storage = Default::default();
+/// All configuration for the blitz node.
+pub type Configuration = FactoryFullConfiguration<Factory>;
 
-		let mut keystore = Keystore::open(config.keystore_path.into())?;
-		for seed in &config.keys {
-			keystore.generate_from_seed(seed)?;
-		}
+/// Blitz-specific configuration.
+#[derive(Default)]
+pub struct CustomConfiguration {
+	// Set to `Some` with a collator `AccountId` and desired parachain
+	// if the network protocol should be started in collator mode.
+	// pub collating_for: Option<(AccountId, parachain::Id)>,
 
-		if keystore.contents()?.is_empty() {
-			let key = keystore.generate("")?;
-			info!("Generated a new keypair: {:?}", key.public());
-		}
+	// TODO Locker setup?
+}
 
-		let prepare_genesis = || {
-			// storage = genesis_config.build_externalities();
-			let block = genesis::construct_genesis_block(&storage);
-			(primitives::block::Header::decode(&mut block.header.encode().as_ref()).expect("to_vec() always gives a valid serialisation; qed"), storage.into_iter().collect())
-		};
+/// Blitz config for the substrate service.
+pub struct Factory;
 
-		let db_settings = client_db::DatabaseSettings {
-			cache_size: None,
-			path: config.database_path.into(),
-		};
+impl service::ServiceFactory for Factory {
+	type Block = Block;
+	type NetworkProtocol = BlitzProtocol;
+	type RuntimeDispatch = blitz_executor::Executor;
+	type FullExtrinsicPool = TransactionPoolAdapter<
+		service::FullBackend<Self>,
+		service::FullExecutor<Self>,
+		service::FullClient<Self>
+	>;
+	type LightExtrinsicPool = TransactionPoolAdapter<
+		service::LightBackend<Self>,
+		service::LightExecutor<Self>,
+		RemoteBlitzApiWrapper<service::LightBackend<Self>, service::LightExecutor<Self>>
+	>;
+	type Genesis = GenesisConfig;
+	type Configuration = CustomConfiguration;
 
-		let client = Arc::new(client_db::new_client(db_settings, executor, prepare_genesis)?);
-		let best_header = client.best_block_header()?;
-		info!("Starting Polkadot. Best block is #{}", best_header.number);
+	const NETWORK_PROTOCOL_ID: network::ProtocolId = ::blitz_network::BLITZ_PROTOCOL_ID;
 
-		struct DummyPool;
-
-		impl network::TransactionPool for DummyPool {
-			fn transactions(&self) -> Vec<(ExtrinsicHash, Vec<u8>)> { Default::default() }
-			/// Import a transction into the pool.
-			fn import(&self, transaction: &[u8]) -> Option<ExtrinsicHash> { None }
-		}
-		let transaction_pool = Arc::new(DummyPool);
-
-		let network_params = network::Params {
-			config: network::ProtocolConfig {
-				roles: config.roles,
-			},
-			network_config: config.network,
-			chain: client.clone(),
-			// transaction_pool: transaction_pool_adapter,
-			transaction_pool: transaction_pool.clone(),
-			specialization: BlitzProtocol::default(),
-		};
-
-		let network = network::Service::new(network_params, blitz_network::BLITZ_PROTOCOL_ID)?;
-		let barrier = ::std::sync::Arc::new(Barrier::new(2));
-
-		let thread = {
-			let client = client.clone();
-			let network = network.clone();
-			let txpool = transaction_pool.clone();
-
-			let thread_barrier = barrier.clone();
-			thread::spawn(move || {
-				network.start_network();
-
-				thread_barrier.wait();
-				let mut core = Core::new().expect("tokio::Core could not be created");
-				let events = client.import_notification_stream().for_each(move |notification| {
-					network.on_block_imported(notification.hash, &notification.header);
-					// prune_imported(&*client, &*txpool, notification.hash);
-
-					Ok(())
-				});
-
-				core.handle().spawn(events);
-				if let Err(e) = core.run(exit) {
-					debug!("Polkadot service event loop shutdown with {:?}", e);
-				}
-				debug!("Polkadot service shutdown");
-			})
-		};
-
-		// wait for the network to start up before starting the consensus
-		// service.
-		barrier.wait();
-
-		Ok(Service {
-			thread: Some(thread),
+	fn build_full_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::FullClient<Self>>)
+		-> Result<Self::FullExtrinsicPool, Error>
+	{
+		let api = client.clone();
+		Ok(TransactionPoolAdapter {
+			pool: Arc::new(TransactionPool::new(config, api)),
 			client: client,
-			network: network,
-			// transaction_pool: transaction_pool,
-			signal: Some(signal),
-			// _consensus: consensus_service,
-			global_state: GlobalState::default(),
+			imports_external_transactions: true,
 		})
 	}
 
-	/// Get shared client instance.
-	pub fn client(&self) -> Arc<Client> {
-		self.client.clone()
+	fn build_light_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::LightClient<Self>>)
+		-> Result<Self::LightExtrinsicPool, Error>
+	{
+		let api = Arc::new(RemoteBlitzApiWrapper(client.clone()));
+		Ok(TransactionPoolAdapter {
+			pool: Arc::new(TransactionPool::new(config, api)),
+			client: client,
+			imports_external_transactions: false,
+		})
 	}
 
-	/// Get shared network instance.
-	pub fn network(&self) -> Arc<NetworkService> {
-		self.network.clone()
+	fn build_network_protocol(config: &Configuration)
+		-> Result<BlitzProtocol, Error>
+	{
+		// if let Some((_, ref para_id)) = config.custom.collating_for {
+		// 	info!("Starting network in Collator mode for parachain {:?}", para_id);
+		// }
+		Ok(BlitzProtocol::default() /*::new(config.custom.collating_for)*/)
 	}
 }
 
-impl Drop for Service {
-	fn drop(&mut self) {
-		self.network.stop_network();
+/// Blitz service.
+pub struct Service<C: Components> {
+	inner: service::Service<C>,
+	client: Arc<ComponentClient<C>>,
+	network: Arc<NetworkService>,
+	api: Arc<<C as Components>::Api>,
+	_consensus: Option<consensus::Service>,
+}
 
-		if let Some(signal) = self.signal.take() {
-			signal.fire();
+impl <C: Components> Service<C> {
+	pub fn client(&self) -> Arc<ComponentClient<C>> {
+		self.client.clone()
+	}
+
+	pub fn network(&self) -> Arc<NetworkService> {
+		self.network.clone()
+	}
+
+	pub fn api(&self) -> Arc<<C as Components>::Api> {
+		self.api.clone()
+	}
+}
+
+/// Creates light client and register protocol with the network service
+pub fn new_light(config: Configuration, executor: TaskExecutor)
+	-> Result<Service<LightComponents<Factory>>, Error>
+{
+	let service = service::Service::<LightComponents<Factory>>::new(config, executor)?;
+	let api = Arc::new(RemoteBlitzApiWrapper(service.client()));
+	Ok(Service {
+		client: service.client(),
+		network: service.network(),
+		api: api,
+		inner: service,
+		_consensus: None,
+	})
+}
+
+/// Creates full client and register protocol with the network service
+pub fn new_full(config: Configuration, executor: TaskExecutor)
+	-> Result<Service<FullComponents<Factory>>, Error>
+{
+	let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
+	let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
+	// Spin consensus service if configured
+	let consensus = if is_validator {
+		// Load the first available key
+		let key = service.keystore().load(&service.keystore().contents()?[0], "")?;
+		info!("Using authority key {}", key.public());
+
+		let client = service.client();
+
+		let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
+		Some(consensus::Service::new(
+			client.clone(),
+			client.clone(),
+			consensus_net,
+			service.extrinsic_pool(),
+			executor,
+			::std::time::Duration::from_millis(4000), // TODO: dynamic
+			key,
+		))
+	} else {
+		None
+	};
+
+	Ok(Service {
+		client: service.client(),
+		network: service.network(),
+		api: service.client(),
+		inner: service,
+		_consensus: consensus,
+	})
+}
+
+/// Creates bare client without any networking.
+pub fn new_client(config: Configuration)
+-> Result<Arc<service::ComponentClient<FullComponents<Factory>>>, Error>
+{
+	service::new_client::<Factory>(config)
+}
+
+impl<C: Components> ::std::ops::Deref for Service<C> {
+	type Target = service::Service<C>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+/// Transaction pool adapter.
+pub struct TransactionPoolAdapter<B, E, A> where A: Send + Sync, E: Send + Sync {
+	imports_external_transactions: bool,
+	pool: Arc<TransactionPool<A>>,
+	client: Arc<Client<B, E, Block>>,
+}
+
+impl<B, E, A> TransactionPoolAdapter<B, E, A>
+	where
+		A: Send + Sync,
+		B: client::backend::Backend<Block> + Send + Sync,
+		E: client::CallExecutor<Block> + Send + Sync,
+{
+	fn best_block_id(&self) -> Option<BlockId> {
+		self.client.info()
+			.map(|info| BlockId::hash(info.chain.best_hash))
+			.map_err(|e| {
+				debug!("Error getting best block: {:?}", e);
+			})
+			.ok()
+	}
+}
+
+impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A>
+	where
+		B: client::backend::Backend<Block> + Send + Sync,
+		E: client::CallExecutor<Block> + Send + Sync,
+		A: blitz_api::BlitzApi + Send + Sync,
+{
+	fn transactions(&self) -> Vec<(Hash, Vec<u8>)> {
+		let best_block_id = match self.best_block_id() {
+			Some(id) => id,
+			None => return vec![],
+		};
+		self.pool.cull_and_get_pending(best_block_id, |pending| pending
+			.map(|t| {
+				let hash = t.hash().clone();
+				(hash, t.primitive_extrinsic())
+			})
+			.collect()
+		).unwrap_or_else(|e| {
+			warn!("Error retrieving pending set: {}", e);
+			vec![]
+		})
+	}
+
+	fn import(&self, transaction: &Vec<u8>) -> Option<Hash> {
+		if !self.imports_external_transactions {
+			return None;
 		}
 
-		if let Some(thread) = self.thread.take() {
-			thread.join().expect("The service thread has panicked");
+		let encoded = transaction.encode();
+		if let Some(uxt) = codec::Decode::decode(&mut &encoded[..]) {
+			let best_block_id = self.best_block_id()?;
+			match self.pool.import_unchecked_extrinsic(best_block_id, uxt) {
+				Ok(xt) => Some(*xt.hash()),
+				Err(e) => match *e.kind() {
+					transaction_pool::ErrorKind::AlreadyImported(hash) => Some(hash[..].into()),
+					_ => {
+						debug!("Error adding transaction to the pool: {:?}", e);
+						None
+					},
+				}
+			}
+		} else {
+			debug!("Error decoding transaction");
+			None
 		}
+	}
+
+	fn on_broadcasted(&self, propagations: HashMap<Hash, Vec<String>>) {
+		self.pool.on_broadcasted(propagations)
+	}
+}
+
+impl<B, E, A> service::ExtrinsicPool<Block> for TransactionPoolAdapter<B, E, A>
+	where
+		B: client::backend::Backend<Block> + Send + Sync + 'static,
+		E: client::CallExecutor<Block> + Send + Sync + 'static,
+		A: blitz_api::BlitzApi + Send + Sync + 'static,
+{
+	type Api = TransactionPool<A>;
+
+	fn prune_imported(&self, hash: &Hash) {
+		let block = BlockId::hash(*hash);
+		if let Err(e) = self.pool.cull(block) {
+			warn!("Culling error: {:?}", e);
+		}
+
+		if let Err(e) = self.pool.retry_verification(block) {
+			warn!("Re-verifying error: {:?}", e);
+		}
+	}
+
+	fn api(&self) -> Arc<Self::Api> {
+		self.pool.clone()
 	}
 }

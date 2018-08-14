@@ -10,7 +10,7 @@ parking_lot = "0.4"
 tokio-timer = "0.1.2"
 error-chain = "0.12"
 log = "0.3"
-tokio-core = "0.1.12"
+tokio = "0.1.7"
 exit-future = "0.1"
 ed25519 = { path = "../../substrate/ed25519" }
 blitz-primitives = { path = "../primitives" }
@@ -29,3 +29,4 @@ substrate-client-db = { path = "../../substrate/client/db" }
 substrate-codec = { path = "../../substrate/codec" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-keystore = { path = "../../substrate/keystore" }
+substrate-service = { path = "../../substrate/service" }
