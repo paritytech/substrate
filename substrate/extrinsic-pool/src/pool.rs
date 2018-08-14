@@ -152,11 +152,9 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 
 	/// Retrieve all transactions in the pool. The transactions might be unordered.
 	pub fn all<F, T>(&self, f: F) -> T where
-		// F: FnOnce(txpool::UnorderedIterator<VEx, AlwaysReady, S>) -> T,
-		F: FnOnce(txpool::PendingIterator<VEx, AlwaysReady, S, Listener<Hash>>) -> T,
+		F: FnOnce(txpool::UnorderedIterator<VEx, AlwaysReady, S>) -> T,
 	{
-		// f(self.pool.read().unordered_pending(AlwaysReady))
-		f(self.pool.read().pending(AlwaysReady))
+		f(self.pool.read().unordered_pending(AlwaysReady))
 	}
 }
 
