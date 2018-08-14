@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+// TODO: Add missing crate doc between the tags below
+// tag::description[]
+// end::description[]
+
 extern crate ed25519;
 extern crate substrate_client as client;
 extern crate substrate_codec as codec;

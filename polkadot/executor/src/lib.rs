@@ -14,8 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! A `CodeExecutor` specialisation which uses natively compiled runtime when the wasm to be
 //! executed is equivalent to the natively compiled code.
+// end::description[]
 
 extern crate polkadot_runtime;
 #[macro_use] extern crate substrate_executor;

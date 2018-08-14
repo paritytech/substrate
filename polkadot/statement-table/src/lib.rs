@@ -1,6 +1,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! The statement table.
 //!
 //! This stores messages other authorities issue about candidates.
@@ -13,6 +14,7 @@
 //! Each parachain is associated with two sets of authorities: those which can
 //! propose and attest to validity of candidates, and those who can only attest
 //! to availability.
+// end::description[]
 
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;

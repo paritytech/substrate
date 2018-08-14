@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Defines primitive types for creating or validating a parachain.
 //!
 //! When compiled with standard library support, this crate exports a `wasm`
@@ -39,6 +40,7 @@
 //!
 //! The `load_params` and `write_result` functions provide utilities for setting up
 //! a parachain WASM module in Rust.
+// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]

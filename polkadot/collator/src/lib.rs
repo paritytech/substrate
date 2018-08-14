@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Collation node logic.
 //!
 //! A collator node lives on a distinct parachain and submits a proposal for
@@ -43,6 +44,7 @@
 //!
 //! This crate defines traits which provide context necessary for collation logic
 //! to be performed, as the collation logic itself.
+// end::description[]
 
 extern crate futures;
 extern crate substrate_client as client;

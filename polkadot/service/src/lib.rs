@@ -16,7 +16,9 @@
 
 #![warn(unused_extern_crates)]
 
+// tag::description[]
 //! Polkadot service. Specialized wrapper over substrate service.
+// end::description[]
 
 extern crate ed25519;
 extern crate polkadot_availability_store as av_store;
