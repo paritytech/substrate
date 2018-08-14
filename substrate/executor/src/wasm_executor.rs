@@ -30,7 +30,7 @@ use wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use primitives::BlakeHasher;
+use primitives::KeccakHasher;
 use triehash::ordered_trie_root;
 use sandbox;
 
@@ -74,7 +74,7 @@ macro_rules! debug_trace {
 	( $( $x:tt )* ) => ()
 }
 
-struct FunctionExecutor<'e, E: Externalities<BlakeHasher> + 'e> {
+struct FunctionExecutor<'e, E: Externalities<KeccakHasher> + 'e> {
 	sandbox_store: sandbox::Store,
 	heap: Heap,
 	memory: MemoryRef,
@@ -83,7 +83,7 @@ struct FunctionExecutor<'e, E: Externalities<BlakeHasher> + 'e> {
 	hash_lookup: HashMap<Vec<u8>, Vec<u8>>,
 }
 
-impl<'e, E: Externalities<BlakeHasher>> FunctionExecutor<'e, E> {
+impl<'e, E: Externalities<KeccakHasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, heap_pages: usize, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
@@ -96,7 +96,7 @@ impl<'e, E: Externalities<BlakeHasher>> FunctionExecutor<'e, E> {
 	}
 }
 
-impl<'e, E: Externalities<BlakeHasher>> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
+impl<'e, E: Externalities<KeccakHasher>> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
 	fn store(&self) -> &sandbox::Store {
 		&self.sandbox_store
 	}
@@ -480,7 +480,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.sandbox_store.memory_teardown(memory_idx)?;
 		Ok(())
 	},
-	=> <'e, E: Externalities<BlakeHasher> + 'e>
+	=> <'e, E: Externalities<KeccakHasher> + 'e>
 );
 
 /// Wasm rust executor for contracts.
@@ -512,7 +512,7 @@ impl WasmExecutor {
 
 	/// Call a given method in the given code.
 	/// This should be used for tests only.
-	pub fn call<E: Externalities<BlakeHasher>>(
+	pub fn call<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
 		code: &[u8],
@@ -524,7 +524,7 @@ impl WasmExecutor {
 	}
 
 	/// Call a given method in the given wasm-module runtime.
-	pub fn call_in_wasm_module<E: Externalities<BlakeHasher>>(
+	pub fn call_in_wasm_module<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
 		module: &Module,

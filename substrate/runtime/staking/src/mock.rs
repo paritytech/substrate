@@ -21,7 +21,7 @@
 use primitives::BuildStorage;
 use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
-use substrate_primitives::{H256, BlakeHasher};
+use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, consensus, session, system, timestamp};
 
@@ -58,7 +58,7 @@ impl Trait for Test {
 	type OnAccountKill = ();
 }
 
-pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool, reward: u64) -> runtime_io::TestExternalities<BlakeHasher> {
+pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool, reward: u64) -> runtime_io::TestExternalities<KeccakHasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let balance_factor = if ext_deposit > 0 {
 		256

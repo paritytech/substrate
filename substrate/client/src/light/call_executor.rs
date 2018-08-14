@@ -24,7 +24,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	execution_proof_check, ExecutionManager};
-use primitives::{H256, BlakeHasher, RlpCodec};
+use primitives::{H256, KeccakHasher, RlpCodec};
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use rlp::Encodable;
@@ -51,7 +51,7 @@ impl<B, F> RemoteCallExecutor<B, F> {
 	}
 }
 
-impl<B, F, Block> CallExecutor<Block, BlakeHasher, RlpCodec> for RemoteCallExecutor<B, F>
+impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExecutor<B, F>
 where
 	Block: BlockT,
 	B: ChainBackend<Block>,
@@ -80,7 +80,7 @@ where
 	}
 
 	fn call_at_state<
-		S: StateBackend<BlakeHasher, RlpCodec>,
+		S: StateBackend<KeccakHasher, RlpCodec>,
 		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
 	>(&self,
 		_state: &S,
@@ -92,7 +92,7 @@ where
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend<BlakeHasher, RlpCodec>>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
+	fn prove_at_state<S: StateBackend<KeccakHasher, RlpCodec>>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 

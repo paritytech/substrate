@@ -360,7 +360,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, BlakeHasher};
+	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
@@ -411,7 +411,7 @@ mod tests {
 		type Proposal = Proposal;
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<BlakeHasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],

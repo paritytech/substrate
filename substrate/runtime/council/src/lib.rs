@@ -623,7 +623,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
-	use substrate_primitives::BlakeHasher;
+	use substrate_primitives::KeccakHasher;
 
 	impl_outer_dispatch! {
 		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
@@ -670,7 +670,7 @@ mod tests {
 	}
 	impl Trait for Test {}
 
-	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<BlakeHasher> {
+	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -787,7 +787,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities<BlakeHasher> {
+	fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = new_test_ext(false);
 		with_externalities(&mut t, || {
 			<Candidates<Test>>::put(vec![0, 0, 1]);

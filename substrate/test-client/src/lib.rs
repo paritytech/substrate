@@ -37,7 +37,7 @@ mod block_builder_ext;
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
 
-use primitives::{BlakeHasher, RlpCodec};
+use primitives::{KeccakHasher, RlpCodec};
 
 mod local_executor {
 	#![allow(missing_docs)]
@@ -50,7 +50,7 @@ mod local_executor {
 pub use local_executor::LocalExecutor;
 
 /// Test client database backend.
-pub type Backend = client::in_mem::Backend<runtime::Block, BlakeHasher, RlpCodec>;
+pub type Backend = client::in_mem::Backend<runtime::Block, KeccakHasher, RlpCodec>;
 
 /// Test client executor.
 pub type Executor = client::LocalCallExecutor<Backend, executor::NativeExecutor<LocalExecutor>>;

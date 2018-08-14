@@ -218,7 +218,7 @@ mod tests {
 	use super::*;
 	use staking::Call;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, BlakeHasher};
+	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
@@ -297,7 +297,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<BlakeHasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(session::GenesisConfig::<Test>::default().build_storage().unwrap());
@@ -313,7 +313,10 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
+					// Blake
+					// state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
+					// Keccak
+					state_root: hex!("8fad93b6b9e5251a2e4913598fd0d74a138c0e486eb1133ff8081b429b0c56f2").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(), // REVIEW: I expected this to be wrong with a different hasher?
 					digest: Digest { logs: vec![], },
 				},

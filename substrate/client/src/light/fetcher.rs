@@ -18,7 +18,7 @@
 
 use std::sync::Arc;
 use futures::IntoFuture;
-use primitives::{BlakeHasher, RlpCodec};
+use primitives::{KeccakHasher, RlpCodec};
 use runtime_primitives::traits::{Block as BlockT};
 use state_machine::CodeExecutor;
 
@@ -79,7 +79,7 @@ impl<S, E, F, Block> FetchChecker<Block> for LightDataChecker<S, E, F>
 	where
 		Block: BlockT,
 		S: BlockchainStorage<Block>,
-		E: CodeExecutor<BlakeHasher>,
+		E: CodeExecutor<KeccakHasher>,
 		F: Fetcher<Block>,
 {
 	fn check_execution_proof(&self, request: &RemoteCallRequest<Block::Hash>, remote_proof: Vec<Vec<u8>>) -> ClientResult<CallResult> {

@@ -75,7 +75,7 @@ pub use native_executor::{with_native_environment, NativeExecutor, NativeExecuti
 pub use state_machine::Externalities;
 pub use runtime_version::RuntimeVersion;
 pub use codec::Codec;
-use primitives::BlakeHasher;
+use primitives::KeccakHasher;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
@@ -83,7 +83,7 @@ pub trait RuntimeInfo {
 	const NATIVE_VERSION: Option<RuntimeVersion>;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities<BlakeHasher>> (
+	fn runtime_version<E: Externalities<KeccakHasher>> (
 		&self,
 		ext: &mut E,
 		code: &[u8]

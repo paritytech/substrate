@@ -49,7 +49,7 @@ use rstd::marker::PhantomData;
 use codec::Encode;
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::{twox_128, TestExternalities, BlakeHasher};
+use runtime_io::{twox_128, TestExternalities, KeccakHasher};
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -142,7 +142,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn externalities() -> TestExternalities<BlakeHasher> {
+	pub fn externalities() -> TestExternalities<KeccakHasher> {
 		map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),

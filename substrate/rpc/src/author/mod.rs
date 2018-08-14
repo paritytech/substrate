@@ -26,7 +26,7 @@ use extrinsic_pool::{
 };
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
-use primitives::{Bytes, BlakeHasher, RlpCodec};
+use primitives::{Bytes, KeccakHasher, RlpCodec};
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
 use subscriptions::Subscriptions;
@@ -86,8 +86,8 @@ impl<B, E, Block: traits::Block, P> Author<B, E, Block, P> {
 }
 
 impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> where
-	B: client::backend::Backend<Block, BlakeHasher, RlpCodec> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, BlakeHasher, RlpCodec> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
 	Block: traits::Block + 'static,
 	Hash: traits::MaybeSerializeDebug + Sync + Send + 'static,
 	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash>,

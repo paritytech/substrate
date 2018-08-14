@@ -23,7 +23,7 @@ use runtime_io::{self, twox_128};
 use runtime_support::StorageValue;
 use codec::Encode;
 use std::collections::HashMap;
-use substrate_primitives::BlakeHasher;
+use substrate_primitives::KeccakHasher;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,7 +38,7 @@ pub struct GenesisConfig<T: Trait> {
 
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
-		let r: runtime_io::TestExternalities<BlakeHasher> = map![
+		let r: runtime_io::TestExternalities<KeccakHasher> = map![
 			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
 			twox_128(<CallBaseFee<T>>::key()).to_vec() => self.call_base_fee.encode(),
 			twox_128(<CreateBaseFee<T>>::key()).to_vec() => self.create_base_fee.encode(),
