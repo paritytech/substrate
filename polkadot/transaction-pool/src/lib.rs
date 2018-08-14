@@ -178,9 +178,14 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 		}
 	}
 
-	fn should_replace(&self, old: &VerifiedTransaction, _new: &VerifiedTransaction) -> bool {
-		// Always replace not fully verified transactions.
-		!old.is_fully_verified()
+	fn should_replace(&self, old: &VerifiedTransaction, _new: &VerifiedTransaction) -> Choice {
+		if old.is_fully_verified() {
+			// Don't allow new transactions if we are reaching the limit.
+			Choice::RejectNew
+		} else {
+			// Always replace not fully verified transactions.
+			Choice::ReplaceOld
+		}
 	}
 }
 
