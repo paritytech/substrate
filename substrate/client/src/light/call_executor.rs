@@ -24,7 +24,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	execution_proof_check, ExecutionManager};
-use primitives::{H256, BlakeHasher, BlakeRlpCodec};
+use primitives::{H256, BlakeHasher, RlpCodec};
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use rlp::Encodable;
@@ -51,7 +51,7 @@ impl<B, F> RemoteCallExecutor<B, F> {
 	}
 }
 
-impl<B, F, Block> CallExecutor<Block, BlakeHasher, BlakeRlpCodec> for RemoteCallExecutor<B, F>
+impl<B, F, Block> CallExecutor<Block, BlakeHasher, RlpCodec> for RemoteCallExecutor<B, F>
 where
 	Block: BlockT,
 	B: ChainBackend<Block>,
@@ -80,7 +80,7 @@ where
 	}
 
 	fn call_at_state<
-		S: StateBackend<BlakeHasher, BlakeRlpCodec>,
+		S: StateBackend<BlakeHasher, RlpCodec>,
 		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
 	>(&self,
 		_state: &S,
@@ -92,7 +92,7 @@ where
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend<BlakeHasher, BlakeRlpCodec>>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
+	fn prove_at_state<S: StateBackend<BlakeHasher, RlpCodec>>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
@@ -168,7 +168,7 @@ mod tests {
 		// check remote execution proof locally
 		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
 
-		do_check_execution_proof::<_, _, _, BlakeRlpCodec>(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
+		do_check_execution_proof::<_, _, _, RlpCodec>(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
 			method: "authorities".into(),
 			call_data: vec![],

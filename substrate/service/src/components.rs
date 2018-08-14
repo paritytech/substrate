@@ -28,7 +28,7 @@ use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use extrinsic_pool::{txpool::Options as ExtrinsicPoolOptions, api::ExtrinsicPool as ExtrinsicPoolApi};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, generic::BlockId, BuildStorage};
 use config::Configuration;
-use primitives::{BlakeHasher, BlakeRlpCodec};
+use primitives::{BlakeHasher, RlpCodec};
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -153,9 +153,9 @@ pub trait Components {
 	/// Associated service factory.
 	type Factory: ServiceFactory;
 	/// Client backend.
-	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, BlakeHasher, BlakeRlpCodec>;
+	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, BlakeHasher, RlpCodec>;
 	/// Client executor.
-	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, BlakeHasher, BlakeRlpCodec> + Send + Sync;
+	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, BlakeHasher, RlpCodec> + Send + Sync;
 	/// Extrinsic pool type.
 	type ExtrinsicPool: ExtrinsicPool<FactoryBlock<Self::Factory>>;
 

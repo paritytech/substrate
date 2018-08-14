@@ -40,8 +40,13 @@ extern crate rlp;
 extern crate serde;
 #[cfg(feature = "std")]
 extern crate twox_hash;
+
 #[cfg(feature = "std")]
 extern crate blake2_rfc;
+
+#[cfg(feature = "std")]
+extern crate tiny_keccak;
+
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
@@ -88,7 +93,7 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 pub mod hexdisplay;
 
 pub mod hash;
-pub mod hasher;
+mod hasher;
 pub mod sandbox;
 pub mod storage;
 pub mod uint;
@@ -102,9 +107,12 @@ mod tests;
 pub use self::hash::{H160, H256, H512};
 pub use self::uint::U256;
 pub use authority_id::AuthorityId;
-pub use self::hasher::BlakeHasher;
+
+pub use self::hasher::blake::BlakeHasher;
+pub use self::hasher::keccak::KeccakHasher;
+
 #[cfg(feature = "std")]
-pub use self::rlp_codec::BlakeRlpCodec;
+pub use self::rlp_codec::RlpCodec;
 
 /// A 512-bit value interpreted as a signature.
 pub type Signature = hash::H512;

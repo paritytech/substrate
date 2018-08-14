@@ -277,13 +277,13 @@ impl<H: Hasher> TrieBackendStorage<H> {
 pub mod tests {
 	use super::*;
 	use std::collections::HashSet;
-	use primitives::{BlakeHasher, BlakeRlpCodec, H256};
+	use primitives::{BlakeHasher, RlpCodec, H256};
 
 	fn test_db() -> (MemoryDB<BlakeHasher>, H256) {
 		let mut root = H256::default();
 		let mut mdb = MemoryDB::<BlakeHasher>::new();
 		{
-			let mut trie = TrieDBMut::<_, BlakeRlpCodec>::new(&mut mdb, &mut root);
+			let mut trie = TrieDBMut::<_, RlpCodec>::new(&mut mdb, &mut root);
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
@@ -292,7 +292,7 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<BlakeHasher, BlakeRlpCodec> {
+	pub(crate) fn test_trie() -> TrieBackend<BlakeHasher, RlpCodec> {
 		let (mdb, root) = test_db();
 		TrieBackend::with_memorydb(mdb, root)
 	}
@@ -314,7 +314,7 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		let db = TrieBackend::<BlakeHasher, BlakeRlpCodec>::with_memorydb(
+		let db = TrieBackend::<BlakeHasher, RlpCodec>::with_memorydb(
 			MemoryDB::new(),
 			Default::default()
 		);

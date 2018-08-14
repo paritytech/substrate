@@ -53,7 +53,7 @@ use hashdb::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
-use primitives::{H256, AuthorityId, BlakeHasher, BlakeRlpCodec};
+use primitives::{H256, AuthorityId, BlakeHasher, RlpCodec};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, NumberFor, Zero};
@@ -68,7 +68,7 @@ pub use state_db::PruningMode;
 const FINALIZATION_WINDOW: u64 = 32;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend<BlakeHasher, BlakeRlpCodec>;
+pub type DbState = state_machine::TrieBackend<BlakeHasher, RlpCodec>;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -223,7 +223,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
 }
 
-impl<Block> client::backend::BlockImportOperation<Block, BlakeHasher, BlakeRlpCodec>
+impl<Block> client::backend::BlockImportOperation<Block, BlakeHasher, RlpCodec>
 for BlockImportOperation<Block, BlakeHasher>
 where Block: BlockT,
 {
@@ -340,7 +340,7 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block> client::backend::Backend<Block, BlakeHasher, BlakeRlpCodec> for Backend<Block> where Block: BlockT {
+impl<Block> client::backend::Backend<Block, BlakeHasher, RlpCodec> for Backend<Block> where Block: BlockT {
 	type BlockImportOperation = BlockImportOperation<Block, BlakeHasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
@@ -461,7 +461,7 @@ impl<Block> client::backend::Backend<Block, BlakeHasher, BlakeRlpCodec> for Back
 	}
 }
 
-impl<Block> client::backend::LocalBackend<Block, BlakeHasher, BlakeRlpCodec> for Backend<Block>
+impl<Block> client::backend::LocalBackend<Block, BlakeHasher, RlpCodec> for Backend<Block>
 where Block: BlockT {}
 
 #[cfg(test)]

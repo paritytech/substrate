@@ -53,7 +53,7 @@ use client::Client;
 use polkadot_network::{PolkadotProtocol, consensus::ConsensusNetwork};
 use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
-use primitives::{BlakeHasher, BlakeRlpCodec};
+use primitives::{BlakeHasher, RlpCodec};
 
 pub use service::{Roles, PruningMode, ExtrinsicPoolOptions,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
@@ -70,9 +70,9 @@ pub trait Components: service::Components {
 	/// Polkadot API.
 	type Api: 'static + PolkadotApi + Send + Sync;
 	/// Client backend.
-	type Backend: 'static + client::backend::Backend<Block, BlakeHasher, BlakeRlpCodec>;
+	type Backend: 'static + client::backend::Backend<Block, BlakeHasher, RlpCodec>;
 	/// Client executor.
-	type Executor: 'static + client::CallExecutor<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync;
+	type Executor: 'static + client::CallExecutor<Block, BlakeHasher, RlpCodec> + Send + Sync;
 }
 
 impl Components for service::LightComponents<Factory> {
@@ -272,8 +272,8 @@ pub struct TransactionPoolAdapter<B, E, A> where A: Send + Sync, E: Send + Sync 
 impl<B, E, A> TransactionPoolAdapter<B, E, A>
 	where
 		A: Send + Sync,
-		B: client::backend::Backend<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync,
-		E: client::CallExecutor<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync,
+		B: client::backend::Backend<Block, BlakeHasher, RlpCodec> + Send + Sync,
+		E: client::CallExecutor<Block, BlakeHasher, RlpCodec> + Send + Sync,
 {
 	fn best_block_id(&self) -> Option<BlockId> {
 		self.client.info()
@@ -287,8 +287,8 @@ impl<B, E, A> TransactionPoolAdapter<B, E, A>
 
 impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A>
 	where
-		B: client::backend::Backend<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync,
-		E: client::CallExecutor<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync,
+		B: client::backend::Backend<Block, BlakeHasher, RlpCodec> + Send + Sync,
+		E: client::CallExecutor<Block, BlakeHasher, RlpCodec> + Send + Sync,
 		A: polkadot_api::PolkadotApi + Send + Sync,
 {
 	fn transactions(&self) -> Vec<(Hash, Vec<u8>)> {
@@ -339,8 +339,8 @@ impl<B, E, A> network::TransactionPool<Block> for TransactionPoolAdapter<B, E, A
 
 impl<B, E, A> service::ExtrinsicPool<Block> for TransactionPoolAdapter<B, E, A>
 	where
-		B: client::backend::Backend<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync + 'static,
-		E: client::CallExecutor<Block, BlakeHasher, BlakeRlpCodec> + Send + Sync + 'static,
+		B: client::backend::Backend<Block, BlakeHasher, RlpCodec> + Send + Sync + 'static,
+		E: client::CallExecutor<Block, BlakeHasher, RlpCodec> + Send + Sync + 'static,
 		A: polkadot_api::PolkadotApi + Send + Sync + 'static,
 {
 	type Api = TransactionPool<A>;

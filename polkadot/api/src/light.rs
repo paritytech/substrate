@@ -24,7 +24,7 @@ use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, 
 use runtime::Address;
 use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
 use {PolkadotApi, BlockBuilder, RemotePolkadotApi, Result, ErrorKind};
-use substrate_primitives::{BlakeHasher, BlakeRlpCodec};
+use substrate_primitives::{BlakeHasher, RlpCodec};
 
 /// Light block builder. TODO: make this work (efficiently)
 #[derive(Clone, Copy)]
@@ -41,9 +41,9 @@ impl BlockBuilder for LightBlockBuilder {
 }
 
 /// Remote polkadot API implementation.
-pub struct RemotePolkadotApiWrapper<B: Backend<Block, BlakeHasher, BlakeRlpCodec>, E: CallExecutor<Block, BlakeHasher, BlakeRlpCodec>>(pub Arc<Client<B, E, Block>>);
+pub struct RemotePolkadotApiWrapper<B: Backend<Block, BlakeHasher, RlpCodec>, E: CallExecutor<Block, BlakeHasher, RlpCodec>>(pub Arc<Client<B, E, Block>>);
 
-impl<B: Backend<Block, BlakeHasher, BlakeRlpCodec>, E: CallExecutor<Block, BlakeHasher, BlakeRlpCodec>> PolkadotApi for RemotePolkadotApiWrapper<B, E> {
+impl<B: Backend<Block, BlakeHasher, RlpCodec>, E: CallExecutor<Block, BlakeHasher, RlpCodec>> PolkadotApi for RemotePolkadotApiWrapper<B, E> {
 	type BlockBuilder = LightBlockBuilder;
 
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
@@ -102,4 +102,4 @@ impl<B: Backend<Block, BlakeHasher, BlakeRlpCodec>, E: CallExecutor<Block, Blake
 	}
 }
 
-impl<B: RemoteBackend<Block, BlakeHasher, BlakeRlpCodec>, E: CallExecutor<Block, BlakeHasher, BlakeRlpCodec>> RemotePolkadotApi for RemotePolkadotApiWrapper<B, E> {}
+impl<B: RemoteBackend<Block, BlakeHasher, RlpCodec>, E: CallExecutor<Block, BlakeHasher, RlpCodec>> RemotePolkadotApi for RemotePolkadotApiWrapper<B, E> {}

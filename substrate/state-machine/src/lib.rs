@@ -441,7 +441,7 @@ mod tests {
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
-	use primitives::{BlakeHasher, BlakeRlpCodec, H256};
+	use primitives::{BlakeHasher, RlpCodec, H256};
 
 	struct DummyCodeExecutor {
 		native_available: bool,
@@ -513,7 +513,7 @@ mod tests {
 			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
 			b"doug".to_vec() => b"notadog".to_vec()
 		];
-		let backend = InMemory::<BlakeHasher, BlakeRlpCodec>::from(initial);
+		let backend = InMemory::<BlakeHasher, RlpCodec>::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"dog".to_vec() => Some(b"puppy".to_vec()),
@@ -583,7 +583,7 @@ mod tests {
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check proof locally
-        let (local_result, _) = execution_proof_check::<BlakeHasher, BlakeRlpCodec,_,>(remote_root, remote_proof,
+        let (local_result, _) = execution_proof_check::<BlakeHasher, RlpCodec,_,>(remote_root, remote_proof,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check that both results are correct
@@ -599,7 +599,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let backend = InMemory::<BlakeHasher, BlakeRlpCodec>::from(initial).try_into_trie_backend().unwrap();
+		let backend = InMemory::<BlakeHasher, RlpCodec>::from(initial).try_into_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"aba".to_vec() => Some(b"1312".to_vec()),
