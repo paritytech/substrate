@@ -59,6 +59,11 @@ use substrate_runtime_primitives::traits::{Bounded, Checkable, Hash as HashT, Bl
 pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
 
+/// Maximal size of a single encoded extrinsic.
+///
+/// See also polkadot-consensus::MAX_TRANSACTIONS_SIZE
+const MAX_TRANSACTION_SIZE: usize = 4 * 1024 * 1024;
+
 /// Type alias for convenience.
 pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable<fn(Address) -> std::result::Result<AccountId, &'static str>>>::Checked;
 
@@ -279,14 +284,18 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 	type Error = Error;
 
 	fn verify_transaction(&self, uxt: UncheckedExtrinsic) -> Result<Self::VerifiedTransaction> {
-
 		if !uxt.is_signed() {
 			bail!(ErrorKind::IsInherent(uxt))
 		}
 
 		let encoded = uxt.encode();
-		let (encoded_size, hash) = (encoded.len(), BlakeTwo256::hash(&encoded));
+		let encoded_size = encoded.len();
 
+		if encoded_size > MAX_TRANSACTION_SIZE {
+			bail!(ErrorKind::TooLarge(encoded_size, MAX_TRANSACTION_SIZE));
+		}
+
+		let hash = BlakeTwo256::hash(&encoded);
 		debug!(target: "transaction-pool", "Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
 
 		let inner = match uxt.clone().check_with(|a| self.lookup(a)) {

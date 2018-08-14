@@ -770,12 +770,6 @@ impl<C> CreateProposal<C> where C: PolkadotApi {
 			let result = self.transaction_pool.cull_and_get_pending(BlockId::hash(self.parent_hash), |pending_iterator| {
 				let mut pending_size = 0;
 				for pending in pending_iterator {
-					// skip and cull transactions which are too large.
-					if pending.encoded_size() > MAX_TRANSACTIONS_SIZE {
-						unqueue_invalid.push(pending.hash().clone());
-						continue
-					}
-
 					if pending_size + pending.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
 
 					match block_builder.push_extrinsic(pending.primitive_extrinsic()) {
