@@ -51,8 +51,8 @@ build_rpc_trait! {
 		#[rpc(name = "author_submitExtrinsic")]
 		fn submit_extrinsic(&self, Bytes) -> Result<Hash>;
 
-		/// A list of pending extrinsics.
-		#[rpc(name = "author_pending")]
+		/// Returns all pending extrinsics, potentially grouped by sender.
+		#[rpc(name = "author_pendingExtrinsics")]
 		fn pending_extrinsics(&self) -> Result<PendingExtrinsics>;
 
 		#[pubsub(name = "author_extrinsicUpdate")] {
@@ -116,6 +116,10 @@ impl<B, E, Block, P, Ex, Hash, InPool> AuthorApi<Hash, Ex, InPool> for Author<B,
 			)
 	}
 
+	fn pending_extrinsics(&self) -> Result<InPool> {
+		Ok(self.pool.all())
+	}
+
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<Hash>>, xt: Bytes) {
 
 		let submit = || -> Result<_> {
@@ -149,8 +153,5 @@ impl<B, E, Block, P, Ex, Hash, InPool> AuthorApi<Hash, Ex, InPool> for Author<B,
 	fn unwatch_extrinsic(&self, id: SubscriptionId) -> Result<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
-
-	fn pending_extrinsics(&self) -> Result<InPool> {
-		Ok(self.pool.all())
-	}
 }
+
