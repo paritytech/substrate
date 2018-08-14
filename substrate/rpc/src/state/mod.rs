@@ -16,7 +16,10 @@
 
 //! Polkadot state API.
 
-use std::sync::Arc;
+use std::{
+	collections::HashMap,
+	sync::Arc,
+};
 
 use client::{self, Client, CallExecutor, BlockchainEvents};
 use jsonrpc_macros::Trailing;
@@ -27,7 +30,7 @@ use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, Header};
 use tokio::runtime::TaskExecutor;
 
 use subscriptions::Subscriptions;
@@ -58,6 +61,13 @@ build_rpc_trait! {
 		/// Returns the size of a storage entry at a block's state.
 		#[rpc(name = "state_getStorageSize", alias = ["state_getStorageSizeAt", ])]
 		fn storage_size(&self, StorageKey, Trailing<Hash>) -> Result<Option<u64>>;
+
+		/// Query historical storage entries (by key) starting from a block given as the second parameter.
+		///
+		/// NOTE This first returned result contains the initial state of storage for all keys.
+		/// Subsequent values in the vector represent changes to the previous state (diffs).
+		#[rpc(name = "state_queryStorage")]
+		fn query_storage(&self, Vec<StorageKey>, Hash, Trailing<Hash>) -> Result<Vec<StorageChangeSet<Hash>>>;
 
 		#[pubsub(name = "state_storage")] {
 			/// New storage subscription
@@ -130,6 +140,74 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
+	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
+		let to = self.unwrap_or_best(to)?;
+
+		let from_hdr = self.client.header(&BlockId::hash(from))?;
+		let to_hdr = self.client.header(&BlockId::hash(to))?;
+
+		match (from_hdr, to_hdr) {
+			(Some(ref from), Some(ref to)) if from.number() <= to.number() => {
+				let from = from.clone();
+				let to = to.clone();
+				// check if we can get from `to` to `from` by going through parent_hashes.
+				let blocks = {
+					let mut blocks = vec![to.hash()];
+					let mut last = to.clone();
+					while last.number() > from.number() {
+						if let Some(hdr) = self.client.header(&BlockId::hash(*last.parent_hash()))? {
+							blocks.push(hdr.hash());
+							last = hdr;
+						} else {
+							bail!(invalid_block_range(
+								Some(from),
+								Some(to),
+								format!("Parent of {} ({}) not found", last.number(), last.hash()),
+							))
+						}
+					}
+					if last.hash() != from.hash() {
+						bail!(invalid_block_range(
+							Some(from),
+							Some(to),
+							format!("Expected to reach `from`, got {} ({})", last.number(), last.hash()),
+						))
+					}
+					blocks.reverse();
+					blocks
+				};
+				let mut result = Vec::new();
+				let mut last_state: HashMap<_, Option<_>> = Default::default();
+				for block in blocks {
+					let mut changes = vec![];
+					let id = BlockId::hash(block.clone());
+
+					for key in &keys {
+						let (has_changed, data) = {
+							let curr_data = self.client.storage(&id, key)?;
+							let prev_data = last_state.get(key).and_then(|x| x.as_ref());
+
+							(curr_data.as_ref() != prev_data, curr_data)
+						};
+
+						if has_changed {
+							changes.push((key.clone(), data.clone()));
+						}
+
+						last_state.insert(key.clone(), data);
+					}
+
+					result.push(StorageChangeSet {
+						block,
+						changes,
+					});
+				}
+				Ok(result)
+			},
+			(from, to) => bail!(invalid_block_range(from, to, "Invalid range or unknown block".into())),
+		}
+	}
+
 	fn subscribe_storage(
 		&self,
 		_meta: Self::Metadata,
@@ -178,4 +256,13 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 	fn unsubscribe_storage(&self, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
+}
+
+fn invalid_block_range<H: Header>(from: Option<H>, to: Option<H>, reason: String) -> error::ErrorKind {
+	let to_string = |x: Option<H>| match x {
+		None => "unknown hash".into(),
+		Some(h) => format!("{} ({})", h.number(), h.hash()),
+	};
+
+	error::ErrorKind::InvalidBlockRange(to_string(from), to_string(to), reason)
 }

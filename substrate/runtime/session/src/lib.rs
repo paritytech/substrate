@@ -232,17 +232,6 @@ impl<T: Trait> Module<T> {
 		let block_number = <system::Module<T>>::block_number();
 		length_minus_1 - (block_number - Self::last_length_change() + length_minus_1) % length
 	}
-
-	/// Returns `true` if the current validator set is taking took long to validate blocks.
-	pub fn broken_validation() -> bool {
-		let now = <timestamp::Module<T>>::get();
-		let block_period = <timestamp::Module<T>>::block_period();
-		let blocks_remaining = Self::blocks_remaining();
-		let blocks_remaining = <T::Moment as As<T::BlockNumber>>::sa(blocks_remaining);
-		now + blocks_remaining * block_period >
-			Self::current_start() + Self::ideal_session_duration() *
-				(T::Moment::sa(100) + Self::broken_percent_late()) / T::Moment::sa(100)
-	}
 }
 
 impl<T: Trait> Executable for Module<T> {
@@ -358,7 +347,7 @@ mod tests {
 	}
 
 	#[test]
-	fn should_identify_broken_validation() {
+	fn should_rotate_on_bad_validators() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(2);
 			assert_eq!(Session::blocks_remaining(), 0);
@@ -370,18 +359,16 @@ mod tests {
 			assert_eq!(Session::current_start(), 0);
 			assert_eq!(Session::ideal_session_duration(), 15);
 			// ideal end = 0 + 15 * 3 = 15
-			// broken_limit = 15 * 130 / 100 = 19
 
 			System::set_block_number(3);
 			assert_eq!(Session::blocks_remaining(), 2);
-			Timestamp::set_timestamp(9);				// earliest end = 9 + 2 * 5 = 19; OK.
-			assert!(!Session::broken_validation());
+			Timestamp::set_timestamp(9); // no bad validators. session not rotated.
 			Session::check_rotate_session();
 
 			System::set_block_number(4);
+			::system::ExtrinsicIndex::<Test>::put(1);
 			assert_eq!(Session::blocks_remaining(), 1);
-			Timestamp::set_timestamp(15);				// another 1 second late. earliest end = 15 + 1 * 5 = 20; broken.
-			assert!(Session::broken_validation());
+			Session::note_offline(&0, vec![1]).unwrap(); // bad validator -> session rotate
 			Session::check_rotate_session();
 			assert_eq!(Session::current_index(), 2);
 		});
