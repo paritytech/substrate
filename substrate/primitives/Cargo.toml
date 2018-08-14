@@ -22,8 +22,8 @@ hashdb = { git = "https://github.com/paritytech/parity-common", default_features
 patricia-trie = { git = "https://github.com/paritytech/parity-common", optional = true }
 plain_hasher = { git = "https://github.com/paritytech/parity-common", default_features = false }
 
-# TODO: use a feature to switch here?
 blake2-rfc = { version = "0.2.18", optional = true }
+# Switch back to Blake after PoC-3 is out and remove this
 tiny-keccak = { version = "1.4", optional = true }
 
 [dev-dependencies]
