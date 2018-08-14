@@ -23,7 +23,8 @@ use core::marker::PhantomData;
 use patricia_trie::{NibbleSlice, NodeCodec, node::Node, ChildReference};
 
 use hash::H256;
-use BlakeHasher;
+// When switching to Blake2, use this instead:
+// use BlakeHasher;
 use KeccakHasher;
 
 /// Concrete implementation of a `NodeCodec` with Rlp encoding, generic over the `Hasher`

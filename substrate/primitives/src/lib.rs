@@ -109,7 +109,7 @@ pub use self::uint::U256;
 pub use authority_id::AuthorityId;
 
 // Switch back to Blake after PoC-3 is out
-pub use self::hasher::blake::BlakeHasher;
+// pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::keccak::KeccakHasher;
 
 #[cfg(feature = "std")]
