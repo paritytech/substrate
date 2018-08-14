@@ -302,7 +302,8 @@ impl<T: Trait> Module<T> {
 		};
 
 		if transactor != &dest {
-			Self::set_free_balance(transactor, new_from_balance);
+			Self::set_free_balance(transactor, new_from_balance);			
+			Self::decrease_total_stake_by(fee);
 			Self::set_free_balance_creating(&dest, new_to_balance);
 		}
 
@@ -424,6 +425,7 @@ impl<T: Trait> Module<T> {
 	/// In that case it will return `AccountKilled`.
 	pub fn set_reserved_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		if balance < Self::existential_deposit() {
+			<ReservedBalance<T>>::insert(who, balance);
 			Self::on_reserved_too_low(who);
 			UpdateBalanceOutcome::AccountKilled
 		} else {
@@ -443,6 +445,7 @@ impl<T: Trait> Module<T> {
 		// Commented out for no - but consider it instructive.
 		// assert!(!Self::voting_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
+			<FreeBalance<T>>::insert(who, balance);
 			Self::on_free_too_low(who);
 			UpdateBalanceOutcome::AccountKilled
 		} else {
@@ -472,7 +475,7 @@ impl<T: Trait> Module<T> {
 		// value of which makes even the `free_balance` unspendable.
 		// TODO: enforce this for the other balance-altering functions.
 		if balance < ed {
-			Self::on_free_too_low(who);
+			Self::set_free_balance(who, balance);
 			UpdateBalanceOutcome::AccountKilled
 		} else {
 			if !<FreeBalance<T>>::exists(who) {
@@ -481,10 +484,12 @@ impl<T: Trait> Module<T> {
 					NewAccountOutcome::GoodHint => balance + <Module<T>>::reclaim_rebate(),
 					_ => balance,
 				};
-				<FreeBalance<T>>::insert(who, credit);
-			} else {
-				<FreeBalance<T>>::insert(who, balance);
+				Self::set_free_balance(who, credit);
+				Self::increase_total_stake_by(credit - balance);
+			} else {	
+				Self::set_free_balance(who, balance);
 			}
+
 			UpdateBalanceOutcome::Updated
 		}
 	}
@@ -498,6 +503,7 @@ impl<T: Trait> Module<T> {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
 		Self::set_free_balance(who, free_balance - free_slash);
+		Self::decrease_total_stake_by(free_slash);
 		if free_slash < value {
 			Self::slash_reserved(who, value - free_slash)
 		} else {
@@ -513,6 +519,7 @@ impl<T: Trait> Module<T> {
 			return Err("beneficiary account must pre-exist");
 		}
 		Self::set_free_balance(who, Self::free_balance(who) + value);
+		Self::increase_total_stake_by(value);
 		Ok(())
 	}
 
@@ -558,6 +565,7 @@ impl<T: Trait> Module<T> {
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
 		Self::set_reserved_balance(who, b - slash);
+		Self::decrease_total_stake_by(slash);
 		if value == slash {
 			None
 		} else {
@@ -785,6 +793,7 @@ impl<T: Trait> Module<T> {
 
 	/// Kill an account's free portion.
 	fn on_free_too_low(who: &T::AccountId) {
+		Self::decrease_total_stake_by(Self::free_balance(who));
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
 		T::OnAccountKill::on_account_kill(who);
@@ -796,9 +805,23 @@ impl<T: Trait> Module<T> {
 
 	/// Kill an account's reserved portion.
 	fn on_reserved_too_low(who: &T::AccountId) {
+		Self::decrease_total_stake_by(Self::reserved_balance(who));
 		<ReservedBalance<T>>::remove(who);
 		if Self::free_balance(who).is_zero() {
 			<system::AccountNonce<T>>::remove(who);
+		}
+	}
+
+	/// Increase TotalStake by Value.
+	pub fn increase_total_stake_by(value: T::Balance) {
+		if <TotalStake<T>>::exists() {
+			<TotalStake<T>>::put(<Module<T>>::total_stake() + value);
+		}
+	}
+	/// Decrease TotalStake by Value.
+	pub fn decrease_total_stake_by(value: T::Balance) {
+		if <TotalStake<T>>::exists() {
+			<TotalStake<T>>::put(<Module<T>>::total_stake() - value);
 		}
 	}
 }
@@ -832,7 +855,8 @@ impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
 		if b < transaction_fee + Self::existential_deposit() {
 			return Err("not enough funds for transaction fee");
 		}
-		<FreeBalance<T>>::insert(transactor, b - transaction_fee);
+		Self::set_free_balance(transactor, b - transaction_fee);
+		Self::decrease_total_stake_by(transaction_fee);
 		Ok(())
 	}
 }

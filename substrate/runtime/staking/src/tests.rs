@@ -28,6 +28,7 @@ fn reward_should_work() {
 		assert_eq!(Staking::voting_balance(&10), 1);
 		assert_ok!(Staking::reward(&10, 10));
 		assert_eq!(Staking::voting_balance(&10), 11);
+		assert_eq!(<TotalStake<Test>>::get(), 112);
 	});
 }
 
@@ -408,7 +409,7 @@ fn staking_eras_work() {
 #[test]
 fn staking_balance_works() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 42);
+		Staking::set_free_balance(&1, 42);
 		assert_eq!(Staking::free_balance(&1), 42);
 		assert_eq!(Staking::reserved_balance(&1), 0);
 		assert_eq!(Staking::voting_balance(&1), 42);
@@ -421,7 +422,8 @@ fn staking_balance_works() {
 #[test]
 fn staking_balance_transfer_works() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
+		Staking::increase_total_stake_by(111);
 		assert_ok!(Staking::transfer(&1, 2.into(), 69));
 		assert_eq!(Staking::voting_balance(&1), 42);
 		assert_eq!(Staking::voting_balance(&2), 69);
@@ -431,7 +433,7 @@ fn staking_balance_transfer_works() {
 #[test]
 fn staking_balance_transfer_when_bonded_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
 		assert_ok!(Staking::stake(&1));
 		assert_noop!(Staking::transfer(&1, 2.into(), 69), "bondage too high to send value");
 	});
@@ -440,7 +442,7 @@ fn staking_balance_transfer_when_bonded_should_not_work() {
 #[test]
 fn reserving_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
 
 		assert_eq!(Staking::voting_balance(&1), 111);
 		assert_eq!(Staking::free_balance(&1), 111);
@@ -457,7 +459,7 @@ fn reserving_balance_should_work() {
 #[test]
 fn staking_balance_transfer_when_reserved_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
 		assert_ok!(Staking::reserve(&1, 69));
 		assert_noop!(Staking::transfer(&1, 2.into(), 69), "balance too low to send value");
 	});
@@ -466,7 +468,7 @@ fn staking_balance_transfer_when_reserved_should_not_work() {
 #[test]
 fn deducting_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
 		assert_ok!(Staking::reserve(&1, 69));
 		assert_eq!(Staking::free_balance(&1), 42);
 	});
@@ -475,7 +477,7 @@ fn deducting_balance_should_work() {
 #[test]
 fn deducting_balance_when_bonded_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
 		<Bondage<Test>>::insert(1, 2);
 		System::set_block_number(1);
 		assert_eq!(Staking::unlock_block(&1), LockStatus::LockedUntil(2));
@@ -486,8 +488,8 @@ fn deducting_balance_when_bonded_should_not_work() {
 #[test]
 fn refunding_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 42);
-		<ReservedBalance<Test>>::insert(1, 69);
+		Staking::set_free_balance(&1, 42);
+		Staking::set_reserved_balance(&1, 69);
 		Staking::unreserve(&1, 69);
 		assert_eq!(Staking::free_balance(&1), 111);
 		assert_eq!(Staking::reserved_balance(&1), 0);
@@ -497,29 +499,33 @@ fn refunding_balance_should_work() {
 #[test]
 fn slashing_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
+		Staking::increase_total_stake_by(111);
 		assert_ok!(Staking::reserve(&1, 69));
 		assert!(Staking::slash(&1, 69).is_none());
 		assert_eq!(Staking::free_balance(&1), 0);
 		assert_eq!(Staking::reserved_balance(&1), 42);
+		assert_eq!(<TotalStake<Test>>::get(), 44);
 	});
 }
 
 #[test]
 fn slashing_incomplete_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 42);
+		Staking::set_free_balance(&1, 42);
+		Staking::increase_total_stake_by(42);
 		assert_ok!(Staking::reserve(&1, 21));
 		assert!(Staking::slash(&1, 69).is_some());
 		assert_eq!(Staking::free_balance(&1), 0);
 		assert_eq!(Staking::reserved_balance(&1), 0);
+		assert_eq!(<TotalStake<Test>>::get(), 2);
 	});
 }
 
 #[test]
 fn unreserving_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
 		assert_ok!(Staking::reserve(&1, 111));
 		Staking::unreserve(&1, 42);
 		assert_eq!(Staking::reserved_balance(&1), 69);
@@ -530,30 +536,34 @@ fn unreserving_balance_should_work() {
 #[test]
 fn slashing_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
+		Staking::increase_total_stake_by(111);
 		assert_ok!(Staking::reserve(&1, 111));
 		assert!(Staking::slash_reserved(&1, 42).is_none());
 		assert_eq!(Staking::reserved_balance(&1), 69);
 		assert_eq!(Staking::free_balance(&1), 0);
+		assert_eq!(<TotalStake<Test>>::get(), 71);
 	});
 }
 
 #[test]
 fn slashing_incomplete_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
+		Staking::increase_total_stake_by(111);
 		assert_ok!(Staking::reserve(&1, 42));
 		assert!(Staking::slash_reserved(&1, 69).is_some());
 		assert_eq!(Staking::free_balance(&1), 69);
 		assert_eq!(Staking::reserved_balance(&1), 0);
+		assert_eq!(<TotalStake<Test>>::get(), 71);
 	});
 }
 
 #[test]
 fn transferring_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 110);
-		<FreeBalance<Test>>::insert(2, 1);
+		Staking::set_free_balance(&1, 110);
+		Staking::set_free_balance(&2, 1);
 		assert_ok!(Staking::reserve(&1, 110));
 		assert_ok!(Staking::transfer_reserved(&1, &2, 41), None);
 		assert_eq!(Staking::reserved_balance(&1), 69);
@@ -566,7 +576,7 @@ fn transferring_reserved_balance_should_work() {
 #[test]
 fn transferring_reserved_balance_to_nonexistent_should_fail() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 111);
+		Staking::set_free_balance(&1, 111);
 		assert_ok!(Staking::reserve(&1, 111));
 		assert_noop!(Staking::transfer_reserved(&1, &2, 42), "beneficiary account must pre-exist");
 	});
@@ -575,8 +585,8 @@ fn transferring_reserved_balance_to_nonexistent_should_fail() {
 #[test]
 fn transferring_incomplete_reserved_balance_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
-		<FreeBalance<Test>>::insert(1, 110);
-		<FreeBalance<Test>>::insert(2, 1);
+		Staking::set_free_balance(&1, 110);
+		Staking::set_free_balance(&2, 1);
 		assert_ok!(Staking::reserve(&1, 41));
 		assert!(Staking::transfer_reserved(&1, &2, 69).unwrap().is_some());
 		assert_eq!(Staking::reserved_balance(&1), 0);
@@ -599,5 +609,32 @@ fn transferring_too_high_value_should_not_panic() {
 
 		assert_eq!(Staking::free_balance(&1), u64::max_value());
 		assert_eq!(Staking::free_balance(&2), 1);
+		});
+}
+
+#[test]
+fn account_removal_on_free_too_low() {
+	with_externalities(&mut new_test_ext(100, 1, 3, 1, false, 0), || {
+		// Setup two accounts with free balance above the exsistential threshold.
+		{
+			Staking::set_free_balance(&1, 110);
+			Staking::increase_total_stake_by(110);
+
+			Staking::set_free_balance(&2, 110);
+			Staking::increase_total_stake_by(110);
+
+			assert_eq!(<TotalStake<Test>>::get(), 732);
+		}
+
+		// Transfer funds from account 1 of such amount that after this transfer
+		// the balance of account 1 will be below the exsistential threshold.
+		// This should lead to the removal of all balance of this account.
+		assert_ok!(Staking::transfer(&1, 2.into(), 20));
+
+		// Verify free balance removal of account 1.
+		assert_eq!(Staking::free_balance(&1), 0);
+		
+		// Verify that TotalStake tracks balance removal when free balance is too low.
+		assert_eq!(<TotalStake<Test>>::get(), 642);
 	});
 }
