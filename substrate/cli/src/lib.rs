@@ -301,6 +301,20 @@ where
 			Some(Err(err)) => return Err(format!("Error parsing node key: {}", err).into()),
 			None => None,
 		};
+
+		let min_peers = match matches.value_of("min-peers") {
+			Some(min_peers) => min_peers.parse().map_err(|_| "Invalid min-peers value specified.")?,
+			None => 25,
+		};
+		let max_peers = match matches.value_of("max-peers") {
+			Some(max_peers) => max_peers.parse().map_err(|_| "Invalid max-peers value specified.")?,
+			None => 50,
+		};
+		if min_peers > max_peers {
+			return Err(error::ErrorKind::Input("Min-peers mustn't be larger than max-peers.".to_owned()).into());
+		}
+		config.network.min_peers = min_peers;
+		config.network.max_peers = max_peers;
 	}
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
