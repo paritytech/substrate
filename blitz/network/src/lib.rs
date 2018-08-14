@@ -19,7 +19,7 @@ extern crate substrate_codec as codec;
 extern crate substrate_network;
 
 extern crate substrate_primitives;
-// extern crate polkadot_consensus as consensus;
+extern crate blitz_consensus as consensus;
 extern crate blitz_primitives;
 extern crate ed25519;
 extern crate futures;
@@ -35,6 +35,7 @@ mod message;
 
 // TODO [dk] move it to state probably
 pub mod transaction;
+pub mod consensus;
 
 use message::BlitzMessage;
 use codec::{Encode, Decode};
