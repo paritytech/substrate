@@ -465,7 +465,6 @@ where
 	C: NodeCodec<H>,
 	H::Out: Ord + Encodable + HeapSizeOf
 {
-	// let backend = proving_backend::create_proof_check_backend::<H, C>(root.into(), proof)?;
 	let backend = proving_backend::create_proof_check_backend::<H, C>(root, proof)?;
 	backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
 }

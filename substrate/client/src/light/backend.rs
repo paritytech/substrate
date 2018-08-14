@@ -238,6 +238,7 @@ pub mod tests {
 	use light::new_fetch_checker;
 	use light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 	use super::*;
+	use primitives::{KeccakHasher, RlpCodec};
 
 	pub type OkCallFetcher = Mutex<CallResult>;
 
@@ -270,7 +271,7 @@ pub mod tests {
 
 		// check remote read proof locally
 		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
-		let local_checker = new_fetch_checker(local_executor);
+		let local_checker = new_fetch_checker::<_, KeccakHasher, RlpCodec>(local_executor);
 		let request = RemoteReadRequest {
 			block: remote_block_hash,
 			header: remote_block_header,
