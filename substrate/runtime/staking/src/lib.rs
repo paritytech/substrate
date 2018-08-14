@@ -493,7 +493,7 @@ impl<T: Trait> Module<T> {
 	/// free balance. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be retutned. Full completion is given by `None`.
+	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
 	pub fn slash(who: &T::AccountId, value: T::Balance) -> Option<T::Balance> {
 		let free_balance = Self::free_balance(who);
 		let free_slash = cmp::min(free_balance, value);
@@ -536,7 +536,7 @@ impl<T: Trait> Module<T> {
 	/// Moves up to `value` from reserved balance to balance. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be retutned. Full completion is given by `None`.
+	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
 	/// NOTE: This is different to `reserve`.
 	pub fn unreserve(who: &T::AccountId, value: T::Balance) -> Option<T::Balance> {
 		let b = Self::reserved_balance(who);
@@ -553,7 +553,7 @@ impl<T: Trait> Module<T> {
 	/// Deducts up to `value` from reserved balance of `who`. This function cannot fail.
 	///
 	/// As much funds up to `value` will be deducted as possible. If this is less than `value`,
-	/// then `Some(remaining)` will be retutned. Full completion is given by `None`.
+	/// then `Some(remaining)` will be returned. Full completion is given by `None`.
 	pub fn slash_reserved(who: &T::AccountId, value: T::Balance) -> Option<T::Balance> {
 		let b = Self::reserved_balance(who);
 		let slash = cmp::min(b, value);
@@ -570,7 +570,7 @@ impl<T: Trait> Module<T> {
 	/// returned.
 	///
 	/// As much funds up to `value` will be moved as possible. If this is less than `value`, then
-	/// `Ok(Some(remaining))` will be retutned. Full completion is given by `Ok(None)`.
+	/// `Ok(Some(remaining))` will be returned. Full completion is given by `Ok(None)`.
 	pub fn transfer_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
