@@ -28,6 +28,7 @@ use primitives::H256;
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use rlp::Encodable;
+use primitives::{KeccakHasher, RlpCodec};
 
 use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
@@ -51,14 +52,11 @@ impl<B, F> RemoteCallExecutor<B, F> {
 	}
 }
 
-impl<B, F, Block, H, C> CallExecutor<Block, H, C> for RemoteCallExecutor<B, F>
+impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExecutor<B, F>
 	where
 		Block: BlockT,
 		B: ChainBackend<Block>,
 		F: Fetcher<Block>,
-		H: Hasher,
-		H::Out: Ord + Encodable,
-		C: NodeCodec<H>,
 {
 	type Error = ClientError;
 
@@ -79,15 +77,13 @@ impl<B, F, Block, H, C> CallExecutor<Block, H, C> for RemoteCallExecutor<B, F>
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		// let call_result = self.call(id, "version", &[])?;
-		// RuntimeVersion::decode(&mut call_result.return_data.as_slice())
-		// 	.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
-		// TODO:
-		Err(ClientErrorKind::VersionInvalid.into())
+		let call_result = self.call(id, "version", &[])?;
+		RuntimeVersion::decode(&mut call_result.return_data.as_slice())
+			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<
-		S: StateBackend<H, C>,
+		S: StateBackend<KeccakHasher, RlpCodec>,
 		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
 	>(&self,
 		_state: &S,
@@ -99,7 +95,7 @@ impl<B, F, Block, H, C> CallExecutor<Block, H, C> for RemoteCallExecutor<B, F>
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend<H, C>>(
+	fn prove_at_state<S: StateBackend<KeccakHasher, RlpCodec>>(
 		&self,
 		_state: S,
 		_changes: &mut OverlayedChanges,
