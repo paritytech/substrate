@@ -17,22 +17,27 @@
 //! Polkadot blockchain trait
 
 use primitives::AuthorityId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 
-use error::Result;
+use error::{ErrorKind, Result};
 
 /// Blockchain database header backend. Does not perform any validation.
 pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
-	fn header(&self, id: BlockId<Block>) -> Result<Option<<Block as BlockT>::Header>>;
+	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>>;
 	/// Get blockchain info.
 	fn info(&self) -> Result<Info<Block>>;
 	/// Get block status.
 	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Hash>>;
+	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
+
+	/// Get block header. Returns `UnknownBlock` error if block is not found.
+	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
+		self.header(id)?.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into())
+	}
 }
 
 /// Blockchain database backend. Does not perform any validation.

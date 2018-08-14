@@ -110,3 +110,14 @@ pub type BlockId = generic::BlockId<Block>;
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+/// Inherent data to include in a block.
+#[derive(Encode, Decode)]
+pub struct InherentData {
+	/// Current timestamp.
+	pub timestamp: Timestamp,
+	/// Parachain heads update.
+	pub parachain_heads: Vec<::parachain::CandidateReceipt>,
+	/// Indices of offline validators.
+	pub offline_indices: Vec<u32>,
+}

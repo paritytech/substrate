@@ -30,6 +30,7 @@ extern crate substrate_network_libp2p as network_libp2p;
 extern crate substrate_codec as codec;
 extern crate futures;
 extern crate ed25519;
+extern crate rustc_hex;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate error_chain;
@@ -64,4 +65,4 @@ pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeIndex, P
 pub use message::{generic as generic_message, RequestId, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal, Status as StatusMessage};
 pub use error::Error;
 pub use config::{Roles, ProtocolConfig};
-pub use on_demand::{OnDemand, OnDemandService, RemoteCallResponse};
+pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};

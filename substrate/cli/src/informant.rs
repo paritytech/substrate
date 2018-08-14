@@ -16,6 +16,7 @@
 
 //! Console informant. Prints sync progress and block events. Runs on the calling thread.
 
+use ansi_term::Colour;
 use std::time::{Duration, Instant};
 use futures::{Future, Stream};
 use service::{Service, Components};
@@ -38,6 +39,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let network = service.network();
 	let client = service.client();
 	let txpool = service.extrinsic_pool();
+	let mut last_number = None;
 
 	let display_notifications = interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 		let sync_status = network.status();
@@ -45,15 +47,32 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 		if let Ok(best_block) = client.best_block_header() {
 			let hash = best_block.hash();
 			let num_peers = sync_status.num_peers;
-			let status = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
-				(SyncState::Idle, _) => "Idle".into(),
-				(SyncState::Downloading, None) => "Syncing".into(),
-				(SyncState::Downloading, Some(n)) => format!("Syncing, target=#{}", n),
-			};
-			let txpool_status = txpool.light_status();
 			let best_number: u64 = best_block.number().as_();
-			info!(target: "substrate", "{} ({} peers), best: #{} ({})", status, sync_status.num_peers, best_number, hash);
-			telemetry!("system.interval"; "status" => status, "peers" => num_peers, "height" => best_number, "best" => ?hash, "txcount" => txpool_status.transaction_count);
+			let speed = move || speed(best_number, last_number);
+			let (status, target) = match (sync_status.sync.state, sync_status.sync.best_seen_block) {
+				(SyncState::Idle, _) => ("Idle".into(), "".into()),
+				(SyncState::Downloading, None) => (format!("Syncing{}", speed()), "".into()),
+				(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed()), format!(", target=#{}", n)),
+			};
+			last_number = Some(best_number);
+			let txpool_status = txpool.light_status();
+			info!(
+				target: "substrate",
+				"{}{} ({} peers), best: #{} ({})",
+				Colour::White.bold().paint(&status),
+				target,
+				Colour::White.bold().paint(format!("{}", sync_status.num_peers)),
+				Colour::White.paint(format!("{}", best_number)),
+				hash
+			);
+			telemetry!(
+				"system.interval";
+				"status" => format!("{}{}", status, target),
+				"peers" => num_peers,
+				"height" => best_number,
+				"best" => ?hash,
+				"txcount" => txpool_status.transaction_count
+			);
 		} else {
 			warn!("Error getting best block information");
 		}
@@ -75,5 +94,18 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 
 	let informant_work = display_notifications.join3(display_block_import, display_txpool_import);
 	handle.spawn(exit.until(informant_work).map(|_| ()));
+}
+
+fn speed(best_number: u64, last_number: Option<u64>) -> String {
+	let speed = match last_number {
+		Some(num) => (best_number.saturating_sub(num) * 10_000 / TIMER_INTERVAL_MS) as f64,
+		None => 0.0
+	};
+
+	if speed < 1.0 {
+		"".into()
+	} else {
+		format!(" {:4.1} bps", speed / 10.0)
+	}
 }
 

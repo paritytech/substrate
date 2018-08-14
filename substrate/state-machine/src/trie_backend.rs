@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Trie-based state machine backend.
-
 use Backend;
 use hashdb::{Hasher, HashDB, AsHashDB};
 use memorydb::MemoryDB;
@@ -115,12 +114,16 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> where H::Ou
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out, C::Error>>> {
 			let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
 			let mut iter = trie.iter()?;
+
 			iter.seek(prefix)?;
+
 			for x in iter {
 				let (key, _) = x?;
+
 				if !key.starts_with(prefix) {
 					break;
 				}
+
 				f(&key);
 			}
 
@@ -288,6 +291,9 @@ pub mod tests {
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
 			trie.insert(b":code", b"return 42").expect("insert failed");
+            for i in 128u8..255u8 {
+                trie.insert(&[i], &[i]).unwrap();
+            }
 		}
 		(mdb, root)
 	}

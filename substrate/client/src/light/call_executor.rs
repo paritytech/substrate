@@ -24,7 +24,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	execution_proof_check, ExecutionManager};
-use primitives::{H256, KeccakHasher, RlpCodec};
+use primitives::H256;
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use rlp::Encodable;
@@ -51,11 +51,14 @@ impl<B, F> RemoteCallExecutor<B, F> {
 	}
 }
 
-impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExecutor<B, F>
-where
-	Block: BlockT,
-	B: ChainBackend<Block>,
-	F: Fetcher<Block>,
+impl<B, F, Block, H, C> CallExecutor<Block, H, C> for RemoteCallExecutor<B, F>
+	where
+		Block: BlockT,
+		B: ChainBackend<Block>,
+		F: Fetcher<Block>,
+		H: Hasher,
+		H::Out: Ord + Encodable,
+		C: NodeCodec<H>,
 {
 	type Error = ClientError;
 
@@ -65,22 +68,26 @@ where
 			BlockId::Number(number) => self.blockchain.hash(number)?
 				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", number)))?,
 		};
+		let block_header = self.blockchain.expect_header(id.clone())?;
 
 		self.fetcher.remote_call(RemoteCallRequest {
-			block: block_hash.clone(),
+			block: block_hash,
+			header: block_header,
 			method: method.into(),
 			call_data: call_data.to_vec(),
 		}).into_future().wait()
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
-		let call_result = self.call(id, "version", &[])?;
-		RuntimeVersion::decode(&mut call_result.return_data.as_slice())
-			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
+		// let call_result = self.call(id, "version", &[])?;
+		// RuntimeVersion::decode(&mut call_result.return_data.as_slice())
+		// 	.ok_or_else(|| ClientErrorKind::VersionInvalid.into())
+		// TODO:
+		Err(ClientErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<
-		S: StateBackend<KeccakHasher, RlpCodec>,
+		S: StateBackend<H, C>,
 		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
 	>(&self,
 		_state: &S,
@@ -92,7 +99,13 @@ where
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend<KeccakHasher, RlpCodec>>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
+	fn prove_at_state<S: StateBackend<H, C>>(
+		&self,
+		_state: S,
+		_changes: &mut OverlayedChanges,
+		_method: &str,
+		_call_data: &[u8]
+	) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
@@ -102,42 +115,22 @@ where
 }
 
 /// Check remote execution proof using given backend.
-pub fn check_execution_proof<Block, B, E, H, C>(
-	blockchain: &B,
+pub fn check_execution_proof<Header, E, H, C>(
 	executor: &E,
-	request: &RemoteCallRequest<Block::Hash>,
+	request: &RemoteCallRequest<Header>,
 	remote_proof: Vec<Vec<u8>>
 ) -> ClientResult<CallResult>
 	where
-		Block: BlockT,
-		B: ChainBackend<Block>,
+		Header: HeaderT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Encodable + Ord + From<H256> + HeapSizeOf,
+		H::Out: Ord + Encodable + HeapSizeOf + From<H256>,
 		C: NodeCodec<H>,
 {
-	let local_header = blockchain.header(BlockId::Hash(request.block))?;
-	let local_header = local_header.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", request.block)))?;
-	let local_state_root = *local_header.state_root();
-	do_check_execution_proof::<_, E, H, C>(local_state_root.into(), executor, request, remote_proof)
-}
+	let local_state_root = request.header.state_root();
 
-/// Check remote execution proof using given state root.
-fn do_check_execution_proof<Hash, E, H, C>(
-	local_state_root: Hash,
-	executor: &E,
-	request: &RemoteCallRequest<Hash>,
-	remote_proof: Vec<Vec<u8>>,
-) -> ClientResult<CallResult>
-	where
-		Hash: ::std::fmt::Display + ::std::convert::AsRef<[u8]>,
-		E: CodeExecutor<H>,
-		H: Hasher,
-		H::Out: Encodable + Ord + From<H256> + HeapSizeOf,
-		C: NodeCodec<H>,
-{
 	let mut changes = OverlayedChanges::default();
-	let (local_result, _) = execution_proof_check::<H, C, E>(
+	let (local_result, _) = execution_proof_check::<H, C, _>(
 		H256::from_slice(local_state_root.as_ref()).into(),
 		remote_proof,
 		&mut changes,
@@ -153,6 +146,7 @@ mod tests {
 	use test_client;
 	use executor::NativeExecutionDispatch;
 	use super::*;
+	use primitives::RlpCodec;
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
@@ -167,9 +161,15 @@ mod tests {
 
 		// check remote execution proof locally
 		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
-
-		do_check_execution_proof::<_, _, _, RlpCodec>(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
+		check_execution_proof::<_, _, _, RlpCodec>(&local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
+			header: test_client::runtime::Header {
+				state_root: remote_block_storage_root.into(),
+				parent_hash: Default::default(),
+				number: 0,
+				extrinsics_root: Default::default(),
+				digest: Default::default(),
+			},
 			method: "authorities".into(),
 			call_data: vec![],
 		}, remote_execution_proof).unwrap();

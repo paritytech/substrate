@@ -20,9 +20,12 @@ use std::sync::Arc;
 use client::backend::{Backend, RemoteBackend};
 use client::{Client, CallExecutor};
 use codec::Decode;
-use primitives::{AccountId, Block, BlockId, Hash, Index, SessionKey, Timestamp, UncheckedExtrinsic};
+use primitives::{
+	AccountId, Block, BlockId, Hash, Index, InherentData,
+	SessionKey, Timestamp, UncheckedExtrinsic,
+};
 use runtime::Address;
-use primitives::parachain::{CandidateReceipt, DutyRoster, Id as ParaId};
+use primitives::parachain::{DutyRoster, Id as ParaId};
 use {PolkadotApi, BlockBuilder, RemotePolkadotApi, Result, ErrorKind};
 use substrate_primitives::{KeccakHasher, RlpCodec};
 
@@ -93,11 +96,11 @@ impl<B: Backend<Block, KeccakHasher, RlpCodec>, E: CallExecutor<Block, KeccakHas
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn build_block(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Self::BlockBuilder> {
+	fn build_block(&self, _at: &BlockId, _inherent: InherentData) -> Result<Self::BlockBuilder> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 
-	fn inherent_extrinsics(&self, _at: &BlockId, _timestamp: Timestamp, _new_heads: Vec<CandidateReceipt>) -> Result<Vec<Vec<u8>>> {
+	fn inherent_extrinsics(&self, _at: &BlockId, _inherent: InherentData) -> Result<Vec<Vec<u8>>> {
 		Err(ErrorKind::UnknownRuntime.into())
 	}
 }

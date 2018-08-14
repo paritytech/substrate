@@ -838,7 +838,7 @@ fn parse_and_add_to_node_store(
 
 	let mut addr = addr_str.to_multiaddr().map_err(|_| ErrorKind::AddressParse)?;
 	let who = match addr.pop() {
-		Some(AddrComponent::P2P(key)) | Some(AddrComponent::IPFS(key)) =>
+		Some(AddrComponent::P2P(key)) =>
 			PeerId::from_bytes(key).map_err(|_| ErrorKind::AddressParse)?,
 		_ => return Err(ErrorKind::AddressParse.into()),
 	};
