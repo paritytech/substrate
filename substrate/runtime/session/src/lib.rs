@@ -142,7 +142,7 @@ impl<T: Trait> Module<T> {
 	pub fn force_new_session(normal_rotation: bool) -> Result {
 		<ForcingNewSession<T>>::put(normal_rotation);
 		Ok(())
-	}	
+	}
 
 	/// Notes which of the validators appear to be online from the point of the view of the block author.
 	pub fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
@@ -370,7 +370,7 @@ mod tests {
 			assert_eq!(Session::blocks_remaining(), 1);
 			Session::note_offline(&0, vec![1]).unwrap(); // bad validator -> session rotate
 			Session::check_rotate_session();
-			assert_eq!(Session::current_index(), 1);
+			assert_eq!(Session::current_index(), 2);
 		});
 	}
 
