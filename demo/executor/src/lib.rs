@@ -247,7 +247,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("b97d52254fc967bb94bed485de6a738e9fad05decfda3453711677b8becf6d0a").into(),
+			hex!("c563199c60df7d914262b1775b284870f3a5da2f24b56d2c6288b37c815a6cd9").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -260,7 +260,40 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("a1f018d2faa339f72f5ee29050b4670d971e2e271cc06c41ee9cbe1f4c6feec9").into(),
+			hex!("83f71d5475f63350825b0301de322233d3711a9f3fcfd74050d1534af47a36b3").into(),
+			vec![
+				BareExtrinsic {
+					signed: bob(),
+					index: 0,
+					function: Call::Staking(staking::Call::transfer(alice().into(), 5)),
+				},
+				BareExtrinsic {
+					signed: alice(),
+					index: 1,
+					function: Call::Staking(staking::Call::transfer(bob().into(), 15)),
+				}
+			]
+		)
+	}
+
+	fn block1_wasm() -> (Vec<u8>, Hash) {
+		construct_block(
+			1,
+			[69u8; 32].into(),
+			hex!("b97d52254fc967bb94bed485de6a738e9fad05decfda3453711677b8becf6d0a").into(),
+			vec![BareExtrinsic {
+				signed: alice(),
+				index: 0,
+				function: Call::Staking(staking::Call::transfer(bob().into(), 69)),
+			}]
+		)
+	}
+
+	fn block2_wasm() -> (Vec<u8>, Hash) {
+		construct_block(
+			2,
+			block1().1,
+			hex!("b820fe09935dba41d200b627c11bd7dd9ebff39c319dee18be3ee4f99fc1eab4").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -280,7 +313,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("41d07010f49aa29b2c9aca542cbaa6f59aafd3dda53cdf711c51ddb7d386912e").into(),
+			hex!("06d026c0d687ec583660a6052de6f89acdb24ea964d06be3831c837c3c426966").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -312,14 +345,14 @@ mod tests {
 	fn full_wasm_block_import_works() {
 		let mut t = new_test_ext();
 
-		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
+		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block1_wasm().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
 			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
 
-		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
+		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block2_wasm().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 30);
@@ -338,7 +371,7 @@ mod tests {
 	#[test]
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext();
-
+		
 		let r = Executor::with_heap_pages(8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, true).0;
 		assert!(r.is_ok());
 	}
