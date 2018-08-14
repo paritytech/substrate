@@ -46,7 +46,7 @@ pub fn rpc_handler<Block: BlockT, S, C, A, Y>(
 ) -> RpcHandler where
 	Block: 'static,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, Metadata=Metadata>,
+	C: apis::chain::ChainApi<Block::Hash, Block::Header, Block::Extrinsic, Metadata=Metadata>,
 	A: apis::author::AuthorApi<Block::Hash, Block::Extrinsic, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
 {
