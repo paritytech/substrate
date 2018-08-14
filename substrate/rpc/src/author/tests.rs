@@ -46,6 +46,7 @@ impl fmt::Display for Error {
 
 impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 	type Error = Error;
+	type InPool = Vec<u8>;
 
 	/// Submit extrinsic for inclusion in block.
 	fn submit(&self, _block: BlockHash, xt: Vec<Extrinsic>) -> Result<Vec<Hash>, Self::Error> {
@@ -78,6 +79,10 @@ impl<BlockHash> api::ExtrinsicPool<Extrinsic, BlockHash, u64> for DummyTxPool {
 
 	fn import_notification_stream(&self) -> api::EventStream {
 		unreachable!()
+	}
+
+	fn all(&self) -> Self::InPool {
+		vec![1, 2, 3, 4, 5]
 	}
 }
 
@@ -141,5 +146,20 @@ fn should_watch_extrinsic() {
 	assert_eq!(
 		runtime.block_on(data.into_future()).unwrap().0,
 		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"usurped":5},"subscription":0}}"#.into())
+	);
+}
+
+#[test]
+fn should_return_pending_extrinsics() {
+	let runtime = runtime::Runtime::new().unwrap();
+	let p = Author {
+		client: Arc::new(test_client::new()),
+		pool: Arc::new(DummyTxPool::default()),
+		subscriptions: Subscriptions::new(runtime.executor()),
+	};
+
+	assert_matches!(
+		p.pending_extrinsics(),
+		Ok(ref expected) if expected == &[1u8, 2, 3, 4, 5]
 	);
 }

@@ -16,6 +16,9 @@
 
 //! External API for extrinsic pool.
 
+use std::fmt::Debug;
+
+use serde::{Serialize, de::DeserializeOwned};
 use txpool;
 use futures::sync::mpsc;
 
@@ -43,6 +46,9 @@ pub trait ExtrinsicPool<Ex, BlockId, Hash>: Send + Sync + 'static {
 	/// Error type
 	type Error: Error;
 
+	/// Pooled extrinsics
+	type InPool: Debug + Serialize + DeserializeOwned + Send + Sync + 'static;
+
 	/// Submit a collection of extrinsics to the pool.
 	fn submit(&self, block: BlockId, xt: Vec<Ex>) -> Result<Vec<Hash>, Self::Error>;
 
@@ -54,4 +60,7 @@ pub trait ExtrinsicPool<Ex, BlockId, Hash>: Send + Sync + 'static {
 
 	/// Return an event stream of transactions imported to the pool.
 	fn import_notification_stream(&self) -> EventStream;
+
+	/// Return all extrinsics in the pool aggregated by the sender.
+	fn all(&self) -> Self::InPool;
 }

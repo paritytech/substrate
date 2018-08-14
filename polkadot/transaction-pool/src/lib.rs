@@ -39,7 +39,7 @@ mod rotator;
 
 use std::{
 	cmp::Ordering,
-	collections::HashMap,
+	collections::{BTreeMap, HashMap},
 	ops::Deref,
 	sync::Arc,
 	time::{Duration, Instant},
@@ -57,6 +57,7 @@ use polkadot_api::PolkadotApi;
 use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
 use rotator::PoolRotator;
 use runtime::{Address, UncheckedExtrinsic};
+use substrate_primitives::Bytes;
 use substrate_runtime_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256};
 
 pub use extrinsic_pool::txpool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
@@ -186,9 +187,14 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 		}
 	}
 
-	fn should_replace(&self, old: &VerifiedTransaction, _new: &VerifiedTransaction) -> bool {
-		// Always replace not fully verified transactions.
-		!old.is_fully_verified()
+	fn should_replace(&self, old: &VerifiedTransaction, _new: &VerifiedTransaction) -> Choice {
+		if old.is_fully_verified() {
+			// Don't allow new transactions if we are reaching the limit.
+			Choice::RejectNew
+		} else {
+			// Always replace not fully verified transactions.
+			Choice::ReplaceOld
+		}
 	}
 }
 
@@ -446,6 +452,7 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 	A: PolkadotApi,
 {
 	type Error = Error;
+	type InPool = BTreeMap<AccountId, Vec<Bytes>>;
 
 	fn submit(&self, block: BlockId, xts: Vec<FutureProofUncheckedExtrinsic>) -> Result<Vec<Hash>> {
 		xts.into_iter()
@@ -477,6 +484,17 @@ impl<A> ExtrinsicPool<FutureProofUncheckedExtrinsic, BlockId, Hash> for Transact
 
 	fn import_notification_stream(&self) -> EventStream {
 		self.inner.import_notification_stream()
+	}
+
+	fn all(&self) -> Self::InPool {
+		self.inner.all(|it| it.fold(Default::default(), |mut map: Self::InPool, tx| {
+			// Map with `null` key is not serializable, so we fallback to default accountId.
+			map.entry(tx.sender().unwrap_or_default())
+				.or_insert_with(Vec::new)
+				// use bytes type to make it serialize nicer.
+				.push(Bytes(tx.primitive_extrinsic()));
+			map
+		}))
 	}
 }
 
