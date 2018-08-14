@@ -59,6 +59,7 @@ use demo_executor::NativeExecutor;
 struct DummyPool;
 impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for DummyPool {
 	type Error = extrinsic_pool::txpool::Error;
+	type InPool = ();
 
 	fn submit(&self, _block: BlockId, _: Vec<UncheckedExtrinsic>)
 		-> Result<Vec<Hash>, Self::Error>
@@ -77,6 +78,10 @@ impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for D
 	}
 
 	fn import_notification_stream(&self) -> extrinsic_pool::api::EventStream {
+		unreachable!()
+	}
+
+	fn all(&self) -> Self::InPool {
 		unreachable!()
 	}
 }
@@ -176,7 +181,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			let state = rpc::apis::state::State::new(client.clone(), runtime.executor());
 			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
 			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool), runtime.executor());
-			rpc::rpc_handler::<Block, _, _, _, _>(state, chain, author, DummySystem)
+			rpc::rpc_handler::<Block, _, _, _, _, _>(state, chain, author, DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();

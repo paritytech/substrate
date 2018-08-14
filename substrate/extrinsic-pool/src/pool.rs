@@ -149,4 +149,19 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 	{
 		f(self.pool.read().pending(ready))
 	}
+
+	/// Retrieve all transactions in the pool. The transactions might be unordered.
+	pub fn all<F, T>(&self, f: F) -> T where
+		F: FnOnce(txpool::UnorderedIterator<VEx, AlwaysReady, S>) -> T,
+	{
+		f(self.pool.read().unordered_pending(AlwaysReady))
+	}
+}
+
+/// A Readiness implementation that returns `Ready` for all transactions.
+pub struct AlwaysReady;
+impl<VEx> txpool::Ready<VEx> for AlwaysReady {
+	fn is_ready(&mut self, _tx: &VEx) -> txpool::Readiness {
+		txpool::Readiness::Ready
+	}
 }
