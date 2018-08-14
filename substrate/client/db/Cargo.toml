@@ -9,7 +9,7 @@ log = "0.3"
 kvdb = { git = "https://github.com/paritytech/parity.git" }
 kvdb-rocksdb = { git = "https://github.com/paritytech/parity.git" }
 ethereum-types = "0.3"
-hashdb = { git = "https://github.com/paritytech/parity.git" }
+hashdb = "0.2.0"
 patricia-trie = { git = "https://github.com/paritytech/parity.git" }
 memorydb = { git = "https://github.com/paritytech/parity.git" }
 substrate-primitives = { path = "../../../substrate/primitives" }
