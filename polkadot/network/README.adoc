@@ -1,5 +1,0 @@
-
-= Polkadot Network
-
-placeholder
-//TODO Write content :)
