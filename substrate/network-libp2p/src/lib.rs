@@ -28,7 +28,7 @@ extern crate libc;
 extern crate libp2p;
 extern crate rand;
 extern crate bytes;
-extern crate varint;
+extern crate unsigned_varint;
 
 extern crate ethcore_io as io;
 extern crate ethereum_types;

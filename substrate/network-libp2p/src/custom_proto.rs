@@ -23,7 +23,7 @@ use std::vec::IntoIter as VecIntoIter;
 use futures::{future, Future, stream, Stream, Sink};
 use futures::sync::mpsc;
 use tokio_io::{AsyncRead, AsyncWrite};
-use varint::VarintCodec;
+use unsigned_varint::codec::UviBytes;
 
 /// Connection upgrade for a single protocol.
 ///
@@ -157,7 +157,7 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 		}
 
 		let (sink, stream) = {
-			let framed = AsyncRead::framed(socket, VarintCodec::default());
+			let framed = AsyncRead::framed(socket, UviBytes::default());
 			let msg_rx = msg_rx.map(Message::SendReq)
 				.map_err(|()| unreachable!("mpsc::UnboundedReceiver never errors"));
 			let (sink, stream) = framed.split();
