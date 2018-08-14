@@ -111,7 +111,7 @@ impl<Hash, VEx, S, E> Pool<Hash, VEx, S, E> where
 		let mut pool = self.pool.write();
 		let mut results = Vec::with_capacity(hashes.len());
 		for hash in hashes {
-			results.push(pool.remove(hash, is_valid));
+			results.push(pool.remove(hash, !is_valid));
 		}
 		results
 	}

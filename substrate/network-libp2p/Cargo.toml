@@ -23,8 +23,7 @@ rand = "0.5.0"
 tokio = "0.1"
 tokio-io = "0.1"
 tokio-timer = "0.2"
-# varint = { git = "https://github.com/tomaka/libp2p-rs", branch = "polkadot-2" }
-varint = { git = "https://github.com/tomaka/libp2p-rs", rev = "6aa139a12dbea3d75d898ce0b2af7fcec129e294" }
+unsigned-varint = { version = "0.1", features = ["codec"] }
 
 [dev-dependencies]
 assert_matches = "1.2"

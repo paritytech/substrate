@@ -55,6 +55,11 @@ error_chain! {
 			description("Unrecognised address in extrinsic"),
 			display("Unrecognised address in extrinsic: {}", who),
 		}
+		/// Extrinsic too large
+		TooLarge(got: usize, max: usize) {
+			description("Extrinsic too large"),
+			display("Extrinsic is too large ({} > {})", got, max),
+		}
 	}
 }
 
