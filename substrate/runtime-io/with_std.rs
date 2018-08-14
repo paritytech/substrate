@@ -30,7 +30,8 @@ pub extern crate substrate_codec as codec;
 pub use primitives::{blake2_256, twox_128, twox_256};
 
 pub use primitives::KeccakHasher;
-pub use primitives::BlakeHasher;
+// Switch to this after PoC-3
+// pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 use primitives::H256;

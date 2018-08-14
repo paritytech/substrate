@@ -43,6 +43,7 @@ extern crate triehash;
 extern crate parking_lot;
 extern crate twox_hash;
 extern crate hashdb;
+extern crate tiny_keccak;
 
 #[macro_use] extern crate log;
 

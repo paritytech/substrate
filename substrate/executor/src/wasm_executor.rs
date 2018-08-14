@@ -33,6 +33,7 @@ use primitives::sandbox as sandbox_primitives;
 use primitives::KeccakHasher;
 use triehash::ordered_trie_root;
 use sandbox;
+use tiny_keccak::keccak256;
 
 
 struct Heap {
@@ -350,6 +351,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			blake2_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
 		};
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
+		Ok(())
+	},
+	ext_keccak256(data: *const u8, len: u32, out: *mut u8) => {
+		let result = if len == 0 {
+			keccak256(&[0u8; 0])
+		} else {
+			keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_keccak256"))?)
+		};
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_keccak256"))?;
 		Ok(())
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
