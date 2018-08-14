@@ -1,0 +1,21 @@
+[package]
+name = "blitz-api"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+error-chain = "0.12"
+blitz-executor = { path = "../executor" }
+blitz-runtime = { path = "../runtime" }
+blitz-primitives = { path = "../primitives" }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-runtime-executive = { path  = "../../substrate/runtime/executive" }
+substrate-runtime-primitives = { path  = "../../substrate/runtime/primitives" }
+substrate-client = { path = "../../substrate/client" }
+substrate-primitives = { path = "../../substrate/primitives" }
+substrate-executor = { path = "../../substrate/executor" }
+substrate-state-machine = { path = "../../substrate/state-machine" }
+
+[dev-dependencies]
+substrate-keyring = { path = "../../substrate/keyring" }

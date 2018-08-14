@@ -76,6 +76,7 @@ members = [
 	"blitz/network",
 	"blitz/service",
 	"blitz/state",
+	"blitz/api",
 
 	"safe-mix",
 	"subkey",
