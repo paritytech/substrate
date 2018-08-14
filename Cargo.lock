@@ -1,28 +1,4 @@
 [[package]]
-name = "adder"
-version = "0.1.0"
-dependencies = [
- "polkadot-parachain 0.1.0",
- "substrate-codec-derive 0.1.0",
- "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "adder-collator"
-version = "0.1.0"
-dependencies = [
- "adder 0.1.0",
- "ctrlc 1.1.1 (git+https://github.com/paritytech/rust-ctrlc.git)",
- "ed25519 0.1.0",
- "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-collator 0.1.0",
- "polkadot-parachain 0.1.0",
- "polkadot-primitives 0.1.0",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -183,11 +159,6 @@ dependencies = [
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
-
-[[package]]
-name = "bitflags"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "bitflags"
@@ -1805,269 +1776,6 @@ source = "git+https://github.com/paritytech/parity.git#4145be863bec10038fc0ac5d3
 dependencies = [
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "polkadot"
-version = "0.3.0"
-dependencies = [
- "ctrlc 1.1.1 (git+https://github.com/paritytech/rust-ctrlc.git)",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-cli 0.3.0",
- "vergen 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "polkadot-api"
-version = "0.1.0"
-dependencies = [
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-executor 0.1.0",
- "polkadot-primitives 0.1.0",
- "polkadot-runtime 0.1.0",
- "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-executor 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-executive 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-state-machine 0.1.0",
-]
-
-[[package]]
-name = "polkadot-availability-store"
-version = "0.1.0"
-dependencies = [
- "kvdb 0.1.0 (git+https://github.com/paritytech/parity.git)",
- "kvdb-memorydb 0.1.0 (git+https://github.com/paritytech/parity.git)",
- "kvdb-rocksdb 0.1.0 (git+https://github.com/paritytech/parity.git)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-primitives 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-primitives 0.1.0",
-]
-
-[[package]]
-name = "polkadot-cli"
-version = "0.3.0"
-dependencies = [
- "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-primitives 0.1.0",
- "polkadot-runtime 0.1.0",
- "polkadot-service 0.3.0",
- "polkadot-transaction-pool 0.1.0",
- "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-cli 0.3.0",
- "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-extrinsic-pool 0.1.0",
- "substrate-network 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-rpc 0.1.0",
- "substrate-rpc-servers 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-service 0.3.0",
- "substrate-state-machine 0.1.0",
- "substrate-telemetry 0.3.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "polkadot-collator"
-version = "0.1.0"
-dependencies = [
- "ed25519 0.1.0",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-api 0.1.0",
- "polkadot-cli 0.3.0",
- "polkadot-primitives 0.1.0",
- "polkadot-runtime 0.1.0",
- "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-primitives 0.1.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "polkadot-consensus"
-version = "0.1.0"
-dependencies = [
- "ed25519 0.1.0",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-api 0.1.0",
- "polkadot-availability-store 0.1.0",
- "polkadot-parachain 0.1.0",
- "polkadot-primitives 0.1.0",
- "polkadot-runtime 0.1.0",
- "polkadot-statement-table 0.1.0",
- "polkadot-transaction-pool 0.1.0",
- "rhododendron 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-bft 0.1.0",
- "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "polkadot-executor"
-version = "0.1.0"
-dependencies = [
- "polkadot-runtime 0.1.0",
- "substrate-executor 0.1.0",
-]
-
-[[package]]
-name = "polkadot-network"
-version = "0.1.0"
-dependencies = [
- "ed25519 0.1.0",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-api 0.1.0",
- "polkadot-availability-store 0.1.0",
- "polkadot-consensus 0.1.0",
- "polkadot-primitives 0.1.0",
- "rhododendron 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-bft 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-network 0.1.0",
- "substrate-primitives 0.1.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "polkadot-parachain"
-version = "0.1.0"
-dependencies = [
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "polkadot-primitives"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-serializer 0.1.0",
-]
-
-[[package]]
-name = "polkadot-runtime"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-primitives 0.1.0",
- "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-council 0.1.0",
- "substrate-runtime-democracy 0.1.0",
- "substrate-runtime-executive 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-session 0.1.0",
- "substrate-runtime-staking 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
- "substrate-runtime-version 0.1.0",
- "substrate-serializer 0.1.0",
-]
-
-[[package]]
-name = "polkadot-service"
-version = "0.3.0"
-dependencies = [
- "ed25519 0.1.0",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-api 0.1.0",
- "polkadot-availability-store 0.1.0",
- "polkadot-consensus 0.1.0",
- "polkadot-executor 0.1.0",
- "polkadot-network 0.1.0",
- "polkadot-primitives 0.1.0",
- "polkadot-runtime 0.1.0",
- "polkadot-transaction-pool 0.1.0",
- "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-network 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-service 0.3.0",
- "substrate-telemetry 0.3.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "polkadot-statement-table"
-version = "0.1.0"
-dependencies = [
- "polkadot-primitives 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
-]
-
-[[package]]
-name = "polkadot-transaction-pool"
-version = "0.1.0"
-dependencies = [
- "ed25519 0.1.0",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "polkadot-api 0.1.0",
- "polkadot-primitives 0.1.0",
- "polkadot-runtime 0.1.0",
- "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-extrinsic-pool 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
 ]
 
 [[package]]
@@ -3813,15 +3521,6 @@ version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "vergen"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "time 0.1.40 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "version_check"
 version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3992,7 +3691,6 @@ dependencies = [
 "checksum base64 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5032d51da2741729bfdaeb2664d9b8c6d9fd1e2b90715c660b6def36628499c2"
 "checksum base64 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)" = "9263aa6a38da271eec5c91a83ce1e800f093c8535788d403d626d8d5c3f8f007"
 "checksum bigint 4.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "da1dde4308822ffaa13665757273a1b787481212f3f9b1c470a864b179a01f1b"
-"checksum bitflags 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "aad18937a628ec6abcd26d1489012cc0e18c21798210f491af69ded9b881106d"
 "checksum bitflags 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)" = "4efd02e230a02e18f92fc2735f44597385ed02ad8f831e7c1c1156ee5e1ab3a5"
 "checksum bitflags 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "d0c54bb8f454c567f21197eefcdbf5679d0bd99f2ddbe52e84c77061952e6789"
 "checksum blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)" = "5d6d530bdd2d52966a6d03b7a964add7ae1a288d25214066fd4b600f0f796400"
@@ -4275,7 +3973,6 @@ dependencies = [
 "checksum varint 0.1.0 (git+https://github.com/tomaka/libp2p-rs?branch=polkadot-2)" = "<none>"
 "checksum vcpkg 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)" = "7ed0f6789c8a85ca41bbc1c9d175422116a9869bd1cf31bb08e1493ecce60380"
 "checksum vec_map 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)" = "05c78687fb1a80548ae3250346c3db86a80a7cdd77bda190189f2d0a0987c81a"
-"checksum vergen 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "8c3365f36c57e5df714a34be40902b27a992eeddb9996eca52d0584611cf885d"
 "checksum version_check 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "6b772017e347561807c1aa192438c5fd74242a670a6cffacc40f2defd1dc069d"
 "checksum void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 "checksum wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "182ae543249ccf2705f324d233891c1176fca142e137b55ba43d9dbfe93f18a2"

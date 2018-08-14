@@ -1,5 +1,0 @@
-
-= Polkadot Consensus
-
-placeholder
-//TODO Write content :)

@@ -1,4 +1,4 @@
-## `Polkadot` projects is a **OPENISH Open Source Project**
+## `Substrate` projects is a **OPENISH Open Source Project**
 -----------------------------------------
 
 ## What?

@@ -1,5 +1,0 @@
-
-= Polkadot Runtime
-
-placeholder
-//TODO Write content :)
