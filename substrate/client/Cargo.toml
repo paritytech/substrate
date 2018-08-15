@@ -13,6 +13,7 @@ hex-literal = "0.1"
 futures = "0.1.17"
 ed25519 = { path = "../ed25519" }
 slog = "^2"
+heapsize = "0.4"
 substrate-bft = { path = "../bft" }
 substrate-codec = { path = "../codec" }
 substrate-executor = { path = "../executor" }
@@ -23,6 +24,9 @@ substrate-runtime-primitives = { path = "../runtime/primitives" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-telemetry = { path = "../telemetry" }
+hashdb = { git = "https://github.com/paritytech/parity-common" }
+patricia-trie = { git = "https://github.com/paritytech/parity-common" }
+rlp = { git = "https://github.com/paritytech/parity-common" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }

@@ -23,7 +23,12 @@ use futures::{IntoFuture, Future};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
-	execution_proof_check, TrieH256, ExecutionManager};
+	execution_proof_check, ExecutionManager};
+use primitives::H256;
+use patricia_trie::NodeCodec;
+use hashdb::Hasher;
+use rlp::Encodable;
+use primitives::{KeccakHasher, RlpCodec};
 
 use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
@@ -31,6 +36,7 @@ use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as Client
 use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
 use codec::Decode;
+use heapsize::HeapSizeOf;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -46,7 +52,7 @@ impl<B, F> RemoteCallExecutor<B, F> {
 	}
 }
 
-impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
+impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExecutor<B, F>
 	where
 		Block: BlockT,
 		B: ChainBackend<Block>,
@@ -77,19 +83,25 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 	}
 
 	fn call_at_state<
-		S: StateBackend,
-		H: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
+		S: StateBackend<KeccakHasher, RlpCodec>,
+		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
-		_m: ExecutionManager<H>
+		_m: ExecutionManager<FF>
 	) -> ClientResult<(Vec<u8>, S::Transaction)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
+	fn prove_at_state<S: StateBackend<KeccakHasher, RlpCodec>>(
+		&self,
+		_state: S,
+		_changes: &mut OverlayedChanges,
+		_method: &str,
+		_call_data: &[u8]
+	) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
@@ -99,20 +111,23 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 }
 
 /// Check remote execution proof using given backend.
-pub fn check_execution_proof<Header, E>(
+pub fn check_execution_proof<Header, E, H, C>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
 	remote_proof: Vec<Vec<u8>>
 ) -> ClientResult<CallResult>
 	where
 		Header: HeaderT,
-		E: CodeExecutor,
+		E: CodeExecutor<H>,
+		H: Hasher,
+		H::Out: Ord + Encodable + HeapSizeOf + From<H256>,
+		C: NodeCodec<H>,
 {
 	let local_state_root = request.header.state_root();
 
 	let mut changes = OverlayedChanges::default();
-	let (local_result, _) = execution_proof_check(
-		TrieH256::from_slice(local_state_root.as_ref()).into(),
+	let (local_result, _) = execution_proof_check::<H, C, _>(
+		H256::from_slice(local_state_root.as_ref()).into(),
 		remote_proof,
 		&mut changes,
 		executor,
@@ -127,6 +142,7 @@ mod tests {
 	use test_client;
 	use executor::NativeExecutionDispatch;
 	use super::*;
+	use primitives::RlpCodec;
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
@@ -138,10 +154,10 @@ mod tests {
 
 		// 'fetch' execution proof from remote node
 		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
-		
+
 		// check remote execution proof locally
 		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
-		check_execution_proof(&local_executor, &RemoteCallRequest {
+		check_execution_proof::<_, _, _, RlpCodec>(&local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
 			header: test_client::runtime::Header {
 				state_root: remote_block_storage_root.into(),

@@ -23,9 +23,10 @@ use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::Block as BlockT;
 use tokio::runtime::TaskExecutor;
+use primitives::{KeccakHasher, RlpCodec};
 
 use subscriptions::Subscriptions;
 
@@ -37,12 +38,16 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Polkadot blockchain API
-	pub trait ChainApi<Hash, Header> {
+	pub trait ChainApi<Hash, Header, Extrinsic> {
 		type Metadata;
 
 		/// Get header of a relay chain block.
 		#[rpc(name = "chain_getHeader")]
 		fn header(&self, Hash) -> Result<Option<Header>>;
+
+		/// Get header and body of a relay chain block.
+		#[rpc(name = "chain_getBlock")]
+		fn block(&self, Hash) -> Result<Option<SignedBlock<Header, Extrinsic, Hash>>>;
 
 		/// Get hash of the head.
 		#[rpc(name = "chain_getHead")]
@@ -78,15 +83,19 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	}
 }
 
-impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> where
+impl<B, E, Block> ChainApi<Block::Hash, Block::Header, Block::Extrinsic> for Chain<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block> + Send + Sync + 'static,
-	E: client::CallExecutor<Block> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 
 	fn header(&self, hash: Block::Hash) -> Result<Option<Block::Header>> {
 		Ok(self.client.header(&BlockId::Hash(hash))?)
+	}
+
+	fn block(&self, hash: Block::Hash) -> Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+		Ok(self.client.block(&BlockId::Hash(hash))?)
 	}
 
 	fn head(&self) -> Result<Block::Hash> {

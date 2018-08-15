@@ -18,7 +18,7 @@ use super::*;
 use jsonrpc_macros::pubsub;
 use client::BlockOrigin;
 use test_client::{self, TestClient};
-use test_client::runtime::Header;
+use test_client::runtime::{Block, Header};
 
 #[test]
 fn should_return_header() {
@@ -42,6 +42,47 @@ fn should_return_header() {
 
 	assert_matches!(
 		client.header(5.into()),
+		Ok(None)
+	);
+}
+
+#[test]
+fn should_return_a_block() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+
+	let api = Chain {
+		client: Arc::new(test_client::new()),
+		subscriptions: Subscriptions::new(remote),
+	};
+
+	let block = api.client.new_block().unwrap().bake().unwrap();
+	let block_hash = block.hash();
+	api.client.justify_and_import(BlockOrigin::Own, block).unwrap();
+
+
+	// Genesis block is not justified, so we can't query it?
+	assert_matches!(
+		api.block(api.client.genesis_hash()),
+		Ok(None)
+	);
+
+	assert_matches!(
+		api.block(block_hash),
+		Ok(Some(ref x)) if x.block == Block {
+			header: Header {
+				parent_hash: api.client.genesis_hash(),
+				number: 1,
+				state_root: x.block.header.state_root.clone(),
+				extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
+				digest: Default::default(),
+			},
+			extrinsics: vec![],
+		}
+	);
+
+	assert_matches!(
+		api.block(5.into()),
 		Ok(None)
 	);
 }

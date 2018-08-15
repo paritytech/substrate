@@ -46,6 +46,8 @@ use primitives::traits::{Zero, One, RefInto, As, AuxLookup};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
 use staking::address::Address;
+#[cfg(any(feature = "std", test))]
+use std::collections::HashMap;
 
 pub mod voting;
 
@@ -590,7 +592,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
 		use codec::Encode;
 
 		Ok(map![
@@ -614,12 +616,14 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 
 #[cfg(test)]
 mod tests {
+	// These re-exports are here for a reason, edit with care
 	pub use super::*;
 	pub use runtime_io::with_externalities;
 	pub use substrate_primitives::H256;
 	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
+	use substrate_primitives::KeccakHasher;
 
 	impl_outer_dispatch! {
 		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
@@ -667,7 +671,7 @@ mod tests {
 	}
 	impl Trait for Test {}
 
-	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities {
+	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -718,7 +722,7 @@ mod tests {
 			voting_period: 1,
 		}.build_storage().unwrap());
 		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
-		t
+		t.into()
 	}
 
 	pub type System = system::Module<Test>;
@@ -784,7 +788,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities {
+	fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = new_test_ext(false);
 		with_externalities(&mut t, || {
 			<Candidates<Test>>::put(vec![0, 0, 1]);
