@@ -83,8 +83,8 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"height" => best_number,
 				"best" => ?hash,
 				"txcount" => txpool_status.transaction_count,
-				"cpu" => format!("{}%", cpu_usage),
-				"memory" => format!("{}kB", memory)
+				"cpu" => cpu_usage,
+				"memory" => memory
 			);
 		} else {
 			warn!("Error getting best block information");
