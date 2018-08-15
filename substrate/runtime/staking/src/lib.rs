@@ -123,7 +123,7 @@ impl Encode for SlashPreference {
 impl Default for SlashPreference {
 	fn default() -> Self {
 		SlashPreference {
-			unstake_threshold: 0,
+			unstake_threshold: 3,
 		}
 	}
 }
