@@ -18,6 +18,7 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder
 };
@@ -29,8 +30,11 @@ use wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
+use primitives::KeccakHasher;
 use triehash::ordered_trie_root;
 use sandbox;
+use tiny_keccak::keccak256;
+
 
 struct Heap {
 	end: u32,
@@ -71,7 +75,7 @@ macro_rules! debug_trace {
 	( $( $x:tt )* ) => ()
 }
 
-struct FunctionExecutor<'e, E: Externalities + 'e> {
+struct FunctionExecutor<'e, E: Externalities<KeccakHasher> + 'e> {
 	sandbox_store: sandbox::Store,
 	heap: Heap,
 	memory: MemoryRef,
@@ -80,7 +84,7 @@ struct FunctionExecutor<'e, E: Externalities + 'e> {
 	hash_lookup: HashMap<Vec<u8>, Vec<u8>>,
 }
 
-impl<'e, E: Externalities> FunctionExecutor<'e, E> {
+impl<'e, E: Externalities<KeccakHasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, heap_pages: usize, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
@@ -93,7 +97,7 @@ impl<'e, E: Externalities> FunctionExecutor<'e, E> {
 	}
 }
 
-impl<'e, E: Externalities> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
+impl<'e, E: Externalities<KeccakHasher>> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
 	fn store(&self) -> &sandbox::Store {
 		&self.sandbox_store
 	}
@@ -138,6 +142,7 @@ impl ReadPrimitive<u32> for MemoryInstance {
 	}
 }
 
+// TODO: this macro does not support `where` clauses and that seems somewhat tricky to add
 impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
@@ -285,7 +290,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_storage_root(result: *mut u8) => {
 		let r = this.ext.storage_root();
-		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
+		this.memory.set(result, r.as_ref()).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
 		Ok(())
 	},
 	ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
@@ -346,6 +351,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			blake2_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
 		};
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
+		Ok(())
+	},
+	ext_keccak256(data: *const u8, len: u32, out: *mut u8) => {
+		let result = if len == 0 {
+			keccak256(&[0u8; 0])
+		} else {
+			keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_keccak256"))?)
+		};
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_keccak256"))?;
 		Ok(())
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
@@ -476,7 +490,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.sandbox_store.memory_teardown(memory_idx)?;
 		Ok(())
 	},
-	=> <'e, E: Externalities + 'e>
+	=> <'e, E: Externalities<KeccakHasher> + 'e>
 );
 
 /// Wasm rust executor for contracts.
@@ -508,7 +522,7 @@ impl WasmExecutor {
 
 	/// Call a given method in the given code.
 	/// This should be used for tests only.
-	pub fn call<E: Externalities>(
+	pub fn call<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
 		code: &[u8],
@@ -520,7 +534,7 @@ impl WasmExecutor {
 	}
 
 	/// Call a given method in the given wasm-module runtime.
-	pub fn call_in_wasm_module<E: Externalities>(
+	pub fn call_in_wasm_module<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
 		module: &Module,
@@ -632,7 +646,7 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: HashMap<_, _> = map![
+		let expected : TestExternalities<_> = map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
@@ -655,7 +669,7 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: HashMap<_, _> = map![
+		let expected: TestExternalities<_> = map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()

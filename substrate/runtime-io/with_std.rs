@@ -29,12 +29,16 @@ pub extern crate substrate_codec as codec;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256};
 
+pub use primitives::KeccakHasher;
+// Switch to this after PoC-3
+// pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
+use primitives::H256;
 
 // TODO: use the real error, not NoError.
 
-environmental!(ext: trait Externalities);
+environmental!(ext: trait Externalities<KeccakHasher>);
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
@@ -90,10 +94,10 @@ pub fn chain_id() -> u64 {
 }
 
 /// "Commit" all existing operations and get the resultant storage root.
-pub fn storage_root() -> [u8; 32] {
+pub fn storage_root() -> H256 {
 	ext::with(|ext|
 		ext.storage_root()
-	).unwrap_or([0u8; 32])
+	).unwrap_or(H256::new())
 }
 
 /// A trie root formed from the enumerated items.
@@ -125,7 +129,8 @@ pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities, f: F) -> R {
+// NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<KeccakHasher>, f: F) -> R {
 	ext::using(ext, f)
 }
 
@@ -191,7 +196,7 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::new();
+		let mut t = TestExternalities::<KeccakHasher>::new();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -212,7 +217,7 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<KeccakHasher> = map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		];
 
@@ -228,7 +233,7 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<KeccakHasher> = map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),

@@ -18,10 +18,12 @@
 
 #![cfg(feature = "std")]
 
+use std::collections::HashMap;
 use rstd::prelude::*;
 use codec::Encode;
 use runtime_support::{StorageValue, StorageMap};
 use primitives::traits::{Zero, As};
+use substrate_primitives::KeccakHasher;
 use {runtime_io, primitives};
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	BondingDuration, CreationFee, TransferFee, ReclaimRebate,
@@ -118,10 +120,10 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
 		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
-		let mut r: runtime_io::TestExternalities = map![
+		let mut r: runtime_io::TestExternalities<KeccakHasher> = map![
 			Self::hash(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
 			Self::hash(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
 			Self::hash(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
@@ -147,6 +149,6 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 		for (who, value) in self.balances.into_iter() {
 			r.insert(Self::hash(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
 		}
-		Ok(r)
+		Ok(r.into())
 	}
 }

@@ -33,6 +33,8 @@ use light::backend::Backend;
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::RemoteCallExecutor;
 use light::fetcher::{Fetcher, LightDataChecker};
+use hashdb::Hasher;
+use patricia_trie::NodeCodec;
 
 /// Create an instance of light client blockchain backend.
 pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>, F>(storage: S) -> Arc<Blockchain<S, F>> {
@@ -62,11 +64,13 @@ pub fn new_light<B, S, F, GS>(
 }
 
 /// Create an instance of fetch data checker.
-pub fn new_fetch_checker<E>(
+pub fn new_fetch_checker<E, H, C>(
 	executor: E,
-) -> LightDataChecker<E>
+) -> LightDataChecker<E, H, C>
 	where
-		E: CodeExecutor,
+		E: CodeExecutor<H>,
+        H: Hasher,
+		C: NodeCodec<H>,
 {
 	LightDataChecker::new(executor)
 }

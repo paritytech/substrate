@@ -28,6 +28,9 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, Numbe
 use runtime_primitives::bft::Justification;
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
+use patricia_trie::NodeCodec;
+use hashdb::Hasher;
+use heapsize::HeapSizeOf;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -248,15 +251,21 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block> {
 }
 
 /// In-memory operation.
-pub struct BlockImportOperation<Block: BlockT> {
+pub struct BlockImportOperation<Block: BlockT, H: Hasher, C: NodeCodec<H>> {
 	pending_block: Option<PendingBlock<Block>>,
 	pending_authorities: Option<Vec<AuthorityId>>,
-	old_state: InMemory,
-	new_state: Option<InMemory>,
+	old_state: InMemory<H, C>,
+	new_state: Option<InMemory<H, C>>,
 }
 
-impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
-	type State = InMemory;
+impl<Block, H, C> backend::BlockImportOperation<Block, H, C> for BlockImportOperation<Block, H, C>
+where
+	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>,
+	H::Out: HeapSizeOf,
+{
+	type State = InMemory<H, C>;
 
 	fn state(&self) -> error::Result<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -281,7 +290,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		self.pending_authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, update: <InMemory as StateBackend>::Transaction) -> error::Result<()> {
+	fn update_storage(&mut self, update: <InMemory<H, C> as StateBackend<H, C>>::Transaction) -> error::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
 		Ok(())
 	}
@@ -293,18 +302,24 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
-pub struct Backend<Block> where
+pub struct Backend<Block, H, C>
+where
 	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>
 {
-	states: RwLock<HashMap<Block::Hash, InMemory>>,
+	states: RwLock<HashMap<Block::Hash, InMemory<H, C>>>,
 	blockchain: Blockchain<Block>,
 }
 
-impl<Block> Backend<Block> where
+impl<Block, H, C> Backend<Block, H, C>
+where
 	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>
 {
 	/// Create a new instance of in-mem backend.
-	pub fn new() -> Backend<Block> {
+	pub fn new() -> Backend<Block, H, C> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
 			blockchain: Blockchain::new(),
@@ -312,12 +327,16 @@ impl<Block> Backend<Block> where
 	}
 }
 
-impl<Block> backend::Backend<Block> for Backend<Block> where
+impl<Block, H, C> backend::Backend<Block, H, C> for Backend<Block, H, C>
+where
 	Block: BlockT,
+	H: Hasher,
+	H::Out: HeapSizeOf,
+	C: NodeCodec<H> + Send + Sync,
 {
-	type BlockImportOperation = BlockImportOperation<Block>;
+	type BlockImportOperation = BlockImportOperation<Block, H, C>;
 	type Blockchain = Blockchain<Block>;
-	type State = InMemory;
+	type State = InMemory<H, C>;
 
 	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
@@ -366,7 +385,13 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 	}
 }
 
-impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> {}
+impl<Block, H, C> backend::LocalBackend<Block, H, C> for Backend<Block, H, C>
+where
+	Block: BlockT,
+	H: Hasher,
+	H::Out: HeapSizeOf,
+	C: NodeCodec<H> + Send + Sync,
+{}
 
 impl<Block: BlockT> Cache<Block> {
 	fn insert(&self, at: Block::Hash, authorities: Option<Vec<AuthorityId>>) {

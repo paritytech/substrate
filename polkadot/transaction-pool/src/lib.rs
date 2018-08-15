@@ -184,12 +184,10 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 	}
 
 	fn should_replace(&self, old: &VerifiedTransaction, _new: &VerifiedTransaction) -> Choice {
-		if old.is_fully_verified() {
-			// Don't allow new transactions if we are reaching the limit.
-			Choice::RejectNew
-		} else {
-			// Always replace not fully verified transactions.
-			Choice::ReplaceOld
+		// Always replace not fully verified transactions.
+		match old.is_fully_verified() {
+			true => Choice::RejectNew,
+			false => Choice::ReplaceOld
 		}
 	}
 }

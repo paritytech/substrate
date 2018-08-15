@@ -26,6 +26,7 @@ std = [
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-primitives/std",
+	"substrate-runtime-consensus/std",
 	"serde/std",
 	"serde_derive",
 	"substrate-codec/std",

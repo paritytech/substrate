@@ -28,6 +28,7 @@ use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use extrinsic_pool::{txpool::Options as ExtrinsicPoolOptions, api::ExtrinsicPool as ExtrinsicPoolApi};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, generic::BlockId, BuildStorage};
 use config::Configuration;
+use primitives::{KeccakHasher, RlpCodec, H256};
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -152,9 +153,9 @@ pub trait Components {
 	/// Associated service factory.
 	type Factory: ServiceFactory;
 	/// Client backend.
-	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>>;
+	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, KeccakHasher, RlpCodec>;
 	/// Client executor.
-	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>> + Send + Sync;
+	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, KeccakHasher, RlpCodec> + Send + Sync;
 	/// Extrinsic pool type.
 	type ExtrinsicPool: ExtrinsicPool<FactoryBlock<Self::Factory>>;
 
@@ -215,7 +216,7 @@ pub struct LightComponents<Factory: ServiceFactory> {
 
 impl<Factory: ServiceFactory> Components for LightComponents<Factory>
 	where
-		<<Factory as ServiceFactory>::Block as BlockT>::Hash: Into<[u8; 32]>,
+		<<Factory as ServiceFactory>::Block as BlockT>::Hash: Into<H256>,
 {
 	type Factory = Factory;
 	type Executor = LightExecutor<Factory>;
@@ -239,7 +240,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory>
 		};
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(client::light::new_fetch_checker(executor));
+		let fetch_checker = Arc::new(client::light::new_fetch_checker::<_, KeccakHasher, RlpCodec>(executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
 		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec)?;

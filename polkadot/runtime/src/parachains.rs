@@ -30,7 +30,10 @@ use substrate_runtime_support::dispatch::Result;
 use rstd::marker::PhantomData;
 
 #[cfg(any(feature = "std", test))]
-use {runtime_io, runtime_primitives};
+use runtime_primitives;
+
+#[cfg(any(feature = "std", test))]
+use std::collections::HashMap;
 
 pub trait Trait: system::Trait<Hash = ::primitives::Hash> + session::Trait {
 	/// The position of the set_heads call in the block.
@@ -214,8 +217,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(mut self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
-		use std::collections::HashMap;
+	fn build_storage(mut self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
 		use codec::Encode;
 
 		self.parachains.sort_unstable_by_key(|&(ref id, _, _)| id.clone());
@@ -235,15 +237,15 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 			map.insert(head_key, genesis.encode());
 		}
 
-		Ok(map.into())
+		Ok(map)
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
+	use runtime_io::{TestExternalities, with_externalities};
+	use substrate_primitives::{H256, KeccakHasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
@@ -284,7 +286,7 @@ mod tests {
 
 	type Parachains = Module<Test>;
 
-	fn new_test_ext(parachains: Vec<(Id, Vec<u8>, Vec<u8>)>) -> runtime_io::TestExternalities {
+	fn new_test_ext(parachains: Vec<(Id, Vec<u8>, Vec<u8>)>) -> TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -299,7 +301,7 @@ mod tests {
 			parachains: parachains,
 			phantom: PhantomData,
 		}.build_storage().unwrap());
-		t
+		t.into()
 	}
 
 	#[test]
