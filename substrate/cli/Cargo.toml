@@ -22,6 +22,7 @@ tokio = "0.1.7"
 futures = "0.1.17"
 fdlimit = "0.1"
 exit-future = "0.1"
+sysinfo = "0.5.7"
 substrate-client = { path = "../../substrate/client" }
 substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-network = { path = "../../substrate/network" }
