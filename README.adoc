@@ -4,6 +4,12 @@
 :toc:
 :sectnums:
 
+++++
+<a href="https://travis-ci.org/paritytech/polkadot">
+    <img alt="Build Status" src="https://travis-ci.org/paritytech/polkadot.svg?branch=master">
+</a>
+++++
+
 Implementation of a https://polkadot.network node in Rust.
 
 
