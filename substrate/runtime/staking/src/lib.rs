@@ -163,6 +163,7 @@ decl_module! {
 		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;
 		fn set_validator_count(new: u32) -> Result = 2;
 		fn force_new_era(apply_rewards: bool) -> Result = 3;
+		fn set_offline_slash_grace(new: u32) -> Result = 4;
 	}
 }
 
@@ -479,7 +480,6 @@ impl<T: Trait> Module<T> {
 		);
 
 		for validator_index in offline_val_indices.into_iter() {
-			// TODO: slash or unstake
 			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
 			let slash_count = Self::slash_count(&v);
 			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
@@ -532,6 +532,12 @@ impl<T: Trait> Module<T> {
 	fn force_new_era(apply_rewards: bool) -> Result {
 		<ForcingNewEra<T>>::put(());
 		<session::Module<T>>::force_new_session(apply_rewards)
+	}
+
+	/// Set the offline slash grace period.
+	fn set_offline_slash_grace(new: u32) -> Result {
+		<OfflineSlashGrace<T>>::put(&new);
+		Ok(())
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)

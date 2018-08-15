@@ -26,7 +26,8 @@ use {runtime_io, primitives};
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	BondingDuration, CreationFee, TransferFee, ReclaimRebate,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
-	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash};
+	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash,
+	OfflineSlashGrace};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -46,6 +47,7 @@ pub struct GenesisConfig<T: Trait> {
 	pub existential_deposit: T::Balance,
 	pub session_reward: T::Balance,
 	pub early_era_slash: T::Balance,
+	pub offline_slash_grace: u32,
 }
 
 impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
@@ -65,6 +67,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			reclaim_rebate: T::Balance::sa(0),
 			session_reward: T::Balance::sa(0),
 			early_era_slash: T::Balance::sa(0),
+			offline_slash_grace: 1,
 		}
 	}
 
@@ -92,6 +95,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			reclaim_rebate: T::Balance::sa(0),
 			session_reward: T::Balance::sa(0),
 			early_era_slash: T::Balance::sa(0),
+			offline_slash_grace: 1,
 		}
 	}
 }
@@ -113,6 +117,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			reclaim_rebate: T::Balance::sa(0),
 			session_reward: T::Balance::sa(0),
 			early_era_slash: T::Balance::sa(0),
+			offline_slash_grace: 0,
 		}
 	}
 }
@@ -136,6 +141,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			Self::hash(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
 			Self::hash(<SessionReward<T>>::key()).to_vec() => self.session_reward.encode(),
 			Self::hash(<EarlyEraSlash<T>>::key()).to_vec() => self.early_era_slash.encode(),
+			Self::hash(<OfflineSlashGrace<T>>::key()).to_vec() => self.offline_slash_grace.encode(),
 			Self::hash(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
 		];
 

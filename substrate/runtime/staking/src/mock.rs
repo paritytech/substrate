@@ -45,7 +45,7 @@ impl system::Trait for Test {
 	type Header = Header;
 }
 impl session::Trait for Test {
-	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
+	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 0;
 	type ConvertAccountIdToSessionKey = Identity;
 	type OnSessionChange = Staking;
 }
@@ -54,7 +54,6 @@ impl timestamp::Trait for Test {
 	type Moment = u64;
 }
 impl Trait for Test {
-	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type Balance = u64;
 	type AccountIndex = u64;
 	type OnAccountKill = ();
@@ -99,6 +98,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		reclaim_rebate: 0,
 		session_reward: reward,
 		early_era_slash: if monied { 20 } else { 0 },
+		offline_slash_grace: 0,
 	}.build_storage().unwrap());
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5

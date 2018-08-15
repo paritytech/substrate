@@ -358,36 +358,6 @@ mod tests {
 	}
 
 	#[test]
-	fn should_identify_broken_validation() {
-		with_externalities(&mut new_test_ext(), || {
-			System::set_block_number(2);
-			assert_eq!(Session::blocks_remaining(), 0);
-			Timestamp::set_timestamp(0);
-			assert_ok!(Session::set_length(3));
-			Session::check_rotate_session();
-			assert_eq!(Session::current_index(), 1);
-			assert_eq!(Session::length(), 3);
-			assert_eq!(Session::current_start(), 0);
-			assert_eq!(Session::ideal_session_duration(), 15);
-			// ideal end = 0 + 15 * 3 = 15
-			// broken_limit = 15 * 130 / 100 = 19
-
-			System::set_block_number(3);
-			assert_eq!(Session::blocks_remaining(), 2);
-			Timestamp::set_timestamp(9);				// earliest end = 9 + 2 * 5 = 19; OK.
-			assert!(!Session::broken_validation());
-			Session::check_rotate_session();
-
-			System::set_block_number(4);
-			assert_eq!(Session::blocks_remaining(), 1);
-			Timestamp::set_timestamp(15);				// another 1 second late. earliest end = 15 + 1 * 5 = 20; broken.
-			assert!(Session::broken_validation());
-			Session::check_rotate_session();
-			assert_eq!(Session::current_index(), 2);
-		});
-	}
-
-	#[test]
 	fn should_work_with_early_exit() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);

@@ -23,6 +23,54 @@ use runtime_io::with_externalities;
 use mock::{Session, Staking, System, Timestamp, Test, new_test_ext};
 
 #[test]
+fn note_null_missed_proposal_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 30);
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![]));
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 30);
+	});
+}
+
+#[test]
+fn note_missed_proposal_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		Staking::set_free_balance(&10, 30);
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 30);
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0]));
+		assert_eq!(Staking::slash_count(&10), 1);
+		assert_eq!(Staking::free_balance(&10), 10);
+	});
+}
+
+#[test]
+fn note_offline_slash_grace_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		assert_ok!(Staking::set_offline_slash_grace(1));
+		assert_eq!(Staking::offline_slash_grace(), 1);
+
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 30);
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0]));
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 30);
+		assert_eq!(Staking::slash_count(&20), 0);
+		assert_eq!(Staking::free_balance(&20), 30);
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
+		assert_eq!(Staking::slash_count(&10), 1);
+		assert_eq!(Staking::free_balance(&10), 10);
+		assert_eq!(Staking::slash_count(&20), 0);
+		assert_eq!(Staking::free_balance(&20), 30);
+	});
+}
+
+#[test]
 fn reward_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		assert_eq!(Staking::voting_balance(&10), 1);
