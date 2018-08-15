@@ -23,6 +23,137 @@ use runtime_io::with_externalities;
 use mock::{Session, Staking, System, Timestamp, Test, new_test_ext};
 
 #[test]
+fn note_null_missed_proposal_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 1);
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![]));
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 1);
+		assert!(Staking::forcing_new_era().is_none());
+	});
+}
+
+#[test]
+fn note_missed_proposal_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		Staking::set_free_balance(&10, 70);
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 70);
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0]));
+		assert_eq!(Staking::slash_count(&10), 1);
+		assert_eq!(Staking::free_balance(&10), 50);
+		assert!(Staking::forcing_new_era().is_none());
+	});
+}
+
+#[test]
+fn note_missed_proposal_exponent_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		Staking::set_free_balance(&10, 150);
+		assert_eq!(Staking::offline_slash_grace(), 0);
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 150);
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0]));
+		assert_eq!(Staking::slash_count(&10), 1);
+		assert_eq!(Staking::free_balance(&10), 130);
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0]));
+		assert_eq!(Staking::slash_count(&10), 2);
+		assert_eq!(Staking::free_balance(&10), 90);
+		assert!(Staking::forcing_new_era().is_none());
+	});
+}
+
+#[test]
+fn note_missed_proposal_grace_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		Staking::set_free_balance(&10, 70);
+		Staking::set_free_balance(&20, 70);
+		assert_ok!(Staking::set_offline_slash_grace(1));
+		assert_eq!(Staking::offline_slash_grace(), 1);
+
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 70);
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0]));
+		assert_eq!(Staking::slash_count(&10), 1);
+		assert_eq!(Staking::free_balance(&10), 70);
+		assert_eq!(Staking::slash_count(&20), 0);
+		assert_eq!(Staking::free_balance(&20), 70);
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
+		assert_eq!(Staking::slash_count(&10), 2);
+		assert_eq!(Staking::free_balance(&10), 50);
+		assert_eq!(Staking::slash_count(&20), 1);
+		assert_eq!(Staking::free_balance(&20), 70);
+		assert!(Staking::forcing_new_era().is_none());
+	});
+}
+
+#[test]
+fn note_missed_proposal_force_unstake_session_change_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		Staking::set_free_balance(&10, 70);
+		Staking::set_free_balance(&20, 70);
+		assert_ok!(Staking::stake(&10));
+		assert_ok!(Staking::stake(&20));
+		assert_ok!(Staking::stake(&1));
+		
+		assert_eq!(Staking::slash_count(&10), 0);
+		assert_eq!(Staking::free_balance(&10), 70);
+		assert_eq!(Staking::intentions(), vec![10, 20, 1]);
+		assert_eq!(Session::validators(), vec![10, 20]);
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0]));
+		assert_eq!(Staking::free_balance(&10), 50);
+		assert_eq!(Staking::slash_count(&10), 1);
+		assert_eq!(Staking::intentions(), vec![10, 20, 1]);
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0]));
+		assert_eq!(Staking::intentions(), vec![1, 20]);
+		assert_eq!(Staking::free_balance(&10), 10);
+		assert!(Staking::forcing_new_era().is_some());
+	});
+}
+
+#[test]
+fn note_missed_proposal_auto_unstake_session_change_should_work() {
+	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
+		Staking::set_free_balance(&10, 7000);
+		Staking::set_free_balance(&20, 7000);
+		assert_ok!(Staking::stake(&10));
+		assert_ok!(Staking::stake(&20));
+		assert_ok!(Staking::register_slash_preference(&10, 0, SlashPreference { unstake_threshold: 1 }));
+		
+		assert_eq!(Staking::intentions(), vec![10, 20]);
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
+		assert_eq!(Staking::free_balance(&10), 6980);
+		assert_eq!(Staking::free_balance(&20), 6980);
+		assert_eq!(Staking::intentions(), vec![10, 20]);
+		assert!(Staking::forcing_new_era().is_none());
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
+		assert_eq!(Staking::free_balance(&10), 6940);
+		assert_eq!(Staking::free_balance(&20), 6940);
+		assert_eq!(Staking::intentions(), vec![20]);
+		assert!(Staking::forcing_new_era().is_some());
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![1]));
+		assert_eq!(Staking::free_balance(&10), 6940);
+		assert_eq!(Staking::free_balance(&20), 6860);
+		assert_eq!(Staking::intentions(), vec![20]);
+
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![1]));
+		assert_eq!(Staking::free_balance(&10), 6940);
+		assert_eq!(Staking::free_balance(&20), 6700);
+		assert_eq!(Staking::intentions(), vec![0u64; 0]);
+	});
+}
+
+#[test]
 fn reward_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		assert_eq!(Staking::voting_balance(&10), 1);

@@ -121,7 +121,7 @@ impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 }
 
 impl session::Trait for Concrete {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
+	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
 	type OnSessionChange = Staking;
 }
