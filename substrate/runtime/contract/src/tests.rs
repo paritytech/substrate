@@ -108,6 +108,7 @@ fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExt
 			reclaim_rebate: 0,
 			early_era_slash: 0,
 			session_reward: 0,
+			offline_slash_grace: 0,
 		}.build_storage()
 			.unwrap(),
 	);

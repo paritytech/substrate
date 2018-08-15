@@ -693,6 +693,7 @@ mod tests {
 			reclaim_rebate: 0,
 			early_era_slash: 0,
 			session_reward: 0,
+			offline_slash_grace: 0,
 		}.build_storage().unwrap());
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,
