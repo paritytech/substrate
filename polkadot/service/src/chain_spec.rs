@@ -64,6 +64,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			validator_count: 12,
 			sessions_per_era: 12,	// 1 hour per era
 			bonding_duration: 24,	// 1 day per bond.
+			offline_slash_grace: 0,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 12 * 60 * 24,	// 1 day per public referendum
@@ -139,6 +140,7 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			bonding_duration: 2,
 			early_era_slash: 0,
 			session_reward: 0,
+			offline_slash_grace: 0,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 9,

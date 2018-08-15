@@ -208,6 +208,7 @@ mod tests {
 				reclaim_rebate: 0,
 				early_era_slash: 0,
 				session_reward: 0,
+				offline_slash_grace: 0,
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
@@ -247,7 +248,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("b97d52254fc967bb94bed485de6a738e9fad05decfda3453711677b8becf6d0a").into(),
+			hex!("42b56bd84bbaf239903480e071a8e7733e6b25c120d7f28bb5ec6a9ce96d565a").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -260,7 +261,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("a1f018d2faa339f72f5ee29050b4670d971e2e271cc06c41ee9cbe1f4c6feec9").into(),
+			hex!("5b282cd7bbbac9acc2393d9618b87b70b875ea5ffdd5f6d60fe5c68fc435775f").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -280,7 +281,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("41d07010f49aa29b2c9aca542cbaa6f59aafd3dda53cdf711c51ddb7d386912e").into(),
+			hex!("a3d8f40101bd901c69367b46d6b1d682ad306f506242ed96b33850a7d1c5695a").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,

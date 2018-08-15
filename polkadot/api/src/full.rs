@@ -147,8 +147,10 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	fn inherent_extrinsics(&self, at: &BlockId, inherent_data: InherentData) -> Result<Vec<UncheckedExtrinsic>> {
 		use codec::{Encode, Decode};
 
+		let runtime_version = self.runtime_version_at(at)?;
+
 		with_runtime!(self, at, || {
-			let extrinsics = ::runtime::inherent_extrinsics(inherent_data);
+			let extrinsics = ::runtime::inherent_extrinsics(inherent_data, runtime_version);
 			extrinsics.into_iter()
 				.map(|x| x.encode()) // get encoded representation
 				.map(|x| Decode::decode(&mut &x[..])) // get byte-vec equivalent to extrinsic

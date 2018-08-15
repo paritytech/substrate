@@ -287,6 +287,7 @@ mod tests {
 			reclaim_rebate: 0,
 			early_era_slash: 0,
 			session_reward: 0,
+			offline_slash_grace: 0,
 		}.build_storage().unwrap());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		with_externalities(&mut t, || {
@@ -313,7 +314,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("8fad93b6b9e5251a2e4913598fd0d74a138c0e486eb1133ff8081b429b0c56f2").into(),
+					state_root: hex!("06efddda99014ce420dc903e6c8b7f87a1c96e699fbb43d26dc5f3203ae94ee0").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -347,7 +348,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("8fad93b6b9e5251a2e4913598fd0d74a138c0e486eb1133ff8081b429b0c56f2").into(),
+					state_root: hex!("06efddda99014ce420dc903e6c8b7f87a1c96e699fbb43d26dc5f3203ae94ee0").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
