@@ -208,6 +208,7 @@ mod tests {
 				reclaim_rebate: 0,
 				early_era_slash: 0,
 				session_reward: 0,
+				offline_slash_grace: 0,
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
@@ -250,7 +251,7 @@ mod tests {
 			// Blake
 			// hex!("3437bf4b182ab17bb322af5c67e55f6be487a77084ad2b4e27ddac7242e4ad21").into(),
 			// Keccak
-			hex!("c563199c60df7d914262b1775b284870f3a5da2f24b56d2c6288b37c815a6cd9").into(),
+			hex!("42b56bd84bbaf239903480e071a8e7733e6b25c120d7f28bb5ec6a9ce96d565a").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -266,7 +267,7 @@ mod tests {
 			// Blake
 			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
 			// Keccak
-			hex!("83f71d5475f63350825b0301de322233d3711a9f3fcfd74050d1534af47a36b3").into(),
+			hex!("5b282cd7bbbac9acc2393d9618b87b70b875ea5ffdd5f6d60fe5c68fc435775f").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -289,7 +290,7 @@ mod tests {
 			// Blake
 			// hex!("2c7231a9c210a7aa4bea169d944bc4aaacd517862b244b8021236ffa7f697991").into(),
 			// Keccak
-			hex!("06d026c0d687ec583660a6052de6f89acdb24ea964d06be3831c837c3c426966").into(),
+			hex!("a3d8f40101bd901c69367b46d6b1d682ad306f506242ed96b33850a7d1c5695a").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
