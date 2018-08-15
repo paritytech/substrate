@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Telemtetry utils.
+//! Telemetry utils.
 //! 
 //! `telemetry` macro be used from whereever in the Substrate codebase
 //! in order to send real-time logging information to the telemetry

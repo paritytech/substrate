@@ -24,17 +24,23 @@ extern crate hex_literal;
 #[macro_use]
 extern crate log;
 
-extern crate ethereum_types;
 extern crate hashdb;
 extern crate memorydb;
 extern crate triehash;
 extern crate patricia_trie;
-
 extern crate byteorder;
 extern crate parking_lot;
+extern crate rlp;
+extern crate heapsize;
+#[cfg(test)]
+extern crate substrate_primitives as primitives;
 
 use std::collections::HashMap;
 use std::fmt;
+use hashdb::Hasher;
+use patricia_trie::NodeCodec;
+use rlp::Encodable;
+use heapsize::HeapSizeOf;
 
 pub mod backend;
 mod ext;
@@ -45,7 +51,7 @@ mod trie_backend;
 pub use testing::TestExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
-pub use trie_backend::{TryIntoTrieBackend, TrieBackend, TrieH256, Storage, DBValue};
+pub use trie_backend::{TryIntoTrieBackend, TrieBackend, Storage, DBValue};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -158,7 +164,7 @@ impl fmt::Display for ExecutionError {
 }
 
 /// Externalities: pinned to specific active address.
-pub trait Externalities {
+pub trait Externalities<H: Hasher> {
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
@@ -187,17 +193,17 @@ pub trait Externalities {
 	fn chain_id(&self) -> u64;
 
 	/// Get the trie root of the current storage map.
-	fn storage_root(&mut self) -> [u8; 32];
+	fn storage_root(&mut self) -> H::Out where H::Out: Ord + Encodable;
 }
 
 /// Code execution engine.
-pub trait CodeExecutor: Sized + Send + Sync {
+pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 	/// Externalities error type.
 	type Error: Error;
 
 	/// Call a given method in the runtime. Returns a tuple of the result (either the output data
 	/// or an execution error) together with a `bool`, which is true if native execution was used.
-	fn call<E: Externalities>(
+	fn call<E: Externalities<H>>(
 		&self,
 		ext: &mut E,
 		code: &[u8],
@@ -256,14 +262,21 @@ pub fn always_wasm<E>() -> ExecutionManager<fn(Result<Vec<u8>, E>, Result<Vec<u8
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
+pub fn execute<H, C, B, Exec>(
 	backend: &B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
 	strategy: ExecutionStrategy,
-) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
+) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	Exec: CodeExecutor<H>,
+	B: Backend<H, C>,
+	H::Out: Ord + Encodable
+{
 	execute_using_consensus_failure_handler(
 		backend,
 		overlay,
@@ -289,18 +302,22 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn execute_using_consensus_failure_handler<
-	B: backend::Backend,
-	Exec: CodeExecutor,
-	Handler: FnOnce(Result<Vec<u8>, Exec::Error>, Result<Vec<u8>, Exec::Error>) -> Result<Vec<u8>, Exec::Error>
->(
+pub fn execute_using_consensus_failure_handler<H, C, B, Exec, Handler>(
 	backend: &B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
-) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
+) -> Result<(Vec<u8>, B::Transaction), Box<Error>>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	Exec: CodeExecutor<H>,
+	B: Backend<H, C>,
+	H::Out: Ord + Encodable,
+	Handler: FnOnce(Result<Vec<u8>, Exec::Error>, Result<Vec<u8>, Exec::Error>) -> Result<Vec<u8>, Exec::Error>
+{
 	let strategy: ExecutionStrategy = (&manager).into();
 
 	// make a copy.
@@ -378,55 +395,77 @@ pub fn execute_using_consensus_failure_handler<
 ///
 /// Note: changes to code will be in place if this call is made again. For running partial
 /// blocks (e.g. a transaction at a time), ensure a different method is used.
-pub fn prove_execution<B: TryIntoTrieBackend, Exec: CodeExecutor>(
+pub fn prove_execution<H, C, B, Exec>(
 	backend: B,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend as Backend>::Transaction), Box<Error>> {
+) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend<H, C> as Backend<H, C>>::Transaction), Box<Error>>
+where
+	H: Hasher,
+	Exec: CodeExecutor<H>,
+	C: NodeCodec<H>,
+	B: TryIntoTrieBackend<H, C>,
+	H::Out: Ord + Encodable + HeapSizeOf,
+{
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let (result, transaction) = execute(&proving_backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)?;
+	let (result, transaction) = execute::<H, C, _, _>(&proving_backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)?;
 	let proof = proving_backend.extract_proof();
 	Ok((result, proof, transaction))
 }
 
 /// Check execution proof, generated by `prove_execution` call.
-pub fn execution_proof_check<Exec: CodeExecutor>(
-	root: [u8; 32],
+pub fn execution_proof_check<H, C, Exec>(
+	root: H::Out,
 	proof: Vec<Vec<u8>>,
 	overlay: &mut OverlayedChanges,
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>> {
-	let backend = proving_backend::create_proof_check_backend(root.into(), proof)?;
-	execute(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
+) -> Result<(Vec<u8>, memorydb::MemoryDB<H>), Box<Error>>
+where
+H: Hasher,
+C: NodeCodec<H>,
+Exec: CodeExecutor<H>,
+H::Out: Ord + Encodable + HeapSizeOf,
+{
+	let backend = proving_backend::create_proof_check_backend::<H, C>(root.into(), proof)?;
+	execute::<H, C, _, _>(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
 }
 
 /// Generate storage read proof.
-pub fn prove_read<B: TryIntoTrieBackend>(
+pub fn prove_read<B, H, C>(
 	backend: B,
-	key: &[u8],
+	key: &[u8]
 ) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
+where
+	B: TryIntoTrieBackend<H, C>,
+	H: Hasher,
+	C: NodeCodec<H>,
+	H::Out: Ord + Encodable + HeapSizeOf
 {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
-	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
+	let proving_backend = proving_backend::ProvingBackend::<H, C>::new(trie_backend);
 	let result = proving_backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)?;
 	Ok((result, proving_backend.extract_proof()))
 }
 
 /// Check storage read proof, generated by `prove_read` call.
-pub fn read_proof_check(
-	root: [u8; 32],
+pub fn read_proof_check<H, C>(
+	root: H::Out,
 	proof: Vec<Vec<u8>>,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<Error>>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	H::Out: Ord + Encodable + HeapSizeOf
 {
-	let backend = proving_backend::create_proof_check_backend(root.into(), proof)?;
+	let backend = proving_backend::create_proof_check_backend::<H, C>(root, proof)?;
 	backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
 }
 
@@ -435,6 +474,7 @@ mod tests {
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
+	use primitives::{KeccakHasher, RlpCodec, H256};
 
 	struct DummyCodeExecutor {
 		native_available: bool,
@@ -442,10 +482,10 @@ mod tests {
 		fallback_succeeds: bool,
 	}
 
-	impl CodeExecutor for DummyCodeExecutor {
+	impl<H: Hasher> CodeExecutor<H> for DummyCodeExecutor {
 		type Error = u8;
 
-		fn call<E: Externalities>(
+		fn call<E: Externalities<H>>(
 			&self,
 			ext: &mut E,
 			_code: &[u8],
@@ -506,7 +546,7 @@ mod tests {
 			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
 			b"doug".to_vec() => b"notadog".to_vec()
 		];
-		let backend = InMemory::from(initial);
+		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"dog".to_vec() => Some(b"puppy".to_vec()),
@@ -519,8 +559,11 @@ mod tests {
 			],
 		};
 		let mut ext = Ext::new(&mut overlay, &backend);
+		// Blake
+		// const ROOT: [u8; 32] = hex!("6ca394ff9b13d6690a51dea30b1b5c43108e52944d30b9095227c49bae03ff8b");
+		// Keccak
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
-		assert_eq!(ext.storage_root(), ROOT);
+		assert_eq!(ext.storage_root(), H256(ROOT));
 	}
 
 	#[test]
@@ -576,7 +619,7 @@ mod tests {
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check proof locally
-		let (local_result, _) = execution_proof_check(remote_root, remote_proof,
+        let (local_result, _) = execution_proof_check::<KeccakHasher, RlpCodec,_,>(remote_root, remote_proof,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check that both results are correct
@@ -592,7 +635,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let backend = InMemory::from(initial).try_into_trie_backend().unwrap();
+		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial).try_into_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"aba".to_vec() => Some(b"1312".to_vec()),
@@ -631,8 +674,8 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, b"value2").unwrap().1;
  		// check proof locally
-		let local_result1 = read_proof_check(remote_root, remote_proof.clone(), b"value2").unwrap();
-		let local_result2 = read_proof_check(remote_root, remote_proof.clone(), &[0xff]).is_ok();
+		let local_result1 = read_proof_check::<KeccakHasher, RlpCodec>(remote_root, remote_proof.clone(), b"value2").unwrap();
+		let local_result2 = read_proof_check::<KeccakHasher, RlpCodec>(remote_root, remote_proof.clone(), &[0xff]).is_ok();
  		// check that results are correct
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);

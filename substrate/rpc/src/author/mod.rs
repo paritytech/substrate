@@ -26,7 +26,7 @@ use extrinsic_pool::{
 };
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
-use primitives::Bytes;
+use primitives::{Bytes, KeccakHasher, RlpCodec};
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
 use subscriptions::Subscriptions;
@@ -41,7 +41,7 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate authoring RPC API
-	pub trait AuthorApi<Hash, Extrinsic> {
+	pub trait AuthorApi<Hash, Extrinsic, PendingExtrinsics> {
 		type Metadata;
 
 		/// Submit extrinsic for inclusion in block.
@@ -50,6 +50,10 @@ build_rpc_trait! {
 		/// Submit hex-encoded extrinsic for inclusion in block.
 		#[rpc(name = "author_submitExtrinsic")]
 		fn submit_extrinsic(&self, Bytes) -> Result<Hash>;
+
+		/// Returns all pending extrinsics, potentially grouped by sender.
+		#[rpc(name = "author_pendingExtrinsics")]
+		fn pending_extrinsics(&self) -> Result<PendingExtrinsics>;
 
 		#[pubsub(name = "author_extrinsicUpdate")] {
 			/// Submit an extrinsic to watch.
@@ -60,7 +64,6 @@ build_rpc_trait! {
 			#[rpc(name = "author_unwatchExtrinsic")]
 			fn unwatch_extrinsic(&self, SubscriptionId) -> Result<bool>;
 		}
-
 	}
 }
 
@@ -85,12 +88,13 @@ impl<B, E, Block: traits::Block, P> Author<B, E, Block, P> {
 	}
 }
 
-impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> where
-	B: client::backend::Backend<Block> + Send + Sync + 'static,
-	E: client::CallExecutor<Block> + Send + Sync + 'static,
+impl<B, E, Block, P, Ex, Hash, InPool> AuthorApi<Hash, Ex, InPool> for Author<B, E, Block, P> where
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
 	Block: traits::Block + 'static,
-	Hash: traits::MaybeSerializeDebug + Sync + Send + 'static,
-	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash>,
+	Hash: traits::MaybeSerializeDebug + Send + Sync + 'static,
+	InPool: traits::MaybeSerializeDebug + Send + Sync + 'static,
+	P: ExtrinsicPool<Ex, generic::BlockId<Block>, Hash, InPool=InPool>,
 	P::Error: 'static,
 	Ex: Codec,
 {
@@ -110,6 +114,10 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 				.map(Into::into)
 				.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
 			)
+	}
+
+	fn pending_extrinsics(&self) -> Result<InPool> {
+		Ok(self.pool.all())
 	}
 
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<Hash>>, xt: Bytes) {
@@ -146,3 +154,4 @@ impl<B, E, Block, P, Ex, Hash> AuthorApi<Hash, Ex> for Author<B, E, Block, P> wh
 		Ok(self.subscriptions.cancel(id))
 	}
 }
+

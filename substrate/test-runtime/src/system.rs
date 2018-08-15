@@ -171,8 +171,9 @@ mod tests {
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
 	use ::{Header, Digest, Extrinsic, Transfer};
+	use primitives::KeccakHasher;
 
-	fn new_test_ext() -> TestExternalities {
+	fn new_test_ext() -> TestExternalities<KeccakHasher> {
 		map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),
@@ -195,6 +196,9 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
+			// Blake
+			// state_root: hex!("0c22599e15fb5e052c84f79a2aab179ba6bb238218fd86bdd4a74ebcc87adfcd").into(),
+			// Keccak
 			state_root: hex!("97dfcd1f8cbf8845fcb544f89332f1a94c1137f7d1b199ef0b0a6ed217015c3e").into(),
 			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
@@ -223,6 +227,9 @@ mod tests {
 			header: Header {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
+				// Blake
+				// state_root: hex!("0425393fd07e2a806cfd7e990ee91dc92fe6bba34eab2bf45d5be7d67e24d467").into(),
+				// Keccak
 				state_root: hex!("0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1").into(),
 				extrinsics_root: hex!("951508f2cc0071500a74765ab0fb2f280fdcdd329d5f989dda675010adee99d6").into(),
 				digest: Digest { logs: vec![], },
@@ -248,6 +255,9 @@ mod tests {
 			header: Header {
 				parent_hash: b.header.hash(),
 				number: 2,
+				// Blake
+				// state_root: hex!("e32dd1d84d9133ca48078d2d83f2b0db19f9d47229ba98bf5ced0e9f86fac2c7").into(),
+				// Keccak
 				state_root: hex!("c93f2fd494c386fa32ee76b6198a7ccf5db12c02c3a79755fd2d4646ec2bf8d7").into(),
 				extrinsics_root: hex!("3563642676d7e042c894eedc579ba2d6eeedf9a6c66d9d557599effc9f674372").into(),
 				digest: Digest { logs: vec![], },

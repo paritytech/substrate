@@ -30,6 +30,7 @@ extern crate futures;
 extern crate tokio;
 extern crate names;
 extern crate backtrace;
+extern crate sysinfo;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;

@@ -136,6 +136,7 @@ pub fn buy_gas<T: Trait>(
 		return Err("not enough funds for transaction fee");
 	}
 	<staking::Module<T>>::set_free_balance(transactor, b - cost);
+	<staking::Module<T>>::decrease_total_stake_by(cost);
 	Ok(GasMeter {
 		gas_left: gas_limit,
 		gas_price,
@@ -147,4 +148,5 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	let b = <staking::Module<T>>::free_balance(transactor);
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
 	<staking::Module<T>>::set_free_balance(transactor, b + refund);
+	<staking::Module<T>>::increase_total_stake_by(refund);
 }

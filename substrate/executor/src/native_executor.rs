@@ -25,6 +25,7 @@ use twox_hash::XxHash;
 use std::hash::Hasher;
 use parking_lot::{Mutex, MutexGuard};
 use RuntimeInfo;
+use primitives::KeccakHasher;
 
 // For the internal Runtime Cache:
 // Is it compatible enough to run this natively or do we need to fall back on the WasmModule
@@ -56,7 +57,7 @@ fn gen_cache_key(code: &[u8]) -> u64 {
 /// fetch a runtime version from the cache or if there is no cached version yet, create
 /// the runtime version entry for `code`, determines whether `Compatibility::IsCompatible`
 /// can be used by by comparing returned RuntimeVersion to `ref_version`
-fn fetch_cached_runtime_version<'a, E: Externalities>(
+fn fetch_cached_runtime_version<'a, E: Externalities<KeccakHasher>>(
 	wasm_executor: &WasmExecutor,
 	cache: &'a mut MutexGuard<CacheType>,
 	ext: &mut E,
@@ -94,8 +95,8 @@ fn safe_call<F, U>(f: F) -> Result<U>
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
 ///
 /// If the inner closure panics, it will be caught and return an error.
-pub fn with_native_environment<F, U>(ext: &mut Externalities, f: F) -> Result<U>
-	where F: ::std::panic::UnwindSafe + FnOnce() -> U
+pub fn with_native_environment<F, U>(ext: &mut Externalities<KeccakHasher>, f: F) -> Result<U>
+where F: ::std::panic::UnwindSafe + FnOnce() -> U
 {
 	::runtime_io::with_externalities(ext, move || safe_call(f))
 }
@@ -107,7 +108,8 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
-	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	// fn dispatch<H: hashdb::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	fn dispatch(ext: &mut Externalities<KeccakHasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Get native runtime version.
 	const VERSION: RuntimeVersion;
@@ -150,7 +152,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	const NATIVE_VERSION: Option<RuntimeVersion> = Some(D::VERSION);
 
-	fn runtime_version<E: Externalities>(
+	fn runtime_version<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
 		code: &[u8],
@@ -163,10 +165,10 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> CodeExecutor<KeccakHasher> for NativeExecutor<D> {
 	type Error = Error;
 
-	fn call<E: Externalities>(
+	fn call<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
 		code: &[u8],
@@ -195,6 +197,8 @@ macro_rules! native_executor_instance {
 		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
 	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
+		// TODO: this is not so great – I think I should go back to have dispatch take a type param and modify this macro to accept a type param and then pass it in from the test-client instead
+		use primitives::KeccakHasher as _KeccakHasher;
 		impl $crate::NativeExecutionDispatch for $name {
 			const VERSION: $crate::RuntimeVersion = $version;
 			fn native_equivalent() -> &'static [u8] {
@@ -202,8 +206,7 @@ macro_rules! native_executor_instance {
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
 				$code
 			}
-
-			fn dispatch(ext: &mut $crate::Externalities, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
+			fn dispatch(ext: &mut $crate::Externalities<_KeccakHasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}

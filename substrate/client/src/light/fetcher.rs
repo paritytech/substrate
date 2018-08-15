@@ -18,8 +18,14 @@
 
 use futures::IntoFuture;
 
+use primitives::H256;
+use hashdb::Hasher;
+use patricia_trie::NodeCodec;
+use rlp::Encodable;
+use heapsize::HeapSizeOf;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{CodeExecutor, read_proof_check};
+use std::marker::PhantomData;
 
 use call_executor::CallResult;
 use error::{Error as ClientError, Result as ClientResult};
@@ -83,24 +89,29 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<E> {
+pub struct LightDataChecker<E, H, C> {
 	executor: E,
+	_hasher: PhantomData<H>,
+	_codec: PhantomData<C>,
 }
 
-impl<E> LightDataChecker<E> {
+impl<E, H, C> LightDataChecker<E, H, C> {
 	/// Create new light data checker.
 	pub fn new(executor: E) -> Self {
 		Self {
-			executor,
+			executor, _hasher: PhantomData, _codec: PhantomData
 		}
 	}
 }
 
-impl<E, Block> FetchChecker<Block> for LightDataChecker<E>
+impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 	where
 		Block: BlockT,
-		Block::Hash: Into<[u8; 32]>,
-		E: CodeExecutor,
+		Block::Hash: Into<H::Out>,
+		E: CodeExecutor<H>,
+		H: Hasher,
+		C: NodeCodec<H> + Sync + Send,
+		H::Out: Ord + Encodable + HeapSizeOf + From<H256>,
 {
 	fn check_read_proof(
 		&self,
@@ -108,7 +119,7 @@ impl<E, Block> FetchChecker<Block> for LightDataChecker<E>
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>> {
 		let local_state_root = request.header.state_root().clone();
-		read_proof_check(local_state_root.into(), remote_proof, &request.key).map_err(Into::into)
+		read_proof_check::<H, C>(local_state_root.into(), remote_proof, &request.key).map_err(Into::into)
 	}
 
 	fn check_execution_proof(
@@ -116,6 +127,6 @@ impl<E, Block> FetchChecker<Block> for LightDataChecker<E>
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<CallResult> {
-		check_execution_proof(&self.executor, request, remote_proof)
+		check_execution_proof::<_, _, H, C>(&self.executor, request, remote_proof)
 	}
 }
