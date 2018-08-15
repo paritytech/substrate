@@ -17,23 +17,24 @@
 //! Proving state machine backend.
 
 use std::cell::RefCell;
-use ethereum_types::H256 as TrieH256;
-use hashdb::HashDB;
+use hashdb::{Hasher, HashDB};
 use memorydb::MemoryDB;
-use patricia_trie::{TrieDB, TrieError, Trie, Recorder};
+use patricia_trie::{TrieDB, Trie, Recorder, NodeCodec};
 use trie_backend::{TrieBackend, Ephemeral};
 use {Error, ExecutionError, Backend, TryIntoTrieBackend};
+use rlp::Encodable;
+use heapsize::HeapSizeOf;
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend {
-	backend: TrieBackend,
-	proof_recorder: RefCell<Recorder>,
+pub struct ProvingBackend<H: Hasher, C: NodeCodec<H>> {
+	backend: TrieBackend<H, C>,
+	proof_recorder: RefCell<Recorder<H::Out>>,
 }
 
-impl ProvingBackend {
+impl<H: Hasher, C: NodeCodec<H>> ProvingBackend<H, C> {
 	/// Create new proving backend.
-	pub fn new(backend: TrieBackend) -> Self {
+	pub fn new(backend: TrieBackend<H, C>) -> Self {
 		ProvingBackend {
 			backend,
 			proof_recorder: RefCell::new(Recorder::new()),
@@ -50,22 +51,26 @@ impl ProvingBackend {
 	}
 }
 
-impl Backend for ProvingBackend {
+impl<H, C> Backend<H, C> for ProvingBackend<H, C>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	H::Out: Ord + Encodable + HeapSizeOf
+{
 	type Error = String;
-	type Transaction = MemoryDB;
+	type Transaction = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		let mut read_overlay = MemoryDB::default();
+		let mut read_overlay = MemoryDB::new();
 		let eph = Ephemeral::new(
 			self.backend.backend_storage(),
 			&mut read_overlay,
 		);
-
-		let map_e = |e: Box<TrieError>| format!("Trie lookup error: {}", e);
+		let map_e = |e| format!("Trie lookup error: {}", e);
 
 		let mut proof_recorder = self.proof_recorder.try_borrow_mut()
 			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
-		TrieDB::new(&eph, &self.backend.root()).map_err(map_e)?
+		TrieDB::<H, C>::new(&eph, &self.backend.root()).map_err(map_e)?
 			.get_with(key, &mut *proof_recorder).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
 
@@ -77,21 +82,29 @@ impl Backend for ProvingBackend {
 		self.backend.pairs()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> ([u8; 32], MemoryDB)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.backend.storage_root(delta)
 	}
 }
 
-impl TryIntoTrieBackend for ProvingBackend {
-	fn try_into_trie_backend(self) -> Option<TrieBackend> {
+impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for ProvingBackend<H, C> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
 		None
 	}
 }
 
 /// Create proof check backend.
-pub fn create_proof_check_backend(root: TrieH256, proof: Vec<Vec<u8>>) -> Result<TrieBackend, Box<Error>> {
+pub fn create_proof_check_backend<H, C>(
+	root: H::Out,
+	proof: Vec<Vec<u8>>
+) -> Result<TrieBackend<H, C>, Box<Error>>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	H::Out: HeapSizeOf,
+{
 	let mut db = MemoryDB::new();
 	for item in proof {
 		db.insert(&item);
@@ -110,8 +123,9 @@ mod tests {
 	use backend::{InMemory};
 	use trie_backend::tests::test_trie;
 	use super::*;
+	use primitives::{KeccakHasher, RlpCodec};
 
-	fn test_proving() -> ProvingBackend {
+	fn test_proving() -> ProvingBackend<KeccakHasher, RlpCodec> {
 		ProvingBackend::new(test_trie())
 	}
 
@@ -129,7 +143,7 @@ mod tests {
 
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
-		assert!(create_proof_check_backend(1.into(), vec![]).is_err());
+		assert!(create_proof_check_backend::<KeccakHasher, RlpCodec>(1.into(), vec![]).is_err());
 	}
 
 	#[test]
@@ -148,7 +162,7 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
-		let in_memory = InMemory::default();
+		let in_memory = InMemory::<KeccakHasher, RlpCodec>::default();
 		let in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -163,7 +177,7 @@ mod tests {
 
 		let proof = proving.extract_proof();
 
-		let proof_check = create_proof_check_backend(in_memory_root.into(), proof).unwrap();
+		let proof_check = create_proof_check_backend::<KeccakHasher, RlpCodec>(in_memory_root.into(), proof).unwrap();
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 	}
 }

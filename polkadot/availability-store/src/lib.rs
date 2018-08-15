@@ -66,20 +66,6 @@ pub struct Data {
 	pub extrinsic: Option<Extrinsic>,
 }
 
-fn extract_io_err(err: ::kvdb::Error) -> io::Error {
-	match err {
-		::kvdb::Error(::kvdb::ErrorKind::Io(io_err), _) => io_err,
-		::kvdb::Error(::kvdb::ErrorKind::Msg(msg), _) => io::Error::new(
-			io::ErrorKind::Other,
-			msg,
-		),
-		x => io::Error::new(
-			io::ErrorKind::Other,
-			format!("Unexpected error variant: {:?}", x), // only necessary because of nonexaustive match.
-		)
-	}
-}
-
 fn block_data_key(relay_parent: &Hash, candidate_hash: &Hash) -> Vec<u8> {
 	(relay_parent, candidate_hash, 0i8).encode()
 }
@@ -99,14 +85,13 @@ impl Store {
 	pub fn new(config: Config) -> io::Result<Self> {
 		let mut db_config = DatabaseConfig::with_columns(Some(columns::NUM_COLUMNS));
 		db_config.memory_budget = config.cache_size;
-		db_config.wal = true;
 
 		let path = config.path.to_str().ok_or_else(|| io::Error::new(
 			io::ErrorKind::Other,
 			format!("Bad database path: {:?}", config.path),
 		))?;
 
-		let db = Database::open(&db_config, &path).map_err(extract_io_err)?;
+		let db = Database::open(&db_config, &path)?;
 
 		Ok(Store {
 			inner: Arc::new(db),
@@ -151,7 +136,7 @@ impl Store {
 			);
 		}
 
-		self.inner.write(tx).map_err(extract_io_err)
+		self.inner.write(tx)
 	}
 
 	/// Note that a set of candidates have been included in a finalized block with given hash and parent hash.
@@ -175,7 +160,7 @@ impl Store {
 			}
 		}
 
-		self.inner.write(tx).map_err(extract_io_err)
+		self.inner.write(tx)
 	}
 
 	/// Query block data.

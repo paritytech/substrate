@@ -47,7 +47,7 @@ mod tests {
 	use keyring::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap};
 	use state_machine::{CodeExecutor, TestExternalities};
-	use primitives::twox_128;
+	use primitives::{twox_128, KeccakHasher};
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
@@ -100,7 +100,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -119,7 +119,7 @@ mod tests {
 
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -138,7 +138,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -161,7 +161,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -182,7 +182,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> TestExternalities {
+	fn new_test_ext() -> TestExternalities<KeccakHasher> {
 		use keyring::Keyring::*;
 		let three = [3u8; 32].into();
 		GenesisConfig {
@@ -212,7 +212,7 @@ mod tests {
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
 			timestamp: Some(Default::default()),
-		}.build_storage().unwrap()
+		}.build_storage().unwrap().into()
 	}
 
 	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<BareExtrinsic>) -> (Vec<u8>, Hash) {
@@ -247,6 +247,9 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
+			// Blake
+			// hex!("3437bf4b182ab17bb322af5c67e55f6be487a77084ad2b4e27ddac7242e4ad21").into(),
+			// Keccak
 			hex!("c563199c60df7d914262b1775b284870f3a5da2f24b56d2c6288b37c815a6cd9").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
@@ -260,6 +263,9 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
+			// Blake
+			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
+			// Keccak
 			hex!("83f71d5475f63350825b0301de322233d3711a9f3fcfd74050d1534af47a36b3").into(),
 			vec![
 				BareExtrinsic {
@@ -313,6 +319,9 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
+			// Blake
+			// hex!("2c7231a9c210a7aa4bea169d944bc4aaacd517862b244b8021236ffa7f697991").into(),
+			// Keccak
 			hex!("06d026c0d687ec583660a6052de6f89acdb24ea964d06be3831c837c3c426966").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
@@ -371,7 +380,7 @@ mod tests {
 	#[test]
 	fn native_big_block_import_succeeds() {
 		let mut t = new_test_ext();
-		
+
 		let r = Executor::with_heap_pages(8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, true).0;
 		assert!(r.is_ok());
 	}
@@ -386,7 +395,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -406,7 +415,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let mut t: TestExternalities = map![
+		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],

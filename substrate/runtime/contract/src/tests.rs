@@ -20,6 +20,7 @@ use runtime_primitives::testing::{Digest, H256, Header};
 use runtime_primitives::traits::{BlakeTwo256, HasPublicAux, Identity};
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
+use substrate_primitives::KeccakHasher;
 use wabt;
 use {
 	consensus, runtime_io, session, staking, system, timestamp, CodeOf, ContractAddressFor,
@@ -73,7 +74,7 @@ impl ContractAddressFor<u64> for DummyContractAddressFor {
 	}
 }
 
-fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExternalities {
+fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExternalities<KeccakHasher> {
 	let mut t = system::GenesisConfig::<Test>::default()
 		.build_storage()
 		.unwrap();
@@ -126,7 +127,7 @@ fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExt
 		}.build_storage()
 			.unwrap(),
 	);
-	t
+	t.into()
 }
 
 const CODE_TRANSFER: &str = r#"

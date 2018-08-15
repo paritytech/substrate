@@ -22,11 +22,18 @@ use runtime_primitives::bft::Justification;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
+use patricia_trie::NodeCodec;
+use hashdb::Hasher;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
-pub trait BlockImportOperation<Block: BlockT> {
+pub trait BlockImportOperation<Block, H, C>
+where
+	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>,
+{
 	/// Associated state backend type.
-	type State: StateBackend;
+	type State: StateBackend<H, C>;
 
 	/// Returns pending state. Returns None for backends with locally-unavailable state data.
 	fn state(&self) -> error::Result<Option<&Self::State>>;
@@ -43,7 +50,7 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// has been used to check justification of this block).
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
 	/// Inject storage data into the database.
-	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
+	fn update_storage(&mut self, update: <Self::State as StateBackend<H, C>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 }
@@ -56,13 +63,18 @@ pub trait BlockImportOperation<Block: BlockT> {
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
 /// is alive, the state for `P` should not be pruned.
-pub trait Backend<Block: BlockT>: Send + Sync {
+pub trait Backend<Block, H, C>: Send + Sync
+where
+	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>,
+{
 	/// Associated block insertion operation type.
-	type BlockImportOperation: BlockImportOperation<Block>;
+	type BlockImportOperation: BlockImportOperation<Block, H, C>;
 	/// Associated blockchain backend type.
 	type Blockchain: ::blockchain::Backend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend;
+	type State: StateBackend<H, C>;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
@@ -79,7 +91,17 @@ pub trait Backend<Block: BlockT>: Send + Sync {
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.
-pub trait LocalBackend<Block: BlockT>: Backend<Block> {}
+pub trait LocalBackend<Block, H, C>: Backend<Block, H, C>
+where
+	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>,
+{}
 
 /// Mark for all Backend implementations, that are fetching required state data from remote nodes.
-pub trait RemoteBackend<Block: BlockT>: Backend<Block> {}
+pub trait RemoteBackend<Block, H, C>: Backend<Block, H, C>
+where
+	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>,
+{}

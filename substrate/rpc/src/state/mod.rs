@@ -27,6 +27,7 @@ use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
+use primitives::{KeccakHasher, RlpCodec};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
@@ -101,8 +102,8 @@ impl<B, E, Block: BlockT> State<B, E, Block> {
 
 impl<B, E, Block> State<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block> + Send + Sync + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
 {
 	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
 		Ok(match hash.into() {
@@ -114,8 +115,8 @@ impl<B, E, Block> State<B, E, Block> where
 
 impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block> + Send + Sync + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 
