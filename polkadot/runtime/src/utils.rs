@@ -21,7 +21,7 @@ use super::{Call, UncheckedExtrinsic, Extrinsic, Staking};
 use runtime_primitives::traits::{Checkable, AuxLookup};
 use timestamp::Call as TimestampCall;
 use parachains::Call as ParachainsCall;
-use session::Call as SessionCall;
+use staking::Call as StakingCall;
 
 /// Produces the list of inherent extrinsics.
 pub fn inherent_extrinsics(data: ::primitives::InherentData) -> Vec<UncheckedExtrinsic> {
@@ -41,7 +41,7 @@ pub fn inherent_extrinsics(data: ::primitives::InherentData) -> Vec<UncheckedExt
 
 	if !data.offline_indices.is_empty() {
 		inherent.push(make_inherent(
-			Call::Session(SessionCall::note_offline(data.offline_indices))
+			Call::Staking(StakingCall::note_missed_proposal(data.offline_indices))
 		));
 	}
 

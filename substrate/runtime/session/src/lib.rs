@@ -51,21 +51,21 @@ use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
 /// A session has changed.
-pub trait OnSessionChange<T, A> {
+pub trait OnSessionChange<T> {
 	/// Session has changed.
-	fn on_session_change(time_elapsed: T, bad_validators: Vec<A>);
+	fn on_session_change(time_elapsed: T, should_reward: bool);
 }
 
-impl<T, A> OnSessionChange<T, A> for () {
-	fn on_session_change(_: T, _: Vec<A>) {}
+impl<T> OnSessionChange<T> for () {
+	fn on_session_change(_: T, _: bool) {}
 }
 
 pub trait Trait: timestamp::Trait {
 	// the position of the required timestamp-set extrinsic.
-	const NOTE_OFFLINE_POSITION: u32;
+	const NOTE_MISSED_PROPOSAL_POSITION: u32;
 
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
-	type OnSessionChange: OnSessionChange<Self::Moment, Self::AccountId>;
+	type OnSessionChange: OnSessionChange<Self::Moment>;
 }
 
 decl_module! {
@@ -80,7 +80,7 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
-		fn force_new_session(normal_rotation: bool) -> Result = 1;
+		fn force_new_session(apply_rewards: bool) -> Result = 1;
 	}
 }
 
@@ -139,8 +139,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Forces a new session.
-	pub fn force_new_session(normal_rotation: bool) -> Result {
-		<ForcingNewSession<T>>::put(normal_rotation);
+	pub fn force_new_session(apply_rewards: bool) -> Result {
+		<ForcingNewSession<T>>::put(apply_rewards);
 		Ok(())
 	}
 
@@ -148,9 +148,9 @@ impl<T: Trait> Module<T> {
 	pub fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
 		assert!(aux.is_empty());
 		assert!(
-			<system::Module<T>>::extrinsic_index() == T::NOTE_OFFLINE_POSITION,
+			<system::Module<T>>::extrinsic_index() == T::NOTE_MISSED_PROPOSAL_POSITION,
 			"note_offline extrinsic must be at position {} in the block",
-			T::NOTE_OFFLINE_POSITION
+			T::NOTE_MISSED_PROPOSAL_POSITION
 		);
 
 		let vs = Self::validators();
@@ -178,15 +178,15 @@ impl<T: Trait> Module<T> {
 		// check block number and call next_session if necessary.
 		let block_number = <system::Module<T>>::block_number();
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
-		let bad_validators = <BadValidators<T>>::take().unwrap_or_default();
-		let should_end_session = <ForcingNewSession<T>>::take().is_some() || !bad_validators.is_empty() || is_final_block;
+		let (should_end_session, apply_rewards) = <ForcingNewSession<T>>::take()
+			.map_or((is_final_block, is_final_block), |apply_rewards| (true, apply_rewards));
 		if should_end_session {
-			Self::rotate_session(is_final_block, bad_validators);
+			Self::rotate_session(is_final_block, apply_rewards);
 		}
 	}
 
 	/// Move onto next session: register the new authority set.
-	pub fn rotate_session(is_final_block: bool, bad_validators: Vec<T::AccountId>) {
+	pub fn rotate_session(is_final_block: bool, apply_rewards: bool) {
 		let now = <timestamp::Module<T>>::get();
 		let time_elapsed = now.clone() - Self::current_start();
 
@@ -206,7 +206,7 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
-		T::OnSessionChange::on_session_change(time_elapsed, bad_validators);
+		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 
 		// Update any changes in session keys.
 		Self::validators().iter().enumerate().for_each(|(i, v)| {
@@ -321,7 +321,7 @@ mod tests {
 		type Moment = u64;
 	}
 	impl Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
+		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = ();
 	}
@@ -354,36 +354,6 @@ mod tests {
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
-		});
-	}
-
-	#[test]
-	fn should_identify_broken_validation() {
-		with_externalities(&mut new_test_ext(), || {
-			System::set_block_number(2);
-			assert_eq!(Session::blocks_remaining(), 0);
-			Timestamp::set_timestamp(0);
-			assert_ok!(Session::set_length(3));
-			Session::check_rotate_session();
-			assert_eq!(Session::current_index(), 1);
-			assert_eq!(Session::length(), 3);
-			assert_eq!(Session::current_start(), 0);
-			assert_eq!(Session::ideal_session_duration(), 15);
-			// ideal end = 0 + 15 * 3 = 15
-			// broken_limit = 15 * 130 / 100 = 19
-
-			System::set_block_number(3);
-			assert_eq!(Session::blocks_remaining(), 2);
-			Timestamp::set_timestamp(9);				// earliest end = 9 + 2 * 5 = 19; OK.
-			assert!(!Session::broken_validation());
-			Session::check_rotate_session();
-
-			System::set_block_number(4);
-			assert_eq!(Session::blocks_remaining(), 1);
-			Timestamp::set_timestamp(15);				// another 1 second late. earliest end = 15 + 1 * 5 = 20; broken.
-			assert!(Session::broken_validation());
-			Session::check_rotate_session();
-			assert_eq!(Session::current_index(), 2);
 		});
 	}
 

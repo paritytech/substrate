@@ -52,7 +52,7 @@ use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, AuxLookup, Member, CheckedAdd, CheckedSub};
+	As, AuxLookup, Member, CheckedAdd, CheckedSub, MaybeEmpty};
 use address::Address as RawAddress;
 
 mod mock;
@@ -98,7 +98,40 @@ impl<AccountId> OnAccountKill<AccountId> for () {
 	fn on_account_kill(_who: &AccountId) {}
 }
 
+/// Preference of what happens on a slash event.
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[derive(Eq, PartialEq, Clone, Copy)]
+pub struct SlashPreference {
+	/// Validator should ensure this many more slashes than is necessary before being unstaked.
+	pub unstake_threshold: u32,
+}
+
+impl Decode for SlashPreference {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		Some(SlashPreference {
+			unstake_threshold: Decode::decode(input)?
+		})
+	}
+}
+
+impl Encode for SlashPreference {
+	fn encode_to<T: Output>(&self, dest: &mut T) {
+		self.unstake_threshold.encode_to(dest)
+	}
+}
+
+impl Default for SlashPreference {
+	fn default() -> Self {
+		SlashPreference {
+			unstake_threshold: 3,
+		}
+	}
+}
+
 pub trait Trait: system::Trait + session::Trait {
+	/// The allowed extrinsic position for `missed_proposal` inherent.
+//	const NOTE_MISSED_PROPOSAL_POSITION: u32;	// TODO: uncomment when removed from session::Trait
+
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
@@ -117,9 +150,11 @@ decl_module! {
 	pub enum Call where aux: T::PublicAux {
 		fn transfer(aux, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
-		fn unstake(aux, index: u32) -> Result = 2;
+		fn unstake(aux, intentions_index: u32) -> Result = 2;
 		fn nominate(aux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result = 3;
 		fn unnominate(aux, target_index: u32) -> Result = 4;
+		fn register_slash_preference(aux, intentions_index: u32, p: SlashPreference) -> Result = 5;
+		fn note_missed_proposal(aux, offline_val_indices: Vec<u32>) -> Result = 6;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -127,7 +162,8 @@ decl_module! {
 		fn set_sessions_per_era(new: T::BlockNumber) -> Result = 0;
 		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;
 		fn set_validator_count(new: u32) -> Result = 2;
-		fn force_new_era(should_slash: bool) -> Result = 3;
+		fn force_new_era(apply_rewards: bool) -> Result = 3;
+		fn set_offline_slash_grace(new: u32) -> Result = 4;
 	}
 }
 
@@ -159,9 +195,13 @@ decl_storage! {
 	pub SessionReward get(session_reward): b"sta:session_reward" => required T::Balance;
 	// Slash, per validator that is taken per abnormal era end.
 	pub EarlyEraSlash get(early_era_slash): b"sta:early_era_slash" => required T::Balance;
+	// Number of instances of offline reports before slashing begins for validators.
+	pub OfflineSlashGrace get(offline_slash_grace): b"sta:offline_slash_grace" => default u32;
 
 	// The current era index.
 	pub CurrentEra get(current_era): b"sta:era" => required T::BlockNumber;
+	// Preference over how many times the validator should get slashed for being offline before they are automatically unstaked.
+	pub SlashPreferenceOf get(slash_preference_of): b"sta:slash_preference_of" => default map [ T::AccountId => SlashPreference ];
 	// All the accounts with a desire to stake.
 	pub Intentions get(intentions): b"sta:wil:" => default Vec<T::AccountId>;
 	// All nominator -> nominee relationships.
@@ -177,8 +217,8 @@ decl_storage! {
 	// The current era stake threshold
 	pub StakeThreshold get(stake_threshold): b"sta:stake_threshold" => required T::Balance;
 
-	// The current bad validator slash.
-	pub CurrentSlash get(current_slash): b"sta:current_slash" => default T::Balance;
+	// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
+	pub SlashCount get(slash_count): b"sta:slash_count" => default map [ T::AccountId => u32 ];
 
 	// The next free enumeration set.
 	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required T::AccountIndex;
@@ -247,6 +287,20 @@ impl<T: Trait> Module<T> {
 		Self::free_balance(who) + Self::reserved_balance(who)
 	}
 
+	/// Balance of a (potential) validator that includes all nominators.
+	pub fn nomination_balance(who: &T::AccountId) -> T::Balance {
+		Self::nominators_for(who).iter()
+			.map(Self::voting_balance)
+			.fold(Zero::zero(), |acc, x| acc + x)
+	}
+
+	/// The total balance that can be slashed from an account.
+	pub fn slashable_balance(who: &T::AccountId) -> T::Balance {
+		Self::nominators_for(who).iter()
+			.map(Self::voting_balance)
+			.fold(Self::voting_balance(who), |acc, x| acc + x)
+	}
+
 	/// Some result as `slash(who, value)` (but without the side-effects) assuming there are no
 	/// balance changes in the meantime and only the reserved balance is not taken into account.
 	pub fn can_slash(who: &T::AccountId, value: T::Balance) -> bool {
@@ -261,6 +315,22 @@ impl<T: Trait> Module<T> {
 		} else {
 			false
 		}
+	}
+
+	/// Lookup an T::AccountIndex to get an Id, if there's one there.
+	pub fn lookup_index(index: T::AccountIndex) -> Option<T::AccountId> {
+		let enum_set_size = Self::enum_set_size();
+		let set = Self::enum_set(index / enum_set_size);
+		let i: usize = (index % enum_set_size).as_();
+		set.get(i).map(|x| x.clone())
+	}
+
+	/// `true` if the account `index` is ready for reclaim.
+	pub fn can_reclaim(try_index: T::AccountIndex) -> bool {
+		let enum_set_size = Self::enum_set_size();
+		let try_set = Self::enum_set(try_index / enum_set_size);
+		let i = (try_index % enum_set_size).as_();
+		i < try_set.len() && Self::voting_balance(&try_set[i]).is_zero()
 	}
 
 	/// The block at which the `who`'s funds become entirely liquid.
@@ -327,18 +397,8 @@ impl<T: Trait> Module<T> {
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake(aux: &T::PublicAux, position: u32) -> Result {
-		let aux = aux.ref_into();
-		let position = position as usize;
-		let mut intentions = <Intentions<T>>::get();
-//		let position = intentions.iter().position(|t| t == aux.ref_into()).ok_or("Cannot unstake if not already staked.")?;
-		if intentions.get(position) != Some(aux) {
-			return Err("Invalid index")
-		}
-		intentions.swap_remove(position);
-		<Intentions<T>>::put(intentions);
-		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
-		Ok(())
+	fn unstake(aux: &T::PublicAux, intentions_index: u32) -> Result {
+		Self::apply_unstake(aux.ref_into(), intentions_index as usize)
 	}
 
 	fn nominate(aux: &T::PublicAux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result {
@@ -389,6 +449,64 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
+	/// Set the given account's preference for slashing behaviour should they be a validator. 
+	/// 
+	/// An error (no-op) if `Self::intentions()[intentions_index] != aux`.
+	fn register_slash_preference(
+		aux: &T::PublicAux,
+		intentions_index: u32,
+		p: SlashPreference
+	) -> Result {
+		let aux = aux.ref_into();
+
+		if Self::intentions().get(intentions_index as usize) != Some(aux) {
+			return Err("Invalid index")
+		}
+		
+		<SlashPreferenceOf<T>>::insert(aux, p);
+
+		Ok(())
+	}
+
+	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
+	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
+	/// for the previous block.
+	fn note_missed_proposal(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
+		assert!(aux.is_empty());
+		assert!(
+			<system::Module<T>>::extrinsic_index() == T::NOTE_MISSED_PROPOSAL_POSITION,
+			"note_missed_proposal extrinsic must be at position {} in the block",
+			T::NOTE_MISSED_PROPOSAL_POSITION
+		);
+
+		for validator_index in offline_val_indices.into_iter() {
+			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
+			let slash_count = Self::slash_count(&v);
+			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
+			let grace = Self::offline_slash_grace();
+
+			if slash_count >= grace {
+				let instances = slash_count - grace;
+				let slash = Self::early_era_slash() << instances;
+				let next_slash = slash << 1u32;
+				let _ = Self::slash_validator(&v, slash);
+				if instances >= Self::slash_preference_of(&v).unstake_threshold
+					|| Self::slashable_balance(&v) < next_slash
+				{
+					if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
+						Self::apply_unstake(&v, pos)
+							.expect("pos derived correctly from Self::intentions(); \
+								apply_unstake can only fail if pos wrong; \
+								Self::intentions() doesn't change; qed");
+					}
+					let _ = Self::force_new_era(false);
+				}
+			}
+		}
+		
+		Ok(())
+	}
+
 	// PRIV DISPATCH
 
 	/// Set the number of sessions in an era.
@@ -411,9 +529,15 @@ impl<T: Trait> Module<T> {
 
 	/// Force there to be a new era. This also forces a new session immediately after by
 	/// setting `normal_rotation` to be false. Validators will get slashed.
-	fn force_new_era(should_slash: bool) -> Result {
+	fn force_new_era(apply_rewards: bool) -> Result {
 		<ForcingNewEra<T>>::put(());
-		<session::Module<T>>::force_new_session(!should_slash)
+		<session::Module<T>>::force_new_session(apply_rewards)
+	}
+
+	/// Set the offline slash grace period.
+	fn set_offline_slash_grace(new: u32) -> Result {
+		<OfflineSlashGrace<T>>::put(&new);
+		Ok(())
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
@@ -590,60 +714,74 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
-	/// move to a new era.
-	fn new_session(actual_elapsed: T::Moment, bad_validators: Vec<T::AccountId>) {
-		let session_index = <session::Module<T>>::current_index();
-		let early_exit_era = !bad_validators.is_empty();
-
-		if early_exit_era {
-			// slash
-			let slash = Self::current_slash() + Self::early_era_slash();
-			<CurrentSlash<T>>::put(&slash);
-			for v in bad_validators.into_iter() {
-				if let Some(rem) = Self::slash(&v, slash) {
-					let noms = Self::current_nominators_for(&v);
-					let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
-					if !total.is_zero() {
-						let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
-						for n in noms.iter() {
-							let _ = Self::slash(n, safe_mul_rational(Self::voting_balance(n)));	// best effort - not much that can be done on fail.
-						}
-					}
+	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
+	/// and reduces the nominators' balance if needed.
+	fn slash_validator(v: &T::AccountId, slash: T::Balance) {
+		if let Some(rem) = Self::slash(v, slash) {
+			let noms = Self::current_nominators_for(v);
+			let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
+			if !total.is_zero() {
+				let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
+				for n in noms.iter() {
+					let _ = Self::slash(n, safe_mul_rational(Self::voting_balance(n)));	// best effort - not much that can be done on fail.
 				}
 			}
-		} else {
-			// Zero any cumulative slash since we're healthy now.
-			<CurrentSlash<T>>::kill();
-
-			// reward
-			let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
-			let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
-			let reward = Self::session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64);
-			// apply good session reward
-			for v in <session::Module<T>>::validators().iter() {
-				let noms = Self::current_nominators_for(v);
-				let total = noms.iter().map(Self::voting_balance).fold(Self::voting_balance(v), |acc, x| acc + x);
-				if !total.is_zero() {
-					let safe_mul_rational = |b| b * reward / total;// TODO: avoid overflow
-					for n in noms.iter() {
-						let _ = Self::reward(n, safe_mul_rational(Self::voting_balance(n)));
-					}
-					let _ = Self::reward(v, safe_mul_rational(Self::voting_balance(v)));
-				}
-			}
-		}
-		if <ForcingNewEra<T>>::take().is_some()
-			|| ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero()
-			|| early_exit_era
-		{
-			Self::new_era();
 		}
 	}
 
-	/// Balance of a (potential) validator that includes all nominators.
-	fn nomination_balance(who: &T::AccountId) -> T::Balance {
-		Self::nominators_for(who).iter().map(Self::voting_balance).fold(Zero::zero(), |acc, x| acc + x)
+	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
+	/// balance, pro-rata.
+	fn reward_validator(who: &T::AccountId, reward: T::Balance) {
+		let noms = Self::current_nominators_for(who);
+		let total = noms.iter().map(Self::voting_balance).fold(Self::voting_balance(who), |acc, x| acc + x);
+		if !total.is_zero() {
+			let safe_mul_rational = |b| b * reward / total;// TODO: avoid overflow
+			for n in noms.iter() {
+				let _ = Self::reward(n, safe_mul_rational(Self::voting_balance(n)));
+			}
+			let _ = Self::reward(who, safe_mul_rational(Self::voting_balance(who)));
+		}
+	}
+
+	/// Actually carry out the unstake operation.
+	/// Assumes `intentions()[intentions_index] == who`.
+	fn apply_unstake(who: &T::AccountId, intentions_index: usize) -> Result {
+		let mut intentions = Self::intentions();
+		if intentions.get(intentions_index) != Some(who) {
+			return Err("Invalid index");
+		}
+		intentions.swap_remove(intentions_index);
+		<Intentions<T>>::put(intentions);
+		<SlashPreferenceOf<T>>::remove(who);
+		<SlashCount<T>>::remove(who);
+		<Bondage<T>>::insert(who, Self::current_era() + Self::bonding_duration());
+		Ok(())
+	}
+
+	/// Get the reward for the session, assuming it ends with this block.
+	fn this_session_reward(actual_elapsed: T::Moment) -> T::Balance {
+		let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
+		let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
+		Self::session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64)
+	}
+
+	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
+	/// move to a new era.
+	fn new_session(actual_elapsed: T::Moment, should_reward: bool) {
+		if should_reward {
+			// apply good session reward
+			let reward = Self::this_session_reward(actual_elapsed);
+			for v in <session::Module<T>>::validators().iter() {
+				Self::reward_validator(v, reward);
+			}
+		}
+
+		let session_index = <session::Module<T>>::current_index();
+		if <ForcingNewEra<T>>::take().is_some()
+			|| ((session_index - Self::last_era_length_change()) % Self::sessions_per_era()).is_zero()
+		{
+			Self::new_era();
+		}
 	}
 
 	/// The era has changed - enact new staking set.
@@ -662,8 +800,6 @@ impl<T: Trait> Module<T> {
 			}
 		}
 
-		let minimum_allowed = Self::early_era_slash();
-
 		// evaluate desired staking amounts and nominations and optimise to find the best
 		// combination of validators, then use session::internal::set_validators().
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
@@ -671,8 +807,7 @@ impl<T: Trait> Module<T> {
 		// TODO: this is not sound. this should be moved to an off-chain solution mechanism.
 		let mut intentions = <Intentions<T>>::get()
 			.into_iter()
-			.map(|v| (Self::voting_balance(&v) + Self::nomination_balance(&v), v))
-			.filter(|&(b, _)| b >= minimum_allowed)
+			.map(|v| (Self::slashable_balance(&v), v))
 			.collect::<Vec<_>>();
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
@@ -688,6 +823,10 @@ impl<T: Trait> Module<T> {
 				.collect::<Vec<_>>();
 		for v in <session::Module<T>>::validators().iter() {
 			<CurrentNominatorsFor<T>>::remove(v);
+			let slash_count = <SlashCount<T>>::take(v);
+			if slash_count > 1 {
+				<SlashCount<T>>::insert(v, slash_count - 1);
+			}
 		}
 		for v in vals.iter() {
 			<CurrentNominatorsFor<T>>::insert(v, Self::nominators_for(v));
@@ -697,22 +836,6 @@ impl<T: Trait> Module<T> {
 
 	fn enum_set_size() -> T::AccountIndex {
 		T::AccountIndex::sa(ENUM_SET_SIZE)
-	}
-
-	/// Lookup an T::AccountIndex to get an Id, if there's one there.
-	pub fn lookup_index(index: T::AccountIndex) -> Option<T::AccountId> {
-		let enum_set_size = Self::enum_set_size();
-		let set = Self::enum_set(index / enum_set_size);
-		let i: usize = (index % enum_set_size).as_();
-		set.get(i).map(|x| x.clone())
-	}
-
-	/// `true` if the account `index` is ready for reclaim.
-	pub fn can_reclaim(try_index: T::AccountIndex) -> bool {
-		let enum_set_size = Self::enum_set_size();
-		let try_set = Self::enum_set(try_index / enum_set_size);
-		let i = (try_index % enum_set_size).as_();
-		i < try_set.len() && Self::voting_balance(&try_set[i]).is_zero()
 	}
 
 	/// Register a new account (with existential balance).
@@ -808,9 +931,9 @@ impl<T: Trait> Executable for Module<T> {
 	}
 }
 
-impl<T: Trait> OnSessionChange<T::Moment, T::AccountId> for Module<T> {
-	fn on_session_change(elapsed: T::Moment, bad_validators: Vec<T::AccountId>) {
-		Self::new_session(elapsed, bad_validators);
+impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
+	fn on_session_change(elapsed: T::Moment, should_reward: bool) {
+		Self::new_session(elapsed, should_reward);
 	}
 }
 

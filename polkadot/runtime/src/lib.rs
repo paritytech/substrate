@@ -86,7 +86,7 @@ pub const TIMESTAMP_SET_POSITION: u32 = 0;
 /// The position of the parachains set extrinsic.
 pub const PARACHAINS_SET_POSITION: u32 = 1;
 /// The position of the offline nodes noting extrinsic.
-pub const NOTE_OFFLINE_POSITION: u32 = 2;
+pub const NOTE_MISSED_PROPOSAL_POSITION: u32 = 2;
 
 /// The address format for describing accounts.
 pub type Address = staking::Address<Concrete>;
@@ -111,8 +111,8 @@ pub struct Concrete;
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("polkadot"),
 	impl_name: ver_str!("parity-polkadot"),
-	authoring_version: 1,
-	spec_version: 3,
+	authoring_version: 2,
+	spec_version: 4,
 	impl_version: 0,
 };
 
@@ -162,7 +162,7 @@ impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 }
 
 impl session::Trait for Concrete {
-	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
+	const NOTE_MISSED_PROPOSAL_POSITION: u32 = NOTE_MISSED_PROPOSAL_POSITION;
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
 	type OnSessionChange = Staking;
 }
