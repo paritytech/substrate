@@ -2,21 +2,23 @@
 # and a minimal language environment.
 sudo: true
 language: rust
+matrix:
+  include:
+    - name: "Webassembly on nightly"
+      rust: nightly
+      env: TARGET=wasm
+    - name: "Latest stable native"
+      rust: stable
+      env: TARGET=native
 
 cache: cargo
+
+env:
+  - RUST_BACKTRACE=1
 
 branches:
   only:
   - master
-
-env:
-  global:
-    - RUST_BACKTRACE=1
-  matrix:
-    - rust: nightly
-      env: TARGET=wasm
-    - rust: stable
-      env: TARGET=native
 
 before_install:
   # Check how much space we've got on this machine.
