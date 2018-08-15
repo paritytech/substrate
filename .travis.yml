@@ -23,11 +23,6 @@ before_install:
 script:
   - ./ci/script.sh
 
-after_success:
-  - if [ "$TARGET" == "wasm" ] && [ "$TRAVIS_PULL_REQUEST" != "true" ] && [ "$TRAVIS_BRANCH" == "master" ]; then
-      ./ci/publish-wasm.sh;
-    fi
-
 after_script:
   # Check how much free disk space left after the build
   - df -h
