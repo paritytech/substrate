@@ -210,7 +210,8 @@ impl<Components> Service<Components>
 				let chain = rpc::apis::chain::Chain::new(client.clone(), task_executor.clone());
 				let state = rpc::apis::state::State::new(client.clone(), task_executor.clone());
 				let author = rpc::apis::author::Author::new(client.clone(), extrinsic_pool.api(), task_executor.clone());
-				rpc::rpc_handler::<ComponentBlock<Components>, _, _, _, _>(
+
+				rpc::rpc_handler::<ComponentBlock<Components>, _, _, _, _, _>(
 					state,
 					chain,
 					author,
