@@ -1,7 +1,7 @@
 # Request an environment that provides sudo (that goes with larger containers)
 # and a minimal language environment.
 sudo: true
-language: minimal
+language: rust
 
 cache: cargo
 
@@ -13,12 +13,18 @@ env:
   global:
     - RUST_BACKTRACE=1
   matrix:
-    - RUST_TOOLCHAIN=nightly TARGET=wasm
-    - RUST_TOOLCHAIN=stable TARGET=native
+    - rust: nightly
+      env: TARGET=wasm
+    - rust: stable
+      env: TARGET=native
 
 before_install:
   # Check how much space we've got on this machine.
   - df -h
+
+install:
+  # pull dependencies
+  - travis_wait 30 cargo update --locked
 
 script:
   - ./ci/script.sh
