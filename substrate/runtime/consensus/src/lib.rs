@@ -146,10 +146,10 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
 		use codec::{Encode, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
-		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|
+		let mut r: primitives::StorageMap = self.authorities.into_iter().enumerate().map(|(i, v)|
 			((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode())
 		).collect();
 		r.insert(AUTHORITY_COUNT.to_vec(), auth_count.encode());

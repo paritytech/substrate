@@ -25,7 +25,8 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::{Backend as StateBackend, TrieBackend as StateTrieBackend,
-	TryIntoTrieBackend as TryIntoStateTrieBackend};
+	TryIntoTrieBackend as TryIntoStateTrieBackend, OverlayedChanges,
+	ChangesTrieStorage};
 
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -143,7 +144,12 @@ impl<S, F, Block> BlockImportOperation<Block> for ImportOperation<Block, S, F>
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend>::Transaction) -> ClientResult<()> {
+	fn update_storage(&mut self, _update: <Self::State as StateBackend>::StorageTransaction) -> ClientResult<()> {
+		// we're not storing anything locally => ignore changes
+		Ok(())
+	}
+
+	fn update_changes_trie(&mut self, _update: <Self::State as StateBackend>::ChangesTrieTransaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -161,7 +167,12 @@ impl<Block, S, F> StateBackend for OnDemandState<Block, S, F>
 		F: Fetcher<Block>,
 {
 	type Error = ClientError;
-	type Transaction = ();
+	type StorageTransaction = ();
+	type ChangesTrieTransaction = ();
+
+	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage>> {
+		None
+	}
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		let mut header = self.cached_header.read().clone();
@@ -186,9 +197,13 @@ impl<Block, S, F> StateBackend for OnDemandState<Block, S, F>
 		// whole state is not available on light node
 	}
 
-	fn storage_root<I>(&self, _delta: I) -> ([u8; 32], Self::Transaction)
+	fn storage_root<I>(&self, _delta: I) -> ([u8; 32], Self::StorageTransaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
 		([0; 32], ())
+	}
+
+	fn changes_trie_root(&self, _overlay: &OverlayedChanges) -> Option<([u8; 32], Self::ChangesTrieTransaction)> {
+		None
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

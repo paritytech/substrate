@@ -22,6 +22,7 @@ extern crate kvdb;
 extern crate hashdb;
 extern crate memorydb;
 extern crate parking_lot;
+extern crate patricia_trie;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
@@ -103,6 +104,7 @@ mod columns {
 	pub const HEADER: Option<u32> = Some(4);
 	pub const BODY: Option<u32> = Some(5);
 	pub const JUSTIFICATION: Option<u32> = Some(6);
+	pub const CHANGES_TRIE: Option<u32> = Some(7);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -218,6 +220,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 pub struct BlockImportOperation<Block: BlockT> {
 	old_state: DbState,
 	updates: MemoryDB,
+	changes_trie_updates: MemoryDB,
 	pending_block: Option<PendingBlock<Block>>,
 }
 
@@ -254,6 +257,11 @@ impl<Block: BlockT> client::backend::BlockImportOperation<Block> for BlockImport
 		self.updates = update;
 		Ok(())
 	}
+
+	fn update_changes_trie(&mut self, update: MemoryDB) -> Result<(), client::error::Error> {
+		self.changes_trie_updates = update;
+		Ok(())
+	}
 }
 
 struct StorageDb<Block: BlockT> {
@@ -277,11 +285,31 @@ impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
 	}
 }
 
+struct DbChangesTrieStorage<Block: BlockT> {
+	db: Arc<KeyValueDB>,
+	_phantom: ::std::marker::PhantomData<Block>,
+}
+
+impl<Block: BlockT> state_machine::ChangesTrieStorage for DbChangesTrieStorage<Block> {
+	fn root(&self, block: u64) -> Result<Option<TrieH256>, String> {
+		Ok(read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(As::sa(block)))
+			.map_err(|err| format!("{}", err))?
+			.map(|header| Block::Header::decode(&mut &header[..]).expect("TODO"))
+			.and_then(|header| header.changes_root().clone()
+				.map(|root| TrieH256::from_slice(root.as_ref()))))
+	}
+
+	fn get(&self, key: &TrieH256) -> Result<Option<DBValue>, String> {
+		self.db.get(columns::CHANGES_TRIE, &key[..])
+			.map_err(|err| format!("{}", err))
+	}
+}
 
 /// Disk backend. Keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
 /// Otherwise, trie nodes are kept only from the most recent block.
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
+	tries_change_storage: Arc<DbChangesTrieStorage<Block>>,
 	blockchain: BlockchainDb<Block>,
 	finalization_window: u64,
 }
@@ -308,12 +336,17 @@ impl<Block: BlockT> Backend<Block> {
 		let map_e = |e: state_db::Error<kvdb::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
 		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
 		let storage_db = StorageDb {
-			db,
+			db: db.clone(),
 			state_db,
+		};
+		let tries_change_storage = DbChangesTrieStorage {
+			db,
+			_phantom: Default::default(),
 		};
 
 		Ok(Backend {
 			storage: Arc::new(storage_db),
+			tries_change_storage: Arc::new(tries_change_storage),
 			blockchain,
 			finalization_window,
 		})
@@ -346,6 +379,7 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 			pending_block: None,
 			old_state: state,
 			updates: MemoryDB::default(),
+			changes_trie_updates: MemoryDB::default(),
 		})
 	}
 
@@ -445,13 +479,13 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 		// special case for genesis initialization
 		match block {
 			BlockId::Hash(h) if h == Default::default() =>
-				return Ok(DbState::with_storage_for_genesis(self.storage.clone())),
+				return Ok(DbState::with_storage_for_genesis(self.storage.clone(), Some(self.tries_change_storage.clone()))),
 			_ => {}
 		}
 
 		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
-			let root: TrieH256  = TrieH256::from_slice(hdr.state_root().as_ref());
-			DbState::with_storage(self.storage.clone(), root)
+			let root: TrieH256 = TrieH256::from_slice(hdr.state_root().as_ref());
+			DbState::with_storage(self.storage.clone(), root, Some(self.tries_change_storage.clone()))
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
 	}
 }
@@ -492,6 +526,7 @@ mod tests {
 						db.blockchain.hash(i - 1).unwrap().unwrap()
 					},
 					state_root: Default::default(),
+					changes_root: Default::default(),
 					digest: Default::default(),
 					extrinsics_root: Default::default(),
 				};
@@ -518,6 +553,7 @@ mod tests {
 				number: 0,
 				parent_hash: Default::default(),
 				state_root: Default::default(),
+				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};
@@ -557,6 +593,7 @@ mod tests {
 				number: 1,
 				parent_hash: Default::default(),
 				state_root: Default::default(),
+				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};
@@ -598,6 +635,7 @@ mod tests {
 				number: 0,
 				parent_hash: Default::default(),
 				state_root: Default::default(),
+				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};
@@ -633,6 +671,7 @@ mod tests {
 				number: 1,
 				parent_hash: hash,
 				state_root: Default::default(),
+				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};
@@ -667,6 +706,7 @@ mod tests {
 				number: 2,
 				parent_hash: hash,
 				state_root: Default::default(),
+				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};

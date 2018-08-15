@@ -194,6 +194,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		debug_trace!(target: "runtime-io", "free {}", addr);
 		Ok(())
 	},
+	ext_set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u8) => {
+		debug_trace!(target: "runtime-io", "ext_set_changes_trie_config {} {} {}",
+			block, digest_interval, digest_levels);
+		this.ext.set_changes_trie_config(block, digest_interval, digest_levels);
+		Ok(())
+	},
+	ext_bind_to_extrinsic(extrinsic_index: u32) => {
+		debug_trace!(target: "runtime-io", "bind_to_extrinsic {}", extrinsic_index);
+		this.ext.bind_to_extrinsic(extrinsic_index);
+		Ok(())
+	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_storage"))?;
@@ -286,6 +297,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_storage_root(result: *mut u8) => {
 		let r = this.ext.storage_root();
 		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
+		Ok(())
+	},
+	ext_storage_changes_root(is_set: *mut u8, result: *mut u8) => {
+		let r = this.ext.storage_changes_root();
+		let r_is_some = [r.is_some() as u8];
+		this.memory.set(is_set, &r_is_some[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
+		if let Some(r) = r {
+			this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
+		}
 		Ok(())
 	},
 	ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
@@ -549,12 +569,9 @@ impl WasmExecutor {
 			.not_started_instance()
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
-
 		let mut fec = FunctionExecutor::new(memory.clone(), self.max_heap_pages, table, ext)?;
-
 		// finish instantiation by running 'start' function (if any).
 		let instance = intermediate_instance.run_start(&mut fec)?;
-
 		let size = data.len() as u32;
 		let offset = fec.heap.allocate(size);
 		memory.set(offset, &data)?;
@@ -567,7 +584,6 @@ impl WasmExecutor {
 			],
 			&mut fec
 		);
-
 		let returned = match result {
 			Ok(x) => x,
 			Err(e) => {
@@ -632,12 +648,12 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: HashMap<_, _> = map![
+		let expected = map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
 		];
-		assert_eq!(expected, ext);
+		assert_eq!(ext.into_data(), expected);
 	}
 
 	#[test]
@@ -660,7 +676,7 @@ mod tests {
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
 		];
-		assert_eq!(expected, ext);
+		assert_eq!(expected, ext.into_data());
 	}
 
 	#[test]

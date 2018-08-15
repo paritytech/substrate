@@ -36,6 +36,21 @@ use primitives::hexdisplay::HexDisplay;
 
 environmental!(ext: trait Externalities);
 
+/// Sets changes trie configuration parameters, announcing that this runtime is
+/// configured to gather and store changes tries.
+pub fn set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u8) {
+	ext::with(|ext|
+		ext.set_changes_trie_config(block, digest_interval, digest_levels)
+	);
+}
+
+/// Bind all future storage changes to extrinsic with given index.
+pub fn bind_to_extrinsic(extrinsic_index: u32) {
+	ext::with(|ext|
+		ext.bind_to_extrinsic(extrinsic_index)
+	);
+}
+
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 	ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
@@ -94,6 +109,13 @@ pub fn storage_root() -> [u8; 32] {
 	ext::with(|ext|
 		ext.storage_root()
 	).unwrap_or([0u8; 32])
+}
+
+/// "Commit" all existing operations and get the resultant storage change root.
+pub fn storage_changes_root() -> Option<[u8; 32]> {
+	ext::with(|ext|
+		ext.storage_changes_root()
+	).unwrap_or(None)
 }
 
 /// A trie root formed from the enumerated items.
@@ -191,7 +213,7 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::new();
+		let mut t = TestExternalities::default();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -201,7 +223,7 @@ mod std_tests {
 			true
 		}));
 
-		t = map![b"foo".to_vec() => b"bar".to_vec()];
+		t = TestExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()]);
 
 		assert!(!with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
@@ -212,9 +234,9 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t: TestExternalities = map![
+		let mut t = TestExternalities::new(map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
-		];
+		]);
 
 		with_externalities(&mut t, || {
 			let mut v = [0u8; 4];
@@ -228,12 +250,12 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t: TestExternalities = map![
+		let mut t = TestExternalities::new(map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
-		];
+		]);
 
 		with_externalities(&mut t, || {
 			clear_prefix(b":abc");

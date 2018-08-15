@@ -139,7 +139,7 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 
-	use runtime_io::with_externalities;
+	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
@@ -174,7 +174,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
 
-		with_externalities(&mut t, || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
 			assert_eq!(Timestamp::now(), 69);
@@ -187,7 +187,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
 
-		with_externalities(&mut t, || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
 			let _ = Timestamp::aux_dispatch(Call::set(70), &0);
@@ -200,7 +200,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
 
-		with_externalities(&mut t, || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::aux_dispatch(Call::set(46), &0);
 		});

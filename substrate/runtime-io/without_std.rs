@@ -54,6 +54,8 @@ extern "C" {
 	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
 	fn ext_print_hex(data: *const u8, len: u32);
 	fn ext_print_num(value: u64);
+	fn ext_set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u8);
+	fn ext_bind_to_extrinsic(extrinsic_index: u32);
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
 	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
@@ -61,12 +63,33 @@ extern "C" {
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
+	fn ext_storage_changes_root(is_set: *mut u8, result: *mut u8);
 	fn ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
 	fn ext_chain_id() -> u64;
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32;
+}
+/// Sets changes trie configuration parameters, announcing that this runtime is
+/// configured to gather and store changes tries.
+pub fn set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u8) {
+	unsafe {
+		ext_set_changes_trie_config(
+			block,
+			digest_interval,
+			digest_levels,
+		);
+	}
+}
+
+/// Bind all future storage changes to extrinsic with given index.
+pub fn bind_to_extrinsic(extrinsic_index: u32) {
+	unsafe {
+		ext_bind_to_extrinsic(
+			extrinsic_index
+		);
+	}
 }
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
@@ -142,6 +165,21 @@ pub fn storage_root() -> [u8; 32] {
 		ext_storage_root(result.as_mut_ptr());
 	}
 	result
+}
+
+/// The current storage' changes root.
+pub fn storage_changes_root() -> Option<[u8; 32]> {
+	let mut is_set: u8 = 0;
+	let mut result: [u8; 32] = Default::default();
+	unsafe {
+		ext_storage_changes_root(&mut is_set, result.as_mut_ptr());
+	}
+
+	if is_set != 0 {
+		Some(result)
+	} else {
+		None
+	}
 }
 
 /// A trie root calculated from enumerated values.

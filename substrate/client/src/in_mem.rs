@@ -82,9 +82,9 @@ impl<B: BlockT> StoredBlock<B> {
 #[derive(Clone)]
 struct BlockchainStorage<Block: BlockT> {
 	blocks: HashMap<Block::Hash, StoredBlock<Block>>,
-	hashes: HashMap<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
+	hashes: HashMap<NumberFor<Block>, Block::Hash>,
 	best_hash: Block::Hash,
-	best_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	best_number: NumberFor<Block>,
 	genesis_hash: Block::Hash,
 }
 
@@ -253,6 +253,7 @@ pub struct BlockImportOperation<Block: BlockT> {
 	pending_authorities: Option<Vec<AuthorityId>>,
 	old_state: InMemory,
 	new_state: Option<InMemory>,
+	changes_trie_update: Option<Vec<(Vec<u8>, Vec<u8>)>>,
 }
 
 impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
@@ -281,8 +282,13 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		self.pending_authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, update: <InMemory as StateBackend>::Transaction) -> error::Result<()> {
+	fn update_storage(&mut self, update: <InMemory as StateBackend>::StorageTransaction) -> error::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
+		Ok(())
+	}
+
+	fn update_changes_trie(&mut self, update: <InMemory as StateBackend>::ChangesTrieTransaction) -> error::Result<()> {
+		self.changes_trie_update = Some(update);
 		Ok(())
 	}
 
@@ -330,6 +336,7 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 			pending_authorities: None,
 			old_state: state,
 			new_state: None,
+			changes_trie_update: None,
 		})
 	}
 

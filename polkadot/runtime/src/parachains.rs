@@ -30,7 +30,7 @@ use substrate_runtime_support::dispatch::Result;
 use rstd::marker::PhantomData;
 
 #[cfg(any(feature = "std", test))]
-use {runtime_io, runtime_primitives};
+use runtime_primitives;
 
 pub trait Trait: system::Trait<Hash = ::primitives::Hash> + session::Trait {
 	/// The position of the set_heads call in the block.
@@ -214,7 +214,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(mut self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_storage(mut self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
 		use std::collections::HashMap;
 		use codec::Encode;
 
@@ -242,7 +242,7 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::with_externalities;
+	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
@@ -284,7 +284,7 @@ mod tests {
 
 	type Parachains = Module<Test>;
 
-	fn new_test_ext(parachains: Vec<(Id, Vec<u8>, Vec<u8>)>) -> runtime_io::TestExternalities {
+	fn new_test_ext(parachains: Vec<(Id, Vec<u8>, Vec<u8>)>) -> TestExternalities {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -299,7 +299,7 @@ mod tests {
 			parachains: parachains,
 			phantom: PhantomData,
 		}.build_storage().unwrap());
-		t
+		TestExternalities::new(t)
 	}
 
 	#[test]

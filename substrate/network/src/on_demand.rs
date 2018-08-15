@@ -415,6 +415,7 @@ pub mod tests {
 			parent_hash: Default::default(),
 			number: 0,
 			state_root: Default::default(),
+			changes_root: Default::default(),
 			extrinsics_root: Default::default(),
 			digest: Default::default(),
 		}

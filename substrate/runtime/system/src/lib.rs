@@ -39,7 +39,7 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay};
+	Hash, Member, MaybeDisplay, As};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -106,6 +106,8 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<RandomSeed<T>>::put(Self::calculate_random());
 		<ExtrinsicIndex<T>>::put(0);
+
+		runtime_io::set_changes_trie_config(number.as_(), 16, 4);
 	}
 
 	/// Remove temporary "environment" entries in storage.
@@ -118,7 +120,9 @@ impl<T: Trait> Module<T> {
 		let digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
-		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
+		let storage_changes_root = T::Hashing::storage_changes_root();
+		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root,
+			storage_changes_root, parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
@@ -143,12 +147,12 @@ impl<T: Trait> Module<T> {
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
 	pub fn externalities() -> TestExternalities {
-		map![
+		TestExternalities::new(map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<RandomSeed<T>>::key()).to_vec() => T::Hash::default().encode()
-		]
+		])
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
@@ -180,6 +184,7 @@ impl<T: Trait> Module<T> {
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
 	/// ensure `derive_extrinsics` is also called before block-building is completed.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
+		runtime_io::bind_to_extrinsic(Self::extrinsic_index());
 		<ExtrinsicData<T>>::insert(Self::extrinsic_index(), encoded_xt);
 	}
 
@@ -207,7 +212,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> Result<primitives::StorageMap, String> {
 		use codec::Encode;
 
 		Ok(map![

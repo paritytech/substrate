@@ -102,7 +102,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5
 	}.build_storage().unwrap());
-	t
+	runtime_io::TestExternalities::new(t)
 }
 
 pub type System = system::Module<Test>;

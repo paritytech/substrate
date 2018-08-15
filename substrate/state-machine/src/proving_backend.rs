@@ -17,12 +17,41 @@
 //! Proving state machine backend.
 
 use std::cell::RefCell;
+use std::sync::Arc;
 use ethereum_types::H256 as TrieH256;
 use hashdb::HashDB;
 use memorydb::MemoryDB;
+use overlayed_changes::OverlayedChanges;
 use patricia_trie::{TrieDB, TrieError, Trie, Recorder};
-use trie_backend::{TrieBackend, Ephemeral};
-use {Error, ExecutionError, Backend, TryIntoTrieBackend};
+use backend::Backend;
+use changes_trie::{Storage as ChangesTrieStorage, InMemoryStorage as InMemoryChangesTrieStorage};
+use trie_backend::TrieBackend;
+use trie_backend_essence::{Ephemeral, TrieBackendEssence};
+use {Error, ExecutionError, TryIntoTrieBackend};
+
+/// Patricia trie-based backend essence which also tracks all touched storage trie values.
+/// These can be sent to remote node and used as a proof of execution.
+pub struct ProvingBackendEssence<'a> {
+	pub(crate) backend: &'a TrieBackendEssence,
+	pub(crate) proof_recorder: &'a mut Recorder,
+}
+
+impl<'a> ProvingBackendEssence<'a> {
+	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		let mut read_overlay = MemoryDB::default();
+		let eph = Ephemeral::new(
+			self.backend.backend_storage(),
+			&mut read_overlay,
+		);
+
+		let map_e = |e: Box<TrieError>| format!("Trie lookup error: {}", e);
+
+		TrieDB::new(&eph, &self.backend.root()).map_err(map_e)?
+			.get_with(key, &mut *self.proof_recorder)
+			.map(|x| x.map(|val| val.to_vec()))
+			.map_err(map_e)
+	}
+}
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
@@ -52,21 +81,19 @@ impl ProvingBackend {
 
 impl Backend for ProvingBackend {
 	type Error = String;
-	type Transaction = MemoryDB;
+	type StorageTransaction = MemoryDB;
+	type ChangesTrieTransaction = MemoryDB;
+
+	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage>> {
+		self.backend.changes_trie_storage()
+	}
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		let mut read_overlay = MemoryDB::default();
-		let eph = Ephemeral::new(
-			self.backend.backend_storage(),
-			&mut read_overlay,
-		);
-
-		let map_e = |e: Box<TrieError>| format!("Trie lookup error: {}", e);
-
-		let mut proof_recorder = self.proof_recorder.try_borrow_mut()
-			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
-		TrieDB::new(&eph, &self.backend.root()).map_err(map_e)?
-			.get_with(key, &mut *proof_recorder).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
+		ProvingBackendEssence {
+			backend: self.backend.essence(),
+			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
+				.expect("only fails when already borrowed; storage() is non-reentrant; qed"),
+		}.storage(key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
@@ -81,6 +108,10 @@ impl Backend for ProvingBackend {
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.backend.storage_root(delta)
+	}
+
+	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<([u8; 32], MemoryDB)> {
+		self.backend.changes_trie_root(overlay)
 	}
 }
 
@@ -101,8 +132,7 @@ pub fn create_proof_check_backend(root: TrieH256, proof: Vec<Vec<u8>>) -> Result
 		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
 	}
 
-
-	Ok(TrieBackend::with_memorydb(db, root))
+	Ok(TrieBackend::with_memorydb(db, root, None))
 }
 
 #[cfg(test)]

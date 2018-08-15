@@ -475,6 +475,7 @@ dependencies = [
  "demo-primitives 0.1.0",
  "demo-runtime 0.1.0",
  "ed25519 0.1.0",
+ "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
@@ -3258,6 +3259,7 @@ dependencies = [
  "memorydb 0.1.1 (git+https://github.com/paritytech/parity.git)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.1.0 (git+https://github.com/paritytech/parity.git)",
+ "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]

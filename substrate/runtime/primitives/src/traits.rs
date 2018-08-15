@@ -225,6 +225,9 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 
 	/// Acquire the global storage root.
 	fn storage_root() -> Self::Output;
+
+	/// Acquire the global storage changes root.
+	fn storage_changes_root() -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -255,6 +258,9 @@ impl Hash for BlakeTwo256 {
 	}
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
+	}
+	fn storage_changes_root() -> Option<Self::Output> {
+		runtime_io::storage_changes_root().map(Into::into)
 	}
 }
 
@@ -337,6 +343,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
+		changes_root: Option<Self::Hash>,
 		parent_hash: Self::Hash,
 		digest: Self::Digest
 	) -> Self;
@@ -349,6 +356,9 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 
 	fn state_root(&self) -> &Self::Hash;
 	fn set_state_root(&mut self, Self::Hash);
+
+	fn changes_root(&self) -> Option<&Self::Hash>;
+	fn set_changes_root(&mut self, Option<Self::Hash>);
 
 	fn parent_hash(&self) -> &Self::Hash;
 	fn set_parent_hash(&mut self, Self::Hash);

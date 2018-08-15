@@ -27,6 +27,7 @@ extern crate demo_primitives;
 extern crate ed25519;
 extern crate triehash;
 
+#[cfg(test)] extern crate env_logger;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_runtime_primitives as runtime_primitives;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
@@ -91,7 +92,7 @@ mod tests {
 	}
 
 	fn from_block_number(n: u64) -> Header {
-		Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
+		Header::new(n, Default::default(), Default::default(), Default::default(), [69; 32].into(), Default::default())
 	}
 
 	fn executor() -> ::substrate_executor::NativeExecutor<Executor> {
@@ -100,7 +101,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
-		let mut t: TestExternalities = map![
+		let mut t = TestExternalities::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -108,7 +109,7 @@ mod tests {
 			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let r = executor().call(&mut t, BLOATY_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
@@ -119,7 +120,7 @@ mod tests {
 
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-		let mut t: TestExternalities = map![
+		let mut t = TestExternalities::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -127,7 +128,7 @@ mod tests {
 			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let r = executor().call(&mut t, COMPACT_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
@@ -138,7 +139,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
-		let mut t: TestExternalities = map![
+		let mut t = TestExternalities::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -146,7 +147,7 @@ mod tests {
 			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let r = executor().call(&mut t, COMPACT_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
@@ -161,7 +162,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
-		let mut t: TestExternalities = map![
+		let mut t = TestExternalities::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -169,7 +170,7 @@ mod tests {
 			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let r = executor().call(&mut t, BLOATY_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
@@ -185,7 +186,7 @@ mod tests {
 	fn new_test_ext() -> TestExternalities {
 		use keyring::Keyring::*;
 		let three = [3u8; 32].into();
-		GenesisConfig {
+		TestExternalities::new(GenesisConfig {
 			consensus: Some(Default::default()),
 			system: Some(Default::default()),
 			session: Some(SessionConfig {
@@ -212,10 +213,10 @@ mod tests {
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
 			timestamp: Some(Default::default()),
-		}.build_storage().unwrap()
+		}.build_storage().unwrap())
 	}
 
-	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<BareExtrinsic>) -> (Vec<u8>, Hash) {
+	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, changes_root: Option<Hash>, extrinsics: Vec<BareExtrinsic>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(|extrinsic| {
@@ -235,6 +236,7 @@ mod tests {
 			parent_hash,
 			number,
 			state_root,
+			changes_root,
 			extrinsics_root,
 			digest: Default::default(),
 		};
@@ -248,6 +250,7 @@ mod tests {
 			1,
 			[69u8; 32].into(),
 			hex!("b97d52254fc967bb94bed485de6a738e9fad05decfda3453711677b8becf6d0a").into(),
+			Some(hex!("0000000000000000000000000000000000000000000000000000000000000000").into()),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -260,7 +263,8 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("a1f018d2faa339f72f5ee29050b4670d971e2e271cc06c41ee9cbe1f4c6feec9").into(),
+			hex!("558c9e0b8689f999163ba8083bdf4ded19b5159aa950174651bb106c35b83870").into(),
+			Some(hex!("0000000000000000000000000000000000000000000000000000000000000000").into()),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -281,6 +285,7 @@ mod tests {
 			1,
 			[69u8; 32].into(),
 			hex!("41d07010f49aa29b2c9aca542cbaa6f59aafd3dda53cdf711c51ddb7d386912e").into(),
+			Some(hex!("0000000000000000000000000000000000000000000000000000000000000000").into()),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -310,8 +315,9 @@ mod tests {
 
 	#[test]
 	fn full_wasm_block_import_works() {
-		let mut t = new_test_ext();
+		::env_logger::init().ok();
 
+		let mut t = new_test_ext();
 		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
@@ -353,7 +359,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let mut t: TestExternalities = map![
+		let mut t = TestExternalities::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -361,7 +367,7 @@ mod tests {
 			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
 		let r = WasmExecutor::new(8).call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)));
@@ -373,7 +379,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let mut t: TestExternalities = map![
+		let mut t = TestExternalities::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -381,7 +387,7 @@ mod tests {
 			twox_128(<staking::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm");
 		let r = WasmExecutor::new(8).call(&mut t, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)));

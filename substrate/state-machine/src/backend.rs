@@ -19,6 +19,11 @@
 use std::{error, fmt};
 use std::collections::HashMap;
 use std::sync::Arc;
+use ethereum_types::H256 as TrieH256;
+use hashdb::{HashDB, DBValue};
+use memorydb::MemoryDB;
+use changes_trie::{Storage as ChangesTrieStorage};
+use overlayed_changes::OverlayedChanges;
 use trie_backend::{TryIntoTrieBackend, TrieBackend};
 
 /// A state backend is used to read state data and can have changes committed
@@ -29,8 +34,13 @@ pub trait Backend: TryIntoTrieBackend {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
-	/// Changes to be applied if committing
-	type Transaction;
+	/// Storage changes to be applied if committing
+	type StorageTransaction;
+	/// Changes to changes trie to be applied if committing.
+	type ChangesTrieTransaction;
+
+	/// Get changes trie storage shared reference.
+	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage>>;
 
 	/// Get keyed storage associated with specific address, or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
@@ -46,8 +56,12 @@ pub trait Backend: TryIntoTrieBackend {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
-	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
+	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::StorageTransaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
+
+	/// Calculate the changes trie root for given overlay and produce a "transaction"
+	/// that can be used to commit.
+	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<([u8; 32], Self::ChangesTrieTransaction)>;
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
@@ -70,23 +84,15 @@ impl error::Error for Void {
 
 /// In-memory backend. Fully recomputes tries on each commit but useful for
 /// tests.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Default, Clone, PartialEq, Eq)]
 pub struct InMemory {
-	inner: Arc<HashMap<Vec<u8>, Vec<u8>>>,
-}
-
-impl Default for InMemory {
-	fn default() -> Self {
-		InMemory {
-			inner: Arc::new(Default::default()),
-		}
-	}
+	inner: HashMap<Vec<u8>, Vec<u8>>,
 }
 
 impl InMemory {
 	/// Copy the state, with applied updates
-	pub fn update(&self, changes: <Self as Backend>::Transaction) -> Self {
-		let mut inner: HashMap<_, _> = (&*self.inner).clone();
+	pub fn update(&self, changes: <Self as Backend>::StorageTransaction) -> Self {
+		let mut inner: HashMap<_, _> = self.inner.clone();
 		for (key, val) in changes {
 			match val {
 				Some(v) => { inner.insert(key, v); },
@@ -101,7 +107,7 @@ impl InMemory {
 impl From<HashMap<Vec<u8>, Vec<u8>>> for InMemory {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		InMemory {
-			inner: Arc::new(inner),
+			inner: inner,
 		}
 	}
 }
@@ -110,7 +116,12 @@ impl super::Error for Void {}
 
 impl Backend for InMemory {
 	type Error = Void;
-	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+	type StorageTransaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+	type ChangesTrieTransaction = Vec<(Vec<u8>, Vec<u8>)>;
+
+	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage>> {
+		None
+	}
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(key).map(Clone::clone))
@@ -124,7 +135,7 @@ impl Backend for InMemory {
 		self.inner.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
 	}
 
-	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::Transaction)
+	fn storage_root<I>(&self, delta: I) -> ([u8; 32], Self::StorageTransaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		let existing_pairs = self.inner.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
@@ -139,6 +150,10 @@ impl Backend for InMemory {
 		(root, transaction)
 	}
 
+	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<([u8; 32], Self::ChangesTrieTransaction)> {
+		None // TODO: compute_changes_trie_root(self.changes_trie_storage.clone(), overlay)
+	}
+
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.inner.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
@@ -146,22 +161,27 @@ impl Backend for InMemory {
 
 impl TryIntoTrieBackend for InMemory {
 	fn try_into_trie_backend(self) -> Option<TrieBackend> {
-		use ethereum_types::H256 as TrieH256;
-		use memorydb::MemoryDB;
-		use patricia_trie::{TrieDBMut, TrieMut};
-
-		let mut root = TrieH256::default();
 		let mut mdb = MemoryDB::default();
-		{
-			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
-			for (key, value) in self.inner.iter() {
-				if let Err(e) = trie.insert(&key, &value) {
-					warn!(target: "trie", "Failed to write to trie: {}", e);
-					return None;
-				}
+		let root = insert_into_memory_db(&mut mdb, self.inner.into_iter())?;
+
+		Some(TrieBackend::with_memorydb(mdb, root, None))
+	}
+}
+
+/// Insert input pairs into memory db.
+pub(crate) fn insert_into_memory_db<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(mdb: &mut MemoryDB, input: I) -> Option<TrieH256> {
+	use patricia_trie::{TrieDBMut, TrieMut};
+
+	let mut root = TrieH256::default();
+	{
+		let mut trie = TrieDBMut::new(mdb, &mut root);
+		for (key, value) in input {
+			if let Err(e) = trie.insert(&key, &value) {
+				warn!(target: "trie", "Failed to write to trie: {}", e);
+				return None;
 			}
 		}
-
-		Some(TrieBackend::with_memorydb(mdb, root))
 	}
+
+	Some(root)
 }

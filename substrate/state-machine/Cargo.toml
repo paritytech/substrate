@@ -12,6 +12,7 @@ log = "0.3"
 parking_lot = "0.4"
 triehash = "0.1"
 
+substrate-codec = { path = "../codec" }
 substrate-primitives = { path = "../primitives", version = "0.1.0" }
 
 hashdb = { git = "https://github.com/paritytech/parity.git" }

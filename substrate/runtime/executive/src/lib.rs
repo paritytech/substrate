@@ -210,6 +210,13 @@ impl<
 		let storage_root = System::Hashing::storage_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == &storage_root, "Storage root must match that calculated.");
+
+		// check storage changes root
+		/*
+		TODO
+		let storage_changes_root = System::Hashing::storage_changes_root();
+		header.changes_root().map(|changes_root| changes_root.check_equal(&storage_changes_root.unwrap_or_default()));
+		assert!(header.changes_root() == storage_changes_root.as_ref(), "Storage change root must match that calculated.");*/
 	}
 }
 
@@ -289,8 +296,8 @@ mod tests {
 			session_reward: 0,
 		}.build_storage().unwrap());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
-		with_externalities(&mut t, || {
-			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+		with_externalities(&mut runtime_io::TestExternalities::new(t), || {
+			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), None, [69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt).unwrap();
 			assert_eq!(<staking::Module<Test>>::voting_balance(&1), 32);
 			assert_eq!(<staking::Module<Test>>::voting_balance(&2), 69);
@@ -303,7 +310,7 @@ mod tests {
 		t.extend(session::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(staking::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
-		t
+		runtime_io::TestExternalities::new(t)
 	}
 
 	#[test]
@@ -314,6 +321,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: hex!("8fad93b6b9e5251a2e4913598fd0d74a138c0e486eb1133ff8081b429b0c56f2").into(),
+					changes_root: Some(hex!("2df8b4f05378cf8dba7a322861ceba7ad486875898751186211dccdf9e322678").into()),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -331,6 +339,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: [0u8; 32].into(),
+					changes_root: Some([0u8; 32].into()),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -348,6 +357,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: hex!("8fad93b6b9e5251a2e4913598fd0d74a138c0e486eb1133ff8081b429b0c56f2").into(),
+					changes_root: Some(hex!("2df8b4f05378cf8dba7a322861ceba7ad486875898751186211dccdf9e322678").into()),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -361,7 +371,7 @@ mod tests {
 		let mut t = new_test_ext();
 		let xt = primitives::testing::TestXt((1, 42, Call::transfer(33.into(), 69)));
 		with_externalities(&mut t, || {
-			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), None, [69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());
 			assert_eq!(<system::Module<Test>>::extrinsic_index(), 0);
 		});

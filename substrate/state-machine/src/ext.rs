@@ -18,6 +18,7 @@
 
 use std::{error, fmt};
 use backend::Backend;
+use changes_trie::Configuration as ChangesTrieConfig;
 use {Externalities, OverlayedChanges};
 
 /// Errors that can occur when interacting with the externalities.
@@ -55,8 +56,10 @@ pub struct Ext<'a, B: 'a + Backend> {
 	overlay: &'a mut OverlayedChanges,
 	// The storage backend to read from.
 	backend: &'a B,
-	// The transaction necessary to commit to the backend.
-	transaction: Option<(B::Transaction, [u8; 32])>,
+	// The storage transaction necessary to commit to the backend.
+	storage_transaction: Option<(B::StorageTransaction, [u8; 32])>,
+	// The changes trie transaction necessary to commit to the changes trie backend.
+	changes_trie_transaction: Option<Option<(B::ChangesTrieTransaction, [u8; 32])>>,
 }
 
 impl<'a, B: 'a + Backend> Ext<'a, B> {
@@ -65,21 +68,36 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 		Ext {
 			overlay,
 			backend,
-			transaction: None,
+			storage_transaction: None,
+			changes_trie_transaction: None,
 		}
 	}
 
 	/// Get the transaction necessary to update the backend.
-	pub fn transaction(mut self) -> B::Transaction {
+	pub fn transaction(mut self) -> (B::StorageTransaction, Option<B::ChangesTrieTransaction>) {
 		let _ = self.storage_root();
-		self.transaction.expect("transaction always set after calling storage root; qed").0
+		let _ = self.storage_changes_root();
+
+		let (storage_transaction, changes_trie_transaction) = (
+			self.storage_transaction
+				.expect("storage_transaction always set after calling storage root; qed"),
+			self.changes_trie_transaction
+				.expect("changes_trie_transaction always set after calling storage changes root; qed")
+				.map(|(tx, _)| tx),
+		);
+
+		(
+			storage_transaction.0,
+			changes_trie_transaction,
+		)
 	}
 
 	/// Invalidates the currently cached storage root and the db transaction.
 	///
 	/// Called when there are changes that likely will invalidate the storage root.
 	fn mark_dirty(&mut self) {
-		self.transaction = None;
+		self.storage_transaction = None;
+		self.changes_trie_transaction = None;
 	}
 }
 
@@ -102,6 +120,17 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 impl<'a, B: 'a> Externalities for Ext<'a, B>
 	where B: Backend
 {
+	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u8) {
+		self.overlay.set_changes_trie_config(block, ChangesTrieConfig {
+			digest_interval,
+			digest_levels,
+		});
+	}
+
+	fn bind_to_extrinsic(&mut self, extrinsic_index: u32) {
+		self.overlay.set_extrinsic_index(extrinsic_index);
+	}
+
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect("Externalities not allowed to fail within runtime"))
@@ -132,7 +161,7 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 	}
 
 	fn storage_root(&mut self) -> [u8; 32] {
-		if let Some((_, ref root)) =  self.transaction {
+		if let Some((_, ref root)) = self.storage_transaction {
 			return root.clone();
 		}
 
@@ -142,7 +171,19 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 			.map(|(k, v)| (k.clone(), v.clone()));
 
 		let (root, transaction) = self.backend.storage_root(delta);
-		self.transaction = Some((transaction, root));
+		self.storage_transaction = Some((transaction, root));
+		root
+	}
+
+	fn storage_changes_root(&mut self) -> Option<[u8; 32]> {
+		if let Some(ref changes_trie_transaction) = self.changes_trie_transaction {
+			return changes_trie_transaction.as_ref().map(|t| t.1.clone());
+		}
+
+		let changes_trie_transaction = self.backend.changes_trie_root(self.overlay);
+		let changes_trie_transaction = changes_trie_transaction.map(|(r, t)| (t, r));
+		let root = changes_trie_transaction.as_ref().map(|t| t.1.clone());
+		self.changes_trie_transaction = Some(changes_trie_transaction);
 		root
 	}
 }

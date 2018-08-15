@@ -43,9 +43,11 @@ pub trait BlockImportOperation<Block: BlockT> {
 	/// has been used to check justification of this block).
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
 	/// Inject storage data into the database.
-	fn update_storage(&mut self, update: <Self::State as StateBackend>::Transaction) -> error::Result<()>;
+	fn update_storage(&mut self, update: <Self::State as StateBackend>::StorageTransaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
+	/// Inject changes trie data into the database.
+	fn update_changes_trie(&mut self, update: <Self::State as StateBackend>::ChangesTrieTransaction) -> error::Result<()>;
 }
 
 /// Client backend. Manages the data layer.

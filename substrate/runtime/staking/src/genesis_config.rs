@@ -22,7 +22,7 @@ use rstd::prelude::*;
 use codec::Encode;
 use runtime_support::{StorageValue, StorageMap};
 use primitives::traits::{Zero, As};
-use {runtime_io, primitives};
+use primitives;
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	BondingDuration, CreationFee, TransferFee, ReclaimRebate,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
@@ -118,10 +118,10 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> Result<primitives::StorageMap, String> {
 		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
-		let mut r: runtime_io::TestExternalities = map![
+		let mut r: primitives::StorageMap = map![
 			Self::hash(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
 			Self::hash(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
 			Self::hash(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),

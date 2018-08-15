@@ -44,6 +44,7 @@ macro_rules! with_runtime {
 			number: $client.block_number_from_id(&parent)?
 				.ok_or_else(|| ErrorKind::UnknownBlock(format!("{:?}", parent)))? + 1,
 			state_root: Default::default(),
+			changes_root: Default::default(),
 			extrinsics_root: Default::default(),
 			digest: Default::default(),
 		};

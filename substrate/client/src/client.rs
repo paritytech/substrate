@@ -357,7 +357,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
-		let (storage_update, storage_changes) = match transaction.state()? {
+		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
 				let mut r = self.executor.call_at_state(
@@ -383,11 +383,11 @@ impl<B, E, Block> Client<B, E, Block> where
 						}),
 					},
 				);
-				let (_, storage_update) = r?;
+				let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
-				(Some(storage_update), Some(overlay.into_committed()))
+				(Some(storage_update), Some(changes_update), Some(overlay.into_committed()))
 			},
-			None => (None, None)
+			None => (None, None, None)
 		};
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
@@ -397,6 +397,9 @@ impl<B, E, Block> Client<B, E, Block> where
 		transaction.update_authorities(authorities);
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
+		}
+		if let Some(Some(changes_update)) = changes_update {
+			transaction.update_changes_trie(changes_update)?;
 		}
 		self.backend.commit_operation(transaction)?;
 

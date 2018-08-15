@@ -328,6 +328,7 @@ mod tests {
 			parent_hash: H256::default(),
 			number: 0,
 			state_root: H256::default(),
+			changes_root: Some(H256::default()),
 			extrinsics_root: H256::default(),
 			digest: Default::default(),
 		};

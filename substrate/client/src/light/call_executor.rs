@@ -85,11 +85,17 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 		_method: &str,
 		_call_data: &[u8],
 		_m: ExecutionManager<H>
-	) -> ClientResult<(Vec<u8>, S::Transaction)> {
+	) -> ClientResult<(Vec<u8>, S::StorageTransaction, Option<S::ChangesTrieTransaction>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
+	fn prove_at_state<S: StateBackend>(
+		&self,
+		_state: S,
+		_changes: &mut OverlayedChanges,
+		_method: &str,
+		_call_data: &[u8]
+	) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
@@ -111,7 +117,7 @@ pub fn check_execution_proof<Header, E>(
 	let local_state_root = request.header.state_root();
 
 	let mut changes = OverlayedChanges::default();
-	let (local_result, _) = execution_proof_check(
+	let local_result = execution_proof_check(
 		TrieH256::from_slice(local_state_root.as_ref()).into(),
 		remote_proof,
 		&mut changes,
@@ -147,6 +153,7 @@ mod tests {
 				state_root: remote_block_storage_root.into(),
 				parent_hash: Default::default(),
 				number: 0,
+				changes_root: Default::default(),
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			},

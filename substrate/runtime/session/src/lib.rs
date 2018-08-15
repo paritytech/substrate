@@ -265,7 +265,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
 		use codec::Encode;
 		use primitives::traits::As;
 		Ok(map![
@@ -334,7 +334,7 @@ mod tests {
 			validators: vec![1, 2, 3],
 			broken_percent_late: 30,
 		}.build_storage().unwrap());
-		t
+		runtime_io::TestExternalities::new(t)
 	}
 
 	#[test]

@@ -43,6 +43,7 @@ pub struct Header {
 	pub parent_hash: H256,
 	pub number: u64,
 	pub state_root: H256,
+	pub changes_root: Option<H256>,
 	pub extrinsics_root: H256,
 	pub digest: Digest,
 }
@@ -62,6 +63,9 @@ impl traits::Header for Header {
 	fn state_root(&self) -> &Self::Hash { &self.state_root }
 	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
 
+	fn changes_root(&self) -> Option<&Self::Hash> { self.changes_root.as_ref() }
+	fn set_changes_root(&mut self, root: Option<Self::Hash>) { self.changes_root = root }
+
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
@@ -72,11 +76,17 @@ impl traits::Header for Header {
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
+		changes_root: Option<Self::Hash>,
 		parent_hash: Self::Hash,
 		digest: Self::Digest
 	) -> Self {
 		Header {
-			number, extrinsics_root: extrinsics_root, state_root, parent_hash, digest
+			number,
+			extrinsics_root: extrinsics_root,
+			state_root,
+			changes_root,
+			parent_hash,
+			digest
 		}
 	}
 }

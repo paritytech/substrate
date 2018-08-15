@@ -29,107 +29,30 @@ extern crate hashdb;
 extern crate memorydb;
 extern crate triehash;
 extern crate patricia_trie;
+extern crate substrate_codec as codec;
 
 extern crate byteorder;
 extern crate parking_lot;
 
-use std::collections::HashMap;
 use std::fmt;
 
 pub mod backend;
+//mod changes_triex;
+mod changes_trie;
 mod ext;
 mod testing;
+mod overlayed_changes;
 mod proving_backend;
 mod trie_backend;
+mod trie_backend_essence;
 
 pub use testing::TestExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
-pub use trie_backend::{TryIntoTrieBackend, TrieBackend, TrieH256, Storage, DBValue};
-
-/// The overlayed changes to state to be queried on top of the backend.
-///
-/// A transaction shares all prospective changes within an inner overlay
-/// that can be cleared.
-#[derive(Debug, Default, Clone)]
-pub struct OverlayedChanges {
-	prospective: HashMap<Vec<u8>, Option<Vec<u8>>>,
-	committed: HashMap<Vec<u8>, Option<Vec<u8>>>,
-}
-
-impl OverlayedChanges {
-	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
-	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
-	/// value has been set.
-	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
-		self.prospective.get(key)
-			.or_else(|| self.committed.get(key))
-			.map(|x| x.as_ref().map(AsRef::as_ref))
-	}
-
-	/// Inserts the given key-value pair into the prospective change set.
-	///
-	/// `None` can be used to delete a value specified by the given key.
-	fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
-		self.prospective.insert(key, val);
-	}
-
-	/// Removes all key-value pairs which keys share the given prefix.
-	///
-	/// NOTE that this doesn't take place immediately but written into the prospective
-	/// change set, and still can be reverted by [`discard_prospective`].
-	///
-	/// [`discard_prospective`]: #method.discard_prospective
-	fn clear_prefix(&mut self, prefix: &[u8]) {
-		// Iterate over all prospective and mark all keys that share
-		// the given prefix as removed (None).
-		for (key, value) in self.prospective.iter_mut() {
-			if key.starts_with(prefix) {
-				*value = None;
-			}
-		}
-
-		// Then do the same with keys from commited changes.
-		// NOTE that we are making changes in the prospective change set.
-		for key in self.committed.keys() {
-			if key.starts_with(prefix) {
-				self.prospective.insert(key.to_owned(), None);
-			}
-		}
-	}
-
-	/// Discard prospective changes to state.
-	pub fn discard_prospective(&mut self) {
-		self.prospective.clear();
-	}
-
-	/// Commit prospective changes to state.
-	pub fn commit_prospective(&mut self) {
-		if self.committed.is_empty() {
-			::std::mem::swap(&mut self.prospective, &mut self.committed);
-		} else {
-			self.committed.extend(self.prospective.drain());
-		}
-	}
-
-	/// Drain committed changes to an iterator.
-	///
-	/// Panics:
-	/// Will panic if there are any uncommitted prospective changes.
-	pub fn drain<'a>(&'a mut self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> + 'a {
-		assert!(self.prospective.is_empty());
-		self.committed.drain()
-	}
-
-	/// Consume `OverlayedChanges` and take committed set.
-	///
-	/// Panics:
-	/// Will panic if there are any uncommitted prospective changes.
-	pub fn into_committed(self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
-		assert!(self.prospective.is_empty());
-		self.committed.into_iter()
-	}
-}
+pub use changes_trie::Storage as ChangesTrieStorage;
+pub use trie_backend::{TryIntoTrieBackend, TrieBackend, TrieH256, DBValue};
+pub use trie_backend_essence::Storage;
+pub use overlayed_changes::OverlayedChanges;
 
 /// State Machine Error bound.
 ///
@@ -159,6 +82,15 @@ impl fmt::Display for ExecutionError {
 
 /// Externalities: pinned to specific active address.
 pub trait Externalities {
+	/// Sets changes trie configuration parameters. Runtime announces that this it is
+	/// configured to gather and store changes tries by calling this method and bind_to_extrinsic
+	/// afterwards.
+	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u8);
+
+	/// Start binding storage changes to the extrinsic number they're changes in.
+	/// This is used later by storage_changes_root to compose changes trie.
+	fn bind_to_extrinsic(&mut self, extrinsic_index: u32);
+
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
@@ -188,6 +120,9 @@ pub trait Externalities {
 
 	/// Get the trie root of the current storage map.
 	fn storage_root(&mut self) -> [u8; 32];
+
+	/// Get the change trie root of the current storage overlay.
+	fn storage_changes_root(&mut self) -> Option<[u8; 32]>;
 }
 
 /// Code execution engine.
@@ -263,7 +198,7 @@ pub fn execute<B: backend::Backend, Exec: CodeExecutor>(
 	method: &str,
 	call_data: &[u8],
 	strategy: ExecutionStrategy,
-) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
+) -> Result<(Vec<u8>, B::StorageTransaction, Option<B::ChangesTrieTransaction>), Box<Error>> {
 	execute_using_consensus_failure_handler(
 		backend,
 		overlay,
@@ -300,7 +235,7 @@ pub fn execute_using_consensus_failure_handler<
 	method: &str,
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
-) -> Result<(Vec<u8>, B::Transaction), Box<Error>> {
+) -> Result<(Vec<u8>, B::StorageTransaction, Option<B::ChangesTrieTransaction>), Box<Error>> {
 	let strategy: ExecutionStrategy = (&manager).into();
 
 	// make a copy.
@@ -311,8 +246,8 @@ pub fn execute_using_consensus_failure_handler<
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
 
-		let (result, was_native, delta) = {
-			let ((result, was_native), delta) = {
+		let (result, was_native, storage_delta, changes_delta) = {
+			let ((result, was_native), (storage_delta, changes_delta)) = {
 				let mut externalities = ext::Ext::new(overlay, backend);
 				(
 					exec.call(
@@ -326,17 +261,17 @@ pub fn execute_using_consensus_failure_handler<
 					externalities.transaction()
 				)
 			};
-			(result, was_native, delta)
+			(result, was_native, storage_delta, changes_delta)
 		};
 
 		// run wasm separately if we did run native the first time and we're meant to run both
-		let (result, delta) = if let (true, ExecutionManager::Both(on_consensus_failure)) =
+		let (result, storage_delta, changes_delta) = if let (true, ExecutionManager::Both(on_consensus_failure)) =
 			(was_native, manager)
 		{
 			overlay.prospective = orig_prospective.clone();
 
-			let (wasm_result, wasm_delta) = {
-				let ((result, _), delta) = {
+			let (wasm_result, wasm_storage_delta, wasm_changes_delta) = {
+				let ((result, _), (storage_delta, changes_delta)) = {
 					let mut externalities = ext::Ext::new(overlay, backend);
 					(
 						exec.call(
@@ -349,21 +284,21 @@ pub fn execute_using_consensus_failure_handler<
 						externalities.transaction()
 					)
 				};
-				(result, delta)
+				(result, storage_delta, changes_delta)
 			};
 
 			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
 				|| (result.is_err() && wasm_result.is_err() && format!("{}", result.as_ref().unwrap_err()) == format!("{}", wasm_result.as_ref().unwrap_err()))
 			{
-				(result, delta)
+				(result, storage_delta, changes_delta)
 			} else {
 				// Consensus error.
-				(on_consensus_failure(wasm_result, result), wasm_delta)
+				(on_consensus_failure(wasm_result, result), wasm_storage_delta, wasm_changes_delta)
 			}
 		} else {
-			(result, delta)
+			(result, storage_delta, changes_delta)
 		};
-		result.map(move |out| (out, delta))
+		result.map(move |out| (out, storage_delta, changes_delta))
 	};
 
 	result.map_err(|e| Box::new(e) as _)
@@ -384,13 +319,13 @@ pub fn prove_execution<B: TryIntoTrieBackend, Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, Vec<Vec<u8>>, <TrieBackend as Backend>::Transaction), Box<Error>> {
+) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<Error>> {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
 	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
-	let (result, transaction) = execute(&proving_backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)?;
+	let (result, _, _) = execute(&proving_backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)?;
 	let proof = proving_backend.extract_proof();
-	Ok((result, proof, transaction))
+	Ok((result, proof))
 }
 
 /// Check execution proof, generated by `prove_execution` call.
@@ -401,9 +336,10 @@ pub fn execution_proof_check<Exec: CodeExecutor>(
 	exec: &Exec,
 	method: &str,
 	call_data: &[u8],
-) -> Result<(Vec<u8>, memorydb::MemoryDB), Box<Error>> {
+) -> Result<Vec<u8>, Box<Error>> {
 	let backend = proving_backend::create_proof_check_backend(root.into(), proof)?;
 	execute(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
+		.map(|(result, _, _)| result)
 }
 
 /// Generate storage read proof.
@@ -432,6 +368,7 @@ pub fn read_proof_check(
 
 #[cfg(test)]
 mod tests {
+	use std::collections::HashMap;
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
@@ -464,63 +401,10 @@ mod tests {
 
 	impl Error for u8 {}
 
-	#[test]
-	fn overlayed_storage_works() {
-		let mut overlayed = OverlayedChanges::default();
-
-		let key = vec![42, 69, 169, 142];
-
-		assert!(overlayed.storage(&key).is_none());
-
-		overlayed.set_storage(key.clone(), Some(vec![1, 2, 3]));
-		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
-
-		overlayed.commit_prospective();
-		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
-
-		overlayed.set_storage(key.clone(), Some(vec![]));
-		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[][..]));
-
-		overlayed.set_storage(key.clone(), None);
-		assert!(overlayed.storage(&key).unwrap().is_none());
-
-		overlayed.discard_prospective();
-		assert_eq!(overlayed.storage(&key).unwrap(), Some(&[1, 2, 3][..]));
-
-		overlayed.set_storage(key.clone(), None);
-		overlayed.commit_prospective();
-		assert!(overlayed.storage(&key).unwrap().is_none());
-	}
-
 	macro_rules! map {
 		($( $name:expr => $value:expr ),*) => (
 			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
 		)
-	}
-
-	#[test]
-	fn overlayed_storage_root_works() {
-		let initial: HashMap<_, _> = map![
-			b"doe".to_vec() => b"reindeer".to_vec(),
-			b"dog".to_vec() => b"puppyXXX".to_vec(),
-			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
-			b"doug".to_vec() => b"notadog".to_vec()
-		];
-		let backend = InMemory::from(initial);
-		let mut overlay = OverlayedChanges {
-			committed: map![
-				b"dog".to_vec() => Some(b"puppy".to_vec()),
-				b"dogglesworth".to_vec() => Some(b"catYYY".to_vec()),
-				b"doug".to_vec() => Some(vec![])
-			],
-			prospective: map![
-				b"dogglesworth".to_vec() => Some(b"cat".to_vec()),
-				b"doug".to_vec() => None
-			],
-		};
-		let mut ext = Ext::new(&mut overlay, &backend);
-		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
-		assert_eq!(ext.storage_root(), ROOT);
 	}
 
 	#[test]
@@ -572,11 +456,11 @@ mod tests {
 		// fetch execution proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
-		let (remote_result, remote_proof, _) = prove_execution(remote_backend,
+		let (remote_result, remote_proof) = prove_execution(remote_backend,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check proof locally
-		let (local_result, _) = execution_proof_check(remote_root, remote_proof,
+		let local_result = execution_proof_check(remote_root, remote_proof,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check that both results are correct
@@ -602,6 +486,7 @@ mod tests {
 				b"abd".to_vec() => Some(b"69".to_vec()),
 				b"bbd".to_vec() => Some(b"42".to_vec())
 			],
+			..Default::default()
 		};
 
 		{
@@ -637,4 +522,38 @@ mod tests {
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);
 	}
+
+/*	#[test]
+	fn empty_storage_changes_root_works() {
+		assert_eq!(OverlayedChanges::default().changes_root(0, 16),
+			hex!("320871E05153AC64632CA67F9E62B54AABA21A1208543BEE3945D6A596D95295"));
+	}
+
+	#[test]
+	fn storage_changes_root_works() {
+		let mut changes = OverlayedChanges::default();
+		changes.set_storage(vec![1], None);
+		changes.set_storage(vec![2], Some(vec![3]));
+
+		// keys [1, 2] in prospective
+		let prospective_root = changes.changes_root(0, 16);
+		assert_eq!(prospective_root,
+			hex!("12E3D78C0AA30025EC178354387E2911C8411D3868B0E69DB0D6ECC52F097705"));
+
+		// keys [1, 2] in committed => root is the same
+		changes.commit_prospective();
+		let committed_root = changes.changes_root(0, 16);
+		assert_eq!(prospective_root, committed_root);
+
+		// keys [1, 2] are both in committed and prospective => root is the same
+		changes.set_storage(vec![1], Some(vec![3]));
+		changes.set_storage(vec![2], None);
+		assert_eq!(prospective_root, changes.changes_root(0, 16));
+
+		// keys [1, 2] are in committed and [4, 5] in prospective => root is different
+		changes.set_storage(vec![4], None);
+		changes.set_storage(vec![5], Some(vec![6]));
+		assert_eq!(changes.changes_root(0, 16),
+			hex!("797045D5F50B086387557AF74FD112063821E5F0E4A90C0748172E2D83C2AC76"));
+	}*/
 }

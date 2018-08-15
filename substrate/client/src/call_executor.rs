@@ -65,7 +65,7 @@ pub trait CallExecutor<B: BlockT> {
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>
-	) -> Result<(Vec<u8>, S::Transaction), error::Error>;
+	) -> Result<(Vec<u8>, S::StorageTransaction, Option<S::ChangesTrieTransaction>), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
@@ -118,7 +118,7 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 		call_data: &[u8],
 	) -> error::Result<CallResult> {
 		let mut changes = OverlayedChanges::default();
-		let (return_data, _) = self.call_at_state(
+		let (return_data, _, _) = self.call_at_state(
 			&self.backend.state_at(*id)?,
 			&mut changes,
 			method,
@@ -148,7 +148,7 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
-	) -> error::Result<(Vec<u8>, S::Transaction)> {
+	) -> error::Result<(Vec<u8>, S::StorageTransaction, Option<S::ChangesTrieTransaction>)> {
 		state_machine::execute_using_consensus_failure_handler(
 			state,
 			changes,
@@ -172,7 +172,6 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 			method,
 			call_data,
 		)
-		.map(|(result, proof, _)| (result, proof))
 		.map_err(Into::into)
 	}
 

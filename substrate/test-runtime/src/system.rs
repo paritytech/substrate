@@ -100,11 +100,13 @@ pub fn finalise_block() -> Header {
 	let number = <Number>::take();
 	let parent_hash = <ParentHash>::take();
 	let storage_root = BlakeTwo256::storage_root();
+	let storage_changes_root = BlakeTwo256::storage_changes_root();
 
 	Header {
 		number,
 		extrinsics_root,
 		state_root: storage_root,
+		changes_root: storage_changes_root,
 		parent_hash,
 		digest: Default::default(),
 	}
@@ -173,14 +175,14 @@ mod tests {
 	use ::{Header, Digest, Extrinsic, Transfer};
 
 	fn new_test_ext() -> TestExternalities {
-		map![
+		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
 			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
 			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
 			twox_128(&Keyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-		]
+		])
 	}
 
 	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
@@ -196,6 +198,7 @@ mod tests {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
 			state_root: hex!("97dfcd1f8cbf8845fcb544f89332f1a94c1137f7d1b199ef0b0a6ed217015c3e").into(),
+			changes_root: Some(hex!("2df8b4f05378cf8dba7a322861ceba7ad486875898751186211dccdf9e322678").into()),
 			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
@@ -224,6 +227,7 @@ mod tests {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
 				state_root: hex!("0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1").into(),
+				changes_root: Some(hex!("2df8b4f05378cf8dba7a322861ceba7ad486875898751186211dccdf9e322678").into()),
 				extrinsics_root: hex!("951508f2cc0071500a74765ab0fb2f280fdcdd329d5f989dda675010adee99d6").into(),
 				digest: Digest { logs: vec![], },
 			},
@@ -249,6 +253,7 @@ mod tests {
 				parent_hash: b.header.hash(),
 				number: 2,
 				state_root: hex!("c93f2fd494c386fa32ee76b6198a7ccf5db12c02c3a79755fd2d4646ec2bf8d7").into(),
+				changes_root: Some(hex!("2df8b4f05378cf8dba7a322861ceba7ad486875898751186211dccdf9e322678").into()),
 				extrinsics_root: hex!("3563642676d7e042c894eedc579ba2d6eeedf9a6c66d9d557599effc9f674372").into(),
 				digest: Digest { logs: vec![], },
 			},

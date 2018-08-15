@@ -339,7 +339,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
 		use codec::Encode;
 
 		Ok(map![
@@ -442,7 +442,7 @@ mod tests {
 			minimum_deposit: 1,
 		}.build_storage().unwrap());
 		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
-		t
+		runtime_io::TestExternalities::new(t)
 	}
 
 	type System = system::Module<Test>;

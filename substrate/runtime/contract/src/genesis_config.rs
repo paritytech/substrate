@@ -19,7 +19,7 @@
 use {Trait, ContractFee, CallBaseFee, CreateBaseFee, GasPrice, MaxDepth};
 
 use runtime_primitives;
-use runtime_io::{self, twox_128};
+use runtime_io::twox_128;
 use runtime_support::StorageValue;
 use codec::Encode;
 
@@ -35,8 +35,8 @@ pub struct GenesisConfig<T: Trait> {
 }
 
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> Result<runtime_io::TestExternalities, String> {
-		let r: runtime_io::TestExternalities = map![
+	fn build_storage(self) -> Result<runtime_primitives::StorageMap, String> {
+		let r = map![
 			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
 			twox_128(<CallBaseFee<T>>::key()).to_vec() => self.call_base_fee.encode(),
 			twox_128(<CreateBaseFee<T>>::key()).to_vec() => self.create_base_fee.encode(),

@@ -126,7 +126,7 @@ fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExt
 		}.build_storage()
 			.unwrap(),
 	);
-	t
+	runtime_io::TestExternalities::new(t)
 }
 
 const CODE_TRANSFER: &str = r#"

@@ -272,6 +272,7 @@ mod tests {
 			parent_hash: 5.into(),
 			number: 67,
 			state_root: 3.into(),
+			changes_root: Some(4.into()),
 			extrinsics_root: 6.into(),
 			digest: { let mut d = Digest::default(); d.push(Log(vec![1])); d },
 		};
@@ -280,6 +281,7 @@ mod tests {
   "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000005",
   "number": 67,
   "stateRoot": "0x0000000000000000000000000000000000000000000000000000000000000003",
+  "changesRoot": "0x0000000000000000000000000000000000000000000000000000000000000004",
   "extrinsicsRoot": "0x0000000000000000000000000000000000000000000000000000000000000006",
   "digest": {
     "logs": [
@@ -295,7 +297,7 @@ mod tests {
 	#[test]
 	fn block_encoding_round_trip() {
 		let mut block = Block {
-			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default()),
+			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default(), Default::default()),
 			extrinsics: vec![
 				UncheckedExtrinsic::new(
 					generic::Extrinsic {
@@ -331,7 +333,7 @@ mod tests {
 	#[test]
 	fn block_encoding_substrate_round_trip() {
 		let mut block = Block {
-			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default()),
+			header: Header::new(1, Default::default(), Default::default(), Default::default(), Default::default(), Default::default()),
 			extrinsics: vec![
 				UncheckedExtrinsic::new(
 					generic::Extrinsic {
