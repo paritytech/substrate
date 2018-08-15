@@ -41,10 +41,16 @@ args:
       long: dev
       help: Run in development mode; implies --chain=dev --validator --key Alice
       takes_value: false
+  - listen-addr:
+      long: listen-addr
+      value_name: LISTEN_ADDR
+      help: Listen on this multiaddress
+      takes_value: true
+      multiple: true
   - port:
       long: port
       value_name: PORT
-      help: Specify p2p protocol TCP port
+      help: Specify p2p protocol TCP port. Only used if --listen-addr is not specified.
       takes_value: true
   - rpc-external:
       long: rpc-external

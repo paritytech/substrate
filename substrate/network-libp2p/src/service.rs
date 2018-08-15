@@ -109,9 +109,10 @@ impl NetworkService {
 
 		let local_peer_id = network_state.local_public_key().clone()
 			.into_peer_id();
-		let mut listen_addr = config.listen_address.clone();
-		listen_addr.append(AddrComponent::P2P(local_peer_id.clone().into_bytes()));
-		info!(target: "sub-libp2p", "Local node address is: {}", listen_addr);
+		for mut addr in config.listen_addresses.iter().cloned() {
+			addr.append(AddrComponent::P2P(local_peer_id.clone().into_bytes()));
+			info!(target: "sub-libp2p", "Local node address is: {}", addr);
+		}
 
 		let kad_system = KadSystem::without_init(KadSystemConfig {
 			parallelism: 3,
@@ -129,10 +130,7 @@ impl NetworkService {
 		let (close_tx, close_rx) = oneshot::channel();
 		let (timeouts_register_tx, timeouts_register_rx) = mpsc::unbounded();
 
-		let mut listened_addrs = Vec::new();
-		if let Some(ref addr) = config.public_address {
-			listened_addrs.push(addr.clone());
-		}
+		let listened_addrs = config.public_addresses.clone();
 
 		let shared = Arc::new(Shared {
 			network_state,
@@ -445,17 +443,18 @@ fn init_thread(
 		)
 	};
 
-	// Listen on multiaddress.
-	match swarm_controller.listen_on(shared.config.listen_address.clone()) {
-		Ok(new_addr) => {
-			debug!(target: "sub-libp2p", "Libp2p listening on {}", new_addr);
-			*shared.original_listened_addr.write() = Some(new_addr.clone());
-		},
-		Err(_) => {
-			warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported",
-				shared.config.listen_address);
-			return Err(ErrorKind::BadProtocol.into())
-		},
+	// Listen on multiaddresses.
+	for addr in &shared.config.listen_addresses {
+		match swarm_controller.listen_on(addr.clone()) {
+			Ok(new_addr) => {
+				debug!(target: "sub-libp2p", "Libp2p listening on {}", new_addr);
+				*shared.original_listened_addr.write() = Some(new_addr.clone());
+			},
+			Err(_) => {
+				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported", addr);
+				return Err(ErrorKind::BadProtocol.into())
+			},
+		}
 	}
 
 	// Explicitely connect to _all_ the boostrap nodes as a temporary measure.
