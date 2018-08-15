@@ -27,6 +27,7 @@ extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_runtime_version as runtime_version;
 extern crate tokio;
 
 #[macro_use]

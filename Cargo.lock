@@ -2630,6 +2630,7 @@ dependencies = [
  "substrate-extrinsic-pool 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-primitives 0.1.0",
+ "substrate-runtime-version 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-test-client 0.1.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
