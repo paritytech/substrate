@@ -111,7 +111,7 @@ pub struct Concrete;
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("polkadot"),
 	impl_name: ver_str!("parity-polkadot"),
-	authoring_version: 2,
+	authoring_version: 1,
 	spec_version: 4,
 	impl_version: 0,
 };
@@ -250,7 +250,7 @@ pub mod api {
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),
 		finalise_block => |()| super::Executive::finalise_block(),
-		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
+		inherent_extrinsics => |(inherent, version)| super::inherent_extrinsics(inherent, version),
 		validator_count => |()| super::Session::validator_count(),
 		validators => |()| super::Session::validators()
 	);
