@@ -23,6 +23,7 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
+use primitives::{KeccakHasher, RlpCodec};
 use runtime_primitives::BuildStorage;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{CodeExecutor, ExecutionStrategy};
@@ -52,7 +53,7 @@ pub fn new_light<B, S, F, GS>(
 	backend: Arc<Backend<S, F>>,
 	fetcher: Arc<F>,
 	genesis_storage: GS,
-) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F>, B>>
+) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F, KeccakHasher, RlpCodec>, B>>
 	where
 		B: BlockT,
 		S: BlockchainStorage<B>,
