@@ -53,7 +53,7 @@ pub fn new_light<B, S, F, GS>(
 	backend: Arc<Backend<S, F>>,
 	fetcher: Arc<F>,
 	genesis_storage: GS,
-) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F, KeccakHasher, RlpCodec>, B>>
+) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F, KeccakHasher, RlpCodec>, B, KeccakHasher, RlpCodec>>
 	where
 		B: BlockT,
 		S: BlockchainStorage<B>,

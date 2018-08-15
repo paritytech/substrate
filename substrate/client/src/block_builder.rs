@@ -24,9 +24,9 @@ use runtime_primitives::generic::BlockId;
 use {backend, error, Client, CallExecutor};
 use runtime_primitives::{ApplyResult, ApplyOutcome};
 use patricia_trie::NodeCodec;
-use primitives::{KeccakHasher, RlpCodec};
 use hashdb::Hasher;
 use rlp::Encodable;
+use heapsize::HeapSizeOf;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<B, E, Block, H, C>
@@ -45,20 +45,23 @@ where
 	changes: state_machine::OverlayedChanges,
 }
 
-impl<B, E, Block> BlockBuilder<B, E, Block, KeccakHasher, RlpCodec>
+impl<B, E, Block, H, C> BlockBuilder<B, E, Block, H, C>
 where
-	B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-	E: CallExecutor<Block, KeccakHasher, RlpCodec> + Clone,
+	B: backend::Backend<Block, H, C>,
+	E: CallExecutor<Block, H, C> + Clone,
 	Block: BlockT,
+	H: Hasher,
+	H::Out: Ord + Encodable + HeapSizeOf,
+	C: NodeCodec<H>
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
-	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {
+	pub fn new(client: &Client<B, E, Block, H, C>) -> error::Result<Self> {
 		client.info().and_then(|i| Self::at_block(&BlockId::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
 	/// build upon.
-	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block>) -> error::Result<Self> {
+	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block, H, C>) -> error::Result<Self> {
 		let number = client.block_number_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?
 			+ One::one();
