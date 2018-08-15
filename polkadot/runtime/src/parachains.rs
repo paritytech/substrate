@@ -265,7 +265,7 @@ mod tests {
 		type Header = Header;
 	}
 	impl session::Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
+		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = ();
 	}

@@ -41,7 +41,7 @@ pub fn inherent_extrinsics(data: ::primitives::InherentData) -> Vec<UncheckedExt
 
 	if !data.offline_indices.is_empty() {
 		inherent.push(make_inherent(
-			Call::Staking(StakingCall::note_offline(data.offline_indices))
+			Call::Staking(StakingCall::note_missed_proposal(data.offline_indices))
 		));
 	}
 

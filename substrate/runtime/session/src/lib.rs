@@ -62,7 +62,7 @@ impl<T> OnSessionChange<T> for () {
 
 pub trait Trait: timestamp::Trait {
 	// the position of the required timestamp-set extrinsic.
-	const NOTE_OFFLINE_POSITION: u32;
+	const NOTE_MISSED_PROPOSAL_POSITION: u32;
 
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
 	type OnSessionChange: OnSessionChange<Self::Moment>;
@@ -148,9 +148,9 @@ impl<T: Trait> Module<T> {
 	pub fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
 		assert!(aux.is_empty());
 		assert!(
-			<system::Module<T>>::extrinsic_index() == T::NOTE_OFFLINE_POSITION,
+			<system::Module<T>>::extrinsic_index() == T::NOTE_MISSED_PROPOSAL_POSITION,
 			"note_offline extrinsic must be at position {} in the block",
-			T::NOTE_OFFLINE_POSITION
+			T::NOTE_MISSED_PROPOSAL_POSITION
 		);
 
 		let vs = Self::validators();
@@ -321,7 +321,7 @@ mod tests {
 		type Moment = u64;
 	}
 	impl Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
+		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = ();
 	}

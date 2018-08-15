@@ -130,7 +130,7 @@ impl Default for SlashPreference {
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The allowed extrinsic position for `missed_proposal` inherent.
-//	const NOTE_OFFLINE_POSITION: u32;	// TODO: uncomment when removed from session::Trait
+//	const NOTE_MISSED_PROPOSAL_POSITION: u32;	// TODO: uncomment when removed from session::Trait
 
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
@@ -154,7 +154,7 @@ decl_module! {
 		fn nominate(aux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result = 3;
 		fn unnominate(aux, target_index: u32) -> Result = 4;
 		fn register_slash_preference(aux, intentions_index: u32, p: SlashPreference) -> Result = 5;
-		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 6;
+		fn note_missed_proposal(aux, offline_val_indices: Vec<u32>) -> Result = 6;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -470,12 +470,12 @@ impl<T: Trait> Module<T> {
 	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
 	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
 	/// for the previous block.
-	fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
+	fn note_missed_proposal(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
 		assert!(aux.is_empty());
 		assert!(
-			<system::Module<T>>::extrinsic_index() == T::NOTE_OFFLINE_POSITION,
-			"note_offline extrinsic must be at position {} in the block",
-			T::NOTE_OFFLINE_POSITION
+			<system::Module<T>>::extrinsic_index() == T::NOTE_MISSED_PROPOSAL_POSITION,
+			"note_missed_proposal extrinsic must be at position {} in the block",
+			T::NOTE_MISSED_PROPOSAL_POSITION
 		);
 
 		for validator_index in offline_val_indices.into_iter() {
