@@ -327,6 +327,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		justification: bft::Justification<Block::Hash>,
 		body: Option<Vec<Block::Extrinsic>>,
 	) -> error::Result<ImportResult> {
+		debug!(target: "client", "Executing block {:?}", hash);
 		let parent_hash = header.parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
 			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
