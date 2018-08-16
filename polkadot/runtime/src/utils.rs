@@ -26,6 +26,8 @@ use version::RuntimeVersion;
 
 /// Produces the list of inherent extrinsics.
 pub fn inherent_extrinsics(data: ::primitives::InherentData, runtime_version: RuntimeVersion) -> Vec<UncheckedExtrinsic> {
+	info!("Constructing inherent extrinsics for runtime version {}", runtime_version);
+	
 	let make_inherent = |function|	UncheckedExtrinsic::new(
 		Extrinsic {
 			signed: Default::default(),
@@ -41,6 +43,7 @@ pub fn inherent_extrinsics(data: ::primitives::InherentData, runtime_version: Ru
 	];
 
 	if !data.offline_indices.is_empty() && runtime_version.spec_version == 4 {
+		info!("Submitting a missed-proposal extrinsic! {:?}", data.offline_indices);
 		inherent.push(make_inherent(
 			Call::Staking(StakingCall::note_missed_proposal(data.offline_indices))
 		));
