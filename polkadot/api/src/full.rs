@@ -16,9 +16,9 @@
 
 //! Strongly typed API for full Polkadot client.
 
-use client::backend::LocalBackend;
+use client::backend::{LocalBackend, BlockImportOperation};
 use client::block_builder::BlockBuilder as ClientBlockBuilder;
-use client::{Client, LocalCallExecutor};
+use client::{Client, LocalCallExecutor, CallExecutor};
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::NativeExecutor;
 use state_machine;
@@ -95,24 +95,25 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool> {
-		use substrate_executor::error::ErrorKind as ExecErrorKind;
-		use codec::{Decode, Encode};
-		use runtime::Block as RuntimeBlock;
+		use codec::Encode;
 
 		let encoded = block.encode();
-		let runtime_block = match RuntimeBlock::decode(&mut &encoded[..]) {
-			Some(x) => x,
-			None => return Ok(false),
-		};
 
-		let res = with_runtime!(self, at, || ::runtime::Executive::execute_block(runtime_block));
-		match res {
-			Ok(()) => Ok(true),
-			Err(err) => match err.kind() {
-				&ErrorKind::Executor(ExecErrorKind::Runtime) => Ok(false),
-				_ => Err(err)
-			}
-		}
+		let transaction = self.backend().begin_operation(at.clone())?;
+		match transaction.state()? {
+			Some(transaction_state) => {
+				let mut overlay = Default::default();
+				let mut r = self.executor().call_at_state(
+					transaction_state,
+					&mut overlay,
+					"execute_block",
+					&encoded,
+					state_machine::always_wasm()
+				);
+				return Ok(r.is_ok())
+			},
+			None => return Err(ErrorKind::UnknownBlock(format!("{:?}", at)).into()),
+		};
 	}
 
 	fn index(&self, at: &BlockId, account: AccountId) -> Result<Index> {
