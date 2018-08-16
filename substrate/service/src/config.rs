@@ -38,7 +38,7 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
-	pub extrinsic_pool: extrinsic_pool::txpool::Options,
+	pub extrinsic_pool: extrinsic_pool::Options,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to key files.

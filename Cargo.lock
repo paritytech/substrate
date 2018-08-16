@@ -2376,7 +2376,6 @@ dependencies = [
  "regex 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-client 0.1.0",
- "substrate-extrinsic-pool 0.1.0",
  "substrate-network 0.1.0",
  "substrate-network-libp2p 0.1.0",
  "substrate-runtime-primitives 0.1.0",
@@ -2494,6 +2493,10 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-runtime-primitives 0.1.0",
+ "substrate-test-client 0.1.0",
  "transaction-pool 1.12.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
