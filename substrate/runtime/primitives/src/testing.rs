@@ -21,6 +21,7 @@ use std::fmt::Debug;
 use codec::Codec;
 use runtime_support::AuxDispatchable;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
+use address_format::Base58;
 
 pub use substrate_primitives::H256;
 
