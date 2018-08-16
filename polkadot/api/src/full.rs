@@ -95,8 +95,9 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 	}
 
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool> {
-		use codec::Encode;
+		debug!(target: "client", "Evaluating block {:?}", block);
 
+		use codec::Encode;
 		let encoded = block.encode();
 
 		let transaction = self.backend().begin_operation(at.clone())?;
@@ -110,6 +111,7 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 					&encoded,
 					state_machine::always_wasm()
 				);
+				debug!(target: "client", "Evaluated to {:?}", r.is_ok());
 				return Ok(r.is_ok())
 			},
 			None => return Err(ErrorKind::UnknownBlock(format!("{:?}", at)).into()),

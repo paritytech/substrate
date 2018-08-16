@@ -32,6 +32,9 @@ extern crate substrate_state_machine as state_machine;
 #[macro_use]
 extern crate error_chain;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
