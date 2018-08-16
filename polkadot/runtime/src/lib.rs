@@ -46,6 +46,9 @@ extern crate substrate_primitives;
 #[macro_use]
 extern crate substrate_runtime_std as rstd;
 
+#[macro_use]
+extern crate log;
+
 extern crate polkadot_primitives as primitives;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_consensus as consensus;

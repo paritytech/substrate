@@ -50,6 +50,12 @@ fn gen_cache_key(code: &[u8]) -> u64 {
 	h.finish()
 }
 
+fn version_from_code<E: Externalities>(ext: &mut E, code: &[u8]) -> Option<RuntimeVersion> {
+	let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
+	WasmExecutor::new(8, 8).call_in_wasm_module(ext, &module, "version", &[]).ok()
+		.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()))
+}
+
 /// fetch a runtime version from the cache or if there is no cached version yet, create
 /// the runtime version entry for `code`, determines whether `Compatibility::IsCompatible`
 /// can be used by by comparing returned RuntimeVersion to `ref_version`
@@ -62,10 +68,7 @@ fn fetch_cached_runtime_version<'a, E: Externalities>(
 	cache.entry(gen_cache_key(code))
 		.or_insert_with(|| {
 			let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-			let version = WasmExecutor::new(8, 8).call_in_wasm_module(ext, &module, "version", &[]).ok()
-				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
-
-			if let Some(v) = version {
+			if let Some(v) = version_from_code(ext, code) {
 				if ref_version.can_call_with(&v) {
 					Compatibility::IsCompatible(v)
 				} else {
@@ -175,13 +178,21 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 		data: &[u8],
 		use_native: bool,
 	) -> (Result<Vec<u8>>, bool) {
-		let mut c = RUNTIMES_CACHE.lock();
-		match (use_native, fetch_cached_runtime_version(&mut c, ext, code, D::VERSION)) {
-			(_, Compatibility::NotCompatible(_, m)) | (_, Compatibility::InvalidVersion(m)) =>
-				(self.fallback.call_in_wasm_module(ext, m, method, data), false),
-			(false, _) =>
-				(self.fallback.call(ext, code, method, data, false).0, false),
-			_ => (D::dispatch(ext, method, data), true),
+//		let mut c = RUNTIMES_CACHE.lock();
+		let onchain_version = version_from_code(ext, code);
+
+		match (use_native, onchain_version.as_ref().map_or(false, |v| v.can_call_with(&D::VERSION))) {
+			(_, false) => {
+				trace!(target: "executor", "Request for native execution failed (native: {}, chain: {})", D::VERSION, onchain_version.map_or_else(||"<None>".into(), |v| format!("{}", v)));
+				(self.fallback.call(ext, code, method, data, false).0, false)
+			}
+			(false, _) => {
+				(self.fallback.call(ext, code, method, data, false).0, false)
+			}
+			_ => {
+				trace!(target: "executor", "Request for native execution succeeded (native: {}, chain: {})", D::VERSION, onchain_version.map_or_else(||"<None>".into(), |v| format!("{}", v)));
+				(D::dispatch(ext, method, data), true)
+			}
 		}
 	}
 }
