@@ -272,6 +272,14 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Lookup an address to get an Id, if there's one there.
+	pub fn lookup_address(a: address::Address<T::AccountId, T::AccountIndex>) -> Option<T::AccountId> {
+		match a {
+			address::Address::Id(i) => Some(i),
+			address::Address::Index(i) => Self::lookup_index(i),
+		}
+	}
+
 	// PUBLIC DISPATCH
 
 	/// Transfer some unlocked staking balance to another staker.
