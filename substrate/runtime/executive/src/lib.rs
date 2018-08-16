@@ -315,16 +315,11 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-<<<<<<< HEAD
 					// Blake
 					// state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
 					// Keccak
-					state_root: hex!("8fad93b6b9e5251a2e4913598fd0d74a138c0e486eb1133ff8081b429b0c56f2").into(),
-					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(), // REVIEW: I expected this to be wrong with a different hasher?
-=======
 					state_root: hex!("06efddda99014ce420dc903e6c8b7f87a1c96e699fbb43d26dc5f3203ae94ee0").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
->>>>>>> 0a0ffacf... Version bump, fixes (#572)
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],

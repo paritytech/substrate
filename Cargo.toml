@@ -1,25 +1,3 @@
-<<<<<<< HEAD
-=======
-[[bin]]
-name = "polkadot"
-path = "polkadot/src/main.rs"
-
-[package]
-name = "polkadot"
-version = "0.2.5"
-authors = ["Parity Technologies <admin@parity.io>"]
-build = "build.rs"
-
-[dependencies]
-error-chain = "0.12"
-polkadot-cli = { path = "polkadot/cli" }
-futures = "0.1"
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
-
-[build-dependencies]
-vergen = "0.1"
-
->>>>>>> 0a0ffacf... Version bump, fixes (#572)
 [workspace]
 members = [
 	"substrate/bft",
