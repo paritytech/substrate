@@ -52,6 +52,11 @@ error_chain! {
 			description("Unknown runtime code")
 			display("Unknown runtime code")
 		}
+		/// Error decoding runtime return data.
+		BadRuntimeData(method: &'static str) {
+			description("Unknown runtime data format")
+			display("Unknown runtime data format when calling {}", method)
+		}
 		/// Unknown block ID.
 		UnknownBlock(b: String) {
 			description("Unknown block")
