@@ -178,7 +178,6 @@ impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
 		data: &[u8],
 		use_native: bool,
 	) -> (Result<Vec<u8>>, bool) {
-//		let mut c = RUNTIMES_CACHE.lock();
 		let onchain_version = version_from_code(ext, code);
 
 		match (use_native, onchain_version.as_ref().map_or(false, |v| v.can_call_with(&D::VERSION))) {
