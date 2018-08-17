@@ -22,7 +22,7 @@ use client::{self, Client, LocalCallExecutor, CallExecutor};
 use codec::{Encode, Decode};
 use polkadot_executor::Executor as LocalDispatch;
 use substrate_executor::NativeExecutor;
-use state_machine;
+use state_machine::ExecutionManager;
 
 use runtime::Address;
 use primitives::{
@@ -49,19 +49,26 @@ where
 	};
 	client.state_at(&parent).map_err(Error::from).and_then(|state| {
 		let mut overlay = Default::default();
+		let execution_manager = || ExecutionManager::Both(|wasm_result, native_result| {
+			warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
+			warn!("   Method {:?}", method);
+			warn!("   Native result {:?}", native_result);
+			warn!("   Wasm result {:?}", wasm_result);
+			wasm_result
+		});
 		client.executor().call_at_state(
 			&state,
 			&mut overlay,
 			"initialise_block",
 			&header.encode(),
-			state_machine::native_when_possible()
+			execution_manager()
 		)?;
 		let (r, _) = client.executor().call_at_state(
 			&state,
 			&mut overlay,
 			method,
 			input,
-			state_machine::native_when_possible()
+			execution_manager()
 		)?;
 		Ok(R::decode(&mut &r[..])
 		   .ok_or_else(|| client::error::Error::from(client::error::ErrorKind::CallResultDecode(method)))?)
