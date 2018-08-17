@@ -167,7 +167,7 @@ pub trait Environment<B: Block> {
 /// block.
 pub trait Proposer<B: Block> {
 	/// Error type which can occur when proposing or evaluating.
-	type Error: From<Error> + From<InputStreamConcluded> + 'static;
+	type Error: From<Error> + From<InputStreamConcluded> + ::std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal.
 	type Create: IntoFuture<Item=B,Error=Self::Error>;
 	/// Future that resolves when a proposal is evaluated.
@@ -202,12 +202,24 @@ pub trait Authorities<B: Block> {
 	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityId>, Error>;
 }
 
+// caches the round number to start at if we end up with BFT consensus on the same
+// parent hash more than once (happens if block is bad).
+//
+// this will force a committed but locally-bad block to be considered analogous to
+// a round advancement vote.
+#[derive(Debug)]
+struct RoundCache<H> {
+	hash: Option<H>,
+	start_round: usize,
+}
+
 /// Instance of BFT agreement.
 struct BftInstance<B: Block, P> {
 	key: Arc<ed25519::Pair>,
 	authorities: Vec<AuthorityId>,
 	parent_hash: B::Hash,
 	round_timeout_multiplier: u64,
+	cache: Arc<Mutex<RoundCache<B::Hash>>>,
 	proposer: P,
 }
 
@@ -228,6 +240,13 @@ impl<B: Block, P: Proposer<B>> BftInstance<B, P>
 			.saturating_mul(self.round_timeout_multiplier);
 
 		Duration::from_secs(timeout)
+	}
+
+	fn update_round_cache(&self, current_round: usize) {
+		let mut cache = self.cache.lock();
+		if cache.hash.as_ref() == Some(&self.parent_hash) {
+			cache.start_round = current_round + 1;
+		}
 	}
 }
 
@@ -299,6 +318,8 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 			collect_pubkeys(accumulator.voters()));
 		debug!(target: "bft", "Round {} should end in at most {} seconds from now", next_round, round_timeout.as_secs());
 
+		self.update_round_cache(next_round);
+
 		if let AdvanceRoundReason::Timeout = reason {
 			self.proposer.on_round_end(round, accumulator.proposal().is_some());
 		}
@@ -359,6 +380,8 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 				&self.inner.context().authorities)
 		}
 
+		self.inner.context().update_round_cache(committed.round_number);
+
 		Ok(Async::Ready(()))
 	}
 }
@@ -374,12 +397,19 @@ impl<B, P, I, InStream, OutSink> Drop for BftFuture<B, P, I, InStream, OutSink> 
 		// TODO: have a trait member to pass misbehavior reports into.
 		let misbehavior = self.inner.drain_misbehavior().collect::<Vec<_>>();
 		self.inner.context().proposer.import_misbehavior(misbehavior);
+		self.cancel.store(true, Ordering::Release);
 	}
 }
 
 struct AgreementHandle {
 	cancel: Arc<AtomicBool>,
 	task: Option<oneshot::Receiver<task::Task>>,
+}
+
+impl AgreementHandle {
+	fn is_live(&self) -> bool {
+		!self.cancel.load(Ordering::Acquire)
+	}
 }
 
 impl Drop for AgreementHandle {
@@ -404,6 +434,7 @@ impl Drop for AgreementHandle {
 pub struct BftService<B: Block, P, I> {
 	client: Arc<I>,
 	live_agreement: Mutex<Option<(B::Hash, AgreementHandle)>>,
+	round_cache: Arc<Mutex<RoundCache<B::Hash>>>,
 	round_timeout_multiplier: u64,
 	key: Arc<ed25519::Pair>, // TODO: key changing over time.
 	factory: P,
@@ -422,9 +453,13 @@ impl<B, P, I> BftService<B, P, I>
 		BftService {
 			client: client,
 			live_agreement: Mutex::new(None),
+			round_cache: Arc::new(Mutex::new(RoundCache {
+				hash: None,
+				start_round: 0,
+			})),
 			round_timeout_multiplier: 4,
 			key: key, // TODO: key changing over time.
-			factory: factory,
+			factory,
 		}
 	}
 
@@ -451,8 +486,8 @@ impl<B, P, I> BftService<B, P, I>
 		where
 	{
 		let hash = header.hash();
-		if self.live_agreement.lock().as_ref().map_or(false, |&(ref h, _)| h == &hash) {
-			return Ok(None);
+		if self.last_agreement().map_or(false, |last| last.parent_hash == hash) {
+			return Ok(None)
 		}
 
 		let authorities = self.client.authorities(&BlockId::Hash(hash.clone()))?;
@@ -474,18 +509,35 @@ impl<B, P, I> BftService<B, P, I>
 		let bft_instance = BftInstance {
 			proposer,
 			parent_hash: hash.clone(),
+			cache: self.round_cache.clone(),
 			round_timeout_multiplier: self.round_timeout_multiplier,
 			key: self.key.clone(),
 			authorities: authorities,
 		};
 
-		let agreement = rhododendron::agree(
+		let mut agreement = rhododendron::agree(
 			bft_instance,
 			n,
 			max_faulty,
 			input,
 			output,
 		);
+
+		// fast forward round number if necessary.
+		{
+			let mut cache = self.round_cache.lock();
+			trace!(target: "bft", "Round cache: {:?}", &*cache);
+			if cache.hash.as_ref() == Some(&hash) {
+				trace!(target: "bft", "Fast-forwarding to round {}", cache.start_round);
+				agreement.fast_forward(cache.start_round);
+				cache.start_round += 1;
+			} else {
+				*cache = RoundCache {
+					hash: Some(hash.clone()),
+					start_round: 1,
+				};
+			}
+		}
 
 		let cancel = Arc::new(AtomicBool::new(false));
 		let (tx, rx) = oneshot::channel();
@@ -513,10 +565,20 @@ impl<B, P, I> BftService<B, P, I>
 	}
 
 	/// Get current agreement parent hash if any.
-	pub fn live_agreement(&self) -> Option<B::Hash> {
-		self.live_agreement.lock().as_ref().map(|&(ref h, _)| h.clone())
+	pub fn last_agreement(&self) -> Option<LastAgreement<B::Hash>> {
+		self.live_agreement.lock()
+			.as_ref()
+			.map(|&(ref h, ref handle)| LastAgreement { parent_hash: h.clone(), live: handle.is_live() })
 	}
+}
 
+
+/// Struct representing the last agreement the service has processed.
+pub struct LastAgreement<H> {
+	/// The parent hash that agreement was building on.
+	pub parent_hash: H,
+	/// Whether that agreement was live.
+	pub live: bool,
 }
 
 /// Given a total number of authorities, yield the maximum faulty that would be allowed.
@@ -684,7 +746,6 @@ mod tests {
 	use runtime_primitives::testing::{Block as GenericTestBlock, Header as TestHeader};
 	use primitives::H256;
 	use self::keyring::Keyring;
-	use futures::stream;
 	use tokio::executor::current_thread;
 
 	extern crate substrate_keyring as keyring;
@@ -709,9 +770,9 @@ mod tests {
 	}
 
 	// "black hole" output sink.
-	struct Output<E>(::std::marker::PhantomData<E>);
+	struct Comms<E>(::std::marker::PhantomData<E>);
 
-	impl<E> Sink for Output<E> {
+	impl<E> Sink for Comms<E> {
 		type SinkItem = Communication<TestBlock>;
 		type SinkError = E;
 
@@ -724,19 +785,28 @@ mod tests {
 		}
 	}
 
+	impl<E> Stream for Comms<E> {
+		type Item = Communication<TestBlock>;
+		type Error = E;
+
+		fn poll(&mut self) -> ::futures::Poll<Option<Self::Item>, Self::Error> {
+			Ok(::futures::Async::NotReady)
+		}
+	}
+
 	struct DummyFactory;
 	struct DummyProposer(u64);
 
 	impl Environment<TestBlock> for DummyFactory {
 		type Proposer = DummyProposer;
-		type Input = stream::Empty<Communication<TestBlock>, Error>;
-		type Output = Output<Error>;
+		type Input = Comms<Error>;
+		type Output = Comms<Error>;
 		type Error = Error;
 
 		fn init(&self, parent_header: &TestHeader, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
 			-> Result<(DummyProposer, Self::Input, Self::Output), Error>
 		{
-			Ok((DummyProposer(parent_header.number + 1), stream::empty(), Output(::std::marker::PhantomData)))
+			Ok((DummyProposer(parent_header.number + 1), Comms(::std::marker::PhantomData), Comms(::std::marker::PhantomData)))
 		}
 	}
 
@@ -770,6 +840,10 @@ mod tests {
 		BftService {
 			client: Arc::new(client),
 			live_agreement: Mutex::new(None),
+			round_cache: Arc::new(Mutex::new(RoundCache {
+				hash: None,
+				start_round: 0,
+			})),
 			round_timeout_multiplier: 4,
 			key: Arc::new(Keyring::One.into()),
 			factory: DummyFactory
