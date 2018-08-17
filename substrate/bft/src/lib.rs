@@ -485,8 +485,8 @@ impl<B, P, I> BftService<B, P, I>
 		where
 	{
 		let hash = header.hash();
-		if self.live_agreement().as_ref() == Some(&hash) {
-			return Ok(None);
+		if self.last_agreement().map_or(false, |last| last.parent_hash == hash) {
+			return Ok(None)
 		}
 
 		let authorities = self.client.authorities(&BlockId::Hash(hash.clone()))?;
@@ -527,6 +527,7 @@ impl<B, P, I> BftService<B, P, I>
 			let mut cache = self.round_cache.lock();
 			trace!(target: "bft", "Round cache: {:?}", &*cache);
 			if cache.hash.as_ref() == Some(&hash) {
+				trace!(target: "bft", "Fast-forwarding to round {}", cache.start_round);
 				agreement.fast_forward(cache.start_round);
 				cache.start_round += 1;
 			} else {
@@ -563,11 +564,20 @@ impl<B, P, I> BftService<B, P, I>
 	}
 
 	/// Get current agreement parent hash if any.
-	pub fn live_agreement(&self) -> Option<B::Hash> {
+	pub fn last_agreement(&self) -> Option<LastAgreement<B::Hash>> {
 		self.live_agreement.lock()
 			.as_ref()
-			.and_then(|&(ref h, ref handle)| if handle.is_live() { Some(h.clone()) } else { None })
+			.map(|&(ref h, ref handle)| LastAgreement { parent_hash: h.clone(), live: handle.is_live() })
 	}
+}
+
+
+/// Struct representing the last agreement the service has processed.
+pub struct LastAgreement<H> {
+	/// The parent hash that agreement was building on.
+	pub parent_hash: H,
+	/// Whether that agreement was live.
+	pub live: bool,
 }
 
 /// Given a total number of authorities, yield the maximum faulty that would be allowed.
