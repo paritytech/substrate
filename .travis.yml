@@ -3,6 +3,8 @@
 sudo: true
 language: rust
 matrix:
+  fast_finish: true
+
   include:
     - name: "Webassembly on nightly"
       rust: nightly
@@ -26,7 +28,7 @@ before_install:
 
 install:
   # pull dependencies
-  - travis_wait 30 cargo update --locked
+  - travis_wait 30 cargo update
 
 script:
   - ./ci/script.sh
