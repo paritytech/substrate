@@ -246,7 +246,7 @@ impl<B: Block, P: Proposer<B>> BftInstance<B, P>
 		let mut cache = self.cache.lock();
 		if cache.hash.as_ref() == Some(&self.parent_hash) {
 			cache.start_round = current_round + 1;
-}
+		}
 	}
 }
 
