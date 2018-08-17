@@ -1,24 +1,34 @@
 # Request an environment that provides sudo (that goes with larger containers)
 # and a minimal language environment.
 sudo: true
-language: minimal
+language: rust
+matrix:
+  fast_finish: true
+
+  include:
+    - name: "Webassembly on nightly"
+      rust: nightly
+      env: TARGET=wasm
+    - name: "Latest stable native"
+      rust: stable
+      env: TARGET=native
 
 cache: cargo
+
+env:
+  - RUST_BACKTRACE=1
 
 branches:
   only:
   - master
 
-env:
-  global:
-    - RUST_BACKTRACE=1
-  matrix:
-    - RUST_TOOLCHAIN=nightly TARGET=wasm
-    - RUST_TOOLCHAIN=stable TARGET=native
-
 before_install:
   # Check how much space we've got on this machine.
   - df -h
+
+install:
+  # pull dependencies
+  - travis_wait 30 cargo update
 
 script:
   - ./ci/script.sh
