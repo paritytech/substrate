@@ -1918,7 +1918,7 @@ dependencies = [
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.41 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rand 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -1992,7 +1992,7 @@ dependencies = [
 
 [[package]]
 name = "rhododendron"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2345,7 +2345,7 @@ dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "rhododendron 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rhododendron 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
@@ -2526,7 +2526,7 @@ dependencies = [
 name = "substrate-misbehavior-check"
 version = "0.1.0"
 dependencies = [
- "rhododendron 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rhododendron 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-bft 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-keyring 0.1.0",
@@ -2998,7 +2998,7 @@ name = "substrate-test-client"
 version = "0.1.0"
 dependencies = [
  "hashdb 0.2.1 (git+https://github.com/paritytech/parity-common)",
- "rhododendron 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rhododendron 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-bft 0.1.0",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
@@ -3893,7 +3893,7 @@ dependencies = [
 "checksum regex-syntax 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "747ba3b235651f6e2f67dfa8bcdcd073ddb7c243cb21c442fc12395dfcac212d"
 "checksum relay 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "1576e382688d7e9deecea24417e350d3062d97e32e45d70b1cde65994ff1489a"
 "checksum remove_dir_all 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3488ba1b9a2084d38645c4c08276a1752dcbf2c7130d74f1569681ad5d2799c5"
-"checksum rhododendron 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3d2b4c928dfb981e491432f0809e93c99857112b0a348a93eee6b13e0bf0f0f3"
+"checksum rhododendron 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "289a6395497f70b8076bf5b9c223e1dc5c0a77619d0a75124f7d4c728d09d2d8"
 "checksum ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6f7d28b30a72c01b458428e0ae988d4149c20d902346902be881e3edc4bb325c"
 "checksum rlp 0.2.1 (git+https://github.com/paritytech/parity-common)" = "<none>"
 "checksum rlp 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "89db7f8dfdd5eb7ab3ac3ece7a07fd273a680b4b224cb231181280e8996f9f0b"
