@@ -30,7 +30,7 @@ fn should_return_header() {
 		subscriptions: Subscriptions::new(remote),
 	};
 	assert_matches!(
-		client.header(client.client.genesis_hash()),
+		client.header(Some(client.client.genesis_hash()).into()),
 		Ok(Some(ref x)) if x == &Header {
 			parent_hash: 0.into(),
 			number: 0,
@@ -41,7 +41,7 @@ fn should_return_header() {
 	);
 
 	assert_matches!(
-		client.header(5.into()),
+		client.header(Some(5.into()).into()),
 		Ok(None)
 	);
 }
@@ -63,12 +63,12 @@ fn should_return_a_block() {
 
 	// Genesis block is not justified, so we can't query it?
 	assert_matches!(
-		api.block(api.client.genesis_hash()),
+		api.block(Some(api.client.genesis_hash()).into()),
 		Ok(None)
 	);
 
 	assert_matches!(
-		api.block(block_hash),
+		api.block(Some(block_hash).into()),
 		Ok(Some(ref x)) if x.block == Block {
 			header: Header {
 				parent_hash: api.client.genesis_hash(),
@@ -82,7 +82,7 @@ fn should_return_a_block() {
 	);
 
 	assert_matches!(
-		api.block(5.into()),
+		api.block(Some(5.into()).into()),
 		Ok(None)
 	);
 }
