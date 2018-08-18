@@ -18,7 +18,7 @@
 
 use std::vec::Vec;
 use codec::{Decode, Encode};
-use state_machine::{self, native_when_possible};
+use state_machine::{self, ExecutionManager};
 use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
 use runtime_primitives::generic::BlockId;
 use {backend, error, Client, CallExecutor};
@@ -42,6 +42,18 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 	E: CallExecutor<Block> + Clone,
 	Block: BlockT,
 {
+	fn execution_mode(method: &'static str)
+		-> ExecutionManager<impl FnOnce(Result<Vec<u8>, E::Error>, Result<Vec<u8>, E::Error>) -> Result<Vec<u8>, E::Error>>
+	{
+		ExecutionManager::Both(move |wasm_result, native_result| {
+			warn!("Consensus error between wasm and native runtime block authoring");
+			warn!("   Method {:?}", method);
+			warn!("   Native result {:?}", native_result);
+			warn!("   Wasm result {:?}", wasm_result);
+			wasm_result
+		})
+	}
+
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {
 		client.info().and_then(|i| Self::at_block(&BlockId::Hash(i.chain.best_hash), client))
@@ -68,7 +80,13 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 			Default::default()
 		);
 
-		executor.call_at_state(&state, &mut changes, "initialise_block", &header.encode(), native_when_possible())?;
+		executor.call_at_state(
+			&state,
+			&mut changes,
+			"initialise_block",
+			&header.encode(),
+			Self::execution_mode("initialise_block")
+		)?;
 		changes.commit_prospective();
 
 		Ok(BlockBuilder {
@@ -84,7 +102,13 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		match self.executor.call_at_state(&self.state, &mut self.changes, "apply_extrinsic", &xt.encode(), native_when_possible()) {
+		match self.executor.call_at_state(
+			&self.state,
+			&mut self.changes,
+			"apply_extrinsic",
+			&xt.encode(),
+			Self::execution_mode("apply_extrinsic"),
+		) {
 			Ok((result, _)) => {
 				match ApplyResult::decode(&mut result.as_slice()) {
 					Some(Ok(ApplyOutcome::Success)) | Some(Ok(ApplyOutcome::Fail)) => {
@@ -116,7 +140,7 @@ impl<B, E, Block> BlockBuilder<B, E, Block> where
 			&mut self.changes,
 			"finalise_block",
 			&[],
-			native_when_possible(),
+			Self::execution_mode("finalise_block"),
 		)?;
 		self.header = <<Block as BlockT>::Header as Decode>::decode(&mut &output[..])
 			.expect("Header came straight out of runtime so must be valid");
