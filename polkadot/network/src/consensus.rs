@@ -91,11 +91,20 @@ impl<E> Sink for BftSink<E> {
 	}
 }
 
+fn check_blacklisted(hash: &Hash) -> Result<(), bft::Error> {
+	match *hash == Hash::from("3c9803978dca85ba388d48878295badc71f98e732d47f5f50ca1e0bbdfcff6a2") {
+		true => Err(bft::ErrorKind::Blacklisted.into()),
+		false => Ok(()),
+	}
+}
+
+
 // check signature and authority validity of message.
 fn process_bft_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &SessionKey, authorities: &[SessionKey]) -> Result<Option<bft::Communication<Block>>, bft::Error> {
 	Ok(Some(match msg.message {
 		msg::BftMessage::Consensus(c) => ::rhododendron::Communication::Consensus(match c {
 			msg::SignedConsensusMessage::Propose(proposal) => ::rhododendron::LocalizedMessage::Propose({
+				check_blacklisted(&proposal.digest)?;
 				if &proposal.sender == local_id { return Ok(None) }
 				let proposal = ::rhododendron::LocalizedProposal {
 					round_number: proposal.round_number as usize,
@@ -125,8 +134,14 @@ fn process_bft_message(msg: msg::LocalizedBftMessage<Block, Hash>, local_id: &Se
 						signer: ed25519::Public(vote.sender.0),
 					},
 					vote: match vote.vote {
-						msg::ConsensusVote::Prepare(r, h) => ::rhododendron::Vote::Prepare(r as usize, h),
-						msg::ConsensusVote::Commit(r, h) => ::rhododendron::Vote::Commit(r as usize, h),
+						msg::ConsensusVote::Prepare(r, h) => {
+							check_blacklisted(&h)?;
+							::rhododendron::Vote::Prepare(r as usize, h)
+						},
+						msg::ConsensusVote::Commit(r, h) => {
+							check_blacklisted(&h)?;
+							::rhododendron::Vote::Commit(r as usize, h)
+						},
 						msg::ConsensusVote::AdvanceRound(r) => ::rhododendron::Vote::AdvanceRound(r as usize),
 					}
 				};

@@ -84,6 +84,12 @@ error_chain! {
 			description("Other error")
 			display("Other error: {}", e.description())
 		}
+
+		/// Blacklisted block.
+		Blacklisted {
+			description("Blacklisted")
+			display("Block is in the black list")
+		}
 	}
 }
 
