@@ -117,3 +117,25 @@ fn should_notify_about_latest_block() {
 	// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
 }
+
+#[test]
+fn should_return_runtime_version() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+
+	let client = Chain {
+		client: Arc::new(test_client::new()),
+		subscriptions: Subscriptions::new(remote),
+	};
+
+	assert_matches!(
+		client.runtime_version(None.into()),
+		Ok(ref ver) if ver == &RuntimeVersion {
+			spec_name: "test".into(),
+			impl_name: "parity-test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+		}
+	);
+}
