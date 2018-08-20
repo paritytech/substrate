@@ -188,12 +188,14 @@ define_env!(init_env, <E: Ext>,
 		callee.resize(callee_len as usize, 0);
 		ctx.memory().get(callee_ptr, &mut callee)?;
 		let callee =
-			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee[..]).unwrap();
+			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee[..])
+				.ok_or_else(|| sandbox::HostError)?;
 
 		let mut value_buf = Vec::new();
 		value_buf.resize(value_len as usize, 0);
 		ctx.memory().get(value_ptr, &mut value_buf)?;
-		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..]).unwrap();
+		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
+			.ok_or_else(|| sandbox::HostError)?;
 
 		let mut input_data = Vec::new();
 		input_data.resize(input_data_len as usize, 0u8);
@@ -223,7 +225,8 @@ define_env!(init_env, <E: Ext>,
 		let mut value_buf = Vec::new();
 		value_buf.resize(value_len as usize, 0);
 		ctx.memory().get(value_ptr, &mut value_buf)?;
-		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..]).unwrap();
+		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
+			.ok_or_else(|| sandbox::HostError)?;
 
 		let mut code = Vec::new();
 		code.resize(code_len as usize, 0u8);
