@@ -1828,7 +1828,7 @@ dependencies = [
  "polkadot-service 0.2.2",
  "polkadot-transaction-pool 0.1.0",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-cli 0.2.2",
+ "substrate-cli 0.2.4",
  "substrate-client 0.1.0",
  "substrate-codec 0.1.0",
  "substrate-extrinsic-pool 0.1.0",
@@ -2614,7 +2614,7 @@ dependencies = [
 
 [[package]]
 name = "substrate-cli"
-version = "0.2.2"
+version = "0.2.4"
 dependencies = [
  "ansi_term 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "app_dirs 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",

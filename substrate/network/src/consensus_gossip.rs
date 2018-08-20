@@ -32,6 +32,7 @@ const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
+	knows_history: bool,
 }
 
 /// Consensus messages.
@@ -77,21 +78,14 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex, roles: Roles) {
 		if roles.intersects(Roles::AUTHORITY | Roles::FULL) {
 			trace!(target:"gossip", "Registering {:?} {}", roles, who);
-			// Send out all known messages.
-			// TODO: limit by size
-			let mut known_messages = HashSet::new();
-			for entry in self.messages.iter() {
-				known_messages.insert(entry.hash);
-				let message = match entry.message {
-					ConsensusMessage::Bft(ref bft) => GenericMessage::BftMessage(bft.clone()),
-					ConsensusMessage::ChainSpecific(ref msg, _) => GenericMessage::ChainSpecific(msg.clone()),
-				};
 
-				protocol.send_message(who, message);
-			}
-			self.peers.insert(who, PeerConsensus {
-				known_messages,
-			});
+			let mut data = PeerConsensus {
+				known_messages: HashSet::new(),
+				knows_history: false,
+			};
+
+			propagate_history_to(protocol, &self.messages, who, &mut data);
+			self.peers.insert(who, data);
 		}
 	}
 
@@ -111,6 +105,13 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 				instant: Instant::now(),
 				message,
 			});
+		}
+	}
+
+	/// Propagate ancient history to all peers.
+	pub fn propagate_history(&mut self, protocol: &mut Context<B>) {
+		for (who, data) in self.peers.iter_mut().filter(|&(_, ref data)| !data.knows_history) {
+			propagate_history_to(protocol, &self.messages, *who, data);
 		}
 	}
 
@@ -270,6 +271,38 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		self.register_message(hash, message);
 		self.propagate(protocol, generic, hash);
 	}
+}
+
+/// Propagate history to a peer incrementally
+fn propagate_history_to<B: BlockT>(
+	protocol: &mut Context<B>,
+	messages: &[MessageEntry<B>],
+	who: NodeIndex,
+	data: &mut PeerConsensus<B::Hash>,
+) {
+	const INCREMENTAL_COUNT: usize = 128;
+
+	if data.knows_history { return }
+
+	let mut sent_count = 0;
+	for entry in messages {
+		if sent_count == INCREMENTAL_COUNT {
+			debug!(target: "gossip", "Sent peer {} {} old gossip messages.", who, INCREMENTAL_COUNT);
+			return
+		}
+		if data.known_messages.insert(entry.hash) {
+			sent_count += 1;
+			let message = match entry.message {
+				ConsensusMessage::Bft(ref bft) => GenericMessage::BftMessage(bft.clone()),
+				ConsensusMessage::ChainSpecific(ref msg, _) => GenericMessage::ChainSpecific(msg.clone()),
+			};
+			protocol.send_message(who, message);
+		}
+	}
+
+	debug!(target: "gossip", "Peer {} fully caught up on history.", who);
+
+	data.knows_history = true;
 }
 
 #[cfg(test)]
