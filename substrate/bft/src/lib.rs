@@ -243,9 +243,11 @@ impl<B: Block, P: Proposer<B>> BftInstance<B, P>
 	}
 
 	fn update_round_cache(&self, current_round: usize) {
+		let start_round = current_round + 1;
+		trace!(target: "bft", "Updating round cache to {}", start_round);
 		let mut cache = self.cache.lock();
 		if cache.hash.as_ref() == Some(&self.parent_hash) {
-			cache.start_round = current_round + 1;
+			cache.start_round = start_round;
 		}
 	}
 }
@@ -485,7 +487,7 @@ impl<B, P, I> BftService<B, P, I>
 		where
 	{
 		let hash = header.hash();
-		if self.last_agreement().map_or(false, |last| last.parent_hash == hash) {
+		if self.last_agreement().map_or(false, |last| last.parent_hash == hash && last.live) {
 			return Ok(None)
 		}
 
@@ -527,7 +529,7 @@ impl<B, P, I> BftService<B, P, I>
 			let mut cache = self.round_cache.lock();
 			trace!(target: "bft", "Round cache: {:?}", &*cache);
 			if cache.hash.as_ref() == Some(&hash) {
-				trace!(target: "bft", "Fast-forwarding to round {}", cache.start_round);
+				debug!(target: "bft", "Fast-forwarding to round {}", cache.start_round);
 				agreement.fast_forward(cache.start_round);
 				cache.start_round += 1;
 			} else {
@@ -573,6 +575,7 @@ impl<B, P, I> BftService<B, P, I>
 
 
 /// Struct representing the last agreement the service has processed.
+#[derive(Debug)]
 pub struct LastAgreement<H> {
 	/// The parent hash that agreement was building on.
 	pub parent_hash: H,

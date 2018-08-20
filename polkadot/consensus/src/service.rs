@@ -165,6 +165,8 @@ impl Service {
 					if let Ok(best_block) = c.best_block_header() {
 						let hash = best_block.hash();
 						let last_agreement = s.last_agreement();
+
+						trace!(target: "bft", "Attempting to start consensus after timeout. Current agreement object: {:?}", last_agreement);
 						let can_build_upon = last_agreement
 							.map_or(true, |x| !x.live || x.parent_hash != hash);
 
