@@ -16,6 +16,7 @@ substrate-client = { path = "../../substrate/client" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-executor = { path = "../../substrate/executor" }
 substrate-state-machine = { path = "../../substrate/state-machine" }
+log = "0.3"
 
 [dev-dependencies]
 substrate-keyring = { path = "../../substrate/keyring" }

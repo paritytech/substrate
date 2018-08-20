@@ -60,6 +60,51 @@ macro_rules! with_runtime {
 	}}
 }
 
+macro_rules! with_runtime_non_native {
+	($client: ident, $at: expr, $exec: expr, $input: expr) => {{
+		use state_machine::ExecutionManager;
+		use client::CallExecutor;
+
+		let parent = $at;
+		let header = Header {
+			parent_hash: $client.block_hash_from_id(&parent)?
+				.ok_or_else(|| ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
+			number: $client.block_number_from_id(&parent)?
+				.ok_or_else(|| ErrorKind::UnknownBlock(format!("{:?}", parent)))? + 1,
+			state_root: Default::default(),
+			extrinsics_root: Default::default(),
+			digest: Default::default(),
+		};
+
+		$client.state_at(&parent).map_err(Error::from).and_then(|state| {
+			let mut overlay = Default::default();
+			let execution_manager = || ExecutionManager::Both(|wasm_result, native_result| {
+				warn!("Consensus error between wasm and native runtime execution at block {:?}", $at);
+				warn!("   Method {:?}", $exec);
+				warn!("   Native result {:?}", native_result);
+				warn!("   Wasm result {:?}", wasm_result);
+				wasm_result
+			});
+			$client.executor().call_at_state(
+				&state,
+				&mut overlay,
+				"initialise_block",
+				&header.encode(),
+				execution_manager()
+			)?;
+			let (r, _) = $client.executor().call_at_state(
+				&state,
+				&mut overlay,
+				$exec,
+				$input,
+				execution_manager()
+			)?;
+
+			Ok(r)
+		})
+	}}
+}
+
 impl<B: LocalBackend<Block>> BlockBuilder for ClientBlockBuilder<B, LocalCallExecutor<B, NativeExecutor<LocalDispatch>>, Block> {
 	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
 		self.push(extrinsic).map_err(Into::into)
@@ -96,18 +141,11 @@ impl<B: LocalBackend<Block>> PolkadotApi for Client<B, LocalCallExecutor<B, Nati
 
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool> {
 		use substrate_executor::error::ErrorKind as ExecErrorKind;
-		use codec::{Decode, Encode};
-		use runtime::Block as RuntimeBlock;
+		use codec::Encode;
 
-		let encoded = block.encode();
-		let runtime_block = match RuntimeBlock::decode(&mut &encoded[..]) {
-			Some(x) => x,
-			None => return Ok(false),
-		};
-
-		let res = with_runtime!(self, at, || ::runtime::Executive::execute_block(runtime_block));
+		let res = with_runtime_non_native!(self, at, "execute_block", &block.encode());
 		match res {
-			Ok(()) => Ok(true),
+			Ok(_) => Ok(true),
 			Err(err) => match err.kind() {
 				&ErrorKind::Executor(ExecErrorKind::Runtime) => Ok(false),
 				_ => Err(err)
