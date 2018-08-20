@@ -21,10 +21,12 @@ use std::sync::Arc;
 use client::{self, Client, BlockchainEvents};
 use jsonrpc_macros::{pubsub, Trailing};
 use jsonrpc_pubsub::SubscriptionId;
+use jsonrpc_macros::Trailing;
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
+use runtime_version::RuntimeVersion;
 use tokio::runtime::TaskExecutor;
 use primitives::{KeccakHasher, RlpCodec};
 
@@ -54,6 +56,10 @@ build_rpc_trait! {
 		/// By default returns latest block hash.
 		#[rpc(name = "chain_getBlockHash", alias = ["chain_getHead", ])]
 		fn block_hash(&self, Trailing<Number>) -> Result<Option<Hash>>;
+
+		/// Get the runtime version.
+		#[rpc(name = "chain_getRuntimeVersion")]
+		fn runtime_version(&self, Trailing<Hash>) -> Result<RuntimeVersion>;
 
 		#[pubsub(name = "chain_newHead")] {
 			/// New head subscription
@@ -86,12 +92,15 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 }
 
 impl<B, E, Block> Chain<B, E, Block> where
-	Block: BlockT,
-	B: client::backend::Backend<Block, KeccakHasher, RlpCodec>,
-	E: client::CallExecutor<Block, KeccakHasher, RlpCodec>,
+	Block: BlockT + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
 {
 	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
-		::helpers::unwrap_or_else(|| Ok(self.client.info()?.chain.best_hash), hash)
+		Ok(match hash.into() {
+			None => self.client.info()?.chain.best_hash,
+			Some(hash) => hash,
+		})
 	}
 }
 
@@ -117,6 +126,11 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::
 			None => Some(self.client.info()?.chain.best_hash),
 			Some(number) => self.client.header(&BlockId::number(number))?.map(|h| h.hash()),
 		})
+	}
+
+	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
+		let at = self.unwrap_or_best(at)?;
+		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
