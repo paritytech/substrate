@@ -484,14 +484,14 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 		E: CallExecutor<Block>,
 		Block: BlockT,
 {
-	fn import_block(&self, block: Block, justification: ::bft::Justification<Block::Hash>) {
+	fn import_block(&self, block: Block, justification: ::bft::Justification<Block::Hash>) -> bool {
 		let (header, extrinsics) = block.deconstruct();
 		let justified_header = JustifiedHeader {
 			header: header,
 			justification,
 		};
 
-		let _ = self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics));
+		self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics)).is_ok()
 	}
 }
 

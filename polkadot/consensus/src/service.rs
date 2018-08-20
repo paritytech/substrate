@@ -53,7 +53,7 @@ fn start_bft<F, C>(
 	bft_service: Arc<BftService<Block, F, C>>,
 ) where
 	F: bft::Environment<Block> + 'static,
-	C: bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
+	C: ChainHead<Block> +bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
 	F::Error: ::std::fmt::Debug,
 	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
 	<F as bft::Environment<Block>>::Error: ::std::fmt::Display
@@ -66,6 +66,13 @@ fn start_bft<F, C>(
 			if let Err(e) = res {
 				warn!(target: "bft", "Failed to force delay of consensus: {:?}", e);
 			}
+
+			let chain_head_same = bft_service.client().best_block_header()
+				.ok()
+				.as_ref()
+				.map_or(false, |h| h.hash() == header.hash());
+
+			if !chain_head_same { return None }
 
 			match bft_service.build_upon(&header) {
 				Ok(maybe_bft_work) => {
@@ -164,14 +171,9 @@ impl Service {
 				interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
 					if let Ok(best_block) = c.best_block_header() {
 						let hash = best_block.hash();
-						let last_agreement = s.last_agreement();
 
-						trace!(target: "bft", "Attempting to start consensus after timeout. Current agreement object: {:?}", last_agreement);
-						let can_build_upon = last_agreement
-							.map_or(true, |x| !x.live || x.parent_hash != hash);
-
-						if hash == prev_best && can_build_upon {
-							debug!("Starting consensus round after a timeout");
+						if hash == prev_best && s.can_build_on(&best_block) {
+							debug!(target: "bft", "Starting consensus round after a timeout");
 							start_bft(best_block, s.clone());
 						}
 						prev_best = hash;
