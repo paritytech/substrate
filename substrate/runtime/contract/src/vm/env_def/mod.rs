@@ -218,8 +218,8 @@ define_env!(init_env, <E: Ext>,
 		}
 	},
 
-	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
-	ext_create(ctx, code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32) => {
+	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
+	ext_create(ctx, code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) => {
 		let mut value_buf = Vec::new();
 		value_buf.resize(value_len as usize, 0);
 		ctx.memory().get(value_ptr, &mut value_buf)?;
@@ -229,8 +229,9 @@ define_env!(init_env, <E: Ext>,
 		code.resize(code_len as usize, 0u8);
 		ctx.memory().get(code_ptr, &mut code)?;
 
-		// TODO: Read input data from the sandbox.
-		let input_data = Vec::new();
+		let mut input_data = Vec::new();
+		input_data.resize(input_data_len as usize, 0u8);
+		ctx.memory().get(input_data_ptr, &mut input_data)?;
 
 		// TODO: Let user to choose how much gas to allocate for the execution.
 		let nested_gas_limit = ctx.gas_meter.gas_left();

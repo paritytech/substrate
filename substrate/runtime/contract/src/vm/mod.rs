@@ -393,6 +393,55 @@ mod tests {
 		);
 	}
 
+	const CODE_CREATE: &str = r#"
+(module
+	;; ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
+	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(call $ext_create
+			(i32.const 12)   ;; Pointer to `code`
+			(i32.const 8)    ;; Length of `code`
+			(i32.const 4)    ;; Pointer to the buffer with value to transfer
+			(i32.const 8)    ;; Length of the buffer with value to transfer
+			(i32.const 20)   ;; Pointer to input data buffer address
+			(i32.const 4)    ;; Length of input data buffer
+		)
+	)
+	;; Amount of value to transfer.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\03\00\00\00\00\00\00\00")
+	;; Embedded wasm code.
+	(data (i32.const 12) "\00\61\73\6d\01\00\00\00")
+	;; Input data to pass to the contract being created.
+	(data (i32.const 20) "\01\02\03\04")
+)
+"#;
+
+	#[test]
+	fn contract_create() {
+		let code_create = wabt::wat2wasm(CODE_CREATE).unwrap();
+
+		let mut mock_ext = MockExt::default();
+		execute(
+			&code_create,
+			&[],
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		).unwrap();
+
+		assert_eq!(
+			&mock_ext.creates,
+			&[CreateEntry {
+				code: vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00],
+				endowment: 3,
+				data: vec![
+					1, 2, 3, 4,
+				],
+			}]
+		);
+	}
+
 	const CODE_MEM: &str = r#"
 (module
 	;; Internal memory is not allowed.
