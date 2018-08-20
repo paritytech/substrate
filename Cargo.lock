@@ -436,7 +436,7 @@ dependencies = [
  "substrate-runtime-io 0.1.0",
  "substrate-state-machine 0.1.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
- "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "triehash 0.2.0 (git+https://github.com/paritytech/parity-common)",
 ]
 
 [[package]]
@@ -458,7 +458,7 @@ dependencies = [
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
  "substrate-state-machine 0.1.0",
- "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "triehash 0.2.0 (git+https://github.com/paritytech/parity-common)",
 ]
 
 [[package]]
@@ -731,7 +731,7 @@ dependencies = [
 [[package]]
 name = "fixed-hash"
 version = "0.2.2"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.41 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -827,7 +827,7 @@ dependencies = [
 [[package]]
 name = "hashdb"
 version = "0.2.1"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -1031,16 +1031,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "keccak-hash"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "cc 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
- "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "kernel32-sys"
 version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1052,7 +1042,7 @@ dependencies = [
 [[package]]
 name = "kvdb"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-bytes 0.1.0 (git+https://github.com/paritytech/parity-common)",
@@ -1061,7 +1051,7 @@ dependencies = [
 [[package]]
 name = "kvdb-memorydb"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "kvdb 0.1.0 (git+https://github.com/paritytech/parity-common)",
  "parking_lot 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1070,7 +1060,7 @@ dependencies = [
 [[package]]
 name = "kvdb-rocksdb"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1462,13 +1452,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "memorydb"
 version = "0.2.1"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.2.1 (git+https://github.com/paritytech/parity-common)",
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "plain_hasher 0.2.0 (git+https://github.com/paritytech/parity-common)",
- "rlp 0.2.1 (git+https://github.com/paritytech/parity-common)",
+ "rlp 0.2.2 (git+https://github.com/paritytech/parity-common)",
 ]
 
 [[package]]
@@ -1672,12 +1662,12 @@ dependencies = [
 [[package]]
 name = "parity-bytes"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 
 [[package]]
 name = "parity-crypto"
 version = "0.1.0"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "quick-error 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1745,7 +1735,7 @@ dependencies = [
 [[package]]
 name = "patricia-trie"
 version = "0.2.1"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.2.1 (git+https://github.com/paritytech/parity-common)",
@@ -1767,7 +1757,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "plain_hasher"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2014,24 +2004,13 @@ dependencies = [
 
 [[package]]
 name = "rlp"
-version = "0.2.1"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
-dependencies = [
- "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "rlp"
 version = "0.2.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-hex 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2401,7 +2380,7 @@ dependencies = [
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.2.1 (git+https://github.com/paritytech/parity-common)",
- "rlp 0.2.1 (git+https://github.com/paritytech/parity-common)",
+ "rlp 0.2.2 (git+https://github.com/paritytech/parity-common)",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-bft 0.1.0",
  "substrate-codec 0.1.0",
@@ -2414,7 +2393,7 @@ dependencies = [
  "substrate-state-machine 0.1.0",
  "substrate-telemetry 0.3.0",
  "substrate-test-client 0.1.0",
- "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "triehash 0.2.0 (git+https://github.com/paritytech/parity-common)",
 ]
 
 [[package]]
@@ -2478,7 +2457,7 @@ dependencies = [
  "substrate-serializer 0.1.0",
  "substrate-state-machine 0.1.0",
  "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "triehash 0.2.0 (git+https://github.com/paritytech/parity-common)",
  "twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2598,7 +2577,7 @@ dependencies = [
  "patricia-trie 0.2.1 (git+https://github.com/paritytech/parity-common)",
  "plain_hasher 0.2.0 (git+https://github.com/paritytech/parity-common)",
  "pretty_assertions 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rlp 0.2.1 (git+https://github.com/paritytech/parity-common)",
+ "rlp 0.2.2 (git+https://github.com/paritytech/parity-common)",
  "rustc-hex 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2762,12 +2741,13 @@ version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
  "environmental 0.1.0",
+ "hashdb 0.2.1 (git+https://github.com/paritytech/parity-common)",
  "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-state-machine 0.1.0",
- "triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "triehash 0.2.0 (git+https://github.com/paritytech/parity-common)",
 ]
 
 [[package]]
@@ -2975,7 +2955,7 @@ dependencies = [
  "memorydb 0.2.1 (git+https://github.com/paritytech/parity-common)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.2.1 (git+https://github.com/paritytech/parity-common)",
- "rlp 0.2.1 (git+https://github.com/paritytech/parity-common)",
+ "rlp 0.2.2 (git+https://github.com/paritytech/parity-common)",
  "substrate-primitives 0.1.0",
  "triehash 0.2.0 (git+https://github.com/paritytech/parity-common)",
 ]
@@ -3373,23 +3353,12 @@ dependencies = [
 
 [[package]]
 name = "triehash"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-dependencies = [
- "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "ethereum-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "keccak-hash 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rlp 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "triehash"
 version = "0.2.0"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.2.1 (git+https://github.com/paritytech/parity-common)",
- "rlp 0.2.1 (git+https://github.com/paritytech/parity-common)",
+ "rlp 0.2.2 (git+https://github.com/paritytech/parity-common)",
 ]
 
 [[package]]
@@ -3434,7 +3403,7 @@ dependencies = [
 [[package]]
 name = "uint"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/parity-common#22209e14805e5764f7fe81259324d34eab179264"
+source = "git+https://github.com/paritytech/parity-common#abe18ea03c1faae5e9b3787b481086e796ff42fb"
 dependencies = [
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3799,7 +3768,6 @@ dependencies = [
 "checksum jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git)" = "<none>"
 "checksum jsonrpc-server-utils 8.0.1 (git+https://github.com/paritytech/jsonrpc.git)" = "<none>"
 "checksum jsonrpc-ws-server 8.0.0 (git+https://github.com/paritytech/jsonrpc.git)" = "<none>"
-"checksum keccak-hash 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "0b7f51f30d7986536accaec4a6a288008dfb3dbffe8a2863a65292bc395a3ae7"
 "checksum kernel32-sys 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "7507624b29483431c0ba2d82aece8ca6cdba9382bff4ddd0f7490560c056098d"
 "checksum kvdb 0.1.0 (git+https://github.com/paritytech/parity-common)" = "<none>"
 "checksum kvdb-memorydb 0.1.0 (git+https://github.com/paritytech/parity-common)" = "<none>"
@@ -3896,8 +3864,7 @@ dependencies = [
 "checksum remove_dir_all 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "3488ba1b9a2084d38645c4c08276a1752dcbf2c7130d74f1569681ad5d2799c5"
 "checksum rhododendron 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "289a6395497f70b8076bf5b9c223e1dc5c0a77619d0a75124f7d4c728d09d2d8"
 "checksum ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6f7d28b30a72c01b458428e0ae988d4149c20d902346902be881e3edc4bb325c"
-"checksum rlp 0.2.1 (git+https://github.com/paritytech/parity-common)" = "<none>"
-"checksum rlp 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "89db7f8dfdd5eb7ab3ac3ece7a07fd273a680b4b224cb231181280e8996f9f0b"
+"checksum rlp 0.2.2 (git+https://github.com/paritytech/parity-common)" = "<none>"
 "checksum rocksdb 0.4.5 (git+https://github.com/paritytech/rust-rocksdb)" = "<none>"
 "checksum rocksdb-sys 0.3.0 (git+https://github.com/paritytech/rust-rocksdb)" = "<none>"
 "checksum rust-crypto 0.2.36 (registry+https://github.com/rust-lang/crates.io-index)" = "f76d05d3993fd5f4af9434e8e436db163a12a9d40e1a58a726f27a01dfd12a2a"
@@ -3972,7 +3939,6 @@ dependencies = [
 "checksum trace-time 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "5aea07da6582e957c6e737eeb63a5af79e648eeeaaaba8fd9a417f1124bafa41"
 "checksum traitobject 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "efd1f82c56340fdf16f2a953d7bda4f8fdffba13d93b00844c25572110b26079"
 "checksum transaction-pool 1.12.3 (registry+https://github.com/rust-lang/crates.io-index)" = "0f1fc049d9f039d3e9264f97f978309b94b5a5c56a5c18d28f91f469cef2b367"
-"checksum triehash 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "2033893a813c70e7d8a739ca6c36dc0a7a2c913ec718d7cbf84a3837bbe3c7ce"
 "checksum triehash 0.2.0 (git+https://github.com/paritytech/parity-common)" = "<none>"
 "checksum try-lock 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ee2aa4715743892880f70885373966c83d73ef1b0838a664ef0c76fffd35e7c2"
 "checksum twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "475352206e7a290c5fccc27624a163e8d0d115f7bb60ca18a64fc9ce056d7435"
