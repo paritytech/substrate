@@ -24,7 +24,6 @@ fdlimit = "0.1"
 exit-future = "0.1"
 sysinfo = "0.5.7"
 substrate-client = { path = "../../substrate/client" }
-substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-network = { path = "../../substrate/network" }
 substrate-network-libp2p = { path = "../../substrate/network-libp2p" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }

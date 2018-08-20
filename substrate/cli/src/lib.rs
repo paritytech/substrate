@@ -36,7 +36,6 @@ extern crate substrate_client as client;
 extern crate substrate_network as network;
 extern crate substrate_network_libp2p as network_libp2p;
 extern crate substrate_runtime_primitives as runtime_primitives;
-extern crate substrate_extrinsic_pool;
 extern crate substrate_service as service;
 #[macro_use]
 extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`

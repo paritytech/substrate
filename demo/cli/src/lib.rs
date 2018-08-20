@@ -48,41 +48,77 @@ extern crate log;
 pub mod error;
 
 use std::sync::Arc;
-use demo_primitives::Hash;
-use demo_runtime::{Block, BlockId, UncheckedExtrinsic, GenesisConfig,
+use demo_primitives::{AccountId, Hash};
+use demo_runtime::{Block, BlockId, GenesisConfig,
 	ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
 	TimestampConfig};
 use futures::{Future, Sink, Stream};
 use tokio::runtime::Runtime;
 use demo_executor::NativeExecutor;
+use extrinsic_pool::{Pool as ExtrinsicPool, ExtrinsicFor, VerifiedFor, scoring, Readiness};
 
-struct DummyPool;
-impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for DummyPool {
-	type Error = extrinsic_pool::txpool::Error;
-	type InPool = ();
+#[derive(Debug, Clone)]
+struct VerifiedExtrinsic {
+	sender: AccountId,
+	hash: Hash,
+}
 
-	fn submit(&self, _block: BlockId, _: Vec<UncheckedExtrinsic>)
-		-> Result<Vec<Hash>, Self::Error>
-	{
-		Err("unimplemented".into())
+impl extrinsic_pool::VerifiedTransaction for VerifiedExtrinsic {
+	type Hash = Hash;
+	type Sender = AccountId;
+
+	fn hash(&self) -> &Self::Hash {
+		&self.hash
 	}
 
-	fn submit_and_watch(&self, _block: BlockId, _: UncheckedExtrinsic)
-		-> Result<extrinsic_pool::watcher::Watcher<Hash>, Self::Error>
-	{
-		Err("unimplemented".into())
+	fn sender(&self) -> &Self::Sender {
+		&self.sender
 	}
 
-	fn light_status(&self) -> extrinsic_pool::txpool::LightStatus {
-		unreachable!()
+	fn mem_usage(&self) -> usize {
+		0
+	}
+}
+
+struct Pool;
+impl extrinsic_pool::ChainApi for Pool {
+	type Block = Block;
+	type Hash = Hash;
+	type Sender = AccountId;
+	type VEx = VerifiedExtrinsic;
+	type Ready = ();
+	type Error = extrinsic_pool::Error;
+	type Score = u64;
+	type Event = ();
+
+	fn verify_transaction(&self, _at: &BlockId, _xt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error> {
+		unimplemented!()
 	}
 
-	fn import_notification_stream(&self) -> extrinsic_pool::api::EventStream {
-		unreachable!()
+	fn ready(&self) -> Self::Ready {  }
+
+	fn is_ready(&self, _at: &BlockId, _ready: &mut Self::Ready, _xt: &VerifiedFor<Self>) -> Readiness {
+		unimplemented!()
 	}
 
-	fn all(&self) -> Self::InPool {
-		unreachable!()
+	fn compare(_old: &VerifiedFor<Self>, _other: &VerifiedFor<Self>) -> ::std::cmp::Ordering {
+		unimplemented!()
+	}
+
+	fn choose(_old: &VerifiedFor<Self>, _new: &VerifiedFor<Self>) -> scoring::Choice {
+		unimplemented!()
+	}
+
+	fn update_scores(
+		_xts: &[extrinsic_pool::Transaction<VerifiedFor<Self>>],
+		_scores: &mut [Self::Score],
+		_change: scoring::Change<()>
+	) {
+		unimplemented!()
+	}
+
+	fn should_replace(_old: &VerifiedFor<Self>, _new: &VerifiedFor<Self>) -> scoring::Choice {
+		unimplemented!()
 	}
 }
 
@@ -180,8 +216,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		let handler = || {
 			let state = rpc::apis::state::State::new(client.clone(), runtime.executor());
 			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
-			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool), runtime.executor());
-			rpc::rpc_handler::<Block, _, _, _, _, _>(state, chain, author, DummySystem)
+			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(ExtrinsicPool::new(Default::default(), Pool)), runtime.executor());
+			rpc::rpc_handler::<Block, Hash, _, _, _, _, _>(state, chain, author, DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();
