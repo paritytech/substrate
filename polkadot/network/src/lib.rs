@@ -585,6 +585,8 @@ impl Specialization<Block> for PolkadotProtocol {
 
 	fn maintain_peers(&mut self, ctx: &mut Context<Block>) {
 		self.consensus_gossip.collect_garbage(None);
+		self.consensus_gossip.propagate_history(ctx);
+
 		self.collators.collect_garbage(None);
 		self.local_collations.collect_garbage(None);
 		self.dispatch_pending_requests(ctx);
