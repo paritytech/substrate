@@ -530,8 +530,11 @@ impl<B, P, I> BftService<B, P, I>
 			trace!(target: "bft", "Round cache: {:?}", &*cache);
 			if cache.hash.as_ref() == Some(&hash) {
 				debug!(target: "bft", "Fast-forwarding to round {}", cache.start_round);
-				agreement.fast_forward(cache.start_round);
+				let start_round = cache.start_round;
 				cache.start_round += 1;
+
+				drop(cache); // drop lock before proceeding
+				agreement.fast_forward(start_round);
 			} else {
 				*cache = RoundCache {
 					hash: Some(hash.clone()),
