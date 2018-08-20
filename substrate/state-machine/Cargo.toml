@@ -17,4 +17,4 @@ hashdb = { git = "https://github.com/paritytech/parity-common" }
 memorydb = { git = "https://github.com/paritytech/parity-common" }
 patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 triehash = { git = "https://github.com/paritytech/parity-common" }
-rlp = { git = "https://github.com/paritytech/parity-common" }
+rlp = { git = "https://github.com/paritytech/parity-common", default-features = false }
