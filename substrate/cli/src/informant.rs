@@ -26,7 +26,6 @@ use sysinfo::{get_current_pid, ProcessExt, System, SystemExt};
 use network::{SyncState, SyncProvider};
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
-use substrate_extrinsic_pool::api::ExtrinsicPool;
 
 const TIMER_INTERVAL_MS: u64 = 5000;
 
