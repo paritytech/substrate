@@ -182,8 +182,8 @@ define_env!(init_env, <E: Ext>,
 		Ok(())
 	},
 
-	// ext_call(transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	ext_call(ctx, callee_ptr: u32, callee_len: u32, value_ptr: u32, value_len: u32) => {
+	// ext_call(transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
+	ext_call(ctx, callee_ptr: u32, callee_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) => {
 		let mut callee = Vec::new();
 		callee.resize(callee_len as usize, 0);
 		ctx.memory().get(callee_ptr, &mut callee)?;
@@ -195,8 +195,9 @@ define_env!(init_env, <E: Ext>,
 		ctx.memory().get(value_ptr, &mut value_buf)?;
 		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..]).unwrap();
 
-		// TODO: Read input data from memory.
-		let input_data = Vec::new();
+		let mut input_data = Vec::new();
+		input_data.resize(input_data_len as usize, 0u8);
+		ctx.memory().get(input_data_ptr, &mut input_data)?;
 
 		// TODO: Let user to choose how much gas to allocate for the execution.
 		let nested_gas_limit = ctx.gas_meter.gas_left();

@@ -281,6 +281,7 @@ mod tests {
 	struct TransferEntry {
 		to: u64,
 		value: u64,
+		data: Vec<u8>,
 	}
 	#[derive(Default)]
 	pub struct MockExt {
@@ -320,9 +321,13 @@ mod tests {
 			to: &u64,
 			value: u64,
 			_gas_meter: &mut GasMeter<Test>,
-			_data: &[u8],
+			data: &[u8],
 		) -> Result<CallReceipt, ()> {
-			self.transfers.push(TransferEntry { to: *to, value });
+			self.transfers.push(TransferEntry {
+				to: *to,
+				value,
+				data: data.to_vec(),
+			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
 			Ok(CallReceipt {
@@ -333,27 +338,34 @@ mod tests {
 
 	const CODE_TRANSFER: &str = r#"
 (module
-	;; ext_call(callee_ptr: u32, callee_len: u32, value_ptr: u32, value_len: u32)
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i32 i32)))
-
+	;; ext_call(
+	;;    callee_ptr: u32,
+	;;    callee_len: u32,
+	;;    value_ptr: u32,
+	;;    value_len: u32,
+	;;    input_data_ptr: u32,
+	;;    input_data_len: u32
+	;;)
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i32 i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
-
 	(func (export "call")
 		(call $ext_call
-			(i32.const 4)   ;; Pointer to "Transfer to" address.
-			(i32.const 8)   ;; Length of "Transfer to" address.
+			(i32.const 4)   ;; Pointer to "callee" address.
+			(i32.const 8)   ;; Length of "callee" address.
 			(i32.const 12)  ;; Pointer to the buffer with value to transfer
 			(i32.const 8)   ;; Length of the buffer with value to transfer.
+			(i32.const 20)  ;; Pointer to input data buffer address
+			(i32.const 4)   ;; Length of input data buffer
 		)
 	)
-
 	;; Destination AccountId to transfer the funds.
 	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 4) "\02\00\00\00\00\00\00\00")
-
+	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
 	;; Amount of value to transfer.
 	;; Represented by u64 (8 bytes long) in little endian.
 	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
+
+	(data (i32.const 20) "\01\02\03\04")
 )
 "#;
 
@@ -369,7 +381,16 @@ mod tests {
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
-		assert_eq!(&mock_ext.transfers, &[TransferEntry { to: 2, value: 6 }]);
+		assert_eq!(
+			&mock_ext.transfers,
+			&[TransferEntry {
+				to: 9,
+				value: 6,
+				data: vec![
+					1, 2, 3, 4,
+				],
+			}]
+		);
 	}
 
 	const CODE_MEM: &str = r#"
