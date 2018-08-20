@@ -27,6 +27,6 @@ unsigned-varint = { version = "0.1", features = ["codec"] }
 
 [dev-dependencies]
 assert_matches = "1.2"
-parity-bytes = { git = "https://github.com/paritytech/parity-common.git" }
+parity-bytes = { git = "https://github.com/paritytech/parity-common" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ethcore-logger = { git = "https://github.com/paritytech/parity.git" }

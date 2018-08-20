@@ -13,8 +13,9 @@ environmental = { path = "../environmental", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 substrate-primitives = { path = "../primitives", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
-triehash = { version = "0.1.2", optional = true }
+triehash = { git = "https://github.com/paritytech/parity-common", optional = true }
 ed25519 = { path = "../ed25519", optional = true }
+hashdb = { git = "https://github.com/paritytech/parity-common", optional = true }
 
 [features]
 default = ["std"]
@@ -26,6 +27,7 @@ std = [
 	"substrate-codec/std",
 	"substrate-runtime-std/std",
 	"ed25519",
+	"hashdb"
 ]
 nightly = []
 strict = []
