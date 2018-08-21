@@ -65,7 +65,10 @@ fn fetch_cached_runtime_version<'a, E: Externalities<KeccakHasher>>(
 					.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
 				RuntimePreproc::ValidCode(module, version)
 			}
-			Err(_) => RuntimePreproc::InvalidCode,
+			Err(e) => {
+				trace!(target: "executor", "Invalid code presented to executor ({:?})", e);
+				RuntimePreproc::InvalidCode
+			}
 		});
 	match maybe_runtime_preproc {
 		RuntimePreproc::InvalidCode => Err(ErrorKind::InvalidCode(code.into()).into()),
