@@ -51,6 +51,7 @@ fn gen_cache_key(code: &[u8]) -> [u8; 32] {
 /// the runtime version entry for `code`, determines whether `Compatibility::IsCompatible`
 /// can be used by by comparing returned RuntimeVersion to `ref_version`
 fn fetch_cached_runtime_version<'a, E: Externalities>(
+	wasm_executor: &WasmExecutor,
 	cache: &'a mut MutexGuard<CacheType>,
 	ext: &mut E,
 	code: &[u8]
@@ -124,11 +125,6 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 	/// Create new instance with specific number of pages for wasm fallback's heap.
 	pub fn with_heap_pages(min_heap_pages: usize, max_heap_pages: usize) -> Self {
-		// FIXME: set this entry at compile time
-		RUNTIMES_CACHE.lock().insert(
-			gen_cache_key(D::native_equivalent()),
-			Compatibility::IsCompatible(D::VERSION));
-
 		NativeExecutor {
 			_dummy: Default::default(),
 			fallback: WasmExecutor::new(min_heap_pages, max_heap_pages),
