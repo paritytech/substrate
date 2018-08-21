@@ -31,7 +31,6 @@
 //!
 //! Failures are typically not cascading. That, for example, means that if contract A calls B and B errors
 //! somehow, then A can decide if it should proceed or error.
-//! TODO: That is not the case now, since call/create externalities traps on any error now.
 //!
 //! # Interaction with the system
 //!

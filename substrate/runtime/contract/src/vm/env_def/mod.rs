@@ -183,7 +183,7 @@ define_env!(init_env, <E: Ext>,
 	},
 
 	// ext_call(transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
-	ext_call(ctx, callee_ptr: u32, callee_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) => {
+	ext_call(ctx, callee_ptr: u32, callee_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32 => {
 		let mut callee = Vec::new();
 		callee.resize(callee_len as usize, 0);
 		ctx.memory().get(callee_ptr, &mut callee)?;
@@ -214,9 +214,8 @@ define_env!(init_env, <E: Ext>,
 
 		match call_outcome {
 			// TODO: Find a way how to pass return_data back to the this sandbox.
-			Ok(CallReceipt { .. }) => Ok(()),
-			// TODO: Return a status code value that can be handled by the caller instead of a trap.
-			Err(_) => Err(sandbox::HostError),
+			Ok(CallReceipt { .. }) => Ok(0),
+			Err(_) => Ok(1),
 		}
 	},
 
