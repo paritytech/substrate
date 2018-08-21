@@ -32,6 +32,9 @@ extern crate substrate_state_machine as state_machine;
 #[macro_use]
 extern crate error_chain;
 
+#[macro_use]
+extern crate log;
+
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
@@ -51,6 +54,11 @@ error_chain! {
 		UnknownRuntime {
 			description("Unknown runtime code")
 			display("Unknown runtime code")
+		}
+		/// Error decoding runtime return data.
+		BadRuntimeData(method: &'static str) {
+			description("Unknown runtime data format")
+			display("Unknown runtime data format when calling {}", method)
 		}
 		/// Unknown block ID.
 		UnknownBlock(b: String) {

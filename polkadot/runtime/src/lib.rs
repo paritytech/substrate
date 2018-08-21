@@ -250,9 +250,17 @@ pub mod api {
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),
 		finalise_block => |()| super::Executive::finalise_block(),
-		inherent_extrinsics => |(inherent, version)| super::inherent_extrinsics(inherent, version),
+		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
 		validator_count => |()| super::Session::validator_count(),
-		validators => |()| super::Session::validators()
+		validators => |()| super::Session::validators(),
+		duty_roster => |()| super::Parachains::calculate_duty_roster(),
+		active_parachains => |()| super::Parachains::active_parachains(),
+		parachain_head => |id| super::Parachains::parachain_head(&id),
+		parachain_code => |id| super::Parachains::parachain_code(&id),
+		timestamp => |()| super::Timestamp::get(),
+		random_seed => |()| super::System::random_seed(),
+		account_nonce => |account| super::System::account_nonce(&account),
+		lookup_address => |address| super::Staking::lookup_address(address)
 	);
 }
 
