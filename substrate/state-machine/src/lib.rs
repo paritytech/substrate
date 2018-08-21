@@ -370,7 +370,7 @@ where
 			};
 
 			if (result.is_ok() && wasm_result.is_ok() && result.as_ref().unwrap() == wasm_result.as_ref().unwrap()/* && delta == wasm_delta*/)
-				|| (result.is_err() && wasm_result.is_err() && format!("{}", result.as_ref().unwrap_err()) == format!("{}", wasm_result.as_ref().unwrap_err()))
+				|| (result.is_err() && wasm_result.is_err())
 			{
 				(result, delta)
 			} else {
