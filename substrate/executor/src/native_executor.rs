@@ -63,8 +63,8 @@ fn fetch_cached_runtime_version<'a, E: Externalities>(
 					.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
 				RuntimePreproc::ValidCode(module, version)
 			}
-			Err(_) => {
-				trace!(target: "executor", "Invalid code presented to executor");
+			Err(e) => {
+				trace!(target: "executor", "Invalid code presented to executor ({:?})", e);
 				RuntimePreproc::InvalidCode
 			}
 		});
