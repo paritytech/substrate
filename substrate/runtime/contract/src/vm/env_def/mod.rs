@@ -219,8 +219,15 @@ define_env!(init_env, <E: Ext>,
 		}
 	},
 
-	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
-	ext_create(ctx, code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) => {
+	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32
+	ext_create(
+		ctx, code_ptr: u32,
+		code_len: u32,
+		value_ptr: u32,
+		value_len: u32,
+		input_data_ptr: u32,
+		input_data_len: u32
+	) -> u32 => {
 		let mut value_buf = Vec::new();
 		value_buf.resize(value_len as usize, 0);
 		ctx.memory().get(value_ptr, &mut value_buf)?;
@@ -248,9 +255,8 @@ define_env!(init_env, <E: Ext>,
 
 		match create_outcome {
 			// TODO: Copy an address of the created contract in the sandbox.
-			Ok(CreateReceipt { .. }) => Ok(()),
-			// TODO: Return a status code value that can be handled by the caller instead of a trap.
-			Err(_) => Err(sandbox::HostError),
+			Ok(CreateReceipt { .. }) => Ok(0),
+			Err(_) => Ok(1),
 		}
 	},
 

@@ -338,17 +338,26 @@ fn code_create(constructor: &[u8]) -> String {
 	format!(
 		r#"
 (module
-	;; ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32 i32 i32)))
+	;; ext_create(
+	;;     code_ptr: u32,
+	;;     code_len: u32,
+	;;     value_ptr: u32,
+	;;     value_len: u32,
+	;;     input_data_ptr: u32,
+	;;     input_data_len: u32,
+	;; ) -> u32
+	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(call $ext_create
-			(i32.const 12)   ;; Pointer to `code`
-			(i32.const {code_len}) ;; Length of `code`
-			(i32.const 4)   ;; Pointer to the buffer with value to transfer
-			(i32.const 8)   ;; Length of the buffer with value to transfer
-			(i32.const 0)   ;; Pointer to input data buffer address
-			(i32.const 0)   ;; Length of input data buffer
+		(drop
+			(call $ext_create
+				(i32.const 12)   ;; Pointer to `code`
+				(i32.const {code_len}) ;; Length of `code`
+				(i32.const 4)   ;; Pointer to the buffer with value to transfer
+				(i32.const 8)   ;; Length of the buffer with value to transfer
+				(i32.const 0)   ;; Pointer to input data buffer address
+				(i32.const 0)   ;; Length of input data buffer
+			)
 		)
 	)
 	;; Amount of value to transfer.
@@ -387,12 +396,12 @@ fn contract_create() {
 		);
 
 		// 11 - value sent with the transaction
-		// 2 * 134 - gas spent by the deployer contract (134) multiplied by gas price (2)
+		// 2 * 135 - gas spent by the deployer contract (135) multiplied by gas price (2)
 		// 2 * 135 - base gas fee for call (top level)
 		// 2 * 175 - base gas fee for create (by contract)
 		// ((21 / 2) * 2) - price per account creation
 		let expected_gas_after_create =
-			100_000_000 - 11 - (2 * 134) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
+			100_000_000 - 11 - (2 * 135) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
 		assert_eq!(Staking::free_balance(&0), expected_gas_after_create);
 		assert_eq!(Staking::free_balance(&1), 8);
 		assert_eq!(Staking::free_balance(&derived_address), 3);

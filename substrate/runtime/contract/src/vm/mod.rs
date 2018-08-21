@@ -397,17 +397,26 @@ mod tests {
 
 	const CODE_CREATE: &str = r#"
 (module
-	;; ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32 i32 i32)))
+	;; ext_create(
+	;;     code_ptr: u32,
+	;;     code_len: u32,
+	;;     value_ptr: u32,
+	;;     value_len: u32,
+	;;     input_data_ptr: u32,
+	;;     input_data_len: u32,
+	;; ) -> u32
+	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(call $ext_create
-			(i32.const 12)   ;; Pointer to `code`
-			(i32.const 8)    ;; Length of `code`
-			(i32.const 4)    ;; Pointer to the buffer with value to transfer
-			(i32.const 8)    ;; Length of the buffer with value to transfer
-			(i32.const 20)   ;; Pointer to input data buffer address
-			(i32.const 4)    ;; Length of input data buffer
+		(drop
+			(call $ext_create
+				(i32.const 12)   ;; Pointer to `code`
+				(i32.const 8)    ;; Length of `code`
+				(i32.const 4)    ;; Pointer to the buffer with value to transfer
+				(i32.const 8)    ;; Length of the buffer with value to transfer
+				(i32.const 20)   ;; Pointer to input data buffer address
+				(i32.const 4)    ;; Length of input data buffer
+			)
 		)
 	)
 	;; Amount of value to transfer.
