@@ -23,6 +23,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine;
 extern crate triehash;
 extern crate ed25519;
+extern crate hashdb;
 
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
@@ -30,6 +31,7 @@ pub extern crate substrate_codec as codec;
 pub use primitives::{blake2_256, twox_128, twox_256};
 
 pub use primitives::KeccakHasher;
+use hashdb::Hasher;
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
@@ -130,8 +132,8 @@ pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
 // NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<KeccakHasher>, f: F) -> R {
-	ext::using(ext, f)
+pub fn with_externalities<R, H: Hasher, F: FnOnce() -> R>(ext: &mut Externalities<H>, f: F) -> R {
+	ext::using(ext, f) // REVIEW: this is where the limitations of the `environmental!` macro comes in. Any way to get around this?
 }
 
 /// Trait for things which can be printed.

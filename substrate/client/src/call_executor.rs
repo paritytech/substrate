@@ -23,9 +23,10 @@ use state_machine::{self, OverlayedChanges, Ext,
 use runtime_io::Externalities;
 use executor::{RuntimeVersion, RuntimeInfo};
 use patricia_trie::NodeCodec;
-use primitives::{KeccakHasher, RlpCodec};
 use hashdb::Hasher;
 use rlp::Encodable;
+use std::marker::PhantomData;
+use heapsize::HeapSizeOf;
 
 use backend;
 use error;
@@ -94,32 +95,39 @@ where
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
-pub struct LocalCallExecutor<B, E> {
+pub struct LocalCallExecutor<B, E, H, C> {
 	backend: Arc<B>,
 	executor: E,
+	_hasher: PhantomData<H>,
+	_codec: PhantomData<C>,
 }
 
-impl<B, E> LocalCallExecutor<B, E> {
+impl<B, E, H, C> LocalCallExecutor<B, E, H, C> {
 	/// Creates new instance of local call executor.
 	pub fn new(backend: Arc<B>, executor: E) -> Self {
-		LocalCallExecutor { backend, executor }
+		LocalCallExecutor { backend, executor, _hasher: PhantomData, _codec: PhantomData }
 	}
 }
 
-impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
+impl<B, E, H, C> Clone for LocalCallExecutor<B, E, H, C> where E: Clone {
 	fn clone(&self) -> Self {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
+			_hasher: PhantomData,
+			_codec: PhantomData,
 		}
 	}
 }
 
-impl<B, E, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for LocalCallExecutor<B, E>
+impl<B, E, Block, H, C> CallExecutor<Block, H, C> for LocalCallExecutor<B, E, H, C>
 where
-	B: backend::LocalBackend<Block, KeccakHasher, RlpCodec>,
-	E: CodeExecutor<KeccakHasher> + RuntimeInfo,
+	B: backend::LocalBackend<Block, H, C>,
+	E: CodeExecutor<H> + RuntimeInfo<H>,
 	Block: BlockT,
+	H: Hasher,
+	H::Out: Ord + Encodable + HeapSizeOf,
+	C: NodeCodec<H>
 {
 	type Error = E::Error;
 
@@ -151,7 +159,7 @@ where
 	}
 
 	fn call_at_state<
-		S: state_machine::Backend<KeccakHasher, RlpCodec>,
+		S: state_machine::Backend<H, C>,
 		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
 	>(&self,
 		state: &S,
@@ -170,7 +178,7 @@ where
 		).map_err(Into::into)
 	}
 
-	fn prove_at_state<S: state_machine::Backend<KeccakHasher, RlpCodec>>(&self,
+	fn prove_at_state<S: state_machine::Backend<H, C>>(&self,
 		state: S,
 		changes: &mut OverlayedChanges,
 		method: &str,
@@ -188,6 +196,6 @@ where
 	}
 
 	fn native_runtime_version(&self) -> Option<RuntimeVersion> {
-		<E as RuntimeInfo>::NATIVE_VERSION
+		<E as RuntimeInfo<H>>::NATIVE_VERSION
 	}
 }

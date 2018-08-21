@@ -23,7 +23,10 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
-use primitives::{KeccakHasher, RlpCodec};
+use hashdb::Hasher;
+use heapsize::HeapSizeOf;
+use patricia_trie::NodeCodec;
+use rlp::Encodable;
 use primitives::storage::{StorageKey, StorageData};
 use codec::Decode;
 use state_machine::{
@@ -37,12 +40,13 @@ use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
 use {error, in_mem, block_builder, runtime_io, bft, genesis};
+use std::marker::PhantomData;
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
 
 /// Substrate Client
-pub struct Client<B, E, Block> where Block: BlockT {
+pub struct Client<B, E, Block, H, C> where Block: BlockT {
 	backend: Arc<B>,
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
@@ -50,6 +54,8 @@ pub struct Client<B, E, Block> where Block: BlockT {
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 	execution_strategy: ExecutionStrategy,
+	_hasher: PhantomData<H>, // TODO: feels like these shouldn't be necesseary
+	_codec: PhantomData<C>,
 }
 
 /// A source of blockchain evenets.
@@ -161,24 +167,35 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 }
 
 /// Create an instance of in-memory client.
-pub fn new_in_mem<E, Block, S>(
+pub fn new_in_mem<E, Block, S, H, C>(
 	executor: E,
 	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block, KeccakHasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, KeccakHasher, RlpCodec>, E>, Block>>
+) -> error::Result<Client<
+		in_mem::Backend<Block, H, C>,
+		LocalCallExecutor<in_mem::Backend<Block, H, C>, E, H, C>,
+		Block,
+		H,
+		C>>
 	where
-		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
+		E: CodeExecutor<H> + RuntimeInfo<H>,
 		S: BuildStorage,
 		Block: BlockT,
+		H: Hasher,
+		H::Out: Ord + Encodable + HeapSizeOf,
+		C: NodeCodec<H> + Send + Sync,
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
 }
 
-impl<B, E, Block> Client<B, E, Block> where
-	B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+impl<B, E, Block, H, C> Client<B, E, Block, H, C> where
+	B: backend::Backend<Block, H, C>,
+	E: CallExecutor<Block, H, C>,
 	Block: BlockT,
+	H: Hasher,
+	H::Out: Ord + Encodable + HeapSizeOf,
+	C: NodeCodec<H>,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new<S: BuildStorage>(
@@ -204,6 +221,8 @@ impl<B, E, Block> Client<B, E, Block> where
 			import_lock: Default::default(),
 			importing_block: Default::default(),
 			execution_strategy,
+			_hasher: PhantomData,
+			_codec: PhantomData,
 		})
 	}
 
@@ -285,14 +304,14 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, KeccakHasher, RlpCodec>>
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, H, C>>
 	where E: Clone
 	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, KeccakHasher, RlpCodec>>
+	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, H, C>>
 	where E: Clone
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
@@ -507,11 +526,14 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-		E: CallExecutor<Block, KeccakHasher, RlpCodec>,
-		Block: BlockT,
+impl<B, E, Block, H, C> bft::BlockImport<Block> for Client<B, E, Block, H, C>
+where
+	H: Hasher,
+	H::Out: Ord + Encodable + HeapSizeOf,
+	C: NodeCodec<H>,
+	B: backend::Backend<Block, H, C>,
+	E: CallExecutor<Block, H, C>,
+	Block: BlockT,
 {
 	fn import_block(
 		&self,
@@ -530,11 +552,14 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 	}
 }
 
-impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-		E: CallExecutor<Block, KeccakHasher, RlpCodec>,
-		Block: BlockT,
+impl<B, E, Block, H, C> bft::Authorities<Block> for Client<B, E, Block, H, C>
+where
+	H: Hasher,
+	H::Out: Ord + Encodable + HeapSizeOf,
+	C: NodeCodec<H>,
+	B: backend::Backend<Block, H, C>,
+	E: CallExecutor<Block, H, C>,
+	Block: BlockT,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
 		let on_chain_version: Result<_, bft::Error> = self.runtime_version_at(at)
@@ -553,9 +578,12 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 	}
 }
 
-impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
+impl<B, E, Block, H, C> BlockchainEvents<Block> for Client<B, E, Block, H, C>
 where
-	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+	H: Hasher,
+	H::Out: Ord + Encodable + HeapSizeOf,
+	C: NodeCodec<H>,
+	E: CallExecutor<Block, H, C>,
 	Block: BlockT,
 {
 	/// Get block import event stream.
@@ -571,10 +599,13 @@ where
 	}
 }
 
-impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
+impl<B, E, Block, H, C> ChainHead<Block> for Client<B, E, Block, H, C>
 where
-	B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+	H: Hasher,
+	H::Out: Ord + Encodable + HeapSizeOf,
+	C: NodeCodec<H>,
+	B: backend::Backend<Block, H, C>,
+	E: CallExecutor<Block, H, C>,
 	Block: BlockT,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
@@ -582,11 +613,14 @@ where
 	}
 }
 
-impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-		E: CallExecutor<Block, KeccakHasher, RlpCodec>,
-		Block: BlockT,
+impl<B, E, Block, H, C> BlockBody<Block> for Client<B, E, Block, H, C>
+where
+	H: Hasher,
+	H::Out: Ord + Encodable + HeapSizeOf,
+	C: NodeCodec<H>,
+	B: backend::Backend<Block, H, C>,
+	E: CallExecutor<Block, H, C>,
+	Block: BlockT,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
