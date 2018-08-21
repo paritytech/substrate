@@ -21,8 +21,7 @@ use wasmi::Module as WasmModule;
 use runtime_version::RuntimeVersion;
 use std::collections::HashMap;
 use codec::Decode;
-use twox_hash::XxHash;
-use std::hash::Hasher;
+use primitives::hashing::blake2_256;
 use parking_lot::{Mutex, MutexGuard};
 use RuntimeInfo;
 use primitives::KeccakHasher;
@@ -30,15 +29,12 @@ use primitives::KeccakHasher;
 // For the internal Runtime Cache:
 // Is it compatible enough to run this natively or do we need to fall back on the WasmModule
 
-enum Compatibility {
-	InvalidVersion(WasmModule),
-	IsCompatible(RuntimeVersion, WasmModule),
-	NotCompatible(RuntimeVersion, WasmModule)
+enum RuntimePreproc {
+	InvalidCode,
+	ValidCode(WasmModule, Option<RuntimeVersion>),
 }
 
-unsafe impl Send for Compatibility {}
-
-type CacheType = HashMap<u64, Compatibility>;
+type CacheType = HashMap<[u8; 32], RuntimePreproc>;
 
 lazy_static! {
 	static ref RUNTIMES_CACHE: Mutex<CacheType> = Mutex::new(HashMap::new());
@@ -48,10 +44,8 @@ lazy_static! {
 // it is asserted that part of the audit process that any potential on-chain code change
 // will have done is to ensure that the two-x hash is different to that of any other
 // :code value from the same chain
-fn gen_cache_key(code: &[u8]) -> u64 {
-	let mut h = XxHash::with_seed(0);
-	h.write(code);
-	h.finish()
+fn gen_cache_key(code: &[u8]) -> [u8; 32] {
+	blake2_256(code)
 }
 
 /// fetch a runtime version from the cache or if there is no cached version yet, create
@@ -61,25 +55,22 @@ fn fetch_cached_runtime_version<'a, E: Externalities<KeccakHasher>>(
 	wasm_executor: &WasmExecutor,
 	cache: &'a mut MutexGuard<CacheType>,
 	ext: &mut E,
-	code: &[u8],
-	ref_version: RuntimeVersion
-) -> &'a Compatibility {
-	cache.entry(gen_cache_key(code))
-		.or_insert_with(|| {
-			let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-			let version = wasm_executor.call_in_wasm_module(ext, &module, "version", &[]).ok()
-				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
-
-			if let Some(v) = version {
-				if ref_version.can_call_with(&v) {
-					Compatibility::IsCompatible(v, module)
-				} else {
-					Compatibility::NotCompatible(v, module)
-				}
-			} else {
-				Compatibility::InvalidVersion(module)
+	code: &[u8]
+) -> Result<(&'a WasmModule, &'a Option<RuntimeVersion>)> {
+	let maybe_runtime_preproc = cache.entry(gen_cache_key(code))
+		.or_insert_with(|| match WasmModule::from_buffer(code) {
+			Ok(module) => {
+				let version = wasm_executor.call_in_wasm_module(ext, &module, "version", &[])
+					.ok()
+					.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
+				RuntimePreproc::ValidCode(module, version)
 			}
-	})
+			Err(_) => RuntimePreproc::InvalidCode,
+		});
+	match maybe_runtime_preproc {
+		RuntimePreproc::InvalidCode => Err(ErrorKind::InvalidCode(code.into()).into()),
+		RuntimePreproc::ValidCode(m, v) => Ok((m, v)),
+	}
 }
 
 fn safe_call<F, U>(f: F) -> Result<U>
@@ -157,11 +148,7 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 		ext: &mut E,
 		code: &[u8],
 	) -> Option<RuntimeVersion> {
-		let mut c = RUNTIMES_CACHE.lock();
-		match fetch_cached_runtime_version(&self.fallback, &mut c, ext, code, D::VERSION) {
-			Compatibility::IsCompatible(v, _) | Compatibility::NotCompatible(v, _) => Some(v.clone()),
-			Compatibility::InvalidVersion(_m) => None
-		}
+		fetch_cached_runtime_version(&self.fallback, &mut RUNTIMES_CACHE.lock(), ext, code).ok()?.1.clone()
 	}
 }
 
@@ -177,10 +164,22 @@ impl<D: NativeExecutionDispatch> CodeExecutor<KeccakHasher> for NativeExecutor<D
 		use_native: bool,
 	) -> (Result<Vec<u8>>, bool) {
 		let mut c = RUNTIMES_CACHE.lock();
-		match (use_native, fetch_cached_runtime_version(&self.fallback, &mut c, ext, code, D::VERSION)) {
-			(_, Compatibility::NotCompatible(_, m)) | (_, Compatibility::InvalidVersion(m)) | (false, Compatibility::IsCompatible(_, m)) =>
-				(self.fallback.call_in_wasm_module(ext, m, method, data), false),
-			_ => (D::dispatch(ext, method, data), true),
+		let (module, onchain_version) = match fetch_cached_runtime_version(&self.fallback, &mut c, ext, code) {
+			Ok((module, onchain_version)) => (module, onchain_version),
+			Err(_) => return (Err(ErrorKind::InvalidCode(code.into()).into()), false),
+		};
+		match (use_native, onchain_version.as_ref().map_or(false, |v| v.can_call_with(&D::VERSION))) {
+			(_, false) => {
+				trace!(target: "executor", "Request for native execution failed (native: {}, chain: {})", D::VERSION, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
+				(self.fallback.call_in_wasm_module(ext, module, method, data), false)
+			}
+			(false, _) => {
+				(self.fallback.call_in_wasm_module(ext, module, method, data), false)
+			}
+			_ => {
+				trace!(target: "executor", "Request for native execution succeeded (native: {}, chain: {})", D::VERSION, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
+				(D::dispatch(ext, method, data), true)
+			}
 		}
 	}
 }
