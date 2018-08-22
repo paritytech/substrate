@@ -62,6 +62,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			session_reward: 100,
 			balances: endowed_accounts.iter().map(|&k|(k, 1u128 << 60)).collect(),
 			validator_count: 12,
+			minimum_validator_count: 4,
 			sessions_per_era: 12,	// 1 hour per era
 			bonding_duration: 24,	// 1 day per bond.
 			offline_slash_grace: 0,
@@ -136,6 +137,7 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			reclaim_rebate: 0,
 			balances: endowed_accounts.iter().map(|&k|(k, (1u128 << 60))).collect(),
 			validator_count: 2,
+			minimum_validator_count: 1,
 			sessions_per_era: 5,
 			bonding_duration: 2,
 			early_era_slash: 0,
