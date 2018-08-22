@@ -782,8 +782,9 @@ mod tests {
 	}
 
 	impl BlockImport<TestBlock> for FakeClient {
-		fn import_block(&self, block: TestBlock, _justification: Justification<H256>) {
-			assert!(self.imported_heights.lock().insert(block.header.number))
+		fn import_block(&self, block: TestBlock, _justification: Justification<H256>) -> bool {
+			assert!(self.imported_heights.lock().insert(block.header.number));
+			true
 		}
 	}
 
