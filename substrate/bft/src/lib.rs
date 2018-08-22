@@ -513,14 +513,15 @@ impl<B, P, I> BftService<B, P, I>
 
 		let n = authorities.len();
 		let max_faulty = max_faulty_of(n);
+		trace!(target: "bft", "Initiating agreement on top of #{}, {:?}", header.number(), hash);
 		trace!(target: "bft", "max_faulty_of({})={}", n, max_faulty);
 
 		let local_id = self.local_id();
 
 		if !authorities.contains(&local_id) {
 			// cancel current agreement
-			self.live_agreement.lock().take();
-			Err(From::from(ErrorKind::InvalidAuthority(local_id)))?;
+			live_agreement.take();
+			Err(ErrorKind::InvalidAuthority(local_id).into())?;
 		}
 
 		let (proposer, input, output) = self.factory.init(header, &authorities, self.key.clone())?;
