@@ -344,7 +344,7 @@ pub struct BftFuture<B, P, I, InStream, OutSink> where
 {
 	inner: rhododendron::Agreement<BftInstance<B, P>, InStream, OutSink>,
 	status: Arc<AtomicUsize>,
-	send_task: Option<oneshot::Sender<task::Task>>,
+	send_task: Option<oneshot::Sender<Option<task::Task>>>,
 	import: Arc<I>,
 }
 
@@ -363,7 +363,7 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 	fn poll(&mut self) -> ::futures::Poll<(), ()> {
 		// send the task to the bft service so this can be cancelled.
 		if let Some(sender) = self.send_task.take() {
-			let _ = sender.send(task::current());
+			let _ = sender.send(Some(task::current()));
 		}
 
 		// service has canceled the future. bail
@@ -413,6 +413,10 @@ impl<B, P, I, InStream, OutSink> Drop for BftFuture<B, P, I, InStream, OutSink> 
 	OutSink: Sink<SinkItem=Communication<B>, SinkError=P::Error>,
 {
 	fn drop(&mut self) {
+		if let Some(sender) = self.send_task.take() {
+			let _ = sender.send(None);
+		}
+
 		// TODO: have a trait member to pass misbehavior reports into.
 		let misbehavior = self.inner.drain_misbehavior().collect::<Vec<_>>();
 		self.inner.context().proposer.import_misbehavior(misbehavior);
@@ -421,7 +425,7 @@ impl<B, P, I, InStream, OutSink> Drop for BftFuture<B, P, I, InStream, OutSink> 
 
 struct AgreementHandle {
 	status: Arc<AtomicUsize>,
-	task: Option<oneshot::Receiver<task::Task>>,
+	task: Option<oneshot::Receiver<Option<task::Task>>>,
 }
 
 impl AgreementHandle {
@@ -438,7 +442,7 @@ impl Drop for AgreementHandle {
 		};
 
 		// if this fails, the task is definitely not live anyway.
-		if let Ok(task) = task.wait() {
+		if let Ok(Some(task)) = task.wait() {
 			self.status.compare_and_swap(status::LIVE, status::CANCELED, Ordering::SeqCst);
 			task.notify();
 		}
@@ -1065,5 +1069,31 @@ mod tests {
 		} else {
 			assert!(false);
 		}
+	}
+
+	#[test]
+	fn drop_bft_future_does_not_deadlock() {
+		let client = FakeClient {
+			authorities: vec![
+				Keyring::One.to_raw_public().into(),
+				Keyring::Two.to_raw_public().into(),
+				Keyring::Alice.to_raw_public().into(),
+				Keyring::Eve.to_raw_public().into(),
+			],
+			imported_heights: Mutex::new(HashSet::new()),
+		};
+
+		let service = make_service(client);
+
+		let first = from_block_number(2);
+		let first_hash = first.hash();
+
+		let mut second = from_block_number(3);
+		second.parent_hash = first_hash;
+		let second_hash = second.hash();
+
+		let _ = service.build_upon(&first).unwrap();
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first_hash);
+		service.live_agreement.lock().take();
 	}
 }
