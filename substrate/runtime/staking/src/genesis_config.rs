@@ -29,7 +29,7 @@ use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	BondingDuration, CreationFee, TransferFee, ReclaimRebate,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
 	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash,
-	OfflineSlashGrace};
+	OfflineSlashGrace, MinimumValidatorCount};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
