@@ -89,6 +89,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		},
 		intentions: vec![],
 		validator_count: 2,
+		minimum_validator_count: 0,
 		bonding_duration: 3,
 		transaction_base_fee: 0,
 		transaction_byte_fee: 0,

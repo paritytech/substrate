@@ -199,6 +199,7 @@ mod tests {
 				balances: vec![(alice(), 111)],
 				intentions: vec![alice(), bob(), Charlie.to_raw_public().into()],
 				validator_count: 3,
+				minimum_validator_count: 0,
 				bonding_duration: 0,
 				transaction_base_fee: 1,
 				transaction_byte_fee: 0,

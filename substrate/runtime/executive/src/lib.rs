@@ -278,6 +278,7 @@ mod tests {
 			balances: vec![(1, 111)],
 			intentions: vec![],
 			validator_count: 0,
+			minimum_validator_count: 0,
 			bonding_duration: 0,
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,

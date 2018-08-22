@@ -64,7 +64,7 @@ mod genesis_config;
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
 
-const MINIMUM_REQUIRED_VALIDATORS: usize = 4;
+const DEFAULT_MINIMUM_VALIDATOR_COUNT: usize = 4;
 
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: usize = 64;
@@ -175,8 +175,10 @@ decl_storage! {
 
 	// The length of the bonding duration in eras.
 	pub BondingDuration get(bonding_duration): b"sta:loc" => required T::BlockNumber;
-	// The length of a staking era in sessions.
+	// The ideal number of staking participants.
 	pub ValidatorCount get(validator_count): b"sta:vac" => required u32;
+	// Minimum number of staking participants before emergency conditions are imposed.
+	pub MinimumValidatorCount: b"sta:minimum_validator_count" => u32;
 	// The length of a staking era in sessions.
 	pub SessionsPerEra get(sessions_per_era): b"sta:spe" => required T::BlockNumber;
 	// The total amount of stake on the system.
@@ -279,6 +281,10 @@ pub enum UpdateBalanceOutcome {
 impl<T: Trait> Module<T> {
 
 	// PUBLIC IMMUTABLES
+
+	pub fn minimum_validator_count() -> usize {
+		<MinimumValidatorCount<T>>::get().map(|v| v as usize).unwrap_or(DEFAULT_MINIMUM_VALIDATOR_COUNT)
+	}
 
 	/// The length of a staking era in blocks.
 	pub fn era_length() -> T::BlockNumber {
@@ -403,7 +409,7 @@ impl<T: Trait> Module<T> {
 	/// Effects will be felt at the beginning of the next era.
 	fn unstake(aux: &T::PublicAux, intentions_index: u32) -> Result {
 		// unstake fails in degenerate case of having too few existing staked parties
-		if Self::intentions().len() <= MINIMUM_REQUIRED_VALIDATORS {
+		if Self::intentions().len() <= Self::minimum_validator_count() {
 			return Err("cannot unstake when there are too few staked participants")
 		}
 		Self::apply_unstake(aux.ref_into(), intentions_index as usize)
@@ -742,7 +748,7 @@ impl<T: Trait> Module<T> {
 	fn slash_validator(v: &T::AccountId, slash: T::Balance) {
 		// skip the slash in degenerate case of having only 4 staking participants despite having a larger
 		// desired number of validators (validator_count).
-		if Self::intentions().len() <= MINIMUM_REQUIRED_VALIDATORS {
+		if Self::intentions().len() <= Self::minimum_validator_count() {
 			return
 		}
 
@@ -840,7 +846,7 @@ impl<T: Trait> Module<T> {
 			.collect::<Vec<_>>();
 
 		// Avoid making new era if it would leave us with fewer than the minimum needed validators
-		if intentions.len() < MINIMUM_REQUIRED_VALIDATORS {
+		if intentions.len() < Self::minimum_validator_count() {
 			return
 		}
 
