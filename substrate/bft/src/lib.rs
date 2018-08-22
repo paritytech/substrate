@@ -597,9 +597,8 @@ impl<B, P, I> BftService<B, P, I>
 		let hash = header.hash();
 		let &(ref live_hash, ref handle) = live;
 		match handle.status() {
-			status::BAD => true, // if the block was bad, can always go on.
-			status::LIVE => hash != *live_hash, // can supersede with better block.
-			status::GOOD => *header.parent_hash() == *live_hash, // can follow with next block.
+			_ if *header.parent_hash() == *live_hash => true, // can always follow with next block.
+			status::BAD => hash == *live_hash, // bad block can be re-agreed on.
 			_ => false, // canceled won't appear since we overwrite the handle before returning.
 		}
 	}
