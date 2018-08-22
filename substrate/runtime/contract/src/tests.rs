@@ -168,18 +168,20 @@ const CODE_TRANSFER: &str = r#"
 	;; ext_call(
 	;;    callee_ptr: u32,
 	;;    callee_len: u32,
+	;;    gas: u64,
 	;;    value_ptr: u32,
 	;;    value_len: u32,
 	;;    input_data_ptr: u32,
 	;;    input_data_len: u32
 	;; ) -> u32
-	(import "env" "ext_call" (func $ext_call (param i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
 			(call $ext_call
 				(i32.const 4)  ;; Pointer to "callee" address.
 				(i32.const 8)  ;; Length of "callee" address.
+				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
 				(i32.const 12)  ;; Pointer to the buffer with value to transfer
 				(i32.const 8)   ;; Length of the buffer with value to transfer.
 				(i32.const 0)   ;; Pointer to input data buffer address
@@ -216,10 +218,10 @@ fn contract_transfer() {
 		assert_eq!(
 			Staking::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 9 - gas used by the contract (8) multiplied by gas price (2)
+			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
 			// 2 * 135 - base gas fee for call (by the contract)
-			100_000_000 - 3 - (2 * 9) - (2 * 135) - (2 * 135),
+			100_000_000 - 3 - (2 * 10) - (2 * 135) - (2 * 135),
 		);
 		assert_eq!(
 			Staking::free_balance(&1),
@@ -283,10 +285,10 @@ fn contract_transfer_max_depth() {
 		assert_eq!(
 			Staking::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 9 * 100 - gas used by the contract (9) multiplied by gas price (2)
-			//               multiplied by max depth (100).
+			// 2 * 10 * 100 - gas used by the contract (10) multiplied by gas price (2)
+			//                multiplied by max depth (100).
 			// 2 * 135 * 100 - base gas fee for call (by transaction) multiplied by max depth (100).
-			100_000_000 - 3 - (2 * 135 * 100) - (2 * 9 * 100),
+			100_000_000 - 3 - (2 * 10 * 100) - (2 * 135 * 100),
 		);
 		assert_eq!(Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 14);
 	});
@@ -396,12 +398,12 @@ fn contract_create() {
 		);
 
 		// 11 - value sent with the transaction
-		// 2 * 135 - gas spent by the deployer contract (135) multiplied by gas price (2)
+		// 2 * 138 - gas spent by the deployer contract (138) multiplied by gas price (2)
 		// 2 * 135 - base gas fee for call (top level)
 		// 2 * 175 - base gas fee for create (by contract)
 		// ((21 / 2) * 2) - price per account creation
 		let expected_gas_after_create =
-			100_000_000 - 11 - (2 * 135) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
+			100_000_000 - 11 - (2 * 138) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
 		assert_eq!(Staking::free_balance(&0), expected_gas_after_create);
 		assert_eq!(Staking::free_balance(&1), 8);
 		assert_eq!(Staking::free_balance(&derived_address), 3);
@@ -412,10 +414,10 @@ fn contract_create() {
 		assert_eq!(
 			Staking::free_balance(&0),
 			// 22 - value sent with the transaction
-			// (2 * 9) - gas used by the contract
+			// (2 * 10) - gas used by the contract
 			// (2 * 135) - base gas fee for call (top level)
 			// (2 * 135) - base gas fee for call (by transfer contract)
-			expected_gas_after_create - 22 - (2 * 9) - (2 * 135) - (2 * 135),
+			expected_gas_after_create - 22 - (2 * 10) - (2 * 135) - (2 * 135),
 		);
 		assert_eq!(Staking::free_balance(&derived_address), 22 - 3);
 		assert_eq!(Staking::free_balance(&9), 36);
@@ -447,12 +449,12 @@ fn top_level_create() {
 		));
 
 		// 11 - value sent with the transaction
-		// (3 * 126) - gas spent by the ctor
+		// (3 * 129) - gas spent by the ctor
 		// (3 * 175) - base gas fee for create (175) (top level) multipled by gas price (3)
 		// ((21 / 3) * 3) - price for contract creation
 		assert_eq!(
 			Staking::free_balance(&0),
-			100_000_000 - 11 - (3 * 126) - (3 * 175) - ((21 / 3) * 3)
+			100_000_000 - 11 - (3 * 129) - (3 * 175) - ((21 / 3) * 3)
 		);
 		assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
 

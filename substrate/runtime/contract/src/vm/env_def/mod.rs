@@ -182,8 +182,8 @@ define_env!(init_env, <E: Ext>,
 		Ok(())
 	},
 
-	// ext_call(transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
-	ext_call(ctx, callee_ptr: u32, callee_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32 => {
+	// ext_call(transfer_to_ptr: u32, transfer_to_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
+	ext_call(ctx, callee_ptr: u32, callee_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32 => {
 		let mut callee = Vec::new();
 		callee.resize(callee_len as usize, 0);
 		ctx.memory().get(callee_ptr, &mut callee)?;
@@ -201,8 +201,11 @@ define_env!(init_env, <E: Ext>,
 		input_data.resize(input_data_len as usize, 0u8);
 		ctx.memory().get(input_data_ptr, &mut input_data)?;
 
-		// TODO: Let user to choose how much gas to allocate for the execution.
-		let nested_gas_limit = ctx.gas_meter.gas_left();
+		let nested_gas_limit = if gas == 0 {
+			ctx.gas_meter.gas_left()
+		} else {
+			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
+		};
 		let ext = &mut ctx.ext;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
