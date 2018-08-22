@@ -97,8 +97,6 @@ fn note_missed_proposal_force_unstake_session_change_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Staking::set_free_balance(&10, 70);
 		Staking::set_free_balance(&20, 70);
-		assert_ok!(Staking::stake(&10));
-		assert_ok!(Staking::stake(&20));
 		assert_ok!(Staking::stake(&1));
 		
 		assert_eq!(Staking::slash_count(&10), 0);
@@ -123,8 +121,6 @@ fn note_missed_proposal_auto_unstake_session_change_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Staking::set_free_balance(&10, 7000);
 		Staking::set_free_balance(&20, 7000);
-		assert_ok!(Staking::stake(&10));
-		assert_ok!(Staking::stake(&20));
 		assert_ok!(Staking::register_slash_preference(&10, 0, SlashPreference { unstake_threshold: 1 }));
 		
 		assert_eq!(Staking::intentions(), vec![10, 20]);
@@ -204,24 +200,19 @@ fn slashing_should_work() {
 		assert_eq!(Staking::voting_balance(&10), 1);
 
 		System::set_block_number(3);
-		Timestamp::set_timestamp(15);	// on time.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::voting_balance(&10), 11);
 
 		System::set_block_number(6);
-		Timestamp::set_timestamp(30);	// on time.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Staking::voting_balance(&10), 21);
 
 		System::set_block_number(7);
-		Timestamp::set_timestamp(100);	// way too late - early exit.
-		Session::check_rotate_session();
-		assert_eq!(Staking::current_era(), 1);
-		assert_eq!(Session::current_index(), 3);
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
 		assert_eq!(Staking::voting_balance(&10), 1);
 	});
 }
@@ -441,12 +432,8 @@ fn nominating_slashes_should_work() {
 		assert_eq!(Staking::voting_balance(&4), 40);
 
 		System::set_block_number(5);
-		Timestamp::set_timestamp(100);	// late
-		assert_eq!(Session::blocks_remaining(), 1);
-		assert!(Session::broken_validation());
-		Session::check_rotate_session();
+		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
 
-		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Staking::voting_balance(&1), 0);
 		assert_eq!(Staking::voting_balance(&2), 20);
 		assert_eq!(Staking::voting_balance(&3), 10);
