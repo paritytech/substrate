@@ -53,7 +53,7 @@ fn start_bft<F, C>(
 	bft_service: Arc<BftService<Block, F, C>>,
 ) where
 	F: bft::Environment<Block> + 'static,
-	C: ChainHead<Block> +bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
+	C: bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
 	F::Error: ::std::fmt::Debug,
 	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
 	<F as bft::Environment<Block>>::Error: ::std::fmt::Display
@@ -61,39 +61,26 @@ fn start_bft<F, C>(
 	const DELAY_UNTIL: Duration = Duration::from_millis(5000);
 
 	let mut handle = LocalThreadHandle::current();
-	let work = Delay::new(Instant::now() + DELAY_UNTIL)
-		.then(move |res| {
-			if let Err(e) = res {
-				warn!(target: "bft", "Failed to force delay of consensus: {:?}", e);
-			}
-
-			let chain_head_same = bft_service.client().best_block_header()
-				.ok()
-				.as_ref()
-				.map_or(false, |h| h.hash() == header.hash());
-
-			if !chain_head_same { return None }
-
-			match bft_service.build_upon(&header) {
-				Ok(maybe_bft_work) => {
-					if maybe_bft_work.is_some() {
-						debug!(target: "bft", "Starting agreement. After forced delay for {:?}",
-							DELAY_UNTIL);
-					}
-
-					maybe_bft_work
+	match bft_service.build_upon(&header) {
+		Ok(Some(bft_work)) => {
+			// do not poll work for some amount of time.
+			let work = Delay::new(Instant::now() + DELAY_UNTIL).then(move |res| {
+				if let Err(e) = res {
+					warn!(target: "bft", "Failed to force delay of consensus: {:?}", e);
 				}
-				Err(e) => {
-					warn!(target: "bft", "BFT agreement error: {}", e);
-					None
-				}
-			}
-		})
-		.map(|_| ());
 
-	if let Err(e) = handle.spawn_local(Box::new(work)) {
-    	debug!(target: "bft", "Couldn't initialize BFT agreement: {:?}", e);
-    }
+				debug!(target: "bft", "Starting agreement. After forced delay for {:?}",
+					DELAY_UNTIL);
+
+				bft_work
+			});
+			if let Err(e) = handle.spawn_local(Box::new(work)) {
+		    	warn!(target: "bft", "Couldn't initialize BFT agreement: {:?}", e);
+			}
+		}
+		Ok(None) => trace!(target: "bft", "Could not start agreement on top of {}", header.hash()),
+		Err(e) => warn!(target: "bft", "BFT agreement error: {}", e),
+	}
 }
 
 /// Consensus service. Starts working when created.
@@ -145,6 +132,7 @@ impl Service {
 
 				client.import_notification_stream().for_each(move |notification| {
 					if notification.is_new_best {
+						trace!(target: "bft", "Attempting to start new consensus round after import notification of {:?}", notification.hash);
 						start_bft(notification.header, bft_service.clone());
 					}
 					Ok(())
@@ -168,11 +156,11 @@ impl Service {
 				let c = client.clone();
 				let s = bft_service.clone();
 
-				interval.map_err(|e| debug!("Timer error: {:?}", e)).for_each(move |_| {
+				interval.map_err(|e| debug!(target: "bft", "Timer error: {:?}", e)).for_each(move |_| {
 					if let Ok(best_block) = c.best_block_header() {
 						let hash = best_block.hash();
 
-						if hash == prev_best && s.can_build_on(&best_block) {
+						if hash == prev_best {
 							debug!(target: "bft", "Starting consensus round after a timeout");
 							start_bft(best_block, s.clone());
 						}
