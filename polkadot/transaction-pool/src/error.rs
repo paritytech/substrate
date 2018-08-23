@@ -55,6 +55,11 @@ error_chain! {
 			description("Unrecognised address in extrinsic"),
 			display("Unrecognised address in extrinsic: {}", who),
 		}
+		/// Temporarily banned
+		TemporarilyBanned {
+			description("Extrinsic is temporarily banned"),
+			display("Extrinsic is temporarily banned"),
+		}
 	}
 }
 
