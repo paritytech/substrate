@@ -38,7 +38,7 @@ use transaction_pool::TransactionPool;
 use tokio::executor::current_thread::TaskExecutor as LocalThreadHandle;
 use tokio::runtime::TaskExecutor as ThreadPoolHandle;
 use tokio::runtime::current_thread::Runtime as LocalRuntime;
-use tokio::timer::{Delay, Interval};
+use tokio::timer::Interval;
 
 use super::{Network, Collators, ProposerFactory};
 use error;
@@ -58,25 +58,10 @@ fn start_bft<F, C>(
 	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
 	<F as bft::Environment<Block>>::Error: ::std::fmt::Display
 {
-	const DELAY_UNTIL: Duration = Duration::from_millis(5000);
-
 	let mut handle = LocalThreadHandle::current();
 	match bft_service.build_upon(&header) {
-		Ok(Some(bft_work)) => {
-			// do not poll work for some amount of time.
-			let work = Delay::new(Instant::now() + DELAY_UNTIL).then(move |res| {
-				if let Err(e) = res {
-					warn!(target: "bft", "Failed to force delay of consensus: {:?}", e);
-				}
-
-				debug!(target: "bft", "Starting agreement. After forced delay for {:?}",
-					DELAY_UNTIL);
-
-				bft_work
-			});
-			if let Err(e) = handle.spawn_local(Box::new(work)) {
-		    	warn!(target: "bft", "Couldn't initialize BFT agreement: {:?}", e);
-			}
+		Ok(Some(bft_work)) => if let Err(e) = handle.spawn_local(Box::new(bft_work)) {
+		    warn!(target: "bft", "Couldn't initialize BFT agreement: {:?}", e);
 		}
 		Ok(None) => trace!(target: "bft", "Could not start agreement on top of {}", header.hash()),
 		Err(e) => warn!(target: "bft", "BFT agreement error: {}", e),

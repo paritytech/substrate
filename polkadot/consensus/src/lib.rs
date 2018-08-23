@@ -265,6 +265,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		authorities: &[AuthorityId],
 		sign_with: Arc<ed25519::Pair>,
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
+		const FORCE_DELAY: Duration = Duration::from_secs(5);
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 
 		let parent_hash = parent_header.hash().into();
@@ -330,6 +331,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			transaction_pool: self.transaction_pool.clone(),
 			offline: self.offline.clone(),
 			validators,
+			forced_delay: Instant::now() + FORCE_DELAY,
 			_drop_signal: drop_signal,
 		};
 
@@ -386,6 +388,7 @@ pub struct Proposer<C: PolkadotApi> {
 	transaction_pool: Arc<TransactionPool<C>>,
 	offline: SharedOfflineTracker,
 	validators: Vec<AccountId>,
+	forced_delay: Instant,
 	_drop_signal: exit_future::Signal,
 }
 
@@ -500,6 +503,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			// timestamp delay, and count delay.
 			// construct a future from the maximum of the two durations.
 			let max_delay = ::std::cmp::max(timestamp_delay, count_delay);
+			let max_delay = ::std::cmp::max(max_delay, Some(self.forced_delay));
 
 			let temporary_delay = match max_delay {
 				Some(duration) => future::Either::A(
