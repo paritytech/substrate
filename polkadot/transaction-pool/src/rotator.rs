@@ -27,6 +27,9 @@ use parking_lot::RwLock;
 use primitives::Hash;
 use VerifiedTransaction;
 
+/// Expected size of the banned extrinsics cache.
+const EXPECTED_SIZE: usize = 2048;
+
 /// Pool rotator is responsible to only keep fresh extrinsics in the pool.
 ///
 /// Extrinsics that occupy the pool for too long are culled and temporarily banned from entering
@@ -61,7 +64,16 @@ impl PoolRotator {
 			return false;
 		}
 
-		self.banned_until.write().insert(*tx.hash(), *now + self.ban_time);
+		let mut banned = self.banned_until.write();
+		banned.insert(*tx.hash(), *now + self.ban_time);
+		if banned.len() > 2 * EXPECTED_SIZE {
+			while banned.len() > EXPECTED_SIZE {
+				if let Ok(key) = banned.keys().next().cloned() {
+					banned.remove(&key);
+				}
+			}
+		}
+
 		true
 	}
 
