@@ -278,6 +278,7 @@ mod tests {
 			balances: vec![(1, 111)],
 			intentions: vec![],
 			validator_count: 0,
+			minimum_validator_count: 0,
 			bonding_duration: 0,
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,
@@ -314,7 +315,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("06efddda99014ce420dc903e6c8b7f87a1c96e699fbb43d26dc5f3203ae94ee0").into(),
+					state_root: hex!("ed456461b82664990b6ebd1caf1360056f6e8a062e73fada331e1c92cd81cad4").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -348,7 +349,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("06efddda99014ce420dc903e6c8b7f87a1c96e699fbb43d26dc5f3203ae94ee0").into(),
+					state_root: hex!("ed456461b82664990b6ebd1caf1360056f6e8a062e73fada331e1c92cd81cad4").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

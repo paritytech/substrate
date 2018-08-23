@@ -27,7 +27,7 @@ use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	BondingDuration, CreationFee, TransferFee, ReclaimRebate,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
 	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash,
-	OfflineSlashGrace};
+	OfflineSlashGrace, MinimumValidatorCount};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,7 +37,8 @@ pub struct GenesisConfig<T: Trait> {
 	pub current_era: T::BlockNumber,
 	pub balances: Vec<(T::AccountId, T::Balance)>,
 	pub intentions: Vec<T::AccountId>,
-	pub validator_count: u64,
+	pub validator_count: u32,
+	pub minimum_validator_count: u32,
 	pub bonding_duration: T::BlockNumber,
 	pub transaction_base_fee: T::Balance,
 	pub transaction_byte_fee: T::Balance,
@@ -58,6 +59,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			balances: vec![(T::AccountId::from(1), T::Balance::sa(111))],
 			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
 			validator_count: 3,
+			minimum_validator_count: 1,
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_base_fee: T::Balance::sa(0),
 			transaction_byte_fee: T::Balance::sa(0),
@@ -86,6 +88,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			],
 			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
 			validator_count: 3,
+			minimum_validator_count: 1,
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_base_fee: T::Balance::sa(1),
 			transaction_byte_fee: T::Balance::sa(0),
@@ -108,6 +111,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			balances: vec![],
 			intentions: vec![],
 			validator_count: 0,
+			minimum_validator_count: 0,
 			bonding_duration: T::BlockNumber::sa(1000),
 			transaction_base_fee: T::Balance::sa(0),
 			transaction_byte_fee: T::Balance::sa(0),
@@ -131,6 +135,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			Self::hash(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
 			Self::hash(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
 			Self::hash(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
+			Self::hash(<MinimumValidatorCount<T>>::key()).to_vec() => self.minimum_validator_count.encode(),
 			Self::hash(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
 			Self::hash(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
 			Self::hash(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),

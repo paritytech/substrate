@@ -99,6 +99,7 @@ fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExt
 			balances: vec![],
 			intentions: vec![],
 			validator_count: 2,
+			minimum_validator_count: 0,
 			bonding_duration: 0,
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,

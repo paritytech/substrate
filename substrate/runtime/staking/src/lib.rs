@@ -64,6 +64,8 @@ mod genesis_config;
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
 
+const DEFAULT_MINIMUM_VALIDATOR_COUNT: usize = 4;
+
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: usize = 64;
 
@@ -164,6 +166,7 @@ decl_module! {
 		fn set_validator_count(new: u32) -> Result = 2;
 		fn force_new_era(apply_rewards: bool) -> Result = 3;
 		fn set_offline_slash_grace(new: u32) -> Result = 4;
+		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result = 5;
 	}
 }
 
@@ -172,8 +175,10 @@ decl_storage! {
 
 	// The length of the bonding duration in eras.
 	pub BondingDuration get(bonding_duration): b"sta:loc" => required T::BlockNumber;
-	// The length of a staking era in sessions.
+	// The ideal number of staking participants.
 	pub ValidatorCount get(validator_count): b"sta:vac" => required u32;
+	// Minimum number of staking participants before emergency conditions are imposed.
+	pub MinimumValidatorCount: b"sta:minimum_validator_count" => u32;
 	// The length of a staking era in sessions.
 	pub SessionsPerEra get(sessions_per_era): b"sta:spe" => required T::BlockNumber;
 	// The total amount of stake on the system.
@@ -276,6 +281,10 @@ pub enum UpdateBalanceOutcome {
 impl<T: Trait> Module<T> {
 
 	// PUBLIC IMMUTABLES
+
+	pub fn minimum_validator_count() -> usize {
+		<MinimumValidatorCount<T>>::get().map(|v| v as usize).unwrap_or(DEFAULT_MINIMUM_VALIDATOR_COUNT)
+	}
 
 	/// The length of a staking era in blocks.
 	pub fn era_length() -> T::BlockNumber {
@@ -398,6 +407,10 @@ impl<T: Trait> Module<T> {
 	///
 	/// Effects will be felt at the beginning of the next era.
 	fn unstake(aux: &T::PublicAux, intentions_index: u32) -> Result {
+		// unstake fails in degenerate case of having too few existing staked parties
+		if Self::intentions().len() <= Self::minimum_validator_count() {
+			return Err("cannot unstake when there are too few staked participants")
+		}
 		Self::apply_unstake(aux.ref_into(), intentions_index as usize)
 	}
 
@@ -537,6 +550,14 @@ impl<T: Trait> Module<T> {
 	/// Set the offline slash grace period.
 	fn set_offline_slash_grace(new: u32) -> Result {
 		<OfflineSlashGrace<T>>::put(&new);
+		Ok(())
+	}
+
+	/// Set the balances of a given account.
+	fn set_balance(who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
+		let who = Self::lookup(who)?;
+		Self::set_free_balance(&who, free);
+		Self::set_reserved_balance(&who, reserved);
 		Ok(())
 	}
 
@@ -717,6 +738,12 @@ impl<T: Trait> Module<T> {
 	/// Slash a given validator by a specific amount. Removes the slash from their balance by preference,
 	/// and reduces the nominators' balance if needed.
 	fn slash_validator(v: &T::AccountId, slash: T::Balance) {
+		// skip the slash in degenerate case of having only 4 staking participants despite having a larger
+		// desired number of validators (validator_count).
+		if Self::intentions().len() <= Self::minimum_validator_count() {
+			return
+		}
+
 		if let Some(rem) = Self::slash(v, slash) {
 			let noms = Self::current_nominators_for(v);
 			let total = noms.iter().map(Self::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
@@ -805,10 +832,16 @@ impl<T: Trait> Module<T> {
 		// for now, this just orders would-be stakers by their balances and chooses the top-most
 		// <ValidatorCount<T>>::get() of them.
 		// TODO: this is not sound. this should be moved to an off-chain solution mechanism.
-		let mut intentions = <Intentions<T>>::get()
+		let mut intentions = Self::intentions()
 			.into_iter()
 			.map(|v| (Self::slashable_balance(&v), v))
 			.collect::<Vec<_>>();
+
+		// Avoid making new era if it would leave us with fewer than the minimum needed validators
+		if intentions.len() < Self::minimum_validator_count() {
+			return
+		}
+
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
 		<StakeThreshold<T>>::put(
@@ -818,9 +851,9 @@ impl<T: Trait> Module<T> {
 			} else { Zero::zero() }
 		);
 		let vals = &intentions.into_iter()
-				.map(|(_, v)| v)
-				.take(<ValidatorCount<T>>::get() as usize)
-				.collect::<Vec<_>>();
+			.map(|(_, v)| v)
+			.take(<ValidatorCount<T>>::get() as usize)
+			.collect::<Vec<_>>();
 		for v in <session::Module<T>>::validators().iter() {
 			<CurrentNominatorsFor<T>>::remove(v);
 			let slash_count = <SlashCount<T>>::take(v);

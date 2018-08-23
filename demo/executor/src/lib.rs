@@ -199,6 +199,7 @@ mod tests {
 				balances: vec![(alice(), 111)],
 				intentions: vec![alice(), bob(), Charlie.to_raw_public().into()],
 				validator_count: 3,
+				minimum_validator_count: 0,
 				bonding_duration: 0,
 				transaction_base_fee: 1,
 				transaction_byte_fee: 0,
@@ -248,7 +249,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("42b56bd84bbaf239903480e071a8e7733e6b25c120d7f28bb5ec6a9ce96d565a").into(),
+			hex!("691f5f7722eca38efdc8c5f86d21551ca5c331348e8669ba5bab1eacef946ecc").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -261,7 +262,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("5b282cd7bbbac9acc2393d9618b87b70b875ea5ffdd5f6d60fe5c68fc435775f").into(),
+			hex!("a743f9f34ca499e77aa3a891fce387f7e45bbf9fe37598a81e9e0f823a5df083").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -281,7 +282,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("a3d8f40101bd901c69367b46d6b1d682ad306f506242ed96b33850a7d1c5695a").into(),
+			hex!("2869bbd7325712000a66cce6e2a8dfba7b73f10e5432799b934b37891c2d96be").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,

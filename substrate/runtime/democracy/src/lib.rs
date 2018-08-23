@@ -425,6 +425,7 @@ mod tests {
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			intentions: vec![],
 			validator_count: 2,
+			minimum_validator_count: 0,
 			bonding_duration: 3,
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
