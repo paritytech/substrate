@@ -148,8 +148,8 @@ impl txpool::Scoring<VerifiedTransaction> for Scoring {
 		if old.is_fully_verified() {
 			assert!(new.is_fully_verified(), "Scoring::choose called with transactions from different senders");
 			if old.index() == new.index() {
-				// TODO [ToDr] Do we allow replacement? If yes then it should be Choice::ReplaceOld
-				return Choice::RejectNew;
+				// Allow replacing transactions so that we never fail to import to the pool.
+				return Choice::ReplaceOld;
 			}
 		}
 
