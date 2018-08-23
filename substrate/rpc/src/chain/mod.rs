@@ -21,7 +21,6 @@ use std::sync::Arc;
 use client::{self, Client, BlockchainEvents};
 use jsonrpc_macros::{pubsub, Trailing};
 use jsonrpc_pubsub::SubscriptionId;
-use jsonrpc_macros::Trailing;
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::{BlockId, SignedBlock};
