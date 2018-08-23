@@ -63,7 +63,7 @@ extern crate substrate_keyring;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{self, Duration, Instant};
 
 use codec::{Decode, Encode};
 use polkadot_api::PolkadotApi;
@@ -265,8 +265,10 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 		authorities: &[AuthorityId],
 		sign_with: Arc<ed25519::Pair>,
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
-		const FORCE_DELAY: Duration = Duration::from_secs(5);
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
+
+		// force delay in evaluation this long.
+		const FORCE_DELAY: Timestamp = 5;
 
 		let parent_hash = parent_header.hash().into();
 
@@ -331,7 +333,7 @@ impl<C, N, P> bft::Environment<Block> for ProposerFactory<C, N, P>
 			transaction_pool: self.transaction_pool.clone(),
 			offline: self.offline.clone(),
 			validators,
-			forced_delay: Instant::now() + FORCE_DELAY,
+			minimum_timestamp: current_timestamp() + FORCE_DELAY,
 			_drop_signal: drop_signal,
 		};
 
@@ -388,7 +390,7 @@ pub struct Proposer<C: PolkadotApi> {
 	transaction_pool: Arc<TransactionPool<C>>,
 	offline: SharedOfflineTracker,
 	validators: Vec<AccountId>,
-	forced_delay: Instant,
+	minimum_timestamp: u64,
 	_drop_signal: exit_future::Signal,
 }
 
@@ -440,6 +442,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			table: self.table.clone(),
 			offline: self.offline.clone(),
 			validators: self.validators.clone(),
+			minimum_timestamp: self.minimum_timestamp,
 			timing,
 		})
 	}
@@ -492,9 +495,11 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			);
 
 			// the duration until the given timestamp is current
-			let proposed_timestamp = proposal.timestamp();
+			let proposed_timestamp = ::std::cmp::max(self.minimum_timestamp, proposal.timestamp());
 			let timestamp_delay = if proposed_timestamp > current_timestamp {
-				Some(now + Duration::from_secs(proposed_timestamp - current_timestamp))
+				let delay_s = proposed_timestamp - current_timestamp;
+				debug!(target: "bft", "Delaying evaluation of proposal for {} seconds", delay_s);
+				Some(now + Duration::from_secs(delay_s))
 			} else {
 				None
 			};
@@ -503,7 +508,6 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			// timestamp delay, and count delay.
 			// construct a future from the maximum of the two durations.
 			let max_delay = ::std::cmp::max(timestamp_delay, count_delay);
-			let max_delay = ::std::cmp::max(max_delay, Some(self.forced_delay));
 
 			let temporary_delay = match max_delay {
 				Some(duration) => future::Either::A(
@@ -646,8 +650,6 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 }
 
 fn current_timestamp() -> Timestamp {
-	use std::time;
-
 	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
 		.expect("now always later than unix epoch; qed")
 		.as_secs()
@@ -701,6 +703,7 @@ pub struct CreateProposal<C: PolkadotApi>  {
 	timing: ProposalTiming,
 	validators: Vec<AccountId>,
 	offline: SharedOfflineTracker,
+	minimum_timestamp: Timestamp,
 }
 
 impl<C> CreateProposal<C> where C: PolkadotApi {
@@ -712,7 +715,7 @@ impl<C> CreateProposal<C> where C: PolkadotApi {
 		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
 
 		// TODO: handle case when current timestamp behind that in state.
-		let timestamp = current_timestamp();
+		let timestamp = ::std::cmp::max(self.minimum_timestamp, current_timestamp());
 
 		let elapsed_since_start = self.timing.dynamic_inclusion.started_at().elapsed();
 		let offline_indices = if elapsed_since_start > MAX_VOTE_OFFLINE_SECONDS {
