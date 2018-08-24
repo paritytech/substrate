@@ -68,7 +68,7 @@ impl PoolRotator {
 		banned.insert(*tx.hash(), *now + self.ban_time);
 		if banned.len() > 2 * EXPECTED_SIZE {
 			while banned.len() > EXPECTED_SIZE {
-				if let Ok(key) = banned.keys().next().cloned() {
+				if let Some(key) = banned.keys().next().cloned() {
 					banned.remove(&key);
 				}
 			}
@@ -79,17 +79,16 @@ impl PoolRotator {
 
 	/// Removes timed bans.
 	pub fn clear_timeouts(&self, now: &Instant) {
-		let to_remove = {
-			self.banned_until.read()
-				.iter()
-				.filter_map(|(k, v)| if v < now {
-					Some(*k)
-				} else {
-					None
-				}).collect::<Vec<_>>()
-		};
-
 		let mut banned = self.banned_until.write();
+
+		let to_remove = banned
+			.iter()
+			.filter_map(|(k, v)| if v < now {
+				Some(*k)
+			} else {
+				None
+			}).collect::<Vec<_>>();
+
 		for k in to_remove {
 			banned.remove(&k);
 		}

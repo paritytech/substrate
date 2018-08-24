@@ -35,6 +35,7 @@ extern crate error_chain;
 extern crate log;
 
 mod error;
+mod rotator;
 
 use std::{
 	cmp::Ordering,
@@ -52,9 +53,9 @@ use extrinsic_pool::{
 	Pool,
 	Listener,
 };
-use parking_lot::RwLock;
 use polkadot_api::PolkadotApi;
 use primitives::{AccountId, BlockId, Hash, Index, UncheckedExtrinsic as FutureProofUncheckedExtrinsic};
+use rotator::PoolRotator;
 use runtime::{Address, UncheckedExtrinsic};
 use substrate_runtime_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256};
 
@@ -336,63 +337,6 @@ impl<'a, A> txpool::Verifier<UncheckedExtrinsic> for Verifier<'a, A> where
 			encoded_size,
 			valid_till: Instant::now() + POOL_TIME,
 		})
-	}
-}
-
-/// Pool rotator is responsible to only keep fresh transactions in the pool.
-///
-/// Transactions that occupy the pool for too long are culled and temporarily banned from entering
-/// the pool again.
-struct PoolRotator {
-	/// How long the transaction is banned for.
-	ban_time: Duration,
-	/// Currently banned transactions.
-	banned_until: RwLock<HashMap<Hash, Instant>>,
-}
-
-impl Default for PoolRotator {
-	fn default() -> Self {
-		PoolRotator {
-			ban_time: Duration::from_secs(60 * 30),
-			banned_until: Default::default(),
-		}
-	}
-}
-
-impl PoolRotator {
-	/// Returns `true` if transaction hash is currently banned.
-	pub fn is_banned(&self, hash: &Hash) -> bool {
-		self.banned_until.read().contains_key(hash)
-	}
-
-	/// Bans transaction if it's stale.
-	///
-	/// Returns `true` if transaction is stale and got banned.
-	pub fn ban_if_stale(&self, now: &Instant, tx: &VerifiedTransaction) -> bool {
-		if &tx.valid_till > now {
-			return false;
-		}
-
-		self.banned_until.write().insert(*tx.hash(), *now + self.ban_time);
-		true
-	}
-
-	/// Removes timed bans.
-	pub fn clear_timeouts(&self, now: &Instant) {
-		let to_remove = {
-			self.banned_until.read()
-				.iter()
-				.filter_map(|(k, v)| if v < now {
-					Some(*k)
-				} else {
-					None
-				}).collect::<Vec<_>>()
-		};
-
-		let mut banned = self.banned_until.write();
-		for k in to_remove {
-			banned.remove(&k);
-		}
 	}
 }
 
