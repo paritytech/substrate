@@ -276,6 +276,7 @@ mod tests {
 		code: Vec<u8>,
 		endowment: u64,
 		data: Vec<u8>,
+		gas_left: u64,
 	}
 	#[derive(Debug, PartialEq, Eq)]
 	struct TransferEntry {
@@ -304,13 +305,14 @@ mod tests {
 			&mut self,
 			code: &[u8],
 			endowment: u64,
-			_gas_meter: &mut GasMeter<Test>,
+			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
 		) -> Result<CreateReceipt<Test>, ()> {
 			self.creates.push(CreateEntry {
 				code: code.to_vec(),
 				endowment,
 				data: data.to_vec(),
+				gas_left: gas_meter.gas_left(),
 			});
 			let address = self.next_account_id;
 			self.next_account_id += 1;
@@ -405,18 +407,20 @@ mod tests {
 	;; ext_create(
 	;;     code_ptr: u32,
 	;;     code_len: u32,
+	;;     gas: u64,
 	;;     value_ptr: u32,
 	;;     value_len: u32,
 	;;     input_data_ptr: u32,
 	;;     input_data_len: u32,
 	;; ) -> u32
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
 			(call $ext_create
 				(i32.const 12)   ;; Pointer to `code`
 				(i32.const 8)    ;; Length of `code`
+				(i64.const 0)    ;; How much gas to devote for the execution. 0 = all.
 				(i32.const 4)    ;; Pointer to the buffer with value to transfer
 				(i32.const 8)    ;; Length of the buffer with value to transfer
 				(i32.const 20)   ;; Pointer to input data buffer address
@@ -454,6 +458,7 @@ mod tests {
 				data: vec![
 					1, 2, 3, 4,
 				],
+				gas_left: 49990,
 			}]
 		);
 	}

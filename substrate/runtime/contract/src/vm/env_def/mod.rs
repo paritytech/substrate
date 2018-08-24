@@ -222,10 +222,11 @@ define_env!(init_env, <E: Ext>,
 		}
 	},
 
-	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32
+	// ext_create(code_ptr: u32, code_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32
 	ext_create(
 		ctx, code_ptr: u32,
 		code_len: u32,
+		gas: u64,
 		value_ptr: u32,
 		value_len: u32,
 		input_data_ptr: u32,
@@ -245,8 +246,11 @@ define_env!(init_env, <E: Ext>,
 		input_data.resize(input_data_len as usize, 0u8);
 		ctx.memory().get(input_data_ptr, &mut input_data)?;
 
-		// TODO: Let user to choose how much gas to allocate for the execution.
-		let nested_gas_limit = ctx.gas_meter.gas_left();
+		let nested_gas_limit = if gas == 0 {
+			ctx.gas_meter.gas_left()
+		} else {
+			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
+		};
 		let ext = &mut ctx.ext;
 		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
