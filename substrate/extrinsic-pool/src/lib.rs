@@ -37,6 +37,7 @@ pub mod watcher;
 mod error;
 mod listener;
 mod pool;
+mod rotator;
 
 pub use listener::Listener;
 pub use pool::{Pool, ChainApi, EventStream, Verified, VerifiedFor, ExtrinsicFor, ExHash, AllExtrinsics};
