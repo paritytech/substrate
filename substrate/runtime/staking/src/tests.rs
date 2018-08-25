@@ -213,7 +213,6 @@ fn slashing_should_work() {
 		assert_eq!(Staking::voting_balance(&10), 21);
 
 		System::set_block_number(7);
-		::system::ExtrinsicIndex::<Test>::put(1);
 		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
 		assert_eq!(Staking::voting_balance(&10), 1);
 	});
@@ -434,7 +433,6 @@ fn nominating_slashes_should_work() {
 		assert_eq!(Staking::voting_balance(&4), 40);
 
 		System::set_block_number(5);
-		::system::ExtrinsicIndex::<Test>::put(1);
 		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
 		assert_eq!(Staking::voting_balance(&1), 0);
 		assert_eq!(Staking::voting_balance(&2), 20);
