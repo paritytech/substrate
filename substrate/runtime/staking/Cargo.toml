@@ -40,4 +40,5 @@ std = [
 	"substrate-runtime-primitives/std",
 	"substrate-runtime-session/std",
 	"substrate-runtime-system/std",
+	"substrate-runtime-timestamp/std"
 ]

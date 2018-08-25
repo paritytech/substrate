@@ -978,14 +978,14 @@ impl<T: Trait> Module<T> {
 
 	/// Increase TotalStake by Value.
 	pub fn increase_total_stake_by(value: T::Balance) {
-		if <TotalStake<T>>::exists() {
-			<TotalStake<T>>::put(<Module<T>>::total_stake() + value);
+		if let Some(v) = <Module<T>>::total_stake().checked_add(&value) {
+			<TotalStake<T>>::put(v);
 		}
 	}
 	/// Decrease TotalStake by Value.
 	pub fn decrease_total_stake_by(value: T::Balance) {
-		if <TotalStake<T>>::exists() {
-			<TotalStake<T>>::put(<Module<T>>::total_stake() - value);
+		if let Some(v) = <Module<T>>::total_stake().checked_sub(&value) {
+			<TotalStake<T>>::put(v);
 		}
 	}
 }
