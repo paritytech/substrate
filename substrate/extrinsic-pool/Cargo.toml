@@ -11,3 +11,9 @@ futures = "0.1"
 log = "0.3"
 parking_lot = "0.4"
 transaction-pool = "1.12"
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
+
+[dev-dependencies]
+substrate-test-client = { path = "../../substrate/test-client" }
+substrate-keyring = { path = "../../substrate/keyring" }
+substrate-codec = { path = "../../substrate/codec" }

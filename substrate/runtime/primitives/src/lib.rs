@@ -62,6 +62,9 @@ pub mod bft;
 
 use traits::{Verify, Lazy};
 
+#[cfg(feature = "std")]
+pub use serde::{Serialize, de::DeserializeOwned};
+
 /// A set of key value pairs for storage.
 #[cfg(feature = "std")]
 pub type StorageMap = HashMap<Vec<u8>, Vec<u8>>;

@@ -116,7 +116,7 @@ pub struct TestPacket {
 
 pub struct Peer {
 	client: Arc<client::Client<test_client::Backend, test_client::Executor, Block>>,
-	pub sync: Protocol<Block, DummySpecialization>,
+	pub sync: Protocol<Block, DummySpecialization, Hash>,
 	pub queue: RwLock<VecDeque<TestPacket>>,
 }
 
@@ -173,8 +173,8 @@ impl Peer {
 	fn flush(&self) {
 	}
 
-	fn generate_blocks<F>(&self, count: usize, mut edit_block: F)
-	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, KeccakHasher, RlpCodec>)
+	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) 
+	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, KeccakHasher, RlpCodec>) 
 	{
 		for _ in 0 .. count {
 			let mut builder = self.client.new_block().unwrap();
@@ -207,7 +207,7 @@ impl Peer {
 
 pub struct EmptyTransactionPool;
 
-impl TransactionPool<Block> for EmptyTransactionPool {
+impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 	fn transactions(&self) -> Vec<(Hash, Extrinsic)> {
 		Vec::new()
 	}
