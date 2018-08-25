@@ -57,7 +57,7 @@ test:rust:stable:                  &test
     - export PATH="${CI_PROJECT_DIR}/cargo/bin/:$PATH"
     - ./scripts/build.sh
     - ./scripts/build-demos.sh
-    - time cargo test --all
+    - time cargo test --all --release
   tags:
     - rust-stable 
 
