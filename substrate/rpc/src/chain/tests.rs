@@ -29,8 +29,9 @@ fn should_return_header() {
 		client: Arc::new(test_client::new()),
 		subscriptions: Subscriptions::new(remote),
 	};
+
 	assert_matches!(
-		client.header(client.client.genesis_hash()),
+		client.header(Some(client.client.genesis_hash()).into()),
 		Ok(Some(ref x)) if x == &Header {
 			parent_hash: 0.into(),
 			number: 0,
@@ -41,7 +42,18 @@ fn should_return_header() {
 	);
 
 	assert_matches!(
-		client.header(5.into()),
+		client.header(None.into()),
+		Ok(Some(ref x)) if x == &Header {
+			parent_hash: 0.into(),
+			number: 0,
+			state_root: x.state_root.clone(),
+			extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
+			digest: Default::default(),
+		}
+	);
+
+	assert_matches!(
+		client.header(Some(5.into()).into()),
 		Ok(None)
 	);
 }
@@ -63,12 +75,12 @@ fn should_return_a_block() {
 
 	// Genesis block is not justified, so we can't query it?
 	assert_matches!(
-		api.block(api.client.genesis_hash()),
+		api.block(Some(api.client.genesis_hash()).into()),
 		Ok(None)
 	);
 
 	assert_matches!(
-		api.block(block_hash),
+		api.block(Some(block_hash).into()),
 		Ok(Some(ref x)) if x.block == Block {
 			header: Header {
 				parent_hash: api.client.genesis_hash(),
@@ -82,9 +94,63 @@ fn should_return_a_block() {
 	);
 
 	assert_matches!(
-		api.block(5.into()),
+		api.block(None.into()),
+		Ok(Some(ref x)) if x.block == Block {
+			header: Header {
+				parent_hash: api.client.genesis_hash(),
+				number: 1,
+				state_root: x.block.header.state_root.clone(),
+				extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
+				digest: Default::default(),
+			},
+			extrinsics: vec![],
+		}
+	);
+
+	assert_matches!(
+		api.block(Some(5.into()).into()),
 		Ok(None)
 	);
+}
+
+#[test]
+fn should_return_block_hash() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+
+	let client = Chain {
+		client: Arc::new(test_client::new()),
+		subscriptions: Subscriptions::new(remote),
+	};
+
+	assert_matches!(
+		client.block_hash(None.into()),
+		Ok(Some(ref x)) if x == &client.client.genesis_hash()
+	);
+
+
+	assert_matches!(
+		client.block_hash(Some(0u64).into()),
+		Ok(Some(ref x)) if x == &client.client.genesis_hash()
+	);
+
+	assert_matches!(
+		client.block_hash(Some(1u64).into()),
+		Ok(None)
+	);
+
+	let block = client.client.new_block().unwrap().bake().unwrap();
+	client.client.justify_and_import(BlockOrigin::Own, block.clone()).unwrap();
+
+	assert_matches!(
+		client.block_hash(Some(0u64).into()),
+		Ok(Some(ref x)) if x == &client.client.genesis_hash()
+	);
+	assert_matches!(
+		client.block_hash(Some(1u64).into()),
+		Ok(Some(ref x)) if x == &block.hash()
+	);
+
 }
 
 #[test]
