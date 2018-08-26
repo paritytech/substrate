@@ -22,7 +22,7 @@ use rpc::futures::sync::mpsc;
 
 /// RPC Metadata.
 ///
-/// Manages peristent session for transports that support it
+/// Manages persistent session for transports that support it
 /// and may contain some additional info extracted from specific transports
 /// (like remote client IP address, request headers, etc)
 #[derive(Default, Clone)]
