@@ -64,7 +64,7 @@ impl<T> OnSessionChange<T> for () {
 }
 
 pub trait Trait: timestamp::Trait {
-	// the position of the required timestamp-set extrinsic.
+	// the position of the required note_missed_proposal extrinsic.
 	const NOTE_MISSED_PROPOSAL_POSITION: u32;
 
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
@@ -152,7 +152,7 @@ impl<T: Trait> Module<T> {
 		assert!(aux.is_empty());
 		assert!(
 			<system::Module<T>>::extrinsic_index() == T::NOTE_MISSED_PROPOSAL_POSITION,
-			"note_offline extrinsic must be at position {} in the block",
+			"note_missed_proposal extrinsic must be at position {} in the block",
 			T::NOTE_MISSED_PROPOSAL_POSITION
 		);
 

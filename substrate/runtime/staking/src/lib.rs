@@ -34,6 +34,9 @@ extern crate substrate_runtime_support as runtime_support;
 #[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_runtime_std as rstd;
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 extern crate substrate_runtime_io as runtime_io;
@@ -102,24 +105,10 @@ impl<AccountId> OnAccountKill<AccountId> for () {
 
 /// Preference of what happens on a slash event.
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-#[derive(Eq, PartialEq, Clone, Copy)]
+#[derive(Encode, Decode, Eq, PartialEq, Clone, Copy)]
 pub struct SlashPreference {
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	pub unstake_threshold: u32,
-}
-
-impl Decode for SlashPreference {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Some(SlashPreference {
-			unstake_threshold: Decode::decode(input)?
-		})
-	}
-}
-
-impl Encode for SlashPreference {
-	fn encode_to<T: Output>(&self, dest: &mut T) {
-		self.unstake_threshold.encode_to(dest)
-	}
 }
 
 impl Default for SlashPreference {
@@ -549,8 +538,8 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Force there to be a new era. This also forces a new session immediately after by
-	/// setting `normal_rotation` to be false. Validators will get slashed.
+	/// Force there to be a new era. This also forces a new session immediately after.
+	/// `apply_rewards` should be true for validators to get the session reward.
 	fn force_new_era(apply_rewards: bool) -> Result {
 		<ForcingNewEra<T>>::put(());
 		<session::Module<T>>::force_new_session(apply_rewards)
@@ -853,7 +842,8 @@ impl<T: Trait> Module<T> {
 			.map(|v| (Self::slashable_balance(&v), v))
 			.collect::<Vec<_>>();
 
-		// Avoid making new era if it would leave us with fewer than the minimum needed validators
+		// Avoid reevaluate validator set if it would leave us with fewer than the minimum
+		// needed validators
 		if intentions.len() < Self::minimum_validator_count() {
 			return
 		}
