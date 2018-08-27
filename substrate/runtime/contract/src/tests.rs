@@ -248,8 +248,8 @@ fn contract_transfer_oog() {
 			// 2 * 135 - base gas fee for call (by contract)
 			100_000_000 - (2 * 6) - (2 * 135) - (2 * 135),
 		);
-		assert_eq!(Staking::free_balance(&1), 11,);
-		assert_eq!(Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 0,);
+		assert_eq!(Staking::free_balance(&1), 11);
+		assert_eq!(Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 0);
 	});
 }
 
@@ -280,7 +280,7 @@ fn contract_transfer_max_depth() {
 			// 2 * 135 * 100 - base gas fee for call (by transaction) multiplied by max depth (100).
 			100_000_000 - (2 * 135 * 100) - (2 * 6 * 100),
 		);
-		assert_eq!(Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 11,);
+		assert_eq!(Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 11);
 	});
 }
 
@@ -506,12 +506,12 @@ fn account_removal_removes_storage() {
 			// Setup two accounts with free balance above than exsistential threshold.
 			{
 				Staking::set_free_balance(&1, 110);
-                Staking::increase_total_stake_by(110);
+				Staking::increase_total_stake_by(110);
 				<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
 				<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
 
 				Staking::set_free_balance(&2, 110);
-                Staking::increase_total_stake_by(110);
+				Staking::increase_total_stake_by(110);
 				<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
 				<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
 			}
