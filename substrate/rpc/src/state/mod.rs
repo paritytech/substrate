@@ -101,15 +101,12 @@ impl<B, E, Block: BlockT> State<B, E, Block> {
 }
 
 impl<B, E, Block> State<B, E, Block> where
-	Block: BlockT + 'static,
-	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
-	E: CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	Block: BlockT,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec>,
+	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
 {
 	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
-		Ok(match hash.into() {
-			None => self.client.info()?.chain.best_hash,
-			Some(hash) => hash,
-		})
+		::helpers::unwrap_or_else(|| Ok(self.client.info()?.chain.best_hash), hash)
 	}
 }
 

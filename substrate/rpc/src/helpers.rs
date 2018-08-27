@@ -14,20 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! External Error trait for extrinsic pool.
-
-use txpool;
-
-/// Extrinsic pool error.
-pub trait IntoPoolError: ::std::error::Error + Send + Sized {
-	/// Try to extract original `txpool::Error`
-	///
-	/// This implementation is optional and used only to
-	/// provide more descriptive error messages for end users
-	/// of RPC API.
-	fn into_pool_error(self) -> Result<txpool::Error, Self> { Err(self) }
-}
-
-impl IntoPoolError for txpool::Error {
-	fn into_pool_error(self) -> Result<txpool::Error, Self> { Ok(self) }
+/// Unwraps the trailing parameter or falls back with the closure result.
+pub fn unwrap_or_else<F, H, E>(or_else: F, optional: ::jsonrpc_macros::Trailing<H>) -> Result<H, E> where
+	F: FnOnce() -> Result<H, E>,
+{
+	match optional.into() {
+		None => or_else(),
+		Some(x) => Ok(x),
+	}
 }

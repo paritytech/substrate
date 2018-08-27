@@ -29,8 +29,11 @@
 //! When this crate is used in `std` environment all these functions are implemented by directly
 //! calling wasm VM.
 //!
-//! Typical use-case for this library might be used for implementing smart-contract runtimes
-//! which uses wasm for contract code.
+//! Example of possible use-cases for this library are following:
+//!
+//! - implementing smart-contract runtimes which uses wasm for contract code
+//! - executing wasm substrate runtime inside of a wasm parachain
+//! - etc
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -46,6 +49,10 @@ extern crate substrate_primitives as primitives;
 
 #[cfg(test)]
 extern crate wabt;
+
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
 
 use rstd::prelude::*;
 
@@ -149,6 +156,11 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 	}
 
 	/// Register a host function in this environment defintion.
+	///
+	/// NOTE that there is no constraints on type of this function. An instance
+	/// can import function passed here with any signature it wants. It can even import
+	/// the same function (i.e. with same `module` and `field`) several times. It's up to
+	/// the user code to check or constrain the types of signatures.
 	pub fn add_host_func<N1, N2>(&mut self, module: N1, field: N2, f: HostFuncType<T>)
 	where
 		N1: Into<Vec<u8>>,

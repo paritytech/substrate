@@ -46,6 +46,7 @@ extern crate substrate_test_client as test_client;
 extern crate rustc_hex;
 
 mod errors;
+mod helpers;
 mod subscriptions;
 
 pub mod author;
