@@ -2795,6 +2795,7 @@ dependencies = [
 name = "substrate-runtime-sandbox"
 version = "0.1.0"
 dependencies = [
+ "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
