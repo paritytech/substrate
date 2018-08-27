@@ -26,7 +26,8 @@ use codec::{Codec, Encode};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
-use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
+use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
+	RemAssign, Shl, Shr};
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -132,6 +133,7 @@ pub trait SimpleArithmetic:
 	Mul<Self, Output = Self> + MulAssign<Self> +
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
+	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
 	CheckedAdd +
 	CheckedSub +
 	CheckedMul +
@@ -145,6 +147,7 @@ impl<T:
 	Mul<Self, Output = Self> + MulAssign<Self> +
 	Div<Self, Output = Self> + DivAssign<Self> +
 	Rem<Self, Output = Self> + RemAssign<Self> +
+	Shl<u32, Output = Self> + Shr<u32, Output = Self> +
 	CheckedAdd +
 	CheckedSub +
 	CheckedMul +

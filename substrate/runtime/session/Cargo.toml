@@ -34,4 +34,5 @@ std = [
 	"substrate-runtime-primitives/std",
 	"substrate-runtime-consensus/std",
 	"substrate-runtime-system/std",
+	"substrate-runtime-timestamp/std"
 ]

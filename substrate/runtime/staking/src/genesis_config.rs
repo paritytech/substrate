@@ -28,7 +28,8 @@ use {runtime_io, primitives};
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	BondingDuration, CreationFee, TransferFee, ReclaimRebate,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
-	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash};
+	SessionsPerEra, ValidatorCount, FreeBalance, SessionReward, EarlyEraSlash,
+	OfflineSlashGrace, MinimumValidatorCount};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,7 +39,8 @@ pub struct GenesisConfig<T: Trait> {
 	pub current_era: T::BlockNumber,
 	pub balances: Vec<(T::AccountId, T::Balance)>,
 	pub intentions: Vec<T::AccountId>,
-	pub validator_count: u64,
+	pub validator_count: u32,
+	pub minimum_validator_count: u32,
 	pub bonding_duration: T::BlockNumber,
 	pub transaction_base_fee: T::Balance,
 	pub transaction_byte_fee: T::Balance,
@@ -48,6 +50,7 @@ pub struct GenesisConfig<T: Trait> {
 	pub existential_deposit: T::Balance,
 	pub session_reward: T::Balance,
 	pub early_era_slash: T::Balance,
+	pub offline_slash_grace: u32,
 }
 
 impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
@@ -58,6 +61,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			balances: vec![(T::AccountId::from(1), T::Balance::sa(111))],
 			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
 			validator_count: 3,
+			minimum_validator_count: 1,
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_base_fee: T::Balance::sa(0),
 			transaction_byte_fee: T::Balance::sa(0),
@@ -67,6 +71,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			reclaim_rebate: T::Balance::sa(0),
 			session_reward: T::Balance::sa(0),
 			early_era_slash: T::Balance::sa(0),
+			offline_slash_grace: 1,
 		}
 	}
 
@@ -85,6 +90,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			],
 			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
 			validator_count: 3,
+			minimum_validator_count: 1,
 			bonding_duration: T::BlockNumber::sa(0),
 			transaction_base_fee: T::Balance::sa(1),
 			transaction_byte_fee: T::Balance::sa(0),
@@ -94,6 +100,7 @@ impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
 			reclaim_rebate: T::Balance::sa(0),
 			session_reward: T::Balance::sa(0),
 			early_era_slash: T::Balance::sa(0),
+			offline_slash_grace: 1,
 		}
 	}
 }
@@ -106,6 +113,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			balances: vec![],
 			intentions: vec![],
 			validator_count: 0,
+			minimum_validator_count: 0,
 			bonding_duration: T::BlockNumber::sa(1000),
 			transaction_base_fee: T::Balance::sa(0),
 			transaction_byte_fee: T::Balance::sa(0),
@@ -115,6 +123,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			reclaim_rebate: T::Balance::sa(0),
 			session_reward: T::Balance::sa(0),
 			early_era_slash: T::Balance::sa(0),
+			offline_slash_grace: 0,
 		}
 	}
 }
@@ -128,6 +137,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			Self::hash(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
 			Self::hash(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
 			Self::hash(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),
+			Self::hash(<MinimumValidatorCount<T>>::key()).to_vec() => self.minimum_validator_count.encode(),
 			Self::hash(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
 			Self::hash(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
 			Self::hash(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
@@ -138,6 +148,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			Self::hash(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
 			Self::hash(<SessionReward<T>>::key()).to_vec() => self.session_reward.encode(),
 			Self::hash(<EarlyEraSlash<T>>::key()).to_vec() => self.early_era_slash.encode(),
+			Self::hash(<OfflineSlashGrace<T>>::key()).to_vec() => self.offline_slash_grace.encode(),
 			Self::hash(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
 		];
 

@@ -1,4 +1,30 @@
 # Substrate
 
-Framework for blockchain innovators.
-More to come here.
+Next-generation framework for blockchain innovation.
+
+## Description
+
+At its heart, Substrate is a combination of three technologies: WebAssembly, Libp2p and AfG Consensus. It is both a library for building new blockchains with and a "skeleton key" of a blockchain client, able to synchronise to any Substrate-based chain.
+
+Substrate chains have two distinct features that make them "next-generation": a dynamic, self-defining state-transition function and a progressive consensus algorithm with fast block production and adaptive, definite finality. The STF, encoded in WebAssembly, is known as the "runtime". This defines the `execute_block` function, and can specify everything from the staking algorithm, transaction semantics, logging mechanisms and governance procedures. Because the runtime is entirely dynamic all of these can be switched out or upgraded at any time. A Substrate chain is very much a "living organism".
+
+## Roadmap
+
+### So far
+
+- 0.1 "PoC-1": PBFT consensus, Wasm runtime engine, basic runtime modules.
+- 0.2 "PoC-2": Libp2p
+
+### In progress
+
+- AfG consensus
+- Improved PoS
+- Smart contract runtime module
+
+### The future
+
+- Splitting out runtime modules into separate repo
+- Introduce substrate executable (the skeleton-key runtime)
+- Introduce basic but extensible transaction queue and block-builder and place them in the executable.
+- DAO runtime module
+- Audit
