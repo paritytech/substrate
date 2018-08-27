@@ -28,6 +28,8 @@ extern crate serde_derive;
 #[cfg(test)]
 extern crate wabt;
 
+extern crate base58;
+
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -53,6 +55,7 @@ use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
 	As, AuxLookup, Member, CheckedAdd, CheckedSub};
+use primitives::address_format::Base58;
 use address::Address as RawAddress;
 
 mod mock;
@@ -103,7 +106,7 @@ pub trait Trait: system::Trait + session::Trait {
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy + Base58;
 	/// A function which is invoked when the given account is dead.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
@@ -845,7 +848,9 @@ impl<T: Trait> OnSessionChange<T::Moment, T::AccountId> for Module<T> {
 	}
 }
 
-impl<T: Trait> AuxLookup for Module<T> {
+impl<T: Trait> AuxLookup for Module<T>
+where <T as system::Trait>::AccountId: primitives::address_format::Base58
+{
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {

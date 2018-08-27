@@ -40,6 +40,8 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
+extern crate base58;
+extern crate byte_num;
 
 #[cfg(test)]
 extern crate serde_json;
@@ -59,6 +61,7 @@ pub mod testing;
 pub mod traits;
 pub mod generic;
 pub mod bft;
+pub mod address_format;
 
 use traits::{Verify, Lazy};
 

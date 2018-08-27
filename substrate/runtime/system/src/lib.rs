@@ -40,6 +40,7 @@ extern crate safe_mix;
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
 	Hash, Member, MaybeDisplay};
+use primitives::address_format::Base58;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -68,7 +69,7 @@ pub trait Trait: Eq + Clone {
 	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Parameter + Member + Default + traits::Digest;
-	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
+	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default + Base58;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,
@@ -212,7 +213,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 
 		Ok(map![
 			Self::hash(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
-			Self::hash(<Number<T>>::key()).to_vec() => 1u64.encode(),
+			Self::hash(<Number<T>>::key()).to_vec() => Encode::encode(&1u64),
 			Self::hash(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
 			Self::hash(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
 			Self::hash(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()

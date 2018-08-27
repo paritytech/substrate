@@ -19,13 +19,15 @@
 #[cfg(feature = "std")]
 use std::fmt;
 use super::{Member, Decode, Encode, As, Input, Output};
+use primitives::address_format::{Base58, Base58Compatible};
+
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug, Hash))]
 pub enum Address<AccountId, AccountIndex> where
-	AccountId: Member,
-	AccountIndex: Member,
+	AccountId: Member + Base58,
+	AccountIndex: Member + Base58,
 {
 	/// It's an account ID (pubkey).
 	#[cfg_attr(feature = "std", serde(deserialize_with="AccountId::deserialize"))]
@@ -37,17 +39,18 @@ pub enum Address<AccountId, AccountIndex> where
 
 #[cfg(feature = "std")]
 impl<AccountId, AccountIndex> fmt::Display for Address<AccountId, AccountIndex> where
-	AccountId: Member,
-	AccountIndex: Member,
+	AccountId: Member + Sized + Base58 + Into<Vec<u8>> + Default + fmt::Debug + Sync,
+	AccountIndex: Member + Sized + Base58 + Into<Vec<u8>> + fmt::Debug + Sync,
+	Vec<u8>: From<AccountIndex>
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-		write!(f, "{:?}", self)
+		write!(f, "{:?}", &self.clone().encode())
 	}
 }
 
 impl<AccountId, AccountIndex> From<AccountId> for Address<AccountId, AccountIndex> where
-	AccountId: Member,
-	AccountIndex: Member,
+	AccountId: Member + Base58,
+	AccountIndex: Member + Base58,
 {
 	fn from(a: AccountId) -> Self {
 		Address::Id(a)
@@ -59,8 +62,8 @@ fn need_more_than<T: PartialOrd>(a: T, b: T) -> Option<T> {
 }
 
 impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
-	AccountId: Member + Decode,
-	AccountIndex: Member + Decode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+	AccountId: Member + Base58 + Decode,
+	AccountIndex: Member + Base58 + Decode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(match input.read_byte()? {
@@ -75,8 +78,8 @@ impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 }
 
 impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
-	AccountId: Member + Encode,
-	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+	AccountId: Member + Base58 + Encode,
+	AccountIndex: Member + Base58 + Encode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
@@ -102,10 +105,40 @@ impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 }
 
 impl<AccountId, AccountIndex> Default for Address<AccountId, AccountIndex> where
-	AccountId: Member + Default,
-	AccountIndex: Member,
+	AccountId: Member + Base58 + Default,
+	AccountIndex: Member + Base58,
 {
 	fn default() -> Self {
 		Address::Id(Default::default())
+	}
+}
+
+impl<AccountId, AccountIndex> Into<Vec<u8>> for Address<AccountId, AccountIndex> where
+    AccountId: Member + Base58 + Into<Vec<u8>> + Default + fmt::Debug + Sync,
+    AccountIndex: Member + Base58 + Into<Vec<u8>> +  fmt::Debug + Sync,
+	Vec<u8>: From<AccountIndex>
+
+{
+	fn into(self) -> Vec<u8> {
+		match self {
+			Address::Id(id) => Into::<Vec<u8>>::into(id),
+			Address::Index(id) => Into::<Vec<u8>>::into(id)
+		}
+	}
+}
+
+impl<AccountId, AccountIndex> Base58 for Address<AccountId, AccountIndex> where
+	AccountId: Member + Base58 + Into<Vec<u8>> + Default + fmt::Debug + Sync,
+	AccountIndex: Member + Base58 + Into<Vec<u8>> +  fmt::Debug + Sync,
+	Vec<u8>: From<AccountIndex>
+{}
+
+impl<AccountId, AccountIndex> Into<Base58Compatible> for Address<AccountId, AccountIndex> where
+		AccountId: Member + Base58 + Into<Vec<u8>> + Default + fmt::Debug + Sync,
+		AccountIndex: Member + Base58 + Into<Vec<u8>> + fmt::Debug + Sync,
+		Vec<u8>: From<AccountIndex>
+{
+	fn into(self) -> Base58Compatible {
+		Base58Compatible(self.into())
 	}
 }
