@@ -87,17 +87,7 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 	pub fn clear_timeouts(&self, now: &Instant) {
 		let mut banned = self.banned_until.write();
 
-		let to_remove = banned
-			.iter()
-			.filter_map(|(k, v)| if v < now {
-				Some(k.clone())
-			} else {
-				None
-			}).collect::<Vec<_>>();
-
-		for k in to_remove {
-			banned.remove(&k);
-		}
+		banned.retain(|_, &mut v| v >= *now);
 	}
 }
 
