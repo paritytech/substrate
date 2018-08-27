@@ -43,20 +43,23 @@ impl system::Trait for Test {
 	type Digest = Digest;
 	type AccountId = u64;
 	type Header = Header;
+	type Event = ();
 }
 impl session::Trait for Test {
-	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 0;
 	type ConvertAccountIdToSessionKey = Identity;
 	type OnSessionChange = Staking;
+	type Event = ();
 }
 impl timestamp::Trait for Test {
 	const TIMESTAMP_SET_POSITION: u32 = 0;
 	type Moment = u64;
 }
 impl Trait for Test {
+	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type Balance = u64;
 	type AccountIndex = u64;
-	type OnAccountKill = ();
+	type OnFreeBalanceZero = ();
+	type Event = ();
 }
 
 pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool, reward: u64) -> runtime_io::TestExternalities<KeccakHasher> {
@@ -73,7 +76,6 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 	t.extend(session::GenesisConfig::<Test>{
 		session_length,
 		validators: vec![10, 20],
-		broken_percent_late: 30,
 	}.build_storage().unwrap());
 	t.extend(GenesisConfig::<Test>{
 		sessions_per_era,

@@ -38,6 +38,9 @@ extern crate substrate_runtime_std as rstd;
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
@@ -46,7 +49,7 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, MaybeEmpty, Executable, Convert, As};
+use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
@@ -64,12 +67,12 @@ impl<T> OnSessionChange<T> for () {
 }
 
 pub trait Trait: timestamp::Trait {
-	// the position of the required note_missed_proposal extrinsic.
-	const NOTE_MISSED_PROPOSAL_POSITION: u32;
-
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
 	type OnSessionChange: OnSessionChange<Self::Moment>;
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
+
+pub type Event<T> = RawEvent<<T as system::Trait>::BlockNumber>;
 
 decl_module! {
 	pub struct Module<T: Trait>;
@@ -77,7 +80,6 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set_key(aux, key: T::SessionKey) -> Result = 0;
-		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 1;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -85,6 +87,19 @@ decl_module! {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
 		fn force_new_session(apply_rewards: bool) -> Result = 1;
 	}
+}
+
+/// An event in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawEvent<BlockNumber> {
+	/// New session has happened. Note that the argument is the session index, not the block number
+	/// as the type might suggest.
+	NewSession(BlockNumber),
+}
+
+impl<N> From<RawEvent<N>> for () {
+	fn from(_: RawEvent<N>) -> () { () }
 }
 
 decl_storage! {
@@ -98,8 +113,6 @@ decl_storage! {
 	pub CurrentIndex get(current_index): b"ses:ind" => required T::BlockNumber;
 	// Timestamp when current session started.
 	pub CurrentStart get(current_start): b"ses:current_start" => required T::Moment;
-	// Percent by which the session must necessarily finish late before we early-exit the session.
-	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Moment;
 
 	// Opinions of the current validator set about the activeness of their peers.
 	// Gets cleared when the validator set changes.
@@ -147,20 +160,6 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Notes which of the validators appear to be online from the point of the view of the block author.
-	pub fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
-		assert!(aux.is_empty());
-		assert!(
-			<system::Module<T>>::extrinsic_index() == T::NOTE_MISSED_PROPOSAL_POSITION,
-			"note_missed_proposal extrinsic must be at position {} in the block",
-			T::NOTE_MISSED_PROPOSAL_POSITION
-		);
-
-		let vs = Self::validators();
-		<BadValidators<T>>::put(offline_val_indices.into_iter().map(|i| vs[i as usize].clone()).collect::<Vec<T::AccountId>>());
-		Ok(())
-	}
-
 	// INTERNAL API (available to other runtime modules)
 
 	/// Set the current set of validators.
@@ -188,13 +187,21 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
+
 	/// Move onto next session: register the new authority set.
 	pub fn rotate_session(is_final_block: bool, apply_rewards: bool) {
 		let now = <timestamp::Module<T>>::get();
 		let time_elapsed = now.clone() - Self::current_start();
+		let session_index = <CurrentIndex<T>>::get() + One::one();
+
+		Self::deposit_event(RawEvent::NewSession(session_index));
 
 		// Increment current session index.
-		<CurrentIndex<T>>::put(<CurrentIndex<T>>::get() + One::one());
+		<CurrentIndex<T>>::put(session_index);
 		<CurrentStart<T>>::put(now);
 
 		// Enact era length change.
@@ -250,7 +257,6 @@ impl<T: Trait> Executable for Module<T> {
 pub struct GenesisConfig<T: Trait> {
 	pub session_length: T::BlockNumber,
 	pub validators: Vec<T::AccountId>,
-	pub broken_percent_late: T::Moment,
 }
 
 #[cfg(any(feature = "std", test))]
@@ -260,7 +266,6 @@ impl<T: Trait> Default for GenesisConfig<T> {
 		GenesisConfig {
 			session_length: T::BlockNumber::sa(1000),
 			validators: vec![],
-			broken_percent_late: T::Moment::sa(30),
 		}
 	}
 }
@@ -276,8 +281,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 			Self::hash(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
 			Self::hash(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
 			Self::hash(<CurrentStart<T>>::key()).to_vec() => T::Moment::zero().encode(),
-			Self::hash(<Validators<T>>::key()).to_vec() => self.validators.encode(),
-			Self::hash(<BrokenPercentLate<T>>::key()).to_vec() => self.broken_percent_late.encode()
+			Self::hash(<Validators<T>>::key()).to_vec() => self.validators.encode()
 		])
 	}
 }
@@ -308,15 +312,16 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
+		type Event = ();
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
 	}
 	impl Trait for Test {
-		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = ();
+		type Event = ();
 	}
 
 	type System = system::Module<Test>;
@@ -336,7 +341,6 @@ mod tests {
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
-			broken_percent_late: 30,
 		}.build_storage().unwrap());
 		t.into()
 	}

@@ -247,8 +247,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> staking::OnAccountKill<T::AccountId> for Module<T> {
-	fn on_account_kill(who: &T::AccountId) {
+impl<T: Trait> staking::OnFreeBalanceZero<T::AccountId> for Module<T> {
+	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());
 	}

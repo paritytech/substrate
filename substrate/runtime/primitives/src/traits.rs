@@ -104,6 +104,14 @@ pub struct Identity;
 impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
+pub struct Empty;
+impl<T> Convert<T, ()> for Empty {
+	fn convert(_: T) -> () { () }
+}
+pub struct UseInto;
+impl<T, S: From<T>> Convert<T, S> for UseInto {
+	fn convert(t: T) -> S { t.into() }
+}
 
 pub trait MaybeEmpty {
 	fn is_empty(&self) -> bool;

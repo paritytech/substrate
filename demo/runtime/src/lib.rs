@@ -34,6 +34,11 @@ extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate serde;
 
+extern crate substrate_codec as codec;
+
+#[macro_use]
+extern crate substrate_codec_derive;
+
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
@@ -90,6 +95,7 @@ impl system::Trait for Concrete {
 	type Digest = generic::Digest<Vec<u8>>;
 	type AccountId = AccountId;
 	type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
+	type Event = Event;
 }
 
 /// System module for this concrete runtime.
@@ -121,18 +127,20 @@ impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 }
 
 impl session::Trait for Concrete {
-	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type ConvertAccountIdToSessionKey = SessionKeyConversion;
 	type OnSessionChange = Staking;
+	type Event = Event;
 }
 
 /// Session module for this concrete runtime.
 pub type Session = session::Module<Concrete>;
 
 impl staking::Trait for Concrete {
+	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type Balance = Balance;
 	type AccountIndex = AccountIndex;
-	type OnAccountKill = ();
+	type OnFreeBalanceZero = ();
+	type Event = Event;
 }
 
 /// Staking module for this concrete runtime.
@@ -151,6 +159,12 @@ impl council::Trait for Concrete {}
 pub type Council = council::Module<Concrete>;
 /// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Concrete>;
+
+impl_outer_event! {
+	pub enum Event for Concrete {
+		session, staking
+	}
+}
 
 impl_outer_dispatch! {
 	#[derive(Clone, PartialEq, Eq)]
@@ -211,6 +225,7 @@ pub mod api {
 	impl_stubs!(
 		version => |()| super::Version::version(),
 		authorities => |()| super::Consensus::authorities(),
+		events => |()| super::System::events(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),

@@ -83,3 +83,26 @@ macro_rules! assert_ok {
 		assert_eq!($x, Ok($y));
 	}
 }
+
+#[macro_export]
+macro_rules! impl_outer_event {
+	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $( $module:ident ),* }) => {
+		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		$(#[$attr])*
+		#[allow(non_camel_case_types)]
+		pub enum $name {
+			$(
+				$module($module::Event<$trait>),
+			)*
+		}
+		$(
+			impl From<$module::Event<$trait>> for $name {
+				fn from(x: $module::Event<$trait>) -> Self {
+					$name::$module(x)
+				}
+			}
+		)*
+	}
+}

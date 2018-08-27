@@ -167,7 +167,6 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		session: Some(SessionConfig {
 			validators: vec![god_key.clone().into()],
 			session_length: 720,	// that's 1 hour per session.
-			broken_percent_late: 30,
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
