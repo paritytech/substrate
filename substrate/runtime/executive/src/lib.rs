@@ -252,7 +252,7 @@ mod tests {
 		type Header = Header;
 	}
 	impl session::Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
+		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = staking::Module<Test>;
 	}
@@ -278,6 +278,7 @@ mod tests {
 			balances: vec![(1, 111)],
 			intentions: vec![],
 			validator_count: 0,
+			minimum_validator_count: 0,
 			bonding_duration: 0,
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,
@@ -287,6 +288,7 @@ mod tests {
 			reclaim_rebate: 0,
 			early_era_slash: 0,
 			session_reward: 0,
+			offline_slash_grace: 0,
 		}.build_storage().unwrap());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		let mut t = runtime_io::TestExternalities::from(t);
@@ -317,8 +319,8 @@ mod tests {
 					// Blake
 					// state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
 					// Keccak
-					state_root: hex!("8fad93b6b9e5251a2e4913598fd0d74a138c0e486eb1133ff8081b429b0c56f2").into(),
-					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(), // REVIEW: I expected this to be wrong with a different hasher?
+					state_root: hex!("ed456461b82664990b6ebd1caf1360056f6e8a062e73fada331e1c92cd81cad4").into(),
+					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],
@@ -351,7 +353,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("8fad93b6b9e5251a2e4913598fd0d74a138c0e486eb1133ff8081b429b0c56f2").into(),
+					state_root: hex!("ed456461b82664990b6ebd1caf1360056f6e8a062e73fada331e1c92cd81cad4").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

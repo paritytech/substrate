@@ -45,7 +45,7 @@ impl system::Trait for Test {
 	type Header = Header;
 }
 impl session::Trait for Test {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
+	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 0;
 	type ConvertAccountIdToSessionKey = Identity;
 	type OnSessionChange = Staking;
 }
@@ -87,8 +87,9 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		} else {
 			vec![(10, balance_factor), (20, balance_factor)]
 		},
-		intentions: vec![],
+		intentions: vec![10, 20],
 		validator_count: 2,
+		minimum_validator_count: 0,
 		bonding_duration: 3,
 		transaction_base_fee: 0,
 		transaction_byte_fee: 0,
@@ -98,6 +99,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		reclaim_rebate: 0,
 		session_reward: reward,
 		early_era_slash: if monied { 20 } else { 0 },
+		offline_slash_grace: 0,
 	}.build_storage().unwrap());
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5

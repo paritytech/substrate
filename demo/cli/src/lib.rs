@@ -180,10 +180,12 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			existential_deposit: 500,
 			balances: vec![(god_key.clone().into(), 1u64 << 63)].into_iter().collect(),
 			validator_count: 12,
+			minimum_validator_count: 4,
 			sessions_per_era: 24,	// 24 hours per era.
 			bonding_duration: 90,	// 90 days per bond.
 			early_era_slash: 10000,
 			session_reward: 100,
+			offline_slash_grace: 0,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
