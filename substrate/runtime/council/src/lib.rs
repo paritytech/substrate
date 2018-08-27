@@ -46,8 +46,6 @@ use primitives::traits::{Zero, One, RefInto, As, AuxLookup};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
 use staking::address::Address;
-#[cfg(any(feature = "std", test))]
-use std::collections::HashMap;
 
 pub mod voting;
 

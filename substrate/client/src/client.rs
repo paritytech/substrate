@@ -23,7 +23,7 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
-use primitives::{KeccakHasher, RlpCodec};
+use primitives::{KeccakHasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
 use codec::Decode;
 use state_machine::{
@@ -169,6 +169,7 @@ pub fn new_in_mem<E, Block, S>(
 		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT,
+		H256: From<Block::Hash>,
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
@@ -281,7 +282,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		overlay: &mut OverlayedChanges,
 		f: F
 	) -> error::Result<T> {
-		Ok(runtime_io::with_externalities(&mut Ext::new(overlay, &self.state_at(id)?), f))
+		Ok(runtime_io::with_externalities(&mut Ext::new(overlay, &self.state_at(id)?, self.backend.changes_trie_storage()), f))
 	}
 
 	/// Create a new block, built on the head of the chain.

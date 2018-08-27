@@ -94,6 +94,12 @@ error_chain! {
 			display("This method is not currently available when running in light client mode"),
 		}
 
+		/// Unable to generate execution proof.
+		UnableToGenerateExecutionProof {
+			description("unable to generate execution proof"),
+			display("The node has no capabilities to generate execution proof"),
+		}
+
 		/// Invalid remote execution proof.
 		InvalidExecutionProof {
 			description("invalid execution proof"),

@@ -20,13 +20,11 @@ use std::{error, fmt};
 use std::cmp::Ord;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::sync::Arc;
 use hashdb::Hasher;
 use memorydb::MemoryDB;
-use changes_trie::{Storage as ChangesTrieStorage};
-use overlayed_changes::OverlayedChanges;
 use rlp::Encodable;
-use trie_backend::{TryIntoTrieBackend, TrieBackend};
+use trie_backend::TrieBackend;
+use trie_backend_essence::TrieBackendStorage;
 use patricia_trie::{TrieDBMut, TrieMut, NodeCodec};
 use heapsize::HeapSizeOf;
 
@@ -34,17 +32,15 @@ use heapsize::HeapSizeOf;
 /// to it.
 ///
 /// The clone operation (if implemented) should be cheap.
-pub trait Backend<H: Hasher, C: NodeCodec<H>>: TryIntoTrieBackend<H, C> {
+pub trait Backend<H: Hasher, C: NodeCodec<H>> {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
 	/// Storage changes to be applied if committing
 	type StorageTransaction;
-	/// Changes to changes trie to be applied if committing.
-	type ChangesTrieTransaction;
 
-	/// Get changes trie storage shared reference.
-	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage<H>>>;
+	/// Type of trie backend storage.
+	type TrieBackendStorage: TrieBackendStorage<H>;
 
 	/// Get keyed storage associated with specific address, or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
@@ -65,12 +61,11 @@ pub trait Backend<H: Hasher, C: NodeCodec<H>>: TryIntoTrieBackend<H, C> {
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord + Encodable;
 
-	/// Calculate the changes trie root for given overlay and produce a "transaction"
-	/// that can be used to commit.
-	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<(H::Out, Self::ChangesTrieTransaction)>;
-
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+
+	/// Try convert into trie backend.
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>>;
 }
 
 /// Error impossible.
@@ -122,6 +117,14 @@ impl<H, C> PartialEq for InMemory<H, C> {
 }
 
 impl<H: Hasher, C: NodeCodec<H>> InMemory<H, C> where H::Out: HeapSizeOf {
+	/// Try convert into trie backend.
+	pub fn try_into_trie_backend(self) -> Option<TrieBackend<MemoryDB<H>, H, C>> {
+		let mut mdb = MemoryDB::default();
+		let root = insert_into_memory_db::<H, C, _>(&mut mdb, self.inner.into_iter())?;
+
+		Some(TrieBackend::new(mdb, root))
+	}
+
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H, C>>::StorageTransaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
@@ -149,11 +152,7 @@ impl super::Error for Void {}
 impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> where H::Out: HeapSizeOf {
 	type Error = Void;
 	type StorageTransaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
-	type ChangesTrieTransaction = Vec<(Vec<u8>, Vec<u8>)>;
-
-	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage<H>>> {
-		None
-	}
+	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(key).map(Clone::clone))
@@ -184,21 +183,14 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> where H::Out: 
 		(root, transaction)
 	}
 
-	fn changes_trie_root(&self, _overlay: &OverlayedChanges) -> Option<(H::Out, Self::ChangesTrieTransaction)> {
-		None // TODO: compute_changes_trie_root(self.changes_trie_storage.clone(), overlay)
-	}
-
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.inner.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
-}
 
-impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for InMemory<H, C> where H::Out: HeapSizeOf {
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
-		let mut mdb = MemoryDB::default();
-		let root = insert_into_memory_db::<H, C, _>(&mut mdb, self.inner.into_iter())?;
-
-		Some(TrieBackend::with_memorydb(mdb, root, None))
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
+		let mut mdb = MemoryDB::new();
+		let root = insert_into_memory_db::<H, C, _>(&mut mdb, self.inner.clone().into_iter())?;
+		Some(TrieBackend::new(mdb, root))
 	}
 }
 

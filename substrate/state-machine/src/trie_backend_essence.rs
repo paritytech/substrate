@@ -22,7 +22,7 @@ use std::sync::Arc;
 use hashdb::{Hasher, DBValue, AsHashDB, HashDB};
 use heapsize::HeapSizeOf;
 use memorydb::MemoryDB;
-use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, NodeCodec};
+use patricia_trie::{TrieDB, TrieError, Trie, NodeCodec};
 use changes_trie::Storage as ChangesTrieStorage;
 
 /// Patricia trie-based storage trait.
@@ -32,15 +32,15 @@ pub trait Storage<H: Hasher>: Send + Sync {
 }
 
 /// Patricia trie-based pairs storage.
-pub struct TrieBackendEssence<H: Hasher, C: NodeCodec<H>> {
-	pub(crate)storage: TrieBackendStorage<H>,
+pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> {
+	pub(crate)storage: S,
 	pub(crate)root: H::Out,
 	pub(crate)_codec: PhantomData<C>,
 }
 
-impl<H: Hasher, C: NodeCodec<H>> TrieBackendEssence<H, C> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackendEssence<S, H, C> where H::Out: HeapSizeOf {
 	/// Create new trie-based backend.
-	pub fn new(storage: TrieBackendStorage<H>, root: H::Out) -> Self {
+	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackendEssence {
 			storage,
 			root,
@@ -48,27 +48,8 @@ impl<H: Hasher, C: NodeCodec<H>> TrieBackendEssence<H, C> where H::Out: HeapSize
 		}
 	}
 
-	/// Create new trie-based backend.
-	pub fn with_storage(db: Arc<Storage<H>>, root: H::Out) -> Self {
-		Self::new(TrieBackendStorage::Storage(db), root)
-	}
-
-	/// Create new trie-based backend for genesis block.
-	pub fn with_storage_for_genesis(db: Arc<Storage<H>>) -> Self {
-		let mut root = H::Out::default();
-		let mut mdb = MemoryDB::<H>::default();
-		TrieDBMut::<H, C>::new(&mut mdb, &mut root);
-
-		Self::new(TrieBackendStorage::Storage(db), root)
-	}
-
-	/// Create new trie-based backend backed by MemoryDb storage.
-	pub fn with_memorydb(db: MemoryDB<H>, root: H::Out) -> Self {
-		Self::new(TrieBackendStorage::MemoryDb(db), root)
-	}
-
 	/// Get backend storage reference.
-	pub fn backend_storage(&self) -> &TrieBackendStorage<H> {
+	pub fn backend_storage(&self) -> &S {
 		&self.storage
 	}
 
@@ -124,18 +105,18 @@ impl<H: Hasher, C: NodeCodec<H>> TrieBackendEssence<H, C> where H::Out: HeapSize
 	}
 }
 
-pub struct Ephemeral<'a, H: 'a + Hasher> {
-	storage: &'a TrieBackendStorage<H>,
+pub struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+	storage: &'a S,
 	overlay: &'a mut MemoryDB<H>,
 }
 
-impl<'a, H: Hasher> AsHashDB<H> for Ephemeral<'a, H> where H::Out: HeapSizeOf {
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> AsHashDB<H> for Ephemeral<'a, S, H> where H::Out: HeapSizeOf {
 	fn as_hashdb(&self) -> &HashDB<H> { self }
 	fn as_hashdb_mut(&mut self) -> &mut HashDB<H> { self }
 }
 
-impl<'a, H: Hasher> Ephemeral<'a, H> {
-	pub fn new(storage: &'a TrieBackendStorage<H>, overlay: &'a mut MemoryDB<H>) -> Self {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
+	pub fn new(storage: &'a S, overlay: &'a mut MemoryDB<H>) -> Self {
 		Ephemeral {
 			storage,
 			overlay,
@@ -143,7 +124,7 @@ impl<'a, H: Hasher> Ephemeral<'a, H> {
 	}
 }
 
-impl<'a, H: Hasher> HashDB<H> for Ephemeral<'a, H> where H::Out: HeapSizeOf {
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> HashDB<H> for Ephemeral<'a, S, H> where H::Out: HeapSizeOf {
 	fn keys(&self) -> HashMap<H::Out, i32> {
 		self.overlay.keys() // TODO: iterate backing
 	}
@@ -184,26 +165,32 @@ impl<'a, H: Hasher> HashDB<H> for Ephemeral<'a, H> where H::Out: HeapSizeOf {
 	}
 }
 
-pub enum TrieBackendStorage<H: Hasher> {
-	/// Key value db + storage column.
-	Storage(Arc<Storage<H>>),
-	/// Key value db + changes trie storage column.
-	ChangesTrieStorage(Arc<ChangesTrieStorage<H>>),
-	/// Hash db.
-	MemoryDb(MemoryDB<H>),
+pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
+	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
 }
 
-impl<H: Hasher> TrieBackendStorage<H> {
-	pub fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		match *self {
-			TrieBackendStorage::Storage(ref db) =>
-				db.get(key)
-					.map_err(|e| format!("Trie lookup error: {}", e)),
-			TrieBackendStorage::ChangesTrieStorage(ref db) =>
-				db.get(key)
-					.map_err(|e| format!("Trie lookup error: {}", e)),
-			TrieBackendStorage::MemoryDb(ref db) =>
-				Ok(db.get(key)),
-		}
+impl<H: Hasher> TrieBackendStorage<H> for Arc<Storage<H>> {
+	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
+use std::ops::Deref;
+		Storage::<H>::get(self.deref(), key)
+	}
+}
+
+impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
+	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
+		Ok(HashDB::<H>::get(self, key))
+	}
+}
+
+impl<H: Hasher> TrieBackendStorage<H> for Arc<MemoryDB<H>> {
+	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
+use std::ops::Deref;
+		Ok(HashDB::<H>::get(self.deref(), key))
+	}
+}
+
+impl<'a, S, H: Hasher> TrieBackendStorage<H> for &'a S where S: ChangesTrieStorage<H> {
+	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
+		ChangesTrieStorage::<H>::get(*self, key)
 	}
 }

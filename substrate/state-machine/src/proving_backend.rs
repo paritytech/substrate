@@ -17,27 +17,25 @@
 //! Proving state machine backend.
 
 use std::cell::RefCell;
-use std::sync::Arc;
 use hashdb::{Hasher, HashDB};
 use heapsize::HeapSizeOf;
 use memorydb::MemoryDB;
 use patricia_trie::{TrieDB, Trie, Recorder, NodeCodec};
 use rlp::Encodable;
-use changes_trie::Storage as ChangesTrieStorage;
-use overlayed_changes::OverlayedChanges;
 use trie_backend::TrieBackend;
-use trie_backend_essence::{Ephemeral, TrieBackendEssence};
-use {Error, ExecutionError, Backend, TryIntoTrieBackend};
+use trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
+use {Error, ExecutionError, Backend};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackendEssence<'a, H: 'a + Hasher, C: 'a + NodeCodec<H>> {
-	pub(crate) backend: &'a TrieBackendEssence<H, C>,
+pub struct ProvingBackendEssence<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher, C: 'a + NodeCodec<H>> {
+	pub(crate) backend: &'a TrieBackendEssence<S, H, C>,
 	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
 }
 
-impl<'a, H, C> ProvingBackendEssence<'a, H, C>
+impl<'a, S, H, C> ProvingBackendEssence<'a, S, H, C>
 	where
+		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: HeapSizeOf,
 		C: NodeCodec<H>,
@@ -60,14 +58,14 @@ impl<'a, H, C> ProvingBackendEssence<'a, H, C>
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<H: Hasher, C: NodeCodec<H>> {
-	backend: TrieBackend<H, C>,
+pub struct ProvingBackend<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> {
+	backend: TrieBackend<S, H, C>,
 	proof_recorder: RefCell<Recorder<H::Out>>,
 }
 
-impl<H: Hasher, C: NodeCodec<H>> ProvingBackend<H, C> {
+impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> ProvingBackend<S, H, C> {
 	/// Create new proving backend.
-	pub fn new(backend: TrieBackend<H, C>) -> Self {
+	pub fn new(backend: TrieBackend<S, H, C>) -> Self {
 		ProvingBackend {
 			backend,
 			proof_recorder: RefCell::new(Recorder::new()),
@@ -84,19 +82,16 @@ impl<H: Hasher, C: NodeCodec<H>> ProvingBackend<H, C> {
 	}
 }
 
-impl<H, C> Backend<H, C> for ProvingBackend<H, C>
+impl<S, H, C> Backend<H, C> for ProvingBackend<S, H, C>
 	where
+		S: TrieBackendStorage<H>,
 		H: Hasher,
 		C: NodeCodec<H>,
 		H::Out: Ord + Encodable + HeapSizeOf,
 {
 	type Error = String;
 	type StorageTransaction = MemoryDB<H>;
-	type ChangesTrieTransaction = MemoryDB<H>;
-
-	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage<H>>> {
-		self.backend.changes_trie_storage()
-	}
+	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		ProvingBackendEssence {
@@ -120,13 +115,7 @@ impl<H, C> Backend<H, C> for ProvingBackend<H, C>
 		self.backend.storage_root(delta)
 	}
 
-	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<(H::Out, MemoryDB<H>)> {
-		self.backend.changes_trie_root(overlay)
-	}
-}
-
-impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for ProvingBackend<H, C> {
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
 		None
 	}
 }
@@ -135,7 +124,7 @@ impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for ProvingBackend<H, 
 pub fn create_proof_check_backend<H, C>(
 	root: H::Out,
 	proof: Vec<Vec<u8>>
-) -> Result<TrieBackend<H, C>, Box<Error>>
+) -> Result<TrieBackend<MemoryDB<H>, H, C>, Box<Error>>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
@@ -150,7 +139,7 @@ where
 		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
 	}
 
-	Ok(TrieBackend::with_memorydb(db, root, None))
+	Ok(TrieBackend::new(db, root))
 }
 
 #[cfg(test)]
@@ -160,7 +149,7 @@ mod tests {
 	use super::*;
 	use primitives::{KeccakHasher, RlpCodec};
 
-	fn test_proving() -> ProvingBackend<KeccakHasher, RlpCodec> {
+	fn test_proving() -> ProvingBackend<MemoryDB<KeccakHasher>, KeccakHasher, RlpCodec> {
 		ProvingBackend::new(test_trie())
 	}
 

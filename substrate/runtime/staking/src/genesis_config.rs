@@ -18,13 +18,10 @@
 
 #![cfg(feature = "std")]
 
-use std::collections::HashMap;
 use rstd::prelude::*;
 use codec::Encode;
 use runtime_support::{StorageValue, StorageMap};
-use primitives::traits::{Zero, As};
-use substrate_primitives::KeccakHasher;
-use {runtime_io, primitives};
+use primitives::{self, traits::{Zero, As}};
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	BondingDuration, CreationFee, TransferFee, ReclaimRebate,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,

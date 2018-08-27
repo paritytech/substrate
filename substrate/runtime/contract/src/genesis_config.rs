@@ -22,8 +22,6 @@ use runtime_primitives;
 use runtime_io::twox_128;
 use runtime_support::StorageValue;
 use codec::Encode;
-use std::collections::HashMap;
-use substrate_primitives::KeccakHasher;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

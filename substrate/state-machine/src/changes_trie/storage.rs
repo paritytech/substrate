@@ -17,84 +17,42 @@
 //! Changes trie storage utilities.
 
 use std::collections::HashMap;
-use std::sync::Arc;
-use backend::insert_into_memory_db;
 use hashdb::{Hasher, HashDB, DBValue};
 use heapsize::HeapSizeOf;
 use memorydb::MemoryDB;
-use patricia_trie::NodeCodec;
+use parking_lot::RwLock;
 use changes_trie::Storage;
+
+#[cfg(test)]
+use backend::insert_into_memory_db;
+#[cfg(test)]
+use patricia_trie::NodeCodec;
+#[cfg(test)]
 use changes_trie::input::InputPair;
-use trie_backend_essence::Storage as TrieStorage;
-
-/// Adapter to use changes trie storage where backend storage is required.
-pub struct TrieStorageAdapter<H: Hasher>(pub Arc<Storage<H>>);
-
-/// Storage implementation that uses proof as a source for trie nodes.
-pub struct ProofCheckStorage<H: Hasher> {
-	proof_db: MemoryDB<H>,
-}
 
 /// In-memory implementation of changes trie storage.
-#[derive(Default)]
-pub struct InMemoryStorage<H: Hasher, C: NodeCodec<H>> where H::Out: HeapSizeOf {
+pub struct InMemoryStorage<H: Hasher> where H::Out: HeapSizeOf {
+	data: RwLock<InMemoryStorageData<H>>,
+}
+
+struct InMemoryStorageData<H: Hasher> where H::Out: HeapSizeOf {
 	roots: HashMap<u64, H::Out>,
 	mdb: MemoryDB<H>,
-	_codec: ::std::marker::PhantomData<C>,
 }
 
-impl<H: Hasher> TrieStorage<H> for TrieStorageAdapter<H> {
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		self.0.get(key)
-	}
-}
-
-impl<H: Hasher> ProofCheckStorage<H> where H::Out: HeapSizeOf {
-	pub fn new(proof: Vec<Vec<u8>>) -> Self {
-		let mut proof_db = MemoryDB::<H>::new();
-		for item in proof {
-			proof_db.insert(&item);
-		}
-
-		ProofCheckStorage {
-			proof_db,
+impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
+	/// Create the storage from given in-memory database.
+	pub fn new(mdb: MemoryDB<H>) -> Self {
+		Self {
+			data: RwLock::new(InMemoryStorageData {
+				roots: HashMap::new(),
+				mdb: mdb,
+			}),
 		}
 	}
-}
 
-impl<H: Hasher> Storage<H> for ProofCheckStorage<H> {
-	fn root(&self, _block: u64) -> Result<Option<H::Out>, String> {
-		unreachable!("This storage must not be used to read trie roots")
-	}
-
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Ok(self.proof_db.get(key))
-	}
-}
-
-impl<H: Hasher, C: NodeCodec<H>> InMemoryStorage<H, C> where C: Send + Sync, H::Out: HeapSizeOf {
-	pub fn clear_storage(&mut self) {
-		self.mdb = MemoryDB::new();
-	}
-}
-
-impl<H: Hasher, C: NodeCodec<H>> Storage<H> for InMemoryStorage<H, C> where C: Send + Sync, H::Out: HeapSizeOf {
-	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {
-		Ok(self.roots.get(&block).cloned())
-	}
-
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Ok(self.mdb.get(key))
-	}
-}
-
-impl<H, C> From<Vec<(u64, Vec<InputPair>)>> for InMemoryStorage<H, C>
-	where
-		H: Hasher,
-		H::Out: HeapSizeOf,
-		C: NodeCodec<H>,
-{
-	fn from(inputs: Vec<(u64, Vec<InputPair>)>) -> Self {
+	#[cfg(test)]
+	pub fn with_inputs<C: NodeCodec<H>>(inputs: Vec<(u64, Vec<InputPair>)>) -> Self {
 		let mut mdb = MemoryDB::default();
 		let mut roots = HashMap::new();
 		for (block, pairs) in inputs {
@@ -103,6 +61,52 @@ impl<H, C> From<Vec<(u64, Vec<InputPair>)>> for InMemoryStorage<H, C>
 			}
 		}
 
-		InMemoryStorage { mdb, roots, _codec: ::std::marker::PhantomData::<C>::default(), }
+		InMemoryStorage {
+			data: RwLock::new(InMemoryStorageData {
+				roots,
+				mdb,
+			}),
+		}
+	}
+
+	#[cfg(test)]
+	pub fn clear_storage(&self) {
+		self.data.write().mdb = MemoryDB::new();
+	}
+
+	/// Insert changes trie for given block.
+	pub fn insert(&self, block: u64, changes_trie_root: H::Out, trie: MemoryDB<H>) {
+		let mut data = self.data.write();
+		data.roots.insert(block, changes_trie_root);
+		data.mdb.consolidate(trie);
+	}
+}
+
+impl<H: Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
+	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {
+		Ok(self.data.read().roots.get(&block).cloned())
+	}
+
+	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
+		Ok(HashDB::<H>::get(&self.data.read().mdb, key))
+	}
+}
+
+use trie_backend_essence::TrieBackendStorage;
+
+pub struct TrieBackendAdapter<'a, H: Hasher, S: 'a + Storage<H>> {
+	storage: &'a S,
+	_hasher: ::std::marker::PhantomData<H>,
+}
+
+impl<'a, H: Hasher, S: 'a + Storage<H>> TrieBackendAdapter<'a, H, S> {
+	pub fn new(storage: &'a S) -> Self {
+		Self { storage, _hasher: Default::default() }
+	}
+}
+
+impl<'a, H: Hasher, S: 'a + Storage<H>> TrieBackendStorage<H> for TrieBackendAdapter<'a, H, S> {
+	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
+		self.storage.get(key)
 	}
 }

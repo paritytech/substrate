@@ -47,14 +47,14 @@ mod tests {
 	use codec::{Encode, Decode, Joiner};
 	use keyring::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap};
-	use state_machine::{CodeExecutor, TestExternalities};
+	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{twox_128, KeccakHasher, RlpCodec};
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
 	use {staking, system, consensus};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
-		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic};
+		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic, SystemConfig};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -183,12 +183,16 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> TestExternalities<KeccakHasher, RlpCodec> {
+	fn new_test_ext(support_changes_trie: bool) -> TestExternalities<KeccakHasher, RlpCodec> {
 		use keyring::Keyring::*;
 		let three = [3u8; 32].into();
 		TestExternalities::new(GenesisConfig {
 			consensus: Some(Default::default()),
-			system: Some(Default::default()),
+			system: Some(SystemConfig {
+				changes_trie_enabled: support_changes_trie,
+				changes_trie_digest_interval: Some(2),
+				changes_trie_digest_levels: Some(2),
+			}),
 			session: Some(SessionConfig {
 				session_length: 2,
 				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
@@ -245,12 +249,20 @@ mod tests {
 		(Block { header, extrinsics }.encode(), hash.into())
 	}
 
-	fn block1() -> (Vec<u8>, Hash) {
+	fn block1(support_changes_trie: bool) -> (Vec<u8>, Hash) {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("c563199c60df7d914262b1775b284870f3a5da2f24b56d2c6288b37c815a6cd9").into(),
-			Some(hex!("0000000000000000000000000000000000000000000000000000000000000000").into()),
+			if support_changes_trie {
+				hex!("a4ffa8ace317d34db3e19318a4a63c60f1cc225c54fb9fb5ac490e1d6f668006").into()
+			} else {
+				hex!("7dce77b1be773a182f8717f037acd5a20ae5944df2c1088b7b349f52bccae642").into()
+			},
+			if support_changes_trie {
+				Some(hex!("2d2248964aaeb0781010933e38e3fcbdf02abf110c232169f8899297acc743df").into())
+			} else {
+				None
+			},
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -262,9 +274,9 @@ mod tests {
 	fn block2() -> (Vec<u8>, Hash) {
 		construct_block(
 			2,
-			block1().1,
-			hex!("2c5d1fa1e0304212ddf8f63545dada6e85c8ea80655461f3d0cc83c4a2c9d3ad").into(),
-			Some(hex!("0000000000000000000000000000000000000000000000000000000000000000").into()),
+			block1(false).1,
+			hex!("54de316e8eb537f422607d5af675b438fc5fa358cc2a98a4c40bd4d3b42e126f").into(),
+			None,
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -284,8 +296,8 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("06d026c0d687ec583660a6052de6f89acdb24ea964d06be3831c837c3c426966").into(),
-			Some(hex!("0000000000000000000000000000000000000000000000000000000000000000").into()),
+			hex!("e4d976e01b40fe6c03782d9f0aa0d150bde2f73d40a1508555f88dcd9c13925e").into(),
+			None,
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -296,9 +308,9 @@ mod tests {
 
 	#[test]
 	fn full_native_block_import_works() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false);
 
-		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1().0, true).0.unwrap();
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1(false).0, true).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
@@ -315,10 +327,8 @@ mod tests {
 
 	#[test]
 	fn full_wasm_block_import_works() {
-		::env_logger::init().ok();
-
-		let mut t = new_test_ext();
-		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
+		let mut t = new_test_ext(false);
+		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block1(false).0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
@@ -335,7 +345,7 @@ mod tests {
 
 	#[test]
 	fn wasm_big_block_import_fails() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false);
 
 		let r = WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0);
 		assert!(!r.is_ok());
@@ -343,7 +353,7 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_succeeds() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false);
 
 		let r = Executor::with_heap_pages(8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, true).0;
 		assert!(r.is_ok());
@@ -351,7 +361,7 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_fails_on_fallback() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false);
 
 		let r = Executor::with_heap_pages(8).call(&mut t, COMPACT_CODE, "execute_block", &block1big().0, false).0;
 		assert!(!r.is_ok());
@@ -400,5 +410,21 @@ mod tests {
 			assert_eq!(Staking::voting_balance(&alice()), 42);
 			assert_eq!(Staking::voting_balance(&bob()), 69);
 		});
+	}
+
+	#[test]
+	fn full_native_block_import_works_with_changes_trie() {
+		let mut t = new_test_ext(true);
+		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1(true).0, true).0.unwrap();
+
+		assert!(t.storage_changes_root().is_some());
+	}
+
+	#[test]
+	fn full_wasm_block_import_works_with_changes_trie() {
+		let mut t = new_test_ext(true);
+		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block1(true).0).unwrap();
+
+		assert!(t.storage_changes_root().is_some());
 	}
 }

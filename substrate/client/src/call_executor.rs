@@ -26,6 +26,7 @@ use patricia_trie::NodeCodec;
 use primitives::{KeccakHasher, RlpCodec};
 use hashdb::Hasher;
 use rlp::Encodable;
+use memorydb::MemoryDB;
 
 use backend;
 use error;
@@ -76,7 +77,7 @@ where
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>
-	) -> Result<(Vec<u8>, S::StorageTransaction, Option<S::ChangesTrieTransaction>), error::Error>;
+	) -> Result<(Vec<u8>, S::StorageTransaction, Option<MemoryDB<H>>), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
@@ -142,7 +143,8 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let mut externalities = Ext::new(&mut overlay, &state);
+		let changes_trie_storage = self.backend.changes_trie_storage();
+		let mut externalities = Ext::new(&mut overlay, &state, changes_trie_storage);
 		let code = externalities.storage(b":code").ok_or(error::ErrorKind::VersionInvalid)?
 			.to_vec();
 
@@ -159,9 +161,10 @@ where
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
-	) -> error::Result<(Vec<u8>, S::StorageTransaction, Option<S::ChangesTrieTransaction>)> {
+	) -> error::Result<(Vec<u8>, S::StorageTransaction, Option<MemoryDB<KeccakHasher>>)> {
 		state_machine::execute_using_consensus_failure_handler(
 			state,
+			self.backend.changes_trie_storage(),
 			changes,
 			&self.executor,
 			method,

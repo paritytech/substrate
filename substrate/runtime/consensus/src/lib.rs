@@ -45,11 +45,6 @@ use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{RefInto, MaybeSerializeDebug, MaybeEmpty};
 use primitives::bft::MisbehaviorReport;
 
-#[cfg(any(feature = "std", test))]
-use substrate_primitives::KeccakHasher;
-#[cfg(any(feature = "std", test))]
-use std::collections::HashMap;
-
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
 

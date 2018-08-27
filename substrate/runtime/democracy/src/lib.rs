@@ -51,9 +51,6 @@ use primitives::traits::{Zero, Executable, RefInto, As, MaybeSerializeDebug};
 use substrate_runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use substrate_runtime_support::dispatch::Result;
 
-#[cfg(any(feature = "std", test))]
-use std::collections::HashMap;
-
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
 

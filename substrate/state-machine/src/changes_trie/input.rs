@@ -60,15 +60,6 @@ pub enum InputKey {
 	DigestIndex(DigestIndex),
 }
 
-/// Single input value of changes trie.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum InputValue {
-	/// Key of { key => set of extrinsics where key has been changed } element mapping.
-	ExtrinsicIndex(ExtrinsicIndexValue),
-	/// Key of { key => set of blocks/digest blocks where key has been changed } element mapping.
-	DigestIndex(DigestIndexValue),
-}
-
 impl Into<(Vec<u8>, Vec<u8>)> for InputPair {
 	fn into(self) -> (Vec<u8>, Vec<u8>) {
 		match self {

@@ -16,64 +16,36 @@
 
 //! Trie-based state machine backend.
 
-use std::sync::Arc;
 use hashdb::Hasher;
 use heapsize::HeapSizeOf;
 use memorydb::MemoryDB;
 use rlp::Encodable;
-use changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root};
-use overlayed_changes::OverlayedChanges;
 use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, NodeCodec};
-use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral, Storage};
+use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use {Backend};
 
 pub use hashdb::DBValue;
 
-/// Try convert into trie-based backend.
-pub trait TryIntoTrieBackend<H: Hasher, C: NodeCodec<H>> {
-	/// Try to convert self into trie backend.
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>>;
-}
-
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-pub struct TrieBackend<H: Hasher, C: NodeCodec<H>> {
-	essence: TrieBackendEssence<H, C>,
-	changes_trie_storage: Option<Arc<ChangesTrieStorage<H>>>,
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> {
+	essence: TrieBackendEssence<S, H, C>,
 }
 
-impl<H: Hasher, C: NodeCodec<H>> TrieBackend<H, C> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackend<S, H, C> where H::Out: HeapSizeOf {
 	/// Create new trie-based backend.
-	pub fn with_storage(db: Arc<Storage<H>>, root: H::Out, changes_trie_storage: Option<Arc<ChangesTrieStorage<H>>>) -> Self {
+	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
-			essence: TrieBackendEssence::new(TrieBackendStorage::Storage(db), root),
-			changes_trie_storage,
-		}
-	}
-
-	/// Create new trie-based backend for genesis block.
-	pub fn with_storage_for_genesis(db: Arc<Storage<H>>, changes_trie_storage: Option<Arc<ChangesTrieStorage<H>>>) -> Self {
-		let mut root = <H as Hasher>::Out::default();
-		let mut mdb = MemoryDB::<H>::new();
-		TrieDBMut::<H, C>::new(&mut mdb, &mut root);
-
-		Self::with_storage(db, root, changes_trie_storage)
-	}
-
-	/// Create new trie-based backend backed by MemoryDb storage.
-	pub fn with_memorydb(db: MemoryDB<H>, root: H::Out, changes_trie_storage: Option<Arc<ChangesTrieStorage<H>>>) -> Self {
-		TrieBackend {
-			essence: TrieBackendEssence::new(TrieBackendStorage::MemoryDb(db), root),
-			changes_trie_storage,
+			essence: TrieBackendEssence::new(storage, root),
 		}
 	}
 
 	/// Get backend essence reference.
-	pub fn essence(&self) -> &TrieBackendEssence<H, C> {
+	pub fn essence(&self) -> &TrieBackendEssence<S, H, C> {
 		&self.essence
 	}
 
 	/// Get backend storage reference.
-	pub fn backend_storage(&self) -> &TrieBackendStorage<H> {
+	pub fn backend_storage(&self) -> &S {
 		self.essence.backend_storage()
 	}
 
@@ -85,17 +57,13 @@ impl<H: Hasher, C: NodeCodec<H>> TrieBackend<H, C> where H::Out: HeapSizeOf {
 
 impl super::Error for String {}
 
-impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C>
+impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<S, H, C>
 	where
 		H::Out: Ord + Encodable + HeapSizeOf,
 {
 	type Error = String;
 	type StorageTransaction = MemoryDB<H>;
-	type ChangesTrieTransaction = MemoryDB<H>;
-
-	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage<H>>> {
-		self.changes_trie_storage.clone()
-	}
+	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.essence.storage(key)
@@ -156,8 +124,12 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C>
 		(root, write_overlay)
 	}
 
-	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<(H::Out, MemoryDB<H>)> {
-		compute_changes_trie_root::<H, C>(self.changes_trie_storage.clone(), overlay)
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
+		Some(self)
+	}
+
+/*	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<(H::Out, MemoryDB<H>)> {
+		compute_changes_trie_root::<H, C>(overlay)
 			.map(|(root, changes)| {
 				let mut calculated_root = Default::default();
 				let mut mdb = MemoryDB::new();
@@ -170,13 +142,7 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C>
 
 				(root, mdb)
 			})
-	}
-}
-
-impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for TrieBackend<H, C> {
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
-		Some(self)
-	}
+	}*/
 }
 
 #[cfg(test)]
@@ -201,9 +167,9 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<KeccakHasher, RlpCodec> {
+	pub(crate) fn test_trie() -> TrieBackend<MemoryDB<KeccakHasher>, KeccakHasher, RlpCodec> {
 		let (mdb, root) = test_db();
-		TrieBackend::with_memorydb(mdb, root, None)
+		TrieBackend::new(mdb, root)
 	}
 
 	#[test]
@@ -223,10 +189,9 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<KeccakHasher, RlpCodec>::with_memorydb(
+		assert!(TrieBackend::<MemoryDB<KeccakHasher>, KeccakHasher, RlpCodec>::new(
 			MemoryDB::new(),
 			Default::default(),
-			None
 		).pairs().is_empty());
 	}
 

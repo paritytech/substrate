@@ -37,6 +37,7 @@ use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
 use codec::Decode;
 use heapsize::HeapSizeOf;
+use memorydb::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -91,7 +92,7 @@ impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExec
 		_method: &str,
 		_call_data: &[u8],
 		_m: ExecutionManager<FF>
-	) -> ClientResult<(Vec<u8>, S::StorageTransaction, Option<S::ChangesTrieTransaction>)> {
+	) -> ClientResult<(Vec<u8>, S::StorageTransaction, Option<MemoryDB<KeccakHasher>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 

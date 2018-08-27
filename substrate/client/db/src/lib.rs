@@ -68,7 +68,7 @@ pub use state_db::PruningMode;
 const FINALIZATION_WINDOW: u64 = 32;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend<KeccakHasher, RlpCodec>;
+pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<KeccakHasher>>, KeccakHasher, RlpCodec>;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -289,7 +289,24 @@ impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
 	}
 }
 
-struct DbChangesTrieStorage<Block: BlockT> {
+struct GenesisStorage(pub H256);
+
+impl GenesisStorage {
+	pub fn new() -> Self {
+		let mut root = H256::default();
+		let mut mdb = MemoryDB::<KeccakHasher>::new();
+		state_machine::TrieDBMut::<KeccakHasher, RlpCodec>::new(&mut mdb, &mut root);
+		GenesisStorage(root)
+	}
+}
+
+impl state_machine::Storage<KeccakHasher> for GenesisStorage {
+	fn get(&self, _key: &H256) -> Result<Option<DBValue>, String> {
+		Ok(None)
+	}
+}
+
+pub struct DbChangesTrieStorage<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	_phantom: ::std::marker::PhantomData<Block>,
 }
@@ -313,7 +330,7 @@ impl<Block: BlockT> state_machine::ChangesTrieStorage<KeccakHasher> for DbChange
 /// Otherwise, trie nodes are kept only from the most recent block.
 pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
-	tries_change_storage: Arc<DbChangesTrieStorage<Block>>,
+	tries_change_storage: DbChangesTrieStorage<Block>,
 	blockchain: BlockchainDb<Block>,
 	finalization_window: u64,
 }
@@ -350,7 +367,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		Ok(Backend {
 			storage: Arc::new(storage_db),
-			tries_change_storage: Arc::new(tries_change_storage),
+			tries_change_storage: tries_change_storage,
 			blockchain,
 			finalization_window,
 		})
@@ -372,10 +389,17 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
+fn apply_changes_trie_commit(transaction: &mut DBTransaction, mut commit: MemoryDB<KeccakHasher>) {
+	for (key, (val, _)) in commit.drain() {
+		transaction.put(columns::CHANGES_TRIE, &key[..], &val);
+	}
+}
+
 impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<Block> where Block: BlockT {
 	type BlockImportOperation = BlockImportOperation<Block, KeccakHasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
+	type ChangesTrieStorage = DbChangesTrieStorage<Block>;
 
 	fn begin_operation(&self, block: BlockId<Block>) -> Result<Self::BlockImportOperation, client::error::Error> {
 		let state = self.state_at(block)?;
@@ -416,6 +440,7 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 			let number_u64 = number.as_().into();
 			let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset);
 			apply_state_commit(&mut transaction, commit);
+			apply_changes_trie_commit(&mut transaction, operation.changes_trie_updates);
 
 			//finalize an older block
 			if number_u64 > self.finalization_window {
@@ -441,6 +466,10 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
 		}
 		Ok(())
+	}
+
+	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
+		Some(&self.tries_change_storage)
 	}
 
 	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
@@ -482,14 +511,17 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 
 		// special case for genesis initialization
 		match block {
-			BlockId::Hash(h) if h == Default::default() =>
-				return Ok(DbState::with_storage_for_genesis(self.storage.clone(), Some(self.tries_change_storage.clone()))),
+			BlockId::Hash(h) if h == Default::default() => {
+				let genesis_storage = GenesisStorage::new();
+				let root = genesis_storage.0.clone();
+				return Ok(DbState::new(Arc::new(genesis_storage), root));
+			},
 			_ => {}
 		}
 
 		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
 			let root: H256 = H256::from_slice(hdr.state_root().as_ref());
-			DbState::with_storage(self.storage.clone(), root, Some(self.tries_change_storage.clone()))
+			DbState::new(self.storage.clone(), root)
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
 	}
 }

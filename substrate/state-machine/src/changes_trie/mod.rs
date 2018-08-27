@@ -39,17 +39,20 @@ mod input;
 mod storage;
 
 pub use self::storage::InMemoryStorage;
+pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_proof_check};
 
-use std::sync::Arc;
 use hashdb::{DBValue, Hasher};
 use heapsize::HeapSizeOf;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
 use changes_trie::build::prepare_input;
 use overlayed_changes::OverlayedChanges;
+use trie_backend_essence::TrieBackendStorage;
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
 pub trait Storage<H: Hasher>: Send + Sync {
+	//type ChangesTrieTransaction;
+
 	/// Get changes trie root for given block.
 	fn root(&self, block: u64) -> Result<Option<H::Out>, String>;
 
@@ -71,18 +74,21 @@ pub struct Configuration {
 
 /// Compute the changes trie root and transaction for given block.
 /// Returns None if there's no data to perform computation.
-pub fn compute_changes_trie_root<H: Hasher, C: NodeCodec<H>>(
-	storage: Option<Arc<Storage<H>>>,
+pub fn compute_changes_trie_root<'a, S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
+	storage: Option<&'a S>,
 	changes: &OverlayedChanges
 ) -> Option<(H::Out, Vec<(Vec<u8>, Vec<u8>)>)>
 	where
+		&'a S: TrieBackendStorage<H>,
 		H::Out: Ord + Encodable + HeapSizeOf,
 {
-	let input_pairs = prepare_input::<H, C>(storage, changes)?;
+println!("=== compute_changes_trie_root: {:?} {:?}", storage.is_some(), changes.extrinsic_changes.is_some());
+	let input_pairs = prepare_input::<S, H, C>(storage, changes)?;
+println!("=== compute_changes_trie_root: {:?}", "OK");
 	let transaction = input_pairs.into_iter()
 		.map(Into::into)
 		.collect::<Vec<_>>();
 	let root = ::triehash::trie_root::<H, _, _, _>(transaction.iter().map(|(k, v)| (&*k, &*v)));
-
+println!("=== compute_changes_trie_root: {:?}", root);
 	Some((root, transaction))
 }

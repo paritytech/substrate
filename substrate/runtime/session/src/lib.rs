@@ -50,9 +50,6 @@ use primitives::traits::{Zero, One, RefInto, MaybeEmpty, Executable, Convert, As
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
-#[cfg(any(feature = "std", test))]
-use std::collections::HashMap;
-
 /// A session has changed.
 pub trait OnSessionChange<T, A> {
 	/// Session has changed.

@@ -17,7 +17,6 @@
 //! Structures and functions required to build changes trie for given block.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::sync::Arc;
 use codec::Decode;
 use hashdb::Hasher;
 use heapsize::HeapSizeOf;
@@ -30,8 +29,10 @@ use changes_trie::{Configuration, Storage};
 
 /// Prepare input pairs for building a changes trie of given block.
 /// Returns None if there's no data required to prepare input pairs.
-pub fn prepare_input<H, C>(storage: Option<Arc<Storage<H>>>, changes: &OverlayedChanges) -> Option<Vec<InputPair>>
+pub fn prepare_input<'a, S, H, C>(storage: Option<&'a S>, changes: &OverlayedChanges) -> Option<Vec<InputPair>>
 	where
+		S: Storage<H>,
+		&'a S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: HeapSizeOf,
 		C: NodeCodec<H>,
@@ -44,7 +45,7 @@ pub fn prepare_input<H, C>(storage: Option<Arc<Storage<H>>>, changes: &Overlayed
 	let mut input = Vec::new();
 	input.extend(prepare_extrinsics_input(extrinsic_changes));
 	// TODO: input.extend(prepare_digest_input(extrinsic_changes.block, &extrinsic_changes.changes_trie_config, storage).expect("TODO"));
-input.extend(prepare_digest_input::<H, C>(extrinsic_changes.block, &Configuration { digest_interval: extrinsic_changes.changes_trie_config.digest_interval, digest_levels: extrinsic_changes.changes_trie_config.digest_levels }, storage).expect("TODO"));
+input.extend(prepare_digest_input::<S, H, C>(extrinsic_changes.block, &Configuration { digest_interval: extrinsic_changes.changes_trie_config.digest_interval, digest_levels: extrinsic_changes.changes_trie_config.digest_levels }, storage).expect("TODO"));
 	Some(input)
 }
 
@@ -65,8 +66,10 @@ fn prepare_extrinsics_input(extrinsic_changes: &ExtrinsicChanges) -> impl Iterat
 }
 
 /// Prepare DigestIndex input pairs.
-fn prepare_digest_input<H, C>(block: u64, config: &Configuration, storage: Arc<Storage<H>>) -> Result<impl Iterator<Item=InputPair>, String>
+fn prepare_digest_input<'a, S, H, C>(block: u64, config: &Configuration, storage: &'a S) -> Result<impl Iterator<Item=InputPair>, String>
 	where
+		S: Storage<H>,
+		&'a S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: HeapSizeOf,
 		C: NodeCodec<H>,
@@ -77,11 +80,10 @@ fn prepare_digest_input<H, C>(block: u64, config: &Configuration, storage: Arc<S
 		let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block))?;
 //		let trie_storage_adapter = Arc::new(TrieStorageAdapter(storage.clone()));
 //		let trie_storage = TrieBackendEssence::<H, C>::with_storage(trie_storage_adapter, trie_root);
-		let trie_storage = TrieBackendEssence::<H, C>::new(TrieBackendStorage::ChangesTrieStorage(storage.clone()), trie_root);
+		//let trie_backend_storage: &TrieBackendStorage<H> = storage;
+		let trie_storage = TrieBackendEssence::<_, H, C>::new(storage, trie_root);
 
-		// TODO: uncomment after merge with master
-
-		trie_storage.for_keys_with_prefix(&[], |key| match Decode::decode(&mut &key[..]) {
+/*		trie_storage.for_keys_with_prefix(&[], |key| match Decode::decode(&mut &key[..]) {
 			Some(InputKey::ExtrinsicIndex(trie_key)) => {
 				digest_map.entry(trie_key.key).or_default()
 					.insert(digest_build_block);
@@ -91,9 +93,9 @@ fn prepare_digest_input<H, C>(block: u64, config: &Configuration, storage: Arc<S
 					.insert(digest_build_block);
 			},
 			_ => (),
-		});
+		});*/
 
-		/*let extrinsic_prefix = ExtrinsicIndex::key_neutral_prefix(digest_build_block);
+		let extrinsic_prefix = ExtrinsicIndex::key_neutral_prefix(digest_build_block);
 		trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
 			if let Some(InputKey::ExtrinsicIndex(trie_key)) = Decode::decode(&mut &key[..]) {
 				digest_map.entry(trie_key.key).or_default()
@@ -105,7 +107,7 @@ fn prepare_digest_input<H, C>(block: u64, config: &Configuration, storage: Arc<S
 			if let Some(InputKey::DigestIndex(trie_key)) = Decode::decode(&mut &key[..]) {
 				digest_map.entry(trie_key.key).or_default()
 					.insert(digest_build_block);
-			});*/
+			});
 	}
 
 	Ok(digest_map.into_iter()
@@ -121,8 +123,8 @@ mod test {
 	use changes_trie::storage::InMemoryStorage;
 	use super::*;
 
-	fn prepare_for_build(block: u64) -> (Arc<InMemoryStorage<KeccakHasher, RlpCodec>>, OverlayedChanges) {
-		let backend = Arc::new(vec![
+	fn prepare_for_build(block: u64) -> (InMemoryStorage<KeccakHasher>, OverlayedChanges) {
+		let backend = InMemoryStorage::with_inputs::<RlpCodec>(vec![
 			(1, vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![100] }, vec![1, 3]),
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![101] }, vec![0, 2]),
@@ -135,7 +137,7 @@ mod test {
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 3, key: vec![100] }, vec![0]),
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 3, key: vec![105] }, vec![1]),
 			]),
-		].into());
+		]);
 		let changes = OverlayedChanges {
 			prospective: vec![
 				(vec![100], Some(vec![200])),
@@ -166,7 +168,7 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_non_digest_block() {
 		let (storage, changes) = prepare_for_build(5);
-		let changes_trie_nodes = prepare_input::<_, RlpCodec>(Some(storage), &changes);
+		let changes_trie_nodes = prepare_input::<_, _, RlpCodec>(Some(&storage), &changes);
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),

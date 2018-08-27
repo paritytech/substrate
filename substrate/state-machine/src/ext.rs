@@ -18,11 +18,15 @@
 
 use std::{error, fmt, cmp::Ord};
 use backend::Backend;
-use changes_trie::Configuration as ChangesTrieConfig;
+use changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root, Configuration as ChangesTrieConfig};
 use {Externalities, OverlayedChanges};
 use hashdb::Hasher;
+use memorydb::MemoryDB;
 use rlp::Encodable;
-use patricia_trie::NodeCodec;
+use patricia_trie::{NodeCodec, TrieDBMut, TrieMut};
+use heapsize::HeapSizeOf;
+
+const EXT_NOT_ALLOWED_TO_FAIL: &'static str = "Externalities not allowed to fail within runtime";
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -54,11 +58,12 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, H, C, B>
+pub struct Ext<'a, H, C, B, T>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
 	B: 'a + Backend<H, C>,
+	T: 'a + ChangesTrieStorage<H>,
 {
 	// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
@@ -66,29 +71,33 @@ where
 	backend: &'a B,
 	// The storage transaction necessary to commit to the backend.
 	storage_transaction: Option<(B::StorageTransaction, H::Out)>,
+	// Changes trie storage to read from.
+	changes_trie_storage: Option<&'a T>,
 	// The changes trie transaction necessary to commit to the changes trie backend.
-	changes_trie_transaction: Option<Option<(B::ChangesTrieTransaction, H::Out)>>,
+	changes_trie_transaction: Option<Option<(MemoryDB<H>, H::Out)>>,
 }
 
-impl<'a, H, C, B> Ext<'a, H, C, B>
+impl<'a, H, C, B, T> Ext<'a, H, C, B, T>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
 	B: 'a + Backend<H, C>,
-	H::Out: Ord + Encodable
+	T: 'a + ChangesTrieStorage<H>,
+	H::Out: Ord + Encodable + HeapSizeOf,
 {
 	/// Create a new `Ext` from overlayed changes and read-only backend
-	pub fn new(overlay: &'a mut OverlayedChanges, backend: &'a B) -> Self {
+	pub fn new(overlay: &'a mut OverlayedChanges, backend: &'a B, changes_trie_storage: Option<&'a T>) -> Self {
 		Ext {
 			overlay,
 			backend,
 			storage_transaction: None,
+			changes_trie_storage,
 			changes_trie_transaction: None,
 		}
 	}
 
 	/// Get the transaction necessary to update the backend.
-	pub fn transaction(mut self) -> (B::StorageTransaction, Option<B::ChangesTrieTransaction>) {
+	pub fn transaction(mut self) -> (B::StorageTransaction, Option<MemoryDB<H>>) {
 		let _ = self.storage_root();
 		let _ = self.storage_changes_root();
 
@@ -116,11 +125,12 @@ where
 }
 
 #[cfg(test)]
-impl<'a, H, C, B> Ext<'a, H, C, B>
+impl<'a, H, C, B, T> Ext<'a, H, C, B, T>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
 	B: 'a + Backend<H,C>,
+	T: 'a + ChangesTrieStorage<H>,
 {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		use std::collections::HashMap;
@@ -136,12 +146,13 @@ where
 	}
 }
 
-impl<'a, B: 'a, H, C> Externalities<H> for Ext<'a, H, C, B>
+impl<'a, B: 'a, T: 'a, H, C> Externalities<H> for Ext<'a, H, C, B, T>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
 	B: 'a + Backend<H, C>,
-	H::Out: Ord + Encodable
+	T: 'a + ChangesTrieStorage<H>,
+	H::Out: Ord + Encodable + HeapSizeOf,
 {
 	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u8) {
 		self.overlay.set_changes_trie_config(block, ChangesTrieConfig {
@@ -156,13 +167,13 @@ where
 
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key).expect("Externalities not allowed to fail within runtime"))
+			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		match self.overlay.storage(key) {
 			Some(x) => x.is_some(),
-			_ => self.backend.exists_storage(key).expect("Externalities not allowed to fail within runtime"),
+			_ => self.backend.exists_storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL),
 		}
 	}
 
@@ -203,10 +214,21 @@ where
 			return changes_trie_transaction.as_ref().map(|t| t.1.clone());
 		}
 
-		let changes_trie_transaction = self.backend.changes_trie_root(self.overlay);
-		let changes_trie_transaction = changes_trie_transaction.map(|(r, t)| (t, r));
-		let root = changes_trie_transaction.as_ref().map(|t| t.1.clone());
-		self.changes_trie_transaction = Some(changes_trie_transaction);
+		let root_and_tx = compute_changes_trie_root::<T, H, C>(self.changes_trie_storage.clone(), self.overlay)
+			.map(|(root, changes)| {
+				let mut calculated_root = Default::default();
+				let mut mdb = MemoryDB::new();
+				{
+					let mut trie = TrieDBMut::<H, C>::new(&mut mdb, &mut calculated_root);
+					for (key, value) in changes {
+						trie.insert(&key, &value).expect(EXT_NOT_ALLOWED_TO_FAIL);
+					}
+				}
+
+				(mdb, root)
+			});
+		let root = root_and_tx.as_ref().map(|(_, root)| root.clone());
+		self.changes_trie_transaction = Some(root_and_tx);
 		root
 	}
 }

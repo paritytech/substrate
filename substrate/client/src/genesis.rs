@@ -46,7 +46,7 @@ mod tests {
 	use codec::{Encode, Decode, Joiner};
 	use keyring::Keyring;
 	use executor::NativeExecutionDispatch;
-	use state_machine::{execute, OverlayedChanges, ExecutionStrategy};
+	use state_machine::{execute, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
 	use test_client;
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
@@ -93,6 +93,7 @@ mod tests {
 
 		execute(
 			backend,
+			Some(&InMemoryChangesTrieStorage::new(Default::default())),
 			&mut overlay,
 			&executor(),
 			"initialise_block",
@@ -103,6 +104,7 @@ mod tests {
 		for tx in transactions.iter() {
 			execute(
 				backend,
+				Some(&InMemoryChangesTrieStorage::new(Default::default())),
 				&mut overlay,
 				&executor(),
 				"apply_extrinsic",
@@ -113,6 +115,7 @@ mod tests {
 
 		let (ret_data, _, _) = execute(
 			backend,
+			Some(&InMemoryChangesTrieStorage::new(Default::default())),
 			&mut overlay,
 			&executor(),
 			"finalise_block",
@@ -156,6 +159,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
+			Some(&InMemoryChangesTrieStorage::new(Default::default())),
 			&mut overlay,
 			&executor(),
 			"execute_block",
@@ -179,6 +183,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
+			Some(&InMemoryChangesTrieStorage::new(Default::default())),
 			&mut overlay,
 			&executor(),
 			"execute_block",
@@ -203,6 +208,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
+			Some(&InMemoryChangesTrieStorage::new(Default::default())),
 			&mut overlay,
 			&Executor::with_heap_pages(8),
 			"execute_block",

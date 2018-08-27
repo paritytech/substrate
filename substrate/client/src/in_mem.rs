@@ -28,9 +28,11 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, Numbe
 use runtime_primitives::bft::Justification;
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
+use state_machine::InMemoryChangesTrieStorage;
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use heapsize::HeapSizeOf;
+use memorydb::MemoryDB;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -256,7 +258,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher, C: NodeCodec<H>> {
 	pending_authorities: Option<Vec<AuthorityId>>,
 	old_state: InMemory<H, C>,
 	new_state: Option<InMemory<H, C>>,
-	changes_trie_update: Option<Vec<(Vec<u8>, Vec<u8>)>>,
+	changes_trie_update: Option<MemoryDB<H>>,
 }
 
 impl<Block, H, C> backend::BlockImportOperation<Block, H, C> for BlockImportOperation<Block, H, C>
@@ -296,7 +298,7 @@ where
 		Ok(())
 	}
 
-	fn update_changes_trie(&mut self, update: <InMemory<H, C> as StateBackend<H, C>>::ChangesTrieTransaction) -> error::Result<()> {
+	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()> {
 		self.changes_trie_update = Some(update);
 		Ok(())
 	}
@@ -312,9 +314,11 @@ pub struct Backend<Block, H, C>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>
+	C: NodeCodec<H>,
+	H::Out: HeapSizeOf + From<Block::Hash>,
 {
 	states: RwLock<HashMap<Block::Hash, InMemory<H, C>>>,
+	changes_trie_storage: InMemoryChangesTrieStorage<H>,
 	blockchain: Blockchain<Block>,
 }
 
@@ -322,12 +326,14 @@ impl<Block, H, C> Backend<Block, H, C>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>
+	C: NodeCodec<H>,
+	H::Out: HeapSizeOf + From<Block::Hash>,
 {
 	/// Create a new instance of in-mem backend.
 	pub fn new() -> Backend<Block, H, C> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
+			changes_trie_storage: InMemoryChangesTrieStorage::new(Default::default()),
 			blockchain: Blockchain::new(),
 		}
 	}
@@ -337,12 +343,13 @@ impl<Block, H, C> backend::Backend<Block, H, C> for Backend<Block, H, C>
 where
 	Block: BlockT,
 	H: Hasher,
-	H::Out: HeapSizeOf,
+	H::Out: HeapSizeOf + From<Block::Hash>,
 	C: NodeCodec<H> + Send + Sync,
 {
 	type BlockImportOperation = BlockImportOperation<Block, H, C>;
 	type Blockchain = Blockchain<Block>;
 	type State = InMemory<H, C>;
+	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
 
 	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
@@ -363,10 +370,16 @@ where
 		if let Some(pending_block) = operation.pending_block {
 			let old_state = &operation.old_state;
 			let (header, body, justification) = pending_block.block.into_inner();
+
 			let hash = header.hash();
 			let parent_hash = *header.parent_hash();
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
+			if let Some(changes_trie_root) = header.changes_root() {
+				if let Some(changes_trie_update) = operation.changes_trie_update {
+					self.changes_trie_storage.insert(header.number().as_(), changes_trie_root.clone().into(), changes_trie_update);
+				}
+			}
 			self.blockchain.insert(hash, header, justification, body, pending_block.is_best);
 			// dumb implementation - store value for each block
 			if pending_block.is_best {
@@ -378,6 +391,10 @@ where
 
 	fn blockchain(&self) -> &Self::Blockchain {
 		&self.blockchain
+	}
+
+	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
+		Some(&self.changes_trie_storage)
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {
@@ -396,7 +413,7 @@ impl<Block, H, C> backend::LocalBackend<Block, H, C> for Backend<Block, H, C>
 where
 	Block: BlockT,
 	H: Hasher,
-	H::Out: HeapSizeOf,
+	H::Out: HeapSizeOf + From<Block::Hash>,
 	C: NodeCodec<H> + Send + Sync,
 {}
 

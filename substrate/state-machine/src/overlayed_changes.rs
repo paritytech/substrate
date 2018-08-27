@@ -78,9 +78,9 @@ impl OverlayedChanges {
 
 	/// Sets the index extrinsic that is currently executing.
 	pub(crate) fn set_extrinsic_index(&mut self, index: u32) {
-		self.extrinsic_changes.as_mut()
-			.expect("set_changes_trie_config must be called prior to set_extrinsic_index")
-			.extrinsic_index = index;
+		if let Some(extrinsic_changes) = self.extrinsic_changes.as_mut() {
+			extrinsic_changes.extrinsic_index = index;
+		}
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
@@ -191,6 +191,7 @@ impl ExtrinsicChanges {
 mod tests {
 	use primitives::{KeccakHasher, RlpCodec, H256};
 	use backend::InMemory;
+	use changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
 	use ext::Ext;
 	use {Externalities};
 	use super::*;
@@ -244,7 +245,9 @@ mod tests {
 			].into_iter().collect(),
 			..Default::default()
 		};
-		let mut ext = Ext::new(&mut overlay, &backend);
+
+		let changes_trie_storage = InMemoryChangesTrieStorage::new(Default::default());
+		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
 		assert_eq!(ext.storage_root(), H256(ROOT));
 	}

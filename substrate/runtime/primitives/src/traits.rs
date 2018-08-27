@@ -288,6 +288,28 @@ impl CheckEqual for substrate_primitives::H256 {
 	}
 }
 
+impl<T> CheckEqual for Option<T> where T: CheckEqual {
+	#[cfg(feature = "std")]
+	fn check_equal(&self, other: &Self) {
+		match (self, other) {
+			(Some(this), Some(other)) => this.check_equal(other),
+			(None, None) => (),
+			(Some(_), None) => println!("CheckEqual: given=Some, expected=None"),
+			(None, Some(_)) => println!("CheckEqual: given=None, expected=Some"),
+		}
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn check_equal(&self, other: &Self) {
+		match (self, other) {
+			(Some(this), Some(other)) => this.check_equal(other),
+			(None, None) => (),
+			(Some(_), None) => runtime_io::print("CheckEqual: given=Some, expected=None"),
+			(None, Some(_)) => runtime_io::print("CheckEqual: given=None, expected=Some"),
+		}
+	}
+}
+
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebugButNotDeserialize: Serialize + Debug {}
 #[cfg(feature = "std")]
