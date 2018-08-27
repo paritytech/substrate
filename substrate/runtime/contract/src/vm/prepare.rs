@@ -268,7 +268,7 @@ mod tests {
 	#[test]
 	fn imports() {
 		// nothing can be imported from non-"env" module for now.
-		let r = parse_and_prepare_wat(r#"(module (import "vne" "memory" (memory 1 1)))"#);
+		let r = parse_and_prepare_wat(r#"(module (import "another_module" "memory" (memory 1 1)))"#);
 		assert_matches!(r, Err(Error::Instantiate));
 
 		let r = parse_and_prepare_wat(r#"(module (import "env" "gas" (func (param i32))))"#);
