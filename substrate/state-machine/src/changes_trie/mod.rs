@@ -41,18 +41,20 @@ mod storage;
 pub use self::storage::InMemoryStorage;
 
 use std::sync::Arc;
-use trie_backend::{DBValue, TrieH256};
+use hashdb::{DBValue, Hasher};
+use heapsize::HeapSizeOf;
+use patricia_trie::NodeCodec;
+use rlp::Encodable;
 use changes_trie::build::prepare_input;
 use overlayed_changes::OverlayedChanges;
-use {Storage as TrieStorage};
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
-pub trait Storage: Send + Sync {
+pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get changes trie root for given block.
-	fn root(&self, block: u64) -> Result<Option<TrieH256>, String>;
+	fn root(&self, block: u64) -> Result<Option<H::Out>, String>;
 
 	/// Get a trie node.
-	fn get(&self, key: &TrieH256) -> Result<Option<DBValue>, String>;
+	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
 }
 
 /// Changes trie configuration.
@@ -69,14 +71,18 @@ pub struct Configuration {
 
 /// Compute the changes trie root and transaction for given block.
 /// Returns None if there's no data to perform computation.
-pub fn compute_changes_trie_root(storage: Option<Arc<Storage>>, changes: &OverlayedChanges)
-	-> Option<([u8; 32], Vec<(Vec<u8>, Vec<u8>)>)>
+pub fn compute_changes_trie_root<H: Hasher, C: NodeCodec<H>>(
+	storage: Option<Arc<Storage<H>>>,
+	changes: &OverlayedChanges
+) -> Option<(H::Out, Vec<(Vec<u8>, Vec<u8>)>)>
+	where
+		H::Out: Ord + Encodable + HeapSizeOf,
 {
-	let input_pairs = prepare_input(storage, changes)?;
+	let input_pairs = prepare_input::<H, C>(storage, changes)?;
 	let transaction = input_pairs.into_iter()
 		.map(Into::into)
 		.collect::<Vec<_>>();
-	let root = ::triehash::trie_root(transaction.iter().map(|(k, v)| (&*k, &*v))).0;
+	let root = ::triehash::trie_root::<H, _, _, _>(transaction.iter().map(|(k, v)| (&*k, &*v)));
 
 	Some((root, transaction))
 }

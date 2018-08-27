@@ -33,6 +33,8 @@ use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::fetcher::{Fetcher, RemoteReadRequest};
+use patricia_trie::NodeCodec;
+use hashdb::Hasher;
 
 /// Light client backend.
 pub struct Backend<S, F> {
@@ -67,10 +69,12 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
+impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
-	F: Fetcher<Block>
+	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
 {
 	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
@@ -113,13 +117,22 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
 	}
 }
 
-impl<S, F, Block> RemoteBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {}
+impl<S, F, Block, H, C> RemoteBackend<Block, H, C> for Backend<S, F>
+where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
+{}
 
-impl<S, F, Block> BlockImportOperation<Block> for ImportOperation<Block, S, F>
-	where
-		Block: BlockT,
-		S: BlockchainStorage<Block>,
-		F: Fetcher<Block>,
+impl<S, F, Block, H, C> BlockImportOperation<Block, H, C> for ImportOperation<Block, S, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+    S: BlockchainStorage<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
 {
 	type State = OnDemandState<Block, S, F>;
 
@@ -144,12 +157,12 @@ impl<S, F, Block> BlockImportOperation<Block> for ImportOperation<Block, S, F>
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend>::StorageTransaction) -> ClientResult<()> {
+	fn update_storage(&mut self, _update: <Self::State as StateBackend<H, C>>::StorageTransaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
 
-	fn update_changes_trie(&mut self, _update: <Self::State as StateBackend>::ChangesTrieTransaction) -> ClientResult<()> {
+	fn update_changes_trie(&mut self, _update: <Self::State as StateBackend<H, C>>::ChangesTrieTransaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -160,17 +173,19 @@ impl<S, F, Block> BlockImportOperation<Block> for ImportOperation<Block, S, F>
 	}
 }
 
-impl<Block, S, F> StateBackend for OnDemandState<Block, S, F>
+impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
 	where
 		Block: BlockT,
 		S: BlockchainStorage<Block>,
 		F: Fetcher<Block>,
+		H: Hasher,
+		C: NodeCodec<H>,
 {
 	type Error = ClientError;
 	type StorageTransaction = ();
 	type ChangesTrieTransaction = ();
 
-	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage>> {
+	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage<H>>> {
 		None
 	}
 
@@ -197,12 +212,12 @@ impl<Block, S, F> StateBackend for OnDemandState<Block, S, F>
 		// whole state is not available on light node
 	}
 
-	fn storage_root<I>(&self, _delta: I) -> ([u8; 32], Self::StorageTransaction)
+	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::StorageTransaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
-		([0; 32], ())
+		(H::Out::default(), ())
 	}
 
-	fn changes_trie_root(&self, _overlay: &OverlayedChanges) -> Option<([u8; 32], Self::ChangesTrieTransaction)> {
+	fn changes_trie_root(&self, _overlay: &OverlayedChanges) -> Option<(H::Out, Self::ChangesTrieTransaction)> {
 		None
 	}
 
@@ -212,8 +227,14 @@ impl<Block, S, F> StateBackend for OnDemandState<Block, S, F>
 	}
 }
 
-impl<Block, S, F> TryIntoStateTrieBackend for OnDemandState<Block, S, F> where Block: BlockT, F: Fetcher<Block> {
-	fn try_into_trie_backend(self) -> Option<StateTrieBackend> {
+impl<Block, S, F, H, C> TryIntoStateTrieBackend<H, C> for OnDemandState<Block, S, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
+{
+	fn try_into_trie_backend(self) -> Option<StateTrieBackend<H, C>> {
 		None
 	}
 }
@@ -229,6 +250,7 @@ pub mod tests {
 	use light::new_fetch_checker;
 	use light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest};
 	use super::*;
+	use primitives::{KeccakHasher, RlpCodec};
 
 	pub type OkCallFetcher = Mutex<CallResult>;
 
@@ -261,7 +283,7 @@ pub mod tests {
 
 		// check remote read proof locally
 		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
-		let local_checker = new_fetch_checker(local_executor);
+		let local_checker = new_fetch_checker::<_, KeccakHasher, RlpCodec>(local_executor);
 		let request = RemoteReadRequest {
 			block: remote_block_hash,
 			header: remote_block_header,

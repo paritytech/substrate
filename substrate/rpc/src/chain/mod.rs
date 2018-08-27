@@ -21,11 +21,14 @@ use std::sync::Arc;
 use client::{self, Client, BlockchainEvents};
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
+use jsonrpc_macros::Trailing;
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::Block as BlockT;
+use runtime_version::RuntimeVersion;
 use tokio::runtime::TaskExecutor;
+use primitives::{KeccakHasher, RlpCodec};
 
 use subscriptions::Subscriptions;
 
@@ -37,16 +40,24 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Polkadot blockchain API
-	pub trait ChainApi<Hash, Header> {
+	pub trait ChainApi<Hash, Header, Extrinsic> {
 		type Metadata;
 
 		/// Get header of a relay chain block.
 		#[rpc(name = "chain_getHeader")]
 		fn header(&self, Hash) -> Result<Option<Header>>;
 
+		/// Get header and body of a relay chain block.
+		#[rpc(name = "chain_getBlock")]
+		fn block(&self, Hash) -> Result<Option<SignedBlock<Header, Extrinsic, Hash>>>;
+
 		/// Get hash of the head.
 		#[rpc(name = "chain_getHead")]
 		fn head(&self) -> Result<Hash>;
+
+		/// Get the runtime version.
+		#[rpc(name = "chain_getRuntimeVersion")]
+		fn runtime_version(&self, Trailing<Hash>) -> Result<RuntimeVersion>;
 
 		#[pubsub(name = "chain_newHead")] {
 			/// New head subscription
@@ -78,10 +89,23 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	}
 }
 
-impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> where
+impl<B, E, Block> Chain<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block> + Send + Sync + 'static,
-	E: client::CallExecutor<Block> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+{
+	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
+		Ok(match hash.into() {
+			None => self.client.info()?.chain.best_hash,
+			Some(hash) => hash,
+		})
+	}
+}
+
+impl<B, E, Block> ChainApi<Block::Hash, Block::Header, Block::Extrinsic> for Chain<B, E, Block> where
+	Block: BlockT + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 
@@ -89,8 +113,17 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> wh
 		Ok(self.client.header(&BlockId::Hash(hash))?)
 	}
 
+	fn block(&self, hash: Block::Hash) -> Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+		Ok(self.client.block(&BlockId::Hash(hash))?)
+	}
+
 	fn head(&self) -> Result<Block::Hash> {
 		Ok(self.client.info()?.chain.best_hash)
+	}
+
+	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
+		let at = self.unwrap_or_best(at)?;
+		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {

@@ -18,8 +18,9 @@
 //! full and light storages.
 
 use std::sync::Arc;
+use std::io;
 
-use kvdb::{self, KeyValueDB, DBTransaction};
+use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 
 use client;
@@ -83,20 +84,15 @@ pub fn db_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u
 }
 
 /// Maps database error to client error
-pub fn db_err(err: kvdb::Error) -> client::error::Error {
+pub fn db_err(err: io::Error) -> client::error::Error {
 	use std::error::Error;
-	match err.kind() {
-		&kvdb::ErrorKind::Io(ref err) => client::error::ErrorKind::Backend(err.description().into()).into(),
-		&kvdb::ErrorKind::Msg(ref m) => client::error::ErrorKind::Backend(m.clone()).into(),
-		_ => client::error::ErrorKind::Backend("Unknown backend error".into()).into(),
-	}
+	client::error::ErrorKind::Backend(err.description().into()).into()
 }
 
 /// Open RocksDB database.
 pub fn open_database(config: &DatabaseSettings, db_type: &str) -> client::error::Result<Arc<KeyValueDB>> {
 	let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
 	db_config.memory_budget = config.cache_size;
-	db_config.wal = true;
 	let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
 	let db = Database::open(&db_config, &path).map_err(db_err)?;
 

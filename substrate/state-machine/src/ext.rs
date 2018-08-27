@@ -16,10 +16,13 @@
 
 //! Conrete externalities implementation.
 
-use std::{error, fmt};
+use std::{error, fmt, cmp::Ord};
 use backend::Backend;
 use changes_trie::Configuration as ChangesTrieConfig;
 use {Externalities, OverlayedChanges};
+use hashdb::Hasher;
+use rlp::Encodable;
+use patricia_trie::NodeCodec;
 
 /// Errors that can occur when interacting with the externalities.
 #[derive(Debug, Copy, Clone)]
@@ -51,18 +54,29 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, B: 'a + Backend> {
+pub struct Ext<'a, H, C, B>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	B: 'a + Backend<H, C>,
+{
 	// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
 	// The storage backend to read from.
 	backend: &'a B,
 	// The storage transaction necessary to commit to the backend.
-	storage_transaction: Option<(B::StorageTransaction, [u8; 32])>,
+	storage_transaction: Option<(B::StorageTransaction, H::Out)>,
 	// The changes trie transaction necessary to commit to the changes trie backend.
-	changes_trie_transaction: Option<Option<(B::ChangesTrieTransaction, [u8; 32])>>,
+	changes_trie_transaction: Option<Option<(B::ChangesTrieTransaction, H::Out)>>,
 }
 
-impl<'a, B: 'a + Backend> Ext<'a, B> {
+impl<'a, H, C, B> Ext<'a, H, C, B>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	B: 'a + Backend<H, C>,
+	H::Out: Ord + Encodable
+{
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(overlay: &'a mut OverlayedChanges, backend: &'a B) -> Self {
 		Ext {
@@ -102,7 +116,12 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 }
 
 #[cfg(test)]
-impl<'a, B: 'a + Backend> Ext<'a, B> {
+impl<'a, H, C, B> Ext<'a, H, C, B>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	B: 'a + Backend<H,C>,
+{
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		use std::collections::HashMap;
 
@@ -117,8 +136,12 @@ impl<'a, B: 'a + Backend> Ext<'a, B> {
 	}
 }
 
-impl<'a, B: 'a> Externalities for Ext<'a, B>
-	where B: Backend
+impl<'a, B: 'a, H, C> Externalities<H> for Ext<'a, H, C, B>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	B: 'a + Backend<H, C>,
+	H::Out: Ord + Encodable
 {
 	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u8) {
 		self.overlay.set_changes_trie_config(block, ChangesTrieConfig {
@@ -160,8 +183,8 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		42
 	}
 
-	fn storage_root(&mut self) -> [u8; 32] {
-		if let Some((_, ref root)) = self.storage_transaction {
+	fn storage_root(&mut self) -> H::Out {
+		if let Some((_, ref root)) =  self.storage_transaction {
 			return root.clone();
 		}
 
@@ -175,7 +198,7 @@ impl<'a, B: 'a> Externalities for Ext<'a, B>
 		root
 	}
 
-	fn storage_changes_root(&mut self) -> Option<[u8; 32]> {
+	fn storage_changes_root(&mut self) -> Option<H::Out> {
 		if let Some(ref changes_trie_transaction) = self.changes_trie_transaction {
 			return changes_trie_transaction.as_ref().map(|t| t.1.clone());
 		}

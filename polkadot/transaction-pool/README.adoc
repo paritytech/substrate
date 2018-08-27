@@ -1,5 +1,0 @@
-
-= Polkadot Transactin pool
-
-placeholder
-//TODO Write content :)

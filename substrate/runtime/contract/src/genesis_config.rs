@@ -22,6 +22,8 @@ use runtime_primitives;
 use runtime_io::twox_128;
 use runtime_support::StorageValue;
 use codec::Encode;
+use std::collections::HashMap;
+use substrate_primitives::KeccakHasher;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,14 +37,13 @@ pub struct GenesisConfig<T: Trait> {
 }
 
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> Result<runtime_primitives::StorageMap, String> {
-		let r = map![
+	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
+		Ok(map![
 			twox_128(<ContractFee<T>>::key()).to_vec() => self.contract_fee.encode(),
 			twox_128(<CallBaseFee<T>>::key()).to_vec() => self.call_base_fee.encode(),
 			twox_128(<CreateBaseFee<T>>::key()).to_vec() => self.create_base_fee.encode(),
 			twox_128(<GasPrice<T>>::key()).to_vec() => self.gas_price.encode(),
 			twox_128(<MaxDepth<T>>::key()).to_vec() => self.max_depth.encode()
-		];
-		Ok(r)
+		])
 	}
 }

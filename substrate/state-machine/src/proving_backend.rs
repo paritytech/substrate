@@ -18,25 +18,30 @@
 
 use std::cell::RefCell;
 use std::sync::Arc;
-use ethereum_types::H256 as TrieH256;
-use hashdb::HashDB;
+use hashdb::{Hasher, HashDB};
+use heapsize::HeapSizeOf;
 use memorydb::MemoryDB;
+use patricia_trie::{TrieDB, Trie, Recorder, NodeCodec};
+use rlp::Encodable;
+use changes_trie::Storage as ChangesTrieStorage;
 use overlayed_changes::OverlayedChanges;
-use patricia_trie::{TrieDB, TrieError, Trie, Recorder};
-use backend::Backend;
-use changes_trie::{Storage as ChangesTrieStorage, InMemoryStorage as InMemoryChangesTrieStorage};
 use trie_backend::TrieBackend;
 use trie_backend_essence::{Ephemeral, TrieBackendEssence};
-use {Error, ExecutionError, TryIntoTrieBackend};
+use {Error, ExecutionError, Backend, TryIntoTrieBackend};
 
 /// Patricia trie-based backend essence which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackendEssence<'a> {
-	pub(crate) backend: &'a TrieBackendEssence,
-	pub(crate) proof_recorder: &'a mut Recorder,
+pub struct ProvingBackendEssence<'a, H: 'a + Hasher, C: 'a + NodeCodec<H>> {
+	pub(crate) backend: &'a TrieBackendEssence<H, C>,
+	pub(crate) proof_recorder: &'a mut Recorder<H::Out>,
 }
 
-impl<'a> ProvingBackendEssence<'a> {
+impl<'a, H, C> ProvingBackendEssence<'a, H, C>
+	where
+		H: Hasher,
+		H::Out: HeapSizeOf,
+		C: NodeCodec<H>,
+{
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = MemoryDB::default();
 		let eph = Ephemeral::new(
@@ -44,9 +49,9 @@ impl<'a> ProvingBackendEssence<'a> {
 			&mut read_overlay,
 		);
 
-		let map_e = |e: Box<TrieError>| format!("Trie lookup error: {}", e);
+		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		TrieDB::new(&eph, &self.backend.root()).map_err(map_e)?
+		TrieDB::<H, C>::new(&eph, self.backend.root()).map_err(map_e)?
 			.get_with(key, &mut *self.proof_recorder)
 			.map(|x| x.map(|val| val.to_vec()))
 			.map_err(map_e)
@@ -55,14 +60,14 @@ impl<'a> ProvingBackendEssence<'a> {
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend {
-	backend: TrieBackend,
-	proof_recorder: RefCell<Recorder>,
+pub struct ProvingBackend<H: Hasher, C: NodeCodec<H>> {
+	backend: TrieBackend<H, C>,
+	proof_recorder: RefCell<Recorder<H::Out>>,
 }
 
-impl ProvingBackend {
+impl<H: Hasher, C: NodeCodec<H>> ProvingBackend<H, C> {
 	/// Create new proving backend.
-	pub fn new(backend: TrieBackend) -> Self {
+	pub fn new(backend: TrieBackend<H, C>) -> Self {
 		ProvingBackend {
 			backend,
 			proof_recorder: RefCell::new(Recorder::new()),
@@ -79,12 +84,17 @@ impl ProvingBackend {
 	}
 }
 
-impl Backend for ProvingBackend {
+impl<H, C> Backend<H, C> for ProvingBackend<H, C>
+	where
+		H: Hasher,
+		C: NodeCodec<H>,
+		H::Out: Ord + Encodable + HeapSizeOf,
+{
 	type Error = String;
-	type StorageTransaction = MemoryDB;
-	type ChangesTrieTransaction = MemoryDB;
+	type StorageTransaction = MemoryDB<H>;
+	type ChangesTrieTransaction = MemoryDB<H>;
 
-	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage>> {
+	fn changes_trie_storage(&self) -> Option<Arc<ChangesTrieStorage<H>>> {
 		self.backend.changes_trie_storage()
 	}
 
@@ -104,25 +114,33 @@ impl Backend for ProvingBackend {
 		self.backend.pairs()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> ([u8; 32], MemoryDB)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.backend.storage_root(delta)
 	}
 
-	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<([u8; 32], MemoryDB)> {
+	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<(H::Out, MemoryDB<H>)> {
 		self.backend.changes_trie_root(overlay)
 	}
 }
 
-impl TryIntoTrieBackend for ProvingBackend {
-	fn try_into_trie_backend(self) -> Option<TrieBackend> {
+impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for ProvingBackend<H, C> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
 		None
 	}
 }
 
 /// Create proof check backend.
-pub fn create_proof_check_backend(root: TrieH256, proof: Vec<Vec<u8>>) -> Result<TrieBackend, Box<Error>> {
+pub fn create_proof_check_backend<H, C>(
+	root: H::Out,
+	proof: Vec<Vec<u8>>
+) -> Result<TrieBackend<H, C>, Box<Error>>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	H::Out: HeapSizeOf,
+{
 	let mut db = MemoryDB::new();
 	for item in proof {
 		db.insert(&item);
@@ -140,8 +158,9 @@ mod tests {
 	use backend::{InMemory};
 	use trie_backend::tests::test_trie;
 	use super::*;
+	use primitives::{KeccakHasher, RlpCodec};
 
-	fn test_proving() -> ProvingBackend {
+	fn test_proving() -> ProvingBackend<KeccakHasher, RlpCodec> {
 		ProvingBackend::new(test_trie())
 	}
 
@@ -159,7 +178,7 @@ mod tests {
 
 	#[test]
 	fn proof_is_invalid_when_does_not_contains_root() {
-		assert!(create_proof_check_backend(1.into(), vec![]).is_err());
+		assert!(create_proof_check_backend::<KeccakHasher, RlpCodec>(1.into(), vec![]).is_err());
 	}
 
 	#[test]
@@ -178,7 +197,7 @@ mod tests {
 	#[test]
 	fn proof_recorded_and_checked() {
 		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
-		let in_memory = InMemory::default();
+		let in_memory = InMemory::<KeccakHasher, RlpCodec>::default();
 		let in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
 		(0..64).for_each(|i| assert_eq!(in_memory.storage(&[i]).unwrap().unwrap(), vec![i]));
@@ -193,7 +212,7 @@ mod tests {
 
 		let proof = proving.extract_proof();
 
-		let proof_check = create_proof_check_backend(in_memory_root.into(), proof).unwrap();
+		let proof_check = create_proof_check_backend::<KeccakHasher, RlpCodec>(in_memory_root.into(), proof).unwrap();
 		assert_eq!(proof_check.storage(&[42]).unwrap().unwrap(), vec![42]);
 	}
 }

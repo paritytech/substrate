@@ -51,6 +51,9 @@ use primitives::traits::{Zero, Executable, RefInto, As, MaybeSerializeDebug};
 use substrate_runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use substrate_runtime_support::dispatch::Result;
 
+#[cfg(any(feature = "std", test))]
+use std::collections::HashMap;
+
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
 
@@ -357,7 +360,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
+	use substrate_primitives::{H256, KeccakHasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
@@ -409,7 +412,7 @@ mod tests {
 		type Proposal = Proposal;
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],

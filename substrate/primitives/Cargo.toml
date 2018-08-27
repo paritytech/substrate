@@ -8,19 +8,28 @@ crunchy = "0.1"
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
 substrate-codec-derive = { path = "../codec/derive", default_features = false }
-fixed-hash = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-for-wasm", default_features = false }
+elastic-array = {version = "0.10", optional = true }
+fixed-hash = { git = "https://github.com/paritytech/parity-common", default_features = false }
 rustc-hex = { version = "2.0", default_features = false }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-uint = { git = "https://github.com/rphmeier/primitives.git", branch = "compile-for-wasm", default_features = false }
+uint = { git = "https://github.com/paritytech/parity-common", default_features = false }
+rlp = { git = "https://github.com/paritytech/parity-common", optional = true }
 twox-hash = { version = "1.1.0", optional = true }
 byteorder = { version = "1.1", default_features = false }
-blake2-rfc = { version = "0.2.18", optional = true }
 wasmi = { version = "0.4", optional = true }
+hashdb = { git = "https://github.com/paritytech/parity-common", default_features = false }
+patricia-trie = { git = "https://github.com/paritytech/parity-common", optional = true }
+plain_hasher = { git = "https://github.com/paritytech/parity-common", default_features = false }
+
+blake2-rfc = { version = "0.2.18", optional = true }
+# Switch back to Blake after PoC-3 is out and remove this
+tiny-keccak = { version = "1.4", optional = true }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
 pretty_assertions = "0.4"
+heapsize = "0.4"
 
 [features]
 default = ["std"]
@@ -28,12 +37,18 @@ std = [
 	"wasmi",
 	"uint/std",
 	"fixed-hash/std",
+	"fixed-hash/heapsizeof",
+	"fixed-hash/libc",
 	"substrate-codec/std",
 	"substrate-runtime-std/std",
 	"serde/std",
 	"rustc-hex/std",
 	"twox-hash",
 	"blake2-rfc",
+	"tiny-keccak",
 	"serde_derive",
-	"byteorder/std"
+	"byteorder/std",
+	"patricia-trie",
+	"rlp",
+	"elastic-array",
 ]

@@ -18,11 +18,13 @@
 
 #![cfg(feature = "std")]
 
+use std::collections::HashMap;
 use rstd::prelude::*;
 use codec::Encode;
 use runtime_support::{StorageValue, StorageMap};
 use primitives::traits::{Zero, As};
-use primitives;
+use substrate_primitives::KeccakHasher;
+use {runtime_io, primitives};
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, Intentions, CurrentEra,
 	BondingDuration, CreationFee, TransferFee, ReclaimRebate,
 	ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
@@ -147,6 +149,6 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 		for (who, value) in self.balances.into_iter() {
 			r.insert(Self::hash(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
 		}
-		Ok(r)
+		Ok(r.into())
 	}
 }

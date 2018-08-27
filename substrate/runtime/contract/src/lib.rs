@@ -65,6 +65,7 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_support as runtime_support;
 
 extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate substrate_primitives;
 
 #[cfg(test)]
 #[macro_use]

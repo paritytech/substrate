@@ -189,6 +189,7 @@ impl ExtrinsicChanges {
 
 #[cfg(test)]
 mod tests {
+	use primitives::{KeccakHasher, RlpCodec, H256};
 	use backend::InMemory;
 	use ext::Ext;
 	use {Externalities};
@@ -230,7 +231,7 @@ mod tests {
 			(b"dogglesworth".to_vec(), b"catXXX".to_vec()),
 			(b"doug".to_vec(), b"notadog".to_vec()),
 		].into_iter().collect();
-		let backend = InMemory::from(initial);
+		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: vec![
 				(b"dog".to_vec(), Some(b"puppy".to_vec())),
@@ -245,6 +246,6 @@ mod tests {
 		};
 		let mut ext = Ext::new(&mut overlay, &backend);
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
-		assert_eq!(ext.storage_root(), ROOT);
+		assert_eq!(ext.storage_root(), H256(ROOT));
 	}
 }

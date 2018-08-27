@@ -115,7 +115,6 @@ impl Iterator for DigestBuildIterator {
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashSet;
 	use super::*;
 
 	fn digest_build_iterator(digest_interval: u64, digest_levels: u8, block: u64) -> DigestBuildIterator {
