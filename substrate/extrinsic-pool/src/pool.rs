@@ -262,9 +262,17 @@ impl<B: ChainApi> Pool<B> {
 	pub fn remove(&self, hashes: &[B::Hash], is_valid: bool) -> Vec<Option<Arc<VerifiedFor<B>>>> {
 		let mut pool = self.pool.write();
 		let mut results = Vec::with_capacity(hashes.len());
+
+		// temporarily ban invalid transactions
+		if !is_valid {
+			debug!(target: "transaction-pool", "Banning invalid transactions: {:?}", hashes);
+			self.rotator.ban(&time::Instant::now(), hashes);
+		}
+
 		for hash in hashes {
 			results.push(pool.remove(hash, is_valid));
 		}
+
 		results
 	}
 
@@ -577,5 +585,22 @@ pub mod tests {
 
 		let pending: Vec<_> = pool.cull_and_get_pending(&BlockId::number(0), |p| p.map(|a| (*a.sender(), a.original.transfer.nonce)).collect()).unwrap();
 		assert_eq!(pending, vec![(Alice.to_raw_public().into(), 209), (Alice.to_raw_public().into(), 210)]);
+	}
+
+	#[test]
+	fn should_ban_invalid_transactions() {
+		let pool = pool();
+		let uxt = uxt(Alice, 209);
+		let hash = *pool.submit_one(&BlockId::number(0), uxt.clone()).unwrap().hash();
+		pool.remove(&[hash], true);
+		pool.submit_one(&BlockId::number(0), uxt.clone()).unwrap();
+
+		// when
+		pool.remove(&[hash], false);
+		let pending: Vec<AccountId> = pool.cull_and_get_pending(&BlockId::number(0), |p| p.map(|a| *a.sender()).collect()).unwrap();
+		assert_eq!(pending, vec![]);
+
+		// then
+		pool.submit_one(&BlockId::number(0), uxt.clone()).unwrap_err();
 	}
 }
