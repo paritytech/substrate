@@ -158,6 +158,14 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>, Vec<AuthorityId>) {
 		(self.header, self.justification, self.authorities)
 	}
+	
+	pub fn new(header: <Block as BlockT>::Header, justification: ::bft::Justification<Block::Hash>, authorities: Vec<AuthorityId>,) -> Self {
+		JustifiedHeader{
+			header,
+			justification,
+			authorities,
+		}
+	}
 }
 
 /// Create an instance of in-memory client.
