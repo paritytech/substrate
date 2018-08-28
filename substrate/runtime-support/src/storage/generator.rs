@@ -652,7 +652,7 @@ macro_rules! __decl_storage_item {
 
 			/// Get the storage key used to fetch a value corresponding to a specific key.
 			fn key_for(x: &$kty) -> Vec<u8> {
-				let mut key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::prefix().to_owned();
+				let mut key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::prefix().to_vec();
 				$crate::codec::Encode::encode_to(x, &mut key);
 				key
 			}
