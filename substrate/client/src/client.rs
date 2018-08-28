@@ -154,17 +154,17 @@ pub struct JustifiedHeader<Block: BlockT> {
 }
 
 impl<Block: BlockT> JustifiedHeader<Block> {
-	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>, Vec<AuthorityId>) {
-		(self.header, self.justification, self.authorities)
-	}
-	
+	/// Creates new JustifiedHeader with given header, justification and authorities.
 	pub fn new(header: <Block as BlockT>::Header, justification: ::bft::Justification<Block::Hash>, authorities: Vec<AuthorityId>,) -> Self {
 		JustifiedHeader{
 			header,
 			justification,
 			authorities,
 		}
+	}
+	/// Deconstruct the justified header into parts.
+	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>, Vec<AuthorityId>) {
+		(self.header, self.justification, self.authorities)
 	}
 }
 
