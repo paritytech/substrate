@@ -25,13 +25,31 @@
 //! create smart-contracts or send messages to existing smart-contracts.
 //!
 //! For any actions invoked by the smart-contracts fee must be paid. The fee is paid in gas.
-//! Gas is bought upfront. Any unused is refunded after the transaction (regardless of the
-//! execution outcome). If all gas is used, then changes made for the specific call or create
-//! are reverted (including balance transfers).
+//! Gas is bought upfront up to the, specified in transaction, limit. Any unused gas is refunded
+//! after the transaction (regardless of the execution outcome). If all gas is used,
+//! then changes made for the specific call or create are reverted (including balance transfers).
 //!
 //! Failures are typically not cascading. That, for example, means that if contract A calls B and B errors
 //! somehow, then A can decide if it should proceed or error.
 //! TODO: That is not the case now, since call/create externalities traps on any error now.
+//!
+//! # Interaction with the system
+//!
+//! ## Finalization
+//!
+//! This module requires performing some finalization steps at the end of the block. If not performed
+//! the module will have incorrect behavior.
+//!
+//! Call [`Module::execute`] at the end of the block. The order in relation to
+//! the other module doesn't matter.
+//!
+//! ## Account killing
+//!
+//! When `staking` module determines that account is dead (e.g. account's balance fell below
+//! exsistential deposit) then it reaps the account. That will lead to deletion of the associated
+//! code and storage of the account.
+//!
+//! [`Module::execute`]: struct.Module.html#impl-Executable
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -90,16 +108,16 @@ use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
 use codec::Codec;
-use runtime_primitives::traits::{As, RefInto, SimpleArithmetic};
+use runtime_primitives::traits::{As, RefInto, SimpleArithmetic, Executable};
 use runtime_support::dispatch::Result;
-use runtime_support::{Parameter, StorageMap};
+use runtime_support::{Parameter, StorageMap, StorageValue};
 
 pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 
 	// As<u32> is needed for wasm-utils
-	type Gas: Parameter + Codec + SimpleArithmetic + Copy + As<Self::Balance> + As<u64> + As<u32>;
+	type Gas: Parameter + Default + Codec + SimpleArithmetic + Copy + As<Self::Balance> + As<u64> + As<u32>;
 }
 
 pub trait ContractAddressFor<AccountId: Sized> {
@@ -144,9 +162,13 @@ decl_storage! {
 	GasPrice get(gas_price): b"con:gas_price" => required T::Balance;
 	// The maximum nesting level of a call/create stack.
 	MaxDepth get(max_depth): b"con:max_depth" => required u32;
+	// The maximum amount of gas that could be expended per block.
+	BlockGasLimit get(block_gas_limit): b"con:block_gas_limit" => required T::Gas;
+	// Gas spent so far in this block.
+	GasSpent get(gas_spent): b"con:gas_spent" => default T::Gas;
 
 	// The code associated with an account.
-	pub CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+	CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
 }
 
 // TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
@@ -251,5 +273,12 @@ impl<T: Trait> staking::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());
+	}
+}
+
+/// Finalization hook for the smart-contract module.
+impl<T: Trait> Executable for Module<T> {
+	fn execute() {
+		<GasSpent<T>>::kill();
 	}
 }
