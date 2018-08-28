@@ -24,9 +24,9 @@ substrate-runtime-primitives = { path = "../runtime/primitives" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-keyring = { path = "../../substrate/keyring" }
 substrate-telemetry = { path = "../telemetry" }
-hashdb = { git = "https://github.com/paritytech/parity-common" }
-patricia-trie = { git = "https://github.com/paritytech/parity-common" }
-rlp = { git = "https://github.com/paritytech/parity-common" }
+hashdb = "0.2.1"
+patricia-trie = "0.2.1"
+rlp = "0.2.4"
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }
