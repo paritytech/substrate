@@ -111,9 +111,9 @@ decl_storage! {
 	trait Store for system::Module<T: Trait> {
 
 		pub AccountNonce get(account_nonce): default map [ T::AccountId => T::Index ];
-		pub BlockHash get(block_hash): required map [ T::BlockNumber => T::Hash ];
 
 		ExtrinsicCount: u32;
+		pub BlockHash get(block_hash): required map [ T::BlockNumber => T::Hash ];
 		pub ExtrinsicIndex get(extrinsic_index): u32;
 		ExtrinsicData get(extrinsic_data): required map [ u32 => Vec<u8> ];
 		RandomSeed get(random_seed): required T::Hash;
