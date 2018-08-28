@@ -87,7 +87,7 @@ impl<H, T> txpool::Listener<T> for Listener<H> where
 		debug!(target: "extrinsic-pool", "Extrinsic canceled: {:?}", tx);
 	}
 
-	fn mined(&mut self, tx: &Arc<T>) {
+	fn culled(&mut self, tx: &Arc<T>) {
 		// TODO [ToDr] latest block number?
 		let header_hash = Default::default();
 		self.fire(tx.hash(), |watcher| watcher.finalised(header_hash))

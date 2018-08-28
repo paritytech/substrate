@@ -10,7 +10,7 @@ error-chain = "0.12"
 futures = "0.1"
 log = "0.3"
 parking_lot = "0.4"
-transaction-pool = "1.12"
+transaction-pool = "1.13.2"
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
 
 [dev-dependencies]
