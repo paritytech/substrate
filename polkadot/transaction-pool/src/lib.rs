@@ -421,6 +421,12 @@ A: PolkadotApi,
 
 	/// Remove a set of transactions idenitified by hashes.
 	pub fn remove(&self, hashes: &[Hash], is_valid: bool) -> Vec<Option<Arc<VerifiedTransaction>>> {
+		// temporarily ban invalid transactions
+		if !is_valid {
+			debug!(target: "transaction-pool", "Banning invalid transactions: {:?}", hashes);
+			self.rotator.ban(&Instant::now(), hashes);
+		}
+
 		self.inner.remove(hashes, is_valid)
 	}
 }
@@ -763,6 +769,24 @@ mod tests {
 
 		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(1), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
 		assert_eq!(pending, vec![]);
-
 	}
+
+	#[test]
+	fn should_ban_invalid_transactions() {
+		let api = TestPolkadotApi::default();
+		let pool = pool(&api);
+		let uxt = uxt(Alice, 209, true);
+		let hash = *pool.import_unchecked_extrinsic(BlockId::number(0), uxt.clone()).unwrap().hash();
+		pool.remove(&[hash], true);
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt.clone()).unwrap();
+
+		// when
+		pool.remove(&[hash], false);
+		let pending: Vec<_> = pool.cull_and_get_pending(BlockId::number(0), |p| p.map(|a| (a.sender(), a.index())).collect()).unwrap();
+		assert_eq!(pending, vec![]);
+
+		// then
+		pool.import_unchecked_extrinsic(BlockId::number(0), uxt.clone()).unwrap_err();
+	}
+
 }

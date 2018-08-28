@@ -56,6 +56,23 @@ impl PoolRotator {
 		self.banned_until.read().contains_key(hash)
 	}
 
+	/// Bans given set of hashes.
+	pub fn ban(&self, now: &Instant, hashes: &[Hash]) {
+		let mut banned = self.banned_until.write();
+
+		for hash in hashes {
+			banned.insert(*hash, *now + self.ban_time);
+		}
+
+		if banned.len() > 2 * EXPECTED_SIZE {
+			while banned.len() > EXPECTED_SIZE {
+				if let Some(key) = banned.keys().next().cloned() {
+					banned.remove(&key);
+				}
+			}
+		}
+	}
+
 	/// Bans extrinsic if it's stale.
 	///
 	/// Returns `true` if extrinsic is stale and got banned.
@@ -64,16 +81,7 @@ impl PoolRotator {
 			return false;
 		}
 
-		let mut banned = self.banned_until.write();
-		banned.insert(*tx.hash(), *now + self.ban_time);
-		if banned.len() > 2 * EXPECTED_SIZE {
-			while banned.len() > EXPECTED_SIZE {
-				if let Some(key) = banned.keys().next().cloned() {
-					banned.remove(&key);
-				}
-			}
-		}
-
+		self.ban(now, &[*tx.hash()]);
 		true
 	}
 
