@@ -65,6 +65,7 @@ use network::NonReservedPeerMode;
 
 use std::io::{Write, Read, stdin, stdout};
 use std::iter;
+use std::fs;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -210,6 +211,12 @@ where
 	if let Some(matches) = matches.subcommand_matches("revert") {
 		let spec = load_spec(&matches, spec_factory)?;
 		revert_chain::<F>(matches, spec)?;
+		return Ok(Action::ExecutedInternally);
+	}
+
+	if let Some(matches) = matches.subcommand_matches("purge-chain") {
+		let spec = load_spec(&matches, spec_factory)?;
+		purge_chain::<F>(matches, spec)?;
 		return Ok(Action::ExecutedInternally);
 	}
 
@@ -415,6 +422,30 @@ fn revert_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>
 	};
 
 	Ok(service::chain_ops::revert_chain::<F>(config, As::sa(blocks))?)
+}
+
+fn purge_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>) -> error::Result<()>
+	where F: ServiceFactory,
+{
+	let base_path = base_path(matches);
+	let database_path = db_path(&base_path, spec.id());
+
+	print!("Are you sure to remove {:?}? (y/n)", &database_path);
+	stdout().flush().expect("failed to flush stdout");
+
+	let mut input = String::new();
+	stdin().read_line(&mut input)?;
+	let input = input.trim();
+
+	match input.chars().nth(0) {
+		Some('y') | Some('Y') => {
+			fs::remove_dir_all(&database_path)?;
+			println!("{:?} removed.", &database_path);
+		},
+		_ => println!("Aborted"),
+	}
+
+	Ok(())
 }
 
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {
