@@ -651,16 +651,19 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
+		type Event = ();
 	}
 	impl session::Trait for Test {
-		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = staking::Module<Test>;
+		type Event = ();
 	}
 	impl staking::Trait for Test {
+		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type Balance = u64;
 		type AccountIndex = u64;
-		type OnAccountKill = ();
+		type OnFreeBalanceZero = ();
+		type Event = ();
 	}
 	impl democracy::Trait for Test {
 		type Proposal = Proposal;
@@ -680,7 +683,6 @@ mod tests {
 		t.extend(session::GenesisConfig::<Test>{
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
-			broken_percent_late: 100,
 		}.build_storage().unwrap());
 		t.extend(staking::GenesisConfig::<Test>{
 			sessions_per_era: 1,

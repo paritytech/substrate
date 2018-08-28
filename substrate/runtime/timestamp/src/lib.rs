@@ -80,7 +80,7 @@ impl<T: Trait> Module<T> {
 		assert!(aux.is_empty());
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
-			<system::Module<T>>::extrinsic_index() == T::TIMESTAMP_SET_POSITION,
+			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
 			"Timestamp extrinsic must be at position {} in the block",
 			T::TIMESTAMP_SET_POSITION
 		);
@@ -158,6 +158,7 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
+		type Event = ();
 	}
 	impl consensus::Trait for Test {
 		type PublicAux = u64;

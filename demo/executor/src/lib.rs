@@ -30,6 +30,7 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_runtime_primitives as runtime_primitives;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
+#[cfg(test)] extern crate substrate_runtime_session as session;
 #[cfg(test)] extern crate substrate_runtime_staking as staking;
 #[cfg(test)] extern crate substrate_runtime_system as system;
 #[cfg(test)] extern crate substrate_runtime_consensus as consensus;
@@ -51,9 +52,10 @@ mod tests {
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
-	use {staking, system, consensus};
+	use {staking, session, system, consensus};
+	use system::{EventRecord, Phase};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
-		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic};
+		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic, System, Event};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -195,7 +197,6 @@ mod tests {
 			session: Some(SessionConfig {
 				session_length: 2,
 				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
-				broken_percent_late: 100,
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
@@ -256,7 +257,7 @@ mod tests {
 			// Blake
 			// hex!("3437bf4b182ab17bb322af5c67e55f6be487a77084ad2b4e27ddac7242e4ad21").into(),
 			// Keccak
-			hex!("856f39cc430b2ecc2b94f55f0df44b28a25ab3ed341a60bdf0b8f382616f675f").into(),
+			hex!("56c9a542e48ccf4e0821de301ea4384e87425604278b12a9db31c6d4e89ca51e").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -272,7 +273,7 @@ mod tests {
 			// Blake
 			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
 			// Keccak
-			hex!("32cb12103306811f4febf3a93c893ebd896f0df5bcf285912d406b43d9f041aa").into(),
+			hex!("166a2593d35f2d1bc87eca8cf2e320ed06759000a02aa88e51fa85b12c6f1267").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -295,7 +296,7 @@ mod tests {
 			// Blake
 			// hex!("2c7231a9c210a7aa4bea169d944bc4aaacd517862b244b8021236ffa7f697991").into(),
 			// Keccak
-			hex!("f7bdc5a3409738285c04585ec436c5c9c3887448f7cf1b5086664517681eb7c1").into(),
+			hex!("be186810570e437f0d803493fced9879207b064a0701fd8d68662b9563b4d33e").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -313,6 +314,12 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
 			assert_eq!(Staking::voting_balance(&bob()), 69);
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: Event::staking(staking::RawEvent::NewAccount(bob(), 1, staking::NewAccountOutcome::NoHint))
+				}
+			]);
 		});
 
 		executor().call(&mut t, COMPACT_CODE, "execute_block", &block2().0, true).0.unwrap();
@@ -320,6 +327,16 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 30);
 			assert_eq!(Staking::voting_balance(&bob()), 78);
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::session(session::RawEvent::NewSession(1))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::staking(staking::RawEvent::Reward(0))
+				}
+			]);
 		});
 	}
 

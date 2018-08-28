@@ -69,7 +69,7 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 				if let staking::UpdateBalanceOutcome::AccountKilled =
 					staking::Module::<T>::set_free_balance_creating(&address, balance)
 				{
-					// Account killed. This will ultimately lead to calling `OnAccountKill` callback
+					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback
 					// which will make removal of CodeOf and StorageOf for this account.
 					// In order to avoid writing over the deleted properties we `continue` here.
 					continue;

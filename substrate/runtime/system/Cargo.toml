@@ -9,6 +9,7 @@ serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default_features = false}
 substrate-codec = { path = "../../codec", default_features = false }
+substrate-codec-derive = { path = "../../codec/derive", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-io = { path = "../../runtime-io", default_features = false }
@@ -22,6 +23,7 @@ std = [
 	"serde_derive",
 	"safe-mix/std",
 	"substrate-codec/std",
+	"substrate-codec-derive/std",
 	"substrate-primitives/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",
