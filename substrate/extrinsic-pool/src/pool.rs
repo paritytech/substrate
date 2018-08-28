@@ -93,7 +93,7 @@ pub trait ChainApi: Send + Sync {
 	/// Error type.
 	type Error: From<txpool::Error> + IntoPoolError;
 	/// Score type.
-	type Score: ::std::cmp::Ord + Clone + Default + fmt::Debug + Send + Send + Sync;
+	type Score: ::std::cmp::Ord + Clone + Default + fmt::Debug + Send + Send + Sync + fmt::LowerHex;
 	/// Custom scoring update event type.
 	type Event: ::std::fmt::Debug;
 	/// Verify extrinsic at given block.
