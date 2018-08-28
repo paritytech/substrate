@@ -37,7 +37,7 @@
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(panic_implementation))]
+#![cfg_attr(not(feature = "std"), feature(panic_handler))]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
