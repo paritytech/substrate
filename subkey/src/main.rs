@@ -159,17 +159,17 @@ mod tests {
 
 	#[cfg(feature = "bench")]
 	#[bench]
-    fn bench_paranoiac(b: &mut Bencher) {
-        b.iter(|| {
+	fn bench_paranoiac(b: &mut Bencher) {
+		b.iter(|| {
 			generate_key("polka", 3, true)
 		});
-    }
+	}
 
 	#[cfg(feature = "bench")]
-    #[bench]
-    fn bench_not_paranoiac(b: &mut Bencher) {
-        b.iter(|| {
+	#[bench]
+	fn bench_not_paranoiac(b: &mut Bencher) {
+		b.iter(|| {
 			generate_key("polka", 3, false)
 		});
-    }
+	}
 }
