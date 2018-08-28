@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Structures and functions to return blocks whose changes are to be included
-//! in given block' change trie.
+//! in given block' changes trie.
 
 use changes_trie::Configuration;
 
@@ -109,7 +109,7 @@ impl Iterator for DigestBuildIterator {
 		Some(self.current_range.as_mut()
 			.expect("assigned one line above; qed")
 			.next()
-			.expect("(X - I^N * I) - X > I^N when X,I,N are > 1; qed"))
+			.expect("X - I^(N+1) + I^N > X when X,I,N are > 1; qed"))
 	}
 }
 

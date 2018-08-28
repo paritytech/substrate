@@ -22,6 +22,7 @@ use heapsize::HeapSizeOf;
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
 use changes_trie::Storage;
+use trie_backend_essence::TrieBackendStorage;
 
 #[cfg(test)]
 use backend::insert_into_memory_db;
@@ -35,6 +36,12 @@ pub struct InMemoryStorage<H: Hasher> where H::Out: HeapSizeOf {
 	data: RwLock<InMemoryStorageData<H>>,
 }
 
+/// Adapter for using changes trie storage as a TrieBackendEssence' storage.
+pub struct TrieBackendAdapter<'a, H: Hasher, S: 'a + Storage<H>> {
+	storage: &'a S,
+	_hasher: ::std::marker::PhantomData<H>,
+}
+
 struct InMemoryStorageData<H: Hasher> where H::Out: HeapSizeOf {
 	roots: HashMap<u64, H::Out>,
 	mdb: MemoryDB<H>,
@@ -42,13 +49,18 @@ struct InMemoryStorageData<H: Hasher> where H::Out: HeapSizeOf {
 
 impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 	/// Create the storage from given in-memory database.
-	pub fn new(mdb: MemoryDB<H>) -> Self {
+	pub fn with_db(mdb: MemoryDB<H>) -> Self {
 		Self {
 			data: RwLock::new(InMemoryStorageData {
 				roots: HashMap::new(),
-				mdb: mdb,
+				mdb,
 			}),
 		}
+	}
+
+	/// Create the storage with empty database.
+	pub fn new() -> Self {
+		Self::with_db(Default::default())
 	}
 
 	#[cfg(test)]
@@ -56,7 +68,8 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 		let mut mdb = MemoryDB::default();
 		let mut roots = HashMap::new();
 		for (block, pairs) in inputs {
-			if let Some(root) = insert_into_memory_db::<H, C, _>(&mut mdb, pairs.into_iter().map(Into::into)) {
+			let root = insert_into_memory_db::<H, C, _>(&mut mdb, pairs.into_iter().map(Into::into));
+			if let Some(root) = root {
 				roots.insert(block, root);
 			}
 		}
@@ -90,13 +103,6 @@ impl<H: Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
 		Ok(HashDB::<H>::get(&self.data.read().mdb, key))
 	}
-}
-
-use trie_backend_essence::TrieBackendStorage;
-
-pub struct TrieBackendAdapter<'a, H: Hasher, S: 'a + Storage<H>> {
-	storage: &'a S,
-	_hasher: ::std::marker::PhantomData<H>,
 }
 
 impl<'a, H: Hasher, S: 'a + Storage<H>> TrieBackendAdapter<'a, H, S> {

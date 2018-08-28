@@ -289,18 +289,18 @@ impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
 	}
 }
 
-struct GenesisStorage(pub H256);
+struct DbGenesisStorage(pub H256);
 
-impl GenesisStorage {
+impl DbGenesisStorage {
 	pub fn new() -> Self {
 		let mut root = H256::default();
 		let mut mdb = MemoryDB::<KeccakHasher>::new();
 		state_machine::TrieDBMut::<KeccakHasher, RlpCodec>::new(&mut mdb, &mut root);
-		GenesisStorage(root)
+		DbGenesisStorage(root)
 	}
 }
 
-impl state_machine::Storage<KeccakHasher> for GenesisStorage {
+impl state_machine::Storage<KeccakHasher> for DbGenesisStorage {
 	fn get(&self, _key: &H256) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
@@ -512,7 +512,7 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 		// special case for genesis initialization
 		match block {
 			BlockId::Hash(h) if h == Default::default() => {
-				let genesis_storage = GenesisStorage::new();
+				let genesis_storage = DbGenesisStorage::new();
 				let root = genesis_storage.0.clone();
 				return Ok(DbState::new(Arc::new(genesis_storage), root));
 			},
@@ -537,6 +537,7 @@ mod tests {
 	use client::backend::BlockImportOperation as Op;
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use runtime_primitives::testing::{Header, Block as RawBlock};
+	use state_machine::{TrieMut, TrieDBMut, ChangesTrieStorage};
 
 	type Block = RawBlock<u64>;
 
@@ -767,5 +768,76 @@ mod tests {
 
 			assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
 		}
+	}
+
+	#[test]
+	fn changes_trie_storage_works() {
+		let backend = Backend::<Block>::new_test();
+
+		let prepare_changes = |changes: Vec<(Vec<u8>, Vec<u8>)>| {
+			let mut changes_root = H256::default();
+			let mut changes_trie_update = MemoryDB::<KeccakHasher>::new();
+			{
+				let mut trie = TrieDBMut::<KeccakHasher, RlpCodec>::new(
+					&mut changes_trie_update,
+					&mut changes_root
+				);
+				for (key, value) in changes {
+					trie.insert(&key, &value).unwrap();
+				}
+			}
+
+			(changes_root, changes_trie_update)
+		};
+
+		let insert_header = |number: u64, parent_hash: H256, changes: Vec<(Vec<u8>, Vec<u8>)>| {
+			let (changes_root, changes_trie_update) = prepare_changes(changes);
+			let header = Header {
+				number,
+				parent_hash,
+				state_root: Default::default(),
+				changes_root: Some(changes_root),
+				digest: Default::default(),
+				extrinsics_root: Default::default(),
+			};
+			let header_hash = header.hash();
+
+			let block_id = if number == 0 {
+				BlockId::Hash(Default::default())
+			} else {
+				BlockId::Number(number - 1)
+			};
+			let mut op = backend.begin_operation(block_id).unwrap();
+			op.set_block_data(header, None, None, true).unwrap();
+			op.update_changes_trie(changes_trie_update).unwrap();
+			backend.commit_operation(op).unwrap();
+
+			header_hash
+		};
+
+		let check_changes = |backend: &Backend<Block>, block: u64, changes: Vec<(Vec<u8>, Vec<u8>)>| {
+			let (changes_root, mut changes_trie_update) = prepare_changes(changes);
+			assert_eq!(backend.tries_change_storage.root(block), Ok(Some(changes_root)));
+
+			for (key, (val, _)) in changes_trie_update.drain() {
+				assert_eq!(backend.changes_trie_storage().unwrap().get(&key), Ok(Some(val)));
+			}
+		};
+
+		let changes0 = vec![(b"key_at_0".to_vec(), b"val_at_0".to_vec())];
+		let changes1 = vec![
+			(b"key_at_1".to_vec(), b"val_at_1".to_vec()),
+			(b"another_key_at_1".to_vec(), b"another_val_at_1".to_vec()),
+		];
+		let changes2 = vec![(b"key_at_2".to_vec(), b"val_at_2".to_vec())];
+
+		let block0 = insert_header(0, Default::default(), changes0.clone());
+		let block1 = insert_header(1, block0, changes1.clone());
+		let _ = insert_header(2, block1, changes2.clone());
+
+		// check that the storage contains tries for all blocks
+		check_changes(&backend, 0, changes0);
+		check_changes(&backend, 1, changes1);
+		check_changes(&backend, 2, changes2);
 	}
 }

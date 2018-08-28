@@ -62,7 +62,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for Tri
 		H::Out: Ord + Encodable + HeapSizeOf,
 {
 	type Error = String;
-	type StorageTransaction = MemoryDB<H>;
+	type Transaction = MemoryDB<H>;
 	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -127,22 +127,6 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for Tri
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
 		Some(self)
 	}
-
-/*	fn changes_trie_root(&self, overlay: &OverlayedChanges) -> Option<(H::Out, MemoryDB<H>)> {
-		compute_changes_trie_root::<H, C>(overlay)
-			.map(|(root, changes)| {
-				let mut calculated_root = Default::default();
-				let mut mdb = MemoryDB::new();
-				{
-					let mut trie = TrieDBMut::<H, C>::new(&mut mdb, &mut calculated_root);
-					for (key, value) in changes {
-						trie.insert(&key, &value);
-					}
-				}
-
-				(root, mdb)
-			})
-	}*/
 }
 
 #[cfg(test)]

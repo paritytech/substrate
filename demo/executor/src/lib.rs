@@ -27,7 +27,6 @@ extern crate demo_primitives;
 extern crate ed25519;
 extern crate triehash;
 
-#[cfg(test)] extern crate env_logger;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_runtime_primitives as runtime_primitives;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
@@ -259,7 +258,7 @@ mod tests {
 				hex!("7dce77b1be773a182f8717f037acd5a20ae5944df2c1088b7b349f52bccae642").into()
 			},
 			if support_changes_trie {
-				Some(hex!("2d2248964aaeb0781010933e38e3fcbdf02abf110c232169f8899297acc743df").into())
+				Some(hex!("2db622f386b69c8607c43801bf7008b69cf5b9117f8315744d69c53000214fa0").into())
 			} else {
 				None
 			},

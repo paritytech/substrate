@@ -93,7 +93,7 @@ mod tests {
 
 		execute(
 			backend,
-			Some(&InMemoryChangesTrieStorage::new(Default::default())),
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"initialise_block",
@@ -104,7 +104,7 @@ mod tests {
 		for tx in transactions.iter() {
 			execute(
 				backend,
-				Some(&InMemoryChangesTrieStorage::new(Default::default())),
+				Some(&InMemoryChangesTrieStorage::new()),
 				&mut overlay,
 				&executor(),
 				"apply_extrinsic",
@@ -115,7 +115,7 @@ mod tests {
 
 		let (ret_data, _, _) = execute(
 			backend,
-			Some(&InMemoryChangesTrieStorage::new(Default::default())),
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"finalise_block",
@@ -159,7 +159,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::new(Default::default())),
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"execute_block",
@@ -183,7 +183,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::new(Default::default())),
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"execute_block",
@@ -208,7 +208,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
-			Some(&InMemoryChangesTrieStorage::new(Default::default())),
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&Executor::with_heap_pages(8),
 			"execute_block",

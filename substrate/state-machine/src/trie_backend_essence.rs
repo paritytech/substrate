@@ -14,10 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Trie-based state machine backend.
+//! Trie-based state machine backend essence used to read values
+//! from storage.
 
 use std::collections::HashMap;
 use std::marker::PhantomData;
+use std::ops::Deref;
 use std::sync::Arc;
 use hashdb::{Hasher, DBValue, AsHashDB, HashDB};
 use heapsize::HeapSizeOf;
@@ -31,11 +33,11 @@ pub trait Storage<H: Hasher>: Send + Sync {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
 }
 
-/// Patricia trie-based pairs storage.
+/// Patricia trie-based pairs storage essence.
 pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> {
-	pub(crate)storage: S,
-	pub(crate)root: H::Out,
-	pub(crate)_codec: PhantomData<C>,
+	storage: S,
+	root: H::Out,
+	_codec: PhantomData<C>,
 }
 
 impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackendEssence<S, H, C> where H::Out: HeapSizeOf {
@@ -105,7 +107,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackendEssence<S,
 	}
 }
 
-pub struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	storage: &'a S,
 	overlay: &'a mut MemoryDB<H>,
 }
@@ -165,30 +167,26 @@ impl<'a, S: TrieBackendStorage<H>, H: Hasher> HashDB<H> for Ephemeral<'a, S, H> 
 	}
 }
 
+/// Key-value pairs storage that is used by trie backend essence.
 pub trait TrieBackendStorage<H: Hasher>: Send + Sync {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
 }
 
+// This implementation is used by normal storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for Arc<Storage<H>> {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-use std::ops::Deref;
 		Storage::<H>::get(self.deref(), key)
 	}
 }
 
+// This implementation is used by test storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
 		Ok(HashDB::<H>::get(self, key))
 	}
 }
 
-impl<H: Hasher> TrieBackendStorage<H> for Arc<MemoryDB<H>> {
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-use std::ops::Deref;
-		Ok(HashDB::<H>::get(self.deref(), key))
-	}
-}
-
+// This implementation is used by changes trie clients.
 impl<'a, S, H: Hasher> TrieBackendStorage<H> for &'a S where S: ChangesTrieStorage<H> {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
 		ChangesTrieStorage::<H>::get(*self, key)

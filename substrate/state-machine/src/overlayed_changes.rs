@@ -52,19 +52,12 @@ pub(crate) struct ExtrinsicChanges {
 impl OverlayedChanges {
 	/// Sets the changes trie configuration.
 	pub(crate) fn set_changes_trie_config(&mut self, block: u64, config: ChangesTrieConfig) {
-/* TODO
-		assert!(
-			self.extrinsic_changes.is_none(),
-			"set_changes_trie_config must be called once per block"
-		);
+		assert!(match self.extrinsic_changes {
+			None => true,
+			Some(ref old_changes) => old_changes.block == block
+				&& old_changes.changes_trie_config == config,
+		});
 
-		self.extrinsic_changes = Some(ExtrinsicChanges {
-			changes_trie_config: config,
-			block,
-			extrinsic_index: Default::default(),
-			prospective: Default::default(),
-			committed: Default::default(),
-		})*/
 		if self.extrinsic_changes.is_none() {
 			self.extrinsic_changes = Some(ExtrinsicChanges {
 				changes_trie_config: config,
@@ -246,9 +239,118 @@ mod tests {
 			..Default::default()
 		};
 
-		let changes_trie_storage = InMemoryChangesTrieStorage::new(Default::default());
+		let changes_trie_storage = InMemoryChangesTrieStorage::new();
 		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
 		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
 		assert_eq!(ext.storage_root(), H256(ROOT));
+	}
+
+	#[test]
+	fn changes_trie_configuration_is_saved() {
+		let mut overlay = OverlayedChanges::default();
+		assert!(overlay.extrinsic_changes.is_none());
+		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+			digest_interval: 4, digest_levels: 1,
+		});
+		assert!(overlay.extrinsic_changes.is_some());
+	}
+
+	#[test]
+	fn changes_trie_configuration_is_saved_twice() {
+		let mut overlay = OverlayedChanges::default();
+		assert!(overlay.extrinsic_changes.is_none());
+		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+			digest_interval: 4, digest_levels: 1,
+		});
+		overlay.set_extrinsic_index(0);
+		overlay.set_storage(vec![1], Some(vec![2]));
+		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+			digest_interval: 4, digest_levels: 1,
+		});
+		assert_eq!(
+			overlay.extrinsic_changes.as_ref().map(|c| c.prospective.clone()),
+			Some(vec![
+				(vec![1], vec![0].into_iter().collect()),
+			].into_iter().collect())
+		);
+	}
+
+	#[test]
+	#[should_panic]
+	fn panics_when_trying_to_save_different_changes_trie_configuration() {
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+			digest_interval: 4, digest_levels: 1,
+		});
+		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+			digest_interval: 2, digest_levels: 1,
+		});
+	}
+
+	#[test]
+	#[should_panic]
+	fn panics_when_trying_to_save_changes_trie_configuration_of_different_block() {
+		let mut overlay = OverlayedChanges::default();
+		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+			digest_interval: 4, digest_levels: 1,
+		});
+		overlay.set_changes_trie_config(2, ChangesTrieConfig {
+			digest_interval: 4, digest_levels: 1,
+		});
+	}
+
+	#[test]
+	fn extrinsic_changes_are_collected() {
+		let mut overlay = OverlayedChanges::default();
+		assert!(overlay.extrinsic_changes.is_none());
+		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+			digest_interval: 4, digest_levels: 1,
+		});
+
+		overlay.set_extrinsic_index(0);
+		overlay.set_storage(vec![1], Some(vec![2]));
+
+		overlay.set_extrinsic_index(1);
+		overlay.set_storage(vec![3], Some(vec![4]));
+
+		overlay.set_extrinsic_index(2);
+		overlay.set_storage(vec![1], Some(vec![6]));
+
+		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().prospective,
+			vec![
+				(vec![1], vec![0, 2].into_iter().collect()),
+				(vec![3], vec![1].into_iter().collect()),
+			].into_iter().collect());
+
+		overlay.commit_prospective();
+
+		overlay.set_extrinsic_index(3);
+		overlay.set_storage(vec![3], Some(vec![7]));
+
+		overlay.set_extrinsic_index(4);
+		overlay.set_storage(vec![1], Some(vec![8]));
+
+		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().committed,
+			vec![
+				(vec![1], vec![0, 2].into_iter().collect()),
+				(vec![3], vec![1].into_iter().collect()),
+			].into_iter().collect());
+
+		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().prospective,
+			vec![
+				(vec![1], vec![4].into_iter().collect()),
+				(vec![3], vec![3].into_iter().collect()),
+			].into_iter().collect());
+
+		overlay.commit_prospective();
+
+		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().committed,
+			vec![
+				(vec![1], vec![0, 2, 4].into_iter().collect()),
+				(vec![3], vec![1, 3].into_iter().collect()),
+			].into_iter().collect());
+
+		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().prospective,
+			Default::default());
 	}
 }

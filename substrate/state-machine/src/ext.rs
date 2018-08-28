@@ -70,7 +70,7 @@ where
 	// The storage backend to read from.
 	backend: &'a B,
 	// The storage transaction necessary to commit to the backend.
-	storage_transaction: Option<(B::StorageTransaction, H::Out)>,
+	storage_transaction: Option<(B::Transaction, H::Out)>,
 	// Changes trie storage to read from.
 	changes_trie_storage: Option<&'a T>,
 	// The changes trie transaction necessary to commit to the changes trie backend.
@@ -97,7 +97,7 @@ where
 	}
 
 	/// Get the transaction necessary to update the backend.
-	pub fn transaction(mut self) -> (B::StorageTransaction, Option<MemoryDB<H>>) {
+	pub fn transaction(mut self) -> (B::Transaction, Option<MemoryDB<H>>) {
 		let _ = self.storage_root();
 		let _ = self.storage_changes_root();
 
@@ -214,21 +214,95 @@ where
 			return changes_trie_transaction.as_ref().map(|t| t.1.clone());
 		}
 
-		let root_and_tx = compute_changes_trie_root::<T, H, C>(self.changes_trie_storage.clone(), self.overlay)
-			.map(|(root, changes)| {
-				let mut calculated_root = Default::default();
-				let mut mdb = MemoryDB::new();
-				{
-					let mut trie = TrieDBMut::<H, C>::new(&mut mdb, &mut calculated_root);
-					for (key, value) in changes {
-						trie.insert(&key, &value).expect(EXT_NOT_ALLOWED_TO_FAIL);
-					}
+		let root_and_tx = compute_changes_trie_root::<_, T, H, C>(
+			self.backend,
+			self.changes_trie_storage.clone(),
+			self.overlay
+		);
+		let root_and_tx = root_and_tx.map(|(root, changes)| {
+			let mut calculated_root = Default::default();
+			let mut mdb = MemoryDB::new();
+			{
+				let mut trie = TrieDBMut::<H, C>::new(&mut mdb, &mut calculated_root);
+				for (key, value) in changes {
+					trie.insert(&key, &value).expect(EXT_NOT_ALLOWED_TO_FAIL);
 				}
+			}
 
-				(mdb, root)
-			});
+			(mdb, root)
+		});
 		let root = root_and_tx.as_ref().map(|(_, root)| root.clone());
 		self.changes_trie_transaction = Some(root_and_tx);
 		root
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use primitives::{KeccakHasher, RlpCodec};
+	use backend::InMemory;
+	use changes_trie::{Configuration as ChangesTrieConfiguration,
+		InMemoryStorage as InMemoryChangesTrieStorage};
+	use overlayed_changes::ExtrinsicChanges;
+	use super::*;
+
+	type TestBackend = InMemory<KeccakHasher, RlpCodec>;
+	type TestChangesTrieStorage = InMemoryChangesTrieStorage<KeccakHasher>;
+	type TestExt<'a> = Ext<'a, KeccakHasher, RlpCodec, TestBackend, TestChangesTrieStorage>;
+
+	fn prepare_overlay_with_changes() -> OverlayedChanges {
+		OverlayedChanges {
+			prospective: vec![(vec![1], Some(vec![100].into_iter().collect()))].into_iter().collect(),
+			committed: Default::default(),
+			extrinsic_changes: Some(ExtrinsicChanges {
+				changes_trie_config: ChangesTrieConfiguration {
+					digest_interval: 0,
+					digest_levels: 0,
+				},
+				block: 100,
+				extrinsic_index: 3,
+				prospective: vec![(vec![1], vec![0].into_iter().collect())].into_iter().collect(),
+				committed: Default::default(),
+			}),
+		}
+	}
+
+	#[test]
+	fn storage_changes_root_is_none_when_storage_is_not_provided() {
+		let mut overlay = prepare_overlay_with_changes();
+		let backend = TestBackend::default();
+		let mut ext = TestExt::new(&mut overlay, &backend, None);
+		assert_eq!(ext.storage_changes_root(), None);
+	}
+
+	#[test]
+	fn storage_changes_root_is_none_when_extrinsic_changes_are_none() {
+		let mut overlay = prepare_overlay_with_changes();
+		overlay.extrinsic_changes = None;
+		let storage = TestChangesTrieStorage::new();
+		let backend = TestBackend::default();
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
+		assert_eq!(ext.storage_changes_root(), None);
+	}
+
+	#[test]
+	fn storage_changes_root_is_some_when_extrinsic_changes_are_non_empty() {
+		let mut overlay = prepare_overlay_with_changes();
+		let storage = TestChangesTrieStorage::new();
+		let backend = TestBackend::default();
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
+		assert_eq!(ext.storage_changes_root(),
+			Some(hex!("0e962b233061e645b048c1f02092fcc29d8af634683ede124a82253ea4a16952").into()));
+	}
+
+	#[test]
+	fn storage_changes_root_is_some_when_extrinsic_changes_are_empty() {
+		let mut overlay = prepare_overlay_with_changes();
+		overlay.extrinsic_changes.as_mut().unwrap().prospective = Default::default();
+		let storage = TestChangesTrieStorage::new();
+		let backend = TestBackend::default();
+		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
+		assert_eq!(ext.storage_changes_root(),
+			Some(hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into()));
 	}
 }

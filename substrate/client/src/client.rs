@@ -282,7 +282,10 @@ impl<B, E, Block> Client<B, E, Block> where
 		overlay: &mut OverlayedChanges,
 		f: F
 	) -> error::Result<T> {
-		Ok(runtime_io::with_externalities(&mut Ext::new(overlay, &self.state_at(id)?, self.backend.changes_trie_storage()), f))
+		Ok(runtime_io::with_externalities(
+			&mut Ext::new(overlay, &self.state_at(id)?,
+				self.backend.changes_trie_storage()),
+			f))
 	}
 
 	/// Create a new block, built on the head of the chain.

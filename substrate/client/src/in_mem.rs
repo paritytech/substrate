@@ -293,7 +293,7 @@ where
 		self.pending_authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, update: <InMemory<H, C> as StateBackend<H, C>>::StorageTransaction) -> error::Result<()> {
+	fn update_storage(&mut self, update: <InMemory<H, C> as StateBackend<H, C>>::Transaction) -> error::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
 		Ok(())
 	}
@@ -333,7 +333,7 @@ where
 	pub fn new() -> Backend<Block, H, C> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
-			changes_trie_storage: InMemoryChangesTrieStorage::new(Default::default()),
+			changes_trie_storage: InMemoryChangesTrieStorage::new(),
 			blockchain: Blockchain::new(),
 		}
 	}

@@ -164,7 +164,7 @@ where
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend<H, C>>::StorageTransaction) -> ClientResult<()> {
+	fn update_storage(&mut self, _update: <Self::State as StateBackend<H, C>>::Transaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -189,7 +189,7 @@ impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
 		C: NodeCodec<H>,
 {
 	type Error = ClientError;
-	type StorageTransaction = ();
+	type Transaction = ();
 	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
@@ -215,7 +215,7 @@ impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
 		// whole state is not available on light node
 	}
 
-	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::StorageTransaction)
+	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
 		(H::Out::default(), ())
 	}

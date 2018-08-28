@@ -90,7 +90,7 @@ impl<S, H, C> Backend<H, C> for ProvingBackend<S, H, C>
 		H::Out: Ord + Encodable + HeapSizeOf,
 {
 	type Error = String;
-	type StorageTransaction = MemoryDB<H>;
+	type Transaction = MemoryDB<H>;
 	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {

@@ -52,7 +52,7 @@ where
 	/// has been used to check justification of this block).
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
 	/// Inject storage data into the database.
-	fn update_storage(&mut self, update: <Self::State as StateBackend<H, C>>::StorageTransaction) -> error::Result<()>;
+	fn update_storage(&mut self, update: <Self::State as StateBackend<H, C>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 	/// Inject changes trie data into the database.
@@ -79,7 +79,7 @@ where
 	type Blockchain: ::blockchain::Backend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend<H, C>;
-	/// Changes trie storage/
+	/// Changes trie storage.
 	type ChangesTrieStorage: StateChangesTrieStorage<H>;
 
 	/// Begin a new block insertion transaction with given parent block id.

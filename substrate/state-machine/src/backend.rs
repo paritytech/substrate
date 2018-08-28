@@ -37,7 +37,7 @@ pub trait Backend<H: Hasher, C: NodeCodec<H>> {
 	type Error: super::Error;
 
 	/// Storage changes to be applied if committing
-	type StorageTransaction;
+	type Transaction;
 
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
@@ -56,7 +56,7 @@ pub trait Backend<H: Hasher, C: NodeCodec<H>> {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::StorageTransaction)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord + Encodable;
@@ -126,7 +126,7 @@ impl<H: Hasher, C: NodeCodec<H>> InMemory<H, C> where H::Out: HeapSizeOf {
 	}
 
 	/// Copy the state, with applied updates
-	pub fn update(&self, changes: <Self as Backend<H, C>>::StorageTransaction) -> Self {
+	pub fn update(&self, changes: <Self as Backend<H, C>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
 		for (key, val) in changes {
 			match val {
@@ -151,7 +151,7 @@ impl super::Error for Void {}
 
 impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> where H::Out: HeapSizeOf {
 	type Error = Void;
-	type StorageTransaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -166,7 +166,7 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> where H::Out: 
 		self.inner.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::StorageTransaction)
+	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord + Encodable,

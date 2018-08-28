@@ -77,7 +77,7 @@ where
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>
-	) -> Result<(Vec<u8>, S::StorageTransaction, Option<MemoryDB<H>>), error::Error>;
+	) -> Result<(Vec<u8>, S::Transaction, Option<MemoryDB<H>>), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
@@ -161,7 +161,7 @@ where
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
-	) -> error::Result<(Vec<u8>, S::StorageTransaction, Option<MemoryDB<KeccakHasher>>)> {
+	) -> error::Result<(Vec<u8>, S::Transaction, Option<MemoryDB<KeccakHasher>>)> {
 		state_machine::execute_using_consensus_failure_handler(
 			state,
 			self.backend.changes_trie_storage(),

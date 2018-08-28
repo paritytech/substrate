@@ -52,7 +52,7 @@ mod proving_backend;
 mod trie_backend;
 mod trie_backend_essence;
 
-pub use patricia_trie::TrieDBMut;
+pub use patricia_trie::{TrieMut, TrieDBMut};
 pub use testing::TestExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
@@ -208,7 +208,7 @@ pub fn execute<H, C, B, T, Exec>(
 	method: &str,
 	call_data: &[u8],
 	strategy: ExecutionStrategy,
-) -> Result<(Vec<u8>, B::StorageTransaction, Option<memorydb::MemoryDB<H>>), Box<Error>>
+) -> Result<(Vec<u8>, B::Transaction, Option<memorydb::MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
@@ -251,7 +251,7 @@ pub fn execute_using_consensus_failure_handler<H, C, B, T, Exec, Handler>(
 	method: &str,
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
-) -> Result<(Vec<u8>, B::StorageTransaction, Option<memorydb::MemoryDB<H>>), Box<Error>>
+) -> Result<(Vec<u8>, B::Transaction, Option<memorydb::MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
@@ -468,7 +468,7 @@ mod tests {
 	fn execute_works() {
 		assert_eq!(execute(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::new(Default::default())),
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				native_available: true,
@@ -486,7 +486,7 @@ mod tests {
 		let mut consensus_failed = false;
 		assert!(execute_using_consensus_failure_handler(
 			&trie_backend::tests::test_trie(),
-			Some(&InMemoryChangesTrieStorage::new(Default::default())),
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				native_available: true,
@@ -549,7 +549,7 @@ mod tests {
 		};
 
 		{
-			let changes_trie_storage = InMemoryChangesTrieStorage::new(Default::default());
+			let changes_trie_storage = InMemoryChangesTrieStorage::new();
 			let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
 			ext.clear_prefix(b"ab");
 		}
@@ -582,38 +582,4 @@ mod tests {
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);
 	}
-
-/*	#[test]
-	fn empty_storage_changes_root_works() {
-		assert_eq!(OverlayedChanges::default().changes_root(0, 16),
-			hex!("320871E05153AC64632CA67F9E62B54AABA21A1208543BEE3945D6A596D95295"));
-	}
-
-	#[test]
-	fn storage_changes_root_works() {
-		let mut changes = OverlayedChanges::default();
-		changes.set_storage(vec![1], None);
-		changes.set_storage(vec![2], Some(vec![3]));
-
-		// keys [1, 2] in prospective
-		let prospective_root = changes.changes_root(0, 16);
-		assert_eq!(prospective_root,
-			hex!("12E3D78C0AA30025EC178354387E2911C8411D3868B0E69DB0D6ECC52F097705"));
-
-		// keys [1, 2] in committed => root is the same
-		changes.commit_prospective();
-		let committed_root = changes.changes_root(0, 16);
-		assert_eq!(prospective_root, committed_root);
-
-		// keys [1, 2] are both in committed and prospective => root is the same
-		changes.set_storage(vec![1], Some(vec![3]));
-		changes.set_storage(vec![2], None);
-		assert_eq!(prospective_root, changes.changes_root(0, 16));
-
-		// keys [1, 2] are in committed and [4, 5] in prospective => root is different
-		changes.set_storage(vec![4], None);
-		changes.set_storage(vec![5], Some(vec![6]));
-		assert_eq!(changes.changes_root(0, 16),
-			hex!("797045D5F50B086387557AF74FD112063821E5F0E4A90C0748172E2D83C2AC76"));
-	}*/
 }

@@ -92,7 +92,7 @@ impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExec
 		_method: &str,
 		_call_data: &[u8],
 		_m: ExecutionManager<FF>
-	) -> ClientResult<(Vec<u8>, S::StorageTransaction, Option<MemoryDB<KeccakHasher>>)> {
+	) -> ClientResult<(Vec<u8>, S::Transaction, Option<MemoryDB<KeccakHasher>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 

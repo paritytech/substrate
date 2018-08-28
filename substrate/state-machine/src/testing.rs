@@ -23,6 +23,7 @@ use heapsize::HeapSizeOf;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
 use triehash::trie_root;
+use backend::InMemory;
 use changes_trie::{compute_changes_trie_root, Configuration as ChangesTrieConfig, InMemoryStorage as ChangesTrieInMemoryStorage};
 use super::{Externalities, OverlayedChanges};
 
@@ -39,7 +40,7 @@ impl<H: Hasher, C: NodeCodec<H>> TestExternalities<H, C> where H::Out: HeapSizeO
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		TestExternalities {
 			inner,
-			changes_trie_storage: ChangesTrieInMemoryStorage::new(Default::default()),
+			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: Default::default(),
 			_codec: Default::default(),
 		}
@@ -87,7 +88,7 @@ impl<H: Hasher, C: NodeCodec<H>> From< HashMap<Vec<u8>, Vec<u8>> > for TestExter
 	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		TestExternalities {
 			inner: hashmap,
-			changes_trie_storage: ChangesTrieInMemoryStorage::new(Default::default()),
+			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: Default::default(),
 			_codec: ::std::marker::PhantomData::<C>::default(),
 		}
@@ -130,7 +131,7 @@ impl<H: Hasher, C: NodeCodec<H>> Externalities<H> for TestExternalities<H, C> wh
 	}
 
 	fn storage_changes_root(&mut self) -> Option<H::Out> {
-		compute_changes_trie_root::<_, H, C>(Some(&self.changes_trie_storage), &self.changes)
+		compute_changes_trie_root::<_, _, H, C>(&InMemory::default(), Some(&self.changes_trie_storage), &self.changes)
 			.map(|(root, _)| root.clone())
 	}
 }

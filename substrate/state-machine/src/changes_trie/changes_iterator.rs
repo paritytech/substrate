@@ -38,13 +38,13 @@ pub fn key_changes<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	end: u64,
 	max: u64,
 	key: &[u8],
-) -> Vec<(u64, u32)> where H::Out: HeapSizeOf {
+) -> Result<Vec<(u64, u32)>, String> where H::Out: HeapSizeOf {
 	DrilldownIterator {
 		essence: DrilldownIteratorEssence {
 			key,
 			roots_storage: storage,
 			storage,
-			surface: surface_iterator(config, max, begin, end),
+			surface: surface_iterator(config, max, begin, end)?,
 
 			extrinsics: Default::default(),
 			blocks: Default::default(),
@@ -63,13 +63,13 @@ pub fn key_changes_proof<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	end: u64,
 	max: u64,
 	key: &[u8],
-) -> Vec<Vec<u8>> where H::Out: HeapSizeOf {
+) -> Result<Vec<Vec<u8>>, String> where H::Out: HeapSizeOf {
 	let mut iter = ProvingDrilldownIterator {
 		essence: DrilldownIteratorEssence {
 			key,
 			roots_storage: storage.clone(),
 			storage,
-			surface: surface_iterator(config, max, begin, end),
+			surface: surface_iterator(config, max, begin, end)?,
 
 			extrinsics: Default::default(),
 			blocks: Default::default(),
@@ -81,9 +81,11 @@ pub fn key_changes_proof<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	};
 
 	// iterate to collect proof
-	while iter.next().is_some() { }
+	while let Some(item) = iter.next() {
+		item?;
+	}
 
-	iter.extract_proof()
+	Ok(iter.extract_proof())
 }
 
 /// Check key changes proog and return changes of the key at given blocks range.
@@ -95,32 +97,19 @@ pub fn key_changes_proof_check<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	end: u64,
 	max: u64,
 	key: &[u8]
-) -> Vec<(u64, u32)> where H::Out: HeapSizeOf {
-/*
-		let root = self.roots_storage.root(block)?;
-
-		// every root that we're asking for MUST be a part of proof db
-		if let Some(root) = root {
-			if !self.proof_db.contains(&root) {
-				return Err("TODO".into());
-			}
-		}
-
-		Ok(root)
-
-*/
+) -> Result<Vec<(u64, u32)>, String> where H::Out: HeapSizeOf {
 	let mut proof_db = MemoryDB::<H>::new();
 	for item in proof {
 		proof_db.insert(&item);
 	}
 
-	let proof_db = InMemoryStorage::new(proof_db);
+	let proof_db = InMemoryStorage::with_db(proof_db);
 	DrilldownIterator {
 		essence: DrilldownIteratorEssence {
 			key,
 			roots_storage,
 			storage: &proof_db,
-			surface: surface_iterator(config, max, begin, end),
+			surface: surface_iterator(config, max, begin, end)?,
 
 			extrinsics: Default::default(),
 			blocks: Default::default(),
@@ -131,8 +120,8 @@ pub fn key_changes_proof_check<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	}.collect()
 }
 
-
-/// Surface iterator.
+/// Surface iterator - only traverses top-level digests from given range and tries to find
+/// all digest changes for the key.
 pub struct SurfaceIterator<'a> {
 	config: &'a Configuration,
 	begin: u64,
@@ -144,7 +133,7 @@ pub struct SurfaceIterator<'a> {
 }
 
 impl<'a> Iterator for SurfaceIterator<'a> {
-	type Item = (u64, u8);
+	type Item = Result<(u64, u8), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let current = self.current?;
@@ -161,8 +150,11 @@ impl<'a> Iterator for SurfaceIterator<'a> {
 			else if next > self.current_begin {
 				self.current = Some(next);
 			} else {
-				let (current, current_begin, digest_step, digest_level) =
-					lower_bound_max_digest(self.config, self.max, self.begin, next);
+				let (current, current_begin, digest_step, digest_level) = match
+					lower_bound_max_digest(self.config, self.max, self.begin, next) {
+					Err(err) => return Some(Err(err)),
+					Ok(range) => range,
+				};
 
 				self.current = Some(current);
 				self.current_begin = current_begin;
@@ -171,11 +163,12 @@ impl<'a> Iterator for SurfaceIterator<'a> {
 			}
 		}
 
-		Some((current, digest_level))
+		Some(Ok((current, digest_level)))
 	}
 }
 
-/// Drilldown iterator essence.
+/// Drilldown iterator - receives 'digest points' from surface iterator and explores
+/// every point until extrinsic is found.
 pub struct DrilldownIteratorEssence<'a, RS: 'a + Storage<H>, S: 'a + Storage<H>, H: Hasher> {
 	key: &'a [u8],
 	roots_storage: &'a RS,
@@ -189,20 +182,31 @@ pub struct DrilldownIteratorEssence<'a, RS: 'a + Storage<H>, S: 'a + Storage<H>,
 }
 
 impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> DrilldownIteratorEssence<'a, RS, S, H> {
-	pub fn next<F>(&mut self, mut trie_reader: F) -> Option<(u64, u32)>
+	pub fn next<F>(&mut self, trie_reader: F) -> Option<Result<(u64, u32), String>>
+		where
+			F: FnMut(&S, H::Out, &[u8]) -> Result<Option<Vec<u8>>, String>,
+	{
+		match self.do_next(trie_reader) {
+			Ok(Some(res)) => Some(Ok(res)),
+			Ok(None) => None,
+			Err(err) => Some(Err(err)),
+		}
+	}
+
+	fn do_next<F>(&mut self, mut trie_reader: F) -> Result<Option<(u64, u32)>, String>
 		where
 			F: FnMut(&S, H::Out, &[u8]) -> Result<Option<Vec<u8>>, String>,
 	{
 		loop {
 			if let Some((block, extrinsic)) = self.extrinsics.pop_front() {
-				return Some((block, extrinsic));
+				return Ok(Some((block, extrinsic)));
 			}
 
 			if let Some((block, level)) = self.blocks.pop_front() {
-				if let Some(trie_root) = self.roots_storage.root(block).expect("TODO") {
+				if let Some(trie_root) = self.roots_storage.root(block)? {
 					let extrinsics_key = ExtrinsicIndex { block, key: self.key.to_vec() }.encode();
 					let extrinsics = trie_reader(&self.storage, trie_root, &extrinsics_key);
-					if let Some(extrinsics) = extrinsics.expect("TODO") {
+					if let Some(extrinsics) = extrinsics? {
 						let extrinsics: Option<ExtrinsicIndexValue> = Decode::decode(&mut &extrinsics[..]);
 						if let Some(extrinsics) = extrinsics {
 							self.extrinsics.extend(extrinsics.into_iter().rev().map(|e| (block, e)));
@@ -211,7 +215,7 @@ impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> DrilldownIteratorEssence
 
 					let blocks_key = DigestIndex { block, key: self.key.to_vec() }.encode();
 					let blocks = trie_reader(&self.storage, trie_root, &blocks_key);
-					if let Some(blocks) = blocks.expect("TODO") {
+					if let Some(blocks) = blocks? {
 						let blocks: Option<DigestIndexValue> = Decode::decode(&mut &blocks[..]);
 						if let Some(blocks) = blocks {
 							self.blocks.extend(blocks.into_iter().rev().map(|b| (b, level - 1)));
@@ -222,19 +226,23 @@ impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> DrilldownIteratorEssence
 				continue;
 			}
 
-			self.blocks.push_back(self.surface.next()?);
+			match self.surface.next() {
+				Some(Ok(block)) => self.blocks.push_back(block),
+				Some(Err(err)) => return Err(err),
+				None => return Ok(None),
+			}
 		}
 	}
 }
 
-/// Drilldown iterator.
+/// Exploring drilldown operator.
 struct DrilldownIterator<'a, RS: 'a + Storage<H>, S: 'a + Storage<H>, H: Hasher, C: NodeCodec<H>> {
 	essence: DrilldownIteratorEssence<'a, RS, S, H>,
 	_codec: ::std::marker::PhantomData<C>,
 }
 
 impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher, C: NodeCodec<H>> Iterator for DrilldownIterator<'a, RS, S, H, C> where H::Out: HeapSizeOf {
-	type Item = (u64, u32);
+	type Item = Result<(u64, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.essence.next(|storage, root, key|
@@ -261,7 +269,7 @@ impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher, C: NodeCodec<H>> Proving
 }
 
 impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher, C: NodeCodec<H>> Iterator for ProvingDrilldownIterator<'a, RS, S, H, C> where H::Out: HeapSizeOf {
-	type Item = (u64, u32);
+	type Item = Result<(u64, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let proof_recorder = &mut *self.proof_recorder.try_borrow_mut()
@@ -274,10 +282,10 @@ impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher, C: NodeCodec<H>> Iterato
 	}
 }
 
-/// TODO
-fn surface_iterator<'a>(config: &'a Configuration, max: u64, begin: u64, end: u64) -> SurfaceIterator<'a> {
-	let (current, current_begin, digest_step, digest_level) = lower_bound_max_digest(config, max, begin, end);
-	SurfaceIterator {
+/// Returns surface iterator for given range of blocks.
+fn surface_iterator<'a>(config: &'a Configuration, max: u64, begin: u64, end: u64) -> Result<SurfaceIterator<'a>, String> {
+	let (current, current_begin, digest_step, digest_level) = lower_bound_max_digest(config, max, begin, end)?;
+	Ok(SurfaceIterator {
 		config,
 		begin,
 		max,
@@ -285,7 +293,7 @@ fn surface_iterator<'a>(config: &'a Configuration, max: u64, begin: u64, end: u6
 		current_begin,
 		digest_step,
 		digest_level,
-	}
+	})
 }
 
 /// Returns parameters of highest level digest block that includes the end of given range
@@ -295,11 +303,11 @@ fn lower_bound_max_digest(
 	max: u64,
 	begin: u64,
 	end: u64,
-) -> (u64, u64, u64, u8) {
-	assert!(end <= max);
-	assert!(begin <= end);
+) -> Result<(u64, u64, u64, u8), String> {
+	if end > max || begin > end {
+		return Err("invalid changes range".into());
+	}
 
-	// TODO: bgin || end == zero
 	let mut digest_level = 0u8;
 	let mut digest_step = 1u64;
 	let mut digest_interval = 0u64;
@@ -309,7 +317,9 @@ fn lower_bound_max_digest(
 		while digest_level != config.digest_levels {
 			let new_digest_level = digest_level + 1;
 			let new_digest_step = digest_step * config.digest_interval;
-			let new_digest_interval = { if digest_interval == 0 { 1 } else { digest_interval } } * config.digest_interval;
+			let new_digest_interval = config.digest_interval * {
+				if digest_interval == 0 { 1 } else { digest_interval }
+			};
 			let new_digest_begin = ((current - 1) / new_digest_interval) * new_digest_interval;
 			let new_digest_end = new_digest_begin + new_digest_interval;
 			let new_current = new_digest_begin + new_digest_interval;
@@ -333,12 +343,12 @@ fn lower_bound_max_digest(
 		}
 	}
 
-	(
+	Ok((
 		current,
 		current_begin,
 		digest_step,
 		digest_level,
-	)
+	))
 }
 
 #[cfg(test)]
@@ -393,8 +403,27 @@ mod tests {
 		let drilldown_result = key_changes::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
 			&config, &storage, 0, 100, 1000, &[42]);
 
-		assert_eq!(drilldown_result, vec![(8, 2), (8, 1), (6, 3), (3, 0)]);
+		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
 	}
+
+	#[test]
+	fn drilldown_iterator_fails_when_storage_fails() {
+		let (config, storage) = prepare_for_drilldown();
+		storage.clear_storage();
+
+		assert!(key_changes::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
+			&config, &storage, 0, 100, 1000, &[42]).is_err());
+	}
+
+	#[test]
+	fn drilldown_iterator_fails_when_range_is_invalid() {
+		let (config, storage) = prepare_for_drilldown();
+		assert!(key_changes::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
+			&config, &storage, 0, 100, 50, &[42]).is_err());
+		assert!(key_changes::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
+			&config, &storage, 20, 10, 100, &[42]).is_err());
+	}
+
 
 	#[test]
 	fn proving_drilldown_iterator_works() {
@@ -404,7 +433,7 @@ mod tests {
 		let (remote_config, remote_storage) = prepare_for_drilldown();
 		let remote_proof = key_changes_proof::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
 			&remote_config, &remote_storage,
-			0, 100, 1000, &[42]);
+			0, 100, 1000, &[42]).unwrap();
 
 		// happens on local light node:
 
@@ -416,6 +445,6 @@ mod tests {
 			0, 100, 1000, &[42]);
 
 		// check that drilldown result is the same as if it was happening at the full node
-		assert_eq!(local_result, vec![(8, 2), (8, 1), (6, 3), (3, 0)]);
+		assert_eq!(local_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
 	}
 }
