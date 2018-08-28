@@ -1005,8 +1005,6 @@ impl<T: Trait> Module<T> {
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
 
-		// TODO: rename this to on_free_account_kill or some such, since it only pertains to removing the 
-		// free-balance part of the account, not the whole thing. 
 		T::OnFreeBalanceZero::on_free_balance_zero(who);
 
 		if Self::reserved_balance(who).is_zero() {
