@@ -339,8 +339,8 @@ mod tests {
 
 	(func (export "call")
 		(call $ext_transfer
-			(i32.const 4)  ;; Pointer to "Transfer to" address.
-			(i32.const 8)  ;; Length of "Transfer to" address.
+			(i32.const 4)   ;; Pointer to "Transfer to" address.
+			(i32.const 8)   ;; Length of "Transfer to" address.
 			(i32.const 12)  ;; Pointer to the buffer with value to transfer
 			(i32.const 8)   ;; Length of the buffer with value to transfer.
 		)
