@@ -19,6 +19,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(any(feature = "std", test))]
+extern crate substrate_primitives;
+
 #[cfg_attr(any(feature = "std", test), macro_use)]
 extern crate substrate_runtime_std as rstd;
 
@@ -32,8 +35,11 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate substrate_runtime_io as runtime_io;
+#[macro_use]
+extern crate substrate_codec_derive;
+
 extern crate substrate_codec as codec;
+extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
@@ -72,10 +78,31 @@ pub trait Trait: Eq + Clone {
 		Hash = Self::Hash,
 		Digest = Self::Digest
 	>;
+	type Event: Parameter + Member;
 }
 
 decl_module! {
 	pub struct Module<T: Trait>;
+}
+
+/// A phase of a block's execution.
+#[derive(Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
+pub enum Phase {
+	/// Applying an extrinsic.
+	ApplyExtrinsic(u32),
+	/// The end.
+	Finalization,
+}
+
+/// Record of an event happening.
+#[derive(Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, PartialEq, Eq, Clone, Debug))]
+pub struct EventRecord<E: Parameter + Member> {
+	/// The phase of the block it happened in.
+	pub phase: Phase,
+	/// The event itself.
+	pub event: E,
 }
 
 decl_storage! {
@@ -84,8 +111,9 @@ decl_storage! {
 	pub AccountNonce get(account_nonce): b"sys:non" => default map [ T::AccountId => T::Index ];
 	pub BlockHash get(block_hash): b"sys:old" => required map [ T::BlockNumber => T::Hash ];
 
-	pub ExtrinsicIndex get(extrinsic_index): b"sys:xti" => required u32;
-	pub ExtrinsicData get(extrinsic_data): b"sys:xtd" => required map [ u32 => Vec<u8> ];
+	ExtrinsicCount: b"sys:extrinsic_count" => u32;
+	pub ExtrinsicIndex get(extrinsic_index): b"sys:xti" => u32;
+	ExtrinsicData get(extrinsic_data): b"sys:xtd" => required map [ u32 => Vec<u8> ];
 	RandomSeed get(random_seed): b"sys:rnd" => required T::Hash;
 	ChangesTrieCreationEnabled get(changes_trie_creation_enabled): b"sys:changes_trie_creation_enabled" => default bool;
 	ChangesTrieDigestInterval get(changes_trie_digest_interval): b"sys:changes_trie_digest_interval" => default T::BlockNumber;
@@ -95,6 +123,8 @@ decl_storage! {
 	ParentHash get(parent_hash): b"sys:pha" => required T::Hash;
 	ExtrinsicsRoot get(extrinsics_root): b"sys:txr" => required T::Hash;
 	Digest get(digest): b"sys:dig" => default T::Digest;
+
+	Events get(events): b"sys:events" => default Vec<EventRecord<T::Event>>;
 }
 
 impl<T: Trait> Module<T> {
@@ -106,7 +136,8 @@ impl<T: Trait> Module<T> {
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<RandomSeed<T>>::put(Self::calculate_random());
-		<ExtrinsicIndex<T>>::put(0);
+		<ExtrinsicIndex<T>>::put(0u32);
+		<Events<T>>::kill();
 
 		if <ChangesTrieCreationEnabled<T>>::get() {
 			let digest_interval = <ChangesTrieDigestInterval<T>>::get();
@@ -123,7 +154,7 @@ impl<T: Trait> Module<T> {
 	/// Remove temporary "environment" entries in storage.
 	pub fn finalise() -> T::Header {
 		<RandomSeed<T>>::kill();
-		<ExtrinsicIndex<T>>::kill();
+		<ExtrinsicCount<T>>::kill();
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
@@ -131,6 +162,9 @@ impl<T: Trait> Module<T> {
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
 		let storage_changes_root = T::Hashing::storage_changes_root();
+
+		// <Events<T>> stays to be inspected by the client.
+
 		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root,
 			storage_changes_root, parent_hash, digest)
 	}
@@ -140,6 +174,14 @@ impl<T: Trait> Module<T> {
 		let mut l = <Digest<T>>::get();
 		traits::Digest::push(&mut l, item);
 		<Digest<T>>::put(l);
+	}
+
+	/// Deposits an event onto this block's event record.
+	pub fn deposit_event(event: T::Event) {
+		let phase = <ExtrinsicIndex<T>>::get().map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let mut events = Self::events();
+		events.push(EventRecord { phase, event });
+		<Events<T>>::put(events);
 	}
 
 	/// Calculate the current block's random seed.
@@ -194,13 +236,26 @@ impl<T: Trait> Module<T> {
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
 	/// ensure `derive_extrinsics` is also called before block-building is completed.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
-		runtime_io::bind_to_extrinsic(Self::extrinsic_index());
-		<ExtrinsicData<T>>::insert(Self::extrinsic_index(), encoded_xt);
+		let extrinsic_index = <ExtrinsicIndex<T>>::get().unwrap_or_default();
+		runtime_io::bind_to_extrinsic(extrinsic_index);
+		<ExtrinsicData<T>>::insert(extrinsic_index, encoded_xt);
+	}
+
+	/// To be called immediately after an extrinsic has been applied.
+	pub fn note_applied_extrinsic() {
+		<ExtrinsicIndex<T>>::put(<ExtrinsicIndex<T>>::get().unwrap_or_default() + 1u32);
+	}
+
+	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
+	/// has been called.
+	pub fn note_finished_extrinsics() {
+		<ExtrinsicCount<T>>::put(<ExtrinsicIndex<T>>::get().unwrap_or_default());
+		<ExtrinsicIndex<T>>::kill();
 	}
 
 	/// Remove all extrinsics data and save the extrinsics trie root.
 	pub fn derive_extrinsics() {
-		let extrinsics = (0..Self::extrinsic_index()).map(<ExtrinsicData<T>>::take).collect();
+		let extrinsics = (0..<ExtrinsicCount<T>>::get().unwrap_or_default()).map(<ExtrinsicData<T>>::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
 	}
@@ -263,5 +318,59 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 		}
 
 		Ok(storage)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use runtime_io::with_externalities;
+	use substrate_primitives::H256;
+	use primitives::BuildStorage;
+	use primitives::traits::BlakeTwo256;
+	use primitives::testing::{Digest, Header};
+
+	#[derive(Clone, Eq, PartialEq)]
+	pub struct Test;
+	impl Trait for Test {
+		type Index = u64;
+		type BlockNumber = u64;
+		type Hash = H256;
+		type Hashing = BlakeTwo256;
+		type Digest = Digest;
+		type AccountId = u64;
+		type Header = Header;
+		type Event = u16;
+	}
+
+	type System = Module<Test>;
+
+	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher, RlpCodec> {
+		GenesisConfig::<Test>::default().build_storage().unwrap().into()
+	}
+
+	#[test]
+	fn deposit_event_should_work() {
+		with_externalities(&mut new_test_ext(), || {
+			System::initialise(&1, &[0u8; 32].into(), &[0u8; 32].into());
+			System::note_finished_extrinsics();
+			System::deposit_event(1u16);
+			System::finalise();
+			assert_eq!(System::events(), vec![EventRecord { phase: Phase::Finalization, event: 1u16 }]);
+
+			System::initialise(&2, &[0u8; 32].into(), &[0u8; 32].into());
+			System::deposit_event(42u16);
+			System::note_applied_extrinsic();
+			System::deposit_event(69u16);
+			System::note_applied_extrinsic();
+			System::note_finished_extrinsics();
+			System::deposit_event(3u16);
+			System::finalise();
+			assert_eq!(System::events(), vec![
+				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16 },
+				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 69u16 },
+				EventRecord { phase: Phase::Finalization, event: 3u16 }
+			]);
+		});
 	}
 }

@@ -38,6 +38,9 @@ extern crate substrate_runtime_std as rstd;
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
@@ -46,27 +49,27 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, MaybeEmpty, Executable, Convert, As};
+use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
 /// A session has changed.
-pub trait OnSessionChange<T, A> {
+pub trait OnSessionChange<T> {
 	/// Session has changed.
-	fn on_session_change(time_elapsed: T, bad_validators: Vec<A>);
+	fn on_session_change(time_elapsed: T, should_reward: bool);
 }
 
-impl<T, A> OnSessionChange<T, A> for () {
-	fn on_session_change(_: T, _: Vec<A>) {}
+impl<T> OnSessionChange<T> for () {
+	fn on_session_change(_: T, _: bool) {}
 }
 
 pub trait Trait: timestamp::Trait {
-	// the position of the required timestamp-set extrinsic.
-	const NOTE_OFFLINE_POSITION: u32;
-
 	type ConvertAccountIdToSessionKey: Convert<Self::AccountId, Self::SessionKey>;
-	type OnSessionChange: OnSessionChange<Self::Moment, Self::AccountId>;
+	type OnSessionChange: OnSessionChange<Self::Moment>;
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
+
+pub type Event<T> = RawEvent<<T as system::Trait>::BlockNumber>;
 
 decl_module! {
 	pub struct Module<T: Trait>;
@@ -74,14 +77,26 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn set_key(aux, key: T::SessionKey) -> Result = 0;
-		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 1;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		fn set_length(new: T::BlockNumber) -> Result = 0;
-		fn force_new_session(normal_rotation: bool) -> Result = 1;
+		fn force_new_session(apply_rewards: bool) -> Result = 1;
 	}
+}
+
+/// An event in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawEvent<BlockNumber> {
+	/// New session has happened. Note that the argument is the session index, not the block number
+	/// as the type might suggest.
+	NewSession(BlockNumber),
+}
+
+impl<N> From<RawEvent<N>> for () {
+	fn from(_: RawEvent<N>) -> () { () }
 }
 
 decl_storage! {
@@ -95,8 +110,6 @@ decl_storage! {
 	pub CurrentIndex get(current_index): b"ses:ind" => required T::BlockNumber;
 	// Timestamp when current session started.
 	pub CurrentStart get(current_start): b"ses:current_start" => required T::Moment;
-	// Percent by which the session must necessarily finish late before we early-exit the session.
-	pub BrokenPercentLate get(broken_percent_late): b"ses:broken_percent_late" => required T::Moment;
 
 	// Opinions of the current validator set about the activeness of their peers.
 	// Gets cleared when the validator set changes.
@@ -139,22 +152,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Forces a new session.
-	pub fn force_new_session(normal_rotation: bool) -> Result {
-		<ForcingNewSession<T>>::put(normal_rotation);
-		Ok(())
-	}
-
-	/// Notes which of the validators appear to be online from the point of the view of the block author.
-	pub fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
-		assert!(aux.is_empty());
-		assert!(
-			<system::Module<T>>::extrinsic_index() == T::NOTE_OFFLINE_POSITION,
-			"note_offline extrinsic must be at position {} in the block",
-			T::NOTE_OFFLINE_POSITION
-		);
-
-		let vs = Self::validators();
-		<BadValidators<T>>::put(offline_val_indices.into_iter().map(|i| vs[i as usize].clone()).collect::<Vec<T::AccountId>>());
+	pub fn force_new_session(apply_rewards: bool) -> Result {
+		<ForcingNewSession<T>>::put(apply_rewards);
 		Ok(())
 	}
 
@@ -178,20 +177,28 @@ impl<T: Trait> Module<T> {
 		// check block number and call next_session if necessary.
 		let block_number = <system::Module<T>>::block_number();
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
-		let bad_validators = <BadValidators<T>>::take().unwrap_or_default();
-		let should_end_session = <ForcingNewSession<T>>::take().is_some() || !bad_validators.is_empty() || is_final_block;
+		let (should_end_session, apply_rewards) = <ForcingNewSession<T>>::take()
+			.map_or((is_final_block, is_final_block), |apply_rewards| (true, apply_rewards));
 		if should_end_session {
-			Self::rotate_session(is_final_block, bad_validators);
+			Self::rotate_session(is_final_block, apply_rewards);
 		}
 	}
 
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
+
 	/// Move onto next session: register the new authority set.
-	pub fn rotate_session(is_final_block: bool, bad_validators: Vec<T::AccountId>) {
+	pub fn rotate_session(is_final_block: bool, apply_rewards: bool) {
 		let now = <timestamp::Module<T>>::get();
 		let time_elapsed = now.clone() - Self::current_start();
+		let session_index = <CurrentIndex<T>>::get() + One::one();
+
+		Self::deposit_event(RawEvent::NewSession(session_index));
 
 		// Increment current session index.
-		<CurrentIndex<T>>::put(<CurrentIndex<T>>::get() + One::one());
+		<CurrentIndex<T>>::put(session_index);
 		<CurrentStart<T>>::put(now);
 
 		// Enact era length change.
@@ -206,7 +213,7 @@ impl<T: Trait> Module<T> {
 			<LastLengthChange<T>>::put(block_number);
 		}
 
-		T::OnSessionChange::on_session_change(time_elapsed, bad_validators);
+		T::OnSessionChange::on_session_change(time_elapsed, apply_rewards);
 
 		// Update any changes in session keys.
 		Self::validators().iter().enumerate().for_each(|(i, v)| {
@@ -247,7 +254,6 @@ impl<T: Trait> Executable for Module<T> {
 pub struct GenesisConfig<T: Trait> {
 	pub session_length: T::BlockNumber,
 	pub validators: Vec<T::AccountId>,
-	pub broken_percent_late: T::Moment,
 }
 
 #[cfg(any(feature = "std", test))]
@@ -257,7 +263,6 @@ impl<T: Trait> Default for GenesisConfig<T> {
 		GenesisConfig {
 			session_length: T::BlockNumber::sa(1000),
 			validators: vec![],
-			broken_percent_late: T::Moment::sa(30),
 		}
 	}
 }
@@ -272,8 +277,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 			Self::hash(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
 			Self::hash(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
 			Self::hash(<CurrentStart<T>>::key()).to_vec() => T::Moment::zero().encode(),
-			Self::hash(<Validators<T>>::key()).to_vec() => self.validators.encode(),
-			Self::hash(<BrokenPercentLate<T>>::key()).to_vec() => self.broken_percent_late.encode()
+			Self::hash(<Validators<T>>::key()).to_vec() => self.validators.encode()
 		])
 	}
 }
@@ -304,15 +308,16 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
+		type Event = ();
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
 		type Moment = u64;
 	}
 	impl Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = ();
+		type Event = ();
 	}
 
 	type System = system::Module<Test>;
@@ -332,7 +337,6 @@ mod tests {
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
-			broken_percent_late: 30,
 		}.build_storage().unwrap());
 		runtime_io::TestExternalities::new(t)
 	}
@@ -343,34 +347,6 @@ mod tests {
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::validators(), vec![1, 2, 3]);
-		});
-	}
-
-	#[test]
-	fn should_rotate_on_bad_validators() {
-		with_externalities(&mut new_test_ext(), || {
-			System::set_block_number(2);
-			assert_eq!(Session::blocks_remaining(), 0);
-			Timestamp::set_timestamp(0);
-			assert_ok!(Session::set_length(3));
-			Session::check_rotate_session();
-			assert_eq!(Session::current_index(), 1);
-			assert_eq!(Session::length(), 3);
-			assert_eq!(Session::current_start(), 0);
-			assert_eq!(Session::ideal_session_duration(), 15);
-			// ideal end = 0 + 15 * 3 = 15
-
-			System::set_block_number(3);
-			assert_eq!(Session::blocks_remaining(), 2);
-			Timestamp::set_timestamp(9); // no bad validators. session not rotated.
-			Session::check_rotate_session();
-
-			System::set_block_number(4);
-			::system::ExtrinsicIndex::<Test>::put(1);
-			assert_eq!(Session::blocks_remaining(), 1);
-			Session::note_offline(&0, vec![1]).unwrap(); // bad validator -> session rotate
-			Session::check_rotate_session();
-			assert_eq!(Session::current_index(), 2);
 		});
 	}
 

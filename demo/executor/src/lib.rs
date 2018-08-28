@@ -30,6 +30,7 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_runtime_primitives as runtime_primitives;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
+#[cfg(test)] extern crate substrate_runtime_session as session;
 #[cfg(test)] extern crate substrate_runtime_staking as staking;
 #[cfg(test)] extern crate substrate_runtime_system as system;
 #[cfg(test)] extern crate substrate_runtime_consensus as consensus;
@@ -51,9 +52,12 @@ mod tests {
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
-	use {staking, system, consensus};
+	use {staking, session, system, consensus};
+	use system::{EventRecord, Phase};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Staking,
-		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic, SystemConfig};
+		BuildStorage, GenesisConfig, SessionConfig, StakingConfig, BareExtrinsic, System,
+		SystemConfig, Event};
+
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -102,6 +106,7 @@ mod tests {
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TotalStake<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -121,6 +126,7 @@ mod tests {
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TotalStake<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -140,6 +146,7 @@ mod tests {
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TotalStake<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -163,6 +170,7 @@ mod tests {
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TotalStake<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -195,7 +203,6 @@ mod tests {
 			session: Some(SessionConfig {
 				session_length: 2,
 				validators: vec![One.to_raw_public().into(), Two.to_raw_public().into(), three],
-				broken_percent_late: 100,
 			}),
 			staking: Some(StakingConfig {
 				sessions_per_era: 2,
@@ -203,6 +210,7 @@ mod tests {
 				balances: vec![(alice(), 111)],
 				intentions: vec![alice(), bob(), Charlie.to_raw_public().into()],
 				validator_count: 3,
+				minimum_validator_count: 0,
 				bonding_duration: 0,
 				transaction_base_fee: 1,
 				transaction_byte_fee: 0,
@@ -212,6 +220,7 @@ mod tests {
 				reclaim_rebate: 0,
 				early_era_slash: 0,
 				session_reward: 0,
+				offline_slash_grace: 0,
 			}),
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
@@ -253,12 +262,12 @@ mod tests {
 			1,
 			[69u8; 32].into(),
 			if support_changes_trie {
-				hex!("a4ffa8ace317d34db3e19318a4a63c60f1cc225c54fb9fb5ac490e1d6f668006").into()
+				hex!("4011519eba01902e40392378ebc85375bf780acb68f44ebbf311ee68d4e76732").into()
 			} else {
-				hex!("7dce77b1be773a182f8717f037acd5a20ae5944df2c1088b7b349f52bccae642").into()
+				hex!("3b57e52e95c1a839ce4a1a54761fb7f28c90f74d2cafdbf52265646384d74528").into()
 			},
 			if support_changes_trie {
-				Some(hex!("2db622f386b69c8607c43801bf7008b69cf5b9117f8315744d69c53000214fa0").into())
+				Some(hex!("ba0c0313a9812380261438c1cbf38a9c75d5a7628d29193393a17ae7b7181dcd").into())
 			} else {
 				None
 			},
@@ -274,7 +283,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("54de316e8eb537f422607d5af675b438fc5fa358cc2a98a4c40bd4d3b42e126f").into(),
+			hex!("e4451178254b2c0fd193c1613aa57a43f32aa9bdd6e179ae32150ee2bf5af0ee").into(),
 			None,
 			vec![
 				BareExtrinsic {
@@ -295,7 +304,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("e4d976e01b40fe6c03782d9f0aa0d150bde2f73d40a1508555f88dcd9c13925e").into(),
+			hex!("a5579b8696887b5a86b9adca9528af1f7e5a183f97a5e5052a904571b5323002").into(),
 			None,
 			vec![BareExtrinsic {
 				signed: alice(),
@@ -314,6 +323,12 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 41);
 			assert_eq!(Staking::voting_balance(&bob()), 69);
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: Event::staking(staking::RawEvent::NewAccount(bob(), 1, staking::NewAccountOutcome::NoHint))
+				}
+			]);
 		});
 
 		executor().call(&mut t, COMPACT_CODE, "execute_block", &block2().0, true).0.unwrap();
@@ -321,6 +336,16 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Staking::voting_balance(&alice()), 30);
 			assert_eq!(Staking::voting_balance(&bob()), 78);
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::session(session::RawEvent::NewSession(1))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::staking(staking::RawEvent::Reward(0))
+				}
+			]);
 		});
 	}
 
@@ -370,6 +395,7 @@ mod tests {
 	fn panic_execution_gives_error() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TotalStake<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -390,6 +416,7 @@ mod tests {
 	fn successful_execution_gives_ok() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
 			twox_128(&<staking::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<staking::TotalStake<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<staking::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<staking::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],

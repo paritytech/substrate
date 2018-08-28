@@ -17,7 +17,6 @@
 //! Derives serialization and deserialization codec for complex structs for simple marshalling.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-//#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 extern crate proc_macro;
 extern crate proc_macro2;

@@ -525,7 +525,7 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 		block: Block,
 		justification: ::bft::Justification<Block::Hash>,
 		authorities: &[AuthorityId]
-	) {
+	) -> bool {
 		let (header, extrinsics) = block.deconstruct();
 		let justified_header = JustifiedHeader {
 			header: header,
@@ -533,7 +533,7 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 			authorities: authorities.to_vec(),
 		};
 
-		let _ = self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics));
+		self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics)).is_ok()
 	}
 }
 

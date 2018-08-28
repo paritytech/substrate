@@ -44,20 +44,23 @@ impl system::Trait for Test {
 	type Digest = Digest;
 	type AccountId = u64;
 	type Header = Header;
+	type Event = ();
 }
 impl timestamp::Trait for Test {
 	const TIMESTAMP_SET_POSITION: u32 = 0;
 	type Moment = u64;
 }
 impl staking::Trait for Test {
+	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type Balance = u64;
 	type AccountIndex = u64;
-	type OnAccountKill = Contract;
+	type OnFreeBalanceZero = Contract;
+	type Event = ();
 }
 impl session::Trait for Test {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type ConvertAccountIdToSessionKey = Identity;
 	type OnSessionChange = Staking;
+	type Event = ();
 }
 impl Trait for Test {
 	type Gas = u64;
@@ -89,7 +92,6 @@ fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExt
 		session::GenesisConfig::<Test> {
 			session_length: 1,
 			validators: vec![10, 20],
-			broken_percent_late: 100,
 		}.build_storage()
 			.unwrap(),
 	);
@@ -100,6 +102,7 @@ fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExt
 			balances: vec![],
 			intentions: vec![],
 			validator_count: 2,
+			minimum_validator_count: 0,
 			bonding_duration: 0,
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
@@ -109,6 +112,7 @@ fn new_test_ext(existential_deposit: u64, gas_price: u64) -> runtime_io::TestExt
 			reclaim_rebate: 0,
 			early_era_slash: 0,
 			session_reward: 0,
+			offline_slash_grace: 0,
 		}.build_storage()
 			.unwrap(),
 	);

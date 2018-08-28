@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
 safe-mix = { version = "1.0", default_features = false}
+substrate-codec-derive = { path = "../../../substrate/codec/derive" }
 substrate-codec = { path = "../../../substrate/codec", default-features = false }
 substrate-primitives = { path = "../../../substrate/primitives", default-features = false }
 substrate-runtime-std = { path = "../../../substrate/runtime-std", default-features = false }

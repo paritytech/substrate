@@ -10,6 +10,7 @@ serde_derive = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default_features = false}
 substrate-keyring = { path = "../../keyring", optional = true }
 substrate-codec = { path = "../../codec", default_features = false }
+substrate-codec-derive = { path = "../../codec/derive", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-io = { path = "../../runtime-io", default_features = false }
@@ -32,6 +33,7 @@ std = [
 	"safe-mix/std",
 	"substrate-keyring",
 	"substrate-codec/std",
+	"substrate-codec-derive/std",
 	"substrate-primitives/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",
@@ -40,4 +42,5 @@ std = [
 	"substrate-runtime-primitives/std",
 	"substrate-runtime-session/std",
 	"substrate-runtime-system/std",
+	"substrate-runtime-timestamp/std"
 ]

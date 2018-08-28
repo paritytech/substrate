@@ -31,7 +31,7 @@ extern crate substrate_runtime_primitives;
 extern crate log;
 
 use std::io;
-use substrate_runtime_primitives::traits::Block as BlockT;
+use substrate_runtime_primitives::traits::{Block as BlockT, NumberFor};
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
@@ -49,7 +49,7 @@ pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
 	ExHash: Send + Sync + 'static + substrate_runtime_primitives::Serialize + substrate_runtime_primitives::DeserializeOwned,
 	PendingExtrinsics: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, Block::Extrinsic, Metadata=Metadata>,
+	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic, Metadata=Metadata>,
 	A: apis::author::AuthorApi<ExHash, Block::Extrinsic, PendingExtrinsics, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
 {
