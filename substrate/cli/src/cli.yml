@@ -211,3 +211,17 @@ subcommands:
               value_name: PATH
               help: Specify custom base path.
               takes_value: true
+  - purge-chain:
+      about: Remove the whole chain data.
+      args:
+          - chain:
+              long: chain
+              value_name: CHAIN_SPEC
+              help: Specify the chain specification.
+              takes_value: true
+          - base-path:
+              long: base-path
+              short: d
+              value_name: PATH
+              help: Specify custom base path.
+              takes_value: true
