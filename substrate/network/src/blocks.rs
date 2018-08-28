@@ -130,7 +130,7 @@ impl<B: BlockT> BlockCollection<B> {
 		}
 		range.end = cmp::min(peer_best + As::sa(1), range.end);
 		self.peer_requests.insert(who, range.start);
-		self.blocks.insert(range.start, BlockRangeState::Downloading{ len: range.end - range.start, downloading: downloading + 1 });
+		self.blocks.insert(range.start, BlockRangeState::Downloading { len: range.end - range.start, downloading: downloading + 1 });
 		if range.end <= range.start {
 			panic!("Empty range {:?}, count={}, peer_best={}, common={}, blocks={:?}", range, count, peer_best, common, self.blocks);
 		}
