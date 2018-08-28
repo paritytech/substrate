@@ -137,7 +137,7 @@ mod tests {
 	#[test]
 	fn test_score_1_char_100() {
 		let score = calculate_score("j", "5jolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
-		assert!(score  == 100, format!("Wrong score, we found {}", score));
+		assert!(score == 100, format!("Wrong score, we found {}", score));
 	}
 
 	#[test]

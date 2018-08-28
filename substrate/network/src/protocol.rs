@@ -191,7 +191,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<Self>  {
+	) -> error::Result<Self> {
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info, import_queue);
 		let protocol = Protocol {

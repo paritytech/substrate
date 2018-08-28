@@ -106,7 +106,7 @@ impl<B: BlockT> BlockCollection<B> {
 			loop {
 				let next = downloading_iter.next();
 				break match &(prev, next) {
-					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _) if downloading < MAX_PARALLEL_DOWNLOADS  =>
+					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _) if downloading < MAX_PARALLEL_DOWNLOADS =>
 						(*start .. *start + *len, downloading),
 					&(Some((start, r)), Some((next_start, _))) if *start + r.len() < *next_start =>
 						(*start + r.len() .. cmp::min(*next_start, *start + r.len() + count), 0), // gap
@@ -171,7 +171,7 @@ impl<B: BlockT> BlockCollection<B> {
 						*downloading = *downloading - 1;
 						false
 					},
-					Some(&mut BlockRangeState::Downloading { .. })  => {
+					Some(&mut BlockRangeState::Downloading { .. }) => {
 						true
 					},
 					_ => {
@@ -217,7 +217,7 @@ mod test {
 	fn create_clear() {
 		let mut bc = BlockCollection::new();
 		assert!(is_empty(&bc));
-		bc.insert(1, generate_blocks(100),  0);
+		bc.insert(1, generate_blocks(100), 0);
 		assert!(!is_empty(&bc));
 		bc.clear();
 		assert!(is_empty(&bc));
