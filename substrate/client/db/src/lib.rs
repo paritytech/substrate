@@ -314,8 +314,13 @@ pub struct DbChangesTrieStorage<Block: BlockT> {
 impl<Block: BlockT> state_machine::ChangesTrieStorage<KeccakHasher> for DbChangesTrieStorage<Block> {
 	fn root(&self, block: u64) -> Result<Option<H256>, String> {
 		Ok(read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(As::sa(block)))
-			.map_err(|err| format!("{}", err))?
-			.map(|header| Block::Header::decode(&mut &header[..]).expect("TODO"))
+			.map_err(|err| format!("{}", err))
+			.and_then(|header| match header {
+				Some(header) => Block::Header::decode(&mut &header[..])
+					.ok_or_else(|| format!("Failed to parse header of block {}", block))
+					.map(Some),
+				None => Ok(None)
+			})?
 			.and_then(|header| header.changes_root().clone()
 				.map(|root| H256::from_slice(root.as_ref()))))
 	}
