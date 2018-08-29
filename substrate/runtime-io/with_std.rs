@@ -43,7 +43,7 @@ environmental!(ext: trait Externalities<KeccakHasher>);
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 	ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
-		.expect("read_storage cannot be called outside of an Externalities-provided environment.")
+		.expect("storage cannot be called outside of an Externalities-provided environment.")
 }
 
 /// Get `key` from storage, placing the value into `value_out` (as much of it as possible) and return
