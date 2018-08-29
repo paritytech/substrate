@@ -19,11 +19,11 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::traits::{HasPublicAux, Identity};
+use primitives::traits::HasPublicAux;
 use primitives::testing::{Digest, Header};
 use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
-use {GenesisConfig, Module, Trait, consensus, session, system, timestamp};
+use {GenesisConfig, Module, Trait, consensus, system};
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -45,15 +45,6 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 }
-impl session::Trait for Test {
-	type ConvertAccountIdToSessionKey = Identity;
-	type OnSessionChange = Staking;
-	type Event = ();
-}
-impl timestamp::Trait for Test {
-	const TIMESTAMP_SET_POSITION: u32 = 0;
-	type Moment = u64;
-}
 impl Trait for Test {
 	type Balance = u64;
 	type AccountIndex = u64;
@@ -73,17 +64,9 @@ pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternali
 		code: vec![],
 		authorities: vec![],
 	}.build_storage().unwrap());
-	t.extend(session::GenesisConfig::<Test>{
-		session_length,
-		validators: vec![10, 20],
-	}.build_storage().unwrap());
 	t.extend(GenesisConfig::<Test>{
 		balances: if monied {
-			if reward > 0 {
-				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor), (10, balance_factor), (20, balance_factor)]
-			} else {
-				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
-			}
+			vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
 		} else {
 			vec![(10, balance_factor), (20, balance_factor)]
 		},
@@ -94,13 +77,8 @@ pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternali
 		creation_fee: 0,
 		reclaim_rebate: 0,
 	}.build_storage().unwrap());
-	t.extend(timestamp::GenesisConfig::<Test>{
-		period: 5
-	}.build_storage().unwrap());
 	t.into()
 }
 
 pub type System = system::Module<Test>;
-pub type Session = session::Module<Test>;
-pub type Timestamp = timestamp::Module<Test>;
 pub type Balances = Module<Test>;

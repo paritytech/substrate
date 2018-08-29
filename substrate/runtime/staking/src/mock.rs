@@ -23,7 +23,7 @@ use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
 use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
-use {GenesisConfig, Module, Trait, consensus, session, system, timestamp};
+use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balance};
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -45,6 +45,13 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 }
+impl balances::Trait for Test {
+	type Balance = u64;
+	type AccountIndex = u64;
+	type OnFreeBalanceZero = Staking;
+	type IsAccountLiquid = Staking;
+	type Event = ();
+}
 impl session::Trait for Test {
 	type ConvertAccountIdToSessionKey = Identity;
 	type OnSessionChange = Staking;
@@ -56,9 +63,6 @@ impl timestamp::Trait for Test {
 }
 impl Trait for Test {
 	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
-	type Balance = u64;
-	type AccountIndex = u64;
-	type OnFreeBalanceZero = ();
 	type Event = ();
 }
 
@@ -77,9 +81,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		session_length,
 		validators: vec![10, 20],
 	}.build_storage().unwrap());
-	t.extend(GenesisConfig::<Test>{
-		sessions_per_era,
-		current_era,
+	t.extend(balances::GenesisConfig::<Test>{
 		balances: if monied {
 			if reward > 0 {
 				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor), (10, balance_factor), (20, balance_factor)]
@@ -89,16 +91,20 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		} else {
 			vec![(10, balance_factor), (20, balance_factor)]
 		},
-		intentions: vec![10, 20],
-		validator_count: 2,
-		minimum_validator_count: 0,
-		bonding_duration: 3,
 		transaction_base_fee: 0,
 		transaction_byte_fee: 0,
 		existential_deposit: ext_deposit,
 		transfer_fee: 0,
 		creation_fee: 0,
 		reclaim_rebate: 0,
+	}.build_storage().unwrap());
+	t.extend(GenesisConfig::<Test>{
+		sessions_per_era,
+		current_era,
+		intentions: vec![10, 20],
+		validator_count: 2,
+		minimum_validator_count: 0,
+		bonding_duration: 3,
 		session_reward: reward,
 		early_era_slash: if monied { 20 } else { 0 },
 		offline_slash_grace: 0,
@@ -110,6 +116,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 }
 
 pub type System = system::Module<Test>;
+pub type Balances = balances::Module<Test>;
 pub type Session = session::Module<Test>;
 pub type Timestamp = timestamp::Module<Test>;
 pub type Staking = Module<Test>;

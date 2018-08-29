@@ -47,7 +47,6 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
-#[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
 use rstd::{cmp, result};
 use codec::{Encode, Decode, Codec, Input, Output};
@@ -458,7 +457,7 @@ impl<T: Trait> Module<T> {
 		if b < value {
 			return Err("not enough free funds")
 		}
-		if T::IsAccountLiquid::is_account_liquid(who) {
+		if !T::IsAccountLiquid::is_account_liquid(who) {
 			return Err("free funds are still bonded")
 		}
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);

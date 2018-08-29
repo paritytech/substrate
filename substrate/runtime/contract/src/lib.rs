@@ -71,6 +71,7 @@ extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 
@@ -269,7 +270,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> staking::OnFreeBalanceZero<T::AccountId> for Module<T> {
+impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());
