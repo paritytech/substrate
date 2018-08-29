@@ -327,7 +327,6 @@ mod tests {
 
 	type System = system::Module<Test>;
 	type Consensus = consensus::Module<Test>;
-	type Timestamp = timestamp::Module<Test>;
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {

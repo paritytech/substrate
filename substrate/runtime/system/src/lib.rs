@@ -288,6 +288,7 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl Trait for Test {
+		type PublicAux = u64;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Staking manager: Handles balances and periodically determines the best set of validators.
+//! Staking manager: Periodically determines the best set of validators.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
