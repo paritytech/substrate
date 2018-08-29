@@ -23,7 +23,7 @@ use primitives::traits::{HasPublicAux, Identity};
 use primitives::testing::{Digest, Header};
 use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
-use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balance};
+use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balances};
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]

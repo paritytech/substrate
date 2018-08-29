@@ -45,7 +45,7 @@ use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, As, AuxLookup};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
-use staking::address::Address;
+use balances::address::Address;
 #[cfg(any(feature = "std", test))]
 use std::collections::HashMap;
 
@@ -270,7 +270,7 @@ impl<T: Trait> Module<T> {
 		who_index: u32,
 		assumed_vote_index: VoteIndex
 	) -> Result {
-		let who = <staking::Module<T>>::lookup(who)?;
+		let who = <balances::Module<T>>::lookup(who)?;
 		ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 		ensure!(Self::voter_last_active(aux.ref_into()).is_some(), "reaper must be a voter");
 		let last_active = Self::voter_last_active(&who).ok_or("target for inactivity cleanup must be active")?;
@@ -359,7 +359,7 @@ impl<T: Trait> Module<T> {
 		total: T::Balance,
 		index: VoteIndex
 	) -> Result {
-		let candidate = <staking::Module<T>>::lookup(candidate)?;
+		let candidate = <balances::Module<T>>::lookup(candidate)?;
 		ensure!(index == Self::vote_index(), "index not current");
 		let (_, _, expiring) = Self::next_finalise().ok_or("cannot present outside of presentation period")?;
 		let stakes = Self::snapshoted_stakes();
@@ -413,7 +413,7 @@ impl<T: Trait> Module<T> {
 	/// period) to fill the seat if removal means that the desired members are not met.
 	/// This is effective immediately.
 	fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result {
-		let who = <staking::Module<T>>::lookup(who)?;
+		let who = <balances::Module<T>>::lookup(who)?;
 		let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
 			.into_iter()
 			.filter(|i| i.0 != who)

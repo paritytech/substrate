@@ -50,14 +50,12 @@ extern crate substrate_runtime_timestamp as timestamp;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
-use rstd::{cmp, result};
-use codec::{Encode, Decode, Codec, Input, Output};
-use runtime_support::{StorageValue, StorageMap, Parameter};
+use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
-use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, AuxLookup, Member, CheckedAdd, CheckedSub, MaybeEmpty};
-use address::Address as RawAddress;
+use primitives::traits::{Zero, One, Bounded, RefInto, Executable,
+	As, AuxLookup, MaybeEmpty};
+use balances::address::Address;
 
 mod mock;
 
@@ -70,7 +68,7 @@ pub use genesis_config::GenesisConfig;
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: usize = 4;
 
 pub type Event<T> = RawEvent<
-	<T as Trait>::Balance,
+	<T as balances::Trait>::Balance,
 	<T as system::Trait>::AccountId
 >;
 
@@ -122,7 +120,7 @@ decl_module! {
 		fn note_missed_proposal(aux, offline_val_indices: Vec<u32>) -> Result = 0;
 		fn stake(aux) -> Result = 1;
 		fn unstake(aux, intentions_index: u32) -> Result = 2;
-		fn nominate(aux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result = 3;
+		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result = 3;
 		fn unnominate(aux, target_index: u32) -> Result = 4;
 		fn register_slash_preference(aux, intentions_index: u32, p: SlashPreference) -> Result = 5;
 	}
@@ -266,8 +264,8 @@ impl<T: Trait> Module<T> {
 		Self::apply_unstake(aux.ref_into(), intentions_index as usize)
 	}
 
-	fn nominate(aux: &T::PublicAux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result {
-		let target = Self::lookup(target)?;
+	fn nominate(aux: &T::PublicAux, target: Address<T::AccountId, T::AccountIndex>) -> Result {
+		let target = <balances::Module<T>>::lookup(target)?;
 		let aux = aux.ref_into();
 
 		ensure!(Self::nominating(aux).is_none(), "Cannot nominate if already nominating.");
@@ -570,6 +568,6 @@ impl<T: Trait> balances::IsAccountLiquid<T::AccountId> for Module<T> {
 
 impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		<BondageOf<T>>::remove(who);
+		<Bondage<T>>::remove(who);
 	}
 }
