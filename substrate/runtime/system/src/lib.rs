@@ -108,7 +108,7 @@ pub struct EventRecord<E: Parameter + Member> {
 }
 
 decl_storage! {
-	trait Store for system::Module<T: Trait> {
+	trait Store for Module<T: Trait> as System {
 
 		pub AccountNonce get(account_nonce): default map [ T::AccountId => T::Index ];
 

@@ -131,7 +131,7 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for council::Module<T: Trait> {
+	trait Store for Module<T: Trait> as Council {
 
 		// parameters
 		// How much should be locked up in order to submit one's candidacy.

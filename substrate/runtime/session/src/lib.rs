@@ -103,7 +103,7 @@ impl<N> From<RawEvent<N>> for () {
 }
 
 decl_storage! {
-	trait Store for session::Module<T: Trait> {
+	trait Store for Module<T: Trait> as Session {
 
 		// The current set of validators.
 		pub Validators get(validators): required Vec<T::AccountId>;

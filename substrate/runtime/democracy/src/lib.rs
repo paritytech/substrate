@@ -84,7 +84,7 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for democracy::Module<T: Trait> {
+	trait Store for Module<T: Trait> as Democracy {
 
 		// The number of (public) proposals that have been made so far.
 		pub PublicPropCount get(public_prop_count): default PropIndex;

@@ -190,7 +190,7 @@ impl<B, A, I> From<RawEvent<B, A, I>> for () {
 }
 
 decl_storage! {
-	trait Store for staking::Module<T: Trait> {
+	trait Store for Module<T: Trait> as Staking {
 
 		// The length of the bonding duration in eras.
 		pub BondingDuration get(bonding_duration): required T::BlockNumber;

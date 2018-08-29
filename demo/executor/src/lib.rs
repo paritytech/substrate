@@ -257,7 +257,7 @@ mod tests {
 			// Blake
 			// hex!("3437bf4b182ab17bb322af5c67e55f6be487a77084ad2b4e27ddac7242e4ad21").into(),
 			// Keccak
-			hex!("63e3cc83468a458408c9f7cf2a3e8c17822ecff9aba2a04ca6365d7d94d54629").into(),
+			hex!("0b401681b95d04e91dbe53835867bdcb5d9e0590b54ae06bd7b347d49f9a737f").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -273,7 +273,7 @@ mod tests {
 			// Blake
 			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
 			// Keccak
-			hex!("c4a353af85a1b844a6148d0dc45201325d54e16ff524aa087570f20ac2cf8716").into(),
+			hex!("03f051dc4f588fdc713145772486a129d33c7f178c133b5801fa79c3ecca2dc9").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -296,7 +296,7 @@ mod tests {
 			// Blake
 			// hex!("2c7231a9c210a7aa4bea169d944bc4aaacd517862b244b8021236ffa7f697991").into(),
 			// Keccak
-			hex!("37f50634018646fac5c332d7e88e916a3d977a3fe053dc87bdf62f543f559a34").into(),
+			hex!("6e3b6aaf0be927394b520e3ebc0c34a7c26519711bc836e116e371273c3aca44").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,

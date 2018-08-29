@@ -43,7 +43,7 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for council_voting::Module<T: Trait> {
+	trait Store for Module<T: Trait> as CouncilVoting {
 		pub CooloffPeriod get(cooloff_period): required T::BlockNumber;
 		pub VotingPeriod get(voting_period): required T::BlockNumber;
 		pub Proposals get(proposals): required Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.

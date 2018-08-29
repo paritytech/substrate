@@ -464,7 +464,7 @@ macro_rules! __storage_items_internal {
 #[macro_export]
 macro_rules! decl_storage {
 	(
-		trait $storetype:ident for $cratename:ident :: $modulename:ident<$traitinstance:ident: $traittype:ident> {
+		trait $storetype:ident for $modulename:ident<$traitinstance:ident: $traittype:ident> as $cratename:ident {
 			$($t:tt)*
 		}
 	) => {
@@ -480,7 +480,7 @@ macro_rules! decl_storage {
 		}
 	};
 	(
-		pub trait $storetype:ident for $cratename:ident :: $modulename:ident<$traitinstance:ident: $traittype:ident> {
+		pub trait $storetype:ident for $modulename:ident<$traitinstance:ident: $traittype:ident> as $cratename:ident {
 			$($t:tt)*
 		}
 	) => {
