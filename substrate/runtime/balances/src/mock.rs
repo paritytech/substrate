@@ -55,14 +55,14 @@ impl timestamp::Trait for Test {
 	type Moment = u64;
 }
 impl Trait for Test {
-	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type Balance = u64;
 	type AccountIndex = u64;
 	type OnFreeBalanceZero = ();
+	type IsAccountLiquid = ();
 	type Event = ();
 }
 
-pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool, reward: u64) -> runtime_io::TestExternalities<KeccakHasher> {
+pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternalities<KeccakHasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let balance_factor = if ext_deposit > 0 {
 		256
@@ -78,8 +78,6 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		validators: vec![10, 20],
 	}.build_storage().unwrap());
 	t.extend(GenesisConfig::<Test>{
-		sessions_per_era,
-		current_era,
 		balances: if monied {
 			if reward > 0 {
 				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor), (10, balance_factor), (20, balance_factor)]
@@ -89,19 +87,12 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		} else {
 			vec![(10, balance_factor), (20, balance_factor)]
 		},
-		intentions: vec![10, 20],
-		validator_count: 2,
-		minimum_validator_count: 0,
-		bonding_duration: 3,
 		transaction_base_fee: 0,
 		transaction_byte_fee: 0,
 		existential_deposit: ext_deposit,
 		transfer_fee: 0,
 		creation_fee: 0,
 		reclaim_rebate: 0,
-		session_reward: reward,
-		early_era_slash: if monied { 20 } else { 0 },
-		offline_slash_grace: 0,
 	}.build_storage().unwrap());
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5
@@ -112,4 +103,4 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 pub type System = system::Module<Test>;
 pub type Session = session::Module<Test>;
 pub type Timestamp = timestamp::Module<Test>;
-pub type Staking = Module<Test>;
+pub type Balances = Module<Test>;
