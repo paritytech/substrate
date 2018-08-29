@@ -64,7 +64,6 @@ pub const CODE: &'static [u8] = b":code";
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
 pub trait Trait: system::Trait {
-	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;		// MaybeEmpty is for Timestamp's usage.
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 }
 

@@ -117,7 +117,7 @@ impl<AccountId> IsAccountLiquid<AccountId> for () {
 	fn is_account_liquid(_who: &AccountId) -> bool { true }
 }
 
-pub trait Trait: system::Trait + session::Trait {
+pub trait Trait: system::Trait {
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system

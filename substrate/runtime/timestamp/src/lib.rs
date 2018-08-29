@@ -43,7 +43,7 @@ use runtime_support::dispatch::Result;
 use runtime_primitives::traits::{Executable, MaybeEmpty, SimpleArithmetic, As, Zero};
 
 pub trait Trait: consensus::Trait where
-	<Self as consensus::Trait>::PublicAux: MaybeEmpty
+	<Self as system::Trait>::PublicAux: MaybeEmpty
 {
 	// the position of the required timestamp-set extrinsic.
 	const TIMESTAMP_SET_POSITION: u32;
@@ -152,6 +152,7 @@ mod tests {
 		type PublicAux = u64;
 	}
 	impl system::Trait for Test {
+		type PublicAux = u64;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -162,7 +163,6 @@ mod tests {
 		type Event = ();
 	}
 	impl consensus::Trait for Test {
-		type PublicAux = u64;
 		type SessionKey = u64;
 	}
 	impl Trait for Test {

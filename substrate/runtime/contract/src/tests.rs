@@ -33,10 +33,10 @@ impl HasPublicAux for Test {
 	type PublicAux = u64;
 }
 impl consensus::Trait for Test {
-	type PublicAux = <Self as HasPublicAux>::PublicAux;
 	type SessionKey = u64;
 }
 impl system::Trait for Test {
+	type PublicAux = <Self as HasPublicAux>::PublicAux;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
