@@ -38,10 +38,14 @@ extern crate substrate_runtime_support;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
+extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_consensus as consensus;
-extern crate substrate_runtime_session as session;
-extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
+
+#[cfg(test)]
+extern crate substrate_runtime_session as session;
+#[cfg(test)]
+extern crate substrate_runtime_staking as staking;
 #[cfg(test)]
 extern crate substrate_runtime_timestamp as timestamp;
 
@@ -62,7 +66,7 @@ pub type PropIndex = u32;
 /// A referendum index.
 pub type ReferendumIndex = u32;
 
-pub trait Trait: staking::Trait + Sized {
+pub trait Trait: balances::Trait + Sized {
 	type Proposal: Parameter + Dispatchable + IsSubType<Module<Self>> + MaybeSerializeDebug;
 }
 
@@ -152,7 +156,7 @@ impl<T: Trait> Module<T> {
 	/// Get the voters for the current proposal.
 	pub fn tally(ref_index: ReferendumIndex) -> (T::Balance, T::Balance) {
 		Self::voters_for(ref_index).iter()
-			.map(|a| (<staking::Module<T>>::voting_balance(a), Self::vote_of((ref_index, a.clone())).unwrap_or(false)/*defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed*/))
+			.map(|a| (<balances::Module<T>>::voting_balance(a), Self::vote_of((ref_index, a.clone())).unwrap_or(false)/*defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed*/))
 			.map(|(bal, vote)| if vote { (bal, Zero::zero()) } else { (Zero::zero(), bal) })
 			.fold((Zero::zero(), Zero::zero()), |(a, b), (c, d)| (a + c, b + d))
 	}
@@ -162,7 +166,7 @@ impl<T: Trait> Module<T> {
 	/// Propose a sensitive action to be taken.
 	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>, value: T::Balance) -> Result {
 		ensure!(value >= Self::minimum_deposit(), "value too low");
-		<staking::Module<T>>::reserve(aux.ref_into(), value)
+		<balances::Module<T>>::reserve(aux.ref_into(), value)
 			.map_err(|_| "proposer's balance too low")?;
 
 		let index = Self::public_prop_count();
@@ -179,7 +183,7 @@ impl<T: Trait> Module<T> {
 	fn second(aux: &T::PublicAux, proposal: PropIndex) -> Result {
 		let mut deposit = Self::deposit_of(proposal)
 			.ok_or("can only second an existing proposal")?;
-		<staking::Module<T>>::reserve(aux.ref_into(), deposit.0)
+		<balances::Module<T>>::reserve(aux.ref_into(), deposit.0)
 			.map_err(|_| "seconder's balance too low")?;
 		deposit.1.push(aux.ref_into().clone());
 		<DepositOf<T>>::insert(proposal, deposit);
@@ -190,7 +194,7 @@ impl<T: Trait> Module<T> {
 	/// false would be a vote to keep the status quo..
 	fn vote(aux: &T::PublicAux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-		ensure!(!<staking::Module<T>>::voting_balance(aux.ref_into()).is_zero(),
+		ensure!(!<balances::Module<T>>::voting_balance(aux.ref_into()).is_zero(),
 			"transactor must have balance to signal approval.");
 		if !<VoteOf<T>>::exists(&(ref_index, aux.ref_into().clone())) {
 			let mut voters = Self::voters_for(ref_index);
@@ -268,7 +272,7 @@ impl<T: Trait> Module<T> {
 				if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {//: (T::Balance, Vec<T::AccountId>) =
 					// refund depositors
 					for d in &depositors {
-						<staking::Module<T>>::unreserve(d, deposit);
+						<balances::Module<T>>::unreserve(d, deposit);
 					}
 					<PublicProps<T>>::put(public_props);
 					Self::inject_referendum(now + Self::voting_period(), proposal, VoteThreshold::SuperMajorityApprove)?;
@@ -281,7 +285,7 @@ impl<T: Trait> Module<T> {
 		// tally up votes for any expiring referenda.
 		for (index, _, proposal, vote_threshold) in Self::maturing_referendums_at(now) {
 			let (approve, against) = Self::tally(index);
-			let total_stake = <staking::Module<T>>::total_stake();
+			let total_stake = <balances::Module<T>>::total_stake();
 			Self::clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
 				proposal.dispatch()?;
@@ -396,16 +400,20 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 	}
+	impl balances::Trait for Test {
+		type Balance = u64;
+		type AccountIndex = u64;
+		type OnFreeBalanceZero = Staking;
+		type IsAccountLiquid = Staking;
+		type Event = ();
+	}
 	impl session::Trait for Test {
 		type ConvertAccountIdToSessionKey = Identity;
-		type OnSessionChange = staking::Module<Test>;
+		type OnSessionChange = Staking;
 		type Event = ();
 	}
 	impl staking::Trait for Test {
 		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
-		type Balance = u64;
-		type AccountIndex = u64;
-		type OnFreeBalanceZero = ();
 		type Event = ();
 	}
 	impl timestamp::Trait for Test {
@@ -426,20 +434,22 @@ mod tests {
 			session_length: 1,		//??? or 2?
 			validators: vec![10, 20],
 		}.build_storage().unwrap());
-		t.extend(staking::GenesisConfig::<Test>{
-			sessions_per_era: 1,
-			current_era: 0,
+		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-			intentions: vec![],
-			validator_count: 2,
-			minimum_validator_count: 0,
-			bonding_duration: 3,
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
+		}.build_storage().unwrap());
+		t.extend(staking::GenesisConfig::<Test>{
+			sessions_per_era: 1,
+			current_era: 0,
+			intentions: vec![],
+			validator_count: 2,
+			minimum_validator_count: 0,
+			bonding_duration: 3,
 			early_era_slash: 0,
 			session_reward: 0,
 			offline_slash_grace: 0,
@@ -454,6 +464,7 @@ mod tests {
 	}
 
 	type System = system::Module<Test>;
+	type Balances = balances::Module<Test>;
 	type Session = session::Module<Test>;
 	type Staking = staking::Module<Test>;
 	type Democracy = Module<Test>;
@@ -466,7 +477,7 @@ mod tests {
 			assert_eq!(Democracy::minimum_deposit(), 1);
 			assert_eq!(Democracy::referendum_count(), 0);
 			assert_eq!(Staking::sessions_per_era(), 1);
-			assert_eq!(Staking::total_stake(), 210);
+			assert_eq!(Balances::total_stake(), 210);
 		});
 	}
 
@@ -519,9 +530,9 @@ mod tests {
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
-			assert_eq!(Staking::free_balance(&1), 5);
-			assert_eq!(Staking::free_balance(&2), 15);
-			assert_eq!(Staking::free_balance(&5), 35);
+			assert_eq!(Balances::free_balance(&1), 5);
+			assert_eq!(Balances::free_balance(&2), 15);
+			assert_eq!(Balances::free_balance(&5), 35);
 		});
 	}
 
@@ -535,9 +546,9 @@ mod tests {
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			assert_eq!(Staking::free_balance(&1), 10);
-			assert_eq!(Staking::free_balance(&2), 20);
-			assert_eq!(Staking::free_balance(&5), 50);
+			assert_eq!(Balances::free_balance(&1), 10);
+			assert_eq!(Balances::free_balance(&2), 20);
+			assert_eq!(Balances::free_balance(&5), 50);
 		});
 	}
 
@@ -696,7 +707,7 @@ mod tests {
 	fn passing_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Staking::era_length(), 1);
-			assert_eq!(Staking::total_stake(), 210);
+			assert_eq!(Balances::total_stake(), 210);
 
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();

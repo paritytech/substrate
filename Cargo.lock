@@ -2754,6 +2754,7 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-codec-derive 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-balances 0.1.0",
  "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
