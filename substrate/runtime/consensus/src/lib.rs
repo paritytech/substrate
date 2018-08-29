@@ -42,7 +42,7 @@ use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{RefInto, MaybeSerializeDebug, MaybeEmpty};
+use primitives::traits::MaybeSerializeDebug;
 use primitives::bft::MisbehaviorReport;
 
 #[cfg(any(feature = "std", test))]

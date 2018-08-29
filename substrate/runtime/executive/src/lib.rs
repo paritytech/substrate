@@ -54,6 +54,9 @@ extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_session as session;
 
 #[cfg(test)]
+extern crate substrate_runtime_balances as balances;
+
+#[cfg(test)]
 extern crate substrate_runtime_staking as staking;
 
 use rstd::prelude::*;
@@ -224,7 +227,7 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use staking::Call;
+	use balances::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
@@ -242,7 +245,7 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Test {
-			session, staking
+			balances, session, staking
 		}
 	}
 
@@ -254,6 +257,13 @@ mod tests {
 	}
 	impl consensus::Trait for Test {
 		type SessionKey = u64;
+	}
+	impl balances::Trait for Test {
+		type Balance = u64;
+		type AccountIndex = u64;
+		type OnFreeBalanceZero = staking::Module<Test>;
+		type IsAccountLiquid = staking::Module<Test>;
+		type Event = MetaEvent;
 	}
 	impl system::Trait for Test {
 		type PublicAux = <Self as HasPublicAux>::PublicAux;
@@ -273,9 +283,6 @@ mod tests {
 	}
 	impl staking::Trait for Test {
 		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
-		type Balance = u64;
-		type AccountIndex = u64;
-		type OnFreeBalanceZero = ();
 		type Event = MetaEvent;
 	}
 	impl timestamp::Trait for Test {
@@ -284,25 +291,27 @@ mod tests {
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Test>>;
-	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
+	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, balances::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(staking::GenesisConfig::<Test> {
-			sessions_per_era: 0,
-			current_era: 0,
+		t.extend(balances::GenesisConfig::<Test> {
 			balances: vec![(1, 111)],
-			intentions: vec![],
-			validator_count: 0,
-			minimum_validator_count: 0,
-			bonding_duration: 0,
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
+		}.build_storage().unwrap());
+		t.extend(staking::GenesisConfig::<Test> {
+			sessions_per_era: 0,
+			current_era: 0,
+			intentions: vec![],
+			validator_count: 0,
+			minimum_validator_count: 0,
+			bonding_duration: 0,
 			early_era_slash: 0,
 			session_reward: 0,
 			offline_slash_grace: 0,
@@ -312,13 +321,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt).unwrap();
-			assert_eq!(<staking::Module<Test>>::voting_balance(&1), 32);
-			assert_eq!(<staking::Module<Test>>::voting_balance(&2), 69);
+			assert_eq!(<balances::Module<Test>>::voting_balance(&1), 32);
+			assert_eq!(<balances::Module<Test>>::voting_balance(&2), 69);
 		});
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(consensus::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(session::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(staking::GenesisConfig::<Test>::default().build_storage().unwrap());
@@ -336,7 +346,7 @@ mod tests {
 					// Blake
 					// state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
 					// Keccak
-					state_root: hex!("e576ed2adacdc09b61844b5106bfaa18d2a4bfd7feb56d7af97c3421cdefca48").into(),
+					state_root: hex!("5b846f849bf38ef5acd96e1c999cd61619408015919f06ab575384d83cf45aa7").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -370,7 +380,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("e576ed2adacdc09b61844b5106bfaa18d2a4bfd7feb56d7af97c3421cdefca48").into(),
+					state_root: hex!("5b846f849bf38ef5acd96e1c999cd61619408015919f06ab575384d83cf45aa7").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
