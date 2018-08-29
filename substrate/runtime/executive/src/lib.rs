@@ -336,7 +336,7 @@ mod tests {
 					// Blake
 					// state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
 					// Keccak
-					state_root: hex!("246ea6d86eefe3fc32f746fdcb1749a5f245570c70a04b43d08b5defac44505a").into(),
+					state_root: hex!("e576ed2adacdc09b61844b5106bfaa18d2a4bfd7feb56d7af97c3421cdefca48").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -370,7 +370,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("246ea6d86eefe3fc32f746fdcb1749a5f245570c70a04b43d08b5defac44505a").into(),
+					state_root: hex!("e576ed2adacdc09b61844b5106bfaa18d2a4bfd7feb56d7af97c3421cdefca48").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

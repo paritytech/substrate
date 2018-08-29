@@ -150,25 +150,25 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
+	trait Store for Module<T: Trait> as Contract {
+		// The fee required to create a contract. At least as big as staking's ReclaimRebate.
+		ContractFee get(contract_fee): required T::Balance;
+		// The fee charged for a call into a contract.
+		CallBaseFee get(call_base_fee): required T::Gas;
+		// The fee charged for a create of a contract.
+		CreateBaseFee get(create_base_fee): required T::Gas;
+		// The price of one unit of gas.
+		GasPrice get(gas_price): required T::Balance;
+		// The maximum nesting level of a call/create stack.
+		MaxDepth get(max_depth): required u32;
+		// The maximum amount of gas that could be expended per block.
+		BlockGasLimit get(block_gas_limit): required T::Gas;
+		// Gas spent so far in this block.
+		GasSpent get(gas_spent): default T::Gas;
 
-	// The fee required to create a contract. At least as big as staking's ReclaimRebate.
-	ContractFee get(contract_fee): b"con:contract_fee" => required T::Balance;
-	// The fee charged for a call into a contract.
-	CallBaseFee get(call_base_fee): b"con:base_call_fee" => required T::Gas;
-	// The fee charged for a create of a contract.
-	CreateBaseFee get(create_base_fee): b"con:base_create_fee" => required T::Gas;
-	// The price of one unit of gas.
-	GasPrice get(gas_price): b"con:gas_price" => required T::Balance;
-	// The maximum nesting level of a call/create stack.
-	MaxDepth get(max_depth): b"con:max_depth" => required u32;
-	// The maximum amount of gas that could be expended per block.
-	BlockGasLimit get(block_gas_limit): b"con:block_gas_limit" => required T::Gas;
-	// Gas spent so far in this block.
-	GasSpent get(gas_spent): b"con:gas_spent" => default T::Gas;
-
-	// The code associated with an account.
-	CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+		// The code associated with an account.
+		pub CodeOf: default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+	}
 }
 
 // TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime

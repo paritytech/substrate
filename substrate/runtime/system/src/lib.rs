@@ -108,22 +108,23 @@ pub struct EventRecord<E: Parameter + Member> {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
+	trait Store for Module<T: Trait> as System {
 
-	pub AccountNonce get(account_nonce): b"sys:non" => default map [ T::AccountId => T::Index ];
-	pub BlockHash get(block_hash): b"sys:old" => required map [ T::BlockNumber => T::Hash ];
+		pub AccountNonce get(account_nonce): default map [ T::AccountId => T::Index ];
 
-	ExtrinsicCount: b"sys:extrinsic_count" => u32;
-	pub ExtrinsicIndex get(extrinsic_index): b"sys:xti" => u32;
-	ExtrinsicData get(extrinsic_data): b"sys:xtd" => required map [ u32 => Vec<u8> ];
-	RandomSeed get(random_seed): b"sys:rnd" => required T::Hash;
-	// The current block number being processed. Set by `execute_block`.
-	Number get(block_number): b"sys:num" => required T::BlockNumber;
-	ParentHash get(parent_hash): b"sys:pha" => required T::Hash;
-	ExtrinsicsRoot get(extrinsics_root): b"sys:txr" => required T::Hash;
-	Digest get(digest): b"sys:dig" => default T::Digest;
+		ExtrinsicCount: u32;
+		pub BlockHash get(block_hash): required map [ T::BlockNumber => T::Hash ];
+		pub ExtrinsicIndex get(extrinsic_index): u32;
+		ExtrinsicData get(extrinsic_data): required map [ u32 => Vec<u8> ];
+		RandomSeed get(random_seed): required T::Hash;
+		// The current block number being processed. Set by `execute_block`.
+		Number get(block_number): required T::BlockNumber;
+		ParentHash get(parent_hash): required T::Hash;
+		ExtrinsicsRoot get(extrinsics_root): required T::Hash;
+		Digest get(digest): default T::Digest;
 
-	Events get(events): b"sys:events" => default Vec<EventRecord<T::Event>>;
+		Events get(events): default Vec<EventRecord<T::Event>>;
+	}
 }
 
 impl<T: Trait> Module<T> {
