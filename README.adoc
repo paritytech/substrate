@@ -4,9 +4,87 @@ Next-generation framework for blockchain innovation.
 
 ## Description
 
-At its heart, Substrate is a combination of three technologies: WebAssembly, Libp2p and AfG Consensus. It is both a library for building new blockchains with and a "skeleton key" of a blockchain client, able to synchronise to any Substrate-based chain.
+At its heart, Substrate is a combination of three technologies: WebAssembly, Libp2p and AfG Consensus. It is both a library for building new blockchains and a "skeleton key" of a blockchain client, able to synchronise to any Substrate-based chain.
 
-Substrate chains have two distinct features that make them "next-generation": a dynamic, self-defining state-transition function and a progressive consensus algorithm with fast block production and adaptive, definite finality. The STF, encoded in WebAssembly, is known as the "runtime". This defines the `execute_block` function, and can specify everything from the staking algorithm, transaction semantics, logging mechanisms and governance procedures. Because the runtime is entirely dynamic all of these can be switched out or upgraded at any time. A Substrate chain is very much a "living organism".
+Substrate chains have three distinct features that make them "next-generation": a dynamic, self-defining state-transition function, light-client functionality from day one and a progressive consensus algorithm with fast block production and adaptive, definite finality. The STF, encoded in WebAssembly, is known as the "runtime". This defines the `execute_block` function, and can specify everything from the staking algorithm, transaction semantics, logging mechanisms and procedures for replacing any aspect of itself or of the blockchain's state ("governance"). Because the runtime is entirely dynamic all of these can be switched out or upgraded at any time. A Substrate chain is very much a "living organism".
+
+## Usage
+
+Substrate is still an early stage project, and while it has already been used as the basis of major projects like Polkadot, using it is still a significant undertaking. In particular, you should have a good knowledge of blockchain concepts and basic cryptography. Terminology like header, block, client, hash, transaction and signature should be familiar. At present you will need a working knowledge of Rust to be able to do anything interesting (though eventually, we aim for this not to be the case).
+
+Substrate is designed to be used in one of three ways:
+
+1. Trivial: By running the Substrate binary `substrate` and configuring it with a genesis block that includes the current demonstration runtime. In this case, you just build Substrate, configure a JSON file and launch your own blockchain. This affords you the least amount of customisability, primarily allowing you to change the genesis parameters of the various included runtime modules such as balances, staking, block-period, fees and governance.
+
+2. Modular: By hacking together modules from the Substrate Runtime Module Library into a new runtime and possibly altering or reconfiguring the Substrate client's block authoring logic. This affords you a very large amount of freedom over your own blockchain's logic, letting you change datatypes, add or remove modules and, crucially, add your own modules. Much can be changed without touching the block-authoring logic (since it is generic). If this is the case, then the existing Substrate binary can be used for block authoring and syncing. If the block authoring logic needs to be tweaked, then a new altered block-authoring binary must be built as a separate project and used by validators. This is how the Polkadot relay chain is built and should suffice for almost all circumstances in the near to mid-term.
+
+3. Generic: The entire Substrate Runtime Module Library can be ignored and the entire runtime designed and implemented from scratch. If desired, this can be done in a language other than Rust, providing it can target WebAssembly. If the runtime can be made to be compatible with the existing client's block authoring logic, then you can simply construct a new genesis block from your Wasm blob and launch your chain with the existing Rust-based Substrate client. If not, then you'll need to alter the client's block authoring logic accordingly. This is probably a useless option for most projects right now, but provides complete flexibility allowing for a long-term far-reaching upgrade path for the Substrate paradigm.
+
+### The Basics of Substrate
+
+Substrate is a blockchain platform with a completely generic state transition function. That said, it does come with both standards and conventions (particularly regarding the Runtime Module Library) regarding underlying datastructures. Roughly speaking, these core datatypes correspond to as `trait`s in terms of the actual non-negotiable standard and generic `struct`s in terms of the convention.
+
+```
+Header := Parent + ExtrinsicsRoot + StorageRoot + Digest
+Block := Header + Extrinsics + Justifications
+```
+
+### Extrinsics
+
+Extrinsics in Substrate are pieces of information from "the outside world" that are contained in the blocks of the chain. You might think "ahh, that means *transactions*": in fact, no. Extrinsics fall into two broad categories of which only one is *transactions*. The other is known as *inherents*. The difference between these two is that transactions are signed and gossipped on the network and can be deemed useful *per se*. This fits the mould of what you would call transactions in Bitcoin or Ethereum.
+
+Inherents, meanwhile, are not passed on the network and are not signed. They represent data which describes the environment but which cannot call upon anything to prove it per se such as a signature. Rather they are assumed to be "true" simply because a sufficiently large number of validators have agreed on them being reasonable.
+
+To give an example, there is the timestamp inherent which sets the current timestamp of the block. This is not a fixed part of Substrate, but does come as part of the Substrate Runtime Module Library to be used as desired. No signature could fundamentally prove that a block were authored at a given time in quite the same way that a signature can "prove" the desire to spend some particular funds. Rather, it is the business of each validator to ensure that they believe the timestamp is set to something reasonable before they agree that the block candidate is valid.
+
+Other examples include the parachain-heads extrinsic in Polkadot and the "note-missed-proposal" extrinsic used in the Substrate Runtime Module Library to determine and punish or deactivate offline validators.
+
+### Runtime and API
+
+Substrate chains all have a runtime. The runtime is a WebAssembly "blob" that includes a number of entry-points. Some entry-points are required as part of the underlying Substrate specification. Others are merely convention and required for the default implemnentation of the Substrate client to be able to author blocks. In short these two sets are:
+
+The runtime is API entry points are expected to be in the runtime's `api` module. There is a specific ABI based upon the Substrate Simple Codec (`codec`) which is used to encode and decode the arguments for these functions and specify where and how they should passed. A special macro is provided called `impl_stubs` which prepares all functionality for marshalling arguments and basicall yjust allows you to write the functions as you would normally (except for the fact that there must be example one argument - tuples are allowed to workaround).
+
+Here's the Polkadot API implementation as of PoC-2:
+
+```rust
+pub mod api {
+	impl_stubs!(
+
+		// Standard: Required.
+		version => |()| super::Version::version(),
+		authorities => |()| super::Consensus::authorities(),
+		execute_block => |block| super::Executive::execute_block(block),
+
+		// Conventional: Needed for Substrate client's reference block authoring logic to work.
+		initialise_block => |header| super::Executive::initialise_block(&header),
+		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
+		finalise_block => |()| super::Executive::finalise_block(),
+		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
+
+		// Non-standard (Polkadot-specific). This just exposes some stuff that Polkadot client
+		// finds useful.
+		validator_count => |()| super::Session::validator_count(),
+		validators => |()| super::Session::validators()
+	);
+}
+```
+
+As you can see, at the minimum there are only three API calls to implement. If you want to reuse as much of Substrate's reference block authoring client code, then you'll want to provide the next four entrypoints (though three of them you probably already implemented as part of `execute_block`).
+
+Of the first three, there is `execute_block`, which contains the actions to be taken to execute a block and pretty much defines the blockchain. Then there is `authorities` which tells the AfG consensus algorithm sitting in the Substrate client who the given authorities (known as "validators" in some contexts) are that can finalise the next block. Finally, there is `version`, which is a fairly sophisticated version identifier. This includes a key distinction between *specification version* and *authoring version*, with the former essentially versioning the logic of `execute_block` and the latter versioning only the logic of `inherent_extrinsics` and core aspects of extrinsic validity. 
+
+### Inherent Extrinsics
+
+The Substrate Runtime Module Library includes functionality for timestamps and slashing. If used, these rely on "trusted" external information being passed in via inherent extrinsics. The Substrate reference block authoring client software will expect to be able to call into the runtime API with collated data (in the case of the reference Substrate authoring client, this is merely the current timestamp and which nodes were offline) in order to return the appropriate extrinsics ready for inclusion. If new inherent extrinsic types and data are to be used in a modified runtime, then it is this function (and its argument type) that would change.
+
+### Block-authoring Logic
+
+In Substrate, there is a major distinction between blockchain *syncing* and block *authoring* ("authoring" is a more general term for what is called "mining" in Bitcoin). The first case might be refered to as a "full node" (or "light node" - Substrate supports both): authoring necessarily requires a synced node and therefore all authoring clients must necessarily be able to synchronise. However, the reverse is not true. The primary functionality that authoring nodes have which is not in "sync nodes" is threefold: transaction queue logic, inherent transaction knowledge and BFT consensus logic. BFT consensus logic is provided as a core element of Substrate and can be ignored since it is only exposed in the SDK under the `authorities()` API entry.
+
+Transaction queue logic in Substrate is designed to be as generic as possible, allowing a runtime to express which transactions are fit for inclusion in a block through the `initialize_block` and `apply_extrinsic` calls. However, more subtle aspects like priotisation and replacement policy must currently be expressed "hard coded" as part of the blockchain's authoring code. That said, Substrate's reference implementation for a transaction queue which should be sufficient for an initial chain implementation.
+
+Inherent extrinsic knowledge is again somewhat generic, and the actual construction of the extrinsics is, by convention, delegated to the "soft code" in the runtime. If ever there needs to be additional extrinsic information in the chain, then both the block authoring logic will need to be altered to provide it into the runtime and the runtime's `inherent_extrinsics` call will need to use this extra information in order to construct any additional extrinsic transactions for inclusion in the block.
 
 ## Roadmap
 
@@ -28,3 +106,72 @@ Substrate chains have two distinct features that make them "next-generation": a 
 - Introduce basic but extensible transaction queue and block-builder and place them in the executable.
 - DAO runtime module
 - Audit
+
+
+## Building
+
+== Hacking on Substrate
+
+If you'd actually like hack on Substrate, you can just grab the source code and
+build it. Ensure you have Rust and the support software installed:
+
+[source, shell]
+----
+curl https://sh.rustup.rs -sSf | sh
+rustup update nightly
+rustup target add wasm32-unknown-unknown --toolchain nightly
+rustup update stable
+cargo install --git https://github.com/alexcrichton/wasm-gc
+sudo apt install cmake pkg-config libssl-dev git
+----
+
+Then, grab the Substrate source code:
+
+[source, shell]
+----
+git clone https://github.com/paritytech/substrate.git
+cd substrate
+----
+
+Then build the code:
+
+[source, shell]
+----
+./scripts/build.sh  # Builds the WebAssembly binaries
+./scripts/build-demos.sh  # Builds the WebAssembly binaries
+cargo build # Builds all native code
+----
+
+You can run the tests if you like:
+
+[source, shell]
+cargo test --all
+
+You can start a development chain with:
+
+[source, shell]
+cargo run -- --dev
+
+=== Development
+
+You can run a simple single-node development "network" on your machine by
+running in a terminal:
+
+[source, shell]
+substrate --dev
+
+== Local Two-node Testnet
+
+If you want to see the multi-node consensus algorithm in action locally, then
+you can create a local testnet. You'll need two terminals open. In one, run:
+
+[source, shell]
+substrate --chain=local --validator --key Alice -d /tmp/alice
+
+and in the other, run:
+
+[source, shell]
+substrate --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes '/ip4/127.0.0.1/tcp/30333/p2p/ALICE_BOOTNODE_ID_HERE'
+
+Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of
+the first terminal.

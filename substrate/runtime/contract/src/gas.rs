@@ -14,8 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use {Trait, Module};
+use {Trait, Module, GasSpent};
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
+use runtime_support::StorageValue;
 use staking;
 
 #[must_use]
@@ -35,6 +36,8 @@ impl GasMeterResult {
 }
 
 pub struct GasMeter<T: Trait> {
+	limit: T::Gas,
+	/// Amount of gas left from initial gas limit. Can reach zero.
 	gas_left: T::Gas,
 	gas_price: T::Balance,
 }
@@ -42,6 +45,7 @@ impl<T: Trait> GasMeter<T> {
 	#[cfg(test)]
 	pub fn with_limit(gas_limit: T::Gas, gas_price: T::Balance) -> GasMeter<T> {
 		GasMeter {
+			limit: gas_limit,
 			gas_left: gas_limit,
 			gas_price,
 		}
@@ -101,6 +105,7 @@ impl<T: Trait> GasMeter<T> {
 		} else {
 			self.gas_left = self.gas_left - amount;
 			let mut nested = GasMeter {
+				limit: amount,
 				gas_left: amount,
 				gas_price: self.gas_price,
 			};
@@ -117,6 +122,11 @@ impl<T: Trait> GasMeter<T> {
 	pub fn gas_left(&self) -> T::Gas {
 		self.gas_left
 	}
+
+	/// Returns how much gas was spent.
+	fn spent(&self) -> T::Gas {
+		self.limit - self.gas_left
+	}
 }
 
 /// Buy the given amount of gas.
@@ -127,6 +137,14 @@ pub fn buy_gas<T: Trait>(
 	transactor: &T::AccountId,
 	gas_limit: T::Gas,
 ) -> Result<GasMeter<T>, &'static str> {
+	// Check if the specified amount of gas is available in the current block.
+	// This cannot underflow since `gas_spent` is never greater than `block_gas_limit`.
+	let gas_available = <Module<T>>::block_gas_limit() - <Module<T>>::gas_spent();
+	if gas_limit > gas_available {
+		return Err("block gas limit is reached");
+	}
+
+	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
 	let b = <staking::Module<T>>::free_balance(transactor);
 	let cost = <T::Gas as As<T::Balance>>::as_(gas_limit.clone())
@@ -138,6 +156,7 @@ pub fn buy_gas<T: Trait>(
 	<staking::Module<T>>::set_free_balance(transactor, b - cost);
 	<staking::Module<T>>::decrease_total_stake_by(cost);
 	Ok(GasMeter {
+		limit: gas_limit,
 		gas_left: gas_limit,
 		gas_price,
 	})
@@ -145,6 +164,13 @@ pub fn buy_gas<T: Trait>(
 
 /// Refund the unused gas.
 pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMeter<T>) {
+	// Increase total spent gas.
+	// This cannot overflow, since `gas_spent` is never greater than `block_gas_limit`, which
+	// also has T::Gas type.
+	let gas_spent = <Module<T>>::gas_spent() + gas_meter.spent();
+	<GasSpent<T>>::put(gas_spent);
+
+	// Refund gas left by the price it was bought.
 	let b = <staking::Module<T>>::free_balance(transactor);
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
 	<staking::Module<T>>::set_free_balance(transactor, b + refund);

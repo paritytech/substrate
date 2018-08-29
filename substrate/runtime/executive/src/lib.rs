@@ -24,12 +24,19 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-extern crate substrate_runtime_std as rstd;
+#[cfg(test)]
+#[macro_use]
+extern crate substrate_codec_derive;
+
+#[cfg_attr(test, macro_use)]
 extern crate substrate_runtime_support as runtime_support;
+
+extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_system as system;
+
 #[cfg(test)]
 extern crate substrate_runtime_timestamp as timestamp;
 
@@ -52,7 +59,6 @@ extern crate substrate_runtime_staking as staking;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
-use runtime_support::StorageValue;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
 	MakePayment, Hash, AuxLookup};
 use codec::{Codec, Encode};
@@ -125,6 +131,7 @@ impl<
 		extrinsics.into_iter().for_each(Self::apply_extrinsic_no_note);
 
 		// post-transactional book-keeping.
+		<system::Module<System>>::note_finished_extrinsics();
 		Finalisation::execute();
 
 		// any final checks
@@ -134,6 +141,7 @@ impl<
 	/// Finalise the block - it is up the caller to ensure that all header fields are valid
 	/// except state-root.
 	pub fn finalise_block() -> System::Header {
+		<system::Module<System>>::note_finished_extrinsics();
 		Finalisation::execute();
 
 		// setup extrinsics
@@ -194,7 +202,7 @@ impl<
 		// decode parameters and dispatch
 		let r = xt.apply();
 
-		<system::ExtrinsicIndex<System>>::put(<system::ExtrinsicIndex<System>>::get() + 1u32);
+		<system::Module<System>>::note_applied_extrinsic();
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
 	}
@@ -232,6 +240,12 @@ mod tests {
 		}
 	}
 
+	impl_outer_event!{
+		pub enum MetaEvent for Test {
+			session, staking
+		}
+	}
+
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
@@ -250,16 +264,19 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
+		type Event = MetaEvent;
 	}
 	impl session::Trait for Test {
-		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type ConvertAccountIdToSessionKey = Identity;
 		type OnSessionChange = staking::Module<Test>;
+		type Event = MetaEvent;
 	}
 	impl staking::Trait for Test {
+		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type Balance = u64;
 		type AccountIndex = u64;
-		type OnAccountKill = ();
+		type OnFreeBalanceZero = ();
+		type Event = MetaEvent;
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
@@ -319,7 +336,7 @@ mod tests {
 					// Blake
 					// state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
 					// Keccak
-					state_root: hex!("ed456461b82664990b6ebd1caf1360056f6e8a062e73fada331e1c92cd81cad4").into(),
+					state_root: hex!("246ea6d86eefe3fc32f746fdcb1749a5f245570c70a04b43d08b5defac44505a").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -353,7 +370,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("ed456461b82664990b6ebd1caf1360056f6e8a062e73fada331e1c92cd81cad4").into(),
+					state_root: hex!("246ea6d86eefe3fc32f746fdcb1749a5f245570c70a04b43d08b5defac44505a").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -369,7 +386,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());
-			assert_eq!(<system::Module<Test>>::extrinsic_index(), 0);
+			assert_eq!(<system::Module<Test>>::extrinsic_index(), Some(0));
 		});
 	}
 }

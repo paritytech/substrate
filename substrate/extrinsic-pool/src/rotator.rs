@@ -58,6 +58,23 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 		self.banned_until.read().contains_key(hash)
 	}
 
+	/// Bans given set of hashes.
+	pub fn ban(&self, now: &Instant, hashes: &[Hash]) {
+		let mut banned = self.banned_until.write();
+
+		for hash in hashes {
+			banned.insert(hash.clone(), *now + self.ban_time);
+		}
+
+		if banned.len() > 2 * EXPECTED_SIZE {
+			while banned.len() > EXPECTED_SIZE {
+				if let Some(key) = banned.keys().next().cloned() {
+					banned.remove(&key);
+				}
+			}
+		}
+	}
+
 	/// Bans extrinsic if it's stale.
 	///
 	/// Returns `true` if extrinsic is stale and got banned.
@@ -69,17 +86,7 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 			return false;
 		}
 
-		let mut banned = self.banned_until.write();
-		banned.insert(xt.verified.hash().clone(), *now + self.ban_time);
-
-		if banned.len() > 2 * EXPECTED_SIZE {
-			while banned.len() > EXPECTED_SIZE {
-				if let Some(key) = banned.keys().next().cloned() {
-					banned.remove(&key);
-				}
-			}
-		}
-
+		self.ban(now, &[xt.verified.hash().clone()]);
 		true
 	}
 
@@ -163,5 +170,40 @@ mod tests {
 
 		// then
 		assert!(!rotator.is_banned(&hash));
+	}
+
+	#[test]
+	fn should_garbage_collect() {
+		// given
+		fn tx_with(i: u64, time: Instant) -> Verified<u64, VerifiedTransaction> {
+			let hash = i.into();
+			Verified {
+				original: i,
+				verified: VerifiedTransaction {
+					hash,
+					sender: Default::default(),
+					nonce: Default::default(),
+				},
+				valid_till: time,
+			}
+		}
+
+		let rotator = rotator();
+
+		let now = Instant::now();
+		let past = now - Duration::from_secs(1);
+
+		// when
+		for i in 0..2*EXPECTED_SIZE {
+			let tx = tx_with(i as u64, past);
+			assert!(rotator.ban_if_stale(&now, &tx));
+		}
+		assert_eq!(rotator.banned_until.read().len(), 2*EXPECTED_SIZE);
+
+		// then
+		let tx = tx_with(2*EXPECTED_SIZE as u64, past);
+		// trigger a garbage collection
+		assert!(rotator.ban_if_stale(&now, &tx));
+		assert_eq!(rotator.banned_until.read().len(), EXPECTED_SIZE);
 	}
 }

@@ -65,6 +65,7 @@ use network::NonReservedPeerMode;
 
 use std::io::{Write, Read, stdin, stdout};
 use std::iter;
+use std::fs;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -213,6 +214,12 @@ where
 		return Ok(Action::ExecutedInternally);
 	}
 
+	if let Some(matches) = matches.subcommand_matches("purge-chain") {
+		let spec = load_spec(&matches, spec_factory)?;
+		purge_chain::<F>(matches, spec)?;
+		return Ok(Action::ExecutedInternally);
+	}
+
 	let spec = load_spec(&matches, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 
@@ -286,15 +293,25 @@ where
 			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
 		}
 
-		let port = match matches.value_of("port") {
-			Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
-			None => 30333,
-		};
+		config.network.listen_addresses = Vec::new();
+		for addr in matches.values_of("listen-addr").unwrap_or_default() {
+			let addr = addr.parse().map_err(|_| "Invalid listen multiaddress")?;
+			config.network.listen_addresses.push(addr);
+		}
+		if config.network.listen_addresses.is_empty() {
+			let port = match matches.value_of("port") {
+				Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
+				None => 30333,
+			};
+			config.network.listen_addresses = vec![
+				iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
+					.chain(iter::once(AddrComponent::TCP(port)))
+					.collect()
+			];
+		}
 
-		config.network.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
-			.chain(iter::once(AddrComponent::TCP(port)))
-			.collect();
-		config.network.public_address = None;
+		config.network.public_addresses = Vec::new();
+
 		config.network.client_version = config.client_id();
 		config.network.use_secret = match matches.value_of("node-key").map(|s| s.parse()) {
 			Some(Ok(secret)) => Some(secret),
@@ -415,6 +432,30 @@ fn revert_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>
 	};
 
 	Ok(service::chain_ops::revert_chain::<F>(config, As::sa(blocks))?)
+}
+
+fn purge_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>) -> error::Result<()>
+	where F: ServiceFactory,
+{
+	let base_path = base_path(matches);
+	let database_path = db_path(&base_path, spec.id());
+
+	print!("Are you sure to remove {:?}? (y/n)", &database_path);
+	stdout().flush().expect("failed to flush stdout");
+
+	let mut input = String::new();
+	stdin().read_line(&mut input)?;
+	let input = input.trim();
+
+	match input.chars().nth(0) {
+		Some('y') | Some('Y') => {
+			fs::remove_dir_all(&database_path)?;
+			println!("{:?} removed.", &database_path);
+		},
+		_ => println!("Aborted"),
+	}
+
+	Ok(())
 }
 
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {

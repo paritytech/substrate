@@ -77,6 +77,12 @@ const RECLAIM_INDEX_MAGIC: usize = 0x69;
 
 pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 
+pub type Event<T> = RawEvent<
+	<T as Trait>::Balance,
+	<T as system::Trait>::AccountId,
+	<T as Trait>::AccountIndex
+>;
+
 #[cfg(test)]
 #[derive(Debug, PartialEq, Clone)]
 pub enum LockStatus<BlockNumber: Debug + PartialEq + Clone> {
@@ -94,13 +100,13 @@ pub enum LockStatus<BlockNumber: PartialEq + Clone> {
 }
 
 /// The account was the given id was killed.
-pub trait OnAccountKill<AccountId> {
+pub trait OnFreeBalanceZero<AccountId> {
 	/// The account was the given id was killed.
-	fn on_account_kill(who: &AccountId);
+	fn on_free_balance_zero(who: &AccountId);
 }
 
-impl<AccountId> OnAccountKill<AccountId> for () {
-	fn on_account_kill(_who: &AccountId) {}
+impl<AccountId> OnFreeBalanceZero<AccountId> for () {
+	fn on_free_balance_zero(_who: &AccountId) {}
 }
 
 /// Preference of what happens on a slash event.
@@ -121,17 +127,21 @@ impl Default for SlashPreference {
 
 pub trait Trait: system::Trait + session::Trait {
 	/// The allowed extrinsic position for `missed_proposal` inherent.
-//	const NOTE_MISSED_PROPOSAL_POSITION: u32;	// TODO: uncomment when removed from session::Trait
+	const NOTE_MISSED_PROPOSAL_POSITION: u32;
 
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
 	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
-	/// A function which is invoked when the given account is dead.
+	/// A function which is invoked when the free-balance has fallen below the existential deposit and
+	/// has been reduced to zero.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
-	type OnAccountKill: OnAccountKill<Self::AccountId>;
+	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
+
+	/// The overarching event type. 
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
 decl_module! {
@@ -157,6 +167,26 @@ decl_module! {
 		fn set_offline_slash_grace(new: u32) -> Result = 4;
 		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result = 5;
 	}
+}
+
+/// An event in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawEvent<Balance, AccountId, AccountIndex> {
+	/// All validators have been rewarded by the given balance.
+	Reward(Balance),
+	/// One validator (and their nominators) has been given a offline-warning (they're still within
+	/// their grace). The accrued number of slashes is recorded, too.
+	OfflineWarning(AccountId, u32),
+	/// One validator (and their nominators) has been slashed by the given amount.
+	OfflineSlash(AccountId, Balance),
+	/// A new account was created.
+	NewAccount(AccountId, AccountIndex, NewAccountOutcome),
+	/// An account was reaped.
+	ReapedAccount(AccountId),
+}
+impl<B, A, I> From<RawEvent<B, A, I>> for () {
+	fn from(_: RawEvent<B, A, I>) -> () { () }
 }
 
 decl_storage! {
@@ -227,7 +257,7 @@ decl_storage! {
 	// This is the only balance that matters in terms of most operations on tokens. It is
 	// alone used to determine the balance when in the contract execution environment. When this
 	// balance falls below the value of `ExistentialDeposit`, then the "current account" is
-	// deleted: specifically, `Bondage` and `FreeBalance`. Furthermore, `OnAccountKill` callback
+	// deleted: specifically, `Bondage` and `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
 	// is invoked, giving a chance to external modules to cleanup data associated with
 	// the deleted account.
 	//
@@ -253,7 +283,10 @@ decl_storage! {
 	pub Bondage get(bondage): b"sta:bon:" => default map [ T::AccountId => T::BlockNumber ];
 }
 
-enum NewAccountOutcome {
+/// Whatever happened about the hint given when creating the new account.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone, Copy)]
+pub enum NewAccountOutcome {
 	NoHint,
 	GoodHint,
 	BadHint,
@@ -485,7 +518,7 @@ impl<T: Trait> Module<T> {
 	fn note_missed_proposal(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
 		assert!(aux.is_empty());
 		assert!(
-			<system::Module<T>>::extrinsic_index() == T::NOTE_MISSED_PROPOSAL_POSITION,
+			<system::Module<T>>::extrinsic_index() == Some(T::NOTE_MISSED_PROPOSAL_POSITION),
 			"note_missed_proposal extrinsic must be at position {} in the block",
 			T::NOTE_MISSED_PROPOSAL_POSITION
 		);
@@ -496,7 +529,7 @@ impl<T: Trait> Module<T> {
 			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
 			let grace = Self::offline_slash_grace();
 
-			if slash_count >= grace {
+			let event = if slash_count >= grace {
 				let instances = slash_count - grace;
 				let slash = Self::early_era_slash() << instances;
 				let next_slash = slash << 1u32;
@@ -512,13 +545,22 @@ impl<T: Trait> Module<T> {
 					}
 					let _ = Self::force_new_era(false);
 				}
-			}
+				RawEvent::OfflineSlash(v, slash)
+			} else {
+				RawEvent::OfflineWarning(v, slash_count)
+			};
+			Self::deposit_event(event);
 		}
 		
 		Ok(())
 	}
 
 	// PRIV DISPATCH
+
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
 
 	/// Set the number of sessions in an era.
 	fn set_sessions_per_era(new: T::BlockNumber) -> Result {
@@ -806,6 +848,7 @@ impl<T: Trait> Module<T> {
 			for v in <session::Module<T>>::validators().iter() {
 				Self::reward_validator(v, reward);
 			}
+			Self::deposit_event(RawEvent::Reward(reward));
 		}
 
 		let session_index = <session::Module<T>>::current_index();
@@ -911,7 +954,9 @@ impl<T: Trait> Module<T> {
 						try_set[item_index] = who.clone();
 						<EnumSet<T>>::insert(set_index, try_set);
 
-						return NewAccountOutcome::GoodHint;
+						Self::deposit_event(RawEvent::NewAccount(who.clone(), try_index, NewAccountOutcome::GoodHint));
+
+						return NewAccountOutcome::GoodHint
 					}
 				}
 				NewAccountOutcome::BadHint
@@ -931,6 +976,8 @@ impl<T: Trait> Module<T> {
 			set_index += One::one();
 		};
 
+		let index = T::AccountIndex::sa(set_index.as_() * ENUM_SET_SIZE + set.len());
+
 		// update set.
 		set.push(who.clone());
 
@@ -942,7 +989,14 @@ impl<T: Trait> Module<T> {
 		// write set.
 		<EnumSet<T>>::insert(set_index, set);
 
+		Self::deposit_event(RawEvent::NewAccount(who.clone(), index, ret));
+
 		ret
+	}
+
+	fn reap_account(who: &T::AccountId) {
+		<system::AccountNonce<T>>::remove(who);
+		Self::deposit_event(RawEvent::ReapedAccount(who.clone()));
 	}
 
 	/// Kill an account's free portion.
@@ -950,10 +1004,11 @@ impl<T: Trait> Module<T> {
 		Self::decrease_total_stake_by(Self::free_balance(who));
 		<FreeBalance<T>>::remove(who);
 		<Bondage<T>>::remove(who);
-		T::OnAccountKill::on_account_kill(who);
+
+		T::OnFreeBalanceZero::on_free_balance_zero(who);
 
 		if Self::reserved_balance(who).is_zero() {
-			<system::AccountNonce<T>>::remove(who);
+			Self::reap_account(who);
 		}
 	}
 
@@ -961,8 +1016,9 @@ impl<T: Trait> Module<T> {
 	fn on_reserved_too_low(who: &T::AccountId) {
 		Self::decrease_total_stake_by(Self::reserved_balance(who));
 		<ReservedBalance<T>>::remove(who);
+
 		if Self::free_balance(who).is_zero() {
-			<system::AccountNonce<T>>::remove(who);
+			Self::reap_account(who);
 		}
 	}
 
