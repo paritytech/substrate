@@ -160,7 +160,7 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 			   authorities: Vec<AuthorityId>,
 	) -> error::Result<Self> {
 		let parent_hash = header.parent_hash().clone();
-		let just = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
+		let justification = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
 			.map_err(|_|
 				error::ErrorKind::BadJustification(
 					format!("{}", header.hash())
@@ -168,7 +168,7 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 			)?;
 		Ok(JustifiedHeader {
 			header,
-			justification: just,
+			justification,
 			authorities,
 		})
 	}
@@ -324,7 +324,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	) -> error::Result<JustifiedHeader<Block>> {
 		let parent_hash = header.parent_hash().clone();
 		let authorities = self.authorities_at(&BlockId::Hash(parent_hash))?;
-		let just = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
+		let justification = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
 			.map_err(|_|
 				error::ErrorKind::BadJustification(
 					format!("{}", header.hash())
@@ -332,7 +332,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			)?;
 		Ok(JustifiedHeader {
 			header,
-			justification: just,
+			justification,
 			authorities,
 		})
 	}
