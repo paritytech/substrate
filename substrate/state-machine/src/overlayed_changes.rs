@@ -25,54 +25,27 @@ use changes_trie::Configuration as ChangesTrieConfig;
 /// that can be cleared.
 #[derive(Debug, Default, Clone)]
 pub struct OverlayedChanges {
-	pub(crate) prospective: HashMap<Vec<u8>, Option<Vec<u8>>>,
-	pub(crate) committed: HashMap<Vec<u8>, Option<Vec<u8>>>,
-	pub(crate) extrinsic_changes: Option<ExtrinsicChanges>,
-}
-
-/// Extrinsic-level map of storage changes at given block.
-///
-/// Used by runtimes that are maintaining change tries.
-#[derive(Debug, Clone)]
-pub(crate) struct ExtrinsicChanges {
-	/// Configuration of changes trie.
-	pub changes_trie_config: ChangesTrieConfig,
-	/// Block number that is currently processing.
-	pub block: u64,
-	/// Extrinsic index that is currently processing.
-	pub extrinsic_index: u32,
-	/// Prospective mapping of storage keys to the indices of extrinsics
-	/// where keys were changed in.
-	pub prospective: HashMap<Vec<u8>, HashSet<u32>>,
-	/// Committed mapping of storage keys to the indices of extrinsics
-	/// where keys were changed in.
-	pub committed: HashMap<Vec<u8>, HashSet<u32>>,
+	pub(crate) prospective: HashMap<Vec<u8>, (Option<Vec<u8>>, Option<HashSet<u32>>)>,
+	pub(crate) committed: HashMap<Vec<u8>, (Option<Vec<u8>>, Option<HashSet<u32>>)>,
+	pub(crate) changes_trie_config: Option<ChangesTrieConfig>,
+	pub(crate) block: Option<u64>,
+	pub(crate) extrinsic: Option<u32>,
 }
 
 impl OverlayedChanges {
 	/// Sets the changes trie configuration.
 	pub(crate) fn set_changes_trie_config(&mut self, block: u64, config: ChangesTrieConfig) {
-		assert!(match self.extrinsic_changes {
-			None => true,
-			Some(ref old_changes) => old_changes.block == block
-				&& old_changes.changes_trie_config == config,
-		});
+		assert!(self.block.map(|old_block| old_block == block).unwrap_or(true));
+		assert!(self.changes_trie_config.as_ref().map(|old_config| *old_config == config).unwrap_or(true));
 
-		if self.extrinsic_changes.is_none() {
-			self.extrinsic_changes = Some(ExtrinsicChanges {
-				changes_trie_config: config,
-				block,
-				extrinsic_index: Default::default(),
-				prospective: Default::default(),
-				committed: Default::default(),
-			})
-		}
+		self.block = Some(block);
+		self.changes_trie_config = Some(config);
 	}
 
 	/// Sets the index extrinsic that is currently executing.
 	pub(crate) fn set_extrinsic_index(&mut self, index: u32) {
-		if let Some(extrinsic_changes) = self.extrinsic_changes.as_mut() {
-			extrinsic_changes.extrinsic_index = index;
+		if self.changes_trie_config.is_some() {
+			self.extrinsic = Some(index);
 		}
 	}
 
@@ -82,15 +55,21 @@ impl OverlayedChanges {
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
 		self.prospective.get(key)
 			.or_else(|| self.committed.get(key))
-			.map(|x| x.as_ref().map(AsRef::as_ref))
+			.map(|x| x.0.as_ref().map(AsRef::as_ref))
 	}
 
 	/// Inserts the given key-value pair into the prospective change set.
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
-		self.extrinsic_changes.as_mut().map(|ec| ec.note_changed_key(key.clone()));
-		self.prospective.insert(key, val);
+		let entry = self.prospective.entry(key).or_default();
+		entry.0 = val;
+
+		if let Some(extrinsic) = self.extrinsic {
+			let mut extrinsics = entry.1.take().unwrap_or_default();
+			extrinsics.insert(extrinsic);
+			entry.1 = Some(extrinsics);
+		}
 	}
 
 	/// Removes all key-value pairs which keys share the given prefix.
@@ -102,10 +81,15 @@ impl OverlayedChanges {
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
 		// Iterate over all prospective and mark all keys that share
 		// the given prefix as removed (None).
-		for (key, value) in self.prospective.iter_mut() {
+		for (key, entry) in self.prospective.iter_mut() {
 			if key.starts_with(prefix) {
-				self.extrinsic_changes.as_mut().map(|ec| ec.note_changed_key(key.clone()));
-				*value = None;
+				entry.0 = None;
+
+				if let Some(extrinsic) = self.extrinsic {
+					let mut extrinsics = entry.1.take().unwrap_or_default();
+					extrinsics.insert(extrinsic);
+					entry.1 = Some(extrinsics);
+				}
 			}
 		}
 
@@ -113,8 +97,14 @@ impl OverlayedChanges {
 		// NOTE that we are making changes in the prospective change set.
 		for key in self.committed.keys() {
 			if key.starts_with(prefix) {
-				self.extrinsic_changes.as_mut().map(|ec| ec.note_changed_key(key.clone()));
-				self.prospective.insert(key.to_owned(), None);
+				let entry = self.prospective.entry(key.clone()).or_default();
+				entry.0 = None;
+
+				if let Some(extrinsic) = self.extrinsic {
+					let mut extrinsics = entry.1.take().unwrap_or_default();
+					extrinsics.insert(extrinsic);
+					entry.1 = Some(extrinsics);
+				}
 			}
 		}
 	}
@@ -122,7 +112,6 @@ impl OverlayedChanges {
 	/// Discard prospective changes to state.
 	pub fn discard_prospective(&mut self) {
 		self.prospective.clear();
-		self.extrinsic_changes.as_mut().map(|ec| ec.discard_prospective());
 	}
 
 	/// Commit prospective changes to state.
@@ -130,17 +119,24 @@ impl OverlayedChanges {
 		if self.committed.is_empty() {
 			::std::mem::swap(&mut self.prospective, &mut self.committed);
 		} else {
-			self.committed.extend(self.prospective.drain());
-		}
+			for (key, (val, extrinsics)) in self.prospective.drain() {
+				let entry = self.committed.entry(key).or_default();
+				entry.0 = val;
 
-		self.extrinsic_changes.as_mut().map(|ec| ec.commit_prospective());
+				if let Some(prospective_extrinsics) = extrinsics {
+					let mut extrinsics = entry.1.take().unwrap_or_default();
+					extrinsics.extend(prospective_extrinsics);
+					entry.1 = Some(extrinsics);
+				}
+			}
+		}
 	}
 
 	/// Drain committed changes to an iterator.
 	///
 	/// Panics:
 	/// Will panic if there are any uncommitted prospective changes.
-	pub fn drain<'a>(&'a mut self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> + 'a {
+	pub fn drain<'a>(&'a mut self) -> impl Iterator<Item=(Vec<u8>, (Option<Vec<u8>>, Option<HashSet<u32>>))> + 'a {
 		assert!(self.prospective.is_empty());
 		self.committed.drain()
 	}
@@ -151,32 +147,7 @@ impl OverlayedChanges {
 	/// Will panic if there are any uncommitted prospective changes.
 	pub fn into_committed(self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
 		assert!(self.prospective.is_empty());
-		self.committed.into_iter()
-	}
-}
-
-impl ExtrinsicChanges {
-	/// Note key changed in the block.
-	pub fn note_changed_key(&mut self, key: Vec<u8>) {
-		self.prospective.entry(key).or_default()
-			.insert(self.extrinsic_index);
-	}
-
-	/// Discard prospective changes to state.
-	pub fn discard_prospective(&mut self) {
-		self.prospective.clear();
-	}
-
-	/// Commit prospective changes to state.
-	pub fn commit_prospective(&mut self) {
-		if self.committed.is_empty() {
-			::std::mem::swap(&mut self.prospective, &mut self.committed);
-		} else {
-			for (key, extrinsics) in self.prospective.drain() {
-				self.committed.entry(key.clone()).or_default()
-					.extend(extrinsics);
-			}
-		}
+		self.committed.into_iter().map(|(k, (v, _))| (k, v))
 	}
 }
 
@@ -228,13 +199,13 @@ mod tests {
 		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: vec![
-				(b"dog".to_vec(), Some(b"puppy".to_vec())),
-				(b"dogglesworth".to_vec(), Some(b"catYYY".to_vec())),
-				(b"doug".to_vec(), Some(vec![])),
+				(b"dog".to_vec(), (Some(b"puppy".to_vec()), None)),
+				(b"dogglesworth".to_vec(), (Some(b"catYYY".to_vec()), None)),
+				(b"doug".to_vec(), (Some(vec![]), None)),
 			].into_iter().collect(),
 			prospective: vec![
-				(b"dogglesworth".to_vec(), Some(b"cat".to_vec())),
-				(b"doug".to_vec(), None),
+				(b"dogglesworth".to_vec(), (Some(b"cat".to_vec()), None)),
+				(b"doug".to_vec(), (None, None)),
 			].into_iter().collect(),
 			..Default::default()
 		};
@@ -248,17 +219,17 @@ mod tests {
 	#[test]
 	fn changes_trie_configuration_is_saved() {
 		let mut overlay = OverlayedChanges::default();
-		assert!(overlay.extrinsic_changes.is_none());
+		assert!(overlay.changes_trie_config.is_none());
 		overlay.set_changes_trie_config(1, ChangesTrieConfig {
 			digest_interval: 4, digest_levels: 1,
 		});
-		assert!(overlay.extrinsic_changes.is_some());
+		assert!(overlay.changes_trie_config.is_some());
 	}
 
 	#[test]
 	fn changes_trie_configuration_is_saved_twice() {
 		let mut overlay = OverlayedChanges::default();
-		assert!(overlay.extrinsic_changes.is_none());
+		assert!(overlay.changes_trie_config.is_none());
 		overlay.set_changes_trie_config(1, ChangesTrieConfig {
 			digest_interval: 4, digest_levels: 1,
 		});
@@ -268,10 +239,10 @@ mod tests {
 			digest_interval: 4, digest_levels: 1,
 		});
 		assert_eq!(
-			overlay.extrinsic_changes.as_ref().map(|c| c.prospective.clone()),
-			Some(vec![
-				(vec![1], vec![0].into_iter().collect()),
-			].into_iter().collect())
+			overlay.prospective,
+			vec![
+				(vec![1], (Some(vec![2]), Some(vec![0].into_iter().collect()))),
+			].into_iter().collect(),
 		);
 	}
 
@@ -302,7 +273,6 @@ mod tests {
 	#[test]
 	fn extrinsic_changes_are_collected() {
 		let mut overlay = OverlayedChanges::default();
-		assert!(overlay.extrinsic_changes.is_none());
 		overlay.set_changes_trie_config(1, ChangesTrieConfig {
 			digest_interval: 4, digest_levels: 1,
 		});
@@ -316,10 +286,10 @@ mod tests {
 		overlay.set_extrinsic_index(2);
 		overlay.set_storage(vec![1], Some(vec![6]));
 
-		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().prospective,
+		assert_eq!(overlay.prospective,
 			vec![
-				(vec![1], vec![0, 2].into_iter().collect()),
-				(vec![3], vec![1].into_iter().collect()),
+				(vec![1], (Some(vec![6]), Some(vec![0, 2].into_iter().collect()))),
+				(vec![3], (Some(vec![4]), Some(vec![1].into_iter().collect()))),
 			].into_iter().collect());
 
 		overlay.commit_prospective();
@@ -330,27 +300,27 @@ mod tests {
 		overlay.set_extrinsic_index(4);
 		overlay.set_storage(vec![1], Some(vec![8]));
 
-		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().committed,
+		assert_eq!(overlay.committed,
 			vec![
-				(vec![1], vec![0, 2].into_iter().collect()),
-				(vec![3], vec![1].into_iter().collect()),
+				(vec![1], (Some(vec![6]), Some(vec![0, 2].into_iter().collect()))),
+				(vec![3], (Some(vec![4]), Some(vec![1].into_iter().collect()))),
 			].into_iter().collect());
 
-		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().prospective,
+		assert_eq!(overlay.prospective,
 			vec![
-				(vec![1], vec![4].into_iter().collect()),
-				(vec![3], vec![3].into_iter().collect()),
+				(vec![1], (Some(vec![8]), Some(vec![4].into_iter().collect()))),
+				(vec![3], (Some(vec![7]), Some(vec![3].into_iter().collect()))),
 			].into_iter().collect());
 
 		overlay.commit_prospective();
 
-		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().committed,
+		assert_eq!(overlay.committed,
 			vec![
-				(vec![1], vec![0, 2, 4].into_iter().collect()),
-				(vec![3], vec![1, 3].into_iter().collect()),
+				(vec![1], (Some(vec![8]), Some(vec![0, 2, 4].into_iter().collect()))),
+				(vec![3], (Some(vec![7]), Some(vec![1, 3].into_iter().collect()))),
 			].into_iter().collect());
 
-		assert_eq!(overlay.extrinsic_changes.as_ref().unwrap().prospective,
+		assert_eq!(overlay.prospective,
 			Default::default());
 	}
 }

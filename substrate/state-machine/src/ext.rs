@@ -137,8 +137,8 @@ where
 
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.committed.clone().into_iter())
-			.chain(self.overlay.prospective.clone().into_iter())
+			.chain(self.overlay.committed.clone().into_iter().map(|(k, (v, _))| (k, v)))
+			.chain(self.overlay.prospective.clone().into_iter().map(|(k, (v, _))| (k, v)))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -200,8 +200,8 @@ where
 		}
 
 		// compute and memoize
-		let delta = self.overlay.committed.iter()
-			.chain(self.overlay.prospective.iter())
+		let delta = self.overlay.committed.iter().map(|(k, (v, _))| (k, v))
+			.chain(self.overlay.prospective.iter().map(|(k, (v, _))| (k, v)))
 			.map(|(k, v)| (k.clone(), v.clone()));
 
 		let (root, transaction) = self.backend.storage_root(delta);
@@ -243,7 +243,6 @@ mod tests {
 	use backend::InMemory;
 	use changes_trie::{Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as InMemoryChangesTrieStorage};
-	use overlayed_changes::ExtrinsicChanges;
 	use super::*;
 
 	type TestBackend = InMemory<KeccakHasher, RlpCodec>;
@@ -252,18 +251,16 @@ mod tests {
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
-			prospective: vec![(vec![1], Some(vec![100].into_iter().collect()))].into_iter().collect(),
+			prospective: vec![
+				(vec![1], (Some(vec![100].into_iter().collect()), Some(vec![1].into_iter().collect())))
+			].into_iter().collect(),
 			committed: Default::default(),
-			extrinsic_changes: Some(ExtrinsicChanges {
-				changes_trie_config: ChangesTrieConfiguration {
-					digest_interval: 0,
-					digest_levels: 0,
-				},
-				block: 100,
-				extrinsic_index: 3,
-				prospective: vec![(vec![1], vec![0].into_iter().collect())].into_iter().collect(),
-				committed: Default::default(),
+			changes_trie_config: Some(ChangesTrieConfiguration {
+				digest_interval: 0,
+				digest_levels: 0,
 			}),
+			block: Some(100),
+			extrinsic: Some(3),
 		}
 	}
 
@@ -278,7 +275,7 @@ mod tests {
 	#[test]
 	fn storage_changes_root_is_none_when_extrinsic_changes_are_none() {
 		let mut overlay = prepare_overlay_with_changes();
-		overlay.extrinsic_changes = None;
+		overlay.changes_trie_config = None;
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
@@ -292,13 +289,13 @@ mod tests {
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
 		assert_eq!(ext.storage_changes_root(),
-			Some(hex!("0e962b233061e645b048c1f02092fcc29d8af634683ede124a82253ea4a16952").into()));
+			Some(hex!("39c072f9c91d3adda925f84a197d67ab0fef16c12fe0587d72d25da177332bba").into()));
 	}
 
 	#[test]
 	fn storage_changes_root_is_some_when_extrinsic_changes_are_empty() {
 		let mut overlay = prepare_overlay_with_changes();
-		overlay.extrinsic_changes.as_mut().unwrap().prospective = Default::default();
+		overlay.prospective.get_mut(&vec![1]).unwrap().1 = None;
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));

@@ -22,7 +22,7 @@ use hashdb::Hasher;
 use heapsize::HeapSizeOf;
 use patricia_trie::NodeCodec;
 use backend::Backend;
-use overlayed_changes::{OverlayedChanges, ExtrinsicChanges};
+use overlayed_changes::OverlayedChanges;
 use trie_backend_essence::{TrieBackendStorage, TrieBackendEssence};
 use changes_trie::build_iterator::digest_build_iterator;
 use changes_trie::input::{InputKey, InputPair, DigestIndex, ExtrinsicIndex};
@@ -47,22 +47,20 @@ pub fn prepare_input<'a, B, S, H, C>(
 		H::Out: HeapSizeOf,
 		C: NodeCodec<H>,
 {
-	let storage = match storage {
-		Some(storage) => storage,
-		None => return Ok(None),
-	};
-	let extrinsic_changes = match changes.extrinsic_changes.as_ref() {
-		Some(extrinsic_changes) => extrinsic_changes,
-		None => return Ok(None),
+	let (storage, config, block) = match (storage, changes.changes_trie_config.as_ref(), changes.block) {
+		(Some(storage), Some(config), Some(block)) => (storage, config, block),
+		_ => return Ok(None),
 	};
 
 	let mut input = Vec::new();
-	input.extend(prepare_extrinsics_input(backend, changes, extrinsic_changes)?);
+	input.extend(prepare_extrinsics_input(
+		backend,
+		block,
+		changes)?);
 	input.extend(prepare_digest_input::<_, H, C>(
-		extrinsic_changes.block,
-		&extrinsic_changes.changes_trie_config,
-		storage,
-	)?);
+		block,
+		config,
+		storage)?);
 
 	Ok(Some(input))
 }
@@ -70,8 +68,8 @@ pub fn prepare_input<'a, B, S, H, C>(
 /// Prepare ExtrinsicIndex input pairs.
 fn prepare_extrinsics_input<B, H, C>(
 	backend: &B,
+	block: u64,
 	changes: &OverlayedChanges,
-	extrinsic_changes: &ExtrinsicChanges,
 ) -> Result<impl Iterator<Item=InputPair>, String>
 	where
 		B: Backend<H, C>,
@@ -79,7 +77,12 @@ fn prepare_extrinsics_input<B, H, C>(
 		C: NodeCodec<H>,
 {
 	let mut extrinsic_map = BTreeMap::<Vec<u8>, BTreeSet<u32>>::new();
-	for (key, extrinsics) in extrinsic_changes.prospective.iter().chain(extrinsic_changes.committed.iter()) {
+	for (key, (_, extrinsics)) in changes.prospective.iter().chain(changes.committed.iter()) {
+		let extrinsics = match extrinsics {
+			Some(extrinsics) => extrinsics,
+			None => continue,
+		};
+
 		// ignore values that have null value at the end of operation AND are not in storage
 		// at the beginning of operation
 		if !changes.storage(key).map(|v| v.is_some()).unwrap_or_default() {
@@ -89,10 +92,9 @@ fn prepare_extrinsics_input<B, H, C>(
 		}
 
 		extrinsic_map.entry(key.clone()).or_default()
-			.extend(extrinsics);
+			.extend(extrinsics.iter().cloned());
 	}
 
-	let block = extrinsic_changes.block;
 	Ok(extrinsic_map.into_iter()
 		.map(move |(key, extrinsics)| InputPair::ExtrinsicIndex(ExtrinsicIndex {
 			block,
@@ -193,26 +195,16 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			prospective: vec![
-				(vec![100], Some(vec![200])),
-				(vec![103], None),
+				(vec![100], (Some(vec![200]), Some(vec![0, 2].into_iter().collect()))),
+				(vec![103], (None, Some(vec![0, 1].into_iter().collect()))),
 			].into_iter().collect(),
 			committed: vec![
-				(vec![100], Some(vec![202])),
-				(vec![101], Some(vec![203])),
+				(vec![100], (Some(vec![202]), Some(vec![3].into_iter().collect()))),
+				(vec![101], (Some(vec![203]), Some(vec![1].into_iter().collect()))),
 			].into_iter().collect(),
-			extrinsic_changes: Some(ExtrinsicChanges {
-				changes_trie_config: Configuration { digest_interval: 4, digest_levels: 2 },
-				block,
-				extrinsic_index: 0,
-				prospective: vec![
-					(vec![100], vec![0, 2].into_iter().collect()),
-					(vec![103], vec![0, 1].into_iter().collect()),
-				].into_iter().collect(),
-				committed: vec![
-					(vec![100], vec![3].into_iter().collect()),
-					(vec![101], vec![1].into_iter().collect()),
-				].into_iter().collect(),
-			}),
+			changes_trie_config: Some(Configuration { digest_interval: 4, digest_levels: 2 }),
+			block: Some(block),
+			extrinsic: Some(3),
 		};
 
 		(backend, storage, changes)
@@ -267,13 +259,7 @@ mod test {
 		let (backend, storage, mut changes) = prepare_for_build(4);
 
 		// 110: missing from backend, set to None in overlay
-		changes.prospective.insert(vec![110], None);
-		changes.extrinsic_changes.as_mut().unwrap().prospective.insert(vec![110],
-			vec![1].into_iter().collect());
-
-		// 111: missing from backend, not in overlay
-		changes.extrinsic_changes.as_mut().unwrap().prospective.insert(vec![111],
-			vec![2].into_iter().collect());
+		changes.prospective.insert(vec![110], (None, Some(vec![1].into_iter().collect())));
 
 		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![

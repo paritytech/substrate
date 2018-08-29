@@ -148,6 +148,7 @@ impl<T: Trait> Module<T> {
 				number.as_(),
 				digest_interval.as_(),
 				digest_levels as u8);
+			runtime_io::bind_to_extrinsic(0u32);
 		}
 	}
 
@@ -236,14 +237,14 @@ impl<T: Trait> Module<T> {
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
 	/// ensure `derive_extrinsics` is also called before block-building is completed.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
-		let extrinsic_index = <ExtrinsicIndex<T>>::get().unwrap_or_default();
-		runtime_io::bind_to_extrinsic(extrinsic_index);
-		<ExtrinsicData<T>>::insert(extrinsic_index, encoded_xt);
+		<ExtrinsicData<T>>::insert(<ExtrinsicIndex<T>>::get().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
 	pub fn note_applied_extrinsic() {
-		<ExtrinsicIndex<T>>::put(<ExtrinsicIndex<T>>::get().unwrap_or_default() + 1u32);
+		let extrinsic_index = <ExtrinsicIndex<T>>::get().unwrap_or_default();
+		runtime_io::bind_to_extrinsic(extrinsic_index + 1u32);
+		<ExtrinsicIndex<T>>::put(extrinsic_index + 1u32);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
