@@ -238,7 +238,7 @@ impl Hash for BlakeTwo256 {
 		runtime_io::blake2_256(s).into()
 	}
 	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output {
-		runtime_io::enumerated_trie_root(items).into()
+		runtime_io::keccak_rlp_enumerated_trie_root(items).into()
 	}
 	fn trie_root<
 		I: IntoIterator<Item = (A, B)>,

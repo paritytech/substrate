@@ -46,9 +46,10 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 		.expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
 
-/// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
-/// the number of bytes that the key in storage was beyond the offset or None if the storage entry
-/// doesn't exist at all.
+/// Get `key` from storage, placing the value into `value_out` (as much of it as possible) and return
+/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
+/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
+/// number of bytes is not equal to the number of bytes written to the `value_out`.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 	ext::with(|ext| ext.storage(key).map(|value| {
 		let value = &value[value_offset..];
@@ -58,14 +59,14 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
 
-/// Set the storage of some particular key to Some value.
+/// Set the storage of a key to some value.
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	ext::with(|ext|
 		ext.set_storage(key.to_vec(), value.to_vec())
 	);
 }
 
-/// Clear the storage of some particular key.
+/// Clear the storage of a key.
 pub fn clear_storage(key: &[u8]) {
 	ext::with(|ext|
 		ext.clear_storage(key)
@@ -79,7 +80,7 @@ pub fn exists_storage(key: &[u8]) -> bool {
 	).unwrap_or(false)
 }
 
-/// Clear the storage entries key of which starts with the given prefix.
+/// Clear the storage entries with a key that starts with the given prefix.
 pub fn clear_prefix(prefix: &[u8]) {
 	ext::with(|ext|
 		ext.clear_prefix(prefix)
@@ -93,7 +94,7 @@ pub fn chain_id() -> u64 {
 	).unwrap_or(0)
 }
 
-/// "Commit" all existing operations and get the resultant storage root.
+/// "Commit" all existing operations and compute the resultant storage root.
 pub fn storage_root() -> H256 {
 	ext::with(|ext|
 		ext.storage_root()
@@ -101,7 +102,7 @@ pub fn storage_root() -> H256 {
 }
 
 /// A trie root formed from the enumerated items.
-pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
+pub fn keccak_rlp_enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
 	triehash::ordered_trie_root::<KeccakHasher, _, _>(serialised_values.iter().map(|s| s.to_vec())).0
 }
 

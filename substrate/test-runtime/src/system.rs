@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, enumerated_trie_root};
+use runtime_io::{storage_root, keccak_rlp_enumerated_trie_root};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
@@ -68,7 +68,7 @@ pub fn execute_block(block: Block) {
 	// check transaction trie root represents the transactions.
 	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let txs_root = enumerated_trie_root(&txs).into();
+	let txs_root = keccak_rlp_enumerated_trie_root(&txs).into();
 	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
 	assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
 
@@ -95,7 +95,7 @@ pub fn finalise_block() -> Header {
 	let extrinsic_index = ExtrinsicIndex::take();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let extrinsics_root = enumerated_trie_root(&txs).into();
+	let extrinsics_root = keccak_rlp_enumerated_trie_root(&txs).into();
 
 	let number = <Number>::take();
 	let parent_hash = <ParentHash>::take();

@@ -43,6 +43,7 @@ macro_rules! impl_serde {
 	}
 }
 
+/// 256-bit unsigned int
 construct_uint!(U256, 4);
 impl_serde!(U256, 4);
 
