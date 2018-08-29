@@ -677,7 +677,7 @@ impl NetworkState {
 	}
 
 	/// Disables a peer for `PEER_DISABLE_DURATION`. This adds the peer to the
-	/// list of disabled peers, and  drops any existing connections if
+	/// list of disabled peers, and drops any existing connections if
 	/// necessary (ie. drops the sender that was stored in the `UniqueConnec`
 	/// of `custom_proto`).
 	pub fn ban_peer(&self, who: NodeIndex, reason: &str) {

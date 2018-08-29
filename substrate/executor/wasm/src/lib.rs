@@ -1,5 +1,5 @@
 #![no_std]
-#![feature(panic_implementation)]
+#![feature(panic_handler)]
 #![cfg_attr(feature = "strict", deny(warnings))]
 
 #![feature(alloc)]
