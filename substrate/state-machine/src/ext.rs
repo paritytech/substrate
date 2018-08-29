@@ -155,7 +155,7 @@ where
 	}
 
 	fn storage_root(&mut self) -> H::Out {
-		if let Some((_, ref root)) =  self.transaction {
+		if let Some((_, ref root)) = self.transaction {
 			return root.clone();
 		}
 

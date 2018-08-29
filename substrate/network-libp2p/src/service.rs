@@ -864,7 +864,7 @@ fn handle_custom_connection(
 /// nodes and only accept incoming connections.
 fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 	swarm_controller: SwarmController<St>) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -931,7 +931,7 @@ fn perform_kademlia_query<T, To, St, C>(
 	transport: T,
 	swarm_controller: SwarmController<St>
 ) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -980,7 +980,7 @@ fn connect_to_nodes<T, To, St, C>(
 	base_transport: T,
 	swarm_controller: &SwarmController<St>
 )
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -1025,7 +1025,7 @@ fn connect_with_query_peer_id<T, To, St, C>(
 	addr: Multiaddr,
 	swarm_controller: &SwarmController<St>
 )
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -1087,7 +1087,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 	expected_peer_id: PeerstorePeerId,
 	swarm_controller: &SwarmController<St>
 )
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -1177,7 +1177,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
 	who: PeerstorePeerId, transport: T, swarm_controller: SwarmController<St>)
 	-> impl Future<Item = KadConnecController, Error = IoError>
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,

@@ -56,7 +56,7 @@ impl ChainApi for TestApi {
 	fn verify_transaction(&self, _at: &BlockId<Block>, uxt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error> {
 		Ok(Verified {
 			sender: uxt.transfer.from[31] as u64,
-			hash:  uxt.transfer.nonce,
+			hash: uxt.transfer.nonce,
 		}) 
 	}
 

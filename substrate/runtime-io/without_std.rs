@@ -27,7 +27,7 @@ use core::intrinsics;
 use rstd::vec::Vec;
 pub use rstd::{mem, slice};
 
-#[panic_implementation]
+#[panic_handler]
 #[no_mangle]
 pub fn panic(info: &::core::panic::PanicInfo) -> ! {
 	unsafe {
