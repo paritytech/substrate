@@ -296,7 +296,7 @@ impl<T: Trait> Module<T> {
 		if valid {
 			// This only fails if `who` doesn't exist, which it clearly must do since its the aux.
 			// Still, it's no more harmful to propagate any error at this point.
-			<balances::Module<T>>::transfer_reserved(&who, aux.ref_into(), Self::voting_bond())?;
+			<balances::Module<T>>::repatriate_reserved(&who, aux.ref_into(), Self::voting_bond())?;
 		} else {
 			<balances::Module<T>>::slash_reserved(aux.ref_into(), Self::voting_bond());
 		}
@@ -469,7 +469,7 @@ impl<T: Trait> Module<T> {
 			<NextFinalise<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
 
 			let voters = Self::voters();
-			let votes = voters.iter().map(<balances::Module<T>>::voting_balance).collect::<Vec<_>>();
+			let votes = voters.iter().map(<balances::Module<T>>::total_balance).collect::<Vec<_>>();
 			<SnapshotedStakes<T>>::put(votes);
 
 			// initialise leaderboard.
@@ -1027,7 +1027,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
-			assert_eq!(Balances::voting_balance(&4), 38);
+			assert_eq!(Balances::total_balance(&4), 38);
 		});
 	}
 
@@ -1060,8 +1060,8 @@ mod tests {
 
 			assert_eq!(Council::voters(), vec![5]);
 			assert_eq!(Council::approvals_of(2).len(), 0);
-			assert_eq!(Balances::voting_balance(&2), 17);
-			assert_eq!(Balances::voting_balance(&5), 53);
+			assert_eq!(Balances::total_balance(&2), 17);
+			assert_eq!(Balances::total_balance(&5), 53);
 		});
 	}
 
@@ -1119,8 +1119,8 @@ mod tests {
 
 			assert_eq!(Council::voters(), vec![5]);
 			assert_eq!(Council::approvals_of(2).len(), 0);
-			assert_eq!(Balances::voting_balance(&2), 17);
-			assert_eq!(Balances::voting_balance(&5), 53);
+			assert_eq!(Balances::total_balance(&2), 17);
+			assert_eq!(Balances::total_balance(&5), 53);
 		});
 	}
 
@@ -1220,7 +1220,7 @@ mod tests {
 
 			assert_eq!(Council::voters(), vec![2, 3, 5]);
 			assert_eq!(Council::approvals_of(4).len(), 0);
-			assert_eq!(Balances::voting_balance(&4), 37);
+			assert_eq!(Balances::total_balance(&4), 37);
 		});
 	}
 
@@ -1358,7 +1358,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
-			assert_eq!(Balances::voting_balance(&4), 40);
+			assert_eq!(Balances::total_balance(&4), 40);
 
 			assert_ok!(Council::submit_candidacy(&2, 0));
 			assert_ok!(Council::submit_candidacy(&5, 1));
@@ -1369,7 +1369,7 @@ mod tests {
 			System::set_block_number(6);
 			assert_err!(Council::present_winner(&4, 2.into(), 80, 0), "incorrect total");
 
-			assert_eq!(Balances::voting_balance(&4), 38);
+			assert_eq!(Balances::total_balance(&4), 38);
 		});
 	}
 

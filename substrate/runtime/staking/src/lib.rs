@@ -48,9 +48,8 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
-#[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
-use runtime_support::{StorageValue, StorageMap};
+use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, Executable,
@@ -72,20 +71,12 @@ pub type Event<T> = RawEvent<
 	<T as system::Trait>::AccountId
 >;
 
-#[cfg(test)]
-#[derive(Debug, PartialEq, Clone)]
-pub enum LockStatus<BlockNumber: Debug + PartialEq + Clone> {
-	Liquid,
-	LockedUntil(BlockNumber),
-	Staked,
-}
-
-#[cfg(not(test))]
 #[derive(PartialEq, Clone)]
-pub enum LockStatus<BlockNumber: PartialEq + Clone> {
+#[cfg_attr(test, derive(Debug))]
+pub enum LockStatus<BlockNumber: Parameter> {
 	Liquid,
 	LockedUntil(BlockNumber),
-	Staked,
+	Bonded,
 }
 
 /// Preference of what happens on a slash event.
@@ -166,8 +157,7 @@ decl_storage! {
 		pub EarlyEraSlash get(early_era_slash): required T::Balance;
 		// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace): default u32;
-		// The length of the bonding duration in eras.
-		// TODO gav: switch to blocks or time.
+		// The length of the bonding duration in blocks.
 		pub BondingDuration get(bonding_duration): required T::BlockNumber;
 
 		// The current era index.
@@ -216,21 +206,21 @@ impl<T: Trait> Module<T> {
 	/// Balance of a (potential) validator that includes all nominators.
 	pub fn nomination_balance(who: &T::AccountId) -> T::Balance {
 		Self::nominators_for(who).iter()
-			.map(<balances::Module<T>>::voting_balance)
+			.map(<balances::Module<T>>::total_balance)
 			.fold(Zero::zero(), |acc, x| acc + x)
 	}
 
 	/// The total balance that can be slashed from an account.
 	pub fn slashable_balance(who: &T::AccountId) -> T::Balance {
 		Self::nominators_for(who).iter()
-			.map(<balances::Module<T>>::voting_balance)
-			.fold(<balances::Module<T>>::voting_balance(who), |acc, x| acc + x)
+			.map(<balances::Module<T>>::total_balance)
+			.fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x)
 	}
 
 	/// The block at which the `who`'s funds become entirely liquid.
 	pub fn unlock_block(who: &T::AccountId) -> LockStatus<T::BlockNumber> {
 		match Self::bondage(who) {
-			i if i == T::BlockNumber::max_value() => LockStatus::Staked,
+			i if i == T::BlockNumber::max_value() => LockStatus::Bonded,
 			i if i <= <system::Module<T>>::block_number() => LockStatus::Liquid,
 			i => LockStatus::LockedUntil(i),
 		}
@@ -308,7 +298,7 @@ impl<T: Trait> Module<T> {
 		<Nominating<T>>::remove(source);
 
 		// update bondage
-		<Bondage<T>>::insert(aux.ref_into(), Self::current_era() + Self::bonding_duration());
+		<Bondage<T>>::insert(aux.ref_into(), <system::Module<T>>::block_number() + Self::bonding_duration());
 		Ok(())
 	}
 
@@ -425,11 +415,11 @@ impl<T: Trait> Module<T> {
 
 		if let Some(rem) = <balances::Module<T>>::slash(v, slash) {
 			let noms = Self::current_nominators_for(v);
-			let total = noms.iter().map(<balances::Module<T>>::voting_balance).fold(T::Balance::zero(), |acc, x| acc + x);
+			let total = noms.iter().map(<balances::Module<T>>::total_balance).fold(T::Balance::zero(), |acc, x| acc + x);
 			if !total.is_zero() {
 				let safe_mul_rational = |b| b * rem / total;// TODO: avoid overflow
 				for n in noms.iter() {
-					let _ = <balances::Module<T>>::slash(n, safe_mul_rational(<balances::Module<T>>::voting_balance(n)));	// best effort - not much that can be done on fail.
+					let _ = <balances::Module<T>>::slash(n, safe_mul_rational(<balances::Module<T>>::total_balance(n)));	// best effort - not much that can be done on fail.
 				}
 			}
 		}
@@ -439,13 +429,13 @@ impl<T: Trait> Module<T> {
 	/// balance, pro-rata.
 	fn reward_validator(who: &T::AccountId, reward: T::Balance) {
 		let noms = Self::current_nominators_for(who);
-		let total = noms.iter().map(<balances::Module<T>>::voting_balance).fold(<balances::Module<T>>::voting_balance(who), |acc, x| acc + x);
+		let total = noms.iter().map(<balances::Module<T>>::total_balance).fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x);
 		if !total.is_zero() {
 			let safe_mul_rational = |b| b * reward / total;// TODO: avoid overflow
 			for n in noms.iter() {
-				let _ = <balances::Module<T>>::reward(n, safe_mul_rational(<balances::Module<T>>::voting_balance(n)));
+				let _ = <balances::Module<T>>::reward(n, safe_mul_rational(<balances::Module<T>>::total_balance(n)));
 			}
-			let _ = <balances::Module<T>>::reward(who, safe_mul_rational(<balances::Module<T>>::voting_balance(who)));
+			let _ = <balances::Module<T>>::reward(who, safe_mul_rational(<balances::Module<T>>::total_balance(who)));
 		}
 	}
 
@@ -460,7 +450,7 @@ impl<T: Trait> Module<T> {
 		<Intentions<T>>::put(intentions);
 		<SlashPreferenceOf<T>>::remove(who);
 		<SlashCount<T>>::remove(who);
-		<Bondage<T>>::insert(who, Self::current_era() + Self::bonding_duration());
+		<Bondage<T>>::insert(who, <system::Module<T>>::block_number() + Self::bonding_duration());
 		Ok(())
 	}
 

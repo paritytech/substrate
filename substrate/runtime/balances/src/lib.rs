@@ -78,14 +78,6 @@ pub type Event<T> = RawEvent<
 	<T as Trait>::AccountIndex
 >;
 
-#[derive(PartialEq, Clone)]
-#[cfg_attr(test, derive(Debug))]
-pub enum LockStatus<BlockNumber: Parameter> {
-	Liquid,
-	LockedUntil(BlockNumber),
-	Bonded,
-}
-
 /// The account was the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
 	/// The account was the given id was killed.
@@ -126,7 +118,6 @@ pub trait Trait: system::Trait {
 	/// has been reduced to zero.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
-	// TODO gav: should ensure staking calls <Bondage<T>>::remove(who); on this.
 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
 
 	/// A function that returns true iff a given account can transfer its funds to another account.
@@ -167,8 +158,7 @@ impl<A, I> From<RawEvent<A, I>> for () {
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
 		// The total amount of stake on the system.
-		// TODO gav: rename to TotalIssuance
-		pub TotalStake get(total_stake): required T::Balance;
+		pub TotalIssuance get(total_stake): required T::Balance;
 		// The minimum amount allowed to keep an account open.
 		pub ExistentialDeposit get(existential_deposit): required T::Balance;
 		// The amount credited to a destination's account whose index was reclaimed.
@@ -242,8 +232,7 @@ impl<T: Trait> Module<T> {
 	// PUBLIC IMMUTABLES
 
 	/// The combined balance of `who`.
-	// TODO gav: rename to total_balance
-	pub fn voting_balance(who: &T::AccountId) -> T::Balance {
+	pub fn total_balance(who: &T::AccountId) -> T::Balance {
 		Self::free_balance(who) + Self::reserved_balance(who)
 	}
 
@@ -276,7 +265,7 @@ impl<T: Trait> Module<T> {
 		let enum_set_size = Self::enum_set_size();
 		let try_set = Self::enum_set(try_index / enum_set_size);
 		let i = (try_index % enum_set_size).as_();
-		i < try_set.len() && Self::voting_balance(&try_set[i]).is_zero()
+		i < try_set.len() && Self::total_balance(&try_set[i]).is_zero()
 	}
 
 	/// Lookup an address to get an Id, if there's one there.
@@ -368,7 +357,7 @@ impl<T: Trait> Module<T> {
 	/// Returns if the account was successfully updated or update has led to killing of the account.
 	pub fn set_free_balance(who: &T::AccountId, balance: T::Balance) -> UpdateBalanceOutcome {
 		// Commented out for no - but consider it instructive.
-		// assert!(!Self::voting_balance(who).is_zero());
+		// assert!(!Self::total_balance(who).is_zero());
 		if balance < Self::existential_deposit() {
 			<FreeBalance<T>>::insert(who, balance);
 			Self::on_free_too_low(who);
@@ -440,7 +429,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// If `who` doesn't exist, nothing is done and an Err returned.
 	pub fn reward(who: &T::AccountId, value: T::Balance) -> Result {
-		if Self::voting_balance(who).is_zero() {
+		if Self::total_balance(who).is_zero() {
 			return Err("beneficiary account must pre-exist");
 		}
 		Self::set_free_balance(who, Self::free_balance(who) + value);
@@ -504,13 +493,12 @@ impl<T: Trait> Module<T> {
 	///
 	/// As much funds up to `value` will be moved as possible. If this is less than `value`, then
 	/// `Ok(Some(remaining))` will be returned. Full completion is given by `Ok(None)`.
-	// TODO gav: rename to repatriate_reserved.
-	pub fn transfer_reserved(
+	pub fn repatriate_reserved(
 		slashed: &T::AccountId,
 		beneficiary: &T::AccountId,
 		value: T::Balance
 	) -> result::Result<Option<T::Balance>, &'static str> {
-		if Self::voting_balance(beneficiary).is_zero() {
+		if Self::total_balance(beneficiary).is_zero() {
 			return Err("beneficiary account must pre-exist");
 		}
 		let b = Self::reserved_balance(slashed);
@@ -557,7 +545,7 @@ impl<T: Trait> Module<T> {
 				let mut try_set = Self::enum_set(set_index);
 				let item_index = (try_index % enum_set_size).as_();
 				if item_index < try_set.len() {
-					if Self::voting_balance(&try_set[item_index]).is_zero() {
+					if Self::total_balance(&try_set[item_index]).is_zero() {
 						// yup - this index refers to a dead account. can be reused.
 						try_set[item_index] = who.clone();
 						<EnumSet<T>>::insert(set_index, try_set);
@@ -629,16 +617,16 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	/// Increase TotalStake by Value.
+	/// Increase TotalIssuance by Value.
 	pub fn increase_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_stake().checked_add(&value) {
-			<TotalStake<T>>::put(v);
+			<TotalIssuance<T>>::put(v);
 		}
 	}
-	/// Decrease TotalStake by Value.
+	/// Decrease TotalIssuance by Value.
 	pub fn decrease_total_stake_by(value: T::Balance) {
 		if let Some(v) = <Module<T>>::total_stake().checked_sub(&value) {
-			<TotalStake<T>>::put(v);
+			<TotalIssuance<T>>::put(v);
 		}
 	}
 }

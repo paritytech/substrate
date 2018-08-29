@@ -105,7 +105,7 @@ mod tests {
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalStake<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -125,7 +125,7 @@ mod tests {
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalStake<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -145,7 +145,7 @@ mod tests {
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalStake<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -160,8 +160,8 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::voting_balance(&alice()), 42);
-			assert_eq!(Balances::voting_balance(&bob()), 69);
+			assert_eq!(Balances::total_balance(&alice()), 42);
+			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 	}
 
@@ -169,7 +169,7 @@ mod tests {
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalStake<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -184,8 +184,8 @@ mod tests {
 		assert!(r.is_ok());
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::voting_balance(&alice()), 42);
-			assert_eq!(Balances::voting_balance(&bob()), 69);
+			assert_eq!(Balances::total_balance(&alice()), 42);
+			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 	}
 
@@ -315,8 +315,8 @@ mod tests {
 		executor().call(&mut t, COMPACT_CODE, "execute_block", &block1().0, true).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::voting_balance(&alice()), 41);
-			assert_eq!(Balances::voting_balance(&bob()), 69);
+			assert_eq!(Balances::total_balance(&alice()), 41);
+			assert_eq!(Balances::total_balance(&bob()), 69);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
@@ -328,8 +328,8 @@ mod tests {
 		executor().call(&mut t, COMPACT_CODE, "execute_block", &block2().0, true).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::voting_balance(&alice()), 30);
-			assert_eq!(Balances::voting_balance(&bob()), 78);
+			assert_eq!(Balances::total_balance(&alice()), 30);
+			assert_eq!(Balances::total_balance(&bob()), 78);
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::Finalization,
@@ -350,15 +350,15 @@ mod tests {
 		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block1().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::voting_balance(&alice()), 41);
-			assert_eq!(Balances::voting_balance(&bob()), 69);
+			assert_eq!(Balances::total_balance(&alice()), 41);
+			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 
 		WasmExecutor::new(8).call(&mut t, COMPACT_CODE, "execute_block", &block2().0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::voting_balance(&alice()), 30);
-			assert_eq!(Balances::voting_balance(&bob()), 78);
+			assert_eq!(Balances::total_balance(&alice()), 30);
+			assert_eq!(Balances::total_balance(&bob()), 78);
 		});
 	}
 
@@ -390,7 +390,7 @@ mod tests {
 	fn panic_execution_gives_error() {
 		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalStake<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -411,7 +411,7 @@ mod tests {
 	fn successful_execution_gives_ok() {
 		let mut t: TestExternalities<KeccakHasher> = map![
 			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalStake<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
@@ -428,8 +428,8 @@ mod tests {
 		assert_eq!(r, Ok(ApplyOutcome::Success));
 
 		runtime_io::with_externalities(&mut t, || {
-			assert_eq!(Balances::voting_balance(&alice()), 42);
-			assert_eq!(Balances::voting_balance(&bob()), 69);
+			assert_eq!(Balances::total_balance(&alice()), 42);
+			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
 	}
 }

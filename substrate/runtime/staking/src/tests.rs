@@ -172,26 +172,26 @@ fn rewards_should_work() {
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 0);
-		assert_eq!(Balances::voting_balance(&10), 1);
+		assert_eq!(Balances::total_balance(&10), 1);
 
 		System::set_block_number(3);
 		Timestamp::set_timestamp(15);	// on time.
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
-		assert_eq!(Balances::voting_balance(&10), 11);
+		assert_eq!(Balances::total_balance(&10), 11);
 		System::set_block_number(6);
 		Timestamp::set_timestamp(31);	// a little late
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
-		assert_eq!(Balances::voting_balance(&10), 20);	// less reward
+		assert_eq!(Balances::total_balance(&10), 20);	// less reward
 		System::set_block_number(9);
 		Timestamp::set_timestamp(50);	// very late
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
-		assert_eq!(Balances::voting_balance(&10), 27);	// much less reward
+		assert_eq!(Balances::total_balance(&10), 27);	// much less reward
 	});
 }
 
@@ -203,24 +203,24 @@ fn slashing_should_work() {
 		assert_eq!(Staking::last_era_length_change(), 0);
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 0);
-		assert_eq!(Balances::voting_balance(&10), 1);
+		assert_eq!(Balances::total_balance(&10), 1);
 
 		System::set_block_number(3);
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
-		assert_eq!(Balances::voting_balance(&10), 11);
+		assert_eq!(Balances::total_balance(&10), 11);
 
 		System::set_block_number(6);
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
-		assert_eq!(Balances::voting_balance(&10), 21);
+		assert_eq!(Balances::total_balance(&10), 21);
 
 		System::set_block_number(7);
 		::system::ExtrinsicIndex::<Test>::put(1);
 		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
-		assert_eq!(Balances::voting_balance(&10), 1);
+		assert_eq!(Balances::total_balance(&10), 1);
 	});
 }
 
@@ -301,20 +301,20 @@ fn nominating_and_rewards_should_work() {
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
-		assert_eq!(Balances::voting_balance(&1), 10);
-		assert_eq!(Balances::voting_balance(&2), 20);
-		assert_eq!(Balances::voting_balance(&3), 30);
-		assert_eq!(Balances::voting_balance(&4), 40);
+		assert_eq!(Balances::total_balance(&1), 10);
+		assert_eq!(Balances::total_balance(&2), 20);
+		assert_eq!(Balances::total_balance(&3), 30);
+		assert_eq!(Balances::total_balance(&4), 40);
 
 		System::set_block_number(2);
 		assert_ok!(Staking::unnominate(&4, 0));
 		Session::check_rotate_session();
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::validators(), vec![3, 2]);
-		assert_eq!(Balances::voting_balance(&1), 12);
-		assert_eq!(Balances::voting_balance(&2), 20);
-		assert_eq!(Balances::voting_balance(&3), 40);
-		assert_eq!(Balances::voting_balance(&4), 48);
+		assert_eq!(Balances::total_balance(&1), 12);
+		assert_eq!(Balances::total_balance(&2), 20);
+		assert_eq!(Balances::total_balance(&3), 40);
+		assert_eq!(Balances::total_balance(&4), 48);
 
 		System::set_block_number(3);
 		assert_ok!(Staking::stake(&4));
@@ -322,17 +322,17 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::nominate(&3, 1.into()));
 		Session::check_rotate_session();
 		assert_eq!(Session::validators(), vec![1, 4]);
-		assert_eq!(Balances::voting_balance(&1), 12);
-		assert_eq!(Balances::voting_balance(&2), 30);
-		assert_eq!(Balances::voting_balance(&3), 50);
-		assert_eq!(Balances::voting_balance(&4), 48);
+		assert_eq!(Balances::total_balance(&1), 12);
+		assert_eq!(Balances::total_balance(&2), 30);
+		assert_eq!(Balances::total_balance(&3), 50);
+		assert_eq!(Balances::total_balance(&4), 48);
 
 		System::set_block_number(4);
 		Session::check_rotate_session();
-		assert_eq!(Balances::voting_balance(&1), 13);
-		assert_eq!(Balances::voting_balance(&2), 30);
-		assert_eq!(Balances::voting_balance(&3), 58);
-		assert_eq!(Balances::voting_balance(&4), 58);
+		assert_eq!(Balances::total_balance(&1), 13);
+		assert_eq!(Balances::total_balance(&2), 30);
+		assert_eq!(Balances::total_balance(&3), 58);
+		assert_eq!(Balances::total_balance(&4), 58);
 	});
 }
 
@@ -357,18 +357,18 @@ fn nominating_slashes_should_work() {
 
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 4, 3 + 2
-		assert_eq!(Balances::voting_balance(&1), 10);
-		assert_eq!(Balances::voting_balance(&2), 20);
-		assert_eq!(Balances::voting_balance(&3), 30);
-		assert_eq!(Balances::voting_balance(&4), 40);
+		assert_eq!(Balances::total_balance(&1), 10);
+		assert_eq!(Balances::total_balance(&2), 20);
+		assert_eq!(Balances::total_balance(&3), 30);
+		assert_eq!(Balances::total_balance(&4), 40);
 
 		System::set_block_number(5);
 		::system::ExtrinsicIndex::<Test>::put(1);
 		assert_ok!(Staking::note_missed_proposal(&Default::default(), vec![0, 1]));
-		assert_eq!(Balances::voting_balance(&1), 0);
-		assert_eq!(Balances::voting_balance(&2), 20);
-		assert_eq!(Balances::voting_balance(&3), 10);
-		assert_eq!(Balances::voting_balance(&4), 30);
+		assert_eq!(Balances::total_balance(&1), 0);
+		assert_eq!(Balances::total_balance(&2), 20);
+		assert_eq!(Balances::total_balance(&3), 10);
+		assert_eq!(Balances::total_balance(&4), 30);
 	});
 }
 

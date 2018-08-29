@@ -148,7 +148,7 @@ impl<T: Trait> Module<T> {
 	/// Get the voters for the current proposal.
 	pub fn tally(ref_index: ReferendumIndex) -> (T::Balance, T::Balance) {
 		Self::voters_for(ref_index).iter()
-			.map(|a| (<balances::Module<T>>::voting_balance(a), Self::vote_of((ref_index, a.clone())).unwrap_or(false)/*defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed*/))
+			.map(|a| (<balances::Module<T>>::total_balance(a), Self::vote_of((ref_index, a.clone())).unwrap_or(false)/*defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed*/))
 			.map(|(bal, vote)| if vote { (bal, Zero::zero()) } else { (Zero::zero(), bal) })
 			.fold((Zero::zero(), Zero::zero()), |(a, b), (c, d)| (a + c, b + d))
 	}
@@ -186,7 +186,7 @@ impl<T: Trait> Module<T> {
 	/// false would be a vote to keep the status quo..
 	fn vote(aux: &T::PublicAux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-		ensure!(!<balances::Module<T>>::voting_balance(aux.ref_into()).is_zero(),
+		ensure!(!<balances::Module<T>>::total_balance(aux.ref_into()).is_zero(),
 			"transactor must have balance to signal approval.");
 		if !<VoteOf<T>>::exists(&(ref_index, aux.ref_into().clone())) {
 			let mut voters = Self::voters_for(ref_index);

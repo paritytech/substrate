@@ -321,8 +321,8 @@ mod tests {
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt).unwrap();
-			assert_eq!(<balances::Module<Test>>::voting_balance(&1), 32);
-			assert_eq!(<balances::Module<Test>>::voting_balance(&2), 69);
+			assert_eq!(<balances::Module<Test>>::total_balance(&1), 32);
+			assert_eq!(<balances::Module<Test>>::total_balance(&2), 69);
 		});
 	}
 

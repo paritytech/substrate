@@ -26,7 +26,7 @@ use primitives::traits::{Zero, As};
 use substrate_primitives::KeccakHasher;
 use {runtime_io, primitives};
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, CreationFee, TransferFee,
-	ReclaimRebate, ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalStake,
+	ReclaimRebate, ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalIssuance,
 	FreeBalance};
 
 #[derive(Serialize, Deserialize)]
@@ -102,7 +102,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			Self::hash(<CreationFee<T>>::key()).to_vec() => self.creation_fee.encode(),
 			Self::hash(<ExistentialDeposit<T>>::key()).to_vec() => self.existential_deposit.encode(),
 			Self::hash(<ReclaimRebate<T>>::key()).to_vec() => self.reclaim_rebate.encode(),
-			Self::hash(<TotalStake<T>>::key()).to_vec() => total_stake.encode()
+			Self::hash(<TotalIssuance<T>>::key()).to_vec() => total_stake.encode()
 		];
 
 		let ids: Vec<_> = self.balances.iter().map(|x| x.0.clone()).collect();
