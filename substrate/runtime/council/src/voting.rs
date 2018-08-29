@@ -43,15 +43,15 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
-
-	pub CooloffPeriod get(cooloff_period): b"cov:cooloff" => required T::BlockNumber;
-	pub VotingPeriod get(voting_period): b"cov:period" => required T::BlockNumber;
-	pub Proposals get(proposals): b"cov:prs" => required Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
-	pub ProposalOf get(proposal_of): b"cov:pro" => map [ T::Hash => T::Proposal ];
-	pub ProposalVoters get(proposal_voters): b"cov:voters:" => default map [ T::Hash => Vec<T::AccountId> ];
-	pub CouncilVoteOf get(vote_of): b"cov:vote:" => map [ (T::Hash, T::AccountId) => bool ];
-	pub VetoedProposal get(veto_of): b"cov:veto:" => map [ T::Hash => (T::BlockNumber, Vec<T::AccountId>) ];
+	trait Store for Module<T: Trait> as CouncilVoting {
+		pub CooloffPeriod get(cooloff_period): required T::BlockNumber;
+		pub VotingPeriod get(voting_period): required T::BlockNumber;
+		pub Proposals get(proposals): required Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
+		pub ProposalOf get(proposal_of): map [ T::Hash => T::Proposal ];
+		pub ProposalVoters get(proposal_voters): default map [ T::Hash => Vec<T::AccountId> ];
+		pub CouncilVoteOf get(vote_of): map [ (T::Hash, T::AccountId) => bool ];
+		pub VetoedProposal get(veto_of): map [ T::Hash => (T::BlockNumber, Vec<T::AccountId>) ];
+	}
 }
 
 impl<T: Trait> Module<T> {
