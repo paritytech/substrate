@@ -154,13 +154,23 @@ pub struct JustifiedHeader<Block: BlockT> {
 }
 
 impl<Block: BlockT> JustifiedHeader<Block> {
-	/// Creates new JustifiedHeader with given header, justification and authorities.
-	pub fn new(header: <Block as BlockT>::Header, justification: ::bft::Justification<Block::Hash>, authorities: Vec<AuthorityId>,) -> Self {
-		JustifiedHeader{
+	/// Creates new JustifiedHeader with given header, unchecked justification and authorities.
+	pub fn new(header: <Block as BlockT>::Header,
+			   justification: ::bft::UncheckedJustification<Block::Hash>,
+			   authorities: Vec<AuthorityId>,
+	) -> error::Result<Self> {
+		let parent_hash = header.parent_hash().clone();
+		let just = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
+			.map_err(|_|
+				error::ErrorKind::BadJustification(
+					format!("{}", header.hash())
+				)
+			)?;
+		Ok(JustifiedHeader {
 			header,
-			justification,
+			justification: just,
 			authorities,
-		}
+		})
 	}
 	/// Deconstruct the justified header into parts.
 	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>, Vec<AuthorityId>) {
