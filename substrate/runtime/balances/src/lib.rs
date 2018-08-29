@@ -67,8 +67,6 @@ mod genesis_config;
 #[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
 
-const DEFAULT_MINIMUM_VALIDATOR_COUNT: usize = 4;
-
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: usize = 64;
 
@@ -78,25 +76,16 @@ const RECLAIM_INDEX_MAGIC: usize = 0x69;
 pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 
 pub type Event<T> = RawEvent<
-	<T as Trait>::Balance,
 	<T as system::Trait>::AccountId,
 	<T as Trait>::AccountIndex
 >;
 
-#[cfg(test)]
-#[derive(Debug, PartialEq, Clone)]
-pub enum LockStatus<BlockNumber: Debug + PartialEq + Clone> {
-	Liquid,
-	LockedUntil(BlockNumber),
-	Staked,
-}
-
-#[cfg(not(test))]
 #[derive(PartialEq, Clone)]
-pub enum LockStatus<BlockNumber: PartialEq + Clone> {
+#[cfg_attr(test, derive(Debug))]
+pub enum LockStatus<BlockNumber: Parameter> {
 	Liquid,
 	LockedUntil(BlockNumber),
-	Staked,
+	Bonded,
 }
 
 /// The account was the given id was killed.
@@ -109,26 +98,7 @@ impl<AccountId> OnFreeBalanceZero<AccountId> for () {
 	fn on_free_balance_zero(_who: &AccountId) {}
 }
 
-/// Preference of what happens on a slash event.
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-#[derive(Encode, Decode, Eq, PartialEq, Clone, Copy)]
-pub struct SlashPreference {
-	/// Validator should ensure this many more slashes than is necessary before being unstaked.
-	pub unstake_threshold: u32,
-}
-
-impl Default for SlashPreference {
-	fn default() -> Self {
-		SlashPreference {
-			unstake_threshold: 3,
-		}
-	}
-}
-
 pub trait Trait: system::Trait + session::Trait {
-	/// The allowed extrinsic position for `missed_proposal` inherent.
-	const NOTE_MISSED_PROPOSAL_POSITION: u32;
-
 	/// The balance of an account.
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
@@ -150,47 +120,30 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn transfer(aux, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result = 0;
-		fn stake(aux) -> Result = 1;
-		fn unstake(aux, intentions_index: u32) -> Result = 2;
-		fn nominate(aux, target: RawAddress<T::AccountId, T::AccountIndex>) -> Result = 3;
-		fn unnominate(aux, target_index: u32) -> Result = 4;
-		fn register_slash_preference(aux, intentions_index: u32, p: SlashPreference) -> Result = 5;
-		fn note_missed_proposal(aux, offline_val_indices: Vec<u32>) -> Result = 6;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		fn set_sessions_per_era(new: T::BlockNumber) -> Result = 0;
-		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;
-		fn set_validator_count(new: u32) -> Result = 2;
-		fn force_new_era(apply_rewards: bool) -> Result = 3;
-		fn set_offline_slash_grace(new: u32) -> Result = 4;
-		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result = 5;
+		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result = 0;
 	}
 }
 
 /// An event in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<Balance, AccountId, AccountIndex> {
-	/// All validators have been rewarded by the given balance.
-	Reward(Balance),
-	/// One validator (and their nominators) has been given a offline-warning (they're still within
-	/// their grace). The accrued number of slashes is recorded, too.
-	OfflineWarning(AccountId, u32),
-	/// One validator (and their nominators) has been slashed by the given amount.
-	OfflineSlash(AccountId, Balance),
+pub enum RawEvent<AccountId, AccountIndex> {
 	/// A new account was created.
 	NewAccount(AccountId, AccountIndex, NewAccountOutcome),
 	/// An account was reaped.
 	ReapedAccount(AccountId),
 }
+
 impl<B, A, I> From<RawEvent<B, A, I>> for () {
 	fn from(_: RawEvent<B, A, I>) -> () { () }
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait> as Staking {
+	trait Store for staking::Module<T: Trait> {
 
 		// Separate into Accounts module.
 
@@ -379,7 +332,7 @@ impl<T: Trait> Module<T> {
 	/// The block at which the `who`'s funds become entirely liquid.
 	pub fn unlock_block(who: &T::AccountId) -> LockStatus<T::BlockNumber> {
 		match Self::bondage(who) {
-			i if i == T::BlockNumber::max_value() => LockStatus::Staked,
+			i if i == T::BlockNumber::max_value() => LockStatus::Bonded,
 			i if i <= <system::Module<T>>::block_number() => LockStatus::Liquid,
 			i => LockStatus::LockedUntil(i),
 		}
