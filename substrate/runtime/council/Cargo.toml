@@ -21,11 +21,6 @@ substrate-runtime-balances = { path = "../balances", default_features = false }
 substrate-runtime-democracy = { path = "../democracy", default_features = false }
 substrate-runtime-system = { path = "../system", default_features = false }
 
-[dev-dependencies]
-substrate-runtime-timestamp = { path = "../timestamp" }
-substrate-runtime-session = { path = "../session" }
-substrate-runtime-staking = { path = "../staking" }
-
 [features]
 default = ["std"]
 std = [
@@ -39,9 +34,6 @@ std = [
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-primitives/std",
-	"substrate-runtime-consensus/std",
 	"substrate-runtime-democracy/std",
-	"substrate-runtime-session/std",
-	"substrate-runtime-staking/std",
 	"substrate-runtime-system/std",
 ]

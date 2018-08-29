@@ -22,8 +22,7 @@ use vm;
 use rstd::prelude::*;
 use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
 use runtime_support::{StorageMap, StorageValue};
-use staking;
-use system;
+use balances::{self, IsAccountLiquid};
 
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
@@ -185,9 +184,9 @@ fn transfer<T: Trait>(
 		<Module<T>>::contract_fee()
 	} else {
 		if would_create {
-			<staking::Module<T>>::creation_fee()
+			<balances::Module<T>>::creation_fee()
 		} else {
-			<staking::Module<T>>::transfer_fee()
+			<balances::Module<T>>::transfer_fee()
 		}
 	};
 
@@ -200,10 +199,10 @@ fn transfer<T: Trait>(
 		Some(b) => b,
 		None => return Err("balance too low to send value"),
 	};
-	if would_create && value < <staking::Module<T>>::existential_deposit() {
+	if would_create && value < <balances::Module<T>>::existential_deposit() {
 		return Err("value too low to create account");
 	}
-	if <staking::Module<T>>::bondage(transactor) > <system::Module<T>>::block_number() {
+	if !<T as balances::Trait>::IsAccountLiquid::is_account_liquid(transactor) {
 		return Err("bondage too high to send value");
 	}
 

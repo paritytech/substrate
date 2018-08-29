@@ -34,16 +34,8 @@ extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_balances as balances;
-extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_democracy as democracy;
 extern crate substrate_runtime_system as system;
-
-#[cfg(test)]
-extern crate substrate_runtime_session as session;
-#[cfg(test)]
-extern crate substrate_runtime_staking as staking;
-#[cfg(test)]
-extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, As, AuxLookup};
