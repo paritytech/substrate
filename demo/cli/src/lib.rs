@@ -95,7 +95,7 @@ impl extrinsic_pool::ChainApi for Pool {
 		unimplemented!()
 	}
 
-	fn ready(&self) -> Self::Ready {  }
+	fn ready(&self) -> Self::Ready { }
 
 	fn is_ready(&self, _at: &BlockId, _ready: &mut Self::Ready, _xt: &VerifiedFor<Self>) -> Readiness {
 		unimplemented!()

@@ -137,7 +137,7 @@ mod tests {
 	#[test]
 	fn test_score_1_char_100() {
 		let score = calculate_score("j", "5jolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
-		assert!(score  == 100, format!("Wrong score, we found {}", score));
+		assert!(score == 100, format!("Wrong score, we found {}", score));
 	}
 
 	#[test]
@@ -159,17 +159,17 @@ mod tests {
 
 	#[cfg(feature = "bench")]
 	#[bench]
-    fn bench_paranoiac(b: &mut Bencher) {
-        b.iter(|| {
+	fn bench_paranoiac(b: &mut Bencher) {
+		b.iter(|| {
 			generate_key("polka", 3, true)
 		});
-    }
+	}
 
 	#[cfg(feature = "bench")]
-    #[bench]
-    fn bench_not_paranoiac(b: &mut Bencher) {
-        b.iter(|| {
+	#[bench]
+	fn bench_not_paranoiac(b: &mut Bencher) {
+		b.iter(|| {
 			generate_key("polka", 3, false)
 		});
-    }
+	}
 }

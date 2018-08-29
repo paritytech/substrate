@@ -132,7 +132,7 @@ impl<S, F, Block, H, C> BlockImportOperation<Block, H, C> for ImportOperation<Bl
 where
 	Block: BlockT,
 	F: Fetcher<Block>,
-    S: BlockchainStorage<Block>,
+	S: BlockchainStorage<Block>,
 	H: Hasher,
 	C: NodeCodec<H>,
 {
@@ -175,8 +175,8 @@ impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
 		Block: BlockT,
 		S: BlockchainStorage<Block>,
 		F: Fetcher<Block>,
-        H: Hasher,
-        C: NodeCodec<H>,
+		H: Hasher,
+		C: NodeCodec<H>,
 {
 	type Error = ClientError;
 	type Transaction = ();

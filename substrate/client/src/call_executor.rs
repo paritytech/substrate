@@ -136,7 +136,7 @@ where
 			call_data,
 			native_when_possible(),
 		)?;
-		Ok(CallResult{ return_data, changes })
+		Ok(CallResult { return_data, changes })
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {

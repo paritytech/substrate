@@ -41,7 +41,7 @@ pub type NetworkService<F> = network::Service<
 >;
 
 /// Code executor type for a factory.
-pub type CodeExecutor<F> =  NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
+pub type CodeExecutor<F> = NativeExecutor<<F as ServiceFactory>::RuntimeDispatch>;
 
 /// Full client backend type for a factory.
 pub type FullBackend<F> = client_db::Backend<<F as ServiceFactory>::Block>;
