@@ -229,10 +229,13 @@ fn slashing_should_work() {
 #[test]
 fn staking_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
+
 		assert_eq!(Staking::era_length(), 2);
 		assert_eq!(Staking::validator_count(), 2);
-		assert_eq!(Staking::bonding_duration(), 3);
 		assert_eq!(Session::validators(), vec![10, 20]);
+		
+		assert_ok!(Staking::set_bonding_duration(2));
+		assert_eq!(Staking::bonding_duration(), 2);
 
 		// Block 1: Add three validators. No obvious change.
 		System::set_block_number(1);
@@ -341,7 +344,7 @@ fn nominating_slashes_should_work() {
 	with_externalities(&mut new_test_ext(0, 2, 2, 0, true, 10), || {
 		assert_eq!(Staking::era_length(), 4);
 		assert_eq!(Staking::validator_count(), 2);
-		assert_eq!(Staking::bonding_duration(), 3);
+		assert_eq!(Staking::bonding_duration(), 12);
 		assert_eq!(Session::validators(), vec![10, 20]);
 
 		System::set_block_number(2);

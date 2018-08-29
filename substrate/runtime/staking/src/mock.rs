@@ -104,7 +104,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 		intentions: vec![10, 20],
 		validator_count: 2,
 		minimum_validator_count: 0,
-		bonding_duration: 3,
+		bonding_duration: sessions_per_era * session_length * 3,
 		session_reward: reward,
 		early_era_slash: if monied { 20 } else { 0 },
 		offline_slash_grace: 0,
