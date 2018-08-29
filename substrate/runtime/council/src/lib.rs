@@ -644,9 +644,6 @@ mod tests {
 	impl HasPublicAux for Test {
 		type PublicAux = u64;
 	}
-	impl consensus::Trait for Test {
-		type SessionKey = u64;
-	}
 	impl system::Trait for Test {
 		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type Index = u64;
@@ -672,10 +669,6 @@ mod tests {
 
 	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(consensus::GenesisConfig::<Test>{
-			code: vec![],
-			authorities: vec![],
-		}.build_storage().unwrap());
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			transaction_base_fee: 0,

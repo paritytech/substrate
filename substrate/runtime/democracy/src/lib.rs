@@ -367,16 +367,14 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
+	use primitives::traits::{HasPublicAux, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
-	use session::OnSessionChange;
 
 	impl_outer_dispatch! {
 		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
 		pub enum Proposal {
-			Session = 0,
-			Staking = 1,
-			Democracy = 2,
+			Balances = 0,
+			Democracy = 1,
 		}
 	}
 
@@ -385,9 +383,6 @@ mod tests {
 	pub struct Test;
 	impl HasPublicAux for Test {
 		type PublicAux = u64;
-	}
-	impl consensus::Trait for Test {
-		type SessionKey = u64;
 	}
 	impl system::Trait for Test {
 		type PublicAux = <Self as HasPublicAux>::PublicAux;
@@ -403,22 +398,9 @@ mod tests {
 	impl balances::Trait for Test {
 		type Balance = u64;
 		type AccountIndex = u64;
-		type OnFreeBalanceZero = Staking;
-		type IsAccountLiquid = Staking;
+		type OnFreeBalanceZero = ();
+		type IsAccountLiquid = ();
 		type Event = ();
-	}
-	impl session::Trait for Test {
-		type ConvertAccountIdToSessionKey = Identity;
-		type OnSessionChange = Staking;
-		type Event = ();
-	}
-	impl staking::Trait for Test {
-		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
-		type Event = ();
-	}
-	impl timestamp::Trait for Test {
-		const TIMESTAMP_SET_POSITION: u32 = 0;
-		type Moment = u64;
 	}
 	impl Trait for Test {
 		type Proposal = Proposal;
@@ -426,14 +408,6 @@ mod tests {
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(consensus::GenesisConfig::<Test>{
-			code: vec![],
-			authorities: vec![],
-		}.build_storage().unwrap());
-		t.extend(session::GenesisConfig::<Test>{
-			session_length: 1,		//??? or 2?
-			validators: vec![10, 20],
-		}.build_storage().unwrap());
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			transaction_base_fee: 0,
@@ -443,30 +417,16 @@ mod tests {
 			creation_fee: 0,
 			reclaim_rebate: 0,
 		}.build_storage().unwrap());
-		t.extend(staking::GenesisConfig::<Test>{
-			sessions_per_era: 1,
-			current_era: 0,
-			intentions: vec![],
-			validator_count: 2,
-			minimum_validator_count: 0,
-			bonding_duration: 3,
-			early_era_slash: 0,
-			session_reward: 0,
-			offline_slash_grace: 0,
-		}.build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 1,
 			minimum_deposit: 1,
 		}.build_storage().unwrap());
-		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.into()
 	}
 
 	type System = system::Module<Test>;
 	type Balances = balances::Module<Test>;
-	type Session = session::Module<Test>;
-	type Staking = staking::Module<Test>;
 	type Democracy = Module<Test>;
 
 	#[test]
@@ -476,22 +436,26 @@ mod tests {
 			assert_eq!(Democracy::voting_period(), 1);
 			assert_eq!(Democracy::minimum_deposit(), 1);
 			assert_eq!(Democracy::referendum_count(), 0);
-			assert_eq!(Staking::sessions_per_era(), 1);
+			assert_eq!(Balances::free_balance(&42), 0);
 			assert_eq!(Balances::total_stake(), 210);
 		});
 	}
 
-	fn propose_sessions_per_era(who: u64, value: u64, locked: u64) -> super::Result {
-		Democracy::propose(&who, Box::new(Proposal::Staking(staking::PrivCall::set_sessions_per_era(value))), locked)
+	fn set_balance_proposal(value: u64) -> Proposal {
+		Proposal::Balances(balances::PrivCall::set_balance(balances::address::Address::Id(42), value, 0))
+	}
+
+	fn propose_set_balance(who: u64, value: u64, locked: u64) -> super::Result {
+		Democracy::propose(&who, Box::new(set_balance_proposal(value)), locked)
 	}
 
 	#[test]
 	fn locked_for_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(1, 2, 2));
-			assert_ok!(propose_sessions_per_era(1, 4, 4));
-			assert_ok!(propose_sessions_per_era(1, 3, 3));
+			assert_ok!(propose_set_balance(1, 2, 2));
+			assert_ok!(propose_set_balance(1, 4, 4));
+			assert_ok!(propose_set_balance(1, 3, 3));
 			assert_eq!(Democracy::locked_for(0), Some(2));
 			assert_eq!(Democracy::locked_for(1), Some(4));
 			assert_eq!(Democracy::locked_for(2), Some(3));
@@ -502,7 +466,7 @@ mod tests {
 	fn single_proposal_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(1, 2, 1));
+			assert_ok!(propose_set_balance(1, 2, 1));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
 			System::set_block_number(2);
@@ -515,9 +479,8 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (10, 0));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
 
-			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 
@@ -525,7 +488,7 @@ mod tests {
 	fn deposit_for_proposals_should_be_taken() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(1, 2, 5));
+			assert_ok!(propose_set_balance(1, 2, 5));
 			assert_ok!(Democracy::second(&2, 0));
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
@@ -540,7 +503,7 @@ mod tests {
 	fn deposit_for_proposals_should_be_returned() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(1, 2, 5));
+			assert_ok!(propose_set_balance(1, 2, 5));
 			assert_ok!(Democracy::second(&2, 0));
 			assert_ok!(Democracy::second(&5, 0));
 			assert_ok!(Democracy::second(&5, 0));
@@ -556,7 +519,7 @@ mod tests {
 	fn proposal_with_deposit_below_minimum_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_noop!(propose_sessions_per_era(1, 2, 0), "value too low");
+			assert_noop!(propose_set_balance(1, 2, 0), "value too low");
 		});
 	}
 
@@ -564,7 +527,7 @@ mod tests {
 	fn poor_proposer_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_noop!(propose_sessions_per_era(1, 2, 11), "proposer\'s balance too low");
+			assert_noop!(propose_set_balance(1, 2, 11), "proposer\'s balance too low");
 		});
 	}
 
@@ -572,53 +535,41 @@ mod tests {
 	fn poor_seconder_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(2, 2, 11));
+			assert_ok!(propose_set_balance(2, 2, 11));
 			assert_noop!(Democracy::second(&1, 0), "seconder\'s balance too low");
 		});
-	}
-
-	fn propose_bonding_duration(who: u64, value: u64, locked: u64) -> super::Result {
-		Democracy::propose(&who, Box::new(Proposal::Staking(staking::PrivCall::set_bonding_duration(value))), locked)
 	}
 
 	#[test]
 	fn runners_up_should_come_after() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(0);
-			assert_ok!(propose_bonding_duration(1, 2, 2));
-			assert_ok!(propose_bonding_duration(1, 4, 4));
-			assert_ok!(propose_bonding_duration(1, 3, 3));
+			assert_ok!(propose_set_balance(1, 2, 2));
+			assert_ok!(propose_set_balance(1, 4, 4));
+			assert_ok!(propose_set_balance(1, 3, 3));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
 			System::set_block_number(1);
 			assert_ok!(Democracy::vote(&1, 0, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
-			assert_eq!(Staking::bonding_duration(), 4);
+			assert_eq!(Balances::free_balance(&42), 4);
 
 			System::set_block_number(2);
 			assert_ok!(Democracy::vote(&1, 1, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
-			assert_eq!(Staking::bonding_duration(), 3);
+			assert_eq!(Balances::free_balance(&42), 3);
 
 			System::set_block_number(3);
 			assert_ok!(Democracy::vote(&1, 2, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
-			assert_eq!(Staking::bonding_duration(), 2);
 		});
-	}
-
-	fn sessions_per_era_proposal(value: u64) -> Proposal {
-		Proposal::Staking(staking::PrivCall::set_sessions_per_era(value))
 	}
 
 	#[test]
 	fn simple_passing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
 			assert_ok!(Democracy::vote(&1, r, true));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -626,9 +577,8 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (10, 0));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
 
-			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 
@@ -636,14 +586,13 @@ mod tests {
 	fn cancel_referendum_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
 			assert_ok!(Democracy::vote(&1, r, true));
 			assert_ok!(Democracy::cancel_referendum(r));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
 
-			assert_eq!(Staking::era_length(), 1);
+			assert_eq!(Balances::free_balance(&42), 0);
 		});
 	}
 
@@ -651,7 +600,7 @@ mod tests {
 	fn simple_failing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
 			assert_ok!(Democracy::vote(&1, r, false));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -659,9 +608,8 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (0, 10));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
 
-			assert_eq!(Staking::era_length(), 1);
+			assert_eq!(Balances::free_balance(&42), 0);
 		});
 	}
 
@@ -669,7 +617,7 @@ mod tests {
 	fn controversial_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
 			assert_ok!(Democracy::vote(&1, r, true));
 			assert_ok!(Democracy::vote(&2, r, false));
 			assert_ok!(Democracy::vote(&3, r, false));
@@ -680,9 +628,8 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (110, 100));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
 
-			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 
@@ -690,27 +637,26 @@ mod tests {
 	fn controversial_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
 			assert_ok!(Democracy::vote(&5, r, false));
 			assert_ok!(Democracy::vote(&6, r, true));
 
 			assert_eq!(Democracy::tally(r), (60, 50));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
 
-			assert_eq!(Staking::era_length(), 1);
+			assert_eq!(Balances::free_balance(&42), 0);
 		});
 	}
 
 	#[test]
 	fn passing_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Staking::era_length(), 1);
+			assert_eq!(Balances::free_balance(&42), 0);
 			assert_eq!(Balances::total_stake(), 210);
 
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
 			assert_ok!(Democracy::vote(&4, r, true));
 			assert_ok!(Democracy::vote(&5, r, false));
 			assert_ok!(Democracy::vote(&6, r, true));
@@ -718,9 +664,8 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (100, 50));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(0, true);
 
-			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 }
