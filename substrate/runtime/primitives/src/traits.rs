@@ -245,13 +245,13 @@ impl Hash for BlakeTwo256 {
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>
 	>(input: I) -> Self::Output {
-		runtime_io::trie_root(input).into()
+		runtime_io::keccak_rlp_trie_root(input).into()
 	}
 	fn ordered_trie_root<
 		I: IntoIterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output {
-		runtime_io::ordered_trie_root(input).into()
+		runtime_io::keccak_rlp_ordered_trie_root(input).into()
 	}
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()

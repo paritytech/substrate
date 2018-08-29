@@ -101,13 +101,13 @@ pub fn storage_root() -> H256 {
 	).unwrap_or(H256::new())
 }
 
-/// A trie root formed from the enumerated items.
+/// A Keccak/Rlp flavoured trie root formed from the enumerated items.
 pub fn keccak_rlp_enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
 	triehash::ordered_trie_root::<KeccakHasher, _, _>(serialised_values.iter().map(|s| s.to_vec())).0
 }
 
-/// A trie root formed from the iterated items.
-pub fn trie_root<
+/// A Keccak/Rlp flavoured trie root formed from the iterated items.
+pub fn keccak_rlp_trie_root<
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
@@ -115,8 +115,8 @@ pub fn trie_root<
 	triehash::trie_root::<KeccakHasher, _, _, _>(input).0
 }
 
-/// A trie root formed from the enumerated items.
-pub fn ordered_trie_root<
+/// A Keccak/Rlp flavoured trie root formed from the enumerated items.
+pub fn keccak_rlp_ordered_trie_root<
 	I: IntoIterator<Item = A>,
 	A: AsRef<[u8]>
 >(input: I) -> [u8; 32] {
