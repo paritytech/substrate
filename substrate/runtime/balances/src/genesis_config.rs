@@ -42,40 +42,6 @@ pub struct GenesisConfig<T: Trait> {
 	pub existential_deposit: T::Balance,
 }
 
-impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
-	pub fn simple() -> Self {
-		GenesisConfig {
-			balances: vec![(T::AccountId::from(1), T::Balance::sa(111))],
-			transaction_base_fee: T::Balance::sa(0),
-			transaction_byte_fee: T::Balance::sa(0),
-			transfer_fee: T::Balance::sa(0),
-			creation_fee: T::Balance::sa(0),
-			existential_deposit: T::Balance::sa(0),
-			reclaim_rebate: T::Balance::sa(0),
-		}
-	}
-
-	pub fn extended() -> Self {
-		GenesisConfig {
-			balances: vec![
-				(T::AccountId::from(1), T::Balance::sa(10)),
-				(T::AccountId::from(2), T::Balance::sa(20)),
-				(T::AccountId::from(3), T::Balance::sa(30)),
-				(T::AccountId::from(4), T::Balance::sa(40)),
-				(T::AccountId::from(5), T::Balance::sa(50)),
-				(T::AccountId::from(6), T::Balance::sa(60)),
-				(T::AccountId::from(7), T::Balance::sa(1))
-			],
-			transaction_base_fee: T::Balance::sa(1),
-			transaction_byte_fee: T::Balance::sa(0),
-			transfer_fee: T::Balance::sa(0),
-			creation_fee: T::Balance::sa(0),
-			existential_deposit: T::Balance::sa(0),
-			reclaim_rebate: T::Balance::sa(0),
-		}
-	}
-}
-
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {

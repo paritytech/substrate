@@ -43,36 +43,6 @@ pub struct GenesisConfig<T: Trait> {
 	pub offline_slash_grace: u32,
 }
 
-impl<T: Trait> GenesisConfig<T> where T::AccountId: From<u64> {
-	pub fn simple() -> Self {
-		GenesisConfig {
-			sessions_per_era: T::BlockNumber::sa(2),
-			current_era: T::BlockNumber::sa(0),
-			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
-			validator_count: 3,
-			minimum_validator_count: 1,
-			bonding_duration: T::BlockNumber::sa(0),
-			session_reward: T::Balance::sa(0),
-			early_era_slash: T::Balance::sa(0),
-			offline_slash_grace: 1,
-		}
-	}
-
-	pub fn extended() -> Self {
-		GenesisConfig {
-			sessions_per_era: T::BlockNumber::sa(3),
-			current_era: T::BlockNumber::sa(1),
-			intentions: vec![T::AccountId::from(1), T::AccountId::from(2), T::AccountId::from(3)],
-			validator_count: 3,
-			minimum_validator_count: 1,
-			bonding_duration: T::BlockNumber::sa(0),
-			session_reward: T::Balance::sa(0),
-			early_era_slash: T::Balance::sa(0),
-			offline_slash_grace: 1,
-		}
-	}
-}
-
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {

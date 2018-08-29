@@ -315,14 +315,6 @@ impl<T: Trait> GenesisConfig<T> {
 			minimum_deposit: T::Balance::sa(1),
 		}
 	}
-
-	pub fn extended() -> Self {
-		GenesisConfig {
-			launch_period: T::BlockNumber::sa(1),
-			voting_period: T::BlockNumber::sa(3),
-			minimum_deposit: T::Balance::sa(1),
-		}
-	}
 }
 
 #[cfg(any(feature = "std", test))]
