@@ -22,7 +22,7 @@ use vm;
 use rstd::prelude::*;
 use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
 use runtime_support::{StorageMap, StorageValue};
-use balances::{self, IsAccountLiquid};
+use balances::{self, EnsureAccountLiquid};
 
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
@@ -202,9 +202,7 @@ fn transfer<T: Trait>(
 	if would_create && value < <balances::Module<T>>::existential_deposit() {
 		return Err("value too low to create account");
 	}
-	if !<T as balances::Trait>::IsAccountLiquid::is_account_liquid(transactor) {
-		return Err("cannot transfer illiquid funds");
-	}
+	<T as balances::Trait>::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
 
 	let to_balance = overlay.get_balance(dest);
 	let new_to_balance = match to_balance.checked_add(&value) {

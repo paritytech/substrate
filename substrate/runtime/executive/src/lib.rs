@@ -264,7 +264,7 @@ mod tests {
 		type Balance = u64;
 		type AccountIndex = u64;
 		type OnFreeBalanceZero = staking::Module<Test>;
-		type IsAccountLiquid = staking::Module<Test>;
+		type EnsureAccountLiquid = staking::Module<Test>;
 		type Event = MetaEvent;
 	}
 	impl system::Trait for Test {

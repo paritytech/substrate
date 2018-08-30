@@ -92,13 +92,14 @@ impl<
 }
 
 /// Determinator for whether a given account is able to transfer balance.
-pub trait IsAccountLiquid<AccountId> {
-	/// `true` iff the account is able to transfer funds normally.
-	fn is_account_liquid(who: &AccountId) -> bool;
+pub trait EnsureAccountLiquid<AccountId> {
+	/// Returns `Ok` iff the account is able to transfer funds normally. `Err(...)`
+	/// with the reason why not otherwise.
+	fn ensure_account_liquid(who: &AccountId) -> Result;
 }
 
-impl<AccountId> IsAccountLiquid<AccountId> for () {
-	fn is_account_liquid(_who: &AccountId) -> bool { true }
+impl<AccountId> EnsureAccountLiquid<AccountId> for () {
+	fn ensure_account_liquid(_who: &AccountId) -> Result { Ok(()) }
 }
 
 pub trait Trait: system::Trait {
@@ -114,7 +115,7 @@ pub trait Trait: system::Trait {
 	type OnFreeBalanceZero: OnFreeBalanceZero<Self::AccountId>;
 
 	/// A function that returns true iff a given account can transfer its funds to another account.
-	type IsAccountLiquid: IsAccountLiquid<Self::AccountId>;
+	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId>;
 
 	/// The overarching event type. 
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -238,7 +239,7 @@ impl<T: Trait> Module<T> {
 	/// Same result as `reserve(who, value)` (but without the side-effects) assuming there
 	/// are no balance changes in the meantime.
 	pub fn can_reserve(who: &T::AccountId, value: T::Balance) -> bool {
-		if T::IsAccountLiquid::is_account_liquid(who) {
+		if T::EnsureAccountLiquid::ensure_account_liquid(who).is_ok() {
 			Self::free_balance(who) >= value
 		} else {
 			false
@@ -288,9 +289,7 @@ impl<T: Trait> Module<T> {
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
 		}
-		if !T::IsAccountLiquid::is_account_liquid(transactor) {
-			return Err("cannot transfer illiquid funds");
-		}
+		T::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
 
 		let to_balance = Self::free_balance(&dest);
 		// NOTE: total stake being stored in the same type means that this could never overflow
@@ -439,9 +438,7 @@ impl<T: Trait> Module<T> {
 		if b < value {
 			return Err("not enough free funds")
 		}
-		if !T::IsAccountLiquid::is_account_liquid(who) {
-			return Err("free funds are still bonded")
-		}
+		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
 		Self::set_reserved_balance(who, Self::reserved_balance(who) + value);
 		Self::set_free_balance(who, b - value);
 		Ok(())

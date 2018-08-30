@@ -651,7 +651,7 @@ mod tests {
 		type Balance = u64;
 		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
-		type IsAccountLiquid = ();
+		type EnsureAccountLiquid = ();
 		type Event = ();
 	}
 	impl democracy::Trait for Test {

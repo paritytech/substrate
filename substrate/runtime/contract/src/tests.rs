@@ -47,7 +47,7 @@ impl balances::Trait for Test {
 	type Balance = u64;
 	type AccountIndex = u64;
 	type OnFreeBalanceZero = Contract;
-	type IsAccountLiquid = ();
+	type EnsureAccountLiquid = ();
 	type Event = ();
 }
 impl Trait for Test {

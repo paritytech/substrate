@@ -503,9 +503,13 @@ impl<T: Trait> OnSessionChange<T::Moment> for Module<T> {
 	}
 }
 
-impl<T: Trait> balances::IsAccountLiquid<T::AccountId> for Module<T> {
-	fn is_account_liquid(who: &T::AccountId) -> bool {
-		Self::bondage(who) <= <system::Module<T>>::block_number()
+impl<T: Trait> balances::EnsureAccountLiquid<T::AccountId> for Module<T> {
+	fn ensure_account_liquid(who: &T::AccountId) -> Result {
+		if Self::bondage(who) <= <system::Module<T>>::block_number() {
+			Ok(())
+		} else {
+			Err("cannot transfer illiquid funds")
+		}
 	}
 }
 

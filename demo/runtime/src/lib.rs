@@ -107,7 +107,7 @@ impl balances::Trait for Concrete {
 	type Balance = Balance;
 	type AccountIndex = AccountIndex;
 	type OnFreeBalanceZero = Staking;
-	type IsAccountLiquid = Staking;
+	type EnsureAccountLiquid = Staking;
 	type Event = Event;
 }
 
