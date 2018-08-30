@@ -154,6 +154,24 @@ pub struct JustifiedHeader<Block: BlockT> {
 }
 
 impl<Block: BlockT> JustifiedHeader<Block> {
+	/// Creates new JustifiedHeader with given header, unchecked justification and authorities.
+	pub fn new(header: <Block as BlockT>::Header,
+			   justification: ::bft::UncheckedJustification<Block::Hash>,
+			   authorities: Vec<AuthorityId>,
+	) -> error::Result<Self> {
+		let parent_hash = header.parent_hash().clone();
+		let justification = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
+			.map_err(|_|
+				error::ErrorKind::BadJustification(
+					format!("{}", header.hash())
+				)
+			)?;
+		Ok(JustifiedHeader {
+			header,
+			justification,
+			authorities,
+		})
+	}
 	/// Deconstruct the justified header into parts.
 	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>, Vec<AuthorityId>) {
 		(self.header, self.justification, self.authorities)
@@ -306,7 +324,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	) -> error::Result<JustifiedHeader<Block>> {
 		let parent_hash = header.parent_hash().clone();
 		let authorities = self.authorities_at(&BlockId::Hash(parent_hash))?;
-		let just = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
+		let justification = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
 			.map_err(|_|
 				error::ErrorKind::BadJustification(
 					format!("{}", header.hash())
@@ -314,7 +332,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			)?;
 		Ok(JustifiedHeader {
 			header,
-			justification: just,
+			justification,
 			authorities,
 		})
 	}
