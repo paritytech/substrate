@@ -70,14 +70,8 @@ extern crate substrate_runtime_sandbox as sandbox;
 #[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_runtime_std as rstd;
 
-extern crate substrate_runtime_consensus as consensus;
-extern crate substrate_runtime_staking as staking;
+extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_system as system;
-
-#[cfg(test)]
-extern crate substrate_runtime_timestamp as timestamp;
-#[cfg(test)]
-extern crate substrate_runtime_session as session;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
@@ -112,7 +106,7 @@ use runtime_primitives::traits::{As, RefInto, SimpleArithmetic, Executable};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
 
-pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
+pub trait Trait: balances::Trait {
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 
@@ -188,7 +182,7 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> Module<T> {
 	/// Make a call to a specified account, optionally transferring some balance.
 	fn call(
-		aux: &<T as consensus::Trait>::PublicAux,
+		aux: &<T as system::Trait>::PublicAux,
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_limit: T::Gas,
@@ -233,7 +227,7 @@ impl<T: Trait> Module<T> {
 	///   after the execution is saved as the `code` of the account. That code will be invoked
 	///   upon any message received by this account.
 	fn create(
-		aux: &<T as consensus::Trait>::PublicAux,
+		aux: &<T as system::Trait>::PublicAux,
 		endowment: T::Balance,
 		gas_limit: T::Gas,
 		ctor_code: Vec<u8>,
@@ -269,7 +263,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> staking::OnFreeBalanceZero<T::AccountId> for Module<T> {
+impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());

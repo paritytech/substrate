@@ -19,6 +19,7 @@ members = [
 	"substrate/runtime-sandbox",
 	"substrate/runtime-std",
 	"substrate/runtime-support",
+	"substrate/runtime/balances",
 	"substrate/runtime/consensus",
 	"substrate/runtime/contract",
 	"substrate/runtime/council",

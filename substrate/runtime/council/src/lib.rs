@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Council system: Handles the voting in and maintenance of council members.
 
@@ -33,19 +33,15 @@ extern crate substrate_primitives;
 extern crate substrate_runtime_io as runtime_io;
 #[macro_use] extern crate substrate_runtime_support;
 extern crate substrate_runtime_primitives as primitives;
-extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_democracy as democracy;
-extern crate substrate_runtime_session as session;
-extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
-#[cfg(test)]
-extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, As, AuxLookup};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
-use staking::address::Address;
+use balances::address::Address;
 #[cfg(any(feature = "std", test))]
 use std::collections::HashMap;
 
@@ -245,7 +241,7 @@ impl<T: Trait> Module<T> {
 		if !<LastActiveOf<T>>::exists(aux.ref_into()) {
 			// not yet a voter - deduct bond.
 			// NOTE: this must be the last potential bailer, since it changes state.
-			<staking::Module<T>>::reserve(aux.ref_into(), Self::voting_bond())?;
+			<balances::Module<T>>::reserve(aux.ref_into(), Self::voting_bond())?;
 
 			<Voters<T>>::put({
 				let mut v = Self::voters();
@@ -270,7 +266,7 @@ impl<T: Trait> Module<T> {
 		who_index: u32,
 		assumed_vote_index: VoteIndex
 	) -> Result {
-		let who = <staking::Module<T>>::lookup(who)?;
+		let who = <balances::Module<T>>::lookup(who)?;
 		ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 		ensure!(Self::voter_last_active(aux.ref_into()).is_some(), "reaper must be a voter");
 		let last_active = Self::voter_last_active(&who).ok_or("target for inactivity cleanup must be active")?;
@@ -300,9 +296,9 @@ impl<T: Trait> Module<T> {
 		if valid {
 			// This only fails if `who` doesn't exist, which it clearly must do since its the aux.
 			// Still, it's no more harmful to propagate any error at this point.
-			<staking::Module<T>>::transfer_reserved(&who, aux.ref_into(), Self::voting_bond())?;
+			<balances::Module<T>>::repatriate_reserved(&who, aux.ref_into(), Self::voting_bond())?;
 		} else {
-			<staking::Module<T>>::slash_reserved(aux.ref_into(), Self::voting_bond());
+			<balances::Module<T>>::slash_reserved(aux.ref_into(), Self::voting_bond());
 		}
 		Ok(())
 	}
@@ -317,7 +313,7 @@ impl<T: Trait> Module<T> {
 		ensure!(&voters[index] == aux.ref_into(), "retraction index mismatch");
 
 		Self::remove_voter(aux.ref_into(), index, voters);
-		<staking::Module<T>>::unreserve(aux.ref_into(), Self::voting_bond());
+		<balances::Module<T>>::unreserve(aux.ref_into(), Self::voting_bond());
 		Ok(())
 	}
 
@@ -335,7 +331,7 @@ impl<T: Trait> Module<T> {
 			"invalid candidate slot"
 		);
 		// NOTE: This must be last as it has side-effects.
-		<staking::Module<T>>::reserve(aux.ref_into(), Self::candidacy_bond())
+		<balances::Module<T>>::reserve(aux.ref_into(), Self::candidacy_bond())
 			.map_err(|_| "candidate has not enough funds")?;
 
 		let mut candidates = candidates;
@@ -359,13 +355,13 @@ impl<T: Trait> Module<T> {
 		total: T::Balance,
 		index: VoteIndex
 	) -> Result {
-		let candidate = <staking::Module<T>>::lookup(candidate)?;
+		let candidate = <balances::Module<T>>::lookup(candidate)?;
 		ensure!(index == Self::vote_index(), "index not current");
 		let (_, _, expiring) = Self::next_finalise().ok_or("cannot present outside of presentation period")?;
 		let stakes = Self::snapshoted_stakes();
 		let voters = Self::voters();
 		let bad_presentation_punishment = Self::present_slash_per_voter() * T::Balance::sa(voters.len() as u64);
-		ensure!(<staking::Module<T>>::can_slash(aux.ref_into(), bad_presentation_punishment), "presenter must have sufficient slashable funds");
+		ensure!(<balances::Module<T>>::can_slash(aux.ref_into(), bad_presentation_punishment), "presenter must have sufficient slashable funds");
 
 		let mut leaderboard = Self::leaderboard().ok_or("leaderboard must exist while present phase active")?;
 		ensure!(total > leaderboard[0].0, "candidate not worthy of leaderboard");
@@ -396,7 +392,7 @@ impl<T: Trait> Module<T> {
 		} else {
 			// we can rest assured it will be Ok since we checked `can_slash` earlier; still
 			// better safe than sorry.
-			let _ = <staking::Module<T>>::slash(aux.ref_into(), bad_presentation_punishment);
+			let _ = <balances::Module<T>>::slash(aux.ref_into(), bad_presentation_punishment);
 			Err(if dupe { "duplicate presentation" } else { "incorrect total" })
 		}
 	}
@@ -413,7 +409,7 @@ impl<T: Trait> Module<T> {
 	/// period) to fill the seat if removal means that the desired members are not met.
 	/// This is effective immediately.
 	fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result {
-		let who = <staking::Module<T>>::lookup(who)?;
+		let who = <balances::Module<T>>::lookup(who)?;
 		let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
 			.into_iter()
 			.filter(|i| i.0 != who)
@@ -473,7 +469,7 @@ impl<T: Trait> Module<T> {
 			<NextFinalise<T>>::put((number + Self::presentation_duration(), empty_seats as u32, expiring));
 
 			let voters = Self::voters();
-			let votes = voters.iter().map(<staking::Module<T>>::voting_balance).collect::<Vec<_>>();
+			let votes = voters.iter().map(<balances::Module<T>>::total_balance).collect::<Vec<_>>();
 			<SnapshotedStakes<T>>::put(votes);
 
 			// initialise leaderboard.
@@ -500,7 +496,7 @@ impl<T: Trait> Module<T> {
 			.take_while(|&&(b, _)| !b.is_zero())
 			.take(coming as usize)
 		{
-			<staking::Module<T>>::unreserve(w, candidacy_bond);
+			<balances::Module<T>>::unreserve(w, candidacy_bond);
 		}
 
 		// set the new council.
@@ -622,14 +618,14 @@ mod tests {
 	pub use runtime_io::with_externalities;
 	pub use substrate_primitives::H256;
 	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
+	use primitives::traits::{HasPublicAux, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 	use substrate_primitives::KeccakHasher;
 
 	impl_outer_dispatch! {
 		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
 		pub enum Proposal {
-			Staking = 0,
+			Balances = 0,
 			Democracy = 1,
 		}
 	}
@@ -640,11 +636,8 @@ mod tests {
 	impl HasPublicAux for Test {
 		type PublicAux = u64;
 	}
-	impl consensus::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
-		type SessionKey = u64;
-	}
 	impl system::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -654,54 +647,28 @@ mod tests {
 		type Header = Header;
 		type Event = ();
 	}
-	impl session::Trait for Test {
-		type ConvertAccountIdToSessionKey = Identity;
-		type OnSessionChange = staking::Module<Test>;
-		type Event = ();
-	}
-	impl staking::Trait for Test {
-		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
+	impl balances::Trait for Test {
 		type Balance = u64;
 		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
+		type EnsureAccountLiquid = ();
 		type Event = ();
 	}
 	impl democracy::Trait for Test {
 		type Proposal = Proposal;
 	}
-	impl timestamp::Trait for Test {
-		const TIMESTAMP_SET_POSITION: u32 = 0;
-		type Moment = u64;
-	}
 	impl Trait for Test {}
 
 	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(consensus::GenesisConfig::<Test>{
-			code: vec![],
-			authorities: vec![],
-		}.build_storage().unwrap());
-		t.extend(session::GenesisConfig::<Test>{
-			session_length: 1,		//??? or 2?
-			validators: vec![10, 20],
-		}.build_storage().unwrap());
-		t.extend(staking::GenesisConfig::<Test>{
-			sessions_per_era: 1,
-			current_era: 0,
+		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-			intentions: vec![],
-			validator_count: 2,
-			minimum_validator_count: 0,
-			bonding_duration: 0,
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-			early_era_slash: 0,
-			session_reward: 0,
-			offline_slash_grace: 0,
 		}.build_storage().unwrap());
 		t.extend(democracy::GenesisConfig::<Test>{
 			launch_period: 1,
@@ -726,12 +693,11 @@ mod tests {
 			cooloff_period: 2,
 			voting_period: 1,
 		}.build_storage().unwrap());
-		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.into()
 	}
 
 	pub type System = system::Module<Test>;
-	pub type Staking = staking::Module<Test>;
+	pub type Balances = balances::Module<Test>;
 	pub type Democracy = democracy::Module<Test>;
 	pub type Council = Module<Test>;
 
@@ -1045,7 +1011,7 @@ mod tests {
 	#[test]
 	fn double_presentations_should_be_punished() {
 		with_externalities(&mut new_test_ext(false), || {
-			assert!(Staking::can_slash(&4, 10));
+			assert!(Balances::can_slash(&4, 10));
 
 			System::set_block_number(4);
 			assert_ok!(Council::submit_candidacy(&2, 0));
@@ -1061,7 +1027,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			assert_eq!(Council::active_council(), vec![(5, 11), (2, 11)]);
-			assert_eq!(Staking::voting_balance(&4), 38);
+			assert_eq!(Balances::total_balance(&4), 38);
 		});
 	}
 
@@ -1094,8 +1060,8 @@ mod tests {
 
 			assert_eq!(Council::voters(), vec![5]);
 			assert_eq!(Council::approvals_of(2).len(), 0);
-			assert_eq!(Staking::voting_balance(&2), 17);
-			assert_eq!(Staking::voting_balance(&5), 53);
+			assert_eq!(Balances::total_balance(&2), 17);
+			assert_eq!(Balances::total_balance(&5), 53);
 		});
 	}
 
@@ -1153,8 +1119,8 @@ mod tests {
 
 			assert_eq!(Council::voters(), vec![5]);
 			assert_eq!(Council::approvals_of(2).len(), 0);
-			assert_eq!(Staking::voting_balance(&2), 17);
-			assert_eq!(Staking::voting_balance(&5), 53);
+			assert_eq!(Balances::total_balance(&2), 17);
+			assert_eq!(Balances::total_balance(&5), 53);
 		});
 	}
 
@@ -1254,7 +1220,7 @@ mod tests {
 
 			assert_eq!(Council::voters(), vec![2, 3, 5]);
 			assert_eq!(Council::approvals_of(4).len(), 0);
-			assert_eq!(Staking::voting_balance(&4), 37);
+			assert_eq!(Balances::total_balance(&4), 37);
 		});
 	}
 
@@ -1381,8 +1347,8 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(6);
-			assert_eq!(Staking::free_balance(&1), 1);
-			assert_eq!(Staking::reserved_balance(&1), 9);
+			assert_eq!(Balances::free_balance(&1), 1);
+			assert_eq!(Balances::reserved_balance(&1), 9);
 			assert_noop!(Council::present_winner(&1, 1.into(), 20, 0), "presenter must have sufficient slashable funds");
 		});
 	}
@@ -1392,7 +1358,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(false), || {
 			System::set_block_number(4);
 			assert!(!Council::presentation_active());
-			assert_eq!(Staking::voting_balance(&4), 40);
+			assert_eq!(Balances::total_balance(&4), 40);
 
 			assert_ok!(Council::submit_candidacy(&2, 0));
 			assert_ok!(Council::submit_candidacy(&5, 1));
@@ -1403,7 +1369,7 @@ mod tests {
 			System::set_block_number(6);
 			assert_err!(Council::present_winner(&4, 2.into(), 80, 0), "incorrect total");
 
-			assert_eq!(Staking::voting_balance(&4), 38);
+			assert_eq!(Balances::total_balance(&4), 38);
 		});
 	}
 
