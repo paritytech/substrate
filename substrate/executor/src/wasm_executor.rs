@@ -199,7 +199,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		debug_trace!(target: "runtime-io", "free {}", addr);
 		Ok(())
 	},
-	ext_set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u8) => {
+	ext_set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u32) => {
 		debug_trace!(target: "runtime-io", "ext_set_changes_trie_config {} {} {}",
 			block, digest_interval, digest_levels);
 		this.ext.set_changes_trie_config(block, digest_interval, digest_levels);

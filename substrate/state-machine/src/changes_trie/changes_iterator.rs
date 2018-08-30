@@ -129,11 +129,11 @@ pub struct SurfaceIterator<'a> {
 	current: Option<u64>,
 	current_begin: u64,
 	digest_step: u64,
-	digest_level: u8,
+	digest_level: u32,
 }
 
 impl<'a> Iterator for SurfaceIterator<'a> {
-	type Item = Result<(u64, u8), String>;
+	type Item = Result<(u64, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let current = self.current?;
@@ -176,7 +176,7 @@ pub struct DrilldownIteratorEssence<'a, RS: 'a + Storage<H>, S: 'a + Storage<H>,
 	surface: SurfaceIterator<'a>,
 
 	extrinsics: VecDeque<(u64, u32)>,
-	blocks: VecDeque<(u64, u8)>,
+	blocks: VecDeque<(u64, u32)>,
 
 	_hasher: ::std::marker::PhantomData<H>,
 }
@@ -303,12 +303,12 @@ fn lower_bound_max_digest(
 	max: u64,
 	begin: u64,
 	end: u64,
-) -> Result<(u64, u64, u64, u8), String> {
+) -> Result<(u64, u64, u64, u32), String> {
 	if end > max || begin > end {
 		return Err("invalid changes range".into());
 	}
 
-	let mut digest_level = 0u8;
+	let mut digest_level = 0u32;
 	let mut digest_step = 1u64;
 	let mut digest_interval = 0u64;
 	let mut current = end;

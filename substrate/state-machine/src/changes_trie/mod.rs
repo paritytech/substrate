@@ -46,6 +46,7 @@ use heapsize::HeapSizeOf;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
 use backend::Backend;
+use primitives;
 use changes_trie::build::prepare_input;
 use overlayed_changes::OverlayedChanges;
 use trie_backend_essence::TrieBackendStorage;
@@ -62,16 +63,7 @@ pub trait Storage<H: Hasher>: Send + Sync {
 }
 
 /// Changes trie configuration.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Configuration {
-	/// Interval (in blocks) at which level1-digests are created. Digests are not
-	/// created when this is less or equal to 1.
-	pub digest_interval: u64,
-	/// Maximal number of digest levels in hierarchy. 0 means that digests are not
-	/// created at all (even level1 digests). 1 means only level1-digests are created.
-	/// 2 means that every digest_interval^2 there will be a level2-digest, and so on.
-	pub digest_levels: u8,
-}
+pub type Configuration = primitives::ChangesTrieConfiguration;
 
 /// Compute the changes trie root and transaction for given block.
 /// Returns None if there's no data to perform computation.

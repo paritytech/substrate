@@ -96,7 +96,7 @@ impl<H: Hasher, C: NodeCodec<H>> From< HashMap<Vec<u8>, Vec<u8>> > for TestExter
 }
 
 impl<H: Hasher, C: NodeCodec<H>> Externalities<H> for TestExternalities<H, C> where H::Out: Ord + Encodable + HeapSizeOf {
-	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u8) {
+	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u32) {
 		self.changes.set_changes_trie_config(block, ChangesTrieConfig {
 			digest_interval,
 			digest_levels,

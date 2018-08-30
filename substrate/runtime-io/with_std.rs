@@ -42,7 +42,7 @@ environmental!(ext: trait Externalities<KeccakHasher>);
 
 /// Sets changes trie configuration parameters, announcing that this runtime is
 /// configured to gather and store changes tries.
-pub fn set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u8) {
+pub fn set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u32) {
 	ext::with(|ext|
 		ext.set_changes_trie_config(block, digest_interval, digest_levels)
 	);

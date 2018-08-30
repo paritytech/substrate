@@ -19,7 +19,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(any(feature = "std", test))]
 extern crate substrate_primitives;
 
 #[cfg_attr(any(feature = "std", test), macro_use)]
@@ -44,6 +43,7 @@ extern crate substrate_runtime_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
+use substrate_primitives::ChangesTrieConfiguration;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
 	Hash, Member, MaybeDisplay, As};
 use runtime_support::{StorageValue, StorageMap, Parameter};
@@ -115,9 +115,7 @@ decl_storage! {
 	pub ExtrinsicIndex get(extrinsic_index): b"sys:xti" => u32;
 	ExtrinsicData get(extrinsic_data): b"sys:xtd" => required map [ u32 => Vec<u8> ];
 	RandomSeed get(random_seed): b"sys:rnd" => required T::Hash;
-	ChangesTrieCreationEnabled get(changes_trie_creation_enabled): b"sys:changes_trie_creation_enabled" => default bool;
-	ChangesTrieDigestInterval get(changes_trie_digest_interval): b"sys:changes_trie_digest_interval" => default T::BlockNumber;
-	ChangesTrieDigestLevels get(changes_trie_digest_level): b"sys:changes_trie_digest_levels" => default u32;
+	ChangesTrieConfig: b"sys:changes_trie_cfg" => ChangesTrieConfiguration;
 	// The current block number being processed. Set by `execute_block`.
 	Number get(block_number): b"sys:num" => required T::BlockNumber;
 	ParentHash get(parent_hash): b"sys:pha" => required T::Hash;
@@ -139,15 +137,11 @@ impl<T: Trait> Module<T> {
 		<ExtrinsicIndex<T>>::put(0u32);
 		<Events<T>>::kill();
 
-		if <ChangesTrieCreationEnabled<T>>::get() {
-			let digest_interval = <ChangesTrieDigestInterval<T>>::get();
-			let digest_levels = <ChangesTrieDigestLevels<T>>::get();
-			assert!(digest_levels <= 255u32, "changes_trie_digest_levels is too large to fit into u8");
-
+		if let Some(changes_trie_config) = <ChangesTrieConfig<T>>::get() {
 			runtime_io::set_changes_trie_config(
 				number.as_(),
-				digest_interval.as_(),
-				digest_levels as u8);
+				changes_trie_config.digest_interval,
+				changes_trie_config.digest_levels);
 			runtime_io::bind_to_extrinsic(0u32);
 		}
 	}
@@ -267,24 +261,18 @@ impl<T: Trait> Module<T> {
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
-	/// True if changes trie creation is enabled.
-	pub changes_trie_enabled: bool,
-	/// Interval (in blocks) at which level1-digests are created. Digests are not
-	/// created when this is None or less or equal to 1.
-	pub changes_trie_digest_interval: Option<T::BlockNumber>,
-	/// Maximal number of digest levels in hierarchy. None/0 means that digests are not
-	/// created at all (even level1 digests). 1 means only level1-digests are created.
-	/// 2 means that every digest_interval^2 there will be a level2-digest, and so on.
-	pub changes_trie_digest_levels: Option<u8>,
+	/// Changes trie configuration.
+	pub changes_trie_config: Option<ChangesTrieConfiguration>,
+	/// Marker for 'storing' T.
+	pub _phantom: ::std::marker::PhantomData<T>,
 }
 
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
-			changes_trie_enabled: false,
-			changes_trie_digest_interval: None,
-			changes_trie_digest_levels: None,
+			changes_trie_config: Default::default(),
+			_phantom: Default::default(),
 		}
 	}
 }
@@ -296,7 +284,6 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 		use codec::Encode;
 
 		let mut storage: primitives::StorageMap = map![
-			Self::hash(<ChangesTrieCreationEnabled<T>>::key()).to_vec() => self.changes_trie_enabled.encode(),
 			Self::hash(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			Self::hash(<Number<T>>::key()).to_vec() => 1u64.encode(),
 			Self::hash(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
@@ -304,18 +291,10 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 			Self::hash(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
 		];
 
-		if self.changes_trie_enabled {
-			if let Some(changes_trie_digest_interval) = self.changes_trie_digest_interval {
-				storage.insert(
-					Self::hash(<ChangesTrieDigestInterval<T>>::key()).to_vec(),
-					changes_trie_digest_interval.encode());
-			}
-
-			if let Some(changes_trie_digest_levels) = self.changes_trie_digest_levels {
-				storage.insert(
-					Self::hash(<ChangesTrieDigestLevels<T>>::key()).to_vec(),
-					(changes_trie_digest_levels as u32).encode());
-			}
+		if let Some(changes_trie_config) = self.changes_trie_config {
+			storage.insert(
+				Self::hash(<ChangesTrieConfig<T>>::key()).to_vec(),
+				changes_trie_config.encode());
 		}
 
 		Ok(storage)

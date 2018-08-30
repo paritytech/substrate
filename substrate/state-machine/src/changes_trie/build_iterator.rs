@@ -35,7 +35,7 @@ pub fn digest_build_iterator(config: &Configuration, block: u64) -> DigestBuildI
 
 	// we have checked that the block is at least level1-digest
 	// => try to find highest digest level for inclusion
-	let mut current_level = 1u8;
+	let mut current_level = 1u32;
 	let mut digest_step = 1u64;
 	while current_level < config.digest_levels {
 		let new_digest_interval = match digest_interval.checked_mul(config.digest_interval) {
@@ -117,16 +117,16 @@ impl Iterator for DigestBuildIterator {
 mod tests {
 	use super::*;
 
-	fn digest_build_iterator(digest_interval: u64, digest_levels: u8, block: u64) -> DigestBuildIterator {
+	fn digest_build_iterator(digest_interval: u64, digest_levels: u32, block: u64) -> DigestBuildIterator {
 		super::digest_build_iterator(&Configuration { digest_interval, digest_levels }, block)
 	}
 
-	fn digest_build_iterator_basic(digest_interval: u64, digest_levels: u8, block: u64) -> (u64, u64, u64) {
+	fn digest_build_iterator_basic(digest_interval: u64, digest_levels: u32, block: u64) -> (u64, u64, u64) {
 		let iter = digest_build_iterator(digest_interval, digest_levels, block);
 		(iter.block, iter.digest_interval, iter.max_step)
 	}
 
-	fn digest_build_iterator_blocks(digest_interval: u64, digest_levels: u8, block: u64) -> Vec<u64> {
+	fn digest_build_iterator_blocks(digest_interval: u64, digest_levels: u32, block: u64) -> Vec<u64> {
 		digest_build_iterator(digest_interval, digest_levels, block).collect()
 	}
 

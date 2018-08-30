@@ -48,7 +48,7 @@ mod tests {
 	use keyring::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap};
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
-	use primitives::{twox_128, KeccakHasher, RlpCodec};
+	use primitives::{twox_128, KeccakHasher, RlpCodec, ChangesTrieConfiguration};
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
@@ -196,9 +196,11 @@ mod tests {
 		TestExternalities::new(GenesisConfig {
 			consensus: Some(Default::default()),
 			system: Some(SystemConfig {
-				changes_trie_enabled: support_changes_trie,
-				changes_trie_digest_interval: Some(2),
-				changes_trie_digest_levels: Some(2),
+				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
+					digest_interval: 2,
+					digest_levels: 2,
+				}) } else { None },
+				..Default::default()
 			}),
 			session: Some(SessionConfig {
 				session_length: 2,
@@ -262,9 +264,9 @@ mod tests {
 			1,
 			[69u8; 32].into(),
 			if support_changes_trie {
-				hex!("4011519eba01902e40392378ebc85375bf780acb68f44ebbf311ee68d4e76732").into()
+				hex!("7fff2f2adbc30e5382b7ad7c515983d1de901724a41af14abf794d68c6093193").into()
 			} else {
-				hex!("3b57e52e95c1a839ce4a1a54761fb7f28c90f74d2cafdbf52265646384d74528").into()
+				hex!("56c9a542e48ccf4e0821de301ea4384e87425604278b12a9db31c6d4e89ca51e").into()
 			},
 			if support_changes_trie {
 				Some(hex!("ba0c0313a9812380261438c1cbf38a9c75d5a7628d29193393a17ae7b7181dcd").into())
@@ -283,7 +285,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("e4451178254b2c0fd193c1613aa57a43f32aa9bdd6e179ae32150ee2bf5af0ee").into(),
+			hex!("e0172ce6c10694ea74c17694cf9ab83f9553b4797aa74cc51dece45bd91533b4").into(),
 			None,
 			vec![
 				BareExtrinsic {
@@ -304,7 +306,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("a5579b8696887b5a86b9adca9528af1f7e5a183f97a5e5052a904571b5323002").into(),
+			hex!("be186810570e437f0d803493fced9879207b064a0701fd8d68662b9563b4d33e").into(),
 			None,
 			vec![BareExtrinsic {
 				signed: alice(),

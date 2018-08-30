@@ -54,7 +54,7 @@ extern "C" {
 	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
 	fn ext_print_hex(data: *const u8, len: u32);
 	fn ext_print_num(value: u64);
-	fn ext_set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u8);
+	fn ext_set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u32);
 	fn ext_bind_to_extrinsic(extrinsic_index: u32);
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
@@ -73,7 +73,7 @@ extern "C" {
 }
 /// Sets changes trie configuration parameters, announcing that this runtime is
 /// configured to gather and store changes tries.
-pub fn set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u8) {
+pub fn set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u32) {
 	unsafe {
 		ext_set_changes_trie_config(
 			block,

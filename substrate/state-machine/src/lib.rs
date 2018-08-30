@@ -34,7 +34,6 @@ extern crate byteorder;
 extern crate parking_lot;
 extern crate rlp;
 extern crate heapsize;
-#[cfg(test)]
 extern crate substrate_primitives as primitives;
 
 use std::fmt;
@@ -94,7 +93,7 @@ pub trait Externalities<H: Hasher> {
 	/// Sets changes trie configuration parameters. Runtime announces that this it is
 	/// configured to gather and store changes tries by calling this method and bind_to_extrinsic
 	/// afterwards.
-	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u8);
+	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u32);
 
 	/// Start binding storage changes to the extrinsic number they're changes in.
 	/// This is used later by storage_changes_root to compose changes trie.
