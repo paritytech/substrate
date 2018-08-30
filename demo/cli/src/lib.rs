@@ -50,8 +50,8 @@ pub mod error;
 use std::sync::Arc;
 use demo_primitives::{AccountId, Hash};
 use demo_runtime::{Block, BlockId, GenesisConfig,
-	ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
-	TimestampConfig};
+	BalancesConfig, ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig,
+	StakingConfig, TimestampConfig};
 use futures::{Future, Sink, Stream};
 use tokio::runtime::Runtime;
 use demo_executor::NativeExecutor;
@@ -164,13 +164,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			authorities: vec![god_key.clone().into()],
 		}),
 		system: None,
-		session: Some(SessionConfig {
-			validators: vec![god_key.clone().into()],
-			session_length: 720,	// that's 1 hour per session.
-		}),
-		staking: Some(StakingConfig {
-			current_era: 0,
-			intentions: vec![],
+		balances: Some(BalancesConfig {
 			transaction_base_fee: 100,
 			transaction_byte_fee: 1,
 			transfer_fee: 0,
@@ -178,10 +172,18 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			reclaim_rebate: 0,
 			existential_deposit: 500,
 			balances: vec![(god_key.clone().into(), 1u64 << 63)].into_iter().collect(),
+		}),
+		session: Some(SessionConfig {
+			validators: vec![god_key.clone().into()],
+			session_length: 720,	// that's 1 hour per session.
+		}),
+		staking: Some(StakingConfig {
+			current_era: 0,
+			intentions: vec![],
 			validator_count: 12,
 			minimum_validator_count: 4,
 			sessions_per_era: 24,	// 24 hours per era.
-			bonding_duration: 90,	// 90 days per bond.
+			bonding_duration: 90 * 24 * 720,	// 90 days per bond.
 			early_era_slash: 10000,
 			session_reward: 100,
 			offline_slash_grace: 0,

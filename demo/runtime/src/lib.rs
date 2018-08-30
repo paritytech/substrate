@@ -40,6 +40,7 @@ extern crate substrate_codec as codec;
 extern crate substrate_codec_derive;
 
 extern crate substrate_runtime_std as rstd;
+extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_council as council;
 extern crate substrate_runtime_democracy as democracy;
@@ -88,6 +89,7 @@ impl HasPublicAux for Concrete {
 }
 
 impl system::Trait for Concrete {
+	type PublicAux = <Self as HasPublicAux>::PublicAux;
 	type Index = Index;
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
@@ -101,9 +103,21 @@ impl system::Trait for Concrete {
 /// System module for this concrete runtime.
 pub type System = system::Module<Concrete>;
 
+impl balances::Trait for Concrete {
+	type Balance = Balance;
+	type AccountIndex = AccountIndex;
+	type OnFreeBalanceZero = Staking;
+	type EnsureAccountLiquid = Staking;
+	type Event = Event;
+}
+
+/// Staking module for this concrete runtime.
+pub type Balances = balances::Module<Concrete>;
+
 impl consensus::Trait for Concrete {
-	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type SessionKey = SessionKey;
+	type OnOfflineValidator = Staking;
 }
 
 /// Consensus module for this concrete runtime.
@@ -136,10 +150,6 @@ impl session::Trait for Concrete {
 pub type Session = session::Module<Concrete>;
 
 impl staking::Trait for Concrete {
-	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
-	type Balance = Balance;
-	type AccountIndex = AccountIndex;
-	type OnFreeBalanceZero = ();
 	type Event = Event;
 }
 
@@ -162,7 +172,7 @@ pub type CouncilVoting = council::voting::Module<Concrete>;
 
 impl_outer_event! {
 	pub enum Event for Concrete {
-		session, staking
+		balances, session, staking
 	}
 }
 
@@ -171,9 +181,10 @@ impl_outer_dispatch! {
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum Call where aux: <Concrete as HasPublicAux>::PublicAux {
 		Consensus = 0,
-		Session = 1,
-		Staking = 2,
-		Timestamp = 3,
+		Balances = 1,
+		Session = 2,
+		Staking = 3,
+		Timestamp = 4,
 		Democracy = 5,
 		Council = 6,
 		CouncilVoting = 7,
@@ -183,16 +194,17 @@ impl_outer_dispatch! {
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum PrivCall {
 		Consensus = 0,
-		Session = 1,
-		Staking = 2,
-		Democracy = 5,
-		Council = 6,
-		CouncilVoting = 7,
+		Balances = 1,
+		Session = 2,
+		Staking = 3,
+		Democracy = 4,
+		Council = 5,
+		CouncilVoting = 6,
 	}
 }
 
 /// The address format for describing accounts.
-pub type Address = staking::Address<Concrete>;
+pub type Address = balances::Address<Concrete>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
 /// Block type as expected by this runtime.
@@ -206,13 +218,14 @@ pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
 /// Extrinsic type that is signed.
 pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Concrete, Block, Staking, Staking,
+pub type Executive = executive::Executive<Concrete, Block, Balances, Balances,
 	(((((), Council), Democracy), Staking), Session)>;
 
 impl_outer_config! {
 	pub struct GenesisConfig for Concrete {
 		ConsensusConfig => consensus,
 		SystemConfig => system,
+		BalancesConfig => balances,
 		SessionConfig => session,
 		StakingConfig => staking,
 		DemocracyConfig => democracy,

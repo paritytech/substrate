@@ -17,13 +17,13 @@
 use double_map::StorageDoubleMap;
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, H256, Header};
-use runtime_primitives::traits::{BlakeTwo256, HasPublicAux, Identity};
+use runtime_primitives::traits::{BlakeTwo256, HasPublicAux};
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
 use substrate_primitives::KeccakHasher;
 use wabt;
 use {
-	consensus, runtime_io, session, staking, system, timestamp, CodeOf, ContractAddressFor,
+	runtime_io, balances, system, CodeOf, ContractAddressFor,
 	GenesisConfig, Module, StorageOf, Trait,
 };
 
@@ -32,11 +32,8 @@ pub struct Test;
 impl HasPublicAux for Test {
 	type PublicAux = u64;
 }
-impl consensus::Trait for Test {
-	type PublicAux = <Self as HasPublicAux>::PublicAux;
-	type SessionKey = u64;
-}
 impl system::Trait for Test {
+	type PublicAux = <Self as HasPublicAux>::PublicAux;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -46,20 +43,11 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 }
-impl timestamp::Trait for Test {
-	const TIMESTAMP_SET_POSITION: u32 = 0;
-	type Moment = u64;
-}
-impl staking::Trait for Test {
-	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
+impl balances::Trait for Test {
 	type Balance = u64;
 	type AccountIndex = u64;
 	type OnFreeBalanceZero = Contract;
-	type Event = ();
-}
-impl session::Trait for Test {
-	type ConvertAccountIdToSessionKey = Identity;
-	type OnSessionChange = Staking;
+	type EnsureAccountLiquid = ();
 	type Event = ();
 }
 impl Trait for Test {
@@ -67,7 +55,7 @@ impl Trait for Test {
 	type DetermineContractAddress = DummyContractAddressFor;
 }
 
-type Staking = staking::Module<Test>;
+type Balances = balances::Module<Test>;
 type Contract = Module<Test>;
 
 pub struct DummyContractAddressFor;
@@ -109,44 +97,16 @@ impl ExtBuilder {
 			.build_storage()
 			.unwrap();
 		t.extend(
-			consensus::GenesisConfig::<Test> {
-				code: vec![],
-				authorities: vec![],
-			}.build_storage()
-			.unwrap(),
-		);
-		t.extend(
-			session::GenesisConfig::<Test> {
-				session_length: 1,
-				validators: vec![10, 20],
-			}.build_storage()
-			.unwrap(),
-		);
-		t.extend(
-			staking::GenesisConfig::<Test> {
-				sessions_per_era: 1,
-				current_era: 0,
+			balances::GenesisConfig::<Test> {
 				balances: vec![],
-				intentions: vec![],
-				validator_count: 2,
-				minimum_validator_count: 0,
-				bonding_duration: 0,
 				transaction_base_fee: 0,
 				transaction_byte_fee: 0,
 				existential_deposit: self.existential_deposit,
 				transfer_fee: 0,
 				creation_fee: 0,
 				reclaim_rebate: 0,
-				early_era_slash: 0,
-				session_reward: 0,
-				offline_slash_grace: 0,
 			}.build_storage()
 			.unwrap(),
-		);
-		t.extend(
-			timestamp::GenesisConfig::<Test>::default()
-				.build_storage()
-				.unwrap(),
 		);
 		t.extend(
 			GenesisConfig::<Test> {
@@ -195,15 +155,15 @@ fn contract_transfer() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
 
-		Staking::set_free_balance(&0, 100_000_000);
-		Staking::increase_total_stake_by(100_000_000);
-		Staking::set_free_balance(&1, 11);
-		Staking::increase_total_stake_by(11);
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&1, 11);
+		Balances::increase_total_stake_by(11);
 
 		assert_ok!(Contract::call(&0, 1, 3, 100_000, Vec::new()));
 
 		assert_eq!(
-			Staking::free_balance(&0),
+			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
 			// 2 * 6 - gas used by the contract (6) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
@@ -211,11 +171,11 @@ fn contract_transfer() {
 			100_000_000 - 3 - (2 * 6) - (2 * 135) - (2 * 135),
 		);
 		assert_eq!(
-			Staking::free_balance(&1),
+			Balances::free_balance(&1),
 			11 + 3 - CONTRACT_SHOULD_TRANSFER_VALUE,
 		);
 		assert_eq!(
-			Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
+			Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
 			CONTRACT_SHOULD_TRANSFER_VALUE,
 		);
 	});
@@ -230,10 +190,10 @@ fn contract_transfer_oog() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
 
-		Staking::set_free_balance(&0, 100_000_000);
-		Staking::increase_total_stake_by(100_000_000);
-		Staking::set_free_balance(&1, 11);
-		Staking::increase_total_stake_by(11);
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&1, 11);
+		Balances::increase_total_stake_by(11);
 
 		assert_err!(
 			Contract::call(&0, 1, 3, 276, Vec::new()),
@@ -241,15 +201,15 @@ fn contract_transfer_oog() {
 		);
 
 		assert_eq!(
-			Staking::free_balance(&0),
+			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
 			// 2 * 6 - gas used by the contract (6) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
 			// 2 * 135 - base gas fee for call (by contract)
 			100_000_000 - (2 * 6) - (2 * 135) - (2 * 135),
 		);
-		assert_eq!(Staking::free_balance(&1), 11);
-		assert_eq!(Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 0);
+		assert_eq!(Balances::free_balance(&1), 11);
+		assert_eq!(Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 0);
 	});
 }
 
@@ -262,10 +222,10 @@ fn contract_transfer_max_depth() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(CONTRACT_SHOULD_TRANSFER_TO, code_transfer.to_vec());
 
-		Staking::set_free_balance(&0, 100_000_000);
-		Staking::increase_total_stake_by(100_000_000);
-		Staking::set_free_balance(&CONTRACT_SHOULD_TRANSFER_TO, 11);
-		Staking::increase_total_stake_by(11);
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&CONTRACT_SHOULD_TRANSFER_TO, 11);
+		Balances::increase_total_stake_by(11);
 
 		assert_err!(
 			Contract::call(&0, CONTRACT_SHOULD_TRANSFER_TO, 3, 100_000, Vec::new()),
@@ -273,14 +233,14 @@ fn contract_transfer_max_depth() {
 		);
 
 		assert_eq!(
-			Staking::free_balance(&0),
+			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
 			// 2 * 6 * 100 - gas used by the contract (6) multiplied by gas price (2)
 			//               multiplied by max depth (100).
 			// 2 * 135 * 100 - base gas fee for call (by transaction) multiplied by max depth (100).
 			100_000_000 - (2 * 135 * 100) - (2 * 6 * 100),
 		);
-		assert_eq!(Staking::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 11);
+		assert_eq!(Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 11);
 	});
 }
 
@@ -360,11 +320,11 @@ fn contract_create() {
 	let code_create = wabt::wat2wasm(&code_create(&code_ctor_transfer)).unwrap();
 
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Staking::set_free_balance(&0, 100_000_000);
-		Staking::increase_total_stake_by(100_000_000);
-		Staking::set_free_balance(&1, 0);
-		Staking::set_free_balance(&9, 30);
-		Staking::increase_total_stake_by(30);
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&1, 0);
+		Balances::set_free_balance(&9, 30);
+		Balances::increase_total_stake_by(30);
 
 		<CodeOf<Test>>::insert(1, code_create.to_vec());
 
@@ -383,23 +343,23 @@ fn contract_create() {
 		// ((21 / 2) * 2) - price per account creation
 		let expected_gas_after_create =
 			100_000_000 - 11 - (2 * 128) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
-		assert_eq!(Staking::free_balance(&0), expected_gas_after_create);
-		assert_eq!(Staking::free_balance(&1), 8);
-		assert_eq!(Staking::free_balance(&derived_address), 3);
+		assert_eq!(Balances::free_balance(&0), expected_gas_after_create);
+		assert_eq!(Balances::free_balance(&1), 8);
+		assert_eq!(Balances::free_balance(&derived_address), 3);
 
 		// Initiate transfer to the newly created contract.
 		assert_ok!(Contract::call(&0, derived_address, 22, 100_000, Vec::new()));
 
 		assert_eq!(
-			Staking::free_balance(&0),
+			Balances::free_balance(&0),
 			// 22 - value sent with the transaction
 			// (2 * 6) - gas used by the contract
 			// (2 * 135) - base gas fee for call (top level)
 			// (2 * 135) - base gas fee for call (by transfer contract)
 			expected_gas_after_create - 22 - (2 * 6) - (2 * 135) - (2 * 135),
 		);
-		assert_eq!(Staking::free_balance(&derived_address), 22 - 3);
-		assert_eq!(Staking::free_balance(&9), 36);
+		assert_eq!(Balances::free_balance(&derived_address), 22 - 3);
+		assert_eq!(Balances::free_balance(&9), 36);
 	});
 }
 
@@ -414,10 +374,10 @@ fn top_level_create() {
 			&0,
 		);
 
-		Staking::set_free_balance(&0, 100_000_000);
-		Staking::increase_total_stake_by(100_000_000);
-		Staking::set_free_balance(&derived_address, 30);
-		Staking::increase_total_stake_by(30);
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&derived_address, 30);
+		Balances::increase_total_stake_by(30);
 
 		assert_ok!(Contract::create(
 			&0,
@@ -432,10 +392,10 @@ fn top_level_create() {
 		// (3 * 175) - base gas fee for create (175) (top level) multipled by gas price (3)
 		// ((21 / 3) * 3) - price for contract creation
 		assert_eq!(
-			Staking::free_balance(&0),
+			Balances::free_balance(&0),
 			100_000_000 - 11 - (3 * 122) - (3 * 175) - ((21 / 3) * 3)
 		);
-		assert_eq!(Staking::free_balance(&derived_address), 30 + 11);
+		assert_eq!(Balances::free_balance(&derived_address), 30 + 11);
 
 		assert_eq!(<CodeOf<Test>>::get(&derived_address), code_transfer);
 	});
@@ -456,12 +416,12 @@ fn refunds_unused_gas() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(1, code_nop.to_vec());
 
-		Staking::set_free_balance(&0, 100_000_000);
-		Staking::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
 
 		assert_ok!(Contract::call(&0, 1, 0, 100_000, Vec::new()));
 
-		assert_eq!(Staking::free_balance(&0), 100_000_000 - 4 - (2 * 135));
+		assert_eq!(Balances::free_balance(&0), 100_000_000 - 4 - (2 * 135));
 	});
 }
 
@@ -470,12 +430,12 @@ fn call_with_zero_value() {
 	with_externalities(&mut ExtBuilder::default().build(), || {
 		<CodeOf<Test>>::insert(1, vec![]);
 
-		Staking::set_free_balance(&0, 100_000_000);
-		Staking::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
 
 		assert_ok!(Contract::call(&0, 1, 0, 100_000, Vec::new()));
 
-		assert_eq!(Staking::free_balance(&0), 100_000_000 - (2 * 135));
+		assert_eq!(Balances::free_balance(&0), 100_000_000 - (2 * 135));
 	});
 }
 
@@ -484,13 +444,13 @@ fn create_with_zero_endowment() {
 	let code_nop = wabt::wat2wasm(CODE_NOP).unwrap();
 
 	with_externalities(&mut ExtBuilder::default().build(), || {
-		Staking::set_free_balance(&0, 100_000_000);
-		Staking::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
 
 		assert_ok!(Contract::create(&0, 0, 100_000, code_nop, Vec::new()));
 
 		assert_eq!(
-			Staking::free_balance(&0),
+			Balances::free_balance(&0),
 			// 4 - for the gas spent by the constructor
 			// 2 * 175 - base gas fee for create (175) multiplied by gas price (2) (top level)
 			100_000_000 - 4 - (2 * 175),
@@ -505,13 +465,13 @@ fn account_removal_removes_storage() {
 		|| {
 			// Setup two accounts with free balance above than exsistential threshold.
 			{
-				Staking::set_free_balance(&1, 110);
-				Staking::increase_total_stake_by(110);
+				Balances::set_free_balance(&1, 110);
+				Balances::increase_total_stake_by(110);
 				<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
 				<StorageOf<Test>>::insert(1, b"bar".to_vec(), b"2".to_vec());
 
-				Staking::set_free_balance(&2, 110);
-				Staking::increase_total_stake_by(110);
+				Balances::set_free_balance(&2, 110);
+				Balances::increase_total_stake_by(110);
 				<StorageOf<Test>>::insert(2, b"hello".to_vec(), b"3".to_vec());
 				<StorageOf<Test>>::insert(2, b"world".to_vec(), b"4".to_vec());
 			}
@@ -520,7 +480,7 @@ fn account_removal_removes_storage() {
 			// the balance of account 1 is will be below than exsistential threshold.
 			//
 			// This should lead to the removal of all storage associated with this account.
-			assert_ok!(Staking::transfer(&1, 2.into(), 20));
+			assert_ok!(Balances::transfer(&1, 2.into(), 20));
 
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.
@@ -556,15 +516,15 @@ fn top_level_call_refunds_even_if_fails() {
 	with_externalities(&mut ExtBuilder::default().gas_price(4).build(), || {
 		<CodeOf<Test>>::insert(1, code_unreachable.to_vec());
 
-		Staking::set_free_balance(&0, 100_000_000);
-		Staking::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
 
 		assert_err!(
 			Contract::call(&0, 1, 0, 100_000, Vec::new()),
 			"vm execute returned error while call"
 		);
 
-		assert_eq!(Staking::free_balance(&0), 100_000_000 - (4 * 3) - (4 * 135));
+		assert_eq!(Balances::free_balance(&0), 100_000_000 - (4 * 3) - (4 * 135));
 	});
 }
 
@@ -586,8 +546,8 @@ fn block_gas_limit() {
 		|| {
 			<CodeOf<Test>>::insert(1, code_loop.to_vec());
 
-			Staking::set_free_balance(&0, 100_000_000);
-			Staking::increase_total_stake_by(100_000_000);
+			Balances::set_free_balance(&0, 100_000_000);
+			Balances::increase_total_stake_by(100_000_000);
 
 			// Spend 50_000 units of gas (OOG).
 			assert_err!(
