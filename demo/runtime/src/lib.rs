@@ -115,7 +115,9 @@ impl balances::Trait for Concrete {
 pub type Balances = balances::Module<Concrete>;
 
 impl consensus::Trait for Concrete {
+	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type SessionKey = SessionKey;
+	type OnOfflineValidator = Staking;
 }
 
 /// Consensus module for this concrete runtime.
@@ -148,7 +150,6 @@ impl session::Trait for Concrete {
 pub type Session = session::Module<Concrete>;
 
 impl staking::Trait for Concrete {
-	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type Event = Event;
 }
 

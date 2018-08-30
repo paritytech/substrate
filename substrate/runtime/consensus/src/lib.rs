@@ -42,7 +42,7 @@ use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::MaybeSerializeDebug;
+use primitives::traits::{MaybeSerializeDebug, MaybeEmpty};
 use primitives::bft::MisbehaviorReport;
 
 #[cfg(any(feature = "std", test))]
@@ -63,8 +63,20 @@ pub const CODE: &'static [u8] = b":code";
 
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
+pub trait OnOfflineValidator {
+	fn on_offline_validator(validator_index: usize);
+}
+
+impl OnOfflineValidator for () {
+	fn on_offline_validator(_validator_index: usize) {}
+}
+
 pub trait Trait: system::Trait {
+	/// The allowed extrinsic position for `note_offline` inherent.
+	const NOTE_OFFLINE_POSITION: u32;
+
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
+	type OnOfflineValidator: OnOfflineValidator;
 }
 
 decl_module! {
@@ -73,7 +85,8 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result = 0;
-		fn remark(aux, remark: Vec<u8>) -> Result = 1;
+		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 1;
+		fn remark(aux, remark: Vec<u8>) -> Result = 2;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -106,6 +119,24 @@ impl<T: Trait> Module<T> {
 	/// Report some misbehaviour.
 	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
 		// TODO.
+		Ok(())
+	}
+
+	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
+	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
+	/// for the previous block.
+	fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
+		assert!(aux.is_empty());
+		assert!(
+			<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
+			"note_offline extrinsic must be at position {} in the block",
+			T::NOTE_OFFLINE_POSITION
+		);
+
+		for validator_index in offline_val_indices.into_iter() {
+			T::OnOfflineValidator::on_offline_validator(validator_index as usize);
+		}
+		
 		Ok(())
 	}
 

@@ -32,7 +32,9 @@ impl HasPublicAux for Test {
 	type PublicAux = u64;
 }
 impl consensus::Trait for Test {
+	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type SessionKey = u64;
+	type OnOfflineValidator = ();
 }
 impl system::Trait for Test {
 	type PublicAux = <Self as HasPublicAux>::PublicAux;
@@ -62,7 +64,6 @@ impl timestamp::Trait for Test {
 	type Moment = u64;
 }
 impl Trait for Test {
-	const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 	type Event = ();
 }
 
