@@ -525,18 +525,20 @@ impl WasmExecutor {
 	pub fn call<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8],
 		method: &str,
 		data: &[u8],
 		) -> Result<Vec<u8>> {
 		let module = ::wasmi::Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-		self.call_in_wasm_module(ext, &module, method, data)
+		self.call_in_wasm_module(ext, heap_pages, &module, method, data)
 	}
 
 	/// Call a given method in the given wasm-module runtime.
 	pub fn call_in_wasm_module<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
+                heap_pages: usize,
 		module: &Module,
 		method: &str,
 		data: &[u8],
@@ -564,7 +566,7 @@ impl WasmExecutor {
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
 
-		let mut fec = FunctionExecutor::new(memory.clone(), self.max_heap_pages, table, ext)?;
+		let mut fec = FunctionExecutor::new(memory.clone(), heap_pages, table, ext)?;
 
 		// finish instantiation by running 'start' function (if any).
 		let instance = intermediate_instance.run_start(&mut fec)?;
@@ -585,7 +587,7 @@ impl WasmExecutor {
 		let returned = match result {
 			Ok(x) => x,
 			Err(e) => {
-				trace!(target: "wasm-executor", "Failed to execute code with {} pages", self.max_heap_pages);
+				trace!(target: "wasm-executor", "Failed to execute code with {} pages", heap_pages);
 				return Err(e.into())
 			},
 		};

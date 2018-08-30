@@ -206,6 +206,7 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 	fn call<E: Externalities<H>>(
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8],
 		method: &str,
 		data: &[u8],
@@ -325,6 +326,12 @@ where
 		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 		.to_vec();
 
+	// TODO:
+//	let heap_pages = ext::Ext::new(overlay, backend).storage(b":heapsize")
+//		.ok_or_else(|| Box::new(ExecutionError::HeapsizeEntryDoesNotExist) as Box<Error>)?
+//		.to_vec();
+	let heap_pages = 8;
+
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
 
@@ -334,6 +341,7 @@ where
 				(
 					exec.call(
 						&mut externalities,
+						heap_pages,
 						&code,
 						method,
 						call_data,
@@ -358,6 +366,7 @@ where
 					(
 						exec.call(
 							&mut externalities,
+							heap_pages,
 							&code,
 							method,
 							call_data,

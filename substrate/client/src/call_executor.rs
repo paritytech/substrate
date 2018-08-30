@@ -146,7 +146,10 @@ where
 		let code = externalities.storage(b":code").ok_or(error::ErrorKind::VersionInvalid)?
 			.to_vec();
 
-		self.executor.runtime_version(&mut externalities, &code)
+		// TODO:
+//		let heap_pages = externalities.storage(b":heapsize").ok_or();
+		let heap_pages = 8;
+		self.executor.runtime_version(&mut externalities, heap_pages, &code)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
