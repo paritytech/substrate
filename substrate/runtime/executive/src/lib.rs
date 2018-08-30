@@ -256,7 +256,9 @@ mod tests {
 		type PublicAux = u64;
 	}
 	impl consensus::Trait for Test {
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
+		type OnOfflineValidator = staking::Module<Test>;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
@@ -282,7 +284,6 @@ mod tests {
 		type Event = MetaEvent;
 	}
 	impl staking::Trait for Test {
-		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
 		type Event = MetaEvent;
 	}
 	impl timestamp::Trait for Test {

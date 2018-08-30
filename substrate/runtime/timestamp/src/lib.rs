@@ -163,7 +163,9 @@ mod tests {
 		type Event = ();
 	}
 	impl consensus::Trait for Test {
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
+		type OnOfflineValidator = ();
 	}
 	impl Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;

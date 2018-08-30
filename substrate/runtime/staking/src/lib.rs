@@ -53,7 +53,7 @@ use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, Executable,
-	As, AuxLookup, MaybeEmpty};
+	As, AuxLookup};
 use balances::address::Address;
 
 mod mock;
@@ -96,9 +96,6 @@ impl Default for SlashPreference {
 }
 
 pub trait Trait: balances::Trait + session::Trait {
-	/// The allowed extrinsic position for `missed_proposal` inherent.
-	const NOTE_MISSED_PROPOSAL_POSITION: u32;
-
 	/// The overarching event type. 
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -108,12 +105,11 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn note_missed_proposal(aux, offline_val_indices: Vec<u32>) -> Result = 0;
-		fn stake(aux) -> Result = 1;
-		fn unstake(aux, intentions_index: u32) -> Result = 2;
-		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result = 3;
-		fn unnominate(aux, target_index: u32) -> Result = 4;
-		fn register_slash_preference(aux, intentions_index: u32, p: SlashPreference) -> Result = 5;
+		fn stake(aux) -> Result = 0;
+		fn unstake(aux, intentions_index: u32) -> Result = 1;
+		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result = 2;
+		fn unnominate(aux, target_index: u32) -> Result = 3;
+		fn register_slash_preference(aux, intentions_index: u32, p: SlashPreference) -> Result = 4;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -321,49 +317,6 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
-	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
-	/// for the previous block.
-	fn note_missed_proposal(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
-		assert!(aux.is_empty());
-		assert!(
-			<system::Module<T>>::extrinsic_index() == Some(T::NOTE_MISSED_PROPOSAL_POSITION),
-			"note_missed_proposal extrinsic must be at position {} in the block",
-			T::NOTE_MISSED_PROPOSAL_POSITION
-		);
-
-		for validator_index in offline_val_indices.into_iter() {
-			let v = <session::Module<T>>::validators()[validator_index as usize].clone();
-			let slash_count = Self::slash_count(&v);
-			<SlashCount<T>>::insert(v.clone(), slash_count + 1);
-			let grace = Self::offline_slash_grace();
-
-			let event = if slash_count >= grace {
-				let instances = slash_count - grace;
-				let slash = Self::early_era_slash() << instances;
-				let next_slash = slash << 1u32;
-				let _ = Self::slash_validator(&v, slash);
-				if instances >= Self::slash_preference_of(&v).unstake_threshold
-					|| Self::slashable_balance(&v) < next_slash
-				{
-					if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
-						Self::apply_unstake(&v, pos)
-							.expect("pos derived correctly from Self::intentions(); \
-								apply_unstake can only fail if pos wrong; \
-								Self::intentions() doesn't change; qed");
-					}
-					let _ = Self::force_new_era(false);
-				}
-				RawEvent::OfflineSlash(v, slash)
-			} else {
-				RawEvent::OfflineWarning(v, slash_count)
-			};
-			Self::deposit_event(event);
-		}
-		
-		Ok(())
-	}
-
 	// PRIV DISPATCH
 
 	/// Deposit one of this module's events.
@@ -559,5 +512,36 @@ impl<T: Trait> balances::IsAccountLiquid<T::AccountId> for Module<T> {
 impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<Bondage<T>>::remove(who);
+	}
+}
+
+impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
+	fn on_offline_validator(validator_index: usize) {
+		let v = <session::Module<T>>::validators()[validator_index].clone();
+		let slash_count = Self::slash_count(&v);
+		<SlashCount<T>>::insert(v.clone(), slash_count + 1);
+		let grace = Self::offline_slash_grace();
+
+		let event = if slash_count >= grace {
+			let instances = slash_count - grace;
+			let slash = Self::early_era_slash() << instances;
+			let next_slash = slash << 1u32;
+			let _ = Self::slash_validator(&v, slash);
+			if instances >= Self::slash_preference_of(&v).unstake_threshold
+				|| Self::slashable_balance(&v) < next_slash
+			{
+				if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
+					Self::apply_unstake(&v, pos)
+						.expect("pos derived correctly from Self::intentions(); \
+							apply_unstake can only fail if pos wrong; \
+							Self::intentions() doesn't change; qed");
+				}
+				let _ = Self::force_new_era(false);
+			}
+			RawEvent::OfflineSlash(v, slash)
+		} else {
+			RawEvent::OfflineWarning(v, slash_count)
+		};
+		Self::deposit_event(event);
 	}
 }

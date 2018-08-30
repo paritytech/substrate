@@ -23,16 +23,13 @@ use primitives::traits::HasPublicAux;
 use primitives::testing::{Digest, Header};
 use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
-use {GenesisConfig, Module, Trait, consensus, system};
+use {GenesisConfig, Module, Trait, system};
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Test;
 impl HasPublicAux for Test {
 	type PublicAux = u64;
-}
-impl consensus::Trait for Test {
-	type SessionKey = u64;
 }
 impl system::Trait for Test {
 	type PublicAux = <Self as HasPublicAux>::PublicAux;
@@ -60,10 +57,6 @@ pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternali
 	} else {
 		1
 	};
-	t.extend(consensus::GenesisConfig::<Test>{
-		code: vec![],
-		authorities: vec![],
-	}.build_storage().unwrap());
 	t.extend(GenesisConfig::<Test>{
 		balances: if monied {
 			vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
