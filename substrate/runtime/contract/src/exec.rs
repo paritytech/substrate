@@ -203,7 +203,7 @@ fn transfer<T: Trait>(
 		return Err("value too low to create account");
 	}
 	if !<T as balances::Trait>::IsAccountLiquid::is_account_liquid(transactor) {
-		return Err("bondage too high to send value");
+		return Err("cannot transfer illiquid funds");
 	}
 
 	let to_balance = overlay.get_balance(dest);

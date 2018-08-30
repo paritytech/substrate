@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Balances: Handles balances.
 
@@ -24,9 +24,6 @@ extern crate serde;
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
-
-#[cfg(test)]
-extern crate wabt;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
@@ -41,11 +38,7 @@ extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
-extern crate substrate_runtime_consensus as consensus;
-extern crate substrate_runtime_sandbox as sandbox;
-extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
-extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
 use rstd::{cmp, result};
@@ -78,7 +71,7 @@ pub type Event<T> = RawEvent<
 	<T as Trait>::AccountIndex
 >;
 
-/// The account was the given id was killed.
+/// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
 	/// The account was the given id was killed.
 	fn on_free_balance_zero(who: &AccountId);
@@ -98,9 +91,9 @@ impl<
 	}
 }
 
-/// The account was the given id was killed.
+/// Determinator for whether a given account is able to transfer balance.
 pub trait IsAccountLiquid<AccountId> {
-	/// The account was the given id was killed.
+	/// `true` iff the account is able to transfer funds normally.
 	fn is_account_liquid(who: &AccountId) -> bool;
 }
 
@@ -178,7 +171,7 @@ decl_storage! {
 		// This is the only balance that matters in terms of most operations on tokens. It is
 		// alone used to determine the balance when in the contract execution environment. When this
 		// balance falls below the value of `ExistentialDeposit`, then the "current account" is
-		// deleted: specifically, `Bondage` and `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
+		// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
 		// is invoked, giving a chance to external modules to cleanup data associated with
 		// the deleted account.
 		//
@@ -190,8 +183,8 @@ decl_storage! {
 		// slashed, but gets slashed last of all.
 		//
 		// This balance is a "reserve" balance that other subsystems use in order to set aside tokens
-		// that are still "owned" by the account holder, but which are unspendable. This is different
-		// and wholly unrelated to the `Bondage` system used for staking.
+		// that are still "owned" by the account holder, but which are unspendable. (This is different
+		// and wholly unrelated to the `Bondage` system used in the staking module.)
 		//
 		// When this balance falls below the value of `ExistentialDeposit`, then this "reserve account"
 		// is deleted: specifically, `ReservedBalance`.
@@ -201,7 +194,7 @@ decl_storage! {
 		pub ReservedBalance get(reserved_balance): default map [ T::AccountId => T::Balance ];
 
 
-		// Separate into Payment module.
+		// Payment stuff.
 
 		// The fee to be paid for making a transaction; the base.
 		pub TransactionBaseFee get(transaction_base_fee): required T::Balance;
@@ -278,7 +271,7 @@ impl<T: Trait> Module<T> {
 
 	// PUBLIC DISPATCH
 
-	/// Transfer some unlocked staking balance to another staker.
+	/// Transfer some liquid free balance to another staker.
 	pub fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
 		let dest = Self::lookup(dest)?;
 
@@ -296,7 +289,7 @@ impl<T: Trait> Module<T> {
 			return Err("value too low to create account");
 		}
 		if !T::IsAccountLiquid::is_account_liquid(transactor) {
-			return Err("bondage too high to send value");
+			return Err("cannot transfer illiquid funds");
 		}
 
 		let to_balance = Self::free_balance(&dest);

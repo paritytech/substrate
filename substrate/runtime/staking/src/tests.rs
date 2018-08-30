@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Tests for the module.
 
@@ -466,7 +466,7 @@ fn staking_balance_transfer_when_bonded_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		Balances::set_free_balance(&1, 111);
 		assert_ok!(Staking::stake(&1));
-		assert_noop!(Balances::transfer(&1, 2.into(), 69), "bondage too high to send value");
+		assert_noop!(Balances::transfer(&1, 2.into(), 69), "cannot transfer illiquid funds");
 	});
 }
 
