@@ -332,27 +332,27 @@ mod tests {
 
 	const CODE_TRANSFER: &str = r#"
 (module
-    ;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-    (import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
+	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
 
-    (import "env" "memory" (memory 1 1))
+	(import "env" "memory" (memory 1 1))
 
-    (func (export "call")
-        (call $ext_transfer
-            (i32.const 4)  ;; Pointer to "Transfer to" address.
-            (i32.const 8)  ;; Length of "Transfer to" address.
-            (i32.const 12)  ;; Pointer to the buffer with value to transfer
+	(func (export "call")
+		(call $ext_transfer
+			(i32.const 4)   ;; Pointer to "Transfer to" address.
+			(i32.const 8)   ;; Length of "Transfer to" address.
+			(i32.const 12)  ;; Pointer to the buffer with value to transfer
 			(i32.const 8)   ;; Length of the buffer with value to transfer.
-        )
-    )
+		)
+	)
 
-    ;; Destination AccountId to transfer the funds.
-    ;; Represented by u64 (8 bytes long) in little endian.
-    (data (i32.const 4) "\02\00\00\00\00\00\00\00")
-
-    ;; Amount of value to transfer.
+	;; Destination AccountId to transfer the funds.
 	;; Represented by u64 (8 bytes long) in little endian.
-    (data (i32.const 12) "\06\00\00\00\00\00\00\00")
+	(data (i32.const 4) "\02\00\00\00\00\00\00\00")
+
+	;; Amount of value to transfer.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
 )
 "#;
 

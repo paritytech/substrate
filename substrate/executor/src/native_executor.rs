@@ -50,7 +50,7 @@ fn gen_cache_key(code: &[u8]) -> [u8; 32] {
 
 /// fetch a runtime version from the cache or if there is no cached version yet, create
 /// the runtime version entry for `code`, determines whether `Compatibility::IsCompatible`
-/// can be used by by comparing returned RuntimeVersion to `ref_version`
+/// can be used by comparing returned RuntimeVersion to `ref_version`
 fn fetch_cached_runtime_version<'a, E: Externalities<KeccakHasher>>(
 	wasm_executor: &WasmExecutor,
 	cache: &'a mut MutexGuard<CacheType>,

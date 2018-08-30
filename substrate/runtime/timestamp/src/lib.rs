@@ -61,13 +61,14 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
-	pub Now get(now): b"tim:val" => required T::Moment;
-	// The minimum (and advised) period between blocks.
-	pub BlockPeriod get(block_period): b"tim:block_period" => required T::Moment;
+	trait Store for Module<T: Trait> as Timestamp {
+		pub Now get(now): required T::Moment;
+		// The minimum (and advised) period between blocks.
+		pub BlockPeriod get(block_period): required T::Moment;
 
-	// Did the timestamp get updated in this block?
-	DidUpdate: b"tim:did" => default bool;
+		// Did the timestamp get updated in this block?
+		DidUpdate: default bool;
+	}
 }
 
 impl<T: Trait> Module<T> {

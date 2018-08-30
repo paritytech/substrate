@@ -518,7 +518,7 @@ mod tests {
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check proof locally
-		let local_result = execution_proof_check::<KeccakHasher, RlpCodec,_,>(remote_root, remote_proof,
+		let local_result = execution_proof_check::<KeccakHasher, RlpCodec, _>(remote_root, remote_proof,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check that both results are correct

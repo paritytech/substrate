@@ -264,12 +264,12 @@ mod tests {
 			1,
 			[69u8; 32].into(),
 			if support_changes_trie {
-				hex!("7fff2f2adbc30e5382b7ad7c515983d1de901724a41af14abf794d68c6093193").into()
+				hex!("857e04d85c71f135b447fe6a3ad272f6f77538cd71bd608e062cd08f2c264aa1").into()
 			} else {
-				hex!("56c9a542e48ccf4e0821de301ea4384e87425604278b12a9db31c6d4e89ca51e").into()
+				hex!("0b401681b95d04e91dbe53835867bdcb5d9e0590b54ae06bd7b347d49f9a737f").into()
 			},
 			if support_changes_trie {
-				Some(hex!("ba0c0313a9812380261438c1cbf38a9c75d5a7628d29193393a17ae7b7181dcd").into())
+				Some(hex!("8ed622cd0d067cc908d3284ab9fcf8d6341784a8c743eb2cdd025139ccb7eb5d").into())
 			} else {
 				None
 			},
@@ -285,7 +285,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("e0172ce6c10694ea74c17694cf9ab83f9553b4797aa74cc51dece45bd91533b4").into(),
+			hex!("254b1a90e1928a1629ef73f1691a9ef7cdac5b66fb980e0266cb0a32ddf84a0e").into(),
 			None,
 			vec![
 				BareExtrinsic {
@@ -306,7 +306,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("be186810570e437f0d803493fced9879207b064a0701fd8d68662b9563b4d33e").into(),
+			hex!("6e3b6aaf0be927394b520e3ebc0c34a7c26519711bc836e116e371273c3aca44").into(),
 			None,
 			vec![BareExtrinsic {
 				signed: alice(),

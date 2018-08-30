@@ -43,7 +43,7 @@ Other examples include the parachain-heads extrinsic in Polkadot and the "note-m
 
 Substrate chains all have a runtime. The runtime is a WebAssembly "blob" that includes a number of entry-points. Some entry-points are required as part of the underlying Substrate specification. Others are merely convention and required for the default implemnentation of the Substrate client to be able to author blocks. In short these two sets are:
 
-The runtime is API entry points are expected to be in the runtime's `api` module. There is a specific ABI based upon the Substrate Simple Codec (`codec`) which is used to encode and decode the arguments for these functions and specify where and how they should passed. A special macro is provided called `impl_stubs` which prepares all functionality for marshalling arguments and basicall yjust allows you to write the functions as you would normally (except for the fact that there must be example one argument - tuples are allowed to workaround).
+The runtime is API entry points are expected to be in the runtime's `api` module. There is a specific ABI based upon the Substrate Simple Codec (`codec`) which is used to encode and decode the arguments for these functions and specify where and how they should passed. A special macro is provided called `impl_stubs` which prepares all functionality for marshalling arguments and basically just allows you to write the functions as you would normally (except for the fact that there must be example one argument - tuples are allowed to workaround).
 
 Here's the Polkadot API implementation as of PoC-2:
 

@@ -137,7 +137,7 @@ impl<S, F, Block, H, C> BlockImportOperation<Block, H, C> for ImportOperation<Bl
 where
 	Block: BlockT,
 	F: Fetcher<Block>,
-    S: BlockchainStorage<Block>,
+	S: BlockchainStorage<Block>,
 	H: Hasher,
 	C: NodeCodec<H>,
 {

@@ -190,97 +190,98 @@ impl<B, A, I> From<RawEvent<B, A, I>> for () {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
+	trait Store for Module<T: Trait> as Staking {
 
-	// The length of the bonding duration in eras.
-	pub BondingDuration get(bonding_duration): b"sta:loc" => required T::BlockNumber;
-	// The ideal number of staking participants.
-	pub ValidatorCount get(validator_count): b"sta:vac" => required u32;
-	// Minimum number of staking participants before emergency conditions are imposed.
-	pub MinimumValidatorCount: b"sta:minimum_validator_count" => u32;
-	// The length of a staking era in sessions.
-	pub SessionsPerEra get(sessions_per_era): b"sta:spe" => required T::BlockNumber;
-	// The total amount of stake on the system.
-	// TODO: this doesn't actually track total stake yet - it should do.
-	pub TotalStake get(total_stake): b"sta:tot" => required T::Balance;
-	// The fee to be paid for making a transaction; the base.
-	pub TransactionBaseFee get(transaction_base_fee): b"sta:basefee" => required T::Balance;
-	// The fee to be paid for making a transaction; the per-byte portion.
-	pub TransactionByteFee get(transaction_byte_fee): b"sta:bytefee" => required T::Balance;
-	// The minimum amount allowed to keep an account open.
-	pub ExistentialDeposit get(existential_deposit): b"sta:existential_deposit" => required T::Balance;
-	// The amount credited to a destination's account whose index was reclaimed.
-	pub ReclaimRebate get(reclaim_rebate): b"sta:reclaim_rebate" => required T::Balance;
-	// The fee required to make a transfer.
-	pub TransferFee get(transfer_fee): b"sta:transfer_fee" => required T::Balance;
-	// The fee required to create an account. At least as big as ReclaimRebate.
-	pub CreationFee get(creation_fee): b"sta:creation_fee" => required T::Balance;
-	// Maximum reward, per validator, that is provided per acceptable session.
-	pub SessionReward get(session_reward): b"sta:session_reward" => required T::Balance;
-	// Slash, per validator that is taken per abnormal era end.
-	pub EarlyEraSlash get(early_era_slash): b"sta:early_era_slash" => required T::Balance;
-	// Number of instances of offline reports before slashing begins for validators.
-	pub OfflineSlashGrace get(offline_slash_grace): b"sta:offline_slash_grace" => default u32;
+		// The length of the bonding duration in eras.
+		pub BondingDuration get(bonding_duration): required T::BlockNumber;
+		// The ideal number of staking participants.
+		pub ValidatorCount get(validator_count): required u32;
+		// Minimum number of staking participants before emergency conditions are imposed.
+		pub MinimumValidatorCount: u32;
+		// The length of a staking era in sessions.
+		pub SessionsPerEra get(sessions_per_era): required T::BlockNumber;
+		// The total amount of stake on the system.
+		// TODO: this doesn't actually track total stake yet - it should do.
+		pub TotalStake get(total_stake): required T::Balance;
+		// The fee to be paid for making a transaction; the base.
+		pub TransactionBaseFee get(transaction_base_fee): required T::Balance;
+		// The fee to be paid for making a transaction; the per-byte portion.
+		pub TransactionByteFee get(transaction_byte_fee): required T::Balance;
+		// The minimum amount allowed to keep an account open.
+		pub ExistentialDeposit get(existential_deposit): required T::Balance;
+		// The amount credited to a destination's account whose index was reclaimed.
+		pub ReclaimRebate get(reclaim_rebate): required T::Balance;
+		// The fee required to make a transfer.
+		pub TransferFee get(transfer_fee): required T::Balance;
+		// The fee required to create an account. At least as big as ReclaimRebate.
+		pub CreationFee get(creation_fee): required T::Balance;
+		// Maximum reward, per validator, that is provided per acceptable session.
+		pub SessionReward get(session_reward): required T::Balance;
+		// Slash, per validator that is taken per abnormal era end.
+		pub EarlyEraSlash get(early_era_slash): required T::Balance;
+		// Number of instances of offline reports before slashing begins for validators.
+		pub OfflineSlashGrace get(offline_slash_grace): default u32;
 
-	// The current era index.
-	pub CurrentEra get(current_era): b"sta:era" => required T::BlockNumber;
-	// Preference over how many times the validator should get slashed for being offline before they are automatically unstaked.
-	pub SlashPreferenceOf get(slash_preference_of): b"sta:slash_preference_of" => default map [ T::AccountId => SlashPreference ];
-	// All the accounts with a desire to stake.
-	pub Intentions get(intentions): b"sta:wil:" => default Vec<T::AccountId>;
-	// All nominator -> nominee relationships.
-	pub Nominating get(nominating): b"sta:nominating" => map [ T::AccountId => T::AccountId ];
-	// Nominators for a particular account.
-	pub NominatorsFor get(nominators_for): b"sta:nominators_for" => default map [ T::AccountId => Vec<T::AccountId> ];
-	// Nominators for a particular account that is in action right now.
-	pub CurrentNominatorsFor get(current_nominators_for): b"sta:current_nominators_for" => default map [ T::AccountId => Vec<T::AccountId> ];
-	// The next value of sessions per era.
-	pub NextSessionsPerEra get(next_sessions_per_era): b"sta:nse" => T::BlockNumber;
-	// The session index at which the era length last changed.
-	pub LastEraLengthChange get(last_era_length_change): b"sta:lec" => default T::BlockNumber;
-	// The current era stake threshold
-	pub StakeThreshold get(stake_threshold): b"sta:stake_threshold" => required T::Balance;
+		// The current era index.
+		pub CurrentEra get(current_era): required T::BlockNumber;
+		// Preference over how many times the validator should get slashed for being offline before they are automatically unstaked.
+		pub SlashPreferenceOf get(slash_preference_of): default map [ T::AccountId => SlashPreference ];
+		// All the accounts with a desire to stake.
+		pub Intentions get(intentions): default Vec<T::AccountId>;
+		// All nominator -> nominee relationships.
+		pub Nominating get(nominating): map [ T::AccountId => T::AccountId ];
+		// Nominators for a particular account.
+		pub NominatorsFor get(nominators_for): default map [ T::AccountId => Vec<T::AccountId> ];
+		// Nominators for a particular account that is in action right now.
+		pub CurrentNominatorsFor get(current_nominators_for): default map [ T::AccountId => Vec<T::AccountId> ];
+		// The next value of sessions per era.
+		pub NextSessionsPerEra get(next_sessions_per_era): T::BlockNumber;
+		// The session index at which the era length last changed.
+		pub LastEraLengthChange get(last_era_length_change): default T::BlockNumber;
+		// The current era stake threshold
+		pub StakeThreshold get(stake_threshold): required T::Balance;
 
-	// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
-	pub SlashCount get(slash_count): b"sta:slash_count" => default map [ T::AccountId => u32 ];
+		// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
+		pub SlashCount get(slash_count): default map [ T::AccountId => u32 ];
 
-	// The next free enumeration set.
-	pub NextEnumSet get(next_enum_set): b"sta:next_enum" => required T::AccountIndex;
-	// The enumeration sets.
-	pub EnumSet get(enum_set): b"sta:enum_set" => default map [ T::AccountIndex => Vec<T::AccountId> ];
+		// The next free enumeration set.
+		pub NextEnumSet get(next_enum_set): required T::AccountIndex;
+		// The enumeration sets.
+		pub EnumSet get(enum_set): default map [ T::AccountIndex => Vec<T::AccountId> ];
 
-	// We are forcing a new era.
-	pub ForcingNewEra get(forcing_new_era): b"sta:forcing_new_era" => ();
+		// We are forcing a new era.
+		pub ForcingNewEra get(forcing_new_era): ();
 
-	// The "free" balance of a given account.
-	//
-	// This is the only balance that matters in terms of most operations on tokens. It is
-	// alone used to determine the balance when in the contract execution environment. When this
-	// balance falls below the value of `ExistentialDeposit`, then the "current account" is
-	// deleted: specifically, `Bondage` and `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
-	// is invoked, giving a chance to external modules to cleanup data associated with
-	// the deleted account.
-	//
-	// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
-	// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-	pub FreeBalance get(free_balance): b"sta:bal:" => default map [ T::AccountId => T::Balance ];
+		// The "free" balance of a given account.
+		//
+		// This is the only balance that matters in terms of most operations on tokens. It is
+		// alone used to determine the balance when in the contract execution environment. When this
+		// balance falls below the value of `ExistentialDeposit`, then the "current account" is
+		// deleted: specifically, `Bondage` and `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
+		// is invoked, giving a chance to external modules to cleanup data associated with
+		// the deleted account.
+		//
+		// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
+		// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		pub FreeBalance get(free_balance): default map [ T::AccountId => T::Balance ];
 
-	// The amount of the balance of a given account that is exterally reserved; this can still get
-	// slashed, but gets slashed last of all.
-	//
-	// This balance is a "reserve" balance that other subsystems use in order to set aside tokens
-	// that are still "owned" by the account holder, but which are unspendable. This is different
-	// and wholly unrelated to the `Bondage` system used for staking.
-	//
-	// When this balance falls below the value of `ExistentialDeposit`, then this "reserve account"
-	// is deleted: specifically, `ReservedBalance`.
-	//
-	// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
-	// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-	pub ReservedBalance get(reserved_balance): b"sta:lbo:" => default map [ T::AccountId => T::Balance ];
+		// The amount of the balance of a given account that is exterally reserved; this can still get
+		// slashed, but gets slashed last of all.
+		//
+		// This balance is a "reserve" balance that other subsystems use in order to set aside tokens
+		// that are still "owned" by the account holder, but which are unspendable. This is different
+		// and wholly unrelated to the `Bondage` system used for staking.
+		//
+		// When this balance falls below the value of `ExistentialDeposit`, then this "reserve account"
+		// is deleted: specifically, `ReservedBalance`.
+		//
+		// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
+		// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		pub ReservedBalance get(reserved_balance): default map [ T::AccountId => T::Balance ];
 
-	// The block at which the `who`'s funds become entirely liquid.
-	pub Bondage get(bondage): b"sta:bon:" => default map [ T::AccountId => T::BlockNumber ];
+		// The block at which the `who`'s funds become entirely liquid.
+		pub Bondage get(bondage): default map [ T::AccountId => T::BlockNumber ];
+	}
 }
 
 /// Whatever happened about the hint given when creating the new account.
