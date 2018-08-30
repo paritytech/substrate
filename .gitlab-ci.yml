@@ -14,6 +14,7 @@ variables:
 
 cache:
   key:                             "${CI_JOB_NAME}"
+  policy: pull
   paths:
     - ${CI_PROJECT_DIR}/target/
     - ${CI_PROJECT_DIR}/cargo/
