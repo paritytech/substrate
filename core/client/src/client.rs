@@ -724,11 +724,46 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok(self.header(&BlockId::Hash(info.best_hash))?.expect("Best block header must always exist"))
 	}
 
-	/// Get the most recent block hash of the best (longest) chain
-	/// that contains block with the given `block_hash`.
-	pub fn best_chain_containing_block_hash(&self, block_hash: Block::Hash) -> error::Result<Option<Block::Hash>> {
-		// TODO [snd] add implementation
-		unimplemented!()
+	/// Get the most recent block hash of the best (longest) chains
+	/// that contain block with the given `target_hash`.
+	/// Returns `None` if no chain contains `target_hash`
+	pub fn best_chain_containing_block_hash(&self, target_hash: Block::Hash) -> error::Result<Option<Block::Hash>> {
+		let target_header = self.backend.blockchain().header(BlockId::Hash(target_hash));
+
+		let leaf_hashes = self.backend.blockchain().leaf_hashes();
+
+		// for each chain. longest chain first. shortest last
+		for leaf_hash in leaf_hashes {
+			// start at the leaf
+			let mut current_hash = leaf_hash;
+			// go backwards (via parent links)
+			loop {
+				// until we find target...
+				if current_hash == target_hash {
+					return leaf_hash;
+				}
+				// TODO [snd] handle if no block for this
+				let current_header = self.backend.blockchain().header(current_hash.clone())?;
+
+				// ...or go below its block number
+				if current_header.number() < target_header.number() {
+					continue;
+				}
+
+				current_hash = current_header.parent_hash();
+			}
+		}
+
+		// `target_hash` not found in any chain
+		Ok(None)
+
+		// TODO [snd] test with:
+		// no blocks
+		// total longest = best containing
+		// total longest != best containing
+		// multiple best containing
+		// returns empty vec
+		// test for every block in test chains
 	}
 }
 
