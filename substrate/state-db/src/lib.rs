@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! State database maintenance. Handles finalization and pruning in the database. The input to
-//! this module is a `ChangeSet` which is basicall a list of key-value pairs (trie nodes) that
+//! this module is a `ChangeSet` which is basically a list of key-value pairs (trie nodes) that
 //! were added or deleted during block execution.
 //!
 //! # Finalization.
@@ -94,7 +94,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 pub struct ChangeSet<H: Hash> {
 	/// Inserted nodes.
 	pub inserted: Vec<(H, DBValue)>,
-	/// Delted nodes.
+	/// Deleted nodes.
 	pub deleted: Vec<H>,
 }
 
@@ -108,7 +108,7 @@ pub struct CommitSet<H: Hash> {
 	pub meta: ChangeSet<Vec<u8>>,
 }
 
-/// Pruning contraints. If none are specified pruning is
+/// Pruning constraints. If none are specified pruning is
 #[derive(Default, Debug, Clone)]
 pub struct Constraints {
 	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only unfinalized states.
@@ -187,7 +187,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
-				// write changes immediatelly
+				// write changes immediately
 				CommitSet {
 					data: changeset,
 					meta: Default::default(),
