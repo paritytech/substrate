@@ -104,8 +104,7 @@ pub struct Identity;
 impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
-pub struct Empty;
-impl<T> Convert<T, ()> for Empty {
+impl<T> Convert<T, ()> for () {
 	fn convert(_: T) -> () { () }
 }
 
