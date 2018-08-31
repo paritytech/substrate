@@ -88,7 +88,7 @@ pub struct Executive<
 	Lookup,
 	Payment,
 	Finalisation,
->(PhantomData<(System, Block, Lookup, Payment, Finalisation)>);
+>(PhantomData<(System, Block, Lookup, Payment, Event, Finalisation)>);
 
 impl<
 	Address,
@@ -205,7 +205,7 @@ impl<
 		// decode parameters and dispatch
 		let r = xt.apply();
 
-		<system::Module<System>>::note_applied_extrinsic();
+		<system::Module<System>>::note_applied_extrinsic(&r);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
 	}

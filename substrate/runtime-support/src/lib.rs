@@ -93,9 +93,15 @@ macro_rules! impl_outer_event {
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum $name {
+			system($crate::system::Event),
 			$(
 				$module($module::Event<$trait>),
 			)*
+		}
+		impl From<$crate::system::Event> for $name {
+			fn from(x: $create::system::Event) -> Self {
+				$name::system(x)
+			}
 		}
 		$(
 			impl From<$module::Event<$trait>> for $name {

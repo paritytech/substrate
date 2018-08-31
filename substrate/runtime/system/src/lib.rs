@@ -83,7 +83,7 @@ pub trait Trait: Eq + Clone {
 		Hash = Self::Hash,
 		Digest = Self::Digest
 	>;
-	type Event: Parameter + Member;
+	type Event: Parameter + Member + From<Event>;
 }
 
 decl_module! {
@@ -108,6 +108,18 @@ pub struct EventRecord<E: Parameter + Member> {
 	pub phase: Phase,
 	/// The event itself.
 	pub event: E,
+}
+
+/// Event for the system module. 
+pub enum Event {
+	/// An extrinsic completed successfully.
+	ExtrinsicSuccess,
+	/// An extrinsic failed.
+	ExtrinsicFailed,
+}
+
+impl<N> From<RawEvent<N>> for () {
+	fn from(_: RawEvent<N>) -> () { () }
 }
 
 decl_storage! {
@@ -230,7 +242,12 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic() {
+	pub fn note_applied_extrinsic(r: &Result<(), &'static str>) {
+		Self::deposit_event(r
+			.map(|_| Event::ExtrinsicSuccess)
+			.map_err(|_| Event::ExtrinsicFailed)
+			.into()
+		);
 		<ExtrinsicIndex<T>>::put(<ExtrinsicIndex<T>>::get().unwrap_or_default() + 1u32);
 	}
 
