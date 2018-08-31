@@ -497,6 +497,7 @@ mod tests {
 		fn call<E: Externalities<H>>(
 			&self,
 			ext: &mut E,
+			_heap_pages: usize,
 			_code: &[u8],
 			_method: &str,
 			_data: &[u8],
