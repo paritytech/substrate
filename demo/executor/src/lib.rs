@@ -260,7 +260,7 @@ mod tests {
 			// Blake
 			// hex!("3437bf4b182ab17bb322af5c67e55f6be487a77084ad2b4e27ddac7242e4ad21").into(),
 			// Keccak
-			hex!("a3f5ce86e303f4001d14124ab690428d10cd9e60d21699b42096358c2422445f").into(),
+			hex!("508a68a0918f614b86b2ccfd0975754f6d2abe1026a34e42d6d8d5abdf4db010").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -276,7 +276,7 @@ mod tests {
 			// Blake
 			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
 			// Keccak
-			hex!("72dc147d2619a978adc38a38abc85bb77e25b0095ad38b15f97d56ccb66f36e8").into(),
+			hex!("171f1b2c01c9c616e40ee2d842a699286b50a5a74874b56d826094dadedffb27").into(),
 			vec![
 				BareExtrinsic {
 					signed: bob(),
@@ -299,7 +299,7 @@ mod tests {
 			// Blake
 			// hex!("2c7231a9c210a7aa4bea169d944bc4aaacd517862b244b8021236ffa7f697991").into(),
 			// Keccak
-			hex!("7aa14ff631321ca5aa22e6fa53e3569faa732758993fa82e2dbde31a1b720391").into(),
+			hex!("e45221804da3a3609454d4e09debe6364cc6af63c2ff067d802d1af62fea32ae").into(),
 			vec![BareExtrinsic {
 				signed: alice(),
 				index: 0,
@@ -321,6 +321,10 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
 					event: Event::balances(balances::RawEvent::NewAccount(bob(), 1, balances::NewAccountOutcome::NoHint))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: Event::system(system::Event::ExtrinsicSuccess)
 				}
 			]);
 		});
@@ -331,6 +335,14 @@ mod tests {
 			assert_eq!(Balances::total_balance(&alice()), 30);
 			assert_eq!(Balances::total_balance(&bob()), 78);
 			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::session(session::RawEvent::NewSession(1))

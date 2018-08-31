@@ -205,7 +205,7 @@ impl<
 		// decode parameters and dispatch
 		let r = xt.apply();
 
-		<system::Module<System>>::note_applied_extrinsic();
+		<system::Module<System>>::note_applied_extrinsic(&r);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
 	}
@@ -233,6 +233,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
+	use system;
 
 	struct NullLookup;
 	impl AuxLookup for NullLookup {
