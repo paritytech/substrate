@@ -446,7 +446,7 @@ impl Drop for AgreementHandle {
 /// This assumes that it is being run in the context of a tokio runtime.
 pub struct BftService<B: Block, P, I> {
 	client: Arc<I>,
-	live_agreement: Mutex<Option<(B::Hash, AgreementHandle)>>,
+	live_agreement: Mutex<Option<(B::Header, AgreementHandle)>>,
 	round_cache: Arc<Mutex<RoundCache<B::Hash>>>,
 	round_timeout_multiplier: u64,
 	key: Arc<ed25519::Pair>, // TODO: key changing over time.
@@ -565,7 +565,7 @@ impl<B, P, I> BftService<B, P, I>
 		let (tx, rx) = oneshot::channel();
 
 		// cancel current agreement.
-		*live_agreement = Some((hash, AgreementHandle {
+		*live_agreement = Some((header.clone(), AgreementHandle {
 			send_cancel: Some(tx),
 			status: status.clone(),
 		}));
@@ -592,12 +592,12 @@ impl<B, P, I> BftService<B, P, I>
 	/// Get a reference to the underyling client.
 	pub fn client(&self) -> &I { &*self.client }
 
-	fn can_build_on_inner(&self, header: &B::Header, live: &(B::Hash, AgreementHandle)) -> bool {
+	fn can_build_on_inner(&self, header: &B::Header, live: &(B::Header, AgreementHandle)) -> bool {
 		let hash = header.hash();
-		let &(ref live_hash, ref handle) = live;
+		let &(ref live_header, ref handle) = live;
 		match handle.status() {
-			_ if *header.parent_hash() == *live_hash => true, // can always follow with next block.
-			status::BAD => hash == *live_hash, // bad block can be re-agreed on.
+			_ if *header != *live_header && *live_header.parent_hash() != hash => true, // can always follow with next block.
+			status::BAD => hash == live_header.hash(), // bad block can be re-agreed on.
 			_ => false, // canceled won't appear since we overwrite the handle before returning.
 		}
 	}
@@ -911,11 +911,11 @@ mod tests {
 		let second_hash = second.hash();
 
 		let mut first_bft = service.build_upon(&first).unwrap().unwrap();
-		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first_hash);
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first);
 
 		let _second_bft = service.build_upon(&second).unwrap();
-		assert!(service.live_agreement.lock().as_ref().unwrap().0 != first_hash);
-		assert!(service.live_agreement.lock().as_ref().unwrap().0 == second_hash);
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 != first);
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 == second);
 
 		// first_bft has been cancelled. need to swap out so we can check it.
 		let (_tx, mut rx) = oneshot::channel();
@@ -1082,7 +1082,41 @@ mod tests {
 		second.parent_hash = first_hash;
 
 		let _ = service.build_upon(&first).unwrap();
-		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first_hash);
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first);
 		service.live_agreement.lock().take();
+	}
+
+	#[test]
+	fn bft_can_build_though_skipped() {
+		let client = FakeClient {
+			authorities: vec![
+				Keyring::One.to_raw_public().into(),
+				Keyring::Two.to_raw_public().into(),
+				Keyring::Alice.to_raw_public().into(),
+				Keyring::Eve.to_raw_public().into(),
+			],
+			imported_heights: Mutex::new(HashSet::new()),
+		};
+
+		let service = make_service(client);
+
+		let first = from_block_number(2);
+		let first_hash = first.hash();
+
+		let mut second = from_block_number(3);
+		second.parent_hash = first_hash;
+
+		let mut third = from_block_number(4);
+		third.parent_hash = second.hash();
+
+		let _ = service.build_upon(&first).unwrap();
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first);
+		// BFT has not seen second, but will move forward on third
+		service.build_upon(&third).unwrap();
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 == third);
+
+		// but we are not walking backwards
+		service.build_upon(&second).unwrap();
+		assert!(service.live_agreement.lock().as_ref().unwrap().0 == third);
 	}
 }
