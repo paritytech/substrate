@@ -321,13 +321,6 @@ impl<T> MaybeDisplay for T {}
 pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
-/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
-/// each `Codec`.
-pub trait Digest {
-	type Item: Member;
-	fn push(&mut self, item: Self::Item);
-}
-
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
@@ -432,4 +425,47 @@ pub trait Applyable: Sized + Send + Sync {
 	fn index(&self) -> &Self::Index;
 	fn sender(&self) -> &Self::AccountId;
 	fn apply(self) -> Result<(), &'static str>;
+}
+
+/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
+/// each `Codec`.
+pub trait Digest {
+	type Item: DigestItem;
+
+	fn push(&mut self, item: Self::Item);
+}
+
+/// Single digest item.
+pub trait DigestItem: Member {
+	/// Type of authorities change log entry.
+	type AuthoritiesChange: AuthoritiesChangeDigest<Self>; // TODO: = StubDigestItem when associated type defaults are stabilized
+
+	/// Returns Some if the entry is the 'authorities change' log entry.
+	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
+		None
+	}
+}
+
+/// Authorities change digest item.
+pub trait AuthoritiesChangeDigest<I: DigestItem> {
+	/// Type of authority Id.
+	type AuthorityId: Member;
+
+	/// Make new authorities change log entry.
+	fn new(authorities: Vec<Self::AuthorityId>) -> Option<I>;
+
+	/// Get new authorities set.
+	fn authorities(&self) -> &[Self::AuthorityId];
+}
+
+/// Empty digest item that is never created and used.
+///
+/// Should be used as a stub for items that are not supported by runtimes.
+pub struct StubDigestItem;
+
+impl<I: DigestItem> AuthoritiesChangeDigest<I> for StubDigestItem {
+	type AuthorityId = ();
+
+	fn new(_authorities: Vec<Self::AuthorityId>) -> Option<I> { None }
+	fn authorities(&self) -> &[Self::AuthorityId] { unreachable!("StubDigestItem is never created") }
 }

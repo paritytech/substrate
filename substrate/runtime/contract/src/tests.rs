@@ -32,6 +32,7 @@ pub struct Test;
 impl HasPublicAux for Test {
 	type PublicAux = u64;
 }
+
 impl system::Trait for Test {
 	type PublicAux = <Self as HasPublicAux>::PublicAux;
 	type Index = u64;
