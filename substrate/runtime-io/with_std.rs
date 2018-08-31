@@ -23,6 +23,8 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine;
 extern crate triehash;
 extern crate ed25519;
+extern crate hashdb;
+extern crate rlp;
 
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
@@ -35,6 +37,8 @@ pub use primitives::KeccakHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 use primitives::H256;
+use hashdb::Hasher;
+use rlp::Encodable;
 
 // TODO: use the real error, not NoError.
 
@@ -101,26 +105,37 @@ pub fn storage_root() -> H256 {
 	).unwrap_or(H256::new())
 }
 
-/// A Keccak/Rlp flavoured trie root formed from the enumerated items.
-pub fn keccak_rlp_enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
-	triehash::ordered_trie_root::<KeccakHasher, _, _>(serialised_values.iter().map(|s| s.to_vec())).0
+/// A trie root formed from the enumerated items.
+pub fn enumerated_trie_root<H>(serialised_values: &[&[u8]]) -> H::Out
+where
+	H: Hasher,
+	H::Out: Encodable + Ord,
+{
+	// triehash::ordered_trie_root::<KeccakHasher, _, _>(serialised_values.iter().map(|s| s.to_vec())).0
+	triehash::ordered_trie_root::<H, _, _>(serialised_values.iter().map(|s| s.to_vec()))
 }
 
-/// A Keccak/Rlp flavoured trie root formed from the iterated items.
-pub fn keccak_rlp_trie_root<
+/// A trie root formed from the iterated items.
+pub fn trie_root<H, I, A, B>(input: I) -> H::Out
+where
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
->(input: I) -> [u8; 32] {
-	triehash::trie_root::<KeccakHasher, _, _, _>(input).0
+	H: Hasher,
+	<H as Hasher>::Out: Encodable + Ord,
+{
+	triehash::trie_root::<H, _, _, _>(input)
 }
 
-/// A Keccak/Rlp flavoured trie root formed from the enumerated items.
-pub fn keccak_rlp_ordered_trie_root<
+/// A trie root formed from the enumerated items.
+pub fn ordered_trie_root<H, I, A>(input: I) -> H::Out
+where
 	I: IntoIterator<Item = A>,
-	A: AsRef<[u8]>
->(input: I) -> [u8; 32] {
-	triehash::ordered_trie_root::<KeccakHasher, _, _>(input).0
+	A: AsRef<[u8]>,
+	H: Hasher,
+	<H as Hasher>::Out: Encodable + Ord,
+{
+	triehash::ordered_trie_root::<H, _, _>(input)
 }
 
 /// Verify a ed25519 signature.
