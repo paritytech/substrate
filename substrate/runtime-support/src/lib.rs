@@ -86,21 +86,21 @@ macro_rules! assert_ok {
 
 #[macro_export]
 macro_rules! impl_outer_event {
-	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $system_module:ident, $( $module:ident ),* }) => {
+	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $( $module:ident ),* }) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum $name {
-			system($system_module::Event),
+			system(system::Event),
 			$(
 				$module($module::Event<$trait>),
 			)*
 		}
-		impl From<$crate::system::Event> for $name {
-			fn from(x: $crate::system::Event) -> Self {
-				$name::$system_module(x)
+		impl From<system::Event> for $name {
+			fn from(x: system::Event) -> Self {
+				$name::system(x)
 			}
 		}
 		$(

@@ -246,7 +246,7 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Test {
-			system, balances, session, staking
+			balances, session, staking
 		}
 	}
 

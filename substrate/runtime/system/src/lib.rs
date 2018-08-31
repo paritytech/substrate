@@ -111,6 +111,8 @@ pub struct EventRecord<E: Parameter + Member> {
 }
 
 /// Event for the system module. 
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub enum Event {
 	/// An extrinsic completed successfully.
 	ExtrinsicSuccess,
