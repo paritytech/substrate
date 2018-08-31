@@ -22,10 +22,9 @@ use runtime_primitives::traits::{Checkable, AuxLookup};
 use timestamp::Call as TimestampCall;
 use parachains::Call as ParachainsCall;
 use staking::Call as StakingCall;
-use version::RuntimeVersion;
 
 /// Produces the list of inherent extrinsics.
-pub fn inherent_extrinsics(data: ::primitives::InherentData, runtime_version: RuntimeVersion) -> Vec<UncheckedExtrinsic> {
+pub fn inherent_extrinsics(data: ::primitives::InherentData, spec_version: u32) -> Vec<UncheckedExtrinsic> {
 	let make_inherent = |function|	UncheckedExtrinsic::new(
 		Extrinsic {
 			signed: Default::default(),
@@ -40,7 +39,7 @@ pub fn inherent_extrinsics(data: ::primitives::InherentData, runtime_version: Ru
 		make_inherent(Call::Parachains(ParachainsCall::set_heads(data.parachain_heads))),
 	];
 
-	if !data.offline_indices.is_empty() && runtime_version.spec_version == 4 {
+	if !data.offline_indices.is_empty() && spec_version == 5 {
 		inherent.push(make_inherent(
 			Call::Staking(StakingCall::note_missed_proposal(data.offline_indices))
 		));
