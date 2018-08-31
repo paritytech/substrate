@@ -118,8 +118,8 @@ pub enum Event {
 	ExtrinsicFailed,
 }
 
-impl<N> From<RawEvent<N>> for () {
-	fn from(_: RawEvent<N>) -> () { () }
+impl From<Event> for () {
+	fn from(_: Event) -> () { () }
 }
 
 decl_storage! {
@@ -243,11 +243,10 @@ impl<T: Trait> Module<T> {
 
 	/// To be called immediately after an extrinsic has been applied.
 	pub fn note_applied_extrinsic(r: &Result<(), &'static str>) {
-		Self::deposit_event(r
-			.map(|_| Event::ExtrinsicSuccess)
-			.map_err(|_| Event::ExtrinsicFailed)
-			.into()
-		);
+		Self::deposit_event(match r {
+			Ok(_) => Event::ExtrinsicSuccess,
+			Err(_) => Event::ExtrinsicFailed,
+		}.into());
 		<ExtrinsicIndex<T>>::put(<ExtrinsicIndex<T>>::get().unwrap_or_default() + 1u32);
 	}
 
@@ -318,6 +317,15 @@ mod tests {
 		type Event = u16;
 	}
 
+	impl From<Event> for u16 {
+		fn from(e: Event) -> u16 {
+			match e { 
+				Event::ExtrinsicSuccess => 100,
+				Event::ExtrinsicFailed => 101,
+			}
+		}
+	}
+
 	type System = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
@@ -335,15 +343,15 @@ mod tests {
 
 			System::initialise(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic();
-			System::deposit_event(69u16);
-			System::note_applied_extrinsic();
+			System::note_applied_extrinsic(&Ok(()));
+			System::note_applied_extrinsic(&Err(""));
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalise();
 			assert_eq!(System::events(), vec![
 				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16 },
-				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 69u16 },
+				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16 },
+				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16 },
 				EventRecord { phase: Phase::Finalization, event: 3u16 }
 			]);
 		});

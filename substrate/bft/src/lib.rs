@@ -908,7 +908,7 @@ mod tests {
 
 		let mut second = from_block_number(3);
 		second.parent_hash = first_hash;
-		let second_hash = second.hash();
+		let _second_hash = second.hash();
 
 		let mut first_bft = service.build_upon(&first).unwrap().unwrap();
 		assert!(service.live_agreement.lock().as_ref().unwrap().0 == first);

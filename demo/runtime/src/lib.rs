@@ -172,7 +172,7 @@ pub type CouncilVoting = council::voting::Module<Concrete>;
 
 impl_outer_event! {
 	pub enum Event for Concrete {
-		balances, session, staking
+		system, balances, session, staking
 	}
 }
 

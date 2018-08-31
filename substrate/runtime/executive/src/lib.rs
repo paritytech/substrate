@@ -88,7 +88,7 @@ pub struct Executive<
 	Lookup,
 	Payment,
 	Finalisation,
->(PhantomData<(System, Block, Lookup, Payment, Event, Finalisation)>);
+>(PhantomData<(System, Block, Lookup, Payment, Finalisation)>);
 
 impl<
 	Address,
@@ -233,6 +233,7 @@ mod tests {
 	use primitives::BuildStorage;
 	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
+	use system;
 
 	struct NullLookup;
 	impl AuxLookup for NullLookup {
@@ -245,7 +246,7 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Test {
-			balances, session, staking
+			system, balances, session, staking
 		}
 	}
 
