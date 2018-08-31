@@ -231,7 +231,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
+	use primitives::traits::{HasPublicAux, Empty, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
 
 	struct NullLookup;
@@ -259,6 +259,7 @@ mod tests {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
 		type OnOfflineValidator = staking::Module<Test>;
+		type ConvertSessionKeyToAuthorityId = Empty;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

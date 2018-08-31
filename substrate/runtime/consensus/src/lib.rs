@@ -39,10 +39,11 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_primitives;
 
 use rstd::prelude::*;
-use runtime_support::{storage, Parameter};
+use runtime_support::{storage, StorageValue, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, MaybeEmpty};
+use primitives::traits::{MaybeSerializeDebug, MaybeEmpty, Convert,
+	Executable, DigestItem, AuthoritiesChangeDigest};
 use primitives::bft::MisbehaviorReport;
 
 #[cfg(any(feature = "std", test))]
@@ -77,6 +78,9 @@ pub trait Trait: system::Trait {
 
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 	type OnOfflineValidator: OnOfflineValidator;
+	type ConvertSessionKeyToAuthorityId: Convert<Self::SessionKey,
+		<<system::DigestItemFor<Self> as DigestItem>::AuthoritiesChange as
+			AuthoritiesChangeDigest<system::DigestItemFor<Self>>>::AuthorityId>;
 }
 
 decl_module! {
@@ -93,6 +97,14 @@ decl_module! {
 	pub enum PrivCall {
 		fn set_code(new: Vec<u8>) -> Result = 0;
 		fn set_storage(items: Vec<KeyValue>) -> Result = 1;
+	}
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as Consensus {
+		// Authorities set actual at the block execution start. IsSome only if
+		// the set has been changed.
+		SavedAuthorities get(saved_authorities): default Vec<T::SessionKey>;
 	}
 }
 
@@ -149,12 +161,29 @@ impl<T: Trait> Module<T> {
 	///
 	/// Called by `next_session` only.
 	pub fn set_authorities(authorities: &[T::SessionKey]) {
-		AuthorityStorageVec::<T::SessionKey>::set_items(authorities);
+		let previous_authorities = AuthorityStorageVec::<T::SessionKey>::items();
+		if previous_authorities != authorities {
+			let saved_authorities = Self::saved_authorities();
+			if saved_authorities.is_empty() {
+				<SavedAuthorities<T>>::put(previous_authorities);
+			}
+
+			AuthorityStorageVec::<T::SessionKey>::set_items(authorities);
+		}
 	}
 
 	/// Set a single authority by index.
 	pub fn set_authority(index: u32, key: &T::SessionKey) {
 		AuthorityStorageVec::<T::SessionKey>::set_item(index, key);
+	}
+}
+
+/// Finalization hook for the consensus module.
+impl<T: Trait> Executable for Module<T> {
+	fn execute() {
+		let _saved_authorities = <SavedAuthorities<T>>::take();
+
+		// TODO: call deposit_log for saved_authorities
 	}
 }
 

@@ -86,6 +86,9 @@ pub trait Trait: Eq + Clone {
 	type Event: Parameter + Member;
 }
 
+/// Type of digest item from the Trait.
+pub type DigestItemFor<T> = <<T as Trait>::Digest as traits::Digest>::Item;
+
 decl_module! {
 	pub struct Module<T: Trait>;
 }

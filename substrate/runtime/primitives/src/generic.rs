@@ -215,7 +215,7 @@ pub struct Digest<Item> {
 }
 
 impl<Item> traits::Digest for Digest<Item> where
-	Item: Member + Default + Codec
+	Item: traits::DigestItem + Default + Codec
 {
 	type Item = Item;
 	fn push(&mut self, item: Self::Item) {

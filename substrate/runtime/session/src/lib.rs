@@ -293,7 +293,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
+	use primitives::traits::{HasPublicAux, Empty, Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -305,6 +305,7 @@ mod tests {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
+		type ConvertSessionKeyToAuthorityId = Empty;
 	}
 	impl system::Trait for Test {
 		type PublicAux = <Self as HasPublicAux>::PublicAux;

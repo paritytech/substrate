@@ -143,7 +143,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
+	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256, Empty};
 	use runtime_primitives::testing::{Digest, Header};
 
 	#[derive(Clone, Eq, PartialEq)]
@@ -166,6 +166,7 @@ mod tests {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
+		type ConvertSessionKeyToAuthorityId = Empty;
 	}
 	impl Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;

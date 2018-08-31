@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::traits::{HasPublicAux, Identity};
+use primitives::traits::{HasPublicAux, Empty, Identity};
 use primitives::testing::{Digest, Header};
 use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
@@ -35,6 +35,7 @@ impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type SessionKey = u64;
 	type OnOfflineValidator = ();
+	type ConvertSessionKeyToAuthorityId = Empty;
 }
 impl system::Trait for Test {
 	type PublicAux = <Self as HasPublicAux>::PublicAux;

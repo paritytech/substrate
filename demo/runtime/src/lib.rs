@@ -56,7 +56,7 @@ extern crate demo_primitives;
 use rstd::prelude::*;
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
+use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256, Identity, DigestItem, AuthoritiesChangeDigest};
 use version::RuntimeVersion;
 
 #[cfg(any(feature = "std", test))]
@@ -94,9 +94,9 @@ impl system::Trait for Concrete {
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
 	type Hashing = BlakeTwo256;
-	type Digest = generic::Digest<Vec<u8>>;
+	type Digest = generic::Digest<ConcreteLog>;
 	type AccountId = AccountId;
-	type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
+	type Header = generic::Header<BlockNumber, BlakeTwo256, ConcreteLog>;
 	type Event = Event;
 }
 
@@ -118,6 +118,7 @@ impl consensus::Trait for Concrete {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type SessionKey = SessionKey;
 	type OnOfflineValidator = Staking;
+	type ConvertSessionKeyToAuthorityId = Identity;
 }
 
 /// Consensus module for this concrete runtime.
@@ -170,6 +171,42 @@ pub type Council = council::Module<Concrete>;
 /// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Concrete>;
 
+/// Concrete log type.
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum ConcreteLog {
+	/// Authority changes log.
+	AuthorityChanges(Vec<SessionKey>),
+}
+
+impl Default for ConcreteLog {
+	fn default() -> Self {
+		unreachable!("shouldn't be called ever")
+	}
+}
+
+impl DigestItem for ConcreteLog {
+	type AuthoritiesChange = Vec<SessionKey>;
+
+	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
+		match self {
+			ConcreteLog::AuthorityChanges(ref authorities_change) => Some(authorities_change),
+		}
+	}
+}
+
+impl AuthoritiesChangeDigest<ConcreteLog> for Vec<SessionKey> {
+	type AuthorityId = SessionKey;
+
+	fn new(authorities: Vec<SessionKey>) -> Option<ConcreteLog> {
+		Some(ConcreteLog::AuthorityChanges(authorities))
+	}
+
+	fn authorities(&self) -> &[SessionKey] {
+		&self[..]
+	}
+}
+
 impl_outer_event! {
 	pub enum Event for Concrete {
 		balances, session, staking
@@ -206,7 +243,7 @@ impl_outer_dispatch! {
 /// The address format for describing accounts.
 pub type Address = balances::Address<Concrete>;
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, ConcreteLog>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// BlockId type as expected by this runtime.
