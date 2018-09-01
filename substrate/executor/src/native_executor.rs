@@ -126,7 +126,7 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
-	/// Create new instance with specific number of pages for wasm fallback's heap.
+	/// Create new instance.
 	pub fn new() -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
