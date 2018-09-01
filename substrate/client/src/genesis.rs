@@ -56,7 +56,7 @@ mod tests {
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
 	fn executor() -> ::executor::NativeExecutor<Executor> {
-		NativeExecutionDispatch::with_heap_pages(8)
+		NativeExecutionDispatch::new()
 	}
 
 	fn construct_block(backend: &InMemory<KeccakHasher, RlpCodec>, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transfer>) -> (Vec<u8>, Hash) {
@@ -194,7 +194,7 @@ mod tests {
 		let _ = execute(
 			&backend,
 			&mut overlay,
-			&Executor::with_heap_pages(8),
+			&Executor::new(),
 			"execute_block",
 			&b1data,
 			ExecutionStrategy::NativeWhenPossible,

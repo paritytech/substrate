@@ -55,12 +55,13 @@ fn fetch_cached_runtime_version<'a, E: Externalities<KeccakHasher>>(
 	wasm_executor: &WasmExecutor,
 	cache: &'a mut MutexGuard<CacheType>,
 	ext: &mut E,
+	heap_pages: usize,
 	code: &[u8]
 ) -> Result<(&'a WasmModule, &'a Option<RuntimeVersion>)> {
 	let maybe_runtime_preproc = cache.entry(gen_cache_key(code))
 		.or_insert_with(|| match WasmModule::from_buffer(code) {
 			Ok(module) => {
-				let version = wasm_executor.call_in_wasm_module(ext, &module, "version", &[])
+				let version = wasm_executor.call_in_wasm_module(ext, heap_pages, &module, "version", &[])
 					.ok()
 					.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
 				RuntimePreproc::ValidCode(module, version)
@@ -108,9 +109,9 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	/// Get native runtime version.
 	const VERSION: RuntimeVersion;
 
-	/// Construct corresponding `NativeExecutor` with given `heap_pages`.
-	fn with_heap_pages(max_heap_pages: usize) -> NativeExecutor<Self> where Self: Sized {
-		NativeExecutor::with_heap_pages(max_heap_pages)
+	/// Construct corresponding `NativeExecutor`
+	fn new() -> NativeExecutor<Self> where Self: Sized {
+		NativeExecutor::new()
 	}
 }
 
@@ -125,11 +126,11 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
-	/// Create new instance with specific number of pages for wasm fallback's heap.
-	pub fn with_heap_pages(max_heap_pages: usize) -> Self {
+	/// Create new instance.
+	pub fn new() -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: WasmExecutor::new(max_heap_pages),
+			fallback: WasmExecutor::new(),
 		}
 	}
 }
@@ -149,9 +150,10 @@ impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	fn runtime_version<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8],
 	) -> Option<RuntimeVersion> {
-		fetch_cached_runtime_version(&self.fallback, &mut RUNTIMES_CACHE.lock(), ext, code).ok()?.1.clone()
+		fetch_cached_runtime_version(&self.fallback, &mut RUNTIMES_CACHE.lock(), ext, heap_pages, code).ok()?.1.clone()
 	}
 }
 
@@ -161,23 +163,24 @@ impl<D: NativeExecutionDispatch> CodeExecutor<KeccakHasher> for NativeExecutor<D
 	fn call<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8],
 		method: &str,
 		data: &[u8],
 		use_native: bool,
 	) -> (Result<Vec<u8>>, bool) {
 		let mut c = RUNTIMES_CACHE.lock();
-		let (module, onchain_version) = match fetch_cached_runtime_version(&self.fallback, &mut c, ext, code) {
+		let (module, onchain_version) = match fetch_cached_runtime_version(&self.fallback, &mut c, ext, heap_pages, code) {
 			Ok((module, onchain_version)) => (module, onchain_version),
 			Err(_) => return (Err(ErrorKind::InvalidCode(code.into()).into()), false),
 		};
 		match (use_native, onchain_version.as_ref().map_or(false, |v| v.can_call_with(&D::VERSION))) {
 			(_, false) => {
 				trace!(target: "executor", "Request for native execution failed (native: {}, chain: {})", D::VERSION, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
-				(self.fallback.call_in_wasm_module(ext, module, method, data), false)
+				(self.fallback.call_in_wasm_module(ext, heap_pages, module, method, data), false)
 			}
 			(false, _) => {
-				(self.fallback.call_in_wasm_module(ext, module, method, data), false)
+				(self.fallback.call_in_wasm_module(ext, heap_pages, module, method, data), false)
 			}
 			_ => {
 				trace!(target: "executor", "Request for native execution succeeded (native: {}, chain: {})", D::VERSION, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
@@ -213,8 +216,8 @@ macro_rules! native_executor_instance {
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
 
-			fn with_heap_pages(max_heap_pages: usize) -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::with_heap_pages(max_heap_pages)
+			fn new() -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor::new()
 			}
 		}
 	}
