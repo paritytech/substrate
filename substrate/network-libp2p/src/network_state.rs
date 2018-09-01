@@ -930,7 +930,7 @@ fn open_priv_key_file<P>(path: P) -> Result<fs::File, IoError>
 
 #[cfg(test)]
 mod tests {
-	use libp2p::core::{Endpoint, PublicKey};
+	use libp2p::core::PublicKey;
 	use network_state::NetworkState;
 
 	#[test]
@@ -938,18 +938,9 @@ mod tests {
 		let state = NetworkState::new(&Default::default()).unwrap();
 		let example_peer = PublicKey::Rsa(vec![1, 2, 3, 4]).into_peer_id();
 
-		let (who, _) = state.custom_proto(
-			example_peer.clone(),
-			[1, 2, 3],
-			Endpoint::Dialer
-		).unwrap();
-
+		let who = state.assign_node_index(&example_peer).unwrap();
 		state.ban_peer(who, "Just a test");
 
-		assert!(state.custom_proto(
-			example_peer.clone(),
-			[1, 2, 3],
-			Endpoint::Dialer
-		).is_err());
+		assert!(state.assign_node_index(&example_peer).is_err());
 	}
 }
