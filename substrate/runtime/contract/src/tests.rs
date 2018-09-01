@@ -125,15 +125,28 @@ impl ExtBuilder {
 
 const CODE_TRANSFER: &str = r#"
 (module
-	;; ext_transfer(transfer_to: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	(import "env" "ext_transfer" (func $ext_transfer (param i32 i32 i32 i32)))
+	;; ext_call(
+	;;    callee_ptr: u32,
+	;;    callee_len: u32,
+	;;    gas: u64,
+	;;    value_ptr: u32,
+	;;    value_len: u32,
+	;;    input_data_ptr: u32,
+	;;    input_data_len: u32
+	;; ) -> u32
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(call $ext_transfer
-			(i32.const 4)  ;; Pointer to "Transfer to" address.
-			(i32.const 8)  ;; Length of "Transfer to" address.
-			(i32.const 12)  ;; Pointer to the buffer with value to transfer
-			(i32.const 8)   ;; Length of the buffer with value to transfer.
+		(drop
+			(call $ext_call
+				(i32.const 4)  ;; Pointer to "callee" address.
+				(i32.const 8)  ;; Length of "callee" address.
+				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
+				(i32.const 12)  ;; Pointer to the buffer with value to transfer
+				(i32.const 8)   ;; Length of the buffer with value to transfer.
+				(i32.const 0)   ;; Pointer to input data buffer address
+				(i32.const 0)   ;; Length of input data buffer
+			)
 		)
 	)
 	;; Destination AccountId to transfer the funds.
@@ -165,10 +178,10 @@ fn contract_transfer() {
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 6 - gas used by the contract (6) multiplied by gas price (2)
+			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
 			// 2 * 135 - base gas fee for call (by the contract)
-			100_000_000 - 3 - (2 * 6) - (2 * 135) - (2 * 135),
+			100_000_000 - 3 - (2 * 10) - (2 * 135) - (2 * 135),
 		);
 		assert_eq!(
 			Balances::free_balance(&1),
@@ -195,20 +208,20 @@ fn contract_transfer_oog() {
 		Balances::set_free_balance(&1, 11);
 		Balances::increase_total_stake_by(11);
 
-		assert_err!(
-			Contract::call(&0, 1, 3, 276, Vec::new()),
-			"vm execute returned error while call"
-		);
+		assert_ok!(Contract::call(&0, 1, 3, 135 + 135 + 7, Vec::new()));
 
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 6 - gas used by the contract (6) multiplied by gas price (2)
+			// 2 * 7 - gas used by the contract (7) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
 			// 2 * 135 - base gas fee for call (by contract)
-			100_000_000 - (2 * 6) - (2 * 135) - (2 * 135),
+			100_000_000 - 3 - (2 * 7) - (2 * 135) - (2 * 135),
 		);
-		assert_eq!(Balances::free_balance(&1), 11);
+
+		// Transaction level transfer should succeed.
+		assert_eq!(Balances::free_balance(&1), 14);
+		// But `ext_call` should not.
 		assert_eq!(Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 0);
 	});
 }
@@ -227,20 +240,17 @@ fn contract_transfer_max_depth() {
 		Balances::set_free_balance(&CONTRACT_SHOULD_TRANSFER_TO, 11);
 		Balances::increase_total_stake_by(11);
 
-		assert_err!(
-			Contract::call(&0, CONTRACT_SHOULD_TRANSFER_TO, 3, 100_000, Vec::new()),
-			"vm execute returned error while call"
-		);
+		assert_ok!(Contract::call(&0, CONTRACT_SHOULD_TRANSFER_TO, 3, 100_000, Vec::new()));
 
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 6 * 100 - gas used by the contract (6) multiplied by gas price (2)
-			//               multiplied by max depth (100).
+			// 2 * 10 * 100 - gas used by the contract (10) multiplied by gas price (2)
+			//                multiplied by max depth (100).
 			// 2 * 135 * 100 - base gas fee for call (by transaction) multiplied by max depth (100).
-			100_000_000 - (2 * 135 * 100) - (2 * 6 * 100),
+			100_000_000 - 3 - (2 * 10 * 100) - (2 * 135 * 100),
 		);
-		assert_eq!(Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 11);
+		assert_eq!(Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 14);
 	});
 }
 
@@ -290,15 +300,28 @@ fn code_create(constructor: &[u8]) -> String {
 	format!(
 		r#"
 (module
-	;; ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i32 i32)))
+	;; ext_create(
+	;;     code_ptr: u32,
+	;;     code_len: u32,
+	;;     gas: u64,
+	;;     value_ptr: u32,
+	;;     value_len: u32,
+	;;     input_data_ptr: u32,
+	;;     input_data_len: u32,
+	;; ) -> u32
+	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(call $ext_create
-			(i32.const 12)   ;; Pointer to `code`
-			(i32.const {code_len}) ;; Length of `code`
-			(i32.const 4)   ;; Pointer to the buffer with value to transfer
-			(i32.const 8)   ;; Length of the buffer with value to transfer
+		(drop
+			(call $ext_create
+				(i32.const 12)   ;; Pointer to `code`
+				(i32.const {code_len}) ;; Length of `code`
+				(i64.const 0)   ;; How much gas to devote for the execution. 0 = all.
+				(i32.const 4)   ;; Pointer to the buffer with value to transfer
+				(i32.const 8)   ;; Length of the buffer with value to transfer
+				(i32.const 0)   ;; Pointer to input data buffer address
+				(i32.const 0)   ;; Length of input data buffer
+			)
 		)
 	)
 	;; Amount of value to transfer.
@@ -337,12 +360,12 @@ fn contract_create() {
 		);
 
 		// 11 - value sent with the transaction
-		// 2 * 128 - gas spent by the deployer contract (128) multiplied by gas price (2)
+		// 2 * 139 - gas spent by the deployer contract (139) multiplied by gas price (2)
 		// 2 * 135 - base gas fee for call (top level)
 		// 2 * 175 - base gas fee for create (by contract)
 		// ((21 / 2) * 2) - price per account creation
 		let expected_gas_after_create =
-			100_000_000 - 11 - (2 * 128) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
+			100_000_000 - 11 - (2 * 139) - (2 * 135) - (2 * 175) - ((21 / 2) * 2);
 		assert_eq!(Balances::free_balance(&0), expected_gas_after_create);
 		assert_eq!(Balances::free_balance(&1), 8);
 		assert_eq!(Balances::free_balance(&derived_address), 3);
@@ -353,10 +376,10 @@ fn contract_create() {
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 22 - value sent with the transaction
-			// (2 * 6) - gas used by the contract
+			// (2 * 10) - gas used by the contract
 			// (2 * 135) - base gas fee for call (top level)
 			// (2 * 135) - base gas fee for call (by transfer contract)
-			expected_gas_after_create - 22 - (2 * 6) - (2 * 135) - (2 * 135),
+			expected_gas_after_create - 22 - (2 * 10) - (2 * 135) - (2 * 135),
 		);
 		assert_eq!(Balances::free_balance(&derived_address), 22 - 3);
 		assert_eq!(Balances::free_balance(&9), 36);
@@ -388,12 +411,12 @@ fn top_level_create() {
 		));
 
 		// 11 - value sent with the transaction
-		// (3 * 122) - gas spent by the ctor
+		// (3 * 129) - gas spent by the ctor
 		// (3 * 175) - base gas fee for create (175) (top level) multipled by gas price (3)
 		// ((21 / 3) * 3) - price for contract creation
 		assert_eq!(
 			Balances::free_balance(&0),
-			100_000_000 - 11 - (3 * 122) - (3 * 175) - ((21 / 3) * 3)
+			100_000_000 - 11 - (3 * 129) - (3 * 175) - ((21 / 3) * 3)
 		);
 		assert_eq!(Balances::free_balance(&derived_address), 30 + 11);
 
@@ -566,6 +589,79 @@ fn block_gas_limit() {
 				Contract::call(&0, 1, 0, 50_000, Vec::new()),
 				"vm execute returned error while call"
 			);
+		},
+	);
+}
+
+const CODE_INPUT_DATA: &'static str = r#"
+(module
+	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
+	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(block $fail
+			;; fail if ext_input_size != 4
+			(br_if $fail
+				(i32.ne
+					(i32.const 4)
+					(call $ext_input_size)
+				)
+			)
+
+			(call $ext_input_copy
+				(i32.const 0)
+				(i32.const 0)
+				(i32.const 4)
+			)
+
+
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 0))
+					(i32.const 0)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 1))
+					(i32.const 1)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 2))
+					(i32.const 2)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 3))
+					(i32.const 3)
+				)
+			)
+
+			(return)
+		)
+		unreachable
+	)
+)
+"#;
+
+#[test]
+fn input_data() {
+	let code_input_data = wabt::wat2wasm(CODE_INPUT_DATA).unwrap();
+	with_externalities(
+		&mut ExtBuilder::default().build(),
+		|| {
+			<CodeOf<Test>>::insert(1, code_input_data.to_vec());
+
+			Balances::set_free_balance(&0, 100_000_000);
+			Balances::increase_total_stake_by(100_000_000);
+
+			assert_ok!(Contract::call(&0, 1, 0, 50_000, vec![0, 1, 2, 3]));
+
+			// all asserts are made within contract code itself.
 		},
 	);
 }
