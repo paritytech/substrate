@@ -329,7 +329,7 @@ where
 		.to_vec();
 
 	let heap_pages = ext::Ext::new(overlay, backend).storage(b":heapsize")
-		.and_then(|v| usize::decode(&mut &v[..])).unwrap_or(8);
+		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
 
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();

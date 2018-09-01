@@ -59,8 +59,6 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub name: String,
 	/// Execution strategy.
 	pub execution_strategy: ExecutionStrategy,
-	/// Maximum number of heap pages to allocate for Wasm execution.
-	pub max_heap_pages: usize,
 	/// RPC over HTTP binding address. `None` if disabled.
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
@@ -88,7 +86,6 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			telemetry: Default::default(),
 			pruning: PruningMode::default(),
 			execution_strategy: ExecutionStrategy::Both,
-			max_heap_pages: 1024,
 			rpc_http: None,
 			rpc_ws: None,
 			telemetry_url: None,
