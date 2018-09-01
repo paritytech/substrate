@@ -47,7 +47,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		_data: &[u8],
+		data: &[u8],
 	) -> Result<CallReceipt, &'static str> {
 		if self.depth == <MaxDepth<T>>::get() as usize {
 			return Err("reached maximum depth, cannot make a call");
@@ -82,6 +82,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			let exec_result = if !dest_code.is_empty() {
 				vm::execute(
 					&dest_code,
+					data,
 					&mut CallContext {
 						ctx: &mut nested,
 						_caller: caller,
@@ -111,7 +112,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		ctor: &[u8],
-		_data: &[u8],
+		data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
 		if self.depth == <MaxDepth<T>>::get() as usize {
 			return Err("reached maximum depth, cannot create");
@@ -150,6 +151,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			let exec_result = {
 				vm::execute(
 					ctor,
+					data,
 					&mut CallContext {
 						ctx: &mut nested,
 						_caller: caller,
