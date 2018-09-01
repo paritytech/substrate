@@ -328,7 +328,7 @@ where
 		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 		.to_vec();
 
-	let heap_pages = ext::Ext::new(overlay, backend).storage(b":heapsize")
+	let heap_pages = ext::Ext::new(overlay, backend).storage(b":heappages")
 		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
 
 	let result = {
