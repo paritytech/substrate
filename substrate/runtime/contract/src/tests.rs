@@ -656,8 +656,8 @@ fn input_data() {
 		|| {
 			<CodeOf<Test>>::insert(1, code_input_data.to_vec());
 
-			Staking::set_free_balance(&0, 100_000_000);
-			Staking::increase_total_stake_by(100_000_000);
+			Balances::set_free_balance(&0, 100_000_000);
+			Balances::increase_total_stake_by(100_000_000);
 
 			assert_ok!(Contract::call(&0, 1, 0, 50_000, vec![0, 1, 2, 3]));
 
