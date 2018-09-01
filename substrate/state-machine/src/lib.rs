@@ -34,6 +34,7 @@ extern crate rlp;
 extern crate heapsize;
 #[cfg(test)]
 extern crate substrate_primitives as primitives;
+extern crate substrate_codec as codec;
 
 use std::collections::HashMap;
 use std::fmt;
@@ -41,6 +42,7 @@ use hashdb::Hasher;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
 use heapsize::HeapSizeOf;
+use codec::Decode;
 
 pub mod backend;
 mod ext;
@@ -206,6 +208,7 @@ pub trait CodeExecutor<H: Hasher>: Sized + Send + Sync {
 	fn call<E: Externalities<H>>(
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8],
 		method: &str,
 		data: &[u8],
@@ -325,6 +328,9 @@ where
 		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 		.to_vec();
 
+	let heap_pages = ext::Ext::new(overlay, backend).storage(b":heappages")
+		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
+
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
 
@@ -334,6 +340,7 @@ where
 				(
 					exec.call(
 						&mut externalities,
+						heap_pages,
 						&code,
 						method,
 						call_data,
@@ -358,6 +365,7 @@ where
 					(
 						exec.call(
 							&mut externalities,
+							heap_pages,
 							&code,
 							method,
 							call_data,
@@ -488,6 +496,7 @@ mod tests {
 		fn call<E: Externalities<H>>(
 			&self,
 			ext: &mut E,
+			_heap_pages: usize,
 			_code: &[u8],
 			_method: &str,
 			_data: &[u8],

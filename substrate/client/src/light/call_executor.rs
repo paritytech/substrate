@@ -156,7 +156,7 @@ mod tests {
 		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
 
 		// check remote execution proof locally
-		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
+		let local_executor = test_client::LocalExecutor::new();
 		check_execution_proof::<_, _, _, RlpCodec>(&local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
 			header: test_client::runtime::Header {

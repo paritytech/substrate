@@ -270,7 +270,7 @@ pub mod tests {
 		let remote_read_proof = remote_client.read_proof(&remote_block_id, b":auth:len").unwrap();
 
 		// check remote read proof locally
-		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
+		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = new_fetch_checker::<_, KeccakHasher, RlpCodec>(local_executor);
 		let request = RemoteReadRequest {
 			block: remote_block_hash,

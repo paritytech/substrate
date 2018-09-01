@@ -17,7 +17,7 @@
 use {Trait, Module, GasSpent};
 use runtime_primitives::traits::{As, CheckedMul, CheckedSub, Zero};
 use runtime_support::StorageValue;
-use staking;
+use balances;
 
 #[must_use]
 #[derive(Debug, PartialEq, Eq)]
@@ -146,15 +146,15 @@ pub fn buy_gas<T: Trait>(
 
 	// Buy the specified amount of gas.
 	let gas_price = <Module<T>>::gas_price();
-	let b = <staking::Module<T>>::free_balance(transactor);
+	let b = <balances::Module<T>>::free_balance(transactor);
 	let cost = <T::Gas as As<T::Balance>>::as_(gas_limit.clone())
 		.checked_mul(&gas_price)
 		.ok_or("overflow multiplying gas limit by price")?;
-	if b < cost + <staking::Module<T>>::existential_deposit() {
+	if b < cost + <balances::Module<T>>::existential_deposit() {
 		return Err("not enough funds for transaction fee");
 	}
-	<staking::Module<T>>::set_free_balance(transactor, b - cost);
-	<staking::Module<T>>::decrease_total_stake_by(cost);
+	<balances::Module<T>>::set_free_balance(transactor, b - cost);
+	<balances::Module<T>>::decrease_total_stake_by(cost);
 	Ok(GasMeter {
 		limit: gas_limit,
 		gas_left: gas_limit,
@@ -171,8 +171,8 @@ pub fn refund_unused_gas<T: Trait>(transactor: &T::AccountId, gas_meter: GasMete
 	<GasSpent<T>>::put(gas_spent);
 
 	// Refund gas left by the price it was bought.
-	let b = <staking::Module<T>>::free_balance(transactor);
+	let b = <balances::Module<T>>::free_balance(transactor);
 	let refund = <T::Gas as As<T::Balance>>::as_(gas_meter.gas_left) * gas_meter.gas_price;
-	<staking::Module<T>>::set_free_balance(transactor, b + refund);
-	<staking::Module<T>>::increase_total_stake_by(refund);
+	<balances::Module<T>>::set_free_balance(transactor, b + refund);
+	<balances::Module<T>>::increase_total_stake_by(refund);
 }

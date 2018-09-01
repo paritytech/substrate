@@ -26,6 +26,7 @@ use patricia_trie::NodeCodec;
 use primitives::{KeccakHasher, RlpCodec};
 use hashdb::Hasher;
 use rlp::Encodable;
+use codec::Decode;
 
 use backend;
 use error;
@@ -145,8 +146,9 @@ where
 		let mut externalities = Ext::new(&mut overlay, &state);
 		let code = externalities.storage(b":code").ok_or(error::ErrorKind::VersionInvalid)?
 			.to_vec();
+		let heap_pages = externalities.storage(b":heappages").and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
 
-		self.executor.runtime_version(&mut externalities, &code)
+		self.executor.runtime_version(&mut externalities, heap_pages, &code)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 

@@ -21,12 +21,10 @@ use exec::{CallReceipt, CreateReceipt};
 use gas::{GasMeter, GasMeterResult};
 use rstd::prelude::*;
 use runtime_primitives::traits::{As, CheckedMul};
-use sandbox;
-use staking;
-use system;
+use {sandbox, balances, system};
 use Trait;
 
-type BalanceOf<T> = <T as staking::Trait>::Balance;
+type BalanceOf<T> = <T as balances::Trait>::Balance;
 type AccountIdOf<T> = <T as system::Trait>::AccountId;
 
 mod prepare;

@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! System manager: Handles lowest level stuff like depositing logs, basic set up and take down of
 //! temporary storage entries, access to old block hashes.
@@ -45,7 +45,7 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay};
+	Hash, Member, MaybeDisplay, RefInto, MaybeEmpty};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -69,6 +69,9 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait: Eq + Clone {
+	// We require that PublicAux impl MaybeEmpty, since we require that inherents - or unsigned
+	// user-level extrinsics - can exist.
+	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;
 	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
 	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
@@ -80,7 +83,7 @@ pub trait Trait: Eq + Clone {
 		Hash = Self::Hash,
 		Digest = Self::Digest
 	>;
-	type Event: Parameter + Member;
+	type Event: Parameter + Member + From<Event>;
 }
 
 decl_module! {
@@ -105,6 +108,20 @@ pub struct EventRecord<E: Parameter + Member> {
 	pub phase: Phase,
 	/// The event itself.
 	pub event: E,
+}
+
+/// Event for the system module. 
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub enum Event {
+	/// An extrinsic completed successfully.
+	ExtrinsicSuccess,
+	/// An extrinsic failed.
+	ExtrinsicFailed,
+}
+
+impl From<Event> for () {
+	fn from(_: Event) -> () { () }
 }
 
 decl_storage! {
@@ -227,7 +244,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
-	pub fn note_applied_extrinsic() {
+	pub fn note_applied_extrinsic(r: &Result<(), &'static str>) {
+		Self::deposit_event(match r {
+			Ok(_) => Event::ExtrinsicSuccess,
+			Err(_) => Event::ExtrinsicFailed,
+		}.into());
 		<ExtrinsicIndex<T>>::put(<ExtrinsicIndex<T>>::get().unwrap_or_default() + 1u32);
 	}
 
@@ -287,6 +308,7 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl Trait for Test {
+		type PublicAux = u64;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -295,6 +317,15 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = u16;
+	}
+
+	impl From<Event> for u16 {
+		fn from(e: Event) -> u16 {
+			match e { 
+				Event::ExtrinsicSuccess => 100,
+				Event::ExtrinsicFailed => 101,
+			}
+		}
 	}
 
 	type System = Module<Test>;
@@ -314,15 +345,15 @@ mod tests {
 
 			System::initialise(&2, &[0u8; 32].into(), &[0u8; 32].into());
 			System::deposit_event(42u16);
-			System::note_applied_extrinsic();
-			System::deposit_event(69u16);
-			System::note_applied_extrinsic();
+			System::note_applied_extrinsic(&Ok(()));
+			System::note_applied_extrinsic(&Err(""));
 			System::note_finished_extrinsics();
 			System::deposit_event(3u16);
 			System::finalise();
 			assert_eq!(System::events(), vec![
 				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 42u16 },
-				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 69u16 },
+				EventRecord { phase: Phase::ApplyExtrinsic(0), event: 100u16 },
+				EventRecord { phase: Phase::ApplyExtrinsic(1), event: 101u16 },
 				EventRecord { phase: Phase::Finalization, event: 3u16 }
 			]);
 		});

@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Session manager: is told the validators and allows them to manage their session keys for the
 //! consensus module.
@@ -302,10 +302,12 @@ mod tests {
 		type PublicAux = u64;
 	}
 	impl consensus::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
+		type OnOfflineValidator = ();
 	}
 	impl system::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -327,7 +329,6 @@ mod tests {
 
 	type System = system::Module<Test>;
 	type Consensus = consensus::Module<Test>;
-	type Timestamp = timestamp::Module<Test>;
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
