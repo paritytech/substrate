@@ -179,7 +179,7 @@ macro_rules! decl_dispatch {
 		}
 		$($rest:tt)*
 	) => {
-		__decl_module_module_with_aux! {
+		__decl_dispatch_module_with_aux! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$(#[$attr])*
 			pub enum $call_type where aux: $aux_type;
@@ -187,7 +187,7 @@ macro_rules! decl_dispatch {
 				fn $fn_name(aux $(, $param_name: $param )*) -> $result = $id;
 			)*
 		}
-		decl_module! {
+		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
 		}
