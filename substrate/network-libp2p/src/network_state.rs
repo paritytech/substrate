@@ -221,16 +221,35 @@ impl NetworkState {
 	/// the list.
 	pub fn outgoing_connections_to_attempt(&self) -> (Vec<(PeerId, Multiaddr)>, Instant) {
 		// TODO: handle better
+		let connections = self.connections.read();
+
 		let num_to_attempt = if self.reserved_only.load(atomic::Ordering::Relaxed) {
 			0
 		} else {
-			let num_open_custom_connections = num_open_custom_connections(&self.connections.read(), &self.reserved_peers.read());
+			let num_open_custom_connections = num_open_custom_connections(&connections, &self.reserved_peers.read());
 			self.max_outgoing_peers.saturating_sub(num_open_custom_connections.unreserved_outgoing)
 		};
 
 		let topology = self.topology.read();
 		let (list, change) = topology.addrs_to_attempt();
-		let list = list.take(num_to_attempt as usize).map(|(addr, peer)| (addr.clone(), peer.clone())).collect();
+		let list = list
+			.filter(|&(peer, _)| {
+				// Filter out peers which we are already connected to.
+				let cur = match connections.peer_by_nodeid.get(peer) {
+					Some(e) => e,
+					None => return true
+				};
+
+				let infos = match connections.info_by_peer.get(&cur) {
+					Some(i) => i,
+					None => return true
+				};
+
+				!infos.protocols.iter().any(|(_, conn)| conn.is_alive())
+			})
+			.take(num_to_attempt as usize)
+			.map(|(addr, peer)| (addr.clone(), peer.clone()))
+			.collect();
 		(list, change)
 	}
 

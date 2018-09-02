@@ -1043,13 +1043,6 @@ fn open_peer_custom_proto<T, To, St, C>(
 			Err(_) => return,
 		};
 
-		trace!(target: "sub-libp2p",
-			"Opening connection to {:?} through {} with proto {:?}",
-			expected_peer_id,
-			addr,
-			proto_id
-		);
-
 		let unique_connec = match shared.network_state.custom_proto(expected_node_index, proto_id) {
 			Some(uc) => uc,
 			None => return,
@@ -1063,6 +1056,13 @@ fn open_peer_custom_proto<T, To, St, C>(
 					future::err(IoError::new(IoErrorKind::ConnectionRefused, "Peer id mismatch"))
 				}
 			});
+
+		trace!(target: "sub-libp2p",
+			"Opening connection to {:?} through {} with proto {:?}",
+			expected_peer_id,
+			addr,
+			proto_id
+		);
 
 		unique_connec.dial(swarm_controller, &addr, with_peer_check);
 
