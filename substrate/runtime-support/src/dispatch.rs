@@ -101,7 +101,7 @@ macro_rules! decl_module {
 		$(#[$attr])*
 		pub struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
 
-		decl_module! {
+		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
 		}
@@ -124,7 +124,7 @@ macro_rules! decl_module {
 		#[cfg(not(feature = "std"))]
 		$(#[$attr])*
 		struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
-		decl_module! {
+		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
 		}
@@ -133,7 +133,7 @@ macro_rules! decl_module {
 
 /// Implement several dispatch modules to create a pairing of a dispatch trait and enum.
 #[macro_export]
-macro_rules! decl_module {
+macro_rules! decl_dispatch {
 	// WITHOUT AUX
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
@@ -150,7 +150,7 @@ macro_rules! decl_module {
 		}
 		$($rest:tt)*
 	) => {
-		__decl_module_module_without_aux! {
+		__decl_dispatch_module_without_aux! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$(#[$attr])*
 			pub enum $call_type;
@@ -158,7 +158,7 @@ macro_rules! decl_module {
 				fn $fn_name( $( $param_name: $param ),* ) -> $result = $id;
 			)*
 		}
-		decl_module! {
+		decl_dispatch! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
 		}
@@ -209,7 +209,7 @@ macro_rules! decl_module {
 
 #[macro_export]
 /// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
-macro_rules! __decl_module_module_without_aux {
+macro_rules! __decl_dispatch_module_without_aux {
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$(#[$attr:meta])*
@@ -224,7 +224,7 @@ macro_rules! __decl_module_module_without_aux {
 			= $id:expr ;
 		)*
 	) => {
-		__decl_module_module_common! {
+		__decl_dispatch_module_common! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$(#[$attr])*
 			pub enum $call_type;
@@ -254,7 +254,7 @@ macro_rules! __decl_module_module_without_aux {
 
 #[macro_export]
 /// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
-macro_rules! __decl_module_module_with_aux {
+macro_rules! __decl_dispatch_module_with_aux {
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$(#[$attr:meta])*
@@ -269,7 +269,7 @@ macro_rules! __decl_module_module_with_aux {
 			= $id:expr ;
 		)*
 	) => {
-		__decl_module_module_common! {
+		__decl_dispatch_module_common! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$(#[$attr])*
 			pub enum $call_type;
@@ -300,7 +300,7 @@ macro_rules! __decl_module_module_with_aux {
 
 /// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
 #[macro_export]
-macro_rules! __decl_module_module_common {
+macro_rules! __decl_dispatch_module_common {
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$(#[$attr:meta])*
