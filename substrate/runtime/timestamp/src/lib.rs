@@ -40,7 +40,7 @@ extern crate substrate_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{Executable, MaybeEmpty, SimpleArithmetic, As, Zero};
+use runtime_primitives::traits::{OnFinalise, MaybeEmpty, SimpleArithmetic, As, Zero};
 
 pub trait Trait: consensus::Trait where
 	<Self as system::Trait>::PublicAux: MaybeEmpty
@@ -101,8 +101,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise for Module<T> {
+	fn on_finalise() {
 		assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 	}
 }

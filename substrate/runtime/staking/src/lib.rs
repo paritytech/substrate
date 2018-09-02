@@ -52,9 +52,9 @@ use rstd::prelude::*;
 use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
-use primitives::traits::{Zero, One, Bounded, RefInto, Executable,
+use primitives::traits::{Zero, One, Bounded, RefInto, OnFinalise,
 	As, AuxLookup};
-use balances::address::Address;
+use balances::{address::Address, OnMinted};
 
 mod mock;
 
@@ -96,6 +96,9 @@ impl Default for SlashPreference {
 }
 
 pub trait Trait: balances::Trait + session::Trait {
+	/// Some tokens minted.
+	type OnRewardMinted: OnMinted<<Self as balances::Trait>::Balance>;
+
 	/// The overarching event type. 
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -420,10 +423,12 @@ impl<T: Trait> Module<T> {
 		if should_reward {
 			// apply good session reward
 			let reward = Self::this_session_reward(actual_elapsed);
-			for v in <session::Module<T>>::validators().iter() {
+			let validators = <session::Module<T>>::validators();
+			for v in validators.iter() {
 				Self::reward_validator(v, reward);
 			}
 			Self::deposit_event(RawEvent::Reward(reward));
+			T::OnRewardMinted::on_minted(reward * validators.len());
 		}
 
 		let session_index = <session::Module<T>>::current_index();
@@ -492,8 +497,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise for Module<T> {
+	fn on_finalise() {
 	}
 }
 

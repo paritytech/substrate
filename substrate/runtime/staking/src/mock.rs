@@ -64,6 +64,7 @@ impl timestamp::Trait for Test {
 	type Moment = u64;
 }
 impl Trait for Test {
+	type OnRewardMinted = ();
 	type Event = ();
 }
 

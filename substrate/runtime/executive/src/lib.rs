@@ -62,7 +62,7 @@ extern crate substrate_runtime_staking as staking;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
-use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
+use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
 	MakePayment, Hash, AuxLookup};
 use codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -96,7 +96,7 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Lookup: AuxLookup<Source=Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
-	Finalisation: Executable,
+	Finalisation: OnFinalise,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
 	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Codec,
 	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
@@ -135,7 +135,7 @@ impl<
 
 		// post-transactional book-keeping.
 		<system::Module<System>>::note_finished_extrinsics();
-		Finalisation::execute();
+		Finalisation::on_finalise();
 
 		// any final checks
 		Self::final_checks(&header);
@@ -145,7 +145,7 @@ impl<
 	/// except state-root.
 	pub fn finalise_block() -> System::Header {
 		<system::Module<System>>::note_finished_extrinsics();
-		Finalisation::execute();
+		Finalisation::on_finalise();
 
 		// setup extrinsics
 		<system::Module<System>>::derive_extrinsics();

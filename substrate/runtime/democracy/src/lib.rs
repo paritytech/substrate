@@ -43,7 +43,7 @@ extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
 use rstd::result;
-use primitives::traits::{Zero, Executable, RefInto, As, MaybeSerializeDebug};
+use primitives::traits::{Zero, OnFinalise, RefInto, As, MaybeSerializeDebug};
 use substrate_runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use substrate_runtime_support::dispatch::Result;
 
@@ -288,8 +288,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise for Module<T> {
+	fn on_finalise() {
 		if let Err(e) = Self::end_block(<system::Module<T>>::block_number()) {
 			runtime_io::print(e);
 		}

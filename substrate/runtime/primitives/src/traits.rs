@@ -184,18 +184,18 @@ impl<T:
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
-/// Something that can be executed.
-pub trait Executable {
-	fn execute();
+/// The block finalisation trait. Implementing this lets you express what should happen
+/// for your module when the block is ending.
+pub trait OnFinalise {
+	/// The block is being finalised. Implement to have something happen.
+	fn on_finalise() {}
 }
 
-impl Executable for () {
-	fn execute() {}
-}
-impl<A: Executable, B: Executable> Executable for (A, B) {
-	fn execute() {
-		A::execute();
-		B::execute();
+impl OnFinalise for () {}
+impl<A: OnFinalise, B: OnFinalise> OnFinalise for (A, B) {
+	fn on_finalise() {
+		A::on_finalise();
+		B::on_finalise();
 	}
 }
 

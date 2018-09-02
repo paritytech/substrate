@@ -49,7 +49,7 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
+use primitives::traits::{Zero, One, RefInto, OnFinalise, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
@@ -113,10 +113,6 @@ decl_storage! {
 		pub CurrentIndex get(current_index): required T::BlockNumber;
 		// Timestamp when current session started.
 		pub CurrentStart get(current_start): required T::Moment;
-
-		// Opinions of the current validator set about the activeness of their peers.
-		// Gets cleared when the validator set changes.
-		pub BadValidators get(bad_validators): Vec<T::AccountId>;
 
 		// New session is being forced is this entry exists; in which case, the boolean value is whether
 		// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
@@ -245,8 +241,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise for Module<T> {
+	fn on_finalise() {
 		Self::check_rotate_session();
 	}
 }

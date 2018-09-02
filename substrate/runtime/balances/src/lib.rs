@@ -45,7 +45,7 @@ use rstd::{cmp, result};
 use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, One, RefInto, SimpleArithmetic, Executable, MakePayment,
+use primitives::traits::{Zero, One, RefInto, SimpleArithmetic, OnFinalise, MakePayment,
 	As, AuxLookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
 
@@ -89,6 +89,16 @@ impl<
 		X::on_free_balance_zero(who);
 		Y::on_free_balance_zero(who);
 	}
+}
+
+/// Trait for a hook to get called when some balance has been minted.
+pub trait OnMinted<Balance> {
+	/// Some balance `b` was minted.
+	fn on_minted(b: Balance);
+}
+
+impl<Balance> OnMinted<Balance> for () {
+	fn on_minted(_b: Balance) {}
 }
 
 /// Determinator for whether a given account is able to transfer balance.
@@ -621,8 +631,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise for Module<T> {
+	fn on_finalise() {
 	}
 }
 
