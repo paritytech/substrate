@@ -118,10 +118,6 @@ impl<T: Default + PartialEq> MaybeEmpty for T {
 	}
 }
 
-pub trait HasPublicAux {
-	type PublicAux: MaybeEmpty;
-}
-
 pub trait RefInto<T> {
 	fn ref_into(&self) -> &T;
 }

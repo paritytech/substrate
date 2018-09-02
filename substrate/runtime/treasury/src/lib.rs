@@ -34,20 +34,22 @@ extern crate serde_derive;
 #[macro_use]
 extern crate substrate_codec_derive;
 
+extern crate substrate_codec as codec;
 #[cfg(test)]
 extern crate substrate_primitives;
-extern crate substrate_codec as codec;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_balances as balances;
-extern crate substrate_codec as codec;
 
-use runtime_support::{StorageValue, Parameter};
+use runtime_support::StorageValue;
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{OnFinalise, MaybeEmpty, SimpleArithmetic, As, Zero};
-use balances::OnMinted;
+use runtime_primitives::traits::OnFinalise;
 
-/// Our module's configuration trait. All our types and consts go in here.
+/// Our module's configuration trait. All our types and consts go in here. If the
+/// module is dependent on specfiic other modules, then their configuration traits
+/// should be added to our implied traits list.
+/// 
+/// `system::Trait` should always be included in our implied traits.
 pub trait Trait: balances::Trait {
 	/// The overarching event type. 
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -56,6 +58,7 @@ pub trait Trait: balances::Trait {
 // The module declaration. This states the entry points that we handle. The
 // macro looks after the marshalling of arguments and dispatch.
 decl_module! {
+	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait>;
 
 	// The unpriviledged entry points. Any account can call into these by signing and submitting
@@ -79,6 +82,9 @@ decl_module! {
 	// This is your public interface. Be extremely careful.
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
+		// This is just a simple example of how to interact with the module from the external
+		// world.
+		fn accumulate_dummy(aux, increase_by: T::Balance) -> Result = 0;
 	}
 
 	// The priviledged entry points. These are provided to allow any governance modules in 
@@ -88,6 +94,8 @@ decl_module! {
 	// otherwise be costly or unsafe operations.
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
+		// A priviledged call; in this case it resets our dummy value to something new.
+		fn set_dummy(new_dummy: T::Balance) -> Result = 0;
 	}
 }
 
@@ -109,7 +117,11 @@ pub enum RawEvent<B> {
 	Dummy(B),
 }
 
-impl<A> From<RawEvent<B>> for () {
+// By convention we implement any trait for which a "null implemntation" makes sense
+// for `()`. This is the case for conversion of module `Event` types and hook traits. It
+// is helpful for test code and production configurations where no eventing is necessary
+// or the hook is unused.
+impl<B> From<RawEvent<B>> for () {
 	fn from(_: RawEvent<B>) -> () { () }
 }
 
@@ -118,8 +130,12 @@ decl_storage! {
 	// This allows for type-safe usage of the Substrate storage database, so you can
 	// keep things around between blocks.
 	trait Store for Module<T: Trait> as Treasury {
-		// TODO: Any storage declarations of the form:
-		//   `pub? Name get(getter_name)? : [required | default]? Type;`
+		// Any storage declarations of the form:
+		//   `pub? Name get(getter_name)? : [required | default]? <type>;`
+		// where `<type>` is either:
+		//   - `Type` (a basic value item); or
+		//   - `map [ KeyType => ValueType ]` (a map item).
+		//
 		// Note that there are two optional modifiers for the storage type declaration.
 		// - `Foo: u32`:
 		//   - `Foo::put(1); Foo::get()` returns `Some(1)`;
@@ -132,6 +148,14 @@ decl_storage! {
 		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 		// e.g. Foo: u32;
 		// e.g. pub Bar get(bar): default map [ T::AccountId => Vec<(T::Balance, u64)> ];
+		//
+		// For basic value items, you'll get a type which implements
+		// `runtime_support::StorageValue`. For map items, you'll get a type which
+		// implements `runtime_support::StorageMap`.
+		//
+		// If they have a getter (`get(getter_name)`), then your module will come
+		// equiped with `fn getter_name() -> Type` for basic value items or
+		// `fn getter_name(key: KeyType) -> ValueType` for map items.
 		Dummy get(dummy): T::Balance;
 	}
 }
@@ -144,18 +168,91 @@ decl_storage! {
 // functions that do not write to storage and operation functions that do.
 // - Private functions. These are your usual private utilities unavailable to other modules.
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
+	/// Deposit one of this module's events. This function doesn't change.
+	// TODO: move into `decl_module` macro.
 	fn deposit_event(event: Event<T>) {
 		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
 	}
 
-	// TODO: Implement Calls/PrivCalls and add public immutables and private mutables.
+	// Implement Calls/PrivCalls and add public immutables and private mutables.
+
+	// Implement dispatched function `accumulate_dummy`. This just increases the value
+	// of `Dummy` by `increase_by`.
+	//
+	// Since this is a dispatched function there are two extremely important things to
+	// remember:
+	//
+	// - MUST NOT PANIC: Under no circumstances (save, perhaps, storage getting into an
+	// irreparably damaged state) must this function panic.
+	// - NO SIDE-EFFECTS ON ERROR: This function must either complete totally (and return 
+	// `Ok(())` or it must have no side-effects on storage and return `Err('Some reason')`.
+	//
+	// The first is relatively easy to audit for - just ensure all panickers are emoved from
+	// logic that executes in production (which you do anyway, right?!). To ensure the second 
+	// is followed, you should do all tests for validity at the top of your function. This
+	// is stuff like checking the sender (`aux`) or that state is such that the operation
+	// makes sense.
+	// 
+	// Once you've determined that it's all good, then enact the operation and change storage.
+	// If you can't be certain that the operation will succeed without substantial computation
+	// then you have a classic blockchain attack scenario. The normal way of managing this is
+	// to attach a bond to the operation. as the first major alteration of storage, reserve
+	// some value from the sender's account (`Balances` module has a `reserve` function for
+	// exactly this scenario). This amount should be enough to cover any costs of the
+	// substantial execution in case it turns out that you can't proceed with the operation.
+	//
+	// If it eventually transpires that the operation is fine and, therefore, that the
+	// expense of the checks should be borne by the network, then you can refund the reserved
+	// deposit. If, however, the operation turns out to be invalid and the computation is
+	// wasted, then you can burn it or repatriate elsewhere.
+	//
+	// Security bonds ensure that attackers can't game it by ensuring that anyone interacting
+	// with the system either progresses it or pays for the trouble of faffing around with
+	// no progress.
+	//
+	// If you don't respect these rules, it is likely that your chain will be attackable.
+	fn accumulate_dummy(_aux: &T::PublicAux, increase_by: T::Balance) -> Result {
+		// Read the value of dummy from storage.
+		let dummy = Self::dummy();
+		// Will also work using the `::get` on the storage item type iself:
+		// let dummy = <Dummy<T>>::get();
+
+		// Calculate the new value.
+		let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
+
+		// Put the new value into storage.
+		<Dummy<T>>::put(new_dummy);
+		// Will also work with a reference:
+		// <Dummy<T>>::put(&new_dummy);
+
+		// Let's deposit an event to let the outside world this happened.
+		Self::deposit_event(RawEvent::Dummy(increase_by));
+
+		// All good.
+		Ok(())
+	}
+
+	// Implementation of a priviledged call. This doesn't have an `aux` parameter because
+	// it's not (directly) from an extrinsic, but rather the system as a whole has decided
+	// to execute it. Different runtimes have different reasons for allow priviledged
+	// calls to be executed - we don't need to care why. Because it's priviledged, we can
+	// assume it's a one-off operation and substantial processing/storage/memort can be used
+	// without worrying about gamability or attack scenarios.
+	fn set_dummy(new_value: T::Balance) -> Result {
+		// Put the new value into storage.
+		<Dummy<T>>::put(new_value);
+
+		// All good.
+		Ok(())
+	}
 }
 
 // The trait expresses what should happen when the block is finalised.
 impl<T: Trait> OnFinalise for Module<T> {
 	fn on_finalise() {
-		// TODO: Anything that needs to be done at the end of the block. 
+		// Anything that needs to be done at the end of the block.
+		// We just kill our dummy storage item.
+		<Dummy<T>>::kill();
 	}
 }
 
@@ -166,7 +263,7 @@ impl<T: Trait> OnFinalise for Module<T> {
 /// The genesis block configuration type. This is a simple default-capable struct that
 /// contains any fields with which this module can be configured at genesis time.
 pub struct GenesisConfig<T: Trait> {
-	/// A dummy entry to ensure this is compilable.
+	/// A value with which to initialise the Dummy storage item.
 	pub dummy: T::Balance,
 }
 
@@ -204,7 +301,10 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
+	use runtime_primitives::traits::{BlakeTwo256};
+
+	// The testing primitives are very useful for avoiding having to work with signatures
+	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use runtime_primitives::testing::{Digest, Header};
 
 	// For testing the module, we construct most of a mock runtime. This means
@@ -212,11 +312,8 @@ mod tests {
 	// configuration traits of modules we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
 	impl system::Trait for Test {
-		type PublicAux = u64;
+		type PublicAux = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -227,11 +324,11 @@ mod tests {
 		type Event = ();
 	}
 	impl balances::Trait for Test {
-		type Balance: u64;
-		type AccountIndex: u64;
-		type OnFreeBalanceZero: ();
-		type EnsureAccountLiquid: ();
-		type Event: ();
+		type Balance = u64;
+		type AccountIndex = u64;
+		type OnFreeBalanceZero = ();
+		type EnsureAccountLiquid = ();
+		type Event = ();
 	}
 	impl Trait for Test {
 		type Event = ();
@@ -242,15 +339,8 @@ mod tests {
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(balances::GenesisConfig::<Test>{
-			balances: vec![(0, 100)],
-			transaction_base_fee: 0,
-			transaction_byte_fee: 0,
-			transfer_fee: 0,
-			creation_fee: 0,
-			reclaim_rebate: 0,
-			existential_deposit: 0,
-		}.build_storage().unwrap());
+		// We use default for brevity, but you can configure as desired if needed.
+		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
 			dummy: 42,
 		}.build_storage().unwrap());
@@ -260,7 +350,20 @@ mod tests {
 	#[test]
 	fn it_works() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq(Treasury::dummy(), 42);
+			// Check that GenesisBuilder works properly.
+			assert_eq!(Treasury::dummy(), Some(42));
+
+			// Check that accumulate works when we have Some value in Dummy already.
+			assert_ok!(Treasury::accumulate_dummy(27.into()));
+			assert_eq!(Treasury::dummy(), Some(69));
+			
+			// Check that finalising the block removes Dummy from storage.
+			<Treasury as OnFinalise>::on_finalise();
+			assert_eq!(Treasury::dummy(), None);
+
+			// Check that accumulate works when we Dummy has None in it.
+			assert_ok!(Treasury::accumulate_dummy(42.into()));
+			assert_eq!(Treasury::dummy(), Some(42));
 		});
 	}
 }

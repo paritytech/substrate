@@ -17,7 +17,7 @@
 use double_map::StorageDoubleMap;
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, H256, Header};
-use runtime_primitives::traits::{BlakeTwo256, HasPublicAux};
+use runtime_primitives::traits::{BlakeTwo256};
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
 use substrate_primitives::KeccakHasher;
@@ -29,11 +29,8 @@ use {
 
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
-impl HasPublicAux for Test {
-	type PublicAux = u64;
-}
 impl system::Trait for Test {
-	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type PublicAux = Self::AccountId;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;

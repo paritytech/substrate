@@ -143,16 +143,13 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
+	use runtime_primitives::traits::{BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
 	impl system::Trait for Test {
-		type PublicAux = u64;
+		type PublicAux = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

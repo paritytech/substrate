@@ -30,6 +30,7 @@ members = [
 	"substrate/runtime/staking",
 	"substrate/runtime/system",
 	"substrate/runtime/timestamp",
+	"substrate/runtime/treasury",
 	"substrate/runtime/version",
 	"substrate/serializer",
 	"substrate/service",

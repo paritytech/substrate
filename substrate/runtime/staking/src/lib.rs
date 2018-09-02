@@ -428,7 +428,7 @@ impl<T: Trait> Module<T> {
 				Self::reward_validator(v, reward);
 			}
 			Self::deposit_event(RawEvent::Reward(reward));
-			T::OnRewardMinted::on_minted(reward * validators.len());
+			T::OnRewardMinted::on_minted(reward * <T::Balance as As<usize>>::sa(validators.len()));
 		}
 
 		let session_index = <session::Module<T>>::current_index();

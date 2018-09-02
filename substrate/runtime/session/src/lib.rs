@@ -289,21 +289,18 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
+	use primitives::traits::{Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
 	}
 	impl system::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		type PublicAux = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

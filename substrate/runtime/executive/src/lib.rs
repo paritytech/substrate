@@ -231,7 +231,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
+	use primitives::traits::{Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
 	use system;
 
@@ -253,9 +253,6 @@ mod tests {
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
@@ -269,7 +266,7 @@ mod tests {
 		type Event = MetaEvent;
 	}
 	impl system::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		type PublicAux = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = substrate_primitives::H256;
