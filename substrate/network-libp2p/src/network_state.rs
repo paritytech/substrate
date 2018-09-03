@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
 use fnv::{FnvHashMap, FnvHashSet};
@@ -677,7 +677,7 @@ impl NetworkState {
 	}
 
 	/// Disables a peer for `PEER_DISABLE_DURATION`. This adds the peer to the
-	/// list of disabled peers, and  drops any existing connections if
+	/// list of disabled peers, and drops any existing connections if
 	/// necessary (ie. drops the sender that was stored in the `UniqueConnec`
 	/// of `custom_proto`).
 	pub fn ban_peer(&self, who: NodeIndex, reason: &str) {
@@ -838,7 +838,7 @@ fn parse_and_add_to_node_store(
 
 	let mut addr = addr_str.to_multiaddr().map_err(|_| ErrorKind::AddressParse)?;
 	let who = match addr.pop() {
-		Some(AddrComponent::P2P(key)) | Some(AddrComponent::IPFS(key)) =>
+		Some(AddrComponent::P2P(key)) =>
 			PeerId::from_bytes(key).map_err(|_| ErrorKind::AddressParse)?,
 		_ => return Err(ErrorKind::AddressParse.into()),
 	};

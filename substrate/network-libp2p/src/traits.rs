@@ -104,10 +104,10 @@ pub struct NetworkConfiguration {
 	pub config_path: Option<String>,
 	/// Directory path to store network-specific configuration. None means nothing will be saved
 	pub net_config_path: Option<String>,
-	/// IP address to listen for incoming connections. Listen to all connections by default
-	pub listen_address: Multiaddr,
-	/// IP address to advertise. Detected automatically if none.
-	pub public_address: Option<Multiaddr>,
+	/// Multiaddresses to listen for incoming connections.
+	pub listen_addresses: Vec<Multiaddr>,
+	/// Multiaddresses to advertise. Detected automatically if empty.
+	pub public_addresses: Vec<Multiaddr>,
 	/// List of initial node addresses
 	pub boot_nodes: Vec<String>,
 	/// Use provided node key instead of default
@@ -136,10 +136,12 @@ impl NetworkConfiguration {
 		NetworkConfiguration {
 			config_path: None,
 			net_config_path: None,
-			listen_address: iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
-				.chain(iter::once(AddrComponent::TCP(30333)))
-				.collect(),
-			public_address: None,
+			listen_addresses: vec![
+				iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
+					.chain(iter::once(AddrComponent::TCP(30333)))
+					.collect()
+			],
+			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			use_secret: None,
 			min_peers: 25,
@@ -153,9 +155,11 @@ impl NetworkConfiguration {
 	/// Create new default configuration for localhost-only connection with random port (useful for testing)
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new();
-		config.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(127, 0, 0, 1)))
-			.chain(iter::once(AddrComponent::TCP(0)))
-			.collect();
+		config.listen_addresses = vec![
+			iter::once(AddrComponent::IP4(Ipv4Addr::new(127, 0, 0, 1)))
+				.chain(iter::once(AddrComponent::TCP(0)))
+				.collect()
+		];
 		config
 	}
 }

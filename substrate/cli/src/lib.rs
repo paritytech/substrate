@@ -294,10 +294,12 @@ where
 			None => 30333,
 		};
 
-		config.network.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
-			.chain(iter::once(AddrComponent::TCP(port)))
-			.collect();
-		config.network.public_address = None;
+		config.network.listen_addresses = vec![
+			iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
+				.chain(iter::once(AddrComponent::TCP(port)))
+				.collect()
+		];
+		config.network.public_addresses = Vec::new();
 		config.network.client_version = config.client_id();
 		config.network.use_secret = match matches.value_of("node-key").map(|s| s.parse()) {
 			Some(Ok(secret)) => Some(secret),
