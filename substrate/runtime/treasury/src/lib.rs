@@ -44,6 +44,7 @@ extern crate substrate_runtime_balances as balances;
 use runtime_support::StorageValue;
 use runtime_support::dispatch::Result;
 use runtime_primitives::traits::OnFinalise;
+use balances::OnMinted;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specfiic other modules, then their configuration traits
@@ -61,30 +62,10 @@ decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait>;
 
-	// The unpriviledged entry points. Any account can call into these by signing and submitting
-	// an extrinsic. Ensure that calls into each of these execute in a time, memory and
-	// using storage space proportional to any costs paid for by the caller.
-	//
-	// The account that is calling this (i.e. the one that signed the extrinsic) is provided
-	// via the `aux` argument, always first in each function call. As such functions must
-	// always look like:
-	// 
-	// `fn foo(aux, bar: Bar, baz: Baz) -> Result = 0;`
-	//
-	// The `Result` is required as part of the syntax (and expands to the conventional dispatch
-	// result of `Result<(), &'static str>`). The index after `=` must be unique within this
-	// enum (the `PrivCall` enum is allowed to reuse indexes).
-	// 
-	// When you come to `impl` them later in the module, you must specify the full type for `aux`:
-	//
-	// `fn foo(aux: T::PublicAux, bar: Bar, baz: Baz) { ... }`
-	//
-	// This is your public interface. Be extremely careful.
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		// This is just a simple example of how to interact with the module from the external
-		// world.
-		fn accumulate_dummy(aux, increase_by: T::Balance) -> Result = 0;
+		// Put forward a suggestion for spending. A bond of 
+		fn propose_spend(aux, amount: T::Balance, destination: T::AccountId) -> Result = 0;
 	}
 
 	// The priviledged entry points. These are provided to allow any governance modules in 
@@ -95,78 +76,72 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		// A priviledged call; in this case it resets our dummy value to something new.
-		fn set_dummy(new_dummy: T::Balance) -> Result = 0;
+		fn set_pot(new_pot: T::Balance) -> Result = 0;
+	}
+
+	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	pub enum CouncilCall {
+		// A priviledged call; in this case it resets our dummy value to something new.
+		fn cancel_proposal(proposal_id: u32) -> Result = 0;
+
+		// A priviledged call; in this case it resets our dummy value to something new.
+		fn approve_proposal(proposal_id: u32) -> Result = 1;
+	}
+}
+
+type ProposalIndex = u32;
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq)]
+struct Proposal<AccountId: Member, Balance: Member> {
+	proposer: AccountId,
+	beneficiary: AccountId,
+	value: Balance,
+}
+
+decl_storage! {
+	trait Store for Module<T: Trait> as Treasury {
+		// Total funds available to this module for spending.
+		Pot get(pot): T::Balance;
+
+		// Proportion of funds that should be bonded in order to place a proposal. An accepted
+		// proposal gets these back. A rejected proposal doesn't.
+		ProposalBondPercentage get(proposal_bond_percentage): u32;
+		
+		// Proportion of funds that should be bonded in order to place a proposal. An accepted
+		// proposal gets these back. A rejected proposal doesn't.
+		ProposalBondMinimum get(proposal_bond_minimum): T::Balance;
+
+		// Proposals that have been made.
+		Proposals get(proposals): map [ ProposalIndex => (T::AccountId, T::AccountId, T::Balance) ];
 	}
 }
 
 /// Exported Event type that's generic over the configuration trait.
-// NOTE: External macro-fu expects this type to exist and be generic over
-// the configuration trait.
 pub type Event<T> = RawEvent<
 	<T as balances::Trait>::Balance,
+	<T as system::Trait>::AccountId,
 >;
 
-/// An event in this module. Events are simple means of reporting specific conditions and
-/// cursumstances that have happened that users, Dapps and/or chain explorers would find
-/// interested and otherwise difficult to detect.
+/// An event in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<B> {
-	// Just a normal `enum`, here's a dummy event to ensure it compiles.
-	/// Dummy event, just here so there's a generic type that's used.
-	Dummy(B),
+pub enum RawEvent<Balance, AccountId> {
+	/// Some funds came in.
+	Revenue(Balance),
+	/// Spent some funds.
+	Spend(Balance, AccountId),
+	/// Burnt some funds.
+	Burn(Balance),
 }
 
 // By convention we implement any trait for which a "null implemntation" makes sense
 // for `()`. This is the case for conversion of module `Event` types and hook traits. It
 // is helpful for test code and production configurations where no eventing is necessary
 // or the hook is unused.
-impl<B> From<RawEvent<B>> for () {
-	fn from(_: RawEvent<B>) -> () { () }
+impl<B, A> From<RawEvent<B, A>> for () {
+	fn from(_: RawEvent<B, A>) -> () { () }
 }
 
-decl_storage! {
-	// A macro for the Storage trait, and its implementation, for this module.
-	// This allows for type-safe usage of the Substrate storage database, so you can
-	// keep things around between blocks.
-	trait Store for Module<T: Trait> as Treasury {
-		// Any storage declarations of the form:
-		//   `pub? Name get(getter_name)? : [required | default]? <type>;`
-		// where `<type>` is either:
-		//   - `Type` (a basic value item); or
-		//   - `map [ KeyType => ValueType ]` (a map item).
-		//
-		// Note that there are two optional modifiers for the storage type declaration.
-		// - `Foo: u32`:
-		//   - `Foo::put(1); Foo::get()` returns `Some(1)`;
-		//   - `Foo::kill(); Foo::get()` returns `None`.
-		// - `Foo: required u32`:
-		//   - `Foo::put(1); Foo::get()` returns `1`;
-		//   - `Foo::kill(); Foo::get()` panics.
-		// - `Foo: default u32`:
-		//   - `Foo::put(1); Foo::get()` returns `1`;
-		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
-		// e.g. Foo: u32;
-		// e.g. pub Bar get(bar): default map [ T::AccountId => Vec<(T::Balance, u64)> ];
-		//
-		// For basic value items, you'll get a type which implements
-		// `runtime_support::StorageValue`. For map items, you'll get a type which
-		// implements `runtime_support::StorageMap`.
-		//
-		// If they have a getter (`get(getter_name)`), then your module will come
-		// equiped with `fn getter_name() -> Type` for basic value items or
-		// `fn getter_name(key: KeyType) -> ValueType` for map items.
-		Dummy get(dummy): T::Balance;
-	}
-}
-
-// The main implementation block for the module. Functions here fall into three broad
-// categories:
-// - Implementations of dispatch functions. The dispatch code generated by the module macro
-// expects each of its functions to be implemented.
-// - Public interface. These are functions that are `pub` and generally fall into inspector
-// functions that do not write to storage and operation functions that do.
-// - Private functions. These are your usual private utilities unavailable to other modules.
 impl<T: Trait> Module<T> {
 	/// Deposit one of this module's events. This function doesn't change.
 	// TODO: move into `decl_module` macro.
@@ -176,41 +151,6 @@ impl<T: Trait> Module<T> {
 
 	// Implement Calls/PrivCalls and add public immutables and private mutables.
 
-	// Implement dispatched function `accumulate_dummy`. This just increases the value
-	// of `Dummy` by `increase_by`.
-	//
-	// Since this is a dispatched function there are two extremely important things to
-	// remember:
-	//
-	// - MUST NOT PANIC: Under no circumstances (save, perhaps, storage getting into an
-	// irreparably damaged state) must this function panic.
-	// - NO SIDE-EFFECTS ON ERROR: This function must either complete totally (and return 
-	// `Ok(())` or it must have no side-effects on storage and return `Err('Some reason')`.
-	//
-	// The first is relatively easy to audit for - just ensure all panickers are emoved from
-	// logic that executes in production (which you do anyway, right?!). To ensure the second 
-	// is followed, you should do all tests for validity at the top of your function. This
-	// is stuff like checking the sender (`aux`) or that state is such that the operation
-	// makes sense.
-	// 
-	// Once you've determined that it's all good, then enact the operation and change storage.
-	// If you can't be certain that the operation will succeed without substantial computation
-	// then you have a classic blockchain attack scenario. The normal way of managing this is
-	// to attach a bond to the operation. as the first major alteration of storage, reserve
-	// some value from the sender's account (`Balances` module has a `reserve` function for
-	// exactly this scenario). This amount should be enough to cover any costs of the
-	// substantial execution in case it turns out that you can't proceed with the operation.
-	//
-	// If it eventually transpires that the operation is fine and, therefore, that the
-	// expense of the checks should be borne by the network, then you can refund the reserved
-	// deposit. If, however, the operation turns out to be invalid and the computation is
-	// wasted, then you can burn it or repatriate elsewhere.
-	//
-	// Security bonds ensure that attackers can't game it by ensuring that anyone interacting
-	// with the system either progresses it or pays for the trouble of faffing around with
-	// no progress.
-	//
-	// If you don't respect these rules, it is likely that your chain will be attackable.
 	fn accumulate_dummy(_aux: &T::PublicAux, increase_by: T::Balance) -> Result {
 		// Read the value of dummy from storage.
 		let dummy = Self::dummy();
@@ -244,6 +184,12 @@ impl<T: Trait> Module<T> {
 
 		// All good.
 		Ok(())
+	}
+}
+
+impl<T: Trait> OnMinted for Module<T> {
+	fn on_minted(b: T::Balance) {
+
 	}
 }
 
