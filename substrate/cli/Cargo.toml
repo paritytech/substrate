@@ -1,6 +1,6 @@
 [package]
 name = "substrate-cli"
-version = "0.2.9"
+version = "0.2.10"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate CLI interface."
 build = "build.rs"
