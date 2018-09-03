@@ -126,7 +126,7 @@ where
 	H::Out: Ord + Encodable
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		use {try_read_overlay_value};
+		use try_read_overlay_value;
 		try_read_overlay_value(self.overlay, self.backend, key)
 			.expect("Externalities not allowed to fail within runtime")
 	}
