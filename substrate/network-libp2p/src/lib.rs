@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #![recursion_limit="128"]
 #![type_length_limit = "268435456"]
@@ -28,7 +28,7 @@ extern crate libc;
 extern crate libp2p;
 extern crate rand;
 extern crate bytes;
-extern crate varint;
+extern crate unsigned_varint;
 
 extern crate ethcore_io as io;
 extern crate ethereum_types;

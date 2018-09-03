@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use libp2p::{self, Transport, mplex, secio, yamux};
 use libp2p::core::{MuxedTransport, either, upgrade};
@@ -55,7 +55,9 @@ pub fn build_transport(
 			upgrade::map(mplex::MplexConfig::new(), either::EitherOutput::First),
 			upgrade::map(yamux::Config::default(), either::EitherOutput::Second),
 		))
-		.into_connection_reuse();
+		.map(|out, _| ((), out))
+		.into_connection_reuse()
+		.map(|((), out), _| out);
 
 	TransportTimeout::new(base, Duration::from_secs(20))
 }

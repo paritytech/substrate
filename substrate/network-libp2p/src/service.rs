@@ -12,7 +12,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.?
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
 use {Error, ErrorKind, NetworkConfiguration, NetworkProtocolHandler};
@@ -109,9 +109,10 @@ impl NetworkService {
 
 		let local_peer_id = network_state.local_public_key().clone()
 			.into_peer_id();
-		let mut listen_addr = config.listen_address.clone();
-		listen_addr.append(AddrComponent::P2P(local_peer_id.clone().into_bytes()));
-		info!(target: "sub-libp2p", "Local node address is: {}", listen_addr);
+		for mut addr in config.listen_addresses.iter().cloned() {
+			addr.append(AddrComponent::P2P(local_peer_id.clone().into_bytes()));
+			info!(target: "sub-libp2p", "Local node address is: {}", addr);
+		}
 
 		let kad_system = KadSystem::without_init(KadSystemConfig {
 			parallelism: 3,
@@ -129,10 +130,7 @@ impl NetworkService {
 		let (close_tx, close_rx) = oneshot::channel();
 		let (timeouts_register_tx, timeouts_register_rx) = mpsc::unbounded();
 
-		let mut listened_addrs = Vec::new();
-		if let Some(ref addr) = config.public_address {
-			listened_addrs.push(addr.clone());
-		}
+		let listened_addrs = config.public_addresses.clone();
 
 		let shared = Arc::new(Shared {
 			network_state,
@@ -431,7 +429,7 @@ fn init_thread(
 					let listener_upgrade = upgrade::or(upgrade::or(upgrade::or(
 						upgrade::map_with_addr(shared.kad_upgrade.clone(), |(c, f), a| FinalUpgrade::Kad(c, f, a.clone())),
 						upgrade::map(IdentifyProtocolConfig, |id| FinalUpgrade::Identify(id, original_addr))),
-						upgrade::map_with_addr(ping::Ping, |(p, f), addr| FinalUpgrade::Ping(p, f, addr.clone()))),
+						upgrade::map_with_addr(ping::Ping, |out, addr| FinalUpgrade::from((out, addr.clone())))),
 						upgrade::map_with_addr(DelayedProtosList(shared), |c, a| FinalUpgrade::Custom(c, a.clone())));
 					upgrade::apply(out.socket, listener_upgrade, endpoint, client_addr)
 				}
@@ -445,17 +443,18 @@ fn init_thread(
 		)
 	};
 
-	// Listen on multiaddress.
-	match swarm_controller.listen_on(shared.config.listen_address.clone()) {
-		Ok(new_addr) => {
-			debug!(target: "sub-libp2p", "Libp2p listening on {}", new_addr);
-			*shared.original_listened_addr.write() = Some(new_addr.clone());
-		},
-		Err(_) => {
-			warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported",
-				shared.config.listen_address);
-			return Err(ErrorKind::BadProtocol.into())
-		},
+	// Listen on multiaddresses.
+	for addr in &shared.config.listen_addresses {
+		match swarm_controller.listen_on(addr.clone()) {
+			Ok(new_addr) => {
+				debug!(target: "sub-libp2p", "Libp2p listening on {}", new_addr);
+				*shared.original_listened_addr.write() = Some(new_addr.clone());
+			},
+			Err(_) => {
+				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported", addr);
+				return Err(ErrorKind::BadProtocol.into())
+			},
+		}
 	}
 
 	// Explicitely connect to _all_ the boostrap nodes as a temporary measure.
@@ -571,10 +570,21 @@ enum FinalUpgrade<C> {
 	Kad(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>, Multiaddr),
 	/// The remote identification system, and the multiaddress we see the remote as.
 	Identify(IdentifyOutput<C>, Multiaddr),
-	Ping(ping::Pinger, Box<Future<Item = (), Error = IoError>>, Multiaddr),
+	PingDialer(ping::Pinger, Box<Future<Item = (), Error = IoError>>, Multiaddr),
+	PingListener(Box<Future<Item = (), Error = IoError>>, Multiaddr),
 	/// `Custom` means anything not in the core libp2p and is handled
 	/// by `CustomProtoConnectionUpgrade`.
 	Custom(RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>, Multiaddr),
+}
+
+impl<C> From<(ping::PingOutput, Multiaddr)> for FinalUpgrade<C> {
+	fn from((out, addr): (ping::PingOutput, Multiaddr)) -> FinalUpgrade<C> {
+		match out {
+			ping::PingOutput::Ponger(processing) => FinalUpgrade::PingListener(processing, addr),
+			ping::PingOutput::Pinger { pinger, processing } =>
+				FinalUpgrade::PingDialer(pinger, processing, addr),
+		}
+	}
 }
 
 /// Called whenever we successfully open a multistream with a remote.
@@ -611,7 +621,12 @@ fn listener_handle<'a, C>(
 		FinalUpgrade::Identify(IdentifyOutput::RemoteInfo { .. }, _) =>
 			unreachable!("We are never dialing with the identify protocol"),
 
-		FinalUpgrade::Ping(pinger, future, client_addr) => {
+		FinalUpgrade::PingListener(future, client_addr) => {
+			trace!(target: "sub-libp2p", "Received ping substream from {:?}", client_addr);
+			future
+		},
+
+		FinalUpgrade::PingDialer(pinger, future, client_addr) => {
 			let node_id = p2p_multiaddr_to_node_id(client_addr);
 			match shared.network_state.ping_connection(node_id.clone()) {
 				Ok((_, ping_connec)) => {
@@ -761,17 +776,20 @@ fn handle_custom_connection(
 		who: NodeIndex,
 		node_id: PeerstorePeerId,
 		handler: Arc<NetworkProtocolHandler + Send + Sync>,
-		protocol: ProtocolId
+		protocol: ProtocolId,
+		print_log_message: bool,
 	}
 
 	impl Drop for ProtoDisconnectGuard {
 		fn drop(&mut self) {
-			info!(target: "sub-libp2p",
-				"Node {:?} with peer ID {} through protocol {:?} disconnected",
-				self.node_id,
-				self.who,
-				self.protocol
-			);
+			if self.print_log_message {
+				info!(target: "sub-libp2p",
+					"Node {:?} with peer ID {} through protocol {:?} disconnected",
+					self.node_id,
+					self.who,
+					self.protocol
+				);
+			}
 			self.handler.disconnected(&NetworkContextImpl {
 				inner: self.inner.clone(),
 				protocol: self.protocol,
@@ -784,12 +802,13 @@ fn handle_custom_connection(
 		}
 	}
 
-	let dc_guard = ProtoDisconnectGuard {
+	let mut dc_guard = ProtoDisconnectGuard {
 		inner: shared.clone(),
 		who,
 		node_id: node_id.clone(),
 		handler: handler.clone(),
 		protocol: protocol_id,
+		print_log_message: true,
 	};
 
 	let fut = custom_proto_out.incoming
@@ -816,6 +835,7 @@ fn handle_custom_connection(
 				info!(target: "sub-libp2p", "Finishing future for proto {:?} with {:?} => {:?}",
 					protocol_id, node_id, val);
 				// Makes sure that `dc_guard` is kept alive until here.
+				dc_guard.print_log_message = false;
 				drop(dc_guard);
 				val
 			}
@@ -844,7 +864,7 @@ fn handle_custom_connection(
 /// nodes and only accept incoming connections.
 fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 	swarm_controller: SwarmController<St>) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -911,7 +931,7 @@ fn perform_kademlia_query<T, To, St, C>(
 	transport: T,
 	swarm_controller: SwarmController<St>
 ) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -960,7 +980,7 @@ fn connect_to_nodes<T, To, St, C>(
 	base_transport: T,
 	swarm_controller: &SwarmController<St>
 )
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -1005,7 +1025,7 @@ fn connect_with_query_peer_id<T, To, St, C>(
 	addr: Multiaddr,
 	swarm_controller: &SwarmController<St>
 )
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -1067,7 +1087,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 	expected_peer_id: PeerstorePeerId,
 	swarm_controller: &SwarmController<St>
 )
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -1157,7 +1177,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
 	who: PeerstorePeerId, transport: T, swarm_controller: SwarmController<St>)
 	-> impl Future<Item = KadConnecController, Error = IoError>
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -1245,9 +1265,9 @@ fn start_pinger<T, To, St, C>(
 		.and_then(move |out, endpoint, client_addr|
 			upgrade::apply(out.socket, ping::Ping, endpoint, client_addr)
 		)
-		.and_then(move |(ctrl, fut), _, client_addr| {
+		.and_then(move |out, _, client_addr| {
 			client_addr.map(|client_addr| {
-				let out = FinalUpgrade::Ping(ctrl, fut, client_addr.clone());
+				let out = FinalUpgrade::from((out, client_addr.clone()));
 				(out, future::ok(client_addr))
 			})
 		});
