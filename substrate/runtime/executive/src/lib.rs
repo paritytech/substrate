@@ -221,7 +221,7 @@ impl<
 
 		// check storage changes root
 		let storage_changes_root = System::Hashing::storage_changes_root();
-		header.changes_root().cloned().check_equal(&storage_changes_root);
+		header.changes_root().check_equal(&storage_changes_root.as_ref());
 		assert!(header.changes_root() == storage_changes_root.as_ref(), "Storage change root must match that calculated.");
 	}
 }

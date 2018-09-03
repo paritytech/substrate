@@ -16,7 +16,7 @@
 
 //! Substrate changes trie configuration.
 
-/// An identifier for an authority in the consensus algorithm. The same size as ed25519::Public.
+/// Substrate changes trie configuration.
 #[cfg_attr(any(feature = "std", test), derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Default, Encode, Decode)]
 pub struct ChangesTrieConfiguration {

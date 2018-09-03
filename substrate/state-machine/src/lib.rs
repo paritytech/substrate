@@ -537,12 +537,12 @@ mod tests {
 		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial).try_into_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
-				b"aba".to_vec() => (Some(b"1312".to_vec()), None),
-				b"bab".to_vec() => (Some(b"228".to_vec()), None)
+				b"aba".to_vec() => Some(b"1312".to_vec()).into(),
+				b"bab".to_vec() => Some(b"228".to_vec()).into()
 			],
 			prospective: map![
-				b"abd".to_vec() => (Some(b"69".to_vec()), None),
-				b"bbd".to_vec() => (Some(b"42".to_vec()), None)
+				b"abd".to_vec() => Some(b"69".to_vec()).into(),
+				b"bbd".to_vec() => Some(b"42".to_vec()).into()
 			],
 			..Default::default()
 		};
@@ -557,13 +557,13 @@ mod tests {
 		assert_eq!(
 			overlay.committed,
 			map![
-				b"abb".to_vec() => (None, None),
-				b"abc".to_vec() => (None, None),
-				b"aba".to_vec() => (None, None),
-				b"abd".to_vec() => (None, None),
+				b"abc".to_vec() => None.into(),
+				b"abb".to_vec() => None.into(),
+				b"aba".to_vec() => None.into(),
+				b"abd".to_vec() => None.into(),
 
-				b"bab".to_vec() => (Some(b"228".to_vec()), None),
-				b"bbd".to_vec() => (Some(b"42".to_vec()), None)
+				b"bab".to_vec() => Some(b"228".to_vec()).into(),
+				b"bbd".to_vec() => Some(b"42".to_vec()).into()
 			],
 		);
 	}

@@ -137,8 +137,8 @@ where
 
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.committed.clone().into_iter().map(|(k, (v, _))| (k, v)))
-			.chain(self.overlay.prospective.clone().into_iter().map(|(k, (v, _))| (k, v)))
+			.chain(self.overlay.committed.clone().into_iter().map(|(k, v)| (k, v.value)))
+			.chain(self.overlay.prospective.clone().into_iter().map(|(k, v)| (k, v.value)))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -200,9 +200,8 @@ where
 		}
 
 		// compute and memoize
-		let delta = self.overlay.committed.iter().map(|(k, (v, _))| (k, v))
-			.chain(self.overlay.prospective.iter().map(|(k, (v, _))| (k, v)))
-			.map(|(k, v)| (k.clone(), v.clone()));
+		let delta = self.overlay.committed.iter().map(|(k, v)| (k.clone(), v.value.clone()))
+			.chain(self.overlay.prospective.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
 		let (root, transaction) = self.backend.storage_root(delta);
 		self.storage_transaction = Some((transaction, root));
@@ -243,6 +242,7 @@ mod tests {
 	use backend::InMemory;
 	use changes_trie::{Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as InMemoryChangesTrieStorage};
+	use overlayed_changes::OverlayedValue;
 	use super::*;
 
 	type TestBackend = InMemory<KeccakHasher, RlpCodec>;
@@ -252,7 +252,10 @@ mod tests {
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
 			prospective: vec![
-				(vec![1], (Some(vec![100].into_iter().collect()), Some(vec![1].into_iter().collect())))
+				(vec![1], OverlayedValue {
+					value: Some(vec![100].into_iter().collect()),
+					extrinsics: Some(vec![1].into_iter().collect())
+				})
 			].into_iter().collect(),
 			committed: Default::default(),
 			changes_trie_config: Some(ChangesTrieConfiguration {
@@ -295,7 +298,7 @@ mod tests {
 	#[test]
 	fn storage_changes_root_is_some_when_extrinsic_changes_are_empty() {
 		let mut overlay = prepare_overlay_with_changes();
-		overlay.prospective.get_mut(&vec![1]).unwrap().1 = None;
+		overlay.prospective.get_mut(&vec![1]).unwrap().value = None;
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));

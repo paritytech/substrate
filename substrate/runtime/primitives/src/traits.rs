@@ -295,7 +295,7 @@ impl CheckEqual for substrate_primitives::H256 {
 	}
 }
 
-impl<T> CheckEqual for Option<T> where T: CheckEqual {
+impl<'a, T> CheckEqual for Option<&'a T> where T: CheckEqual {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		match (self, other) {

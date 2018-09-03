@@ -77,9 +77,9 @@ fn prepare_extrinsics_input<B, H, C>(
 		C: NodeCodec<H>,
 {
 	let mut extrinsic_map = BTreeMap::<Vec<u8>, BTreeSet<u32>>::new();
-	for (key, (_, extrinsics)) in changes.prospective.iter().chain(changes.committed.iter()) {
-		let extrinsics = match extrinsics {
-			Some(extrinsics) => extrinsics,
+	for (key, val) in changes.prospective.iter().chain(changes.committed.iter()) {
+		let extrinsics = match val.extrinsics {
+			Some(ref extrinsics) => extrinsics,
 			None => continue,
 		};
 
@@ -98,7 +98,7 @@ fn prepare_extrinsics_input<B, H, C>(
 	Ok(extrinsic_map.into_iter()
 		.map(move |(key, extrinsics)| InputPair::ExtrinsicIndex(ExtrinsicIndex {
 			block,
-			key: key.clone(),
+			key,
 		}, extrinsics.iter().cloned().collect())))
 }
 
@@ -148,6 +148,7 @@ mod test {
 	use primitives::{KeccakHasher, RlpCodec};
 	use backend::InMemory;
 	use changes_trie::storage::InMemoryStorage;
+	use overlayed_changes::OverlayedValue;
 	use super::*;
 
 	fn prepare_for_build(block: u64) -> (InMemory<KeccakHasher, RlpCodec>, InMemoryStorage<KeccakHasher>, OverlayedChanges) {
@@ -195,12 +196,24 @@ mod test {
 		]);
 		let changes = OverlayedChanges {
 			prospective: vec![
-				(vec![100], (Some(vec![200]), Some(vec![0, 2].into_iter().collect()))),
-				(vec![103], (None, Some(vec![0, 1].into_iter().collect()))),
+				(vec![100], OverlayedValue {
+					value: Some(vec![200]),
+					extrinsics: Some(vec![0, 2].into_iter().collect())
+				}),
+				(vec![103], OverlayedValue {
+					value: None,
+					extrinsics: Some(vec![0, 1].into_iter().collect())
+				}),
 			].into_iter().collect(),
 			committed: vec![
-				(vec![100], (Some(vec![202]), Some(vec![3].into_iter().collect()))),
-				(vec![101], (Some(vec![203]), Some(vec![1].into_iter().collect()))),
+				(vec![100], OverlayedValue {
+					value: Some(vec![202]),
+					extrinsics: Some(vec![3].into_iter().collect())
+				}),
+				(vec![101], OverlayedValue {
+					value: Some(vec![203]),
+					extrinsics: Some(vec![1].into_iter().collect())
+				}),
 			].into_iter().collect(),
 			changes_trie_config: Some(Configuration { digest_interval: 4, digest_levels: 2 }),
 			block: Some(block),
@@ -259,7 +272,10 @@ mod test {
 		let (backend, storage, mut changes) = prepare_for_build(4);
 
 		// 110: missing from backend, set to None in overlay
-		changes.prospective.insert(vec![110], (None, Some(vec![1].into_iter().collect())));
+		changes.prospective.insert(vec![110], OverlayedValue {
+			value: None,
+			extrinsics: Some(vec![1].into_iter().collect())
+		});
 
 		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![

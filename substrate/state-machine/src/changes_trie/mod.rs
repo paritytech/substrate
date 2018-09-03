@@ -53,8 +53,6 @@ use trie_backend_essence::TrieBackendStorage;
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
 pub trait Storage<H: Hasher>: Send + Sync {
-	//type ChangesTrieTransaction;
-
 	/// Get changes trie root for given block.
 	fn root(&self, block: u64) -> Result<Option<H::Out>, String>;
 
