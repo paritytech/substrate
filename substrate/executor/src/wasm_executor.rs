@@ -304,14 +304,12 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(result, r.as_ref()).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
 		Ok(())
 	},
-	ext_storage_changes_root(is_set: *mut u8, result: *mut u8) => {
+	ext_storage_changes_root(result: *mut u8) -> u32 => {
 		let r = this.ext.storage_changes_root();
-		let r_is_some = [r.is_some() as u8];
-		this.memory.set(is_set, &r_is_some[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
-		if let Some(r) = r {
+		if let Some(ref r) = r {
 			this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
 		}
-		Ok(())
+		Ok(if r.is_some() { 1u32 } else { 0u32 })
 	},
 	ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
 		let values = (0..lens_len)
