@@ -282,7 +282,7 @@ pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{KeccakHasher, RlpCodec, H256};
 
-	fn test_db() -> (MemoryDB<KeccakHasher>, H256) {
+	fn test_db(has_code: bool) -> (MemoryDB<KeccakHasher>, H256) {
 		let mut root = H256::default();
 		let mut mdb = MemoryDB::<KeccakHasher>::new();
 		{
@@ -290,7 +290,9 @@ pub mod tests {
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
-			trie.insert(b":code", b"return 42").expect("insert failed");
+			if has_code {
+				trie.insert(b":code", b"return 42").expect("insert failed");
+			}
 			for i in 128u8..255u8 {
 				trie.insert(&[i], &[i]).unwrap();
 			}
@@ -298,24 +300,24 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<KeccakHasher, RlpCodec> {
-		let (mdb, root) = test_db();
+	pub(crate) fn test_trie(has_code: bool) -> TrieBackend<KeccakHasher, RlpCodec> {
+		let (mdb, root) = test_db(has_code);
 		TrieBackend::with_memorydb(mdb, root)
 	}
 
 	#[test]
 	fn read_from_storage_returns_some() {
-		assert_eq!(test_trie().storage(b"key").unwrap(), Some(b"value".to_vec()));
+		assert_eq!(test_trie(true).storage(b"key").unwrap(), Some(b"value".to_vec()));
 	}
 
 	#[test]
 	fn read_from_storage_returns_none() {
-		assert_eq!(test_trie().storage(b"non-existing-key").unwrap(), None);
+		assert_eq!(test_trie(true).storage(b"non-existing-key").unwrap(), None);
 	}
 
 	#[test]
 	fn pairs_are_not_empty_on_non_empty_storage() {
-		assert!(!test_trie().pairs().is_empty());
+		assert!(!test_trie(true).pairs().is_empty());
 	}
 
 	#[test]
@@ -329,24 +331,24 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		assert!(test_trie().storage_root(::std::iter::empty()).0 != H256([0; 32]));
+		assert!(test_trie(true).storage_root(::std::iter::empty()).0 != H256([0; 32]));
 	}
 
 	#[test]
 	fn storage_root_transaction_is_empty() {
-		assert!(test_trie().storage_root(::std::iter::empty()).1.drain().is_empty());
+		assert!(test_trie(true).storage_root(::std::iter::empty()).1.drain().is_empty());
 	}
 
 	#[test]
 	fn storage_root_transaction_is_non_empty() {
-		let (new_root, mut tx) = test_trie().storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
+		let (new_root, mut tx) = test_trie(true).storage_root(vec![(b"new-key".to_vec(), Some(b"new-value".to_vec()))]);
 		assert!(!tx.drain().is_empty());
-		assert!(new_root != test_trie().storage_root(::std::iter::empty()).0);
+		assert!(new_root != test_trie(true).storage_root(::std::iter::empty()).0);
 	}
 
 	#[test]
 	fn prefix_walking_works() {
-		let trie = test_trie();
+		let trie = test_trie(true);
 
 		let mut seen = HashSet::new();
 		trie.for_keys_with_prefix(b"value", |key| {

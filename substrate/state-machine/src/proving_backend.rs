@@ -126,7 +126,7 @@ mod tests {
 	use primitives::{KeccakHasher, RlpCodec};
 
 	fn test_proving() -> ProvingBackend<KeccakHasher, RlpCodec> {
-		ProvingBackend::new(test_trie())
+		ProvingBackend::new(test_trie(true))
 	}
 
 	#[test]
@@ -148,7 +148,7 @@ mod tests {
 
 	#[test]
 	fn passes_throgh_backend_calls() {
-		let trie_backend = test_trie();
+		let trie_backend = test_trie(true);
 		let proving_backend = test_proving();
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());

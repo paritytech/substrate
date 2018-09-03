@@ -126,8 +126,9 @@ where
 	H::Out: Ord + Encodable
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
-		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
-			self.backend.storage(key).expect("Externalities not allowed to fail within runtime"))
+		use {try_read_overlay_value};
+		try_read_overlay_value(self.overlay, self.backend, key)
+			.expect("Externalities not allowed to fail within runtime")
 	}
 
 	fn exists_storage(&self, key: &[u8]) -> bool {
