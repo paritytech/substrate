@@ -85,7 +85,7 @@ decl_module! {
 		fn configure(proposal_bond: Permill, proposal_bond_minimum: T::Balance, spend_period: T::BlockNumber, burn: Permill) -> Result = 1;
 
 		// A priviledged call; in this case it resets our dummy value to something new.
-		fn cancel_proposal(proposal_id: ProposalIndex) -> Result = 2;
+		fn reject_proposal(proposal_id: ProposalIndex) -> Result = 2;
 
 		// A priviledged call; in this case it resets our dummy value to something new.
 		fn approve_proposal(proposal_id: ProposalIndex) -> Result = 3;
@@ -187,7 +187,7 @@ impl<T: Trait> Module<T> {
 
 		let bond = Self::calculate_bond(value);
 		<balances::Module<T>>::reserve(proposer, bond)
-			.map_err(|_| "proposer's balance too low")?;
+			.map_err(|_| "Proposer's balance too low")?;
 
 		let c = Self::proposal_count();
 		<ProposalCount<T>>::put(c + 1);
@@ -198,7 +198,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn cancel_proposal(proposal_id: ProposalIndex) -> Result {
+	fn reject_proposal(proposal_id: ProposalIndex) -> Result {
 		let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
 		
 		let value = Self::calculate_bond(proposal.value);
@@ -208,6 +208,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn approve_proposal(proposal_id: ProposalIndex) -> Result {
+		ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
+
 		{
 			let mut v = <Approvals<T>>::get();
 			v.push(proposal_id);
@@ -376,12 +378,13 @@ mod tests {
 	impl Trait for Test {
 		type Event = ();
 	}
+	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
-			balances: vec![(0, 100), (1, 10)],
+			balances: vec![(0, 100), (1, 10), (2, 1)],
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
 			transfer_fee: 0,
@@ -399,28 +402,154 @@ mod tests {
 	}
 
 	#[test]
-	fn it_works() {
+	fn genesis_config_works() {
 		with_externalities(&mut new_test_ext(), || {
-			// Check that GenesisBuilder works properly.
 			assert_eq!(Treasury::proposal_bond(), Permill(50_000));
 			assert_eq!(Treasury::proposal_bond_minimum(), 1);
 			assert_eq!(Treasury::spend_period(), 2);
 			assert_eq!(Treasury::burn(), Permill(500_000));
 			assert_eq!(Treasury::pot(), 0);
 			assert_eq!(Treasury::proposal_count(), 0);
+		});
+	}
 
+	#[test]
+	fn minting_works() {
+		with_externalities(&mut new_test_ext(), || {
 			// Check that accumulate works when we have Some value in Dummy already.
 			Treasury::on_minted(100);
 			assert_eq!(Treasury::pot(), 100);
-/*			
-			Treasury::propose_spend();
-			
-			<Treasury as OnFinalise>::on_finalise(2);
-			assert_eq!(Treasury::dummy(), None);
+		});
+	}
 
-			// Check that accumulate works when we Dummy has None in it.
-			assert_ok!(Treasury::accumulate_dummy(42.into()));
-			assert_eq!(Treasury::dummy(), Some(42));*/
+	#[test]
+	fn spend_proposal_takes_min_deposit() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_ok!(Treasury::propose_spend(&0, 1, 3));
+			assert_eq!(Balances::free_balance(&0), 99);
+			assert_eq!(Balances::reserved_balance(&0), 1);
+		});
+	}
+
+	#[test]
+	fn spend_proposal_takes_proportional_deposit() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_ok!(Treasury::propose_spend(&0, 100, 3));
+			assert_eq!(Balances::free_balance(&0), 95);
+			assert_eq!(Balances::reserved_balance(&0), 5);
+		});
+	}
+
+	#[test]
+	fn spend_proposal_fails_when_proposer_poor() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_noop!(Treasury::propose_spend(&2, 100, 3), "Proposer's balance too low");
+		});
+	}
+
+	#[test]
+	fn accepted_spend_proposal_ignored_outside_spend_period() {
+		with_externalities(&mut new_test_ext(), || {
+			Treasury::on_minted(100);
+
+			assert_ok!(Treasury::propose_spend(&0, 100, 3));
+			assert_ok!(Treasury::approve_proposal(0));
+
+			<Treasury as OnFinalise<u64>>::on_finalise(1);
+			assert_eq!(Balances::free_balance(&3), 0);
+			assert_eq!(Treasury::pot(), 100);
+		});
+	}
+
+	#[test]
+	fn unused_pot_should_diminish() {
+		with_externalities(&mut new_test_ext(), || {
+			Treasury::on_minted(100);
+
+			<Treasury as OnFinalise<u64>>::on_finalise(2);
+			assert_eq!(Treasury::pot(), 50);
+		});
+	}
+
+	#[test]
+	fn rejected_spend_proposal_ignored_on_spend_period() {
+		with_externalities(&mut new_test_ext(), || {
+			Treasury::on_minted(100);
+
+			assert_ok!(Treasury::propose_spend(&0, 100, 3));
+			assert_ok!(Treasury::reject_proposal(0));
+
+			<Treasury as OnFinalise<u64>>::on_finalise(2);
+			assert_eq!(Balances::free_balance(&3), 0);
+			assert_eq!(Treasury::pot(), 50);
+		});
+	}
+
+	#[test]
+	fn reject_already_rejected_spend_proposal_fails() {
+		with_externalities(&mut new_test_ext(), || {
+			Treasury::on_minted(100);
+
+			assert_ok!(Treasury::propose_spend(&0, 100, 3));
+			assert_ok!(Treasury::reject_proposal(0));
+			assert_noop!(Treasury::reject_proposal(0), "No proposal at that index");
+		});
+	}
+
+	#[test]
+	fn reject_non_existant_spend_proposal_fails() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_noop!(Treasury::reject_proposal(0), "No proposal at that index");
+		});
+	}
+
+	#[test]
+	fn accept_non_existant_spend_proposal_fails() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_noop!(Treasury::approve_proposal(0), "No proposal at that index");
+		});
+	}
+
+	#[test]
+	fn accept_already_rejected_spend_proposal_fails() {
+		with_externalities(&mut new_test_ext(), || {
+			Treasury::on_minted(100);
+
+			assert_ok!(Treasury::propose_spend(&0, 100, 3));
+			assert_ok!(Treasury::reject_proposal(0));
+			assert_noop!(Treasury::approve_proposal(0), "No proposal at that index");
+		});
+	}
+
+	#[test]
+	fn accepted_spend_proposal_enacted_on_spend_period() {
+		with_externalities(&mut new_test_ext(), || {
+			Treasury::on_minted(100);
+
+			assert_ok!(Treasury::propose_spend(&0, 100, 3));
+			assert_ok!(Treasury::approve_proposal(0));
+
+			<Treasury as OnFinalise<u64>>::on_finalise(2);
+			assert_eq!(Balances::free_balance(&3), 100);
+			assert_eq!(Treasury::pot(), 0);
+		});
+	}
+
+	#[test]
+	fn pot_underflow_should_not_diminish() {
+		with_externalities(&mut new_test_ext(), || {
+			Treasury::on_minted(100);
+
+			assert_ok!(Treasury::propose_spend(&0, 150, 3));
+			assert_ok!(Treasury::approve_proposal(0));
+
+			<Treasury as OnFinalise<u64>>::on_finalise(2);
+			assert_eq!(Treasury::pot(), 100);
+
+			Treasury::on_minted(100);
+			<Treasury as OnFinalise<u64>>::on_finalise(4);
+			assert_eq!(Balances::free_balance(&3), 150);
+			assert_eq!(Treasury::pot(), 25);
 		});
 	}
 }
