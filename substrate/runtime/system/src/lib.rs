@@ -40,7 +40,7 @@ extern crate safe_mix;
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
 	Hash, Member, MaybeDisplay};
-use primitives::address_format::Base58;
+use primitives::address_format::SS58Compatible;
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -69,7 +69,7 @@ pub trait Trait: Eq + Clone {
 	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Parameter + Member + Default + traits::Digest;
-	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default + Base58;
+	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default + Into<SS58Compatible>;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,

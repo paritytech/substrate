@@ -14,54 +14,59 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
 
-use base58::ToBase58;
 use byte_num::convert::IntoAscii;
 use testing::Digest;
 use substrate_primitives::H256;
 use generic::Digest as GenericDigest;
-
+use ed25519::Public;
 
 #[derive(Clone, Debug)]
-pub struct Base58Compatible ( pub Vec<u8>);
+pub struct SS58Compatible ( pub Public);
 
-pub trait Base58 : Into<Base58Compatible> {
+pub trait SS58: Into<SS58Compatible > {
     fn encode(self) -> String {
-        self.into().0.to_base58()
+        self.into().0.to_ss58check()
     }
 }
 
-impl From<u64> for Base58Compatible {
+impl From<u64> for SS58Compatible {
     fn from(x: u64) -> Self {
-        Base58Compatible(x.itoa())
+        SS58Compatible (Public::from_slice(&x.itoa()))
     }
 }
 
-impl Base58 for u64 {}
+impl SS58 for u64 {}
 
-impl From<Digest> for Base58Compatible {
+impl From<Digest> for SS58Compatible {
     fn from(x: Digest) -> Self {
-        Base58Compatible(x.logs.iter().map(|digest| digest.itoa()).flatten().collect())
+        SS58Compatible (Public::from_slice(&x
+            .logs
+            .iter()
+            .map(|digest| digest.itoa())
+            .flatten()
+            .collect::<Vec<u8>>()
+        ))
     }
 }
-impl Base58 for Digest {}
+impl SS58 for Digest {}
 
-impl From<H256> for Base58Compatible {
+impl From<H256> for SS58Compatible {
     fn from(x: H256) -> Self {
-        Base58Compatible(x[..].to_vec())
+        SS58Compatible (Public::from_slice(&x[..]))
     }
 }
 
-impl Base58 for H256 {}
+impl SS58 for H256 {}
 
-impl<Item: Into<u8>> From<GenericDigest<Item>> for Base58Compatible where
+impl<Item: Into<u8>> From<GenericDigest<Item>> for SS58Compatible where
     Vec<u8> : From<Vec<Item>>
 {
     fn from(x: GenericDigest<Item>) -> Self {
-        Base58Compatible(x.into())
+        SS58Compatible (Public::from_slice(Vec::from(x.logs).as_slice()))
     }
 }
 
-impl<Item: Into<u8>> Base58 for GenericDigest<Item> where
+impl<Item: Into<u8>> SS58 for GenericDigest<Item> where
     Vec<u8>: From<Vec<Item>>
 {}
 

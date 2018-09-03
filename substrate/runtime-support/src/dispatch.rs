@@ -192,6 +192,37 @@ macro_rules! decl_dispatch {
 			$($rest)*
 		}
 	};
+	// WITH MANY TRAIT BOUNDS
+	(
+		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
+		$(#[$attr:meta])*
+		pub enum $call_type:ident where aux: $aux_type:ty,
+		$($tr:ident : $bound:ty)*
+		{
+			$(
+				fn $fn_name:ident(aux,
+					$(
+						, $param_name:ident : $param:ty
+					)*
+				) -> $result:ty
+				= $id:expr ;
+			)*
+		}
+		$($rest:tt)*
+	) => {
+		__decl_dispatch_module_with_aux! {
+			impl for $mod_type<$trait_instance: $trait_name>;
+			$(#[$attr])*
+			pub enum $call_type where $($tr : $bound),* ;
+			$(
+				fn $fn_name(aux $(, $param_name: $param )*) -> $result = $id;
+			)*
+		}
+		decl_dispatch! {
+			impl for $mod_type<$trait_instance: $trait_name>;
+			$($rest)*
+		}
+	};
 	// BASE CASE
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;

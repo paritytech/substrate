@@ -27,7 +27,7 @@ pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign, RemAssign};
-use address_format::Base58;
+use address_format::SS58;
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {

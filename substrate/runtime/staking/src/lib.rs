@@ -45,6 +45,7 @@ extern crate substrate_runtime_sandbox as sandbox;
 extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
+extern crate ed25519;
 
 #[cfg(test)] use std::fmt::Debug;
 use rstd::prelude::*;
@@ -55,8 +56,9 @@ use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, SimpleArithmetic, Executable, MakePayment,
 	As, AuxLookup, Member, CheckedAdd, CheckedSub};
-use primitives::address_format::Base58;
+use primitives::address_format::{SS58, SS58Compatible};
 use address::Address as RawAddress;
+use std::fmt;
 
 mod mock;
 
@@ -106,7 +108,7 @@ pub trait Trait: system::Trait + session::Trait {
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy + Base58;
+	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy + fmt::Display;
 	/// A function which is invoked when the given account is dead.
 	///
 	/// Gives a chance to clean up resources associated with the given account.
@@ -117,7 +119,11 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call
+	where
+		aux: T::PublicAux,
+		SS58Compatible: From<<T as system::Trait>::AccountId> + From<<T as system::Trait>::AccountIndex>
+	{
 		fn transfer(aux, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result = 0;
 		fn stake(aux) -> Result = 1;
 		fn unstake(aux, index: u32) -> Result = 2;
@@ -236,7 +242,9 @@ pub enum UpdateBalanceOutcome {
 	AccountKilled,
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait> Module<T>
+where SS58Compatible: From<T>
+{
 
 	// PUBLIC IMMUTABLES
 
@@ -849,7 +857,7 @@ impl<T: Trait> OnSessionChange<T::Moment, T::AccountId> for Module<T> {
 }
 
 impl<T: Trait> AuxLookup for Module<T>
-where <T as system::Trait>::AccountId: primitives::address_format::Base58
+where SS58Compatible: From<<T as system::Trait>::AccountId> + From<<T as system::Trait>::AccountIndex>
 {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;

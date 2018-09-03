@@ -40,7 +40,7 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
-extern crate base58;
+extern crate ed25519;
 extern crate byte_num;
 
 #[cfg(test)]
