@@ -19,6 +19,7 @@ members = [
 	"substrate/runtime-sandbox",
 	"substrate/runtime-std",
 	"substrate/runtime-support",
+	"substrate/runtime/balances",
 	"substrate/runtime/consensus",
 	"substrate/runtime/contract",
 	"substrate/runtime/council",
@@ -52,10 +53,10 @@ exclude = [
 ]
 
 [badges]
-travis-ci = { repository = "paritytech/paritysubstrate", branch = "master" }
+travis-ci = { repository = "paritytech/substrate", branch = "master" }
 maintenance = { status = "actively-developed" }
-is-it-maintained-issue-resolution = { repository = "paritytech/paritysubstrate" }
-is-it-maintained-open-issues = { repository = "paritytech/paritysubstrate" }
+is-it-maintained-issue-resolution = { repository = "paritytech/substrate" }
+is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 
 [profile.release]
 # Substrate runtime requires unwinding.

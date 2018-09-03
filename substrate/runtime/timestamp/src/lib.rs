@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Timestamp manager: just handles the current timestamp.
 
@@ -43,7 +43,7 @@ use runtime_support::dispatch::Result;
 use runtime_primitives::traits::{Executable, MaybeEmpty, SimpleArithmetic, As, Zero};
 
 pub trait Trait: consensus::Trait where
-	<Self as consensus::Trait>::PublicAux: MaybeEmpty
+	<Self as system::Trait>::PublicAux: MaybeEmpty
 {
 	// the position of the required timestamp-set extrinsic.
 	const TIMESTAMP_SET_POSITION: u32;
@@ -61,13 +61,14 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
-	pub Now get(now): b"tim:val" => required T::Moment;
-	// The minimum (and advised) period between blocks.
-	pub BlockPeriod get(block_period): b"tim:block_period" => required T::Moment;
+	trait Store for Module<T: Trait> as Timestamp {
+		pub Now get(now): required T::Moment;
+		// The minimum (and advised) period between blocks.
+		pub BlockPeriod get(block_period): required T::Moment;
 
-	// Did the timestamp get updated in this block?
-	DidUpdate: b"tim:did" => default bool;
+		// Did the timestamp get updated in this block?
+		DidUpdate: default bool;
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -80,7 +81,7 @@ impl<T: Trait> Module<T> {
 		assert!(aux.is_empty());
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
-			<system::Module<T>>::extrinsic_index() == T::TIMESTAMP_SET_POSITION,
+			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
 			"Timestamp extrinsic must be at position {} in the block",
 			T::TIMESTAMP_SET_POSITION
 		);
@@ -151,6 +152,7 @@ mod tests {
 		type PublicAux = u64;
 	}
 	impl system::Trait for Test {
+		type PublicAux = u64;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -158,10 +160,12 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
+		type Event = ();
 	}
 	impl consensus::Trait for Test {
-		type PublicAux = u64;
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
+		type OnOfflineValidator = ();
 	}
 	impl Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;

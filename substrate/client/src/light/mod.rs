@@ -70,7 +70,7 @@ pub fn new_fetch_checker<E, H, C>(
 ) -> LightDataChecker<E, H, C>
 	where
 		E: CodeExecutor<H>,
-        H: Hasher,
+		H: Hasher,
 		C: NodeCodec<H>,
 {
 	LightDataChecker::new(executor)

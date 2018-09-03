@@ -191,7 +191,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<Self>  {
+	) -> error::Result<Self> {
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info, import_queue);
 		let protocol = Protocol {
@@ -321,7 +321,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		let get_body = request.fields.contains(message::BlockAttributes::BODY);
 		let get_justification = request.fields.contains(message::BlockAttributes::JUSTIFICATION);
 		while let Some(header) = self.context_data.chain.header(&id).unwrap_or(None) {
-			if blocks.len() >= max{
+			if blocks.len() >= max {
 				break;
 			}
 			let number = header.number().clone();

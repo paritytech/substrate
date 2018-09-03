@@ -291,9 +291,9 @@ pub mod tests {
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
 			trie.insert(b":code", b"return 42").expect("insert failed");
-            for i in 128u8..255u8 {
-                trie.insert(&[i], &[i]).unwrap();
-            }
+			for i in 128u8..255u8 {
+				trie.insert(&[i], &[i]).unwrap();
+			}
 		}
 		(mdb, root)
 	}

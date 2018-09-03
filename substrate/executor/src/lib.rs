@@ -87,6 +87,7 @@ pub trait RuntimeInfo<H: Hasher> {
 	fn runtime_version<E: Externalities<H>> (
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8]
 	) -> Option<RuntimeVersion>;
 }

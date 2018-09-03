@@ -455,7 +455,7 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 		}
 
 		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
-			let root: H256  = H256::from_slice(hdr.state_root().as_ref());
+			let root: H256 = H256::from_slice(hdr.state_root().as_ref());
 			DbState::with_storage(self.storage.clone(), root)
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
 	}
