@@ -726,36 +726,49 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get the most recent block hash of the best (longest) chains
 	/// that contain block with the given `target_hash`.
-	/// Returns `None` if no chain contains `target_hash`
-	pub fn best_chain_containing_block_hash(&self, target_hash: Block::Hash) -> error::Result<Option<Block::Hash>> {
-		let target_header = self.backend.blockchain().header(BlockId::Hash(target_hash));
+	/// TODO [snd] possibly implement this for blockchain::Backend (easier to test)
+	pub fn best_chain_containing_block_hash(&self, target_hash: Block::Hash) -> error::Result<Block::Hash> {
+		let target_header = self.backend.blockchain().header(BlockId::Hash(target_hash))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", target_hash)))?;
 
-		let leaf_hashes = self.backend.blockchain().leaf_hashes();
+		let canonical_hash = self.backend.blockchain().info()?.best_hash;
+
+		// TODO [snd] is there a better way to do this?
+		// TODO [snd] panic here?
+		let is_target_in_canonical_chain = self.backend.blockchain().hash(*target_header.number())?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))? == target_hash;
+
+		if is_target_in_canonical_chain {
+			return Ok(canonical_hash);
+		}
+		
+		let leaves = self.backend.blockchain().leaves()?;
 
 		// for each chain. longest chain first. shortest last
-		for leaf_hash in leaf_hashes {
+		for leaf_hash in leaves {
+			if leaf_hash == canonical_hash {
+				// we already checked the canonical chain above (`is_target_in_canonical_chain`)
+				continue;
+			}
 			// start at the leaf
 			let mut current_hash = leaf_hash;
 			// go backwards (via parent links)
 			loop {
 				// until we find target...
 				if current_hash == target_hash {
-					return leaf_hash;
+					return Ok(leaf_hash);
 				}
-				// TODO [snd] handle if no block for this
-				let current_header = self.backend.blockchain().header(current_hash.clone())?;
+				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
 				// ...or go below its block number
 				if current_header.number() < target_header.number() {
 					continue;
 				}
 
-				current_hash = current_header.parent_hash();
+				current_hash = *current_header.parent_hash();
 			}
 		}
 
 		// `target_hash` not found in any chain
-		Ok(None)
+		unreachable!();
 
 		// TODO [snd] test with:
 		// no blocks
