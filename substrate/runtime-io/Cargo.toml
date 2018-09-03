@@ -15,8 +15,8 @@ substrate-primitives = { path = "../primitives", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
 triehash = { git = "https://github.com/paritytech/parity-common", optional = true }
 ed25519 = { path = "../ed25519", optional = true }
-hashdb = { git = "https://github.com/paritytech/parity-common", optional = true }
-rlp = { git = "https://github.com/paritytech/parity-common", optional = true }
+hashdb = { git = "https://github.com/paritytech/parity-common", optional = true, default_features = false }
+rlp = { git = "https://github.com/paritytech/parity-common", optional = true, default_features = false }
 
 [features]
 default = ["std"]

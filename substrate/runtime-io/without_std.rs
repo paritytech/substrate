@@ -61,7 +61,7 @@ extern "C" {
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
-	fn ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
+	fn ext_keccak_rlp_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
 	fn ext_chain_id() -> u64;
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
 	fn ext_twox_128(data: *const u8, len: u32, out: *mut u8);
@@ -145,14 +145,14 @@ pub fn storage_root() -> [u8; 32] {
 }
 
 /// A trie root calculated from enumerated values.
-pub fn enumerated_trie_root(values: &[&[u8]]) -> [u8; 32] {
-	let lens = values.iter().map(|v| (v.len() as u32).to_le()).collect::<Vec<_>>();
+pub fn enumerated_trie_root<H>(values: &[&[u8]]) -> [u8; 32] {
+	let lengths = values.iter().map(|v| (v.len() as u32).to_le()).collect::<Vec<_>>();
 	let values = values.iter().fold(Vec::new(), |mut acc, sl| { acc.extend_from_slice(sl); acc });
 	let mut result: [u8; 32] = Default::default();
 	unsafe {
-		ext_enumerated_trie_root(
+		ext_keccak_rlp_enumerated_trie_root(
 			values.as_ptr(),
-			lens.as_ptr(), lens.len() as u32,
+			lengths.as_ptr(), lengths.len() as u32,
 			result.as_mut_ptr()
 		);
 	}
@@ -161,6 +161,7 @@ pub fn enumerated_trie_root(values: &[&[u8]]) -> [u8; 32] {
 
 /// A trie root formed from the iterated items.
 pub fn trie_root<
+	H,
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
@@ -172,6 +173,7 @@ pub fn trie_root<
 
 /// A trie root formed from the enumerated items.
 pub fn ordered_trie_root<
+	H,
 	I: IntoIterator<Item = A>,
 	A: AsRef<[u8]>
 >(_input: I) -> [u8; 32] {

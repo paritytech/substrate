@@ -693,7 +693,6 @@ version = "0.1.0"
 dependencies = [
  "ed25519 0.1.0",
  "environmental 0.1.0",
- "hashdb 0.2.1 (git+https://github.com/paritytech/parity-common)",
  "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
