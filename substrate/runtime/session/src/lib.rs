@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Session manager: is told the validators and allows them to manage their session keys for the
 //! consensus module.
@@ -103,30 +103,31 @@ impl<N> From<RawEvent<N>> for () {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
+	trait Store for Module<T: Trait> as Session {
 
-	// The current set of validators.
-	pub Validators get(validators): b"ses:val" => required Vec<T::AccountId>;
-	// Current length of the session.
-	pub SessionLength get(length): b"ses:len" => required T::BlockNumber;
-	// Current index of the session.
-	pub CurrentIndex get(current_index): b"ses:ind" => required T::BlockNumber;
-	// Timestamp when current session started.
-	pub CurrentStart get(current_start): b"ses:current_start" => required T::Moment;
+		// The current set of validators.
+		pub Validators get(validators): required Vec<T::AccountId>;
+		// Current length of the session.
+		pub SessionLength get(length): required T::BlockNumber;
+		// Current index of the session.
+		pub CurrentIndex get(current_index): required T::BlockNumber;
+		// Timestamp when current session started.
+		pub CurrentStart get(current_start): required T::Moment;
 
-	// Opinions of the current validator set about the activeness of their peers.
-	// Gets cleared when the validator set changes.
-	pub BadValidators get(bad_validators): b"ses:bad_validators" => Vec<T::AccountId>;
+		// Opinions of the current validator set about the activeness of their peers.
+		// Gets cleared when the validator set changes.
+		pub BadValidators get(bad_validators): Vec<T::AccountId>;
 
-	// New session is being forced is this entry exists; in which case, the boolean value is whether
-	// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
-	pub ForcingNewSession get(forcing_new_session): b"ses:forcing_new_session" => bool;
-	// Block at which the session length last changed.
-	LastLengthChange: b"ses:llc" => T::BlockNumber;
-	// The next key for a given validator.
-	NextKeyFor: b"ses:nxt:" => map [ T::AccountId => T::SessionKey ];
-	// The next session length.
-	NextSessionLength: b"ses:nln" => T::BlockNumber;
+		// New session is being forced is this entry exists; in which case, the boolean value is whether
+		// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
+		pub ForcingNewSession get(forcing_new_session): bool;
+		// Block at which the session length last changed.
+		LastLengthChange: T::BlockNumber;
+		// The next key for a given validator.
+		NextKeyFor: map [ T::AccountId => T::SessionKey ];
+		// The next session length.
+		NextSessionLength: T::BlockNumber;
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -301,10 +302,12 @@ mod tests {
 		type PublicAux = u64;
 	}
 	impl consensus::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
+		type OnOfflineValidator = ();
 	}
 	impl system::Trait for Test {
+		type PublicAux = <Self as HasPublicAux>::PublicAux;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -326,7 +329,6 @@ mod tests {
 
 	type System = system::Module<Test>;
 	type Consensus = consensus::Module<Test>;
-	type Timestamp = timestamp::Module<Test>;
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {

@@ -4,9 +4,13 @@ set -e
 
 echo "*** Initialising WASM build environment"
 
-rustup update nightly
+if [ -z $CI_PROJECT_NAME ] ; then
+   rustup update nightly
+   rustup update stable
+fi
+
 rustup target add wasm32-unknown-unknown --toolchain nightly
-rustup update stable
+rustup component add llvm-tools-preview --toolchain=nightly
 
 # Install wasm-gc. It's useful for stripping slimming down wasm binaries.
 command -v wasm-gc || \

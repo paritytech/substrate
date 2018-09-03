@@ -49,7 +49,23 @@ impl ConvertibleToWasm for u32 {
 		TypedValue::I32(self as i32)
 	}
 	fn from_typed_value(v: TypedValue) -> Option<Self> {
-		v.as_i32().map(|v| v as u32)
+		match v {
+			TypedValue::I32(v) => Some(v as u32),
+			_ => None,
+		}
+	}
+}
+impl ConvertibleToWasm for u64 {
+	type NativeType = u64;
+	const VALUE_TYPE: ValueType = ValueType::I64;
+	fn to_typed_value(self) -> TypedValue {
+		TypedValue::I64(self as i64)
+	}
+	fn from_typed_value(v: TypedValue) -> Option<Self> {
+		match v {
+			TypedValue::I64(v) => Some(v as u64),
+			_ => None,
+		}
 	}
 }
 
@@ -166,29 +182,34 @@ define_env!(init_env, <E: Ext>,
 		Ok(())
 	},
 
-	// TODO: Rename ext_transfer to ext_call.
-	// ext_transfer(transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32)
-	ext_transfer(ctx, transfer_to_ptr: u32, transfer_to_len: u32, value_ptr: u32, value_len: u32) => {
-		let mut transfer_to = Vec::new();
-		transfer_to.resize(transfer_to_len as usize, 0);
-		ctx.memory().get(transfer_to_ptr, &mut transfer_to)?;
-		let transfer_to =
-			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &transfer_to[..]).unwrap();
+	// ext_call(transfer_to_ptr: u32, transfer_to_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
+	ext_call(ctx, callee_ptr: u32, callee_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32 => {
+		let mut callee = Vec::new();
+		callee.resize(callee_len as usize, 0);
+		ctx.memory().get(callee_ptr, &mut callee)?;
+		let callee =
+			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee[..])
+				.ok_or_else(|| sandbox::HostError)?;
 
 		let mut value_buf = Vec::new();
 		value_buf.resize(value_len as usize, 0);
 		ctx.memory().get(value_ptr, &mut value_buf)?;
-		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..]).unwrap();
+		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
+			.ok_or_else(|| sandbox::HostError)?;
 
-		// TODO: Read input data from memory.
-		let input_data = Vec::new();
+		let mut input_data = Vec::new();
+		input_data.resize(input_data_len as usize, 0u8);
+		ctx.memory().get(input_data_ptr, &mut input_data)?;
 
-		// TODO: Let user to choose how much gas to allocate for the execution.
-		let nested_gas_limit = ctx.gas_meter.gas_left();
+		let nested_gas_limit = if gas == 0 {
+			ctx.gas_meter.gas_left()
+		} else {
+			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
+		};
 		let ext = &mut ctx.ext;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.call(&transfer_to, value, nested_meter, &input_data),
+				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
@@ -196,28 +217,40 @@ define_env!(init_env, <E: Ext>,
 
 		match call_outcome {
 			// TODO: Find a way how to pass return_data back to the this sandbox.
-			Ok(CallReceipt { .. }) => Ok(()),
-			// TODO: Return a status code value that can be handled by the caller instead of a trap.
-			Err(_) => Err(sandbox::HostError),
+			Ok(CallReceipt { .. }) => Ok(0),
+			Err(_) => Ok(1),
 		}
 	},
 
-	// ext_create(code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32)
-	ext_create(ctx, code_ptr: u32, code_len: u32, value_ptr: u32, value_len: u32) => {
+	// ext_create(code_ptr: u32, code_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32
+	ext_create(
+		ctx, code_ptr: u32,
+		code_len: u32,
+		gas: u64,
+		value_ptr: u32,
+		value_len: u32,
+		input_data_ptr: u32,
+		input_data_len: u32
+	) -> u32 => {
 		let mut value_buf = Vec::new();
 		value_buf.resize(value_len as usize, 0);
 		ctx.memory().get(value_ptr, &mut value_buf)?;
-		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..]).unwrap();
+		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
+			.ok_or_else(|| sandbox::HostError)?;
 
 		let mut code = Vec::new();
 		code.resize(code_len as usize, 0u8);
 		ctx.memory().get(code_ptr, &mut code)?;
 
-		// TODO: Read input data from the sandbox.
-		let input_data = Vec::new();
+		let mut input_data = Vec::new();
+		input_data.resize(input_data_len as usize, 0u8);
+		ctx.memory().get(input_data_ptr, &mut input_data)?;
 
-		// TODO: Let user to choose how much gas to allocate for the execution.
-		let nested_gas_limit = ctx.gas_meter.gas_left();
+		let nested_gas_limit = if gas == 0 {
+			ctx.gas_meter.gas_left()
+		} else {
+			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
+		};
 		let ext = &mut ctx.ext;
 		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
@@ -229,9 +262,8 @@ define_env!(init_env, <E: Ext>,
 
 		match create_outcome {
 			// TODO: Copy an address of the created contract in the sandbox.
-			Ok(CreateReceipt { .. }) => Ok(()),
-			// TODO: Return a status code value that can be handled by the caller instead of a trap.
-			Err(_) => Err(sandbox::HostError),
+			Ok(CreateReceipt { .. }) => Ok(0),
+			Err(_) => Ok(1),
 		}
 	},
 
@@ -248,5 +280,34 @@ define_env!(init_env, <E: Ext>,
 		// This trap should be handled appropriately before returning the result
 		// to the user of this crate.
 		Err(sandbox::HostError)
+	},
+
+	// ext_input_size() -> u32
+	//
+	// Returns size of an input buffer.
+	ext_input_size(ctx) -> u32 => {
+		Ok(ctx.input_data.len() as u32)
+	},
+
+	// ext_input_copy(dest_ptr: u32, offset: u32, len: u32)
+	//
+	// Copy data from an input buffer starting from `offset` with length `len` into the contract memory.
+	// The region at which the data should be put is specified by `dest_ptr`.
+	ext_input_copy(ctx, dest_ptr: u32, offset: u32, len: u32) => {
+		let offset = offset as usize;
+		if offset > ctx.input_data.len() {
+			// Offset can't be larger than input buffer length.
+			return Err(sandbox::HostError);
+		}
+
+		// This can't panic since `offset <= ctx.input_data.len()`.
+		let src = &ctx.input_data[offset..];
+		if src.len() != len as usize {
+			return Err(sandbox::HostError);
+		}
+
+		ctx.memory().set(dest_ptr, src)?;
+
+		Ok(())
 	},
 );

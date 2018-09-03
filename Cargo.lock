@@ -451,6 +451,7 @@ dependencies = [
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-balances 0.1.0",
  "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
@@ -491,6 +492,7 @@ dependencies = [
  "substrate-codec-derive 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-balances 0.1.0",
  "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-council 0.1.0",
  "substrate-runtime-democracy 0.1.0",
@@ -2642,6 +2644,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-runtime-balances"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-runtime-io 0.1.0",
+ "substrate-runtime-primitives 0.1.0",
+ "substrate-runtime-std 0.1.0",
+ "substrate-runtime-support 0.1.0",
+ "substrate-runtime-system 0.1.0",
+]
+
+[[package]]
 name = "substrate-runtime-consensus"
 version = "0.1.0"
 dependencies = [
@@ -2668,16 +2689,13 @@ dependencies = [
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-consensus 0.1.0",
+ "substrate-runtime-balances 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-sandbox 0.1.0",
- "substrate-runtime-session 0.1.0",
- "substrate-runtime-staking 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
  "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2693,16 +2711,14 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-balances 0.1.0",
  "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-democracy 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-session 0.1.0",
- "substrate-runtime-staking 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
 ]
 
 [[package]]
@@ -2716,15 +2732,13 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-codec-derive 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-balances 0.1.0",
  "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-session 0.1.0",
- "substrate-runtime-staking 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-runtime-support 0.1.0",
  "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
 ]
 
 [[package]]
@@ -2737,6 +2751,7 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-codec-derive 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-balances 0.1.0",
  "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
@@ -2827,6 +2842,7 @@ dependencies = [
  "substrate-codec-derive 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-runtime-balances 0.1.0",
  "substrate-runtime-consensus 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
@@ -2972,6 +2988,7 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.2.1 (git+https://github.com/paritytech/parity-common)",
  "rlp 0.2.1 (git+https://github.com/paritytech/parity-common)",
+ "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "triehash 0.2.0 (git+https://github.com/paritytech/parity-common)",
 ]
