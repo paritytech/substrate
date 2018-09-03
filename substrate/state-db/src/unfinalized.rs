@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Finalization window.
 //! Maintains trees of block overlays and allows discarding trees/roots
@@ -114,7 +114,7 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 	pub fn insert(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
 		let mut commit = CommitSet::default();
 		if self.levels.is_empty() && self.last_finalized.is_none() {
-			//  assume that parent was finalized
+			// assume that parent was finalized
 			let last_finalized = (parent_hash.clone(), number - 1);
 			commit.meta.inserted.push((to_meta_key(LAST_FINALIZED, &()), last_finalized.encode()));
 			self.last_finalized = Some(last_finalized);
@@ -272,7 +272,7 @@ mod tests {
 	#[test]
 	fn created_from_empty_db() {
 		let db = make_db(&[]);
-		let overlay: UnfinalizedOverlay<H256, H256>  = UnfinalizedOverlay::new(&db).unwrap();
+		let overlay: UnfinalizedOverlay<H256, H256> = UnfinalizedOverlay::new(&db).unwrap();
 		assert_eq!(overlay.last_finalized, None);
 		assert!(overlay.levels.is_empty());
 		assert!(overlay.parents.is_empty());

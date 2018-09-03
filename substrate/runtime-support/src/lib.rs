@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Support code for the runtime.
 
@@ -81,5 +81,34 @@ macro_rules! assert_ok {
 	};
 	( $x:expr, $y:expr ) => {
 		assert_eq!($x, Ok($y));
+	}
+}
+
+#[macro_export]
+macro_rules! impl_outer_event {
+	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $( $module:ident ),* }) => {
+		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		$(#[$attr])*
+		#[allow(non_camel_case_types)]
+		pub enum $name {
+			system(system::Event),
+			$(
+				$module($module::Event<$trait>),
+			)*
+		}
+		impl From<system::Event> for $name {
+			fn from(x: system::Event) -> Self {
+				$name::system(x)
+			}
+		}
+		$(
+			impl From<$module::Event<$trait>> for $name {
+				fn from(x: $module::Event<$trait>) -> Self {
+					$name::$module(x)
+				}
+			}
+		)*
 	}
 }

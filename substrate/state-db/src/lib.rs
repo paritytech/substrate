@@ -1,21 +1,21 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! State database maintenance. Handles finalization and pruning in the database. The input to
-//! this module is a `ChangeSet` which is basicall a list of key-value pairs (trie nodes) that
+//! this module is a `ChangeSet` which is basically a list of key-value pairs (trie nodes) that
 //! were added or deleted during block execution.
 //!
 //! # Finalization.
@@ -94,7 +94,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 pub struct ChangeSet<H: Hash> {
 	/// Inserted nodes.
 	pub inserted: Vec<(H, DBValue)>,
-	/// Delted nodes.
+	/// Deleted nodes.
 	pub deleted: Vec<H>,
 }
 
@@ -108,7 +108,7 @@ pub struct CommitSet<H: Hash> {
 	pub meta: ChangeSet<Vec<u8>>,
 }
 
-/// Pruning contraints. If none are specified pruning is
+/// Pruning constraints. If none are specified pruning is
 #[derive(Default, Debug, Clone)]
 pub struct Constraints {
 	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only unfinalized states.
@@ -187,7 +187,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
-				// write changes immediatelly
+				// write changes immediately
 				CommitSet {
 					data: changeset,
 					meta: Default::default(),

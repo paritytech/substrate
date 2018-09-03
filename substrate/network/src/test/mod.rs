@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 mod sync;
 
@@ -26,6 +26,7 @@ use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
 use protocol::{Context, Protocol};
+use primitives::{KeccakHasher, RlpCodec};
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{NodeIndex, SessionInfo, Severity};
@@ -115,7 +116,7 @@ pub struct TestPacket {
 
 pub struct Peer {
 	client: Arc<client::Client<test_client::Backend, test_client::Executor, Block>>,
-	pub sync: Protocol<Block, DummySpecialization>,
+	pub sync: Protocol<Block, DummySpecialization, Hash>,
 	pub queue: RwLock<VecDeque<TestPacket>>,
 }
 
@@ -172,7 +173,9 @@ impl Peer {
 	fn flush(&self) {
 	}
 
-	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block>) {
+	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) 
+	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, KeccakHasher, RlpCodec>) 
+	{
 		for _ in 0 .. count {
 			let mut builder = self.client.new_block().unwrap();
 			edit_block(&mut builder);
@@ -204,7 +207,7 @@ impl Peer {
 
 pub struct EmptyTransactionPool;
 
-impl TransactionPool<Block> for EmptyTransactionPool {
+impl TransactionPool<Hash, Block> for EmptyTransactionPool {
 	fn transactions(&self) -> Vec<(Hash, Extrinsic)> {
 		Vec::new()
 	}

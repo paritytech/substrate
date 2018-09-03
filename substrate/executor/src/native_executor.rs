@@ -21,23 +21,20 @@ use wasmi::Module as WasmModule;
 use runtime_version::RuntimeVersion;
 use std::collections::HashMap;
 use codec::Decode;
-use twox_hash::XxHash;
-use std::hash::Hasher;
+use primitives::hashing::blake2_256;
 use parking_lot::{Mutex, MutexGuard};
 use RuntimeInfo;
+use primitives::KeccakHasher;
 
 // For the internal Runtime Cache:
 // Is it compatible enough to run this natively or do we need to fall back on the WasmModule
 
-enum Compatibility {
-	InvalidVersion(WasmModule),
-	IsCompatible(RuntimeVersion, WasmModule),
-	NotCompatible(RuntimeVersion, WasmModule)
+enum RuntimePreproc {
+	InvalidCode,
+	ValidCode(WasmModule, Option<RuntimeVersion>),
 }
 
-unsafe impl Send for Compatibility {}
-
-type CacheType = HashMap<u64, Compatibility>;
+type CacheType = HashMap<[u8; 32], RuntimePreproc>;
 
 lazy_static! {
 	static ref RUNTIMES_CACHE: Mutex<CacheType> = Mutex::new(HashMap::new());
@@ -47,38 +44,37 @@ lazy_static! {
 // it is asserted that part of the audit process that any potential on-chain code change
 // will have done is to ensure that the two-x hash is different to that of any other
 // :code value from the same chain
-fn gen_cache_key(code: &[u8]) -> u64 {
-	let mut h = XxHash::with_seed(0);
-	h.write(code);
-	h.finish()
+fn gen_cache_key(code: &[u8]) -> [u8; 32] {
+	blake2_256(code)
 }
 
 /// fetch a runtime version from the cache or if there is no cached version yet, create
 /// the runtime version entry for `code`, determines whether `Compatibility::IsCompatible`
-/// can be used by by comparing returned RuntimeVersion to `ref_version`
-fn fetch_cached_runtime_version<'a, E: Externalities>(
+/// can be used by comparing returned RuntimeVersion to `ref_version`
+fn fetch_cached_runtime_version<'a, E: Externalities<KeccakHasher>>(
 	wasm_executor: &WasmExecutor,
 	cache: &'a mut MutexGuard<CacheType>,
 	ext: &mut E,
-	code: &[u8],
-	ref_version: RuntimeVersion
-) -> &'a Compatibility {
-	cache.entry(gen_cache_key(code))
-		.or_insert_with(|| {
-			let module = WasmModule::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-			let version = wasm_executor.call_in_wasm_module(ext, &module, "version", &[]).ok()
-				.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
-
-			if let Some(v) = version {
-				if ref_version.can_call_with(&v) {
-					Compatibility::IsCompatible(v, module)
-				} else {
-					Compatibility::NotCompatible(v, module)
-				}
-			} else {
-				Compatibility::InvalidVersion(module)
+	heap_pages: usize,
+	code: &[u8]
+) -> Result<(&'a WasmModule, &'a Option<RuntimeVersion>)> {
+	let maybe_runtime_preproc = cache.entry(gen_cache_key(code))
+		.or_insert_with(|| match WasmModule::from_buffer(code) {
+			Ok(module) => {
+				let version = wasm_executor.call_in_wasm_module(ext, heap_pages, &module, "version", &[])
+					.ok()
+					.and_then(|v| RuntimeVersion::decode(&mut v.as_slice()));
+				RuntimePreproc::ValidCode(module, version)
 			}
-	})
+			Err(e) => {
+				trace!(target: "executor", "Invalid code presented to executor ({:?})", e);
+				RuntimePreproc::InvalidCode
+			}
+		});
+	match maybe_runtime_preproc {
+		RuntimePreproc::InvalidCode => Err(ErrorKind::InvalidCode(code.into()).into()),
+		RuntimePreproc::ValidCode(m, v) => Ok((m, v)),
+	}
 }
 
 fn safe_call<F, U>(f: F) -> Result<U>
@@ -94,8 +90,8 @@ fn safe_call<F, U>(f: F) -> Result<U>
 /// Set up the externalities and safe calling environment to execute calls to a native runtime.
 ///
 /// If the inner closure panics, it will be caught and return an error.
-pub fn with_native_environment<F, U>(ext: &mut Externalities, f: F) -> Result<U>
-	where F: ::std::panic::UnwindSafe + FnOnce() -> U
+pub fn with_native_environment<F, U>(ext: &mut Externalities<KeccakHasher>, f: F) -> Result<U>
+where F: ::std::panic::UnwindSafe + FnOnce() -> U
 {
 	::runtime_io::with_externalities(ext, move || safe_call(f))
 }
@@ -107,14 +103,15 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
-	fn dispatch(ext: &mut Externalities, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	// fn dispatch<H: hashdb::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	fn dispatch(ext: &mut Externalities<KeccakHasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Get native runtime version.
 	const VERSION: RuntimeVersion;
 
-	/// Construct corresponding `NativeExecutor` with given `heap_pages`.
-	fn with_heap_pages(max_heap_pages: usize) -> NativeExecutor<Self> where Self: Sized {
-		NativeExecutor::with_heap_pages(max_heap_pages)
+	/// Construct corresponding `NativeExecutor`
+	fn new() -> NativeExecutor<Self> where Self: Sized {
+		NativeExecutor::new()
 	}
 }
 
@@ -129,11 +126,11 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
-	/// Create new instance with specific number of pages for wasm fallback's heap.
-	pub fn with_heap_pages(max_heap_pages: usize) -> Self {
+	/// Create new instance.
+	pub fn new() -> Self {
 		NativeExecutor {
 			_dummy: Default::default(),
-			fallback: WasmExecutor::new(max_heap_pages),
+			fallback: WasmExecutor::new(),
 		}
 	}
 }
@@ -150,35 +147,45 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	const NATIVE_VERSION: Option<RuntimeVersion> = Some(D::VERSION);
 
-	fn runtime_version<E: Externalities>(
+	fn runtime_version<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8],
 	) -> Option<RuntimeVersion> {
-		let mut c = RUNTIMES_CACHE.lock();
-		match fetch_cached_runtime_version(&self.fallback, &mut c, ext, code, D::VERSION) {
-			Compatibility::IsCompatible(v, _) | Compatibility::NotCompatible(v, _) => Some(v.clone()),
-			Compatibility::InvalidVersion(_m) => None
-		}
+		fetch_cached_runtime_version(&self.fallback, &mut RUNTIMES_CACHE.lock(), ext, heap_pages, code).ok()?.1.clone()
 	}
 }
 
-impl<D: NativeExecutionDispatch> CodeExecutor for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> CodeExecutor<KeccakHasher> for NativeExecutor<D> {
 	type Error = Error;
 
-	fn call<E: Externalities>(
+	fn call<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8],
 		method: &str,
 		data: &[u8],
 		use_native: bool,
 	) -> (Result<Vec<u8>>, bool) {
 		let mut c = RUNTIMES_CACHE.lock();
-		match (use_native, fetch_cached_runtime_version(&self.fallback, &mut c, ext, code, D::VERSION)) {
-			(_, Compatibility::NotCompatible(_, m)) | (_, Compatibility::InvalidVersion(m)) | (false, Compatibility::IsCompatible(_, m)) =>
-				(self.fallback.call_in_wasm_module(ext, m, method, data), false),
-			_ => (D::dispatch(ext, method, data), true),
+		let (module, onchain_version) = match fetch_cached_runtime_version(&self.fallback, &mut c, ext, heap_pages, code) {
+			Ok((module, onchain_version)) => (module, onchain_version),
+			Err(_) => return (Err(ErrorKind::InvalidCode(code.into()).into()), false),
+		};
+		match (use_native, onchain_version.as_ref().map_or(false, |v| v.can_call_with(&D::VERSION))) {
+			(_, false) => {
+				trace!(target: "executor", "Request for native execution failed (native: {}, chain: {})", D::VERSION, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
+				(self.fallback.call_in_wasm_module(ext, heap_pages, module, method, data), false)
+			}
+			(false, _) => {
+				(self.fallback.call_in_wasm_module(ext, heap_pages, module, method, data), false)
+			}
+			_ => {
+				trace!(target: "executor", "Request for native execution succeeded (native: {}, chain: {})", D::VERSION, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
+				(D::dispatch(ext, method, data), true)
+			}
 		}
 	}
 }
@@ -195,6 +202,8 @@ macro_rules! native_executor_instance {
 		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
 	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {
+		// TODO: this is not so great – I think I should go back to have dispatch take a type param and modify this macro to accept a type param and then pass it in from the test-client instead
+		use primitives::KeccakHasher as _KeccakHasher;
 		impl $crate::NativeExecutionDispatch for $name {
 			const VERSION: $crate::RuntimeVersion = $version;
 			fn native_equivalent() -> &'static [u8] {
@@ -202,14 +211,13 @@ macro_rules! native_executor_instance {
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
 				$code
 			}
-
-			fn dispatch(ext: &mut $crate::Externalities, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
+			fn dispatch(ext: &mut $crate::Externalities<_KeccakHasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
 			}
 
-			fn with_heap_pages(max_heap_pages: usize) -> $crate::NativeExecutor<$name> {
-				$crate::NativeExecutor::with_heap_pages(max_heap_pages)
+			fn new() -> $crate::NativeExecutor<$name> {
+				$crate::NativeExecutor::new()
 			}
 		}
 	}

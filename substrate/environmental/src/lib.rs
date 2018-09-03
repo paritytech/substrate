@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Safe global references to stack variables.
 //!
@@ -33,7 +33,7 @@
 //! fn main() {
 //!   // declare a stack variable of the same type as our global declaration.
 //!   let mut counter_value = 41u32;
-//!   // call stuff, setting up our `counter` environment as a refrence to our counter_value var.
+//!   // call stuff, setting up our `counter` environment as a reference to our counter_value var.
 //!   counter::using(&mut counter_value, stuff);
 //!   println!("The answer is {:?}", counter_value); // will print 42!
 //!   stuff();	// safe! doesn't do anything.
@@ -234,10 +234,11 @@ mod tests {
 		// declare a stack variable of the same type as our global declaration.
 		let mut local = 41u32;
 
-		// call stuff, setting up our `counter` environment as a refrence to our local counter var.
+		// call stuff, setting up our `counter` environment as a reference to our local counter var.
 		counter::using(&mut local, stuff);
 		assert_eq!(local, 42);
 		stuff();	// safe! doesn't do anything.
+		assert_eq!(local, 42);
 	}
 
 	#[test]
@@ -280,6 +281,8 @@ mod tests {
 		assert_eq!(local, 42);
 
 		stuff(); // doesn't do anything.
+
+		assert_eq!(local, 42);
 	}
 
 	#[test]

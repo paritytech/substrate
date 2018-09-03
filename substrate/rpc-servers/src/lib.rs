@@ -24,13 +24,14 @@ extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_http_server as http;
 extern crate jsonrpc_pubsub as pubsub;
 extern crate jsonrpc_ws_server as ws;
+extern crate serde;
 extern crate substrate_runtime_primitives;
 
 #[macro_use]
 extern crate log;
 
 use std::io;
-use substrate_runtime_primitives::traits::Block as BlockT;
+use substrate_runtime_primitives::traits::{Block as BlockT, NumberFor};
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
@@ -38,16 +39,18 @@ pub type HttpServer = http::Server;
 pub type WsServer = ws::Server;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<Block: BlockT, S, C, A, Y>(
+pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
 	state: S,
 	chain: C,
 	author: A,
 	system: Y,
 ) -> RpcHandler where
-	Block: 'static,
+	Block: BlockT + 'static,
+	ExHash: Send + Sync + 'static + substrate_runtime_primitives::Serialize + substrate_runtime_primitives::DeserializeOwned,
+	PendingExtrinsics: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, Metadata=Metadata>,
-	A: apis::author::AuthorApi<Block::Hash, Block::Extrinsic, Metadata=Metadata>,
+	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic, Metadata=Metadata>,
+	A: apis::author::AuthorApi<ExHash, Block::Extrinsic, PendingExtrinsics, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
 {
 	let mut io = pubsub::PubSubHandler::default();

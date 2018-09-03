@@ -1,25 +1,31 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Light client data fetcher. Fetches requested data from remote full nodes.
 
 use futures::IntoFuture;
 
+use primitives::H256;
+use hashdb::Hasher;
+use patricia_trie::NodeCodec;
+use rlp::Encodable;
+use heapsize::HeapSizeOf;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{CodeExecutor, read_proof_check};
+use std::marker::PhantomData;
 
 use call_executor::CallResult;
 use cht;
@@ -104,24 +110,29 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<E> {
+pub struct LightDataChecker<E, H, C> {
 	executor: E,
+	_hasher: PhantomData<H>,
+	_codec: PhantomData<C>,
 }
 
-impl<E> LightDataChecker<E> {
+impl<E, H, C> LightDataChecker<E, H, C> {
 	/// Create new light data checker.
 	pub fn new(executor: E) -> Self {
 		Self {
-			executor,
+			executor, _hasher: PhantomData, _codec: PhantomData
 		}
 	}
 }
 
-impl<E, Block> FetchChecker<Block> for LightDataChecker<E>
+impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 	where
 		Block: BlockT,
-		Block::Hash: From<[u8; 32]> + Into<[u8; 32]>,
-		E: CodeExecutor,
+		Block::Hash: Into<H::Out> + From<H256>,
+		E: CodeExecutor<H>,
+		H: Hasher,
+		C: NodeCodec<H> + Sync + Send,
+		H::Out: Ord + Encodable + HeapSizeOf + From<Block::Hash> + From<H256>,
 {
 	fn check_header_proof(
 		&self,
@@ -132,7 +143,7 @@ impl<E, Block> FetchChecker<Block> for LightDataChecker<E>
 		let remote_header = remote_header.ok_or_else(||
 			ClientError::from(ClientErrorKind::InvalidHeaderProof))?;
 		let remote_header_hash = remote_header.hash();
-		cht::check_proof::<Block::Header>(
+		cht::check_proof::<Block::Header, H, C>(
 			request.cht_root,
 			request.block,
 			remote_header_hash,
@@ -146,7 +157,7 @@ impl<E, Block> FetchChecker<Block> for LightDataChecker<E>
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>> {
 		let local_state_root = request.header.state_root().clone();
-		read_proof_check(local_state_root.into(), remote_proof, &request.key).map_err(Into::into)
+		read_proof_check::<H, C>(local_state_root.into(), remote_proof, &request.key).map_err(Into::into)
 	}
 
 	fn check_execution_proof(
@@ -154,7 +165,7 @@ impl<E, Block> FetchChecker<Block> for LightDataChecker<E>
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<CallResult> {
-		check_execution_proof(&self.executor, request, remote_proof)
+		check_execution_proof::<_, _, H, C>(&self.executor, request, remote_proof)
 	}
 }
 
@@ -170,6 +181,7 @@ pub mod tests {
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
+	use primitives::{KeccakHasher, RlpCodec};
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
@@ -195,7 +207,7 @@ pub mod tests {
 	}
 
 	fn prepare_for_read_proof_check() -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, KeccakHasher, RlpCodec>,
 		Header, Vec<Vec<u8>>, usize)
 	{
 		// prepare remote client
@@ -212,13 +224,13 @@ pub mod tests {
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
 		local_storage.insert(remote_block_hash, remote_block_header.clone(), None, None, true);
-		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
+		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = LightDataChecker::new(local_executor);
 		(local_checker, remote_block_header, remote_read_proof, authorities_len)
 	}
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, KeccakHasher, RlpCodec>,
 		Hash, Header, Vec<Vec<u8>>)
 	{
 		// prepare remote client
@@ -236,11 +248,11 @@ pub mod tests {
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
-		let local_cht_root = cht::compute_root::<Header, _>(4, 0, local_headers_hashes.into_iter()).unwrap();
+		let local_cht_root = cht::compute_root::<Header, KeccakHasher, _>(4, 0, local_headers_hashes.into_iter()).unwrap();
 		if insert_cht {
 			local_storage.insert_cht_root(1, local_cht_root);
 		}
-		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
+		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = LightDataChecker::new(local_executor);
 		(local_checker, local_cht_root, remote_block_header, remote_header_proof)
 	}

@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Conensus module for runtime; manages the authority set ready for the native code.
 
@@ -42,8 +42,13 @@ use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{RefInto, MaybeSerializeDebug, MaybeEmpty};
+use primitives::traits::{MaybeSerializeDebug, MaybeEmpty};
 use primitives::bft::MisbehaviorReport;
+
+#[cfg(any(feature = "std", test))]
+use substrate_primitives::KeccakHasher;
+#[cfg(any(feature = "std", test))]
+use std::collections::HashMap;
 
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
@@ -58,9 +63,20 @@ pub const CODE: &'static [u8] = b":code";
 
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
+pub trait OnOfflineValidator {
+	fn on_offline_validator(validator_index: usize);
+}
+
+impl OnOfflineValidator for () {
+	fn on_offline_validator(_validator_index: usize) {}
+}
+
 pub trait Trait: system::Trait {
-	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;		// MaybeEmpty is for Timestamp's usage.
+	/// The allowed extrinsic position for `note_offline` inherent.
+	const NOTE_OFFLINE_POSITION: u32;
+
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
+	type OnOfflineValidator: OnOfflineValidator;
 }
 
 decl_module! {
@@ -69,7 +85,8 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result = 0;
-		fn remark(aux, remark: Vec<u8>) -> Result = 1;
+		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 1;
+		fn remark(aux, remark: Vec<u8>) -> Result = 2;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -102,6 +119,24 @@ impl<T: Trait> Module<T> {
 	/// Report some misbehaviour.
 	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
 		// TODO.
+		Ok(())
+	}
+
+	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
+	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
+	/// for the previous block.
+	fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
+		assert!(aux.is_empty());
+		assert!(
+			<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
+			"note_offline extrinsic must be at position {} in the block",
+			T::NOTE_OFFLINE_POSITION
+		);
+
+		for validator_index in offline_val_indices.into_iter() {
+			T::OnOfflineValidator::on_offline_validator(validator_index as usize);
+		}
+		
 		Ok(())
 	}
 
@@ -146,14 +181,14 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
 		use codec::{Encode, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
-		let mut r: runtime_io::TestExternalities = self.authorities.into_iter().enumerate().map(|(i, v)|
+		let mut r: runtime_io::TestExternalities<KeccakHasher> = self.authorities.into_iter().enumerate().map(|(i, v)|
 			((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode())
 		).collect();
 		r.insert(AUTHORITY_COUNT.to_vec(), auth_count.encode());
 		r.insert(CODE.to_vec(), self.code);
-		Ok(r)
+		Ok(r.into())
 	}
 }

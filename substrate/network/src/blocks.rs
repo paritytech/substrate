@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::mem;
 use std::cmp;
@@ -106,7 +106,7 @@ impl<B: BlockT> BlockCollection<B> {
 			loop {
 				let next = downloading_iter.next();
 				break match &(prev, next) {
-					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _) if downloading < MAX_PARALLEL_DOWNLOADS  =>
+					&(Some((start, &BlockRangeState::Downloading { ref len, downloading })), _) if downloading < MAX_PARALLEL_DOWNLOADS =>
 						(*start .. *start + *len, downloading),
 					&(Some((start, r)), Some((next_start, _))) if *start + r.len() < *next_start =>
 						(*start + r.len() .. cmp::min(*next_start, *start + r.len() + count), 0), // gap
@@ -130,7 +130,7 @@ impl<B: BlockT> BlockCollection<B> {
 		}
 		range.end = cmp::min(peer_best + As::sa(1), range.end);
 		self.peer_requests.insert(who, range.start);
-		self.blocks.insert(range.start, BlockRangeState::Downloading{ len: range.end - range.start, downloading: downloading + 1 });
+		self.blocks.insert(range.start, BlockRangeState::Downloading { len: range.end - range.start, downloading: downloading + 1 });
 		if range.end <= range.start {
 			panic!("Empty range {:?}, count={}, peer_best={}, common={}, blocks={:?}", range, count, peer_best, common, self.blocks);
 		}
@@ -171,7 +171,7 @@ impl<B: BlockT> BlockCollection<B> {
 						*downloading = *downloading - 1;
 						false
 					},
-					Some(&mut BlockRangeState::Downloading { .. })  => {
+					Some(&mut BlockRangeState::Downloading { .. }) => {
 						true
 					},
 					_ => {
@@ -217,7 +217,7 @@ mod test {
 	fn create_clear() {
 		let mut bc = BlockCollection::new();
 		assert!(is_empty(&bc));
-		bc.insert(1, generate_blocks(100),  0);
+		bc.insert(1, generate_blocks(100), 0);
 		assert!(!is_empty(&bc));
 		bc.clear();
 		assert!(is_empty(&bc));

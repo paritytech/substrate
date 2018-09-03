@@ -1,9 +1,0 @@
-[package]
-name = "polkadot-executor"
-version = "0.1.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-description = "Polkadot node implementation in Rust."
-
-[dependencies]
-substrate-executor = { path = "../../substrate/executor" }
-polkadot-runtime = { path = "../runtime" }

@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Light client components.
 
@@ -33,6 +33,8 @@ use light::backend::Backend;
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::RemoteCallExecutor;
 use light::fetcher::{Fetcher, LightDataChecker};
+use hashdb::Hasher;
+use patricia_trie::NodeCodec;
 
 /// Create an instance of light client blockchain backend.
 pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>, F>(storage: S) -> Arc<Blockchain<S, F>> {
@@ -62,11 +64,13 @@ pub fn new_light<B, S, F, GS>(
 }
 
 /// Create an instance of fetch data checker.
-pub fn new_fetch_checker<E>(
+pub fn new_fetch_checker<E, H, C>(
 	executor: E,
-) -> LightDataChecker<E>
+) -> LightDataChecker<E, H, C>
 	where
-		E: CodeExecutor,
+		E: CodeExecutor<H>,
+		H: Hasher,
+		C: NodeCodec<H>,
 {
 	LightDataChecker::new(executor)
 }

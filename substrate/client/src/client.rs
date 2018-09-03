@@ -23,6 +23,7 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
+use primitives::{KeccakHasher, RlpCodec};
 use primitives::storage::{StorageKey, StorageData};
 use codec::Decode;
 use state_machine::{
@@ -163,9 +164,9 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 pub fn new_in_mem<E, Block, S>(
 	executor: E,
 	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block>, LocalCallExecutor<in_mem::Backend<Block>, E>, Block>>
+) -> error::Result<Client<in_mem::Backend<Block, KeccakHasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, KeccakHasher, RlpCodec>, E>, Block>>
 	where
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT,
 {
@@ -175,8 +176,8 @@ pub fn new_in_mem<E, Block, S>(
 }
 
 impl<B, E, Block> Client<B, E, Block> where
-	B: backend::Backend<Block>,
-	E: CallExecutor<Block>,
+	B: backend::Backend<Block, KeccakHasher, RlpCodec>,
+	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
 	Block: BlockT,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
@@ -279,7 +280,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
 		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)).unwrap_or_default());
-		let proof = cht::build_proof::<Block::Header, _>(cht_size, cht_num, block_num, headers)
+		let proof = cht::build_proof::<Block::Header, KeccakHasher, RlpCodec, _>(cht_size, cht_num, block_num, headers)
 			.ok_or_else(proof_error)?;
 		Ok((header, proof))
 	}
@@ -302,12 +303,16 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, KeccakHasher, RlpCodec>>
+	where E: Clone
+	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block>> where E: Clone {
+	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, KeccakHasher, RlpCodec>>
+	where E: Clone
+	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
@@ -522,8 +527,8 @@ impl<B, E, Block> Client<B, E, Block> where
 
 impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
+		B: backend::Backend<Block, KeccakHasher, RlpCodec>,
+		E: CallExecutor<Block, KeccakHasher, RlpCodec>,
 		Block: BlockT,
 {
 	fn import_block(
@@ -531,7 +536,7 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 		block: Block,
 		justification: ::bft::Justification<Block::Hash>,
 		authorities: &[AuthorityId]
-	) {
+	) -> bool {
 		let (header, extrinsics) = block.deconstruct();
 		let justified_header = JustifiedHeader {
 			header: header,
@@ -539,14 +544,14 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 			authorities: authorities.to_vec(),
 		};
 
-		let _ = self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics));
+		self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics)).is_ok()
 	}
 }
 
 impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
+		B: backend::Backend<Block, KeccakHasher, RlpCodec>,
+		E: CallExecutor<Block, KeccakHasher, RlpCodec>,
 		Block: BlockT,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
@@ -567,9 +572,9 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 }
 
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
-	where
-		E: CallExecutor<Block>,
-		Block: BlockT,
+where
+	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+	Block: BlockT,
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> BlockchainEventStream<Block> {
@@ -585,10 +590,10 @@ impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 }
 
 impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
-		Block: BlockT,
+where
+	B: backend::Backend<Block, KeccakHasher, RlpCodec>,
+	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+	Block: BlockT,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
@@ -597,8 +602,8 @@ impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 
 impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block>,
-		E: CallExecutor<Block>,
+		B: backend::Backend<Block, KeccakHasher, RlpCodec>,
+		E: CallExecutor<Block, KeccakHasher, RlpCodec>,
 		Block: BlockT,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {

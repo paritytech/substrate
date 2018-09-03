@@ -11,7 +11,8 @@ bytes = "0.4"
 error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
-libp2p = { git = "https://github.com/tomaka/libp2p-rs", branch = "polkadot-2", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
+# libp2p = { git = "https://github.com/tomaka/libp2p-rs", branch = "polkadot-2", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
+libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "6aa139a12dbea3d75d898ce0b2af7fcec129e294", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ethkey = { git = "https://github.com/paritytech/parity.git" }
 ethereum-types = "0.3"
@@ -26,6 +27,6 @@ unsigned-varint = { version = "0.1", features = ["codec"] }
 
 [dev-dependencies]
 assert_matches = "1.2"
-ethcore-bytes = { git = "https://github.com/paritytech/parity.git" }
+parity-bytes = { git = "https://github.com/paritytech/parity-common.git" }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ethcore-logger = { git = "https://github.com/paritytech/parity.git" }

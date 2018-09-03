@@ -18,6 +18,7 @@
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
+
 use wasmi::{
 	Module, ModuleInstance, MemoryInstance, MemoryRef, TableRef, ImportsBuilder
 };
@@ -29,8 +30,11 @@ use wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
+use primitives::KeccakHasher;
 use triehash::ordered_trie_root;
 use sandbox;
+use tiny_keccak::keccak256;
+
 
 struct Heap {
 	end: u32,
@@ -71,7 +75,7 @@ macro_rules! debug_trace {
 	( $( $x:tt )* ) => ()
 }
 
-struct FunctionExecutor<'e, E: Externalities + 'e> {
+struct FunctionExecutor<'e, E: Externalities<KeccakHasher> + 'e> {
 	sandbox_store: sandbox::Store,
 	heap: Heap,
 	memory: MemoryRef,
@@ -80,7 +84,7 @@ struct FunctionExecutor<'e, E: Externalities + 'e> {
 	hash_lookup: HashMap<Vec<u8>, Vec<u8>>,
 }
 
-impl<'e, E: Externalities> FunctionExecutor<'e, E> {
+impl<'e, E: Externalities<KeccakHasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, heap_pages: usize, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
@@ -93,7 +97,7 @@ impl<'e, E: Externalities> FunctionExecutor<'e, E> {
 	}
 }
 
-impl<'e, E: Externalities> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
+impl<'e, E: Externalities<KeccakHasher>> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
 	fn store(&self) -> &sandbox::Store {
 		&self.sandbox_store
 	}
@@ -138,6 +142,7 @@ impl ReadPrimitive<u32> for MemoryInstance {
 	}
 }
 
+// TODO: this macro does not support `where` clauses and that seems somewhat tricky to add
 impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_utf8(utf8_data: *const u8, utf8_len: u32) => {
 		if let Ok(utf8) = this.memory.get(utf8_data, utf8_len as usize) {
@@ -285,7 +290,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	ext_storage_root(result: *mut u8) => {
 		let r = this.ext.storage_root();
-		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
+		this.memory.set(result, r.as_ref()).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
 		Ok(())
 	},
 	ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
@@ -346,6 +351,15 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			blake2_256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_blake2_256"))?)
 		};
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
+		Ok(())
+	},
+	ext_keccak256(data: *const u8, len: u32, out: *mut u8) => {
+		let result = if len == 0 {
+			keccak256(&[0u8; 0])
+		} else {
+			keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_keccak256"))?)
+		};
+		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_keccak256"))?;
 		Ok(())
 	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
@@ -476,53 +490,42 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.sandbox_store.memory_teardown(memory_idx)?;
 		Ok(())
 	},
-	=> <'e, E: Externalities + 'e>
+	=> <'e, E: Externalities<KeccakHasher> + 'e>
 );
 
 /// Wasm rust executor for contracts.
 ///
 /// Executes the provided code in a sandboxed wasm runtime.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WasmExecutor {
-	/// The max number of pages to allocate for the heap.
-	pub max_heap_pages: usize,
-}
-
-impl Clone for WasmExecutor {
-	fn clone(&self) -> Self {
-		WasmExecutor {
-			max_heap_pages: self.max_heap_pages,
-		}
-	}
 }
 
 impl WasmExecutor {
 
 	/// Create a new instance.
-	pub fn new(max_heap_pages: usize) -> Self {
-		WasmExecutor {
-			max_heap_pages,
-		}
+	pub fn new() -> Self {
+		WasmExecutor{}
 	}
-
 
 	/// Call a given method in the given code.
 	/// This should be used for tests only.
-	pub fn call<E: Externalities>(
+	pub fn call<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8],
 		method: &str,
 		data: &[u8],
 		) -> Result<Vec<u8>> {
 		let module = ::wasmi::Module::from_buffer(code).expect("all modules compiled with rustc are valid wasm code; qed");
-		self.call_in_wasm_module(ext, &module, method, data)
+		self.call_in_wasm_module(ext, heap_pages, &module, method, data)
 	}
 
 	/// Call a given method in the given wasm-module runtime.
-	pub fn call_in_wasm_module<E: Externalities>(
+	pub fn call_in_wasm_module<E: Externalities<KeccakHasher>>(
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		module: &Module,
 		method: &str,
 		data: &[u8],
@@ -550,7 +553,7 @@ impl WasmExecutor {
 			.export_by_name("__indirect_function_table")
 			.and_then(|e| e.as_table().cloned());
 
-		let mut fec = FunctionExecutor::new(memory.clone(), self.max_heap_pages, table, ext)?;
+		let mut fec = FunctionExecutor::new(memory.clone(), heap_pages, table, ext)?;
 
 		// finish instantiation by running 'start' function (if any).
 		let instance = intermediate_instance.run_start(&mut fec)?;
@@ -571,7 +574,7 @@ impl WasmExecutor {
 		let returned = match result {
 			Ok(x) => x,
 			Err(e) => {
-				trace!(target: "wasm-executor", "Failed to execute code with {} pages", self.max_heap_pages);
+				trace!(target: "wasm-executor", "Failed to execute code with {} pages", heap_pages);
 				return Err(e.into())
 			},
 		};
@@ -606,7 +609,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_empty_return", &[]).unwrap();
+		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
 		assert_eq!(output, vec![0u8; 0]);
 	}
 
@@ -615,10 +618,10 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_panic", &[]);
+		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
 		assert!(output.is_err());
 
-		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_conditional_panic", &[2]);
+		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_conditional_panic", &[2]);
 		assert!(output.is_err());
 	}
 
@@ -628,11 +631,11 @@ mod tests {
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
-		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_data_in", b"Hello world").unwrap();
+		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_data_in", b"Hello world").unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: HashMap<_, _> = map![
+		let expected : TestExternalities<_> = map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
@@ -651,11 +654,11 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		// This will clear all entries which prefix is "ab".
-		let output = WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_clear_prefix", b"ab").unwrap();
+		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_clear_prefix", b"ab").unwrap();
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: HashMap<_, _> = map![
+		let expected: TestExternalities<_> = map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
@@ -668,11 +671,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_blake2_256", &[]).unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", &[]).unwrap(),
 			blake2_256(&b""[..]).encode()
 		);
 		assert_eq!(
-			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", b"Hello world!").unwrap(),
 			blake2_256(&b"Hello world!"[..]).encode()
 		);
 	}
@@ -682,11 +685,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_twox_256", &[]).unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
 			hex!("99e9d85137db46ef4bbea33613baafd56f963c64b1f3685a4eb4abd67ff6203a")
 		);
 		assert_eq!(
-			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", b"Hello world!").unwrap(),
 			hex!("b27dfd7f223f177f2a13647b533599af0c07f68bda23d96d059da2b451a35a74")
 		);
 	}
@@ -696,11 +699,11 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_twox_128", &[]).unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", &[]).unwrap(),
 			hex!("99e9d85137db46ef4bbea33613baafd5")
 		);
 		assert_eq!(
-			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", b"Hello world!").unwrap(),
 			hex!("b27dfd7f223f177f2a13647b533599af")
 		);
 	}
@@ -716,7 +719,7 @@ mod tests {
 		calldata.extend_from_slice(sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![1]
 		);
 
@@ -726,7 +729,7 @@ mod tests {
 		calldata.extend_from_slice(other_sig.as_ref());
 
 		assert_eq!(
-			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_ed25519_verify", &calldata).unwrap(),
 			vec![0]
 		);
 	}
@@ -736,7 +739,7 @@ mod tests {
 		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
-			WasmExecutor::new(8).call(&mut ext, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
 			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
 		);
 	}

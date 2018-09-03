@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Client backend that uses RocksDB database as storage.
 
@@ -46,19 +46,21 @@ mod utils;
 
 use std::sync::Arc;
 use std::path::PathBuf;
+use std::io;
 
 use codec::{Decode, Encode};
+use hashdb::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
-use primitives::{H256, AuthorityId};
+use primitives::{H256, AuthorityId, KeccakHasher, RlpCodec};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, NumberFor, Zero};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
-use state_machine::{CodeExecutor, TrieH256, DBValue, ExecutionStrategy};
+use state_machine::{CodeExecutor, DBValue, ExecutionStrategy};
 use utils::{Meta, db_err, meta_keys, number_to_db_key, db_key_to_number, open_database,
 	read_db, read_id, read_meta};
 use state_db::StateDb;
@@ -67,7 +69,7 @@ pub use state_db::PruningMode;
 const FINALIZATION_WINDOW: u64 = 32;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend;
+pub type DbState = state_machine::TrieBackend<KeccakHasher, RlpCodec>;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -88,7 +90,7 @@ pub fn new_client<E, S, Block>(
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
@@ -117,7 +119,7 @@ struct PendingBlock<Block: BlockT> {
 struct StateMetaDb<'a>(&'a KeyValueDB);
 
 impl<'a> state_db::MetaDb for StateMetaDb<'a> {
-	type Error = kvdb::Error;
+	type Error = io::Error;
 
 	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.get(columns::STATE_META, key).map(|r| r.map(|v| v.to_vec()))
@@ -224,13 +226,16 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 }
 
 /// Database transaction
-pub struct BlockImportOperation<Block: BlockT> {
+pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: DbState,
-	updates: MemoryDB,
+	updates: MemoryDB<H>,
 	pending_block: Option<PendingBlock<Block>>,
 }
 
-impl<Block: BlockT> client::backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
+impl<Block> client::backend::BlockImportOperation<Block, KeccakHasher, RlpCodec>
+for BlockImportOperation<Block, KeccakHasher>
+where Block: BlockT,
+{
 	type State = DbState;
 
 	fn state(&self) -> Result<Option<&Self::State>, client::error::Error> {
@@ -252,7 +257,7 @@ impl<Block: BlockT> client::backend::BlockImportOperation<Block> for BlockImport
 		// currently authorities are not cached on full nodes
 	}
 
-	fn update_storage(&mut self, update: MemoryDB) -> Result<(), client::error::Error> {
+	fn update_storage(&mut self, update: MemoryDB<KeccakHasher>) -> Result<(), client::error::Error> {
 		self.updates = update;
 		Ok(())
 	}
@@ -270,15 +275,15 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, H256>,
 }
 
-impl<Block: BlockT> state_machine::Storage for StorageDb<Block> {
-	fn get(&self, key: &TrieH256) -> Result<Option<DBValue>, String> {
+impl<Block: BlockT> state_machine::Storage<KeccakHasher> for StorageDb<Block> {
+	fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
 		self.state_db.get(&key.0.into(), self).map(|r| r.map(|v| DBValue::from_slice(&v)))
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
 
 impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
-	type Error = kvdb::Error;
+	type Error = io::Error;
 	type Hash = H256;
 
 	fn get(&self, key: &H256) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -314,7 +319,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, finalization_window: u64) -> Result<Self, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
-		let map_e = |e: state_db::Error<kvdb::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
+		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
 		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
 		let storage_db = StorageDb {
 			db,
@@ -344,8 +349,8 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
-	type BlockImportOperation = BlockImportOperation<Block>;
+impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<Block> where Block: BlockT {
+	type BlockImportOperation = BlockImportOperation<Block, KeccakHasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
 
@@ -459,14 +464,14 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 		}
 
 		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
-			let root: TrieH256  = TrieH256::from_slice(hdr.state_root().as_ref());
+			let root: H256 = H256::from_slice(hdr.state_root().as_ref());
 			DbState::with_storage(self.storage.clone(), root)
 		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
 	}
 }
 
-impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block>
-{}
+impl<Block> client::backend::LocalBackend<Block, KeccakHasher, RlpCodec> for Backend<Block>
+where Block: BlockT {}
 
 #[cfg(test)]
 mod tests {

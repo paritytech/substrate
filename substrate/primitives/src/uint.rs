@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! An unsigned fixed-size integer.
 
@@ -44,9 +44,7 @@ macro_rules! impl_serde {
 }
 
 construct_uint!(U256, 4);
-construct_uint!(U512, 8);
 impl_serde!(U256, 4);
-impl_serde!(U512, 8);
 
 #[cfg(test)]
 mod tests {
@@ -68,7 +66,7 @@ mod tests {
 					($name::from(1_000), "0x3e8"),
 					($name::from(100_000), "0x186a0"),
 					($name::from(u64::max_value()), "0xffffffffffffffff"),
-					($name::from(u64::max_value()) + 1.into(), "0x10000000000000000"),
+					($name::from(u64::max_value()) + $name::from(1), "0x10000000000000000"),
 				];
 
 				for (number, expected) in tests {
@@ -87,7 +85,6 @@ mod tests {
 	}
 
 	test!(U256, test_u256);
-	test!(U512, test_u512);
 
 	#[test]
 	fn test_large_values() {

@@ -1,26 +1,32 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::sync::Arc;
+use std::cmp::Ord;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
-use state_machine::{self, OverlayedChanges, Ext, 
+use state_machine::{self, OverlayedChanges, Ext,
 	CodeExecutor, ExecutionManager, native_when_possible};
 use runtime_io::Externalities;
 use executor::{RuntimeVersion, RuntimeInfo};
+use patricia_trie::NodeCodec;
+use primitives::{KeccakHasher, RlpCodec};
+use hashdb::Hasher;
+use rlp::Encodable;
+use codec::Decode;
 
 use backend;
 use error;
@@ -35,7 +41,13 @@ pub struct CallResult {
 }
 
 /// Method call executor.
-pub trait CallExecutor<B: BlockT> {
+pub trait CallExecutor<B, H, C>
+where
+	B: BlockT,
+	H: Hasher,
+	H::Out: Ord + Encodable,
+	C: NodeCodec<H>,
+{
 	/// Externalities error type.
 	type Error: state_machine::Error;
 
@@ -57,7 +69,7 @@ pub trait CallExecutor<B: BlockT> {
 	///
 	/// No changes are made.
 	fn call_at_state<
-		S: state_machine::Backend,
+		S: state_machine::Backend<H, C>,
 		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
 	>(&self,
 		state: &S,
@@ -70,7 +82,7 @@ pub trait CallExecutor<B: BlockT> {
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: state_machine::Backend>(&self,
+	fn prove_at_state<S: state_machine::Backend<H, C>>(&self,
 		state: S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
@@ -104,11 +116,11 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 	}
 }
 
-impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
-	where
-		B: backend::LocalBackend<Block>,
-		E: CodeExecutor + RuntimeInfo,
-		Block: BlockT,
+impl<B, E, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for LocalCallExecutor<B, E>
+where
+	B: backend::LocalBackend<Block, KeccakHasher, RlpCodec>,
+	E: CodeExecutor<KeccakHasher> + RuntimeInfo,
+	Block: BlockT,
 {
 	type Error = E::Error;
 
@@ -125,7 +137,7 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 			call_data,
 			native_when_possible(),
 		)?;
-		Ok(CallResult{ return_data, changes })
+		Ok(CallResult { return_data, changes })
 	}
 
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
@@ -134,13 +146,14 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 		let mut externalities = Ext::new(&mut overlay, &state);
 		let code = externalities.storage(b":code").ok_or(error::ErrorKind::VersionInvalid)?
 			.to_vec();
+		let heap_pages = externalities.storage(b":heappages").and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
 
-		self.executor.runtime_version(&mut externalities, &code)
+		self.executor.runtime_version(&mut externalities, heap_pages, &code)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
 	fn call_at_state<
-		S: state_machine::Backend,
+		S: state_machine::Backend<KeccakHasher, RlpCodec>,
 		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
 	>(&self,
 		state: &S,
@@ -159,7 +172,7 @@ impl<B, E, Block> CallExecutor<Block> for LocalCallExecutor<B, E>
 		).map_err(Into::into)
 	}
 
-	fn prove_at_state<S: state_machine::Backend>(&self,
+	fn prove_at_state<S: state_machine::Backend<KeccakHasher, RlpCodec>>(&self,
 		state: S,
 		changes: &mut OverlayedChanges,
 		method: &str,
