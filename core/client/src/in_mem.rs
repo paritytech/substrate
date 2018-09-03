@@ -94,6 +94,7 @@ struct BlockchainStorage<Block: BlockT> {
 	finalized_hash: Block::Hash,
 	genesis_hash: Block::Hash,
 	cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
+	leaves: Vec<Block::Hash>,
 }
 
 /// In-memory blockchain. Supports concurrent reads.
@@ -140,6 +141,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				finalized_hash: Default::default(),
 				genesis_hash: Default::default(),
 				cht_roots: HashMap::new(),
+				leaves: Vec::new(),
 			}));
 		Blockchain {
 			storage: storage.clone(),
@@ -262,6 +264,11 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 
 	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
 		Some(&self.cache)
+	}
+
+	fn leaves(&self) -> error::Result<Vec<Block::Hash>> {
+		// TODO [snd] get rid of this clone
+		Ok(self.storage.read().leaves.clone())
 	}
 }
 
