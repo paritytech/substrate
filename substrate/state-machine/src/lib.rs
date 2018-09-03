@@ -153,6 +153,8 @@ impl Error for ExecutionError {}
 /// and as a transition away from the pre-existing framework.
 #[derive(Debug, Eq, PartialEq)]
 pub enum ExecutionError {
+	/// Backend error.
+	Backend(String),
 	/// The entry `:code` doesn't exist in storage so there's no way we can execute anything.
 	CodeEntryDoesNotExist,
 	/// Backend is incompatible with execution proof generation process.
@@ -324,11 +326,13 @@ where
 	let strategy: ExecutionStrategy = (&manager).into();
 
 	// make a copy.
-	let code = ext::Ext::new(overlay, backend).storage(b":code")
+	let code = try_read_overlay_value(overlay, backend, b":code")
+		.map_err(|err| Box::new(ExecutionError::Backend(format!("{}", err))) as Box<Error>)?
 		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 		.to_vec();
 
-	let heap_pages = ext::Ext::new(overlay, backend).storage(b":heappages")
+	let heap_pages = try_read_overlay_value(overlay, backend, b":heappages")
+		.map_err(|err| Box::new(ExecutionError::Backend(format!("{}", err))) as Box<Error>)?
 		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
 
 	let result = {
@@ -435,10 +439,10 @@ pub fn execution_proof_check<H, C, Exec>(
 	call_data: &[u8],
 ) -> Result<(Vec<u8>, memorydb::MemoryDB<H>), Box<Error>>
 where
-H: Hasher,
-C: NodeCodec<H>,
-Exec: CodeExecutor<H>,
-H::Out: Ord + Encodable + HeapSizeOf,
+	H: Hasher,
+	C: NodeCodec<H>,
+	Exec: CodeExecutor<H>,
+	H::Out: Ord + Encodable + HeapSizeOf,
 {
 	let backend = proving_backend::create_proof_check_backend::<H, C>(root.into(), proof)?;
 	execute::<H, C, _, _>(&backend, overlay, exec, method, call_data, ExecutionStrategy::NativeWhenPossible)
@@ -475,6 +479,19 @@ where
 {
 	let backend = proving_backend::create_proof_check_backend::<H, C>(root, proof)?;
 	backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
+}
+
+/// Reads storage value from overlay or from the backend.
+pub(crate) fn try_read_overlay_value<H, C, B>(overlay: &OverlayedChanges, backend: &B, key: &[u8]) -> Result<Option<Vec<u8>>, B::Error>
+	where
+		H: Hasher,
+		C: NodeCodec<H>,
+		B: Backend<H, C>,
+{
+	match overlay.storage(key).map(|x| x.map(|x| x.to_vec())) {
+		Some(value) => Ok(value),
+		None => backend.storage(key),
+	}
 }
 
 #[cfg(test)]
@@ -578,7 +595,7 @@ mod tests {
 	#[test]
 	fn execute_works() {
 		assert_eq!(execute(
-			&trie_backend::tests::test_trie(),
+			&trie_backend::tests::test_trie(true),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				native_available: true,
@@ -592,10 +609,26 @@ mod tests {
 	}
 
 	#[test]
+	fn execute_should_not_panic_when_there_is_no_code_entry() {
+		assert!(execute(
+			&trie_backend::tests::test_trie(false),
+			&mut Default::default(),
+			&DummyCodeExecutor {
+				native_available: true,
+				native_succeeds: true,
+				fallback_succeeds: true,
+			},
+			"test",
+			&[],
+			ExecutionStrategy::NativeWhenPossible
+		).is_err());
+	}
+
+	#[test]
 	fn dual_execution_strategy_detects_consensus_failure() {
 		let mut consensus_failed = false;
 		assert!(execute_using_consensus_failure_handler(
-			&trie_backend::tests::test_trie(),
+			&trie_backend::tests::test_trie(true),
 			&mut Default::default(),
 			&DummyCodeExecutor {
 				native_available: true,
@@ -622,7 +655,7 @@ mod tests {
 		};
 
 		// fetch execution proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie();
+		let remote_backend = trie_backend::tests::test_trie(true);
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let (remote_result, remote_proof, _) = prove_execution(remote_backend,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
@@ -679,7 +712,7 @@ mod tests {
 	#[test]
 	fn prove_read_and_proof_check_works() {
 		// fetch read proof from 'remote' full node
-		let remote_backend = trie_backend::tests::test_trie();
+		let remote_backend = trie_backend::tests::test_trie(true);
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, b"value2").unwrap().1;
  		// check proof locally
