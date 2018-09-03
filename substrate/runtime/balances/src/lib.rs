@@ -410,6 +410,17 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created.
+	///
+	/// This is a sensitive function since it circumvents any fees associated with account
+	/// setup. Ensure it is only called by trusted code.
+	///
+	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
+	/// you mean to actually mint value into existence, then use `reward` instead.
+	pub fn increase_free_balance_creating(who: &T::AccountId, value: T::Balance) -> UpdateBalanceOutcome {
+		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
+	}
+
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
 	///

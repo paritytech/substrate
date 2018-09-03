@@ -349,7 +349,7 @@ mod tests {
 	impl Trait for Test {
 		type Event = ();
 	}
-	type Treasury = Module<Test>;
+	type Example = Module<Test>;
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
@@ -367,19 +367,19 @@ mod tests {
 	fn it_works() {
 		with_externalities(&mut new_test_ext(), || {
 			// Check that GenesisBuilder works properly.
-			assert_eq!(Treasury::dummy(), Some(42));
+			assert_eq!(Example::dummy(), Some(42));
 
 			// Check that accumulate works when we have Some value in Dummy already.
-			assert_ok!(Treasury::accumulate_dummy(27.into()));
-			assert_eq!(Treasury::dummy(), Some(69));
+			assert_ok!(Example::accumulate_dummy(27.into()));
+			assert_eq!(Example::dummy(), Some(69));
 			
 			// Check that finalising the block removes Dummy from storage.
-			<Treasury as OnFinalise<u64>>::on_finalise(1);
-			assert_eq!(Treasury::dummy(), None);
+			<Example as OnFinalise<u64>>::on_finalise(1);
+			assert_eq!(Example::dummy(), None);
 
 			// Check that accumulate works when we Dummy has None in it.
-			assert_ok!(Treasury::accumulate_dummy(42.into()));
-			assert_eq!(Treasury::dummy(), Some(42));
+			assert_ok!(Example::accumulate_dummy(42.into()));
+			assert_eq!(Example::dummy(), Some(42));
 		});
 	}
 }

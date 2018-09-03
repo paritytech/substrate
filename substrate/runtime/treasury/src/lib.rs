@@ -43,7 +43,7 @@ extern crate substrate_runtime_balances as balances;
 
 use runtime_support::StorageValue;
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::OnFinalise;
+use runtime_primitives::traits::{As, OnFinalise};
 use balances::OnMinted;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -56,6 +56,8 @@ pub trait Trait: balances::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
+type ProposalIndex = u32;
+
 // The module declaration. This states the entry points that we handle. The
 // macro looks after the marshalling of arguments and dispatch.
 decl_module! {
@@ -65,7 +67,7 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
 		// Put forward a suggestion for spending. A bond of 
-		fn propose_spend(aux, amount: T::Balance, destination: T::AccountId) -> Result = 0;
+		fn propose_spend(aux, value: T::Balance, beneficiary: T::AccountId) -> Result = 0;
 	}
 
 	// The priviledged entry points. These are provided to allow any governance modules in 
@@ -77,50 +79,68 @@ decl_module! {
 	pub enum PrivCall {
 		// A priviledged call; in this case it resets our dummy value to something new.
 		fn set_pot(new_pot: T::Balance) -> Result = 0;
-	}
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum CouncilCall {
-		// A priviledged call; in this case it resets our dummy value to something new.
-		fn cancel_proposal(proposal_id: u32) -> Result = 0;
+		// (Re-)configure this module.
+		fn configure(proposal_bond: Permill, proposal_bond_minimum: T::Balance, spend_period: T::BlockNumber, burn: Permill) -> Result = 1;
 
 		// A priviledged call; in this case it resets our dummy value to something new.
-		fn approve_proposal(proposal_id: u32) -> Result = 1;
+		fn cancel_proposal(proposal_id: ProposalIndex) -> Result = 2;
+
+		// A priviledged call; in this case it resets our dummy value to something new.
+		fn approve_proposal(proposal_id: ProposalIndex) -> Result = 3;
 	}
 }
-
-type ProposalIndex = u32;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
 struct Proposal<AccountId, Balance> {
 	proposer: AccountId,
-	beneficiary: AccountId,
 	value: Balance,
+	beneficiary: AccountId,
 }
 
-// NOTE: Perbill is parts-per-billion (i.e. multiply by this then divide by 1_000_000_000u32).
+// Permill is parts-per-million (i.e. after multiplying by this, divide by `PERMILL`).
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+struct Permill(u32);
+
+// TODO: impl Mul<Permill> for N where N: As<usize>
+impl Permill {
+	fn times<N: As<usize>>(self, b: N) -> N {
+		// TODO: handle overflows
+		b * <N as As<usize>>::sa(self.0) / <N as As<usize>>::sa(1000000)
+	}
+}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
-		// Total funds available to this module for spending.
-		Pot get(pot): T::Balance;
+		// Config...
 
 		// Proportion of funds that should be bonded in order to place a proposal. An accepted
 		// proposal gets these back. A rejected proposal doesn't.
-		ProposalBondPerbill get(proposal_bond_perbill): u32;
+		ProposalBond get(proposal_bond): required Permill;
 		
 		// Proportion of funds that should be bonded in order to place a proposal. An accepted
 		// proposal gets these back. A rejected proposal doesn't.
-		ProposalBondMinimum get(proposal_bond_minimum): T::Balance;
+		ProposalBondMinimum get(proposal_bond_minimum): required T::Balance;
+
+		// Period between successive spends.
+		SpendPeriod get(spend_period): required T::BlockNumber;
+
+		// Percentage of spare funds (if any) that are burnt per spend period.
+		Burn get(burn): required Permill;
+
+		// State...
+
+		// Total funds available to this module for spending.
+		Pot get(pot): default T::Balance;
+
+		// Number of proposals that have been made.
+		ProposalCount get(proposal_count): default ProposalIndex;
 
 		// Proposals that have been made.
 		Proposals get(proposals): map [ ProposalIndex => Proposal<T::AccountId, T::Balance> ];
 
-		// Period between successive spends.
-		SpendPeriod get(spend_period): T::BlockNumber;
-
-		// Percentage of spare funds (if any) that are burnt per spend period.
-		BurnPerbill get(burn_perbill): u32;
+		// Proposals that have been made.
+		Approvals get(approvals): default Vec<ProposalIndex>;
 	}
 }
 
@@ -134,10 +154,16 @@ pub type Event<T> = RawEvent<
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawEvent<Balance, AccountId> {
-	/// Spent some funds.
-	Spend(Balance, AccountId),
-	/// Burnt some funds.
-	Burn(Balance),
+	/// New proposal.
+	Proposed(ProposalIndex),
+	/// We have ended a spend period and will now allocate funds.
+	Spending(Balance),
+	/// Some funds have been allocated.
+	Spent(Balance, AccountId),
+	/// Some of our funds have been burnt.
+	Burnt(Balance),
+	/// Spending has finished; this is the amount that rolls over until next spend.
+	Rollover(Balance),
 }
 
 impl<B, A> From<RawEvent<B, A>> for () {
@@ -145,51 +171,116 @@ impl<B, A> From<RawEvent<B, A>> for () {
 }
 
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events. This function doesn't change.
-	// TODO: move into `decl_module` macro.
+	/// Deposit one of this module's events.
 	fn deposit_event(event: Event<T>) {
 		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
 	}
 
 	// Implement Calls/PrivCalls and add public immutables and private mutables.
 
-	fn accumulate_dummy(_aux: &T::PublicAux, increase_by: T::Balance) -> Result {
-		// Read the value of dummy from storage.
-		let dummy = Self::dummy();
-		// Will also work using the `::get` on the storage item type iself:
-		// let dummy = <Dummy<T>>::get();
+	fn propose_spend(aux: &T::PublicAux, value: T::Balance, beneficiary: T::AccountId) -> Result {
+		let proposer = aux.ref_into();
 
-		// Calculate the new value.
-		let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
+		let bond = Self::calculate_bond(value);
+		<balances::Module<T>>::reserve(proposer, bond)
+			.map_err(|_| "proposer's balance too low")?;
 
+		let c = Self::proposal_count();
+		<ProposalCount<T>>::put(c + 1);
+		<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary });
+
+		Self::deposit_event(RawEvent::Proposed(c));
+
+		Ok(())
+	}
+
+	fn cancel_proposal(proposal_id: ProposalIndex) -> Result {
+		let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
+		
+		let value = Self::calculate_bond(proposal.value);
+		let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
+
+		Ok(())
+	}
+
+	fn approve_proposal(proposal_id: ProposalIndex) -> Result {
+		{
+			let v = <Approvals<T>>::get();
+			v.push(proposal_id);
+			<Approvals<T>>::put(v);
+		}
+		//TODO gav: make work:
+		//<Approvals<T>>::mutate(|a| a.push(proposal_id));
+
+		Ok(())
+	}
+
+	fn set_pot(new_pot: T::Balance) -> Result {
 		// Put the new value into storage.
-		<Dummy<T>>::put(new_dummy);
-		// Will also work with a reference:
-		// <Dummy<T>>::put(&new_dummy);
-
-		// Let's deposit an event to let the outside world this happened.
-		Self::deposit_event(RawEvent::Dummy(increase_by));
+		<Pot<T>>::put(new_pot);
 
 		// All good.
 		Ok(())
 	}
 
-	// Implementation of a priviledged call. This doesn't have an `aux` parameter because
-	// it's not (directly) from an extrinsic, but rather the system as a whole has decided
-	// to execute it. Different runtimes have different reasons for allow priviledged
-	// calls to be executed - we don't need to care why. Because it's priviledged, we can
-	// assume it's a one-off operation and substantial processing/storage/memort can be used
-	// without worrying about gamability or attack scenarios.
-	fn set_dummy(new_value: T::Balance) -> Result {
-		// Put the new value into storage.
-		<Dummy<T>>::put(new_value);
+	fn configure(
+		proposal_bond: Permill,
+		proposal_bond_minimum: T::Balance,
+		spend_period: T::BlockNumber,
+		burn: Permill
+	) -> Result {
+		<ProposalBond<T>>::put(proposal_bond);
+		<ProposalBondMinimum<T>>::put(proposal_bond_minimum);
+		<SpendPeriod<T>>::put(spend_period);
+		<Burn<T>>::put(burn);
+	}
 
-		// All good.
-		Ok(())
+	/// The needed bond for a proposal whose spend is `value`.
+	fn calculate_bond(value: T::Balance) -> T::Balance {
+		Self::proposal_bond_minimum().max(Self::propsal_bond().times(value))
+	}
+
+	// Spend some money!
+	fn spend_funds() {
+		let mut budget_remaining = Self::pot();
+		Self::deposit_event(RawEvent::Spending(budget_remaining));
+
+		let mut missed_any = false;
+		let remaining_approvals = <Approvals<T>>::get().filter(|index| {
+			let p = Self::proposal(index);
+			if p.value <= budget_remaining {
+				budget_remaining -= p.value;
+				<Proposals<T>>::remove(index);
+				Self::deposit_event(RawEvent::Spent(p.value, p.beneficiary));
+
+				// return their deposit.
+				let _ = <balances::Module<T>>::unreserve(&p.proposer, Self::calculate_bond(p.value));
+
+				// provide the allocation.
+				<balances::Module<T>>::increase_free_balance_creating(&p.beneficiary, p.value);
+
+				false
+			} else {
+				missed_any = true;
+				true
+			}
+		}).collect();
+		<Approvals<T>>::put(remaining_approvals);
+
+		if !missed_any {
+			// burn some proportion of the remaining budget if we run a surplus.
+			let burn = Self::burn().times(budget_remaining);
+			budget_remaining -= burn;
+			Self::deposit_event(RawEvent::Burnt(burn))
+		}
+
+		Self::deposit_event(RawEvent::Rollover(budget_remaining));
+
+		<Pot<T>>::put(budget_remaining);
 	}
 }
 
-impl<T: Trait> OnMinted for Module<T> {
+impl<T: Trait> OnMinted<T::Balance> for Module<T> {
 	fn on_minted(b: T::Balance) {
 		<Pot<T>>::put(Self::pot() + b);
 	}
@@ -198,8 +289,9 @@ impl<T: Trait> OnMinted for Module<T> {
 impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	fn on_finalise(n: T::BlockNumber) {
 		// Check to see if we should spend some funds!
-		if 
-		
+		if n % Self::spend_period() == 0 {
+			Self::spend_funds();
+		}
 	}
 }
 
@@ -210,33 +302,34 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 /// The genesis block configuration type. This is a simple default-capable struct that
 /// contains any fields with which this module can be configured at genesis time.
 pub struct GenesisConfig<T: Trait> {
-	/// A value with which to initialise the Dummy storage item.
-	pub dummy: T::Balance,
+	pub proposal_bond: Permill,
+	pub proposal_bond_minimum: T::Balance,
+	pub spend_period: T::BlockNumber,
+	pub burn: Permill,
 }
 
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
-			dummy: Default::default(),
+			proposal_bond: Default::default(),
+			proposal_bond_minimum: Default::default(),
+			spend_period: Default::default(),
+			burn: Default::default(),
 		}
 	}
 }
 
-// This expresses the specific key/value pairs that must be placed in storage in order
-// to initialise the module and properly reflect the configuration.
-// 
-// Ideally this would re-use the `::put` logic in the storage item type for introducing
-// the values into the `StorageMap`. That is not yet in place, though, so for now we
-// do everything "manually", using `hash`, `::key()` and `.to_vec()` for the key and
-// `.encode()` for the value.
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
 		use codec::Encode;
 		Ok(map![
-			Self::hash(<Dummy<T>>::key()).to_vec() => self.dummy.encode()
+			Self::hash(<ProposalBond<T>>::key()).to_vec() => self.proposal_bond.encode(),
+			Self::hash(<ProposalBondMinimum<T>>::key()).to_vec() => self.proposal_bond_minimum.encode(),
+			Self::hash(<SpendPeriod<T>>::key()).to_vec() => self.spend_period.encode(),
+			Self::hash(<Burn<T>>::key()).to_vec() => self.burn.encode()
 		])
 	}
 }
@@ -249,14 +342,8 @@ mod tests {
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256};
-
-	// The testing primitives are very useful for avoiding having to work with signatures
-	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use runtime_primitives::testing::{Digest, Header};
 
-	// For testing the module, we construct most of a mock runtime. This means
-	// first constructing a configuration type (`Test`) which `impl`s each of the
-	// configuration traits of modules we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl system::Trait for Test {
@@ -282,14 +369,22 @@ mod tests {
 	}
 	type Treasury = Module<Test>;
 
-	// This function basically just builds a genesis storage key/value store according to
-	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		// We use default for brevity, but you can configure as desired if needed.
-		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());
+		t.extend(balances::GenesisConfig::<Test>{
+			balances: vec![(0, 100), (1, 10)],
+			transaction_base_fee: T::Balance::sa(0),
+			transaction_byte_fee: T::Balance::sa(0),
+			transfer_fee: T::Balance::sa(0),
+			creation_fee: T::Balance::sa(0),
+			existential_deposit: T::Balance::sa(0),
+			reclaim_rebate: T::Balance::sa(0),
+		}.build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
-			dummy: 42,
+			proposal_bond: 50_000,	// 5%
+			proposal_bond_minimum: 1,
+			spend_period: 2,
+			burn: 500_000,			// 50%
 		}.build_storage().unwrap());
 		t.into()
 	}
@@ -299,18 +394,25 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			// Check that GenesisBuilder works properly.
 			assert_eq!(Treasury::dummy(), Some(42));
+			assert_eq!(Treasury::proposal_bond(), 50_000);
+			assert_eq!(Treasury::proposal_bond_minimum(), 1);
+			assert_eq!(Treasury::spend_period(), 2);
+			assert_eq!(Treasury::burn(), 500_000);
+			assert_eq!(Treasury::pot(), 0);
+			assert_eq!(Treasury::proposal_count(), 0);
 
 			// Check that accumulate works when we have Some value in Dummy already.
-			assert_ok!(Treasury::accumulate_dummy(27.into()));
-			assert_eq!(Treasury::dummy(), Some(69));
+			Treasury::on_minted(100);
+			assert_eq!(Treasury::pot(), 100);
+/*			
+			Treasury::propose_spend();
 			
-			// Check that finalising the block removes Dummy from storage.
-			<Treasury as OnFinalise>::on_finalise();
+			<Treasury as OnFinalise>::on_finalise(2);
 			assert_eq!(Treasury::dummy(), None);
 
 			// Check that accumulate works when we Dummy has None in it.
 			assert_ok!(Treasury::accumulate_dummy(42.into()));
-			assert_eq!(Treasury::dummy(), Some(42));
+			assert_eq!(Treasury::dummy(), Some(42));*/
 		});
 	}
 }
