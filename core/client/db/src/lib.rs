@@ -239,6 +239,10 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	fn cache(&self) -> Option<&client::blockchain::Cache<Block>> {
 		None
 	}
+
+	fn leaves(&self) -> Result<Vec<Block::Hash>, client::error::Error> {
+		unimplemented!()
+	}
 }
 
 /// Database transaction
