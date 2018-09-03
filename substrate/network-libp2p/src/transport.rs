@@ -18,19 +18,24 @@ use libp2p::{self, PeerId, Transport, mplex, secio, yamux};
 use libp2p::core::{MuxedTransport, either, upgrade};
 use libp2p::transport_timeout::TransportTimeout;
 use std::time::Duration;
+use std::usize;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Builds the transport that serves as a common ground for all connections.
 pub fn build_transport(
 	local_private_key: secio::SecioKeyPair
 ) -> impl MuxedTransport<Output = (PeerId, impl AsyncRead + AsyncWrite)> + Clone {
+	let mut mplex_config = mplex::MplexConfig::new();
+	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
+	mplex_config.max_buffer_len(usize::MAX);
+
 	let base = libp2p::CommonTransport::new()
 		.with_upgrade(secio::SecioConfig {
 			key: local_private_key,
 		})
 		.and_then(move |out, endpoint, client_addr| {
 			let upgrade = upgrade::or(
-				upgrade::map(mplex::MplexConfig::new(), either::EitherOutput::First),
+				upgrade::map(mplex_config, either::EitherOutput::First),
 				upgrade::map(yamux::Config::default(), either::EitherOutput::Second),
 			);
 			let key = out.remote_key;

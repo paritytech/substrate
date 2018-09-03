@@ -110,7 +110,7 @@ impl NetworkService {
 		let local_peer_id = network_state.local_public_key().clone()
 			.into_peer_id();
 		for mut addr in config.listen_addresses.iter().cloned() {
-			addr.append(AddrComponent::P2P(local_peer_id.clone().into_bytes()));
+			addr.append(AddrComponent::P2P(local_peer_id.clone().into()));
 			info!(target: "sub-libp2p", "Local node address is: {}", addr);
 		}
 
@@ -1148,7 +1148,7 @@ fn process_identify_info(
 				);
 				listened_addrs.push(ext_addr.clone());
 				ext_addr.append(AddrComponent::P2P(shared.kad_system
-					.local_peer_id().clone().into_bytes()));
+					.local_peer_id().clone().into()));
 				info!(target: "sub-libp2p", "New external node address: {}", ext_addr);
 			}
 		}
