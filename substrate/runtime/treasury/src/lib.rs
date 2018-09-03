@@ -41,9 +41,10 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_balances as balances;
 
-use runtime_support::StorageValue;
+use rstd::ops::{Mul, Div};
+use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{As, OnFinalise};
+use runtime_primitives::traits::{As, OnFinalise, Zero, RefInto};
 use balances::OnMinted;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -91,22 +92,25 @@ decl_module! {
 	}
 }
 
+/// A spending proposal.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-struct Proposal<AccountId, Balance> {
+pub struct Proposal<AccountId, Balance> {
 	proposer: AccountId,
 	value: Balance,
 	beneficiary: AccountId,
 }
 
-// Permill is parts-per-million (i.e. after multiplying by this, divide by `PERMILL`).
+/// Permill is parts-per-million (i.e. after multiplying by this, divide by `PERMILL`).
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
-struct Permill(u32);
+pub struct Permill(u32);
 
 // TODO: impl Mul<Permill> for N where N: As<usize>
 impl Permill {
-	fn times<N: As<usize>>(self, b: N) -> N {
+	fn times<N: As<usize> + Mul<N, Output=N> + Div<N, Output=N>>(self, b: N) -> N {
 		// TODO: handle overflows
-		b * <N as As<usize>>::sa(self.0) / <N as As<usize>>::sa(1000000)
+		b * <N as As<usize>>::sa(self.0 as usize) / <N as As<usize>>::sa(1000000)
 	}
 }
 
@@ -187,7 +191,7 @@ impl<T: Trait> Module<T> {
 
 		let c = Self::proposal_count();
 		<ProposalCount<T>>::put(c + 1);
-		<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary });
+		<Proposals<T>>::insert(c, Proposal { proposer: proposer.clone(), value, beneficiary });
 
 		Self::deposit_event(RawEvent::Proposed(c));
 
@@ -205,7 +209,7 @@ impl<T: Trait> Module<T> {
 
 	fn approve_proposal(proposal_id: ProposalIndex) -> Result {
 		{
-			let v = <Approvals<T>>::get();
+			let mut v = <Approvals<T>>::get();
 			v.push(proposal_id);
 			<Approvals<T>>::put(v);
 		}
@@ -233,11 +237,12 @@ impl<T: Trait> Module<T> {
 		<ProposalBondMinimum<T>>::put(proposal_bond_minimum);
 		<SpendPeriod<T>>::put(spend_period);
 		<Burn<T>>::put(burn);
+		Ok(())
 	}
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: T::Balance) -> T::Balance {
-		Self::proposal_bond_minimum().max(Self::propsal_bond().times(value))
+		Self::proposal_bond_minimum().max(Self::proposal_bond().times(value))
 	}
 
 	// Spend some money!
@@ -246,23 +251,27 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
 
 		let mut missed_any = false;
-		let remaining_approvals = <Approvals<T>>::get().filter(|index| {
-			let p = Self::proposal(index);
-			if p.value <= budget_remaining {
-				budget_remaining -= p.value;
-				<Proposals<T>>::remove(index);
-				Self::deposit_event(RawEvent::Spent(p.value, p.beneficiary));
+		let remaining_approvals: Vec<_> = <Approvals<T>>::get().into_iter().filter(|index| {
+			// Should always be true, but shouldn't panic if false or we're screwed.
+			if let Some(p) = Self::proposals(index) {
+				if p.value <= budget_remaining {
+					budget_remaining -= p.value;
+					<Proposals<T>>::remove(index);
 
-				// return their deposit.
-				let _ = <balances::Module<T>>::unreserve(&p.proposer, Self::calculate_bond(p.value));
+					// return their deposit.
+					let _ = <balances::Module<T>>::unreserve(&p.proposer, Self::calculate_bond(p.value));
 
-				// provide the allocation.
-				<balances::Module<T>>::increase_free_balance_creating(&p.beneficiary, p.value);
+					// provide the allocation.
+					<balances::Module<T>>::increase_free_balance_creating(&p.beneficiary, p.value);
 
-				false
+					Self::deposit_event(RawEvent::Spent(p.value, p.beneficiary));
+					false
+				} else {
+					missed_any = true;
+					true
+				}
 			} else {
-				missed_any = true;
-				true
+				false	
 			}
 		}).collect();
 		<Approvals<T>>::put(remaining_approvals);
@@ -289,7 +298,7 @@ impl<T: Trait> OnMinted<T::Balance> for Module<T> {
 impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	fn on_finalise(n: T::BlockNumber) {
 		// Check to see if we should spend some funds!
-		if n % Self::spend_period() == 0 {
+		if (n % Self::spend_period()).is_zero() {
 			Self::spend_funds();
 		}
 	}
