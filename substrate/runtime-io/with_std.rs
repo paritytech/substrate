@@ -111,7 +111,6 @@ where
 	H: Hasher,
 	H::Out: Encodable + Ord,
 {
-	// triehash::ordered_trie_root::<KeccakHasher, _, _>(serialised_values.iter().map(|s| s.to_vec())).0
 	triehash::ordered_trie_root::<H, _, _>(serialised_values.iter().map(|s| s.to_vec()))
 }
 
