@@ -26,7 +26,7 @@ use rstd::prelude::*;
 use codec::{Decode, Encode, Codec, Input, Output};
 use runtime_support::AuxDispatchable;
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Block as BlockT,
-	Header as HeaderT, Hash as HashT};
+	Header as HeaderT, Hash as HashT, DigestItem as DigestItemT};
 use rstd::ops;
 use bft::Justification;
 
@@ -208,16 +208,27 @@ where
 	}
 }
 
-#[derive(Default, PartialEq, Eq, Clone, Encode, Decode)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct Digest<Item> {
 	pub logs: Vec<Item>,
 }
 
+impl<Item> Default for Digest<Item> {
+	fn default() -> Self {
+		Digest { logs: Vec::new(), }
+	}
+}
+
 impl<Item> traits::Digest for Digest<Item> where
-	Item: Member + Default + Codec
+	Item: DigestItemT + Codec
 {
 	type Item = Item;
+
+	fn logs(&self) -> &[Self::Item] {
+		&self.logs
+	}
+
 	fn push(&mut self, item: Self::Item) {
 		self.logs.push(item);
 	}
@@ -317,7 +328,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
 	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
-	DigestItem: Member + Default + Codec,
+	DigestItem: DigestItemT + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	type Number = Number;
@@ -356,7 +367,7 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 impl<Number, Hash, DigestItem> Header<Number, Hash, DigestItem> where
 	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
-	DigestItem: Member + Default + Codec,
+	DigestItem: DigestItemT + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	/// Convenience helper for computing the hash of the header without having

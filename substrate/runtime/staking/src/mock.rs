@@ -33,6 +33,7 @@ impl HasPublicAux for Test {
 }
 impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
+	type Log = u64;
 	type SessionKey = u64;
 	type OnOfflineValidator = ();
 }

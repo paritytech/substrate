@@ -53,10 +53,9 @@ extern crate substrate_runtime_timestamp as timestamp;
 extern crate substrate_runtime_version as version;
 extern crate demo_primitives;
 
-use rstd::prelude::*;
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256};
+use runtime_primitives::traits::{Convert, HasPublicAux, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
 
 #[cfg(any(feature = "std", test))]
@@ -94,9 +93,9 @@ impl system::Trait for Concrete {
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
 	type Hashing = BlakeTwo256;
-	type Digest = generic::Digest<Vec<u8>>;
+	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
-	type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
+	type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 	type Event = Event;
 }
 
@@ -116,6 +115,7 @@ pub type Balances = balances::Module<Concrete>;
 
 impl consensus::Trait for Concrete {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
+	type Log = Log;
 	type SessionKey = SessionKey;
 	type OnOfflineValidator = Staking;
 }
@@ -176,6 +176,12 @@ impl_outer_event! {
 	}
 }
 
+impl_outer_log! {
+	pub enum Log for Concrete {
+		consensus(AuthoritiesChange => consensus::AuthoritiesChange<SessionKey> => as_authorities_change)
+	}
+}
+
 impl_outer_dispatch! {
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -206,7 +212,7 @@ impl_outer_dispatch! {
 /// The address format for describing accounts.
 pub type Address = balances::Address<Concrete>;
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// BlockId type as expected by this runtime.

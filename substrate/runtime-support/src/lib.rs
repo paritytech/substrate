@@ -112,3 +112,38 @@ macro_rules! impl_outer_event {
 		)*
 	}
 }
+
+#[macro_export]
+macro_rules! impl_outer_log {
+	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $( $module:ident($( $log_type_name:ident => $log_type:ty => $as_log:ident ),*) ),* }) => {
+		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		$(#[$attr])*
+		#[allow(non_camel_case_types)]
+		pub enum $name {
+			$(
+				$module($module::Log<$trait>),
+			)*
+		}
+		$(
+			impl From<$module::Log<$trait>> for $name {
+				fn from(x: $module::Log<$trait>) -> Self {
+					$name::$module(x)
+				}
+			}
+
+			impl DigestItem for $name {
+				$(
+					type $log_type_name = $log_type;
+
+					fn $as_log(&self) -> Option<&$log_type> {
+						match *self {
+							$name::$module(ref item) => item.$as_log(),
+						}
+					}
+				)*
+			}
+		)*
+	}
+}
