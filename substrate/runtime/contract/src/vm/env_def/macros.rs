@@ -21,7 +21,7 @@
 
 #[macro_export]
 macro_rules! convert_args {
-	() => ([]);
+	() => (vec![]);
 	( $( $t:ty ),* ) => ( vec![ $( { use $crate::vm::env_def::ConvertibleToWasm; <$t>::VALUE_TYPE }, )* ] );
 }
 
@@ -90,7 +90,7 @@ macro_rules! unmarshall_then_body_then_marshall {
 			unmarshall_then_body!($body, $ctx, $args_iter, $( $names : $params ),*)
 		});
 		let r = body()?;
-		return Ok(ReturnValue::Value({ use $crate::vm::env_def::ConvertibleToWasm; r.to_typed_value() }))
+		return Ok($crate::sandbox::ReturnValue::Value({ use $crate::vm::env_def::ConvertibleToWasm; r.to_typed_value() }))
 	});
 	( $args_iter:ident, $ctx:ident, ( $( $names:ident : $params:ty ),* ) => $body:tt ) => ({
 		let body = $crate::vm::env_def::macros::constrain_closure::<(), _>(|| {
@@ -103,7 +103,7 @@ macro_rules! unmarshall_then_body_then_marshall {
 
 #[macro_export]
 macro_rules! define_func {
-	( < E: $ext_ty:tt > $name:ident ( $ctx: ident, $($names:ident : $params:ty),*) $(-> $returns:ty)* => $body:tt ) => {
+	( < E: $ext_ty:tt > $name:ident ( $ctx: ident $(, $names:ident : $params:ty)*) $(-> $returns:ty)* => $body:tt ) => {
 		fn $name< E: $ext_ty >(
 			$ctx: &mut $crate::vm::Runtime<E>,
 			args: &[$crate::sandbox::TypedValue],
@@ -129,7 +129,7 @@ macro_rules! define_func {
 /// and reject the code if any imported function has a mismached signature.
 macro_rules! define_env {
 	( $init_name:ident , < E: $ext_ty:tt > ,
-		$( $name:ident ( $ctx:ident, $( $names:ident : $params:ty ),* )
+		$( $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
 			$( -> $returns:ty )* => $body:tt , )*
 	) => {
 		pub(crate) fn $init_name<E: Ext>() -> HostFunctionSet<E> {
@@ -142,7 +142,7 @@ macro_rules! define_env {
 						gen_signature!( ( $( $params ),* ) $( -> $returns )* ),
 						{
 							define_func!(
-								< E: $ext_ty > $name ( $ctx, $( $names : $params ),* ) $( -> $returns )* => $body
+								< E: $ext_ty > $name ( $ctx $(, $names : $params )* ) $( -> $returns )* => $body
 							);
 							$name::<E>
 						},

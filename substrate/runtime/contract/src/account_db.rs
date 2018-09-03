@@ -22,8 +22,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_support::StorageMap;
-use staking;
-use system;
+use {balances, system};
 
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -61,13 +60,13 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 		<CodeOf<T>>::get(account)
 	}
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
-		staking::Module::<T>::free_balance(account)
+		balances::Module::<T>::free_balance(account)
 	}
 	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
-				if let staking::UpdateBalanceOutcome::AccountKilled =
-					staking::Module::<T>::set_free_balance_creating(&address, balance)
+				if let balances::UpdateBalanceOutcome::AccountKilled =
+					balances::Module::<T>::set_free_balance_creating(&address, balance)
 				{
 					// Account killed. This will ultimately lead to calling `OnFreeBalanceZero` callback
 					// which will make removal of CodeOf and StorageOf for this account.

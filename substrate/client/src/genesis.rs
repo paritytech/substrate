@@ -57,7 +57,7 @@ mod tests {
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
 	fn executor() -> ::executor::NativeExecutor<Executor> {
-		NativeExecutionDispatch::with_heap_pages(8)
+		NativeExecutionDispatch::new()
 	}
 
 	fn construct_block(
@@ -210,7 +210,7 @@ mod tests {
 			&backend,
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
-			&Executor::with_heap_pages(8),
+			&Executor::new(),
 			"execute_block",
 			&b1data,
 			ExecutionStrategy::NativeWhenPossible,

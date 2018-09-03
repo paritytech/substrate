@@ -17,6 +17,7 @@ substrate-runtime-io = { path = "../../substrate/runtime-io" }
 substrate-runtime-support = { path = "../../substrate/runtime-support" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-keyring = { path = "../../substrate/keyring" }
+substrate-runtime-balances = { path = "../../substrate/runtime/balances" }
 substrate-runtime-consensus = { path = "../../substrate/runtime/consensus" }
 substrate-runtime-council = { path = "../../substrate/runtime/council" }
 substrate-runtime-democracy = { path = "../../substrate/runtime/democracy" }
@@ -37,6 +38,7 @@ std = [
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
+	"substrate-runtime-balances/std",
 	"substrate-runtime-consensus/std",
 	"substrate-runtime-council/std",
 	"substrate-runtime-democracy/std",

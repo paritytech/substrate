@@ -43,6 +43,7 @@ impl GenesisConfig {
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
 				(b":code"[..].into(), wasm_runtime),
+				(b":heappages"[..].into(), vec![].and(&(16 as u64))),
 				(b":auth:len"[..].into(), vec![].and(&(self.authorities.len() as u32))),
 			].into_iter())
 			.chain(self.authorities.iter()
