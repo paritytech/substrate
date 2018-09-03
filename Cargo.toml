@@ -24,6 +24,7 @@ members = [
 	"substrate/runtime/contract",
 	"substrate/runtime/council",
 	"substrate/runtime/democracy",
+	"substrate/runtime/example",
 	"substrate/runtime/executive",
 	"substrate/runtime/primitives",
 	"substrate/runtime/session",

@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Assert macros used in tests.
-#[cfg_attr(test, macro_use)]
+#[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_runtime_std;
 
 // Needed for tests (`with_externalities`).
