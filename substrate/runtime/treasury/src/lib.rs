@@ -348,7 +348,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
+	use substrate_primitives::{H256, KeccakHasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
@@ -382,18 +382,18 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 10)],
-			transaction_base_fee: T::Balance::sa(0),
-			transaction_byte_fee: T::Balance::sa(0),
-			transfer_fee: T::Balance::sa(0),
-			creation_fee: T::Balance::sa(0),
-			existential_deposit: T::Balance::sa(0),
-			reclaim_rebate: T::Balance::sa(0),
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
+			existential_deposit: 0,
+			reclaim_rebate: 0,
 		}.build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
-			proposal_bond: 50_000,	// 5%
+			proposal_bond: Permill(50_000),	// 5%
 			proposal_bond_minimum: 1,
 			spend_period: 2,
-			burn: 500_000,			// 50%
+			burn: Permill(500_000),			// 50%
 		}.build_storage().unwrap());
 		t.into()
 	}
@@ -402,11 +402,10 @@ mod tests {
 	fn it_works() {
 		with_externalities(&mut new_test_ext(), || {
 			// Check that GenesisBuilder works properly.
-			assert_eq!(Treasury::dummy(), Some(42));
-			assert_eq!(Treasury::proposal_bond(), 50_000);
+			assert_eq!(Treasury::proposal_bond(), Permill(50_000));
 			assert_eq!(Treasury::proposal_bond_minimum(), 1);
 			assert_eq!(Treasury::spend_period(), 2);
-			assert_eq!(Treasury::burn(), 500_000);
+			assert_eq!(Treasury::burn(), Permill(500_000));
 			assert_eq!(Treasury::pot(), 0);
 			assert_eq!(Treasury::proposal_count(), 0);
 
