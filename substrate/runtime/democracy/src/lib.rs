@@ -288,9 +288,9 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFinalise for Module<T> {
-	fn on_finalise() {
-		if let Err(e) = Self::end_block(<system::Module<T>>::block_number()) {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(n: T::BlockNumber) {
+		if let Err(e) = Self::end_block(n) {
 			runtime_io::print(e);
 		}
 	}

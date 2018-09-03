@@ -497,8 +497,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFinalise for Module<T> {
-	fn on_finalise() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 

@@ -271,8 +271,8 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 }
 
 /// Finalization hook for the smart-contract module.
-impl<T: Trait> OnFinalise for Module<T> {
-	fn on_finalise() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 		<GasSpent<T>>::kill();
 	}
 }

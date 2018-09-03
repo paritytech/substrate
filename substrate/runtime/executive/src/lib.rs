@@ -96,7 +96,7 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Lookup: AuxLookup<Source=Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
-	Finalisation: OnFinalise,
+	Finalisation: OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
 	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Codec,
 	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
@@ -135,7 +135,7 @@ impl<
 
 		// post-transactional book-keeping.
 		<system::Module<System>>::note_finished_extrinsics();
-		Finalisation::on_finalise();
+		Finalisation::on_finalise(header.number());
 
 		// any final checks
 		Self::final_checks(&header);
@@ -145,7 +145,7 @@ impl<
 	/// except state-root.
 	pub fn finalise_block() -> System::Header {
 		<system::Module<System>>::note_finished_extrinsics();
-		Finalisation::on_finalise();
+		Finalisation::on_finalise(<system::Module<System>>::block_number());
 
 		// setup extrinsics
 		<system::Module<System>>::derive_extrinsics();

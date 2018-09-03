@@ -264,8 +264,8 @@ impl<T: Trait> Module<T> {
 }
 
 // The trait expresses what should happen when the block is finalised.
-impl<T: Trait> OnFinalise for Module<T> {
-	fn on_finalise() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_: T::BlockNumber) {
 		// Anything that needs to be done at the end of the block.
 		// We just kill our dummy storage item.
 		<Dummy<T>>::kill();
@@ -374,7 +374,7 @@ mod tests {
 			assert_eq!(Treasury::dummy(), Some(69));
 			
 			// Check that finalising the block removes Dummy from storage.
-			<Treasury as OnFinalise>::on_finalise();
+			<Treasury as OnFinalise<u64>>::on_finalise(1);
 			assert_eq!(Treasury::dummy(), None);
 
 			// Check that accumulate works when we Dummy has None in it.

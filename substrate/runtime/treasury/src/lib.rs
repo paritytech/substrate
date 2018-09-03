@@ -92,11 +92,13 @@ decl_module! {
 type ProposalIndex = u32;
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq)]
-struct Proposal<AccountId: Member, Balance: Member> {
+struct Proposal<AccountId, Balance> {
 	proposer: AccountId,
 	beneficiary: AccountId,
 	value: Balance,
 }
+
+// NOTE: Perbill is parts-per-billion (i.e. multiply by this then divide by 1_000_000_000u32).
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
@@ -105,14 +107,20 @@ decl_storage! {
 
 		// Proportion of funds that should be bonded in order to place a proposal. An accepted
 		// proposal gets these back. A rejected proposal doesn't.
-		ProposalBondPercentage get(proposal_bond_percentage): u32;
+		ProposalBondPerbill get(proposal_bond_perbill): u32;
 		
 		// Proportion of funds that should be bonded in order to place a proposal. An accepted
 		// proposal gets these back. A rejected proposal doesn't.
 		ProposalBondMinimum get(proposal_bond_minimum): T::Balance;
 
 		// Proposals that have been made.
-		Proposals get(proposals): map [ ProposalIndex => (T::AccountId, T::AccountId, T::Balance) ];
+		Proposals get(proposals): map [ ProposalIndex => Proposal<T::AccountId, T::Balance> ];
+
+		// Period between successive spends.
+		SpendPeriod get(spend_period): T::BlockNumber;
+
+		// Percentage of spare funds (if any) that are burnt per spend period.
+		BurnPerbill get(burn_perbill): u32;
 	}
 }
 
@@ -126,18 +134,12 @@ pub type Event<T> = RawEvent<
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawEvent<Balance, AccountId> {
-	/// Some funds came in.
-	Revenue(Balance),
 	/// Spent some funds.
 	Spend(Balance, AccountId),
 	/// Burnt some funds.
 	Burn(Balance),
 }
 
-// By convention we implement any trait for which a "null implemntation" makes sense
-// for `()`. This is the case for conversion of module `Event` types and hook traits. It
-// is helpful for test code and production configurations where no eventing is necessary
-// or the hook is unused.
 impl<B, A> From<RawEvent<B, A>> for () {
 	fn from(_: RawEvent<B, A>) -> () { () }
 }
@@ -189,16 +191,15 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnMinted for Module<T> {
 	fn on_minted(b: T::Balance) {
-
+		<Pot<T>>::put(Self::pot() + b);
 	}
 }
 
-// The trait expresses what should happen when the block is finalised.
-impl<T: Trait> OnFinalise for Module<T> {
-	fn on_finalise() {
-		// Anything that needs to be done at the end of the block.
-		// We just kill our dummy storage item.
-		<Dummy<T>>::kill();
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(n: T::BlockNumber) {
+		// Check to see if we should spend some funds!
+		if 
+		
 	}
 }
 

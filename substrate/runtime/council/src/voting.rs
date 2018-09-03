@@ -200,9 +200,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFinalise for Council<T> {
-	fn on_finalise() {
-		let n = <system::Module<T>>::block_number();
+impl<T: Trait> OnFinalise<T::BlockNumber> for Council<T> {
+	fn on_finalise(n: T::BlockNumber) {
 		if let Err(e) = Self::end_block(n) {
 			print("Guru meditation");
 			print(e);

@@ -182,16 +182,16 @@ impl<T:
 
 /// The block finalisation trait. Implementing this lets you express what should happen
 /// for your module when the block is ending.
-pub trait OnFinalise {
+pub trait OnFinalise<BlockNumber> {
 	/// The block is being finalised. Implement to have something happen.
-	fn on_finalise() {}
+	fn on_finalise(_n: BlockNumber) {}
 }
 
-impl OnFinalise for () {}
-impl<A: OnFinalise, B: OnFinalise> OnFinalise for (A, B) {
-	fn on_finalise() {
-		A::on_finalise();
-		B::on_finalise();
+impl<N> OnFinalise<N> for () {}
+impl<N: Copy, A: OnFinalise<N>, B: OnFinalise<N>> OnFinalise<N> for (A, B) {
+	fn on_finalise(n: N) {
+		A::on_finalise(n);
+		B::on_finalise(n);
 	}
 }
 

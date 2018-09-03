@@ -101,8 +101,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFinalise for Module<T> {
-	fn on_finalise() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 		assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 	}
 }
