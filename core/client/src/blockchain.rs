@@ -57,7 +57,8 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	/// Returns block hashes for all blocks that are leaves of the block tree.
 	/// in other words that have no children, are chain heads.
 	/// Results must be ordered best (longest) chain first.
-	fn leaf_hashes(&self) -> Result<Vec<Block::Hash>>;
+	/// TODO [snd] determine whether best to return hashes, ids or blocks
+	fn leaves(&self) -> Result<Vec<Block::Hash>>;
 }
 
 /// Blockchain optional data cache.
