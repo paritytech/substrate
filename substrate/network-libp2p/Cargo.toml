@@ -11,8 +11,7 @@ bytes = "0.4"
 error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
-# libp2p = { git = "https://github.com/tomaka/libp2p-rs", branch = "polkadot-2", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
-libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "6aa139a12dbea3d75d898ce0b2af7fcec129e294", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "02576eecf140a06134519ed9438d061d99bb2e69", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
 ethcore-io = { git = "https://github.com/paritytech/parity.git" }
 ethkey = { git = "https://github.com/paritytech/parity.git" }
 ethereum-types = "0.3"
@@ -20,10 +19,13 @@ parking_lot = "0.5"
 libc = "0.2"
 log = "0.3"
 rand = "0.5.0"
+serde = "1.0.70"
+serde_derive = "1.0.70"
+serde_json = "1.0.24"
 tokio = "0.1"
 tokio-io = "0.1"
 tokio-timer = "0.2"
-unsigned-varint = { version = "0.1", features = ["codec"] }
+unsigned-varint = { version = "0.2", features = ["codec"] }
 
 [dev-dependencies]
 assert_matches = "1.2"

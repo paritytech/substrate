@@ -31,7 +31,6 @@
 //!
 //! Failures are typically not cascading. That, for example, means that if contract A calls B and B errors
 //! somehow, then A can decide if it should proceed or error.
-//! TODO: That is not the case now, since call/create externalities traps on any error now.
 //!
 //! # Interaction with the system
 //!
@@ -49,7 +48,7 @@
 //! exsistential deposit) then it reaps the account. That will lead to deletion of the associated
 //! code and storage of the account.
 //!
-//! [`Module::execute`]: struct.Module.html#impl-Executable
+//! [`Module::execute`]: struct.Module.html#impl-OnFinalise
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -70,14 +69,8 @@ extern crate substrate_runtime_sandbox as sandbox;
 #[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_runtime_std as rstd;
 
-extern crate substrate_runtime_consensus as consensus;
-extern crate substrate_runtime_staking as staking;
+extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_system as system;
-
-#[cfg(test)]
-extern crate substrate_runtime_timestamp as timestamp;
-#[cfg(test)]
-extern crate substrate_runtime_session as session;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
@@ -108,11 +101,11 @@ use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
 use codec::Codec;
-use runtime_primitives::traits::{As, RefInto, SimpleArithmetic, Executable};
+use runtime_primitives::traits::{As, RefInto, SimpleArithmetic, OnFinalise};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
 
-pub trait Trait: system::Trait + staking::Trait + consensus::Trait {
+pub trait Trait: balances::Trait {
 	/// Function type to get the contract address given the creator.
 	type DetermineContractAddress: ContractAddressFor<Self::AccountId>;
 
@@ -150,25 +143,25 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
+	trait Store for Module<T: Trait> as Contract {
+		// The fee required to create a contract. At least as big as staking's ReclaimRebate.
+		ContractFee get(contract_fee): required T::Balance;
+		// The fee charged for a call into a contract.
+		CallBaseFee get(call_base_fee): required T::Gas;
+		// The fee charged for a create of a contract.
+		CreateBaseFee get(create_base_fee): required T::Gas;
+		// The price of one unit of gas.
+		GasPrice get(gas_price): required T::Balance;
+		// The maximum nesting level of a call/create stack.
+		MaxDepth get(max_depth): required u32;
+		// The maximum amount of gas that could be expended per block.
+		BlockGasLimit get(block_gas_limit): required T::Gas;
+		// Gas spent so far in this block.
+		GasSpent get(gas_spent): default T::Gas;
 
-	// The fee required to create a contract. At least as big as staking's ReclaimRebate.
-	ContractFee get(contract_fee): b"con:contract_fee" => required T::Balance;
-	// The fee charged for a call into a contract.
-	CallBaseFee get(call_base_fee): b"con:base_call_fee" => required T::Gas;
-	// The fee charged for a create of a contract.
-	CreateBaseFee get(create_base_fee): b"con:base_create_fee" => required T::Gas;
-	// The price of one unit of gas.
-	GasPrice get(gas_price): b"con:gas_price" => required T::Balance;
-	// The maximum nesting level of a call/create stack.
-	MaxDepth get(max_depth): b"con:max_depth" => required u32;
-	// The maximum amount of gas that could be expended per block.
-	BlockGasLimit get(block_gas_limit): b"con:block_gas_limit" => required T::Gas;
-	// Gas spent so far in this block.
-	GasSpent get(gas_spent): b"con:gas_spent" => default T::Gas;
-
-	// The code associated with an account.
-	CodeOf: b"con:cod:" => default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+		// The code associated with an account.
+		pub CodeOf: default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+	}
 }
 
 // TODO: consider storing upper-bound for contract's gas limit in fixed-length runtime
@@ -188,7 +181,7 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> Module<T> {
 	/// Make a call to a specified account, optionally transferring some balance.
 	fn call(
-		aux: &<T as consensus::Trait>::PublicAux,
+		aux: &<T as system::Trait>::PublicAux,
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_limit: T::Gas,
@@ -233,7 +226,7 @@ impl<T: Trait> Module<T> {
 	///   after the execution is saved as the `code` of the account. That code will be invoked
 	///   upon any message received by this account.
 	fn create(
-		aux: &<T as consensus::Trait>::PublicAux,
+		aux: &<T as system::Trait>::PublicAux,
 		endowment: T::Balance,
 		gas_limit: T::Gas,
 		ctor_code: Vec<u8>,
@@ -269,7 +262,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> staking::OnFreeBalanceZero<T::AccountId> for Module<T> {
+impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());
@@ -277,8 +270,8 @@ impl<T: Trait> staking::OnFreeBalanceZero<T::AccountId> for Module<T> {
 }
 
 /// Finalization hook for the smart-contract module.
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 		<GasSpent<T>>::kill();
 	}
 }

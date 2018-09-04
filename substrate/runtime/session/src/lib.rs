@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Session manager: is told the validators and allows them to manage their session keys for the
 //! consensus module.
@@ -49,7 +49,7 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, Executable, Convert, As};
+use primitives::traits::{Zero, One, RefInto, OnFinalise, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 
@@ -103,30 +103,27 @@ impl<N> From<RawEvent<N>> for () {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
+	trait Store for Module<T: Trait> as Session {
 
-	// The current set of validators.
-	pub Validators get(validators): b"ses:val" => required Vec<T::AccountId>;
-	// Current length of the session.
-	pub SessionLength get(length): b"ses:len" => required T::BlockNumber;
-	// Current index of the session.
-	pub CurrentIndex get(current_index): b"ses:ind" => required T::BlockNumber;
-	// Timestamp when current session started.
-	pub CurrentStart get(current_start): b"ses:current_start" => required T::Moment;
+		// The current set of validators.
+		pub Validators get(validators): required Vec<T::AccountId>;
+		// Current length of the session.
+		pub SessionLength get(length): required T::BlockNumber;
+		// Current index of the session.
+		pub CurrentIndex get(current_index): required T::BlockNumber;
+		// Timestamp when current session started.
+		pub CurrentStart get(current_start): required T::Moment;
 
-	// Opinions of the current validator set about the activeness of their peers.
-	// Gets cleared when the validator set changes.
-	pub BadValidators get(bad_validators): b"ses:bad_validators" => Vec<T::AccountId>;
-
-	// New session is being forced is this entry exists; in which case, the boolean value is whether
-	// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
-	pub ForcingNewSession get(forcing_new_session): b"ses:forcing_new_session" => bool;
-	// Block at which the session length last changed.
-	LastLengthChange: b"ses:llc" => T::BlockNumber;
-	// The next key for a given validator.
-	NextKeyFor: b"ses:nxt:" => map [ T::AccountId => T::SessionKey ];
-	// The next session length.
-	NextSessionLength: b"ses:nln" => T::BlockNumber;
+		// New session is being forced is this entry exists; in which case, the boolean value is whether
+		// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
+		pub ForcingNewSession get(forcing_new_session): bool;
+		// Block at which the session length last changed.
+		LastLengthChange: T::BlockNumber;
+		// The next key for a given validator.
+		NextKeyFor: map [ T::AccountId => T::SessionKey ];
+		// The next session length.
+		NextSessionLength: T::BlockNumber;
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -174,11 +171,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Hook to be called after transaction processing.
-	pub fn check_rotate_session() {
+	pub fn check_rotate_session(block_number: T::BlockNumber) {
 		// do this last, after the staking system has had chance to switch out the authorities for the
 		// new set.
 		// check block number and call next_session if necessary.
-		let block_number = <system::Module<T>>::block_number();
 		let is_final_block = ((block_number - Self::last_length_change()) % Self::length()).is_zero();
 		let (should_end_session, apply_rewards) = <ForcingNewSession<T>>::take()
 			.map_or((is_final_block, is_final_block), |apply_rewards| (true, apply_rewards));
@@ -244,9 +240,9 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
-		Self::check_rotate_session();
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(n: T::BlockNumber) {
+		Self::check_rotate_session(n);
 	}
 }
 
@@ -292,19 +288,18 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
+	use primitives::traits::{Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
 	impl consensus::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
+		type OnOfflineValidator = ();
 	}
 	impl system::Trait for Test {
+		type PublicAux = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -326,7 +321,6 @@ mod tests {
 
 	type System = system::Module<Test>;
 	type Consensus = consensus::Module<Test>;
-	type Timestamp = timestamp::Module<Test>;
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
@@ -360,28 +354,28 @@ mod tests {
 			System::set_block_number(1);
 			assert_ok!(Session::set_length(10));
 			assert_eq!(Session::blocks_remaining(), 1);
-			Session::check_rotate_session();
+			Session::check_rotate_session(1);
 
 			System::set_block_number(2);
 			assert_eq!(Session::blocks_remaining(), 0);
-			Session::check_rotate_session();
+			Session::check_rotate_session(2);
 			assert_eq!(Session::length(), 10);
 
 			System::set_block_number(7);
 			assert_eq!(Session::current_index(), 1);
 			assert_eq!(Session::blocks_remaining(), 5);
 			assert_ok!(Session::force_new_session(false));
-			Session::check_rotate_session();
+			Session::check_rotate_session(7);
 
 			System::set_block_number(8);
 			assert_eq!(Session::current_index(), 2);
 			assert_eq!(Session::blocks_remaining(), 9);
-			Session::check_rotate_session();
+			Session::check_rotate_session(8);
 
 			System::set_block_number(17);
 			assert_eq!(Session::current_index(), 2);
 			assert_eq!(Session::blocks_remaining(), 0);
-			Session::check_rotate_session();
+			Session::check_rotate_session(17);
 
 			System::set_block_number(18);
 			assert_eq!(Session::current_index(), 3);
@@ -394,45 +388,45 @@ mod tests {
 			// Block 1: Change to length 3; no visible change.
 			System::set_block_number(1);
 			assert_ok!(Session::set_length(3));
-			Session::check_rotate_session();
+			Session::check_rotate_session(1);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
 			System::set_block_number(2);
 			assert_ok!(Session::set_length(3));
-			Session::check_rotate_session();
+			Session::check_rotate_session(2);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
 
 			// Block 3: Length now changed to 3. Index incremented.
 			System::set_block_number(3);
-			Session::check_rotate_session();
+			Session::check_rotate_session(3);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
 
 			// Block 4: Change to length 2; no visible change.
 			System::set_block_number(4);
 			assert_ok!(Session::set_length(2));
-			Session::check_rotate_session();
+			Session::check_rotate_session(4);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
 
 			// Block 5: Length now changed to 2. Index incremented.
 			System::set_block_number(5);
-			Session::check_rotate_session();
+			Session::check_rotate_session(5);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 2);
 
 			// Block 6: No change.
 			System::set_block_number(6);
-			Session::check_rotate_session();
+			Session::check_rotate_session(6);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 2);
 
 			// Block 7: Next index.
 			System::set_block_number(7);
-			Session::check_rotate_session();
+			Session::check_rotate_session(7);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 3);
 		});
@@ -443,12 +437,12 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: No change
 			System::set_block_number(1);
-			Session::check_rotate_session();
+			Session::check_rotate_session(1);
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			// Block 2: Session rollover, but no change.
 			System::set_block_number(2);
-			Session::check_rotate_session();
+			Session::check_rotate_session(2);
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			// Block 3: Set new key for validator 2; no visible change.
@@ -456,12 +450,12 @@ mod tests {
 			assert_ok!(Session::set_key(&2, 5));
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
-			Session::check_rotate_session();
+			Session::check_rotate_session(3);
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			// Block 4: Session rollover, authority 2 changes.
 			System::set_block_number(4);
-			Session::check_rotate_session();
+			Session::check_rotate_session(4);
 			assert_eq!(Consensus::authorities(), vec![1, 5, 3]);
 		});
 	}

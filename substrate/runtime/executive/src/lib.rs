@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Executive: Handles all of the top-level stuff; essentially just executing blocks/extrinsics.
 
@@ -54,12 +54,15 @@ extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_session as session;
 
 #[cfg(test)]
+extern crate substrate_runtime_balances as balances;
+
+#[cfg(test)]
 extern crate substrate_runtime_staking as staking;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
-use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, Executable,
+use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
 	MakePayment, Hash, AuxLookup};
 use codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -93,7 +96,7 @@ impl<
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
 	Lookup: AuxLookup<Source=Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
-	Finalisation: Executable,
+	Finalisation: OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
 	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Codec,
 	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
@@ -132,7 +135,7 @@ impl<
 
 		// post-transactional book-keeping.
 		<system::Module<System>>::note_finished_extrinsics();
-		Finalisation::execute();
+		Finalisation::on_finalise(*header.number());
 
 		// any final checks
 		Self::final_checks(&header);
@@ -142,7 +145,7 @@ impl<
 	/// except state-root.
 	pub fn finalise_block() -> System::Header {
 		<system::Module<System>>::note_finished_extrinsics();
-		Finalisation::execute();
+		Finalisation::on_finalise(<system::Module<System>>::block_number());
 
 		// setup extrinsics
 		<system::Module<System>>::derive_extrinsics();
@@ -202,7 +205,7 @@ impl<
 		// decode parameters and dispatch
 		let r = xt.apply();
 
-		<system::Module<System>>::note_applied_extrinsic();
+		<system::Module<System>>::note_applied_extrinsic(&r);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))
 	}
@@ -224,12 +227,13 @@ impl<
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use staking::Call;
+	use balances::Call;
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
+	use primitives::traits::{Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
+	use system;
 
 	struct NullLookup;
 	impl AuxLookup for NullLookup {
@@ -242,21 +246,27 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Test {
-			session, staking
+			balances, session, staking
 		}
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
 	impl consensus::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
+		const NOTE_OFFLINE_POSITION: u32 = 1;
 		type SessionKey = u64;
+		type OnOfflineValidator = staking::Module<Test>;
+	}
+	impl balances::Trait for Test {
+		type Balance = u64;
+		type AccountIndex = u64;
+		type OnFreeBalanceZero = staking::Module<Test>;
+		type EnsureAccountLiquid = staking::Module<Test>;
+		type Event = MetaEvent;
 	}
 	impl system::Trait for Test {
+		type PublicAux = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = substrate_primitives::H256;
@@ -272,10 +282,7 @@ mod tests {
 		type Event = MetaEvent;
 	}
 	impl staking::Trait for Test {
-		const NOTE_MISSED_PROPOSAL_POSITION: u32 = 1;
-		type Balance = u64;
-		type AccountIndex = u64;
-		type OnFreeBalanceZero = ();
+		type OnRewardMinted = ();
 		type Event = MetaEvent;
 	}
 	impl timestamp::Trait for Test {
@@ -284,25 +291,27 @@ mod tests {
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Test>>;
-	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, staking::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
+	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, balances::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
 
 	#[test]
 	fn staking_balance_transfer_dispatch_works() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(staking::GenesisConfig::<Test> {
-			sessions_per_era: 0,
-			current_era: 0,
+		t.extend(balances::GenesisConfig::<Test> {
 			balances: vec![(1, 111)],
-			intentions: vec![],
-			validator_count: 0,
-			minimum_validator_count: 0,
-			bonding_duration: 0,
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
+		}.build_storage().unwrap());
+		t.extend(staking::GenesisConfig::<Test> {
+			sessions_per_era: 0,
+			current_era: 0,
+			intentions: vec![],
+			validator_count: 0,
+			minimum_validator_count: 0,
+			bonding_duration: 0,
 			early_era_slash: 0,
 			session_reward: 0,
 			offline_slash_grace: 0,
@@ -312,13 +321,14 @@ mod tests {
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt).unwrap();
-			assert_eq!(<staking::Module<Test>>::voting_balance(&1), 32);
-			assert_eq!(<staking::Module<Test>>::voting_balance(&2), 69);
+			assert_eq!(<balances::Module<Test>>::total_balance(&1), 32);
+			assert_eq!(<balances::Module<Test>>::total_balance(&2), 69);
 		});
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(consensus::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(session::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(staking::GenesisConfig::<Test>::default().build_storage().unwrap());
@@ -336,7 +346,7 @@ mod tests {
 					// Blake
 					// state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
 					// Keccak
-					state_root: hex!("246ea6d86eefe3fc32f746fdcb1749a5f245570c70a04b43d08b5defac44505a").into(),
+					state_root: hex!("ffe27b4c3a8b421fa10592be61fb28eca7ebbe04cbfa99cdda9f703f35522569").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -370,7 +380,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("246ea6d86eefe3fc32f746fdcb1749a5f245570c70a04b43d08b5defac44505a").into(),
+					state_root: hex!("ffe27b4c3a8b421fa10592be61fb28eca7ebbe04cbfa99cdda9f703f35522569").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

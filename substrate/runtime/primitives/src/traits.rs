@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Primitives for the runtime modules.
 
@@ -104,8 +104,7 @@ pub struct Identity;
 impl<T> Convert<T, T> for Identity {
 	fn convert(a: T) -> T { a }
 }
-pub struct Empty;
-impl<T> Convert<T, ()> for Empty {
+impl<T> Convert<T, ()> for () {
 	fn convert(_: T) -> () { () }
 }
 
@@ -117,10 +116,6 @@ impl<T: Default + PartialEq> MaybeEmpty for T {
 	fn is_empty(&self) -> bool {
 		*self == T::default()
 	}
-}
-
-pub trait HasPublicAux {
-	type PublicAux: MaybeEmpty;
 }
 
 pub trait RefInto<T> {
@@ -185,18 +180,18 @@ impl<T:
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
-/// Something that can be executed.
-pub trait Executable {
-	fn execute();
+/// The block finalisation trait. Implementing this lets you express what should happen
+/// for your module when the block is ending.
+pub trait OnFinalise<BlockNumber> {
+	/// The block is being finalised. Implement to have something happen.
+	fn on_finalise(_n: BlockNumber) {}
 }
 
-impl Executable for () {
-	fn execute() {}
-}
-impl<A: Executable, B: Executable> Executable for (A, B) {
-	fn execute() {
-		A::execute();
-		B::execute();
+impl<N> OnFinalise<N> for () {}
+impl<N: Copy, A: OnFinalise<N>, B: OnFinalise<N>> OnFinalise<N> for (A, B) {
+	fn on_finalise(n: N) {
+		A::on_finalise(n);
+		B::on_finalise(n);
 	}
 }
 

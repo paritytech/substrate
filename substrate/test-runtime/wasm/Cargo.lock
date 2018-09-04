@@ -661,6 +661,7 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.2.1 (git+https://github.com/paritytech/parity-common)",
  "rlp 0.2.1 (git+https://github.com/paritytech/parity-common)",
+ "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "triehash 0.2.0 (git+https://github.com/paritytech/parity-common)",
 ]

@@ -25,6 +25,15 @@ extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+#[cfg(test)]
+#[macro_use]
+extern crate serde_derive;
+#[cfg(test)]
+extern crate serde_json;
+
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
 pub use self::storage::generator::Storage as GenericStorage;
@@ -93,9 +102,15 @@ macro_rules! impl_outer_event {
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum $name {
+			system(system::Event),
 			$(
 				$module($module::Event<$trait>),
 			)*
+		}
+		impl From<system::Event> for $name {
+			fn from(x: system::Event) -> Self {
+				$name::system(x)
+			}
 		}
 		$(
 			impl From<$module::Event<$trait>> for $name {

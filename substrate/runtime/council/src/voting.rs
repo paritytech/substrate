@@ -1,24 +1,24 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Council voting system.
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::traits::{Executable, RefInto, Hash};
+use primitives::traits::{OnFinalise, RefInto, Hash};
 use runtime_io::print;
 use substrate_runtime_support::dispatch::Result;
 use substrate_runtime_support::{StorageValue, StorageMap, IsSubType};
@@ -43,15 +43,15 @@ decl_module! {
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
-
-	pub CooloffPeriod get(cooloff_period): b"cov:cooloff" => required T::BlockNumber;
-	pub VotingPeriod get(voting_period): b"cov:period" => required T::BlockNumber;
-	pub Proposals get(proposals): b"cov:prs" => required Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
-	pub ProposalOf get(proposal_of): b"cov:pro" => map [ T::Hash => T::Proposal ];
-	pub ProposalVoters get(proposal_voters): b"cov:voters:" => default map [ T::Hash => Vec<T::AccountId> ];
-	pub CouncilVoteOf get(vote_of): b"cov:vote:" => map [ (T::Hash, T::AccountId) => bool ];
-	pub VetoedProposal get(veto_of): b"cov:veto:" => map [ T::Hash => (T::BlockNumber, Vec<T::AccountId>) ];
+	trait Store for Module<T: Trait> as CouncilVoting {
+		pub CooloffPeriod get(cooloff_period): required T::BlockNumber;
+		pub VotingPeriod get(voting_period): required T::BlockNumber;
+		pub Proposals get(proposals): required Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
+		pub ProposalOf get(proposal_of): map [ T::Hash => T::Proposal ];
+		pub ProposalVoters get(proposal_voters): default map [ T::Hash => Vec<T::AccountId> ];
+		pub CouncilVoteOf get(vote_of): map [ (T::Hash, T::AccountId) => bool ];
+		pub VetoedProposal get(veto_of): map [ T::Hash => (T::BlockNumber, Vec<T::AccountId>) ];
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -200,9 +200,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Council<T> {
-	fn execute() {
-		let n = <system::Module<T>>::block_number();
+impl<T: Trait> OnFinalise<T::BlockNumber> for Council<T> {
+	fn on_finalise(n: T::BlockNumber) {
 		if let Err(e) = Self::end_block(n) {
 			print("Guru meditation");
 			print(e);
@@ -227,7 +226,7 @@ mod tests {
 	fn basic_environment_works() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			assert_eq!(Staking::bonding_duration(), 0);
+			assert_eq!(Balances::free_balance(&42), 0);
 			assert_eq!(CouncilVoting::cooloff_period(), 2);
 			assert_eq!(CouncilVoting::voting_period(), 1);
 			assert_eq!(CouncilVoting::will_still_be_councillor_at(&1, 1), true);
@@ -243,8 +242,8 @@ mod tests {
 		});
 	}
 
-	fn bonding_duration_proposal(value: u64) -> Proposal {
-		Proposal::Staking(staking::PrivCall::set_bonding_duration(value))
+	fn set_balance_proposal(value: u64) -> Proposal {
+		Proposal::Balances(balances::PrivCall::set_balance(balances::address::Address::Id(42), value, 0))
 	}
 
 	fn cancel_referendum_proposal(id: u32) -> Proposal {
@@ -255,7 +254,7 @@ mod tests {
 	fn referendum_cancellation_should_work_when_unanimous() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove), 0);
 			assert_eq!(Democracy::active_referendums(), vec![(0, 4, proposal, VoteThreshold::SuperMajorityApprove)]);
 
@@ -270,7 +269,7 @@ mod tests {
 			System::set_block_number(2);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(Democracy::active_referendums(), vec![]);
-			assert_eq!(Staking::bonding_duration(), 0);
+			assert_eq!(Balances::free_balance(&42), 0);
 		});
 	}
 
@@ -278,7 +277,7 @@ mod tests {
 	fn referendum_cancellation_should_fail_when_not_unanimous() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove), 0);
 
 			let cancellation = cancel_referendum_proposal(0);
@@ -298,7 +297,7 @@ mod tests {
 	fn referendum_cancellation_should_fail_when_abstentions() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			assert_ok!(Democracy::internal_start_referendum(proposal.clone(), VoteThreshold::SuperMajorityApprove), 0);
 
 			let cancellation = cancel_referendum_proposal(0);
@@ -317,7 +316,7 @@ mod tests {
 	fn veto_should_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
 			assert_ok!(CouncilVoting::propose(&1, Box::new(proposal.clone())));
 			assert_ok!(CouncilVoting::veto(&2, hash));
@@ -330,7 +329,7 @@ mod tests {
 	fn double_veto_should_not_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
 			assert_ok!(CouncilVoting::propose(&1, Box::new(proposal.clone())));
 			assert_ok!(CouncilVoting::veto(&2, hash));
@@ -345,7 +344,7 @@ mod tests {
 	fn retry_in_cooloff_should_not_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
 			assert_ok!(CouncilVoting::propose(&1, Box::new(proposal.clone())));
 			assert_ok!(CouncilVoting::veto(&2, hash));
@@ -359,7 +358,7 @@ mod tests {
 	fn retry_after_cooloff_should_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
 			assert_ok!(CouncilVoting::propose(&1, Box::new(proposal.clone())));
 			assert_ok!(CouncilVoting::veto(&2, hash));
@@ -373,7 +372,7 @@ mod tests {
 			System::set_block_number(4);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
-			assert_eq!(Democracy::active_referendums(), vec![(0, 7, bonding_duration_proposal(42), VoteThreshold::SimpleMajority)]);
+			assert_eq!(Democracy::active_referendums(), vec![(0, 7, set_balance_proposal(42), VoteThreshold::SimpleMajority)]);
 		});
 	}
 
@@ -381,7 +380,7 @@ mod tests {
 	fn alternative_double_veto_should_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
 			assert_ok!(CouncilVoting::propose(&1, Box::new(proposal.clone())));
 			assert_ok!(CouncilVoting::veto(&2, hash));
@@ -398,7 +397,7 @@ mod tests {
 	fn simple_propose_should_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
 			assert_ok!(CouncilVoting::propose(&1, Box::new(proposal.clone())));
 			assert_eq!(CouncilVoting::proposals().len(), 1);
@@ -412,7 +411,7 @@ mod tests {
 	fn unvoted_proposal_should_expire_without_action() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			assert_ok!(CouncilVoting::propose(&1, Box::new(proposal.clone())));
 			assert_eq!(CouncilVoting::tally(&proposal.blake2_256().into()), (1, 0, 2));
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
@@ -428,7 +427,7 @@ mod tests {
 	fn unanimous_proposal_should_expire_with_biased_referendum() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			assert_ok!(CouncilVoting::propose(&1, Box::new(proposal.clone())));
 			assert_ok!(CouncilVoting::vote(&2, proposal.blake2_256().into(), true));
 			assert_ok!(CouncilVoting::vote(&3, proposal.blake2_256().into(), true));
@@ -446,7 +445,7 @@ mod tests {
 	fn majority_proposal_should_expire_with_unbiased_referendum() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			assert_ok!(CouncilVoting::propose(&1, Box::new(proposal.clone())));
 			assert_ok!(CouncilVoting::vote(&2, proposal.blake2_256().into(), true));
 			assert_ok!(CouncilVoting::vote(&3, proposal.blake2_256().into(), false));
@@ -464,7 +463,7 @@ mod tests {
 	fn propose_by_public_should_not_work() {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
-			let proposal = bonding_duration_proposal(42);
+			let proposal = set_balance_proposal(42);
 			assert_noop!(CouncilVoting::propose(&4, Box::new(proposal)), "proposer would not be on council");
 		});
 	}
