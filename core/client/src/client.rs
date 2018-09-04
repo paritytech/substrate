@@ -730,24 +730,25 @@ impl<B, E, Block> Client<B, E, Block> where
 	pub fn best_chain_containing_block_hash(&self, target_hash: Block::Hash) -> error::Result<Block::Hash> {
 		let target_header = self.backend.blockchain().header(BlockId::Hash(target_hash))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", target_hash)))?;
 
-		let canonical_hash = self.backend.blockchain().info()?.best_hash;
+		// let best_hash = self.backend.blockchain().info()?.best_hash;
 
 		// TODO [snd] is there a better way to do this?
 		// TODO [snd] panic here?
-		let is_target_in_canonical_chain = self.backend.blockchain().hash(*target_header.number())?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))? == target_hash;
-
-		if is_target_in_canonical_chain {
-			return Ok(canonical_hash);
-		}
+		// let is_target_in_best_chain = self.backend.blockchain().hash(*target_header.number())?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))? == target_hash;
+        //
+		// if is_target_in_best_chain {
+		// 	println!("target {:?} is in best chain", target_hash);
+		// 	return Ok(best_hash);
+		// }
 		
 		let leaves = self.backend.blockchain().leaves()?;
 
 		// for each chain. longest chain first. shortest last
 		for leaf_hash in leaves {
-			if leaf_hash == canonical_hash {
-				// we already checked the canonical chain above (`is_target_in_canonical_chain`)
-				continue;
-			}
+			// if leaf_hash == best_hash {
+			// 	// we already checked the best chain above (`is_target_in_best_chain`)
+			// 	continue;
+			// }
 			// start at the leaf
 			let mut current_hash = leaf_hash;
 			// go backwards (via parent links)
@@ -760,14 +761,21 @@ impl<B, E, Block> Client<B, E, Block> where
 
 				// ...or go below its block number
 				if current_header.number() < target_header.number() {
-					continue;
+					break;
 				}
+
+				// TODO [snd] is this really needed?
+				// if *current_header.number() == Zero::zero() {
+				// 	// ended up at genesis block. not found in this chain
+				// 	break;
+				// }
 
 				current_hash = *current_header.parent_hash();
 			}
 		}
 
 		// `target_hash` not found in any chain
+		// TODO [snd] replace by returning error or None
 		unreachable!();
 
 		// TODO [snd] test with:
@@ -1082,6 +1090,7 @@ mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_hash, block_d.hash());
 
+		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(client.info().unwrap().chain.genesis_hash).unwrap());
 		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_a.hash().clone()).unwrap());
 		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_b.hash().clone()).unwrap());
 		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_c.hash().clone()).unwrap());
