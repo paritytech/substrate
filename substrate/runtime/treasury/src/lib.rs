@@ -164,7 +164,7 @@ pub enum RawEvent<Balance, AccountId> {
 	/// We have ended a spend period and will now allocate funds.
 	Spending(Balance),
 	/// Some funds have been allocated.
-	Awareded(ProposalIndex, Balance, AccountId),
+	Awarded(ProposalIndex, Balance, AccountId),
 	/// Some of our funds have been burnt.
 	Burnt(Balance),
 	/// Spending has finished; this is the amount that rolls over until next spend.
@@ -254,7 +254,7 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
 
 		let mut missed_any = false;
-		let remaining_approvals: Vec<_> = <Approvals<T>>::get().into_iter().filter(|index| {
+		let remaining_approvals: Vec<_> = <Approvals<T>>::get().into_iter().filter(|&index| {
 			// Should always be true, but shouldn't panic if false or we're screwed.
 			if let Some(p) = Self::proposals(index) {
 				if p.value <= budget_remaining {
