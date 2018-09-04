@@ -23,8 +23,8 @@ use libp2p::multiaddr::{AddrComponent, Multiaddr};
 use libp2p::kad::{KadSystem, KadConnecConfig, KadSystemConfig};
 use libp2p::kad::{KadIncomingRequest, KadConnecController, KadPeer};
 use libp2p::kad::{KadConnectionType, KadQueryEvent};
-use libp2p::identify::{IdentifyInfo, IdentifyOutput, IdentifyTransportOutcome};
-use libp2p::identify::{IdentifyProtocolConfig, PeerIdTransport};
+use libp2p::identify::{IdentifyInfo, IdentifyOutput, IdentifySender};
+use libp2p::identify::{IdentifyProtocolConfig};
 use libp2p::core::{upgrade, Transport, MuxedTransport, ConnectionUpgrade};
 use libp2p::core::{Endpoint, PeerId as PeerstorePeerId, PublicKey};
 use libp2p::core::{SwarmController, UniqueConnecState};
@@ -38,7 +38,7 @@ use std::sync::Arc;
 use std::sync::mpsc as sync_mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use futures::{future, Future, Stream, IntoFuture};
+use futures::{future, Future, stream, Stream};
 use futures::sync::{mpsc, oneshot};
 use tokio::runtime::current_thread;
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -46,7 +46,7 @@ use tokio_timer::{Interval, Deadline};
 
 use custom_proto::{RegisteredProtocol, RegisteredProtocols};
 use custom_proto::RegisteredProtocolOutput;
-use network_state::NetworkState;
+use network_state::{NetworkState, PeriodicUpdate};
 use timeouts;
 use transport;
 
@@ -90,7 +90,7 @@ struct Shared {
 	/// Original address from the configuration, after being adjusted by the `Transport`.
 	// TODO: because we create the `Shared` before starting to listen, this
 	// has to be set later ; sort this out
-	original_listened_addr: RwLock<Option<Multiaddr>>,
+	original_listened_addr: RwLock<Vec<Multiaddr>>,
 
 	/// Contains the addresses we known about ourselves.
 	listened_addrs: RwLock<Vec<Multiaddr>>,
@@ -110,7 +110,7 @@ impl NetworkService {
 		let local_peer_id = network_state.local_public_key().clone()
 			.into_peer_id();
 		for mut addr in config.listen_addresses.iter().cloned() {
-			addr.append(AddrComponent::P2P(local_peer_id.clone().into_bytes()));
+			addr.append(AddrComponent::P2P(local_peer_id.clone().into()));
 			info!(target: "sub-libp2p", "Local node address is: {}", addr);
 		}
 
@@ -119,7 +119,7 @@ impl NetworkService {
 			local_peer_id: local_peer_id.clone(),
 			kbuckets_timeout: Duration::from_secs(600),
 			request_timeout: Duration::from_secs(10),
-			known_initial_peers: network_state.known_peers(),
+			known_initial_peers: network_state.known_peers().into_iter(),
 		});
 
 		// Channel we use to signal success or failure of the bg thread
@@ -143,7 +143,7 @@ impl NetworkService {
 			kad_upgrade: KadConnecConfig::new(),
 			config,
 			timeouts_register_tx,
-			original_listened_addr: RwLock::new(None),
+			original_listened_addr: RwLock::new(Vec::new()),
 			listened_addrs: RwLock::new(listened_addrs),
 		});
 
@@ -204,7 +204,7 @@ impl NetworkService {
 		// TODO: in the context of libp2p, it is hard to define what an external
 		// URL is, as different nodes can have multiple different ways to
 		// reach us
-		self.shared.original_listened_addr.read().as_ref()
+		self.shared.original_listened_addr.read().get(0)
 			.map(|addr|
 				format!("{}/p2p/{}", addr, self.shared.kad_system.local_peer_id().to_base58())
 			)
@@ -292,7 +292,7 @@ impl NetworkContext for NetworkContextImpl {
 		let mut message = Bytes::with_capacity(1 + data.len());
 		message.extend_from_slice(&[packet_id]);
 		message.extend_from_slice(&data);
-		if self.inner.network_state.send(protocol, peer, message).is_err() {
+		if self.inner.network_state.send(peer, protocol, message).is_err() {
 			debug!(target: "sub-libp2p", "Sending to peer {} failed. Dropping.", peer);
 			self.inner.network_state.drop_peer(peer);
 		}
@@ -308,11 +308,11 @@ impl NetworkContext for NetworkContextImpl {
 
 	fn report_peer(&self, peer: NodeIndex, reason: Severity) {
 		if let Some(info) = self.inner.network_state.peer_info(peer) {
-			if let (Some(client_version), Some(remote_address)) = (info.client_version, info.remote_address) {
+			if let Some(client_version) = info.client_version {
 				info!(target: "sub-libp2p",
-					"Peer {} ({} {}) reported by client: {}",
+					"Peer {} ({:?} {}) reported by client: {}",
 					peer,
-					remote_address,
+					info.remote_address,
 					client_version,
 					reason
 				);
@@ -382,39 +382,39 @@ fn init_thread(
 	// Build the transport layer.
 	let transport = {
 		let base = transport::build_transport(
-			transport::UnencryptedAllowed::Denied,
 			shared.network_state.local_private_key().clone()
 		);
 
-		let addr_resolver = {
+		let base = base.map_err_dial({
 			let shared = shared.clone();
-			move |who| {
-				let addrs = shared.network_state.addrs_of_peer(&who);
-				for addr in &addrs {
-					trace!(target: "sub-libp2p", "{:?} resolved as {}", who, addr);
+			move |err, addr| {
+				trace!(target: "sub-libp2p", "Failed to dial {}: {:?}", addr, err);
+				shared.network_state.report_failed_to_connect(&addr);
+				err
+			}
+		});
+
+		let shared = shared.clone();
+		base.and_then(move |(peer_id, stream), endpoint, remote_addr| {
+			remote_addr.and_then(move |remote_addr| {
+				if &peer_id == shared.kad_system.local_peer_id() {
+					// TODO: this happens very frequently for now and floods the logs
+					//warn!(target: "sub-libp2p", "Refusing connection from our local peer id");
+					return Err(IoErrorKind::ConnectionRefused.into())
 				}
-				addrs.into_iter()
-			}
-		};
 
-		PeerIdTransport::new(base.clone(), addr_resolver).and_then({
-			let shared = shared.clone();
-			move |out, endpoint, remote_addr| {
-				let original_addr = out.original_addr.clone();
-				let info = out.info.and_then(move |info| {
-					process_identify_info(shared, &info, original_addr,
-						endpoint, &base)?;
-					Ok(info)
-				});
-
+				// TODO: there's a possible race condition here if `cleanup_and_prepare_updates` is
+				// called between `assign_node_index` and one of `kad_connec`, `unique_connec`,
+				// etc. ; in practice though, it is very unlikely to happen
+				let node_index = shared.network_state.assign_node_index(&peer_id)?;
+				shared.network_state.report_connected(node_index, &remote_addr, endpoint)?;
 				let out = TransportOutput {
-					socket: out.socket,
-					info: Box::new(info) as Box<_>,
-					original_addr: out.original_addr,
+					socket: stream,
+					node_index,
+					original_addr: remote_addr.clone(),
 				};
-
-				future::ok((out, remote_addr))
-			}
+				Ok((out, future::ok(remote_addr)))
+			})
 		})
 	};
 
@@ -425,12 +425,13 @@ fn init_thread(
 			.and_then({
 				let shared = shared.clone();
 				move |out, endpoint, client_addr| {
+					let node_index = out.node_index;
 					let original_addr = out.original_addr;
 					let listener_upgrade = upgrade::or(upgrade::or(upgrade::or(
-						upgrade::map_with_addr(shared.kad_upgrade.clone(), |(c, f), a| FinalUpgrade::Kad(c, f, a.clone())),
-						upgrade::map(IdentifyProtocolConfig, |id| FinalUpgrade::Identify(id, original_addr))),
-						upgrade::map_with_addr(ping::Ping, |out, addr| FinalUpgrade::from((out, addr.clone())))),
-						upgrade::map_with_addr(DelayedProtosList(shared), |c, a| FinalUpgrade::Custom(c, a.clone())));
+						upgrade::map(shared.kad_upgrade.clone(), move |(c, f)| FinalUpgrade::Kad(node_index, c, f)),
+						upgrade::map(IdentifyProtocolConfig, move |id| FinalUpgrade::from((node_index, id, original_addr)))),
+						upgrade::map(ping::Ping, move |out| FinalUpgrade::from((node_index, out)))),
+						upgrade::map(DelayedProtosList(shared), move |c| FinalUpgrade::Custom(node_index, c)));
 					upgrade::apply(out.socket, listener_upgrade, endpoint, client_addr)
 				}
 			});
@@ -448,7 +449,7 @@ fn init_thread(
 		match swarm_controller.listen_on(addr.clone()) {
 			Ok(new_addr) => {
 				debug!(target: "sub-libp2p", "Libp2p listening on {}", new_addr);
-				*shared.original_listened_addr.write() = Some(new_addr.clone());
+				shared.original_listened_addr.write().push(new_addr.clone());
 			},
 			Err(_) => {
 				warn!(target: "sub-libp2p", "Can't listen on {}, protocol not supported", addr);
@@ -459,15 +460,16 @@ fn init_thread(
 
 	// Explicitely connect to _all_ the boostrap nodes as a temporary measure.
 	for bootnode in shared.config.boot_nodes.iter() {
-		match shared.network_state.add_peer(bootnode) {
-			Ok(who) => {
-				trace!(target: "sub-libp2p", "Dialing bootnode {:?}", who);
+		match shared.network_state.add_bootstrap_peer(bootnode) {
+			Ok((who, addr)) => {
+				trace!(target: "sub-libp2p", "Dialing bootnode {:?} through {}", who, addr);
 				for proto in shared.protocols.0.clone().into_iter() {
 					open_peer_custom_proto(
 						shared.clone(),
 						transport.clone(),
+						addr.clone(),
+						Some(who.clone()),
 						proto,
-						who.clone(),
 						&swarm_controller
 					)
 				}
@@ -488,11 +490,12 @@ fn init_thread(
 				if let Ok(addr) = multi {
 					trace!(target: "sub-libp2p", "Missing NodeIndex for Bootnode {:}. Querying", bootnode);
 					for proto in shared.protocols.0.clone().into_iter() {
-						connect_with_query_peer_id(
+						open_peer_custom_proto(
 							shared.clone(),
 							transport.clone(),
-							proto,
 							addr.clone(),
+							None,
+							proto,
 							&swarm_controller
 						)
 					}
@@ -505,18 +508,17 @@ fn init_thread(
 		}
 	}
 
-	shared.network_state.set_non_reserved_mode(shared.config.non_reserved_mode.clone());
-	for reserved in shared.config.reserved_nodes.iter() {
-		match shared.network_state.add_reserved_peer(reserved) {
-			Ok(who) => {
-				trace!(target: "sub-libp2p", "Added reseved peer {:?}", who);
-			},
-			Err(err) => warn!(target:"sub-libp2p", "Couldn't parse reserved address: {}", err),
-		}
-	}
-
-	// Start connecting to nodes now.
-	connect_to_nodes(shared.clone(), transport.clone(), &swarm_controller);
+	let outgoing_connections = Interval::new(Instant::now(), Duration::from_secs(5))
+		.map_err(|err| IoError::new(IoErrorKind::Other, err))
+		.for_each({
+			let shared = shared.clone();
+			let transport = transport.clone();
+			let swarm_controller = swarm_controller.clone();
+			move |_| {
+				connect_to_nodes(shared.clone(), transport.clone(), &swarm_controller);
+				Ok(())
+			}
+		});
 
 	// Build the timeouts system for the `register_timeout` function.
 	// (note: this has nothing to do with socket timeouts)
@@ -542,12 +544,13 @@ fn init_thread(
 		transport.clone(), swarm_controller.clone());
 
 	// Start the process of pinging the active nodes on the network.
-	let pinger = start_pinger(shared.clone(), transport, swarm_controller);
+	let periodic = start_periodic_updates(shared.clone(), transport, swarm_controller);
 
 	// Merge all the futures into one!
 	Ok(swarm_future
 		.select(discovery).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
-		.select(pinger).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
+		.select(periodic).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
+		.select(outgoing_connections).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
 		.select(timeouts).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
 		.select(close_rx.then(|_| Ok(()))).map(|_| ()).map_err(|(err, _)| err)
 
@@ -561,28 +564,42 @@ fn init_thread(
 /// Output of the common transport layer.
 struct TransportOutput<S> {
 	socket: S,
-	info: Box<Future<Item = IdentifyTransportOutcome, Error = IoError>>,
+	node_index: NodeIndex,
 	original_addr: Multiaddr,
 }
 
 /// Enum of all the possible protocols our service handles.
 enum FinalUpgrade<C> {
-	Kad(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>, Multiaddr),
+	Kad(NodeIndex, KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>),
 	/// The remote identification system, and the multiaddress we see the remote as.
-	Identify(IdentifyOutput<C>, Multiaddr),
-	PingDialer(ping::Pinger, Box<Future<Item = (), Error = IoError>>, Multiaddr),
-	PingListener(Box<Future<Item = (), Error = IoError>>, Multiaddr),
+	IdentifyListener(NodeIndex, IdentifySender<C>, Multiaddr),
+	/// The remote information about the address they see us as.
+	IdentifyDialer(NodeIndex, IdentifyInfo, Multiaddr),
+	PingDialer(NodeIndex, ping::Pinger, Box<Future<Item = (), Error = IoError>>),
+	PingListener(NodeIndex, Box<Future<Item = (), Error = IoError>>),
 	/// `Custom` means anything not in the core libp2p and is handled
 	/// by `CustomProtoConnectionUpgrade`.
-	Custom(RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>, Multiaddr),
+	Custom(NodeIndex, RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>),
 }
 
-impl<C> From<(ping::PingOutput, Multiaddr)> for FinalUpgrade<C> {
-	fn from((out, addr): (ping::PingOutput, Multiaddr)) -> FinalUpgrade<C> {
+impl<C> From<(NodeIndex, ping::PingOutput)> for FinalUpgrade<C> {
+	fn from((node_index, out): (NodeIndex, ping::PingOutput)) -> FinalUpgrade<C> {
 		match out {
-			ping::PingOutput::Ponger(processing) => FinalUpgrade::PingListener(processing, addr),
+			ping::PingOutput::Ponger(processing) =>
+				FinalUpgrade::PingListener(node_index, processing),
 			ping::PingOutput::Pinger { pinger, processing } =>
-				FinalUpgrade::PingDialer(pinger, processing, addr),
+				FinalUpgrade::PingDialer(node_index, pinger, processing),
+		}
+	}
+}
+
+impl<C> From<(NodeIndex, IdentifyOutput<C>, Multiaddr)> for FinalUpgrade<C> {
+	fn from((node_index, out, addr): (NodeIndex, IdentifyOutput<C>, Multiaddr)) -> FinalUpgrade<C> {
+		match out {
+			IdentifyOutput::RemoteInfo { info, observed_addr } =>
+				FinalUpgrade::IdentifyDialer(node_index, info, observed_addr),
+			IdentifyOutput::Sender { sender } =>
+				FinalUpgrade::IdentifyListener(node_index, sender, addr),
 		}
 	}
 }
@@ -594,16 +611,16 @@ fn listener_handle<'a, C>(
 ) -> Box<Future<Item = (), Error = IoError> + 'a>
 	where C: AsyncRead + AsyncWrite + 'a {
 	match upgrade {
-		FinalUpgrade::Kad(controller, kademlia_stream, client_addr) => {
-			trace!(target: "sub-libp2p", "Opened kademlia substream with {:?}", client_addr);
-			match handle_kademlia_connection(shared, client_addr, controller, kademlia_stream) {
+		FinalUpgrade::Kad(node_index, controller, kademlia_stream) => {
+			trace!(target: "sub-libp2p", "Opened kademlia substream with #{:?}", node_index);
+			match handle_kademlia_connection(shared, node_index, controller, kademlia_stream) {
 				Ok(fut) => Box::new(fut) as Box<_>,
 				Err(err) => Box::new(future::err(err)) as Box<_>,
 			}
 		},
 
-		FinalUpgrade::Identify(IdentifyOutput::Sender { sender }, original_addr) => {
-			trace!(target: "sub-libp2p", "Sending back identification info");
+		FinalUpgrade::IdentifyListener(node_index, sender, original_addr) => {
+			trace!(target: "sub-libp2p", "Sending back identification info to #{}", node_index);
 			sender.send(
 				IdentifyInfo {
 					public_key: shared.network_state.local_public_key().clone(),
@@ -618,30 +635,30 @@ fn listener_handle<'a, C>(
 			)
 		},
 
-		FinalUpgrade::Identify(IdentifyOutput::RemoteInfo { .. }, _) =>
-			unreachable!("We are never dialing with the identify protocol"),
+		FinalUpgrade::IdentifyDialer(node_index, info, observed_addr) => {
+			process_identify_info(&shared, node_index, &info, &observed_addr);
+			Box::new(future::ok(()))
+		},
 
-		FinalUpgrade::PingListener(future, client_addr) => {
-			trace!(target: "sub-libp2p", "Received ping substream from {:?}", client_addr);
+		FinalUpgrade::PingListener(node_index, future) => {
+			trace!(target: "sub-libp2p", "Received ping substream from #{}", node_index);
 			future
 		},
 
-		FinalUpgrade::PingDialer(pinger, future, client_addr) => {
-			let node_id = p2p_multiaddr_to_node_id(client_addr);
-			match shared.network_state.ping_connection(node_id.clone()) {
-				Ok((_, ping_connec)) => {
-					trace!(target: "sub-libp2p", "Successfully opened ping substream with {:?}", node_id);
-					let fut = ping_connec.tie_or_passthrough(pinger, future);
-					Box::new(fut) as Box<_>
-				},
-				Err(err) => Box::new(future::err(err)) as Box<_>
-			}
+		FinalUpgrade::PingDialer(node_index, pinger, future) => {
+			let ping_connec = match shared.network_state.ping_connection(node_index) {
+				Some(p) => p,
+				None => return Box::new(future::ok(())) as Box<_>
+			};
+			trace!(target: "sub-libp2p", "Successfully opened ping substream with #{}", node_index);
+			let fut = ping_connec.tie_or_passthrough(pinger, future);
+			Box::new(fut) as Box<_>
 		},
 
-		FinalUpgrade::Custom(custom_proto_out, client_addr) => {
+		FinalUpgrade::Custom(node_index, custom_proto_out) => {
 			// A "custom" protocol is one that is part of substrate and not part of libp2p.
 			let shared = shared.clone();
-			let fut = handle_custom_connection(shared, client_addr, custom_proto_out);
+			let fut = handle_custom_connection(shared, node_index, custom_proto_out);
 			Box::new(fut) as Box<_>
 		},
 	}
@@ -650,14 +667,20 @@ fn listener_handle<'a, C>(
 /// Handles a newly-opened Kademlia connection.
 fn handle_kademlia_connection(
 	shared: Arc<Shared>,
-	client_addr: Multiaddr,
+	node_index: NodeIndex,
 	controller: KadConnecController,
 	kademlia_stream: Box<Stream<Item = KadIncomingRequest, Error = IoError>>
 ) -> Result<impl Future<Item = (), Error = IoError>, IoError> {
-	let node_id = p2p_multiaddr_to_node_id(client_addr);
-	let (who, kad_connec) = shared.network_state
-		.kad_connection(node_id.clone())?;
-	
+	let kad_connec = match shared.network_state.kad_connection(node_index) {
+		Some(kad) => kad,
+		None => return Err(IoError::new(IoErrorKind::Other, "node no longer exists")),
+	};
+
+	let node_id = match shared.network_state.node_id_from_index(node_index) {
+		Some(id) => id,
+		None => return Err(IoError::new(IoErrorKind::Other, "node no longer exists")),
+	};
+
 	let node_id2 = node_id.clone();
 	let future = future::loop_fn(kademlia_stream, move |kademlia_stream| {
 		let shared = shared.clone();
@@ -684,7 +707,7 @@ fn handle_kademlia_connection(
 				Ok(future::Loop::Continue(rest))
 			})
 	}).then(move |val| {
-		trace!(target: "sub-libp2p", "Closed Kademlia connection with #{} {:?} => {:?}", who, node_id2, val);
+		trace!(target: "sub-libp2p", "Closed Kademlia connection with #{} {:?} => {:?}", node_index, node_id2, val);
 		val
 	});
 
@@ -738,34 +761,29 @@ fn build_kademlia_response(
 /// Returns a future that corresponds to when the handling is finished.
 fn handle_custom_connection(
 	shared: Arc<Shared>,
-	client_addr: Multiaddr,
+	node_index: NodeIndex,
 	custom_proto_out: RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>
 ) -> impl Future<Item = (), Error = IoError> {
 	let handler = custom_proto_out.custom_data;
 	let protocol_id = custom_proto_out.protocol_id;
-
-	// We're using the `PeerIdTransport` layer, so all the multiaddresses received
-	// here should be of the format `/p2p/<node_id>`.
-	let node_id = p2p_multiaddr_to_node_id(client_addr);
 
 	// Determine the ID of this peer, or drop the connection if the peer is disabled,
 	// if we reached `max_peers`, or a similar reason.
 	// TODO: is there a better way to refuse connections than to drop the
 	//		 newly-opened substream? should we refuse the connection
 	//		 beforehand?
-	let (who, unique_connec) = match shared.network_state.custom_proto(
-		node_id.clone(),
+	let unique_connec = match shared.network_state.custom_proto(
+		node_index,
 		protocol_id,
-		custom_proto_out.endpoint,
 	) {
-		Ok(a) => a,
-		Err(err) => return future::Either::A(future::err(err.into())),
+		Some(c) => c,
+		None => return future::Either::A(future::err(IoErrorKind::Other.into())),
 	};
 
 	if let UniqueConnecState::Full = unique_connec.state() {
 		debug!(target: "sub-libp2p",
-			"Interrupting connection attempt to {:?} with {:?} because we're already connected",
-			node_id,
+			"Interrupting connection attempt to #{} with {:?} because we're already connected",
+			node_index,
 			custom_proto_out.protocol_id
 		);
 		return future::Either::A(future::ok(()))
@@ -774,7 +792,6 @@ fn handle_custom_connection(
 	struct ProtoDisconnectGuard {
 		inner: Arc<Shared>,
 		who: NodeIndex,
-		node_id: PeerstorePeerId,
 		handler: Arc<NetworkProtocolHandler + Send + Sync>,
 		protocol: ProtocolId,
 		print_log_message: bool,
@@ -785,7 +802,7 @@ fn handle_custom_connection(
 			if self.print_log_message {
 				info!(target: "sub-libp2p",
 					"Node {:?} with peer ID {} through protocol {:?} disconnected",
-					self.node_id,
+					self.inner.network_state.node_id_from_index(self.who),
 					self.who,
 					self.protocol
 				);
@@ -804,8 +821,7 @@ fn handle_custom_connection(
 
 	let mut dc_guard = ProtoDisconnectGuard {
 		inner: shared.clone(),
-		who,
-		node_id: node_id.clone(),
+		who: node_index,
 		handler: handler.clone(),
 		protocol: protocol_id,
 		print_log_message: true,
@@ -815,36 +831,34 @@ fn handle_custom_connection(
 		.for_each({
 			let shared = shared.clone();
 			let handler = handler.clone();
-			let node_id = node_id.clone();
 			move |(packet_id, data)| {
-				shared.kad_system.update_kbuckets(node_id.clone());
+				if let Some(id) = shared.network_state.node_id_from_index(node_index) {
+					shared.kad_system.update_kbuckets(id);
+				}
 				handler.read(&NetworkContextImpl {
 					inner: shared.clone(),
 					protocol: protocol_id,
-					current_peer: Some(who.clone()),
-				}, &who, packet_id, &data);
+					current_peer: Some(node_index.clone()),
+				}, &node_index, packet_id, &data);
 				Ok(())
 			}
 		});
 
 	let val = (custom_proto_out.outgoing, custom_proto_out.protocol_version);
 	let final_fut = unique_connec.tie_or_stop(val, fut)
-		.then({
-			let node_id = node_id.clone();
-			move |val| {
-				info!(target: "sub-libp2p", "Finishing future for proto {:?} with {:?} => {:?}",
-					protocol_id, node_id, val);
-				// Makes sure that `dc_guard` is kept alive until here.
-				dc_guard.print_log_message = false;
-				drop(dc_guard);
-				val
-			}
+		.then(move |val| {
+			info!(target: "sub-libp2p", "Finishing future for proto {:?} with {:?} => {:?}",
+				protocol_id, node_index, val);
+			// Makes sure that `dc_guard` is kept alive until here.
+			dc_guard.print_log_message = false;
+			drop(dc_guard);
+			val
 		});
 
 	debug!(target: "sub-libp2p",
-		"Successfully connected to {:?} (peer id {}) with protocol {:?} version {}",
-		node_id,
-		who,
+		"Successfully connected to {:?} (peer id #{}) with protocol {:?} version {}",
+		shared.network_state.node_id_from_index(node_index),
+		node_index,
 		protocol_id,
 		custom_proto_out.protocol_version
 	);
@@ -852,8 +866,8 @@ fn handle_custom_connection(
 	handler.connected(&NetworkContextImpl {
 		inner: shared.clone(),
 		protocol: protocol_id,
-		current_peer: Some(who),
-	}, &who);
+		current_peer: Some(node_index),
+	}, &node_index);
 
 	future::Either::B(final_fut)
 }
@@ -862,9 +876,12 @@ fn handle_custom_connection(
 /// This works by running a round at a regular interval, and skipping if we
 /// reached `min_peers`. When we are over `min_peers`, we stop trying to dial
 /// nodes and only accept incoming connections.
-fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
-	swarm_controller: SwarmController<St>) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
+fn start_kademlia_discovery<T, To, St, C>(
+	shared: Arc<Shared>,
+	transport: T,
+	swarm_controller: SwarmController<St>
+) -> impl Future<Item = (), Error = IoError>
+	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
@@ -882,35 +899,17 @@ fn start_kademlia_discovery<T, To, St, C>(shared: Arc<Shared>, transport: T,
 			)
 	});
 
+	// We perform a random Kademlia query at a regular interval.
 	let discovery = Interval::new(Instant::now(), Duration::from_secs(32))
-		// TODO: add a timeout to the lookups
+		// TODO: add a timeout to the lookups?
 		.map_err(|err| IoError::new(IoErrorKind::Other, err))
-		.and_then({
+		.for_each({
 			let shared = shared.clone();
 			let transport = transport.clone();
 			let swarm_controller = swarm_controller.clone();
 			move |_| {
-				// Note that this is a small hack. We flush the caches here so
-				// that we don't need to run a timer just for flushing.
 				let _ = shared.network_state.flush_caches_to_disk();
-
-				if shared.network_state.should_open_outgoing_custom_connections() != 0 {
-					future::Either::A(perform_kademlia_query(shared.clone(),
-						transport.clone(), swarm_controller.clone()))
-				} else {
-					// If we shouldn't open connections (eg. we reached
-					// `min_peers`), pretend we did a lookup but with an empty
-					// result.
-					trace!(target: "sub-libp2p", "Bypassing kademlia discovery");
-					future::Either::B(future::ok(()))
-				}
-			}
-		})
-		.for_each({
-			let shared = shared.clone();
-			move |_| {
-				connect_to_nodes(shared.clone(), transport.clone(), &swarm_controller);
-				Ok(())
+				perform_kademlia_query(shared.clone(), transport.clone(), swarm_controller.clone())
 			}
 		});
 
@@ -985,23 +984,9 @@ fn connect_to_nodes<T, To, St, C>(
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
-	let num_slots = shared.network_state.should_open_outgoing_custom_connections();
-	debug!(target: "sub-libp2p",
-		"Outgoing connections cycle ; opening up to {} outgoing connections",
-		num_slots
-	);
+	let (addrs, _will_change) = shared.network_state.outgoing_connections_to_attempt();
 
-	for _ in 0 .. num_slots {
-		// Choose a random peer. We are potentially already connected to
-		// this peer, but this is not a problem as this function is called
-		// regularly.
-		// TODO: is it ^ ?
-		let peer = match shared.network_state.random_peer() {
-			Some(p) => p,
-			// `None` returned when no peer is known
-			None => break,
-		};
-
+	for (peer, addr) in addrs.into_iter() {
 		// Try to dial that node for each registered protocol. Since dialing
 		// upgrades the connection to use multiplexing, dialing multiple times
 		// should automatically open multiple substreams.
@@ -1009,82 +994,29 @@ fn connect_to_nodes<T, To, St, C>(
 			open_peer_custom_proto(
 				shared.clone(),
 				base_transport.clone(),
+				addr.clone(),
+				Some(peer.clone()),
 				proto,
-				peer.clone(),
 				swarm_controller
 			)
 		}
 	}
 }
 
-
-fn connect_with_query_peer_id<T, To, St, C>(
-	shared: Arc<Shared>,
-	base_transport: T,
-	proto: RegisteredProtocol<Arc<NetworkProtocolHandler + Send + Sync>>,
-	addr: Multiaddr,
-	swarm_controller: &SwarmController<St>
-)
-	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
-		T::MultiaddrFuture: 'static,
-		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		C: 'static,
-{
-	let addr2 = addr.clone();
-	let with_proto = base_transport
-		.clone()
-		.and_then(move |out, endpoint, client_addr| {
-			trace!(target: "sub-libp2p", "in");
-			let socket = out.socket;
-			let original_addr = out.original_addr;
-			out.info
-				.and_then(move |info| {
-					let _ = process_identify_info(shared, &info, original_addr,
-						endpoint, &base_transport);
-					trace!(target: "sub-libp2p",
-						"Bootnode {:} found with peer id: {:?}",
-						addr2,
-						info.info.public_key.into_peer_id()
-					);
-					upgrade::apply(socket, proto, endpoint, client_addr)
-				})
-		})
-		.and_then(move |out, _endpoint, client_addr|
-			client_addr.map(move |client_addr|
-				(FinalUpgrade::Custom(out, client_addr.clone()), future::ok(client_addr))
-			)
-		);
-	
-	let with_timeout = TransportTimeout::new(with_proto, Duration::from_secs(10));
-	let with_err = with_timeout
-		.map_err({
-			let addr = addr.clone();
-			move |err| {
-				warn!(target: "sub-libp2p",
-					"Error while dialing {:?} to query peer id: {:?}",
-					addr,
-					err
-				);
-				err
-			}
-		});
-
-	let _ = swarm_controller.dial(addr.clone(), with_err)
-		.map_err(move |err|
-			warn!(target: "sub-libp2p", "Error when querying peer node info {:} of {:}", err, addr)
-		);
-}
-
-/// If necessary, dials the given address for the given protocol and using the
-/// given `swarm_controller`. Has no effect if we already dialed earlier.
-/// Checks that the peer ID matches `expected_peer_id`.
-// TODO: check that the secio key matches the id given by kademlia
+/// Dials the given address for the given protocol and using the given `swarm_controller`.
+///
+/// This function *always* performs a dial, and doesn't check whether we already have an existing
+/// connection to the remote. This is expected to be checked by the caller.
+///
+/// The dialing will fail if the obtained peer ID doesn't match the expected ID. This is an
+/// opinionated decision, as we could just let the new connection through. But we decide not to.
+/// If `None` is passed for the expected peer ID, we always accept the connection.
 fn open_peer_custom_proto<T, To, St, C>(
 	shared: Arc<Shared>,
 	base_transport: T,
+	addr: Multiaddr,
+	expected_peer_id: Option<PeerstorePeerId>,
 	proto: RegisteredProtocol<Arc<NetworkProtocolHandler + Send + Sync>>,
-	expected_peer_id: PeerstorePeerId,
 	swarm_controller: &SwarmController<St>
 )
 	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
@@ -1093,165 +1025,145 @@ fn open_peer_custom_proto<T, To, St, C>(
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static,
 {
-	// Don't connect to ourselves.
-	// TODO: remove this eventually
-	if &expected_peer_id == shared.kad_system.local_peer_id() {
-		trace!(target: "sub-libp2p", "Skipped connecting to {:?} because it is ourselves", expected_peer_id);
-		return
-	}
-
 	let proto_id = proto.id();
-	let node_id = expected_peer_id.clone();
-	let shared2 = shared.clone();
-	let addr: Multiaddr = AddrComponent::P2P(expected_peer_id.clone().into_bytes()).into();
 
-	// TODO: check that the secio key matches the id given by kademlia
 	let with_proto = base_transport
-		.clone()
 		.and_then(move |out, endpoint, client_addr| {
-			let socket = out.socket;
-			let original_addr = out.original_addr;
-			out.info
-				.and_then(move |info| {
-					let actual_peer_id = info.info.public_key.into_peer_id();
-					if actual_peer_id == expected_peer_id {
-						Ok(socket)
-					} else {
-						debug!(target: "sub-libp2p",
-							"Public key mismatch for node {:?} ; actual: {:?}",
-							expected_peer_id,
-							actual_peer_id
-						);
-						trace!(target: "sub-libp2p", "Removing addr {} for {:?}", original_addr, expected_peer_id);
-						shared.network_state.set_invalid_kad_address(&expected_peer_id, &original_addr);
-						Err(IoError::new(IoErrorKind::InvalidData, "public key mismatch when identifying peer"))
-					}
-				})
-				.and_then(move |socket|
-					upgrade::apply(socket, proto, endpoint, client_addr)
-				)
-		})
-		.and_then(move |out, _endpoint, client_addr|
-			client_addr.map(move |client_addr| {
-				let out = FinalUpgrade::Custom(out, client_addr.clone());
-				(out, future::ok(client_addr))
-			})
-		);
-	
-	let with_timeout = TransportTimeout::new(with_proto,
-		Duration::from_secs(20));
-	let with_err = with_timeout
-		.map_err({
-			let node_id = node_id.clone();
-			move |err| {
-				debug!(target: "sub-libp2p", "Error while dialing {:?} with custom proto: {:?}", node_id, err);
-				err
-			}
+			let node_index = out.node_index;
+			upgrade::apply(out.socket, proto, endpoint, client_addr)
+				.map(move |(custom, client_addr)|
+					((node_index, FinalUpgrade::Custom(node_index, custom)), client_addr))
 		});
 
-	match shared2.network_state.custom_proto(node_id.clone(), proto_id, Endpoint::Dialer) {
-		Ok((who, unique_connec)) => {
-			if !unique_connec.is_alive() {
-				trace!(target: "sub-libp2p",
-					"Opening connection to #{} {:?} with proto {:?}",
-					who,
-					node_id,
-					proto_id
-				);
-			}
+	let with_timeout = TransportTimeout::new(with_proto, Duration::from_secs(20));
 
-			unique_connec.dial(&swarm_controller, &addr, with_err);
-		},
-		Err(err) => {
-			trace!(target: "sub-libp2p",
-				"Error while opening connection to {:?} with proto {:?} => {:?}",
-				node_id,
-				proto_id,
-				err
-			);
-		},
+	if let Some(expected_peer_id) = expected_peer_id {
+		let expected_node_index = match shared.network_state.assign_node_index(&expected_peer_id) {
+			Ok(i) => i,
+			Err(_) => return,
+		};
+
+		let unique_connec = match shared.network_state.custom_proto(expected_node_index, proto_id) {
+			Some(uc) => uc,
+			None => return,
+		};
+
+		let with_peer_check = with_timeout
+			.and_then(move |(node_index, custom), _, client_addr| {
+				if node_index == expected_node_index {
+					future::ok((custom, client_addr))
+				} else {
+					future::err(IoError::new(IoErrorKind::ConnectionRefused, "Peer id mismatch"))
+				}
+			});
+
+		trace!(target: "sub-libp2p",
+			"Opening connection to {:?} through {} with proto {:?}",
+			expected_peer_id,
+			addr,
+			proto_id
+		);
+
+		unique_connec.dial(swarm_controller, &addr, with_peer_check);
+
+	} else {
+		let trans = with_timeout.map(|(_, out), _| out);
+		if let Err(addr) = swarm_controller.dial(addr, trans) {
+			debug!(target: "sub-libp2p", "Failed to dial {:?}", addr);
+		}
 	}
 }
 
 /// Obtain a Kademlia connection to the given peer.
-fn obtain_kad_connection<T, To, St, C>(shared: Arc<Shared>,
-	who: PeerstorePeerId, transport: T, swarm_controller: SwarmController<St>)
-	-> impl Future<Item = KadConnecController, Error = IoError>
-	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
+fn obtain_kad_connection<T, To, St, C>(
+	shared: Arc<Shared>,
+	who: PeerstorePeerId,
+	transport: T,
+	swarm_controller: SwarmController<St>
+) -> impl Future<Item = KadConnecController, Error = IoError>
+	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
 	let kad_upgrade = shared.kad_upgrade.clone();
-	let addr: Multiaddr = AddrComponent::P2P(who.clone().into_bytes()).into();
 	let transport = transport
-		.and_then(move |out, endpoint, client_addr|
-			upgrade::apply(out.socket, kad_upgrade.clone(),
-				endpoint, client_addr)
-		)
-		.and_then(move |(ctrl, fut), _, client_addr| {
-			client_addr.map(|client_addr| {
-				let out = FinalUpgrade::Kad(ctrl, fut, client_addr.clone());
-				(out, future::ok(client_addr))
-			})
+		.and_then(move |out, endpoint, client_addr| {
+			let node_index = out.node_index;
+			upgrade::apply(out.socket, kad_upgrade.clone(), endpoint, client_addr)
+				.map(move |((ctrl, fut), addr)| (FinalUpgrade::Kad(node_index, ctrl, fut), addr))
 		});
-	
-	let future = shared.network_state
-		.kad_connection(who.clone())
+
+	// This function consists in trying all the addresses we know one by one until we find
+	// one that works.
+	//
+	// This `future` returns a Kad controller, or an error if all dialing attempts failed.
+	let future = stream::iter_ok(shared.network_state.addrs_of_peer(&who))
+		.and_then(move |addr| {
+			let node_index = shared.network_state.assign_node_index(&who)?;
+			let kad = match shared.network_state.kad_connection(node_index) {
+				Some(kad) => kad,
+				None => return Err(IoError::new(IoErrorKind::Other, "node no longer exists")),
+			};
+			Ok((kad, addr))
+		})
+		.and_then(move |(unique_connec, addr)| {
+			unique_connec.dial(&swarm_controller, &addr, transport.clone())
+		})
+		.then(|result| -> Result<_, ()> { Ok(result.ok()) })
+		.filter_map(|result| result)
 		.into_future()
-		.map(move |(_, k)| k.dial(&swarm_controller, &addr, transport))
-		.flatten();
+		.map_err(|_| -> IoError { unreachable!("all items always succeed") })
+		.and_then(|(kad, _)| kad.ok_or_else(|| IoErrorKind::ConnectionRefused.into()));
 
 	// Note that we use a Box in order to speed up compilation.
 	Box::new(future) as Box<Future<Item = _, Error = _>>
 }
 
-/// Processes the information about a node.
-///
-/// - `original_addr` is the address used to originally dial this node.
-/// - `endpoint` is whether we dialed or listened to this node.
-/// - `transport` is used for the `nat_traversal` method.
-///
-/// Returns an error if the node has been refused access.
+/// Processes the identification information that we received about a node.
 fn process_identify_info(
-	shared: Arc<Shared>,
-	info: &IdentifyTransportOutcome,
-	original_addr: Multiaddr,
-	endpoint: Endpoint,
-	transport: &impl Transport
-) -> Result<(), IoError> {
-	let node_id = info.info.public_key.clone().into_peer_id();
-	let _peer_id = shared.network_state.set_peer_info(node_id.clone(), endpoint,
-		info.info.agent_version.clone(), original_addr.clone(),
-		original_addr.clone())?;	// TODO: wrong local addr
+	shared: &Shared,
+	node_index: NodeIndex,
+	info: &IdentifyInfo,
+	observed_addr: &Multiaddr,
+) {
+	trace!(target: "sub-libp2p", "Received identification info from #{}", node_index);
 
-	if let Some(ref original_listened_addr) = *shared.original_listened_addr.read() {
-		if let Some(mut ext_addr) = transport.nat_traversal(original_listened_addr, &info.observed_addr) {
+	shared.network_state.set_node_info(node_index, info.agent_version.clone());
+
+	for original_listened_addr in &*shared.original_listened_addr.read() {
+		// TODO: we're using a hack here ; ideally we would call `nat_traversal` on our
+		// `Transport` ; but that's complicated to pass around ; we could put it in a `Box` in
+		// `Shared`, but since our transport doesn't implement `Send` (libp2p doesn't implement
+		// `Send` on modifiers), we can't. Instead let's just recreate a transport locally every
+		// time.
+		let transport = libp2p::tcp::TcpConfig::new();
+		if let Some(mut ext_addr) = transport.nat_traversal(original_listened_addr, &observed_addr) {
 			let mut listened_addrs = shared.listened_addrs.write();
 			if !listened_addrs.iter().any(|a| a == &ext_addr) {
 				trace!(target: "sub-libp2p",
 					"NAT traversal: remote observes us as {}; registering {} as one of our own addresses",
-					info.observed_addr,
+					observed_addr,
 					ext_addr
 				);
 				listened_addrs.push(ext_addr.clone());
 				ext_addr.append(AddrComponent::P2P(shared.kad_system
-					.local_peer_id().clone().into_bytes()));
+					.local_peer_id().clone().into()));
 				info!(target: "sub-libp2p", "New external node address: {}", ext_addr);
 			}
 		}
 	}
 
-	for addr in info.info.listen_addrs.iter() {
-		shared.network_state.add_kad_discovered_addr(&node_id, addr.clone());
+	for addr in info.listen_addrs.iter() {
+		if let Some(node_id) = shared.network_state.node_id_from_index(node_index) {
+			shared.network_state.add_kad_discovered_addr(&node_id, addr.clone());
+		}
 	}
-
-	Ok(())
 }
 
 /// Returns a future that regularly pings every peer we're connected to.
 /// If a peer doesn't respond after a while, we disconnect it.
-fn start_pinger<T, To, St, C>(
+fn start_periodic_updates<T, To, St, C>(
 	shared: Arc<Shared>,
 	transport: T,
 	swarm_controller: SwarmController<St>
@@ -1261,23 +1173,37 @@ fn start_pinger<T, To, St, C>(
 		To: AsyncRead + AsyncWrite + 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
-	let transport = transport
-		.and_then(move |out, endpoint, client_addr|
+	let ping_transport = transport.clone()
+		.and_then(move |out, endpoint, client_addr| {
+			let node_index = out.node_index;
 			upgrade::apply(out.socket, ping::Ping, endpoint, client_addr)
-		)
-		.and_then(move |out, _, client_addr| {
-			client_addr.map(|client_addr| {
-				let out = FinalUpgrade::from((out, client_addr.clone()));
-				(out, future::ok(client_addr))
-			})
+				.map(move |(stream, addr)| (FinalUpgrade::from((node_index, stream)), addr))
+		});
+	
+	let identify_transport = transport
+		.and_then(move |out, endpoint, client_addr| {
+			let node_index = out.node_index;
+			upgrade::apply(out.socket, IdentifyProtocolConfig, endpoint, client_addr)
+				.map(move |(id, addr)| {
+					let fin = match id {
+						IdentifyOutput::RemoteInfo { info, observed_addr } =>
+							FinalUpgrade::IdentifyDialer(node_index, info, observed_addr),
+						IdentifyOutput::Sender { .. } => unreachable!("can't reach that on the dialer side"),
+					};
+					(fin, addr)
+				})
 		});
 
-	let fut = Interval::new(Instant::now(), Duration::from_secs(30))
+	let fut = Interval::new(Instant::now() + Duration::from_secs(5), Duration::from_secs(30))
 		.map_err(|err| IoError::new(IoErrorKind::Other, err))
-		.for_each(move |_|
-			ping_all(shared.clone(), transport.clone(), &swarm_controller))
+		.for_each(move |_| periodic_updates(
+			shared.clone(),
+			ping_transport.clone(),
+			identify_transport.clone(),
+			&swarm_controller
+		))
 		.then(|val| {
-			warn!(target: "sub-libp2p", "Pinging stream has stopped: {:?}", val);
+			warn!(target: "sub-libp2p", "Periodic updates stream has stopped: {:?}", val);
 			val
 		});
 
@@ -1286,29 +1212,34 @@ fn start_pinger<T, To, St, C>(
 }
 
 /// Pings all the nodes we're connected to and disconnects any node that
-/// doesn't respond. Returns a `Future` when all the pings have either
-/// suceeded or timed out.
-fn ping_all<T, St, C>(
+/// doesn't respond. Identifies nodes that need to be identified. Returns
+/// a `Future` when all the pings have either suceeded or timed out.
+fn periodic_updates<Tp, Tid, St, C>(
 	shared: Arc<Shared>,
-	transport: T,
+	ping_transport: Tp,
+	identify_transport: Tid,
 	swarm_controller: &SwarmController<St>
 ) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		T::MultiaddrFuture: 'static,
+	where Tp: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
+		Tp::MultiaddrFuture: 'static,
+		Tid: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
+		Tid::MultiaddrFuture: 'static,
 		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		C: 'static {
+	trace!(target: "sub-libp2p", "Periodic update cycle");
+
 	let mut ping_futures = Vec::new();
 
-	for (peer, who, pinger) in shared.network_state.cleanup_and_prepare_ping() {
+	for PeriodicUpdate { node_index, peer_id, address, pinger, identify } in
+		shared.network_state.cleanup_and_prepare_updates() {
 		let shared = shared.clone();
 
-		let addr = Multiaddr::from(AddrComponent::P2P(who.clone().into_bytes()));
 		let fut = pinger
-			.dial(&swarm_controller, &addr, transport.clone())
+			.dial(&swarm_controller, &address, ping_transport.clone())
 			.and_then(move |mut p| {
-				trace!(target: "sub-libp2p", "Pinging peer #{} aka. {:?}", peer, who);
+				trace!(target: "sub-libp2p", "Pinging peer #{} aka. {:?}", node_index, peer_id);
 				p.ping()
-					.map(|()| who)
+					.map(move |()| peer_id)
 					.map_err(|err| IoError::new(IoErrorKind::Other, err))
 			});
 		let ping_start_time = Instant::now();
@@ -1316,21 +1247,27 @@ fn ping_all<T, St, C>(
 			.then(move |val|
 				match val {
 					Err(err) => {
-						trace!(target: "sub-libp2p", "Error while pinging #{:?} => {:?}", peer, err);
-						shared.network_state.report_ping_failed(peer);
+						trace!(target: "sub-libp2p", "Error while pinging #{:?} => {:?}", node_index, err);
+						shared.network_state.report_ping_failed(node_index);
 						// Return Ok, otherwise we would close the ping service
 						Ok(())
 					},
 					Ok(who) => {
 						let elapsed = ping_start_time.elapsed();
-						trace!(target: "sub-libp2p", "Pong from #{:?} in {:?}", peer, elapsed);
-						shared.network_state.report_ping_duration(peer, elapsed);
+						trace!(target: "sub-libp2p", "Pong from #{:?} in {:?}", who, elapsed);
+						shared.network_state.report_ping_duration(node_index, elapsed);
 						shared.kad_system.update_kbuckets(who);
 						Ok(())
 					}
 				}
 			);
 		ping_futures.push(fut);
+
+		if identify {
+			// Ignore dialing errors, as identifying is only about diagnostics.
+			trace!(target: "sub-libp2p", "Attempting to identify #{}", node_index);
+			let _ = swarm_controller.dial(address, identify_transport.clone());
+		}
 	}
 
 	let future = future::loop_fn(ping_futures, |ping_futures| {
@@ -1347,22 +1284,6 @@ fn ping_all<T, St, C>(
 
 	// Note that we use a Box in order to speed up compilation.
 	Box::new(future) as Box<Future<Item = _, Error = _>>
-}
-
-/// Expects a multiaddr of the format `/p2p/<node_id>` and returns the node ID.
-/// Panics if the format is not correct.
-fn p2p_multiaddr_to_node_id(client_addr: Multiaddr) -> PeerstorePeerId {
-	let (first, second);
-	{
-		let mut iter = client_addr.iter();
-		first = iter.next();
-		second = iter.next();
-	}
-	match (first, second) {
-		(Some(AddrComponent::P2P(node_id)), None) =>
-			PeerstorePeerId::from_bytes(node_id).expect("libp2p always reports a valid node id"),
-		_ => panic!("Reported multiaddress is in the wrong format ; programmer error")
-	}
 }
 
 /// Since new protocols are added after the networking starts, we have to load the protocols list
