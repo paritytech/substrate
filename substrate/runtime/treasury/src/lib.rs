@@ -80,16 +80,17 @@ decl_module! {
 	// otherwise be costly or unsafe operations.
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		// A priviledged call; in this case it resets our dummy value to something new.
+		// Set the balance of funds available to spend.
 		fn set_pot(new_pot: T::Balance) -> Result = 0;
 
 		// (Re-)configure this module.
 		fn configure(proposal_bond: Permill, proposal_bond_minimum: T::Balance, spend_period: T::BlockNumber, burn: Permill) -> Result = 1;
 
-		// A priviledged call; in this case it resets our dummy value to something new.
+		// Reject a proposed spend. The original deposit will be slashed.
 		fn reject_proposal(proposal_id: ProposalIndex) -> Result = 2;
 
-		// A priviledged call; in this case it resets our dummy value to something new.
+		// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
+		// and the original deposit will be returned.
 		fn approve_proposal(proposal_id: ProposalIndex) -> Result = 3;
 	}
 }
@@ -101,6 +102,7 @@ pub struct Proposal<AccountId, Balance> {
 	proposer: AccountId,
 	value: Balance,
 	beneficiary: AccountId,
+	bond: Balance,
 }
 
 /// Permill is parts-per-million (i.e. after multiplying by this, divide by `PERMILL`).
@@ -192,7 +194,7 @@ impl<T: Trait> Module<T> {
 
 		let c = Self::proposal_count();
 		<ProposalCount<T>>::put(c + 1);
-		<Proposals<T>>::insert(c, Proposal { proposer: proposer.clone(), value, beneficiary });
+		<Proposals<T>>::insert(c, Proposal { proposer: proposer.clone(), value, beneficiary, bond });
 
 		Self::deposit_event(RawEvent::Proposed(c));
 
@@ -202,7 +204,7 @@ impl<T: Trait> Module<T> {
 	fn reject_proposal(proposal_id: ProposalIndex) -> Result {
 		let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
 		
-		let value = Self::calculate_bond(proposal.value);
+		let value = proposal.bond;
 		let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
 
 		Ok(())
@@ -262,7 +264,7 @@ impl<T: Trait> Module<T> {
 					<Proposals<T>>::remove(index);
 
 					// return their deposit.
-					let _ = <balances::Module<T>>::unreserve(&p.proposer, Self::calculate_bond(p.value));
+					let _ = <balances::Module<T>>::unreserve(&p.proposer, p.bond);
 
 					// provide the allocation.
 					<balances::Module<T>>::increase_free_balance_creating(&p.beneficiary, p.value);
