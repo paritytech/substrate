@@ -161,40 +161,40 @@ impl<Block: BlockT> Blockchain<Block> {
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
 	) {
-        let parent_hash = header.parent_hash().clone();
+		let parent_hash = header.parent_hash().clone();
 		let number = header.number().clone();
 		let mut storage = self.storage.write();
 		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
 		storage.hashes.insert(number, hash.clone());
 
-        let mut i = 0;
-        let mut is_inserted = false;
-        while i < storage.leaves.len() {
-            let leaf_hash = storage.leaves[i];
-            let leaf_header = {
-                // TODO [snd] get rid of clone
-                storage.blocks.get(&leaf_hash).expect("leaf hash must reference block in storage. q.e.d.").header().clone()
-            };
-            if !is_inserted && leaf_header.number() < &number {
-                storage.leaves.insert(i, leaf_hash);
-                is_inserted = true;
-                // adjust i for inserted element
-                i += 1;
-            // TODO [snd] stop when number < parent number
-            } else if leaf_hash == parent_hash {
-                assert!(is_inserted, "parent must come after child since leaf list is ordered by number descending");
-                // since we just inserted a child `parent_hash` is no longer a leaf
-                // and we have to remove it.
-                // we can't just replace parent by child because we must
-                // maintain descending block number ordering
-                // and there might be another leaf with the same number as
-                // the parent before it.
-                storage.leaves.remove(i);
-                // child inserted, parent removed, we're done
-                break;
-            }
-            i += 1;
-        }
+		let mut i = 0;
+		let mut is_inserted = false;
+		while i < storage.leaves.len() {
+			let leaf_hash = storage.leaves[i];
+			let leaf_header = {
+				// TODO [snd] get rid of clone
+				storage.blocks.get(&leaf_hash).expect("leaf hash must reference block in storage. q.e.d.").header().clone()
+			};
+			if !is_inserted && leaf_header.number() < &number {
+				storage.leaves.insert(i, leaf_hash);
+				is_inserted = true;
+				// adjust i for inserted element
+				i += 1;
+			// TODO [snd] stop when number < parent number
+			} else if leaf_hash == parent_hash {
+				assert!(is_inserted, "parent must come after child since leaf list is ordered by number descending");
+				// since we just inserted a child `parent_hash` is no longer a leaf
+				// and we have to remove it.
+				// we can't just replace parent by child because we must
+				// maintain descending block number ordering
+				// and there might be another leaf with the same number as
+				// the parent before it.
+				storage.leaves.remove(i);
+				// child inserted, parent removed, we're done
+				break;
+			}
+			i += 1;
+		}
 
 		if new_state.is_best() {
 			storage.best_hash = hash.clone();
