@@ -1001,4 +1001,17 @@ mod tests {
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
 		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
 	}
+
+	#[test]
+	fn best_chain_containing_single_block() {
+		let client = test_client::new();
+
+		let mut builder = client.new_block().unwrap();
+		let block = builder.bake().unwrap();
+		let block_hash = block.hash();
+
+		client.justify_and_import(BlockOrigin::Own, block).unwrap();
+
+		assert_eq!(block_hash.clone(), client.best_chain_containing_block_hash(block_hash.clone()).unwrap());
+	}
 }
