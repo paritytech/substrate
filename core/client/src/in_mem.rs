@@ -161,40 +161,13 @@ impl<Block: BlockT> Blockchain<Block> {
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
 	) {
-		let parent_hash = header.parent_hash().clone();
+		// remember for after header is moved
 		let number = header.number().clone();
+		let parent_hash = header.parent_hash().clone();
+
 		let mut storage = self.storage.write();
 		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
 		storage.hashes.insert(number, hash.clone());
-
-		let mut i = 0;
-		let mut is_inserted = false;
-		while i < storage.leaves.len() {
-			let leaf_hash = storage.leaves[i];
-			let leaf_header = {
-				// TODO [snd] get rid of clone
-				storage.blocks.get(&leaf_hash).expect("leaf hash must reference block in storage. q.e.d.").header().clone()
-			};
-			if !is_inserted && leaf_header.number() < &number {
-				storage.leaves.insert(i, leaf_hash);
-				is_inserted = true;
-				// adjust i for inserted element
-				i += 1;
-			// TODO [snd] stop when number < parent number
-			} else if leaf_hash == parent_hash {
-				assert!(is_inserted, "parent must come after child since leaf list is ordered by number descending");
-				// since we just inserted a child `parent_hash` is no longer a leaf
-				// and we have to remove it.
-				// we can't just replace parent by child because we must
-				// maintain descending block number ordering
-				// and there might be another leaf with the same number as
-				// the parent before it.
-				storage.leaves.remove(i);
-				// child inserted, parent removed, we're done
-				break;
-			}
-			i += 1;
-		}
 
 		if new_state.is_best() {
 			storage.best_hash = hash.clone();
@@ -207,6 +180,46 @@ impl<Block: BlockT> Blockchain<Block> {
 		if number == Zero::zero() {
 			storage.genesis_hash = hash;
 		}
+
+		// new block is leaf by definition. insert into leaf list.
+		let mut insert_at = 0;
+		for i in 0..storage.leaves.len() {
+			let leaf_number = {
+				storage.blocks.get(&storage.leaves[i]).expect("leaf hash must reference block in storage. q.e.d.").header().number().clone()
+			};
+			if leaf_number < number {
+				insert_at = i;
+			}
+		}
+		// TODO [snd] this moves all elements after `insert_at`. make it more efficient
+		storage.leaves.insert(insert_at, hash);
+
+		// genesis block does not have parent to remove
+		if number == Zero::zero() {
+			return;
+		}
+
+		let parent_header = storage.blocks.get(&parent_hash).expect("parent hash must reference block in storage. q.e.d.").header().clone();
+
+		// parent of new block is no longer leaf by definition. remove from leaf list if present
+		// parent comes somewhere after child in leaf list since it's ordered by block number
+		// descending.
+		for i in insert_at..storage.leaves.len() {
+			let leaf_hash = storage.leaves[i];
+			if leaf_hash == parent_header.hash() {
+				// TODO [snd] this moves all elements after `i`. make it more efficient
+				storage.leaves.remove(i);
+				break;
+			}
+			let leaf_number = {
+				storage.blocks.get(&leaf_hash).expect("leaf hash must reference block in storage. q.e.d.").header().number().clone()
+			};
+			if leaf_number < *parent_header.number() {
+				// parent was not in leaf list
+				break;
+			}
+		}
+
 	}
 
 	/// Compare this blockchain with another in-mem blockchain
