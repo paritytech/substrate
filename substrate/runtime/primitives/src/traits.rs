@@ -118,10 +118,6 @@ impl<T: Default + PartialEq> MaybeEmpty for T {
 	}
 }
 
-pub trait HasPublicAux {
-	type PublicAux: MaybeEmpty;
-}
-
 pub trait RefInto<T> {
 	fn ref_into(&self) -> &T;
 }
@@ -184,18 +180,18 @@ impl<T:
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
-/// Something that can be executed.
-pub trait Executable {
-	fn execute();
+/// The block finalisation trait. Implementing this lets you express what should happen
+/// for your module when the block is ending.
+pub trait OnFinalise<BlockNumber> {
+	/// The block is being finalised. Implement to have something happen.
+	fn on_finalise(_n: BlockNumber) {}
 }
 
-impl Executable for () {
-	fn execute() {}
-}
-impl<A: Executable, B: Executable> Executable for (A, B) {
-	fn execute() {
-		A::execute();
-		B::execute();
+impl<N> OnFinalise<N> for () {}
+impl<N: Copy, A: OnFinalise<N>, B: OnFinalise<N>> OnFinalise<N> for (A, B) {
+	fn on_finalise(n: N) {
+		A::on_finalise(n);
+		B::on_finalise(n);
 	}
 }
 

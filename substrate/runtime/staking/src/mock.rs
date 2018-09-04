@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::traits::{HasPublicAux, Identity};
+use primitives::traits::{Identity};
 use primitives::testing::{Digest, Header};
 use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
@@ -28,16 +28,13 @@ use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balanc
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Test;
-impl HasPublicAux for Test {
-	type PublicAux = u64;
-}
 impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type SessionKey = u64;
 	type OnOfflineValidator = ();
 }
 impl system::Trait for Test {
-	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type PublicAux = Self::AccountId;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -64,6 +61,7 @@ impl timestamp::Trait for Test {
 	type Moment = u64;
 }
 impl Trait for Test {
+	type OnRewardMinted = ();
 	type Event = ();
 }
 

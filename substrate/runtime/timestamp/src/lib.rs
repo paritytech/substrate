@@ -40,7 +40,7 @@ extern crate substrate_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{Executable, MaybeEmpty, SimpleArithmetic, As, Zero};
+use runtime_primitives::traits::{OnFinalise, MaybeEmpty, SimpleArithmetic, As, Zero};
 
 pub trait Trait: consensus::Trait where
 	<Self as system::Trait>::PublicAux: MaybeEmpty
@@ -101,8 +101,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 		assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 	}
 }
@@ -143,16 +143,13 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
+	use runtime_primitives::traits::{BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
 	impl system::Trait for Test {
-		type PublicAux = u64;
+		type PublicAux = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
