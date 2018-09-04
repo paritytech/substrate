@@ -130,7 +130,7 @@ fn note_offline_auto_unstake_session_change_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Balances::set_free_balance(&10, 7000);
 		Balances::set_free_balance(&20, 7000);
-		assert_ok!(Staking::register_slash_preference(&10, 0, SlashPreference { unstake_threshold: 1 }));
+		assert_ok!(Staking::register_preferences(&10, 0, 1, 0));
 		
 		assert_eq!(Staking::intentions(), vec![10, 20]);
 
@@ -165,8 +165,6 @@ fn note_offline_auto_unstake_session_change_should_work() {
 }
 
 
-
-
 #[test]
 fn rewards_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
@@ -179,19 +177,19 @@ fn rewards_should_work() {
 
 		System::set_block_number(3);
 		Timestamp::set_timestamp(15);	// on time.
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Balances::total_balance(&10), 11);
 		System::set_block_number(6);
 		Timestamp::set_timestamp(31);	// a little late
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Balances::total_balance(&10), 20);	// less reward
 		System::set_block_number(9);
 		Timestamp::set_timestamp(50);	// very late
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::current_index(), 3);
 		assert_eq!(Balances::total_balance(&10), 27);	// much less reward
@@ -209,13 +207,13 @@ fn slashing_should_work() {
 		assert_eq!(Balances::total_balance(&10), 1);
 
 		System::set_block_number(3);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Balances::total_balance(&10), 11);
 
 		System::set_block_number(6);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Balances::total_balance(&10), 21);
@@ -246,13 +244,13 @@ fn staking_should_work() {
 		assert_ok!(Staking::stake(&1));
 		assert_ok!(Staking::stake(&2));
 		assert_ok!(Staking::stake(&4));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::validators(), vec![10, 20]);
 
 		// Block 2: New validator set now.
 		System::set_block_number(2);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::validators(), vec![4, 2]);
 
@@ -261,33 +259,33 @@ fn staking_should_work() {
 		assert_ok!(Staking::stake(&3));
 		assert_ok!(Staking::unstake(&4, Staking::intentions().iter().position(|&x| x == 4).unwrap() as u32));
 		assert_eq!(Staking::current_era(), 1);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 
 		// Block 4: New era - validators change.
 		System::set_block_number(4);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::validators(), vec![3, 2]);
 
 		// Block 5: Transfer stake from highest to lowest. No change yet.
 		System::set_block_number(5);
 		assert_ok!(Balances::transfer(&4, 1.into(), 40));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 
 		// Block 6: Lowest now validator.
 		System::set_block_number(6);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 3]);
 
 		// Block 7: Unstake three. No change yet.
 		System::set_block_number(7);
 		assert_ok!(Staking::unstake(&3, Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 3]);
 
 		// Block 8: Back to one and two.
 		System::set_block_number(8);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 2]);
 	});
 }
@@ -305,7 +303,7 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::stake(&2));
 		assert_ok!(Staking::stake(&3));
 		assert_ok!(Staking::nominate(&4, 1.into()));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
 		assert_eq!(Balances::total_balance(&1), 10);
@@ -315,7 +313,7 @@ fn nominating_and_rewards_should_work() {
 
 		System::set_block_number(2);
 		assert_ok!(Staking::unnominate(&4, 0));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::validators(), vec![3, 2]);
 		assert_eq!(Balances::total_balance(&1), 12);
@@ -327,7 +325,7 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::stake(&4));
 		assert_ok!(Staking::unstake(&3, Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
 		assert_ok!(Staking::nominate(&3, 1.into()));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 4]);
 		assert_eq!(Balances::total_balance(&1), 12);
 		assert_eq!(Balances::total_balance(&2), 30);
@@ -335,11 +333,33 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Balances::total_balance(&4), 48);
 
 		System::set_block_number(4);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Balances::total_balance(&1), 13);
 		assert_eq!(Balances::total_balance(&2), 30);
 		assert_eq!(Balances::total_balance(&3), 58);
 		assert_eq!(Balances::total_balance(&4), 58);
+	});
+}
+
+#[test]
+fn rewards_with_off_the_table_should_work() {
+	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
+		System::set_block_number(1);
+		assert_ok!(Staking::stake(&1));
+		assert_ok!(Staking::nominate(&2, 1.into()));
+		assert_ok!(Staking::stake(&3));
+		Session::check_rotate_session();
+		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 2, 3
+		assert_eq!(Balances::total_balance(&1), 10);
+		assert_eq!(Balances::total_balance(&2), 20);
+		assert_eq!(Balances::total_balance(&3), 30);
+
+		System::set_block_number(2);
+		assert_ok!(Staking::register_preferences(&1, Staking::intentions().into_iter().position(|i| i == 1).unwrap() as u32, 3, 4));
+		Session::check_rotate_session();
+		assert_eq!(Balances::total_balance(&1), 16);
+		assert_eq!(Balances::total_balance(&2), 24);
+		assert_eq!(Balances::total_balance(&3), 40);
 	});
 }
 
@@ -352,7 +372,7 @@ fn nominating_slashes_should_work() {
 		assert_eq!(Session::validators(), vec![10, 20]);
 
 		System::set_block_number(2);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 
 		Timestamp::set_timestamp(15);
 		System::set_block_number(4);
@@ -360,7 +380,7 @@ fn nominating_slashes_should_work() {
 		assert_ok!(Staking::stake(&3));
 		assert_ok!(Staking::nominate(&2, 3.into()));
 		assert_ok!(Staking::nominate(&4, 1.into()));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 4, 3 + 2
@@ -404,7 +424,7 @@ fn staking_eras_work() {
 
 		// Block 1: No change.
 		System::set_block_number(1);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::current_index(), 1);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -412,7 +432,7 @@ fn staking_eras_work() {
 
 		// Block 2: Simple era change.
 		System::set_block_number(2);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::current_index(), 2);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -421,7 +441,7 @@ fn staking_eras_work() {
 		// Block 3: Schedule an era length change; no visible changes.
 		System::set_block_number(3);
 		assert_ok!(Staking::set_sessions_per_era(3));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::current_index(), 3);
 		assert_eq!(Staking::sessions_per_era(), 2);
 		assert_eq!(Staking::last_era_length_change(), 0);
@@ -429,7 +449,7 @@ fn staking_eras_work() {
 
 		// Block 4: Era change kicks in.
 		System::set_block_number(4);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::current_index(), 4);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
@@ -437,7 +457,7 @@ fn staking_eras_work() {
 
 		// Block 5: No change.
 		System::set_block_number(5);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::current_index(), 5);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
@@ -445,7 +465,7 @@ fn staking_eras_work() {
 
 		// Block 6: No change.
 		System::set_block_number(6);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::current_index(), 6);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);
@@ -453,7 +473,7 @@ fn staking_eras_work() {
 
 		// Block 7: Era increment.
 		System::set_block_number(7);
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::current_index(), 7);
 		assert_eq!(Staking::sessions_per_era(), 3);
 		assert_eq!(Staking::last_era_length_change(), 4);

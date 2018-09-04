@@ -23,9 +23,6 @@ substrate-runtime-system = { path = "../system", default_features = false }
 substrate-runtime-session = { path = "../session", default_features = false }
 substrate-runtime-timestamp = { path = "../timestamp", default_features = false }
 
-[dev-dependencies]
-wabt = "0.4"
-
 [features]
 default = ["std"]
 std = [

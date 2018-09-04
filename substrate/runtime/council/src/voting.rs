@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::traits::{Executable, RefInto, Hash};
+use primitives::traits::{OnFinalise, RefInto, Hash};
 use runtime_io::print;
 use substrate_runtime_support::dispatch::Result;
 use substrate_runtime_support::{StorageValue, StorageMap, IsSubType};
@@ -200,9 +200,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Council<T> {
-	fn execute() {
-		let n = <system::Module<T>>::block_number();
+impl<T: Trait> OnFinalise<T::BlockNumber> for Council<T> {
+	fn on_finalise(n: T::BlockNumber) {
 		if let Err(e) = Self::end_block(n) {
 			print("Guru meditation");
 			print(e);
