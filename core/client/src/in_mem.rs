@@ -181,30 +181,44 @@ impl<Block: BlockT> Blockchain<Block> {
 			storage.genesis_hash = hash;
 		}
 
+		// TODO [snd] reduce complexity of leaf list update code
+
 		// new block is leaf by definition. insert into leaf list.
-		let mut insert_at = 0;
+		let mut maybe_insertion_position = None;
 		for i in 0..storage.leaves.len() {
 			let leaf_number = {
 				storage.blocks.get(&storage.leaves[i]).expect("leaf hash must reference block in storage. q.e.d.").header().number().clone()
 			};
 			if leaf_number < number {
-				insert_at = i;
+				maybe_insertion_position = Some(i);
+				break;
 			}
 		}
-		// TODO [snd] this moves all elements after `insert_at`. make it more efficient
-		storage.leaves.insert(insert_at, hash);
+		if let Some(insertion_position) = maybe_insertion_position {
+			// TODO [snd] this moves all elements after `insert_at`. make it more efficient
+			storage.leaves.insert(insertion_position, hash);
+		} else {
+			// new number is smallest or first entry in leaf list
+			storage.leaves.push(hash);
+		}
 
 		// genesis block does not have parent to remove
 		if number == Zero::zero() {
 			return;
 		}
 
+		// either first block or inserted at end which means parent wasn't in leaf list
+		if maybe_insertion_position.is_none() {
+			return;
+		}
+		let insertion_position = maybe_insertion_position.expect("early return right above. q.e.d.");
+
 		let parent_header = storage.blocks.get(&parent_hash).expect("parent hash must reference block in storage. q.e.d.").header().clone();
 
 		// parent of new block is no longer leaf by definition. remove from leaf list if present
 		// parent comes somewhere after child in leaf list since it's ordered by block number
 		// descending.
-		for i in insert_at..storage.leaves.len() {
+		for i in insertion_position..storage.leaves.len() {
 			let leaf_hash = storage.leaves[i];
 			if leaf_hash == parent_header.hash() {
 				// TODO [snd] this moves all elements after `i`. make it more efficient
