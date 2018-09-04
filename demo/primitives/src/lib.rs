@@ -21,12 +21,26 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-#[cfg(feature = "std")] extern crate serde;
+#[cfg(feature = "std")]
+extern crate serde;
+
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate serde_derive;
+
+#[macro_use]
+extern crate substrate_codec_derive;
 
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_primitives as primitives;
 extern crate substrate_codec as codec;
+
+use rstd::prelude::*;
+use runtime_primitives::generic;
+#[cfg(feature = "std")]
+use primitives::bytes;
+use runtime_primitives::traits::BlakeTwo256;
 
 /// An index to a block.
 pub type BlockNumber = u64;
@@ -54,3 +68,32 @@ pub type Hash = primitives::H256;
 
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = runtime_primitives::MaybeUnsigned<runtime_primitives::Ed25519Signature>;
+
+/// A timestamp: seconds since the unix epoch.
+pub type Timestamp = u64;
+
+/// Header type.
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
+/// Block type.
+pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+/// Block ID.
+pub type BlockId = generic::BlockId<Block>;
+
+/// A log entry in the block.
+#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+
+/// Opaque, encoded, unchecked extrinsic.
+#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct UncheckedExtrinsic(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
+///
+/// Inherent data to include in a block.
+#[derive(Encode, Decode)]
+pub struct InherentData {
+	/// Current timestamp.
+	pub timestamp: Timestamp,
+	/// Indices of offline validators.
+	pub offline_indices: Vec<u32>,
+}

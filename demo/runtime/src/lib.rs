@@ -53,6 +53,9 @@ extern crate substrate_runtime_timestamp as timestamp;
 extern crate substrate_runtime_version as version;
 extern crate demo_primitives;
 
+#[cfg(feature = "std")]
+mod checked_block;
+
 use rstd::prelude::*;
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
@@ -61,6 +64,13 @@ use version::RuntimeVersion;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
+pub use consensus::Call as ConsensusCall;
+pub use timestamp::Call as TimestampCall;
+#[cfg(any(feature = "std", test))]
+pub use checked_block::CheckedBlock;
+
+const TIMESTAMP_SET_POSITION: u32 = 0;
+const NOTE_OFFLINE_POSITION: u32 = 1;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -115,7 +125,7 @@ impl balances::Trait for Concrete {
 pub type Balances = balances::Module<Concrete>;
 
 impl consensus::Trait for Concrete {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
+	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
 	type SessionKey = SessionKey;
 	type OnOfflineValidator = Staking;
 }
@@ -124,7 +134,7 @@ impl consensus::Trait for Concrete {
 pub type Consensus = consensus::Module<Concrete>;
 
 impl timestamp::Trait for Concrete {
-	const TIMESTAMP_SET_POSITION: u32 = 0;
+	const TIMESTAMP_SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
 
 	type Moment = u64;
 }
@@ -203,6 +213,8 @@ impl_outer_dispatch! {
 	}
 }
 
+/// The address format for describing accounts.
+pub use balances::address::Address as RawAddress;
 /// The address format for describing accounts.
 pub type Address = balances::Address<Concrete>;
 /// Block header type as expected by this runtime.

@@ -45,6 +45,15 @@ pub struct RemoteCallExecutor<B, F> {
 	fetcher: Arc<F>,
 }
 
+impl<B, F> Clone for RemoteCallExecutor<B, F> {
+	fn clone(&self) -> Self {
+		RemoteCallExecutor {
+			blockchain: self.blockchain.clone(),
+			fetcher: self.fetcher.clone()
+		}
+	}
+}
+
 impl<B, F> RemoteCallExecutor<B, F> {
 	/// Creates new instance of remote call executor.
 	pub fn new(blockchain: Arc<B>, fetcher: Arc<F>) -> Self {

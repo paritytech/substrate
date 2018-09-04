@@ -1,0 +1,18 @@
+[[bin]]
+name = "substrate-demo"
+path = "src/main.rs"
+
+[package]
+name = "substrate-demo"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+build = "build.rs"
+
+[dependencies]
+error-chain = "0.12"
+demo-cli = { path = "cli" }
+futures = "0.1"
+ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
+
+[build-dependencies]
+vergen = "0.1"
