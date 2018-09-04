@@ -31,6 +31,8 @@ pub trait HeaderBackend<Block: BlockT>: Send + Sync {
 	fn info(&self) -> Result<Info<Block>>;
 	/// Get block status.
 	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
+	/// Get block number by hash. Returns `None` if the header is not in the chain.
+	fn number(&self, hash: Block::Hash) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
 	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
 
