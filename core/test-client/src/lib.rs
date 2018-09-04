@@ -38,6 +38,7 @@ mod block_builder_ext;
 
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
+pub use client::blockchain;
 
 use primitives::{Blake2Hasher, RlpCodec};
 
