@@ -348,7 +348,7 @@ fn rewards_with_off_the_table_should_work() {
 		assert_ok!(Staking::stake(&1));
 		assert_ok!(Staking::nominate(&2, 1.into()));
 		assert_ok!(Staking::stake(&3));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 2, 3
 		assert_eq!(Balances::total_balance(&1), 10);
 		assert_eq!(Balances::total_balance(&2), 20);
@@ -356,7 +356,7 @@ fn rewards_with_off_the_table_should_work() {
 
 		System::set_block_number(2);
 		assert_ok!(Staking::register_preferences(&1, Staking::intentions().into_iter().position(|i| i == 1).unwrap() as u32, 3, 4));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Balances::total_balance(&1), 16);
 		assert_eq!(Balances::total_balance(&2), 24);
 		assert_eq!(Balances::total_balance(&3), 40);
