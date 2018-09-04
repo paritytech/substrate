@@ -130,7 +130,7 @@ fn note_offline_auto_unstake_session_change_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Balances::set_free_balance(&10, 7000);
 		Balances::set_free_balance(&20, 7000);
-		assert_ok!(Staking::register_preferences(&10, 0, 1, 0));
+		assert_ok!(Staking::register_preferences(&10, 0, ValidatorPrefs { unstake_threshold: 1, validator_payment: 0 }));
 		
 		assert_eq!(Staking::intentions(), vec![10, 20]);
 
@@ -348,15 +348,15 @@ fn rewards_with_off_the_table_should_work() {
 		assert_ok!(Staking::stake(&1));
 		assert_ok!(Staking::nominate(&2, 1.into()));
 		assert_ok!(Staking::stake(&3));
-		Session::check_rotate_session();
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 2, 3
 		assert_eq!(Balances::total_balance(&1), 10);
 		assert_eq!(Balances::total_balance(&2), 20);
 		assert_eq!(Balances::total_balance(&3), 30);
 
 		System::set_block_number(2);
-		assert_ok!(Staking::register_preferences(&1, Staking::intentions().into_iter().position(|i| i == 1).unwrap() as u32, 3, 4));
-		Session::check_rotate_session();
+		assert_ok!(Staking::register_preferences(&1, Staking::intentions().into_iter().position(|i| i == 1).unwrap() as u32, ValidatorPrefs { unstake_threshold: 3, validator_payment: 4 }));
+		Session::check_rotate_session(System::block_number());
 		assert_eq!(Balances::total_balance(&1), 16);
 		assert_eq!(Balances::total_balance(&2), 24);
 		assert_eq!(Balances::total_balance(&3), 40);
