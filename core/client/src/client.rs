@@ -1003,7 +1003,7 @@ mod tests {
 	}
 
 	#[test]
-	fn best_chain_containing_single_block() {
+	fn best_chain_containing_with_single_block() {
 		let client = test_client::new();
 
 		let mut builder = client.new_block().unwrap();
@@ -1013,5 +1013,46 @@ mod tests {
 		client.justify_and_import(BlockOrigin::Own, block).unwrap();
 
 		assert_eq!(block_hash.clone(), client.best_chain_containing_block_hash(block_hash.clone()).unwrap());
+	}
+
+	#[test]
+	fn best_chain_containing_with_fork() {
+		// G -> A -> B -> C -> D
+		//      A -> E -> F
+		let client = test_client::new();
+
+		// G -> A
+		let block_a = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, block_a.clone()).unwrap();
+
+		// A -> B
+		let block_b = client.new_block_at(&BlockId::Hash(block_a.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, block_b.clone()).unwrap();
+
+		// B -> C
+		let block_c = client.new_block_at(&BlockId::Hash(block_b.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, block_c.clone()).unwrap();
+
+		// C -> D
+		let block_d = client.new_block_at(&BlockId::Hash(block_c.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, block_d.clone()).unwrap();
+
+		// A -> E
+		let block_e = client.new_block_at(&BlockId::Hash(block_a.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, block_e.clone()).unwrap();
+
+		// E -> F
+		let block_f = client.new_block_at(&BlockId::Hash(block_e.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, block_f.clone()).unwrap();
+
+		assert_eq!(client.info().unwrap().chain.best_hash, block_d.hash());
+
+		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_a.hash().clone()).unwrap());
+		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_b.hash().clone()).unwrap());
+		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_c.hash().clone()).unwrap());
+		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_d.hash().clone()).unwrap());
+
+		assert_eq!(block_f.hash(), client.best_chain_containing_block_hash(block_e.hash().clone()).unwrap());
+		assert_eq!(block_f.hash(), client.best_chain_containing_block_hash(block_f.hash().clone()).unwrap());
 	}
 }
