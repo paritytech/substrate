@@ -105,6 +105,11 @@ macro_rules! decl_module {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
 		}
+
+		__impl_json_metadata! {
+			impl for $mod_type<$trait_instance: $trait_name>;
+			$($rest)*
+		}
 	};
 	(
 		$(#[$attr:meta])*
@@ -125,6 +130,11 @@ macro_rules! decl_module {
 		$(#[$attr])*
 		struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
 		decl_dispatch! {
+			impl for $mod_type<$trait_instance: $trait_name>;
+			$($rest)*
+		}
+
+		__impl_json_metadata! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
 		}
@@ -556,5 +566,243 @@ macro_rules! impl_outer_dispatch_common {
 			}
 		}
 
+	}
+}
+
+/// Implement the `json_metadata` function.
+#[macro_export]
+macro_rules! __impl_json_metadata {
+	(
+		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
+		$($rest:tt)*
+	) => {
+		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
+			pub fn json_metadata() -> &'static str {
+			    concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "calls": ["#,
+				    __calls_to_json!(""; $($rest)*), " ] }")
+			}
+		}
+	}
+}
+
+/// Convert the list of calls into their JSON representation, joined by ",".
+#[macro_export]
+macro_rules! __calls_to_json {
+    // WITHOUT AUX
+	(
+		$prefix_str:tt;
+		$(#[$attr:meta])*
+		pub enum $call_type:ident {
+			$(
+				fn $fn_name:ident(
+					$(
+						$param_name:ident : $param:ty
+					),*
+				) -> $result:ty
+				= $id:expr ;
+			)*
+		}
+		$($rest:tt)*
+	) => {
+		concat!($prefix_str, " ",
+		    r#"{ "name": ""#, stringify!($call_type),
+			r#"", "functions": {"#,
+			__functions_to_json!(""; $(
+				fn $fn_name( $( $param_name: $param ),* ) -> $result = $id;
+			)*), " } }", __calls_to_json!(","; $($rest)*)
+		)
+	};
+	// WITH AUX
+	(
+		$prefix_str:tt;
+		$(#[$attr:meta])*
+		pub enum $call_type:ident where aux: $aux_type:ty {
+			$(
+				fn $fn_name:ident(aux
+					$(
+						, $param_name:ident : $param:ty
+					)*
+				) -> $result:ty
+				= $id:expr ;
+			)*
+		}
+		$($rest:tt)*
+	) => {
+		concat!($prefix_str, " ",
+		    r#"{ "name": ""#, stringify!($call_type),
+			r#"", "functions": {"#,
+			__functions_to_json!(""; $aux_type; $(
+				fn $fn_name(aux $(, $param_name: $param )* ) -> $result = $id;
+			)*), " } }", __calls_to_json!(","; $($rest)*)
+		)
+	};
+	// BASE CASE
+	(
+		$prefix_str:tt;
+	) => {
+		""
+	}
+}
+
+/// Convert a list of function into their JSON representation, joined by ",".
+#[macro_export]
+macro_rules! __functions_to_json {
+	// WITHOUT AUX
+    (
+		$prefix_str:tt;
+	    fn $fn_name:ident(
+			$($param_name:ident : $param:ty),*
+		) -> $result:ty = $id:expr ;
+		$($rest:tt)*
+	) => {
+		    concat!($prefix_str, " ",
+				__function_to_json!(
+					fn $fn_name(
+						$($param_name : $param),*
+					) -> $result = $id ;
+				), __functions_to_json!(","; $($rest)*)
+		    )
+	};
+	// WITH AUX
+	(
+		$prefix_str:tt;
+		$aux_type:ty;
+		fn $fn_name:ident(aux
+			$(
+				, $param_name:ident : $param:ty
+			)*
+		) -> $result:ty = $id:expr ;
+		$($rest:tt)*
+	) => {
+			concat!($prefix_str, " ",
+				__function_to_json!(
+					fn $fn_name(
+						aux: $aux_type
+						$(, $param_name : $param)*
+					) -> $result = $id ;
+				), __functions_to_json!(","; $aux_type; $($rest)*)
+		    )
+	};
+	// BASE CASE
+	(
+		$prefix_str:tt;
+		$($aux_type:ty;)*
+	) => {
+		""
+	}
+}
+
+/// Convert a function into its JSON representation.
+#[macro_export]
+macro_rules! __function_to_json {
+    (
+	    fn $fn_name:ident(
+			$first_param_name:ident : $first_param:ty $(, $param_name:ident : $param:ty)*
+		) -> $result:ty = $id:expr ;
+	) => {
+			concat!(
+				r#"""#, stringify!($id), r#"""#,
+				r#": { "name": ""#, stringify!($fn_name),
+				r#"", "params": [ "#,
+				concat!(r#"{ "name": ""#, stringify!($first_param_name), r#"", "type": ""#, stringify!($first_param), r#"" }"# ),
+				$(
+					concat!(r#", { "name": ""#, stringify!($param_name), r#"", "type": ""#, stringify!($param), r#"" }"# ),
+				)*
+				" ] }"
+			)
+	};
+}
+
+#[cfg(test)]
+// Do not complain about unused `dispatch` and `dispatch_aux`.
+#[allow(dead_code)]
+mod tests {
+	use super::*;
+	use serde;
+	use serde_json;
+
+	pub trait Trait {
+		 type PublicAux;
+	}
+
+	decl_module! {
+		pub struct Module<T: Trait>;
+
+		#[derive(Serialize, Deserialize)]
+		pub enum Call where aux: T::PublicAux {
+			fn aux_0(aux) -> Result = 0;
+			fn aux_1(aux, data: i32) -> Result = 1;
+			fn aux_2(aux, data: i32, data2: String) -> Result = 2;
+		}
+
+		#[derive(Serialize, Deserialize)]
+		pub enum PrivCall {
+			 fn priv_0(data: String) -> Result = 0;
+			 fn priv_1(data: String, data2: u32) -> Result = 1;
+		}
+	}
+
+	const EXPECTED_METADATA: &str = concat!(
+		r#"{ "name": "Module", "calls": [ "#,
+			r#"{ "name": "Call", "functions": { "#,
+				r#""0": { "name": "aux_0", "params": [ "#,
+					r#"{ "name": "aux", "type": "T::PublicAux" }"#,
+				r#" ] }, "#,
+				r#""1": { "name": "aux_1", "params": [ "#,
+					r#"{ "name": "aux", "type": "T::PublicAux" }, "#,
+					r#"{ "name": "data", "type": "i32" }"#,
+				r#" ] }, "#,
+				r#""2": { "name": "aux_2", "params": [ "#,
+					r#"{ "name": "aux", "type": "T::PublicAux" }, "#,
+					r#"{ "name": "data", "type": "i32" }, "#,
+					r#"{ "name": "data2", "type": "String" }"#,
+				r#" ] }"#,
+			r#" } }, "#,
+			r#"{ "name": "PrivCall", "functions": { "#,
+				r#""0": { "name": "priv_0", "params": [ "#,
+					r#"{ "name": "data", "type": "String" }"#,
+				r#" ] }, "#,
+				r#""1": { "name": "priv_1", "params": [ "#,
+					r#"{ "name": "data", "type": "String" }, "#,
+					r#"{ "name": "data2", "type": "u32" }"#,
+				r#" ] }"#,
+			r#" } }"#,
+		r#" ] }"#,
+	);
+
+	impl<T: Trait> Module<T> {
+		fn aux_0(_: &T::PublicAux) -> Result {
+			unreachable!()
+		}
+
+		fn aux_1(_: &T::PublicAux, _: i32) -> Result {
+			unreachable!()
+		}
+
+		fn aux_2(_: &T::PublicAux, _: i32, _: String) -> Result {
+			unreachable!()
+		}
+
+		fn priv_0(_: String) -> Result {
+			unreachable!()
+		}
+
+		fn priv_1(_: String, _: u32) -> Result {
+			unreachable!()
+		}
+	}
+
+	struct TraitImpl {}
+
+	impl Trait for TraitImpl {
+		type PublicAux = u32;
+	}
+
+	#[test]
+	fn module_json_metadata() {
+		let metadata = Module::<TraitImpl>::json_metadata();
+		assert_eq!(EXPECTED_METADATA, metadata);
+		let _: serde::de::IgnoredAny =
+			serde_json::from_str(metadata).expect("Is valid json syntax");
 	}
 }

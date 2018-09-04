@@ -13,6 +13,10 @@ substrate-runtime-io = { path = "../runtime-io", default_features = false }
 substrate-primitives = { path = "../primitives", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
 
+[dev-dependencies]
+pretty_assertions = "0.5.1"
+serde_json = { version = "1.0" }
+
 [features]
 default = ["std"]
 std = [
