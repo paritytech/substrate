@@ -1059,7 +1059,15 @@ mod tests {
 			vec![block_d.hash()]);
 
 		// A -> E
-		let block_e = client.new_block_at(&BlockId::Hash(block_a.hash())).unwrap().bake().unwrap();
+		let mut builder_e = client.new_block_at(&BlockId::Hash(block_a.hash())).unwrap();
+		// this push is required as otherwise E has the same hash as B and won't get imported
+		builder_e.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		}).unwrap();
+		let block_e = builder_e.bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, block_e.clone()).unwrap();
 		assert_eq!(
 			client.backend().blockchain().leaves().unwrap(),
@@ -1068,12 +1076,11 @@ mod tests {
 		// E -> F
 		let block_f = client.new_block_at(&BlockId::Hash(block_e.hash())).unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, block_f.clone()).unwrap();
-
-		assert_eq!(client.info().unwrap().chain.best_hash, block_d.hash());
-
 		assert_eq!(
 			client.backend().blockchain().leaves().unwrap(),
 			vec![block_d.hash(), block_f.hash()]);
+
+		assert_eq!(client.info().unwrap().chain.best_hash, block_d.hash());
 
 		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_a.hash().clone()).unwrap());
 		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_b.hash().clone()).unwrap());
