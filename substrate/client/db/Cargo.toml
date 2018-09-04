@@ -6,12 +6,12 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 parking_lot = "0.4"
 log = "0.3"
-kvdb = { git = "https://github.com/paritytech/parity.git" }
-kvdb-rocksdb = { git = "https://github.com/paritytech/parity.git" }
+kvdb = { git = "https://github.com/paritytech/parity.git", rev = "202c54d42398fc4b49d67ffbf9070522e38f9360" }
+kvdb-rocksdb = { git = "https://github.com/paritytech/parity.git", rev = "202c54d42398fc4b49d67ffbf9070522e38f9360" }
 ethereum-types = "0.3"
-hashdb = { git = "https://github.com/paritytech/parity.git" }
-patricia-trie = { git = "https://github.com/paritytech/parity.git" }
-memorydb = { git = "https://github.com/paritytech/parity.git" }
+hashdb = { git = "https://github.com/paritytech/parity.git", rev = "202c54d42398fc4b49d67ffbf9070522e38f9360" }
+patricia-trie = { git = "https://github.com/paritytech/parity.git", rev = "202c54d42398fc4b49d67ffbf9070522e38f9360" }
+memorydb = { git = "https://github.com/paritytech/parity.git", rev = "202c54d42398fc4b49d67ffbf9070522e38f9360" }
 substrate-primitives = { path = "../../../substrate/primitives" }
 substrate-runtime-primitives = { path = "../../../substrate/runtime/primitives" }
 substrate-client = { path = "../../../substrate/client" }
@@ -22,4 +22,4 @@ substrate-executor = { path = "../../../substrate/executor" }
 substrate-state-db = { path = "../../../substrate/state-db" }
 
 [dev-dependencies]
-kvdb-memorydb = { git = "https://github.com/paritytech/parity.git" }
+kvdb-memorydb = { git = "https://github.com/paritytech/parity.git", rev = "202c54d42398fc4b49d67ffbf9070522e38f9360" }

@@ -18,8 +18,9 @@
 //! full and light storages.
 
 use std::sync::Arc;
+use std::io;
 
-use kvdb::{self, KeyValueDB, DBTransaction};
+use kvdb::{KeyValueDB, DBTransaction};
 use kvdb_rocksdb::{Database, DatabaseConfig};
 
 use client;
@@ -70,13 +71,9 @@ pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u64> {
 }
 
 /// Maps database error to client error
-pub fn db_err(err: kvdb::Error) -> client::error::Error {
+pub fn db_err(err: io::Error) -> client::error::Error {
 	use std::error::Error;
-	match err.kind() {
-		&kvdb::ErrorKind::Io(ref err) => client::error::ErrorKind::Backend(err.description().into()).into(),
-		&kvdb::ErrorKind::Msg(ref m) => client::error::ErrorKind::Backend(m.clone()).into(),
-		_ => client::error::ErrorKind::Backend("Unknown backend error".into()).into(),
-	}
+	client::error::ErrorKind::Backend(err.description().into()).into()
 }
 
 /// Open RocksDB database.
