@@ -50,7 +50,7 @@ use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, RefInto, OnFinalise,
-	As, AuxLookup, Member};
+	As, AuxLookup};
 use balances::{address::Address, OnMinted};
 
 mod mock;
@@ -79,19 +79,18 @@ pub enum LockStatus<BlockNumber: Parameter> {
 /// Preference of what happens on a slash event.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct ValidatorPrefs<Balance> where Balance: Member {
+pub struct ValidatorPrefs<Balance> {
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	pub unstake_threshold: u32,
 	// Reward that validator takes up-front; only the rest is split between themself and nominators.
-	#[cfg_attr(feature = "std", serde(deserialize_with="Balance::deserialize"))]
 	pub validator_payment: Balance,
 }
 
-impl<B: Member + Default> Default for ValidatorPrefs<B> {
+impl<B: Default> Default for ValidatorPrefs<B> {
 	fn default() -> Self {
-		ValidatorPreferences {
+		ValidatorPrefs {
 			unstake_threshold: 3,
-			off_the_table: Default::default(),
+			validator_payment: Default::default(),
 		}
 	}
 }
@@ -108,6 +107,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned"))]
 	pub enum Call where aux: T::PublicAux {
 		fn stake(aux) -> Result = 0;
 		fn unstake(aux, intentions_index: u32) -> Result = 1;
@@ -163,7 +163,7 @@ decl_storage! {
 		// The current era index.
 		pub CurrentEra get(current_era): required T::BlockNumber;
 		// Preferences that a validator has.
-		pub ValidatorPreferences get(validator_preferences): map [ T::AccountId => ValidatorPrefs<T::Balance> ];
+		pub ValidatorPreferences get(validator_preferences): default map [ T::AccountId => ValidatorPrefs<T::Balance> ];
 		// All the accounts with a desire to stake.
 		pub Intentions get(intentions): default Vec<T::AccountId>;
 		// All nominator -> nominee relationships.
@@ -386,7 +386,7 @@ impl<T: Trait> Module<T> {
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
 	/// balance, pro-rata.
 	fn reward_validator(who: &T::AccountId, reward: T::Balance) {
-		let off_the_table = reward.min(Self::validator_preferences(who).off_the_table);
+		let off_the_table = reward.min(Self::validator_preferences(who).validator_payment);
 		let reward = reward - off_the_table;
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()
