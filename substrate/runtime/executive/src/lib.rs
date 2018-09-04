@@ -135,7 +135,7 @@ impl<
 
 		// post-transactional book-keeping.
 		<system::Module<System>>::note_finished_extrinsics();
-		Finalisation::on_finalise(header.number());
+		Finalisation::on_finalise(*header.number());
 
 		// any final checks
 		Self::final_checks(&header);
