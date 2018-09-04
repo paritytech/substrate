@@ -150,6 +150,7 @@ macro_rules! decl_dispatch {
 		$(#[$attr:meta])*
 		pub enum $call_type:ident {
 			$(
+				$(#[$fn_attr:meta])*
 				fn $fn_name:ident(
 					$(
 						$param_name:ident : $param:ty
@@ -179,6 +180,7 @@ macro_rules! decl_dispatch {
 		$(#[$attr:meta])*
 		pub enum $call_type:ident where aux: $aux_type:ty {
 			$(
+				$(#[$fn_attr:meta])*
 				fn $fn_name:ident(aux
 					$(
 						, $param_name:ident : $param:ty
@@ -594,6 +596,7 @@ macro_rules! __calls_to_json {
 		$(#[$attr:meta])*
 		pub enum $call_type:ident {
 			$(
+				$(#[doc = $doc_attr:tt])*
 				fn $fn_name:ident(
 					$(
 						$param_name:ident : $param:ty
@@ -609,6 +612,7 @@ macro_rules! __calls_to_json {
 			r#"", "functions": {"#,
 			__functions_to_json!(""; $(
 				fn $fn_name( $( $param_name: $param ),* ) -> $result = $id;
+				__function_doc_to_json!(""; $($doc_attr)*);
 			)*), " } }", __calls_to_json!(","; $($rest)*)
 		)
 	};
@@ -618,6 +622,7 @@ macro_rules! __calls_to_json {
 		$(#[$attr:meta])*
 		pub enum $call_type:ident where aux: $aux_type:ty {
 			$(
+				$(#[doc = $doc_attr:tt])*
 				fn $fn_name:ident(aux
 					$(
 						, $param_name:ident : $param:ty
@@ -633,6 +638,7 @@ macro_rules! __calls_to_json {
 			r#"", "functions": {"#,
 			__functions_to_json!(""; $aux_type; $(
 				fn $fn_name(aux $(, $param_name: $param )* ) -> $result = $id;
+				__function_doc_to_json!(""; $($doc_attr)*);
 			)*), " } }", __calls_to_json!(","; $($rest)*)
 		)
 	};
@@ -653,6 +659,7 @@ macro_rules! __functions_to_json {
 	    fn $fn_name:ident(
 			$($param_name:ident : $param:ty),*
 		) -> $result:ty = $id:expr ;
+		$fn_doc:expr;
 		$($rest:tt)*
 	) => {
 		    concat!($prefix_str, " ",
@@ -660,6 +667,7 @@ macro_rules! __functions_to_json {
 					fn $fn_name(
 						$($param_name : $param),*
 					) -> $result = $id ;
+					$fn_doc;
 				), __functions_to_json!(","; $($rest)*)
 		    )
 	};
@@ -672,6 +680,7 @@ macro_rules! __functions_to_json {
 				, $param_name:ident : $param:ty
 			)*
 		) -> $result:ty = $id:expr ;
+		$fn_doc:expr;
 		$($rest:tt)*
 	) => {
 			concat!($prefix_str, " ",
@@ -680,6 +689,7 @@ macro_rules! __functions_to_json {
 						aux: $aux_type
 						$(, $param_name : $param)*
 					) -> $result = $id ;
+					$fn_doc;
 				), __functions_to_json!(","; $aux_type; $($rest)*)
 		    )
 	};
@@ -699,6 +709,7 @@ macro_rules! __function_to_json {
 	    fn $fn_name:ident(
 			$first_param_name:ident : $first_param:ty $(, $param_name:ident : $param:ty)*
 		) -> $result:ty = $id:expr ;
+		$fn_doc:tt;
 	) => {
 			concat!(
 				r#"""#, stringify!($id), r#"""#,
@@ -708,9 +719,31 @@ macro_rules! __function_to_json {
 				$(
 					concat!(r#", { "name": ""#, stringify!($param_name), r#"", "type": ""#, stringify!($param), r#"" }"# ),
 				)*
-				" ] }"
+				r#" ], "description": ["#, $fn_doc, " ] }"
 			)
 	};
+}
+
+/// Convert a function documentation attribute into its JSON representation.
+#[macro_export]
+macro_rules! __function_doc_to_json {
+    (
+		$prefix_str:tt;
+		$doc_attr:tt
+		$($rest:tt)*
+	) => {
+			concat!(
+				$prefix_str, r#" ""#,
+				$doc_attr,
+				r#"""#,
+				__function_doc_to_json!(","; $($rest)*)
+			)
+	};
+	(
+		$prefix_str:tt;
+	) => {
+		""
+	}
 }
 
 #[cfg(test)]
@@ -730,6 +763,7 @@ mod tests {
 
 		#[derive(Serialize, Deserialize)]
 		pub enum Call where aux: T::PublicAux {
+			/// Hi, this is a comment.
 			fn aux_0(aux) -> Result = 0;
 			fn aux_1(aux, data: i32) -> Result = 1;
 			fn aux_2(aux, data: i32, data2: String) -> Result = 2;
@@ -737,6 +771,8 @@ mod tests {
 
 		#[derive(Serialize, Deserialize)]
 		pub enum PrivCall {
+			/// Hi, this is a comment.
+			/// Hi, this is a second comment.
 			 fn priv_0(data: String) -> Result = 0;
 			 fn priv_1(data: String, data2: u32) -> Result = 1;
 		}
@@ -747,25 +783,25 @@ mod tests {
 			r#"{ "name": "Call", "functions": { "#,
 				r#""0": { "name": "aux_0", "params": [ "#,
 					r#"{ "name": "aux", "type": "T::PublicAux" }"#,
-				r#" ] }, "#,
+				r#" ], "description": [ " Hi, this is a comment." ] }, "#,
 				r#""1": { "name": "aux_1", "params": [ "#,
 					r#"{ "name": "aux", "type": "T::PublicAux" }, "#,
 					r#"{ "name": "data", "type": "i32" }"#,
-				r#" ] }, "#,
+				r#" ], "description": [ ] }, "#,
 				r#""2": { "name": "aux_2", "params": [ "#,
 					r#"{ "name": "aux", "type": "T::PublicAux" }, "#,
 					r#"{ "name": "data", "type": "i32" }, "#,
 					r#"{ "name": "data2", "type": "String" }"#,
-				r#" ] }"#,
+				r#" ], "description": [ ] }"#,
 			r#" } }, "#,
 			r#"{ "name": "PrivCall", "functions": { "#,
 				r#""0": { "name": "priv_0", "params": [ "#,
 					r#"{ "name": "data", "type": "String" }"#,
-				r#" ] }, "#,
+				r#" ], "description": [ " Hi, this is a comment.", " Hi, this is a second comment." ] }, "#,
 				r#""1": { "name": "priv_1", "params": [ "#,
 					r#"{ "name": "data", "type": "String" }, "#,
 					r#"{ "name": "data2", "type": "u32" }"#,
-				r#" ] }"#,
+				r#" ], "description": [ ] }"#,
 			r#" } }"#,
 		r#" ] }"#,
 	);
