@@ -42,7 +42,7 @@ use futures::{future, Future, stream, Stream};
 use futures::sync::{mpsc, oneshot};
 use tokio::runtime::current_thread;
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::{Interval, Deadline};
+use tokio_timer::{Interval, Timeout};
 
 use custom_proto::{RegisteredProtocol, RegisteredProtocols};
 use custom_proto::RegisteredProtocolOutput;
@@ -689,9 +689,8 @@ fn handle_kademlia_connection(
 		let next = kademlia_stream
 			.into_future()
 			.map_err(|(err, _)| err);
-		let deadline = Instant::now() + Duration::from_secs(20);
 
-		Deadline::new(next, deadline)
+		Timeout::new(next, Duration::from_secs(20))
 			.map_err(|err|
 				// TODO: improve the error reporting here, but tokio-timer's API is bad
 				IoError::new(IoErrorKind::Other, err)
@@ -1243,7 +1242,7 @@ fn periodic_updates<Tp, Tid, St, C>(
 					.map_err(|err| IoError::new(IoErrorKind::Other, err))
 			});
 		let ping_start_time = Instant::now();
-		let fut = Deadline::new(fut, ping_start_time + Duration::from_secs(30))
+		let fut = Timeout::new_at(fut, ping_start_time + Duration::from_secs(30))
 			.then(move |val|
 				match val {
 					Err(err) => {
