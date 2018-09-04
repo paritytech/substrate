@@ -580,8 +580,8 @@ macro_rules! __impl_json_metadata {
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn json_metadata() -> &'static str {
-			    concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "calls": ["#,
-				    __calls_to_json!(""; $($rest)*), " ] }")
+				concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "calls": ["#,
+					__calls_to_json!(""; $($rest)*), " ] }")
 			}
 		}
 	}
@@ -590,7 +590,7 @@ macro_rules! __impl_json_metadata {
 /// Convert the list of calls into their JSON representation, joined by ",".
 #[macro_export]
 macro_rules! __calls_to_json {
-    // WITHOUT AUX
+	// WITHOUT AUX
 	(
 		$prefix_str:tt;
 		$(#[$attr:meta])*
@@ -608,7 +608,7 @@ macro_rules! __calls_to_json {
 		$($rest:tt)*
 	) => {
 		concat!($prefix_str, " ",
-		    r#"{ "name": ""#, stringify!($call_type),
+			r#"{ "name": ""#, stringify!($call_type),
 			r#"", "functions": {"#,
 			__functions_to_json!(""; $(
 				fn $fn_name( $( $param_name: $param ),* ) -> $result = $id;
@@ -634,7 +634,7 @@ macro_rules! __calls_to_json {
 		$($rest:tt)*
 	) => {
 		concat!($prefix_str, " ",
-		    r#"{ "name": ""#, stringify!($call_type),
+			r#"{ "name": ""#, stringify!($call_type),
 			r#"", "functions": {"#,
 			__functions_to_json!(""; $aux_type; $(
 				fn $fn_name(aux $(, $param_name: $param )* ) -> $result = $id;
@@ -654,22 +654,22 @@ macro_rules! __calls_to_json {
 #[macro_export]
 macro_rules! __functions_to_json {
 	// WITHOUT AUX
-    (
+	(
 		$prefix_str:tt;
-	    fn $fn_name:ident(
+		fn $fn_name:ident(
 			$($param_name:ident : $param:ty),*
 		) -> $result:ty = $id:expr ;
 		$fn_doc:expr;
 		$($rest:tt)*
 	) => {
-		    concat!($prefix_str, " ",
+			concat!($prefix_str, " ",
 				__function_to_json!(
 					fn $fn_name(
 						$($param_name : $param),*
 					) -> $result = $id ;
 					$fn_doc;
 				), __functions_to_json!(","; $($rest)*)
-		    )
+			)
 	};
 	// WITH AUX
 	(
@@ -691,7 +691,7 @@ macro_rules! __functions_to_json {
 					) -> $result = $id ;
 					$fn_doc;
 				), __functions_to_json!(","; $aux_type; $($rest)*)
-		    )
+			)
 	};
 	// BASE CASE
 	(
@@ -705,8 +705,8 @@ macro_rules! __functions_to_json {
 /// Convert a function into its JSON representation.
 #[macro_export]
 macro_rules! __function_to_json {
-    (
-	    fn $fn_name:ident(
+	(
+		fn $fn_name:ident(
 			$first_param_name:ident : $first_param:ty $(, $param_name:ident : $param:ty)*
 		) -> $result:ty = $id:expr ;
 		$fn_doc:tt;
@@ -727,7 +727,7 @@ macro_rules! __function_to_json {
 /// Convert a function documentation attribute into its JSON representation.
 #[macro_export]
 macro_rules! __function_doc_to_json {
-    (
+	(
 		$prefix_str:tt;
 		$doc_attr:tt
 		$($rest:tt)*
