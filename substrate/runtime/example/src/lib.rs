@@ -62,7 +62,7 @@ use runtime_primitives::traits::OnFinalise;
 use runtime_support::{StorageValue, dispatch::Result};
 
 /// Our module's configuration trait. All our types and consts go in here. If the
-/// module is dependent on specfiic other modules, then their configuration traits
+/// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
 /// 
 /// `system::Trait` should always be included in our implied traits.
@@ -72,7 +72,7 @@ pub trait Trait: balances::Trait {
 }
 
 // The module declaration. This states the entry points that we handle. The
-// macro looks after the marshalling of arguments and dispatch.
+// macro takes care of the marshalling of arguments and dispatch.
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait>;
@@ -123,8 +123,8 @@ pub type Event<T> = RawEvent<
 >;
 
 /// An event in this module. Events are simple means of reporting specific conditions and
-/// cursumstances that have happened that users, Dapps and/or chain explorers would find
-/// interested and otherwise difficult to detect.
+/// circumstances that have happened that users, Dapps and/or chain explorers would find
+/// interesting and otherwise difficult to detect.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawEvent<B> {
@@ -184,7 +184,7 @@ decl_storage! {
 // functions that do not write to storage and operation functions that do.
 // - Private functions. These are your usual private utilities unavailable to other modules.
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events. This function doesn't change.
+	/// Deposit one of this module's events.
 	// TODO: move into `decl_module` macro.
 	fn deposit_event(event: Event<T>) {
 		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
@@ -203,7 +203,7 @@ impl<T: Trait> Module<T> {
 	// - NO SIDE-EFFECTS ON ERROR: This function must either complete totally (and return 
 	// `Ok(())` or it must have no side-effects on storage and return `Err('Some reason')`.
 	//
-	// The first is relatively easy to audit for - just ensure all panickers are emoved from
+	// The first is relatively easy to audit for - just ensure all panickers are removed from
 	// logic that executes in production (which you do anyway, right?!). To ensure the second 
 	// is followed, you should do all tests for validity at the top of your function. This
 	// is stuff like checking the sender (`aux`) or that state is such that the operation
@@ -212,7 +212,7 @@ impl<T: Trait> Module<T> {
 	// Once you've determined that it's all good, then enact the operation and change storage.
 	// If you can't be certain that the operation will succeed without substantial computation
 	// then you have a classic blockchain attack scenario. The normal way of managing this is
-	// to attach a bond to the operation. as the first major alteration of storage, reserve
+	// to attach a bond to the operation. As the first major alteration of storage, reserve
 	// some value from the sender's account (`Balances` module has a `reserve` function for
 	// exactly this scenario). This amount should be enough to cover any costs of the
 	// substantial execution in case it turns out that you can't proceed with the operation.
@@ -241,7 +241,7 @@ impl<T: Trait> Module<T> {
 		// Will also work with a reference:
 		// <Dummy<T>>::put(&new_dummy);
 
-		// Let's deposit an event to let the outside world this happened.
+		// Let's deposit an event to let the outside world know this happened.
 		Self::deposit_event(RawEvent::Dummy(increase_by));
 
 		// All good.
@@ -252,8 +252,8 @@ impl<T: Trait> Module<T> {
 	// it's not (directly) from an extrinsic, but rather the system as a whole has decided
 	// to execute it. Different runtimes have different reasons for allow priviledged
 	// calls to be executed - we don't need to care why. Because it's priviledged, we can
-	// assume it's a one-off operation and substantial processing/storage/memort can be used
-	// without worrying about gamability or attack scenarios.
+	// assume it's a one-off operation and substantial processing/storage/memory can be used
+	// without worrying about gameability or attack scenarios.
 	fn set_dummy(new_value: T::Balance) -> Result {
 		// Put the new value into storage.
 		<Dummy<T>>::put(new_value);
@@ -263,7 +263,7 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-// The trait expresses what should happen when the block is finalised.
+// This trait expresses what should happen when the block is finalised.
 impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	fn on_finalise(_: T::BlockNumber) {
 		// Anything that needs to be done at the end of the block.
@@ -296,9 +296,9 @@ impl<T: Trait> Default for GenesisConfig<T> {
 // to initialise the module and properly reflect the configuration.
 // 
 // Ideally this would re-use the `::put` logic in the storage item type for introducing
-// the values into the `StorageMap`. That is not yet in place, though, so for now we
-// do everything "manually", using `hash`, `::key()` and `.to_vec()` for the key and
-// `.encode()` for the value.
+// the values into the `StorageMap` (which is just a `HashMap<Vec<u8>, Vec<u8>>`). That
+// is not yet in place, though, so for now we do everything "manually", using `hash`, 
+// `::key()` and `.to_vec()` for the key and `.encode()` for the value.
 #[cfg(feature = "std")]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {

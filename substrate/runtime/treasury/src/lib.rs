@@ -48,7 +48,7 @@ use runtime_primitives::traits::{As, OnFinalise, Zero, RefInto};
 use balances::OnMinted;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
-/// module is dependent on specfiic other modules, then their configuration traits
+/// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
 /// 
 /// `system::Trait` should always be included in our implied traits.
@@ -60,14 +60,16 @@ pub trait Trait: balances::Trait {
 type ProposalIndex = u32;
 
 // The module declaration. This states the entry points that we handle. The
-// macro looks after the marshalling of arguments and dispatch.
+// macro takes care of the marshalling of arguments and dispatch.
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		// Put forward a suggestion for spending. A bond of 
+		// Put forward a suggestion for spending. A deposit proportional to the value
+		// is reserved and slashed if the proposal is rejected. It is returned once the
+		// proposal is awarded.
 		fn propose_spend(aux, value: T::Balance, beneficiary: T::AccountId) -> Result = 0;
 	}
 
@@ -122,8 +124,7 @@ decl_storage! {
 		// proposal gets these back. A rejected proposal doesn't.
 		ProposalBond get(proposal_bond): required Permill;
 		
-		// Proportion of funds that should be bonded in order to place a proposal. An accepted
-		// proposal gets these back. A rejected proposal doesn't.
+		// Minimum amount of funds that should be placed ina deposit for making a proposal.
 		ProposalBondMinimum get(proposal_bond_minimum): required T::Balance;
 
 		// Period between successive spends.
@@ -143,7 +144,7 @@ decl_storage! {
 		// Proposals that have been made.
 		Proposals get(proposals): map [ ProposalIndex => Proposal<T::AccountId, T::Balance> ];
 
-		// Proposals that have been made.
+		// Proposal indices that have been approved but not yet awarded.
 		Approvals get(approvals): default Vec<ProposalIndex>;
 	}
 }
@@ -163,7 +164,7 @@ pub enum RawEvent<Balance, AccountId> {
 	/// We have ended a spend period and will now allocate funds.
 	Spending(Balance),
 	/// Some funds have been allocated.
-	Spent(Balance, AccountId),
+	Awareded(ProposalIndex, Balance, AccountId),
 	/// Some of our funds have been burnt.
 	Burnt(Balance),
 	/// Spending has finished; this is the amount that rolls over until next spend.
@@ -266,7 +267,7 @@ impl<T: Trait> Module<T> {
 					// provide the allocation.
 					<balances::Module<T>>::increase_free_balance_creating(&p.beneficiary, p.value);
 
-					Self::deposit_event(RawEvent::Spent(p.value, p.beneficiary));
+					Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
 					false
 				} else {
 					missed_any = true;
