@@ -107,7 +107,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	#[serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned"))]
+	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
 	pub enum Call where aux: T::PublicAux {
 		fn stake(aux) -> Result = 0;
 		fn unstake(aux, intentions_index: u32) -> Result = 1;
