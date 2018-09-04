@@ -17,5 +17,5 @@ substrate-codec = { path = "../codec", default_features = false }
 hashdb = { git = "https://github.com/paritytech/parity-common" }
 memorydb = { git = "https://github.com/paritytech/parity-common" }
 patricia-trie = { git = "https://github.com/paritytech/parity-common" }
-triehash = { git = "https://github.com/paritytech/parity-common" }
+triehash = { version = "0.2", git = "https://github.com/paritytech/parity-common" }
 rlp = { git = "https://github.com/paritytech/parity-common" }

@@ -304,7 +304,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 					.map_err(|_| UserError("Invalid attempt to get memory in ext_enumerated_trie_root"))
 			)
 			.collect::<::std::result::Result<Vec<_>, UserError>>()?;
-		let r = ordered_trie_root(values.into_iter());
+		let r = ordered_trie_root::<KeccakHasher, _, _>(values.into_iter());
 		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_enumerated_trie_root"))?;
 		Ok(())
 	},
