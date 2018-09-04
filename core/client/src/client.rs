@@ -1011,7 +1011,9 @@ mod tests {
 		let block_a = client.new_block().unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, block_a.clone()).unwrap();
 
-		assert_eq!(client.backend().blockchain().leaves().unwrap(), vec![block_a.hash()]);
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![block_a.hash()]);
 
 		assert_eq!(block_a.hash().clone(), client.best_chain_containing_block_hash(block_a.hash().clone()).unwrap());
 	}
@@ -1022,31 +1024,56 @@ mod tests {
 		//      A -> E -> F
 		let client = test_client::new();
 
+
+		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![genesis_hash]);
+
 		// G -> A
 		let block_a = client.new_block().unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, block_a.clone()).unwrap();
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![block_a.hash()]);
 
 		// A -> B
 		let block_b = client.new_block_at(&BlockId::Hash(block_a.hash())).unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, block_b.clone()).unwrap();
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![block_b.hash()]);
 
 		// B -> C
 		let block_c = client.new_block_at(&BlockId::Hash(block_b.hash())).unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, block_c.clone()).unwrap();
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![block_c.hash()]);
 
 		// C -> D
 		let block_d = client.new_block_at(&BlockId::Hash(block_c.hash())).unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, block_d.clone()).unwrap();
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![block_d.hash()]);
 
 		// A -> E
 		let block_e = client.new_block_at(&BlockId::Hash(block_a.hash())).unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, block_e.clone()).unwrap();
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![block_d.hash(), block_e.hash()]);
 
 		// E -> F
 		let block_f = client.new_block_at(&BlockId::Hash(block_e.hash())).unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, block_f.clone()).unwrap();
 
 		assert_eq!(client.info().unwrap().chain.best_hash, block_d.hash());
+
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![block_d.hash(), block_f.hash()]);
 
 		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_a.hash().clone()).unwrap());
 		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_b.hash().clone()).unwrap());
