@@ -47,7 +47,7 @@ use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
 
 /// Demo protocol id.
-pub const PROTOCOL_ID: ::substrate_network::ProtocolId = *b"sub";
+pub const PROTOCOL_ID: ::substrate_network::ProtocolId = *b"dot";
 
 type FullStatus = GenericFullStatus<Block>;
 

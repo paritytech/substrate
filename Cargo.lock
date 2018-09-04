@@ -3064,7 +3064,7 @@ dependencies = [
  "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.22 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-io 0.1.0",

@@ -148,7 +148,8 @@ where
 	}
 
 	fn inherent_extrinsics(&self, at: &BlockId, inherent_data: InherentData) -> Result<Vec<UncheckedExtrinsic>> {
-		self.call_api(at, "inherent_extrinsics", &inherent_data)
+		let runtime_version = self.runtime_version_at(at)?;
+		self.call_api(at, "inherent_extrinsics", &(inherent_data, runtime_version.spec_version))
 	}
 }
 
