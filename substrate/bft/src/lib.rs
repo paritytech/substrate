@@ -472,7 +472,7 @@ impl<B, P, I> BftService<B, P, I>
 				hash: None,
 				start_round: 0,
 			})),
-			round_timeout_multiplier: 4,
+			round_timeout_multiplier: 10,
 			key: key, // TODO: key changing over time.
 			factory,
 		}

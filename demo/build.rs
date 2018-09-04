@@ -20,5 +20,5 @@ const ERROR_MSG: &'static str = "Failed to generate metadata files";
 
 fn main() {
 	vergen::vergen(vergen::SHORT_SHA).expect(ERROR_MSG);
-	println!("cargo:rerun-if-changed=../.git/HEAD");
+	println!("cargo:rerun-if-changed=../../.git/HEAD");
 }

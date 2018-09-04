@@ -36,7 +36,6 @@ extern crate rhododendron;
 
 #[macro_use]
 extern crate error_chain;
-#[macro_use]
 extern crate futures;
 
 #[macro_use]
@@ -46,7 +45,7 @@ extern crate log;
 extern crate substrate_keyring;
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{self, Duration, Instant};
 
 use codec::{Decode, Encode};
 use demo_api::Api;
@@ -54,7 +53,7 @@ use demo_primitives::{AccountId, Hash, Block, BlockId, BlockNumber, Header, Time
 use primitives::AuthorityId;
 use transaction_pool::TransactionPool;
 use tokio::runtime::TaskExecutor;
-use tokio::timer::{Delay, Interval};
+use tokio::timer::Delay;
 
 use futures::prelude::*;
 use futures::future;
@@ -122,6 +121,9 @@ impl<N, P> bft::Environment<Block> for ProposerFactory<N, P>
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 
+		// force delay in evaluation this long.
+		const FORCE_DELAY: Timestamp = 5;
+
 		let parent_hash = parent_header.hash().into();
 
 		let id = BlockId::hash(parent_hash);
@@ -152,6 +154,7 @@ impl<N, P> bft::Environment<Block> for ProposerFactory<N, P>
 			transaction_pool: self.transaction_pool.clone(),
 			offline: self.offline.clone(),
 			validators,
+			minimum_timestamp: current_timestamp() + FORCE_DELAY,
 		};
 
 		Ok((proposer, input, output))
@@ -170,6 +173,7 @@ pub struct Proposer<C: Api + Send + Sync> {
 	transaction_pool: Arc<TransactionPool<C>>,
 	offline: SharedOfflineTracker,
 	validators: Vec<AccountId>,
+	minimum_timestamp: u64,
 }
 
 impl<C: Api + Send + Sync> Proposer<C> {
@@ -187,32 +191,89 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 	where
 		C: Api + Send + Sync,
 {
+	type Create = Result<Block, Error>;
 	type Error = Error;
-	type Create = future::Either<
-		CreateProposal<C>,
-		future::FutureResult<Block, Error>,
-	>;
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
-	fn propose(&self) -> Self::Create {
-		const ATTEMPT_PROPOSE_EVERY: Duration = Duration::from_millis(100);
+	fn propose(&self) -> Result<Block, Error> {
+		use demo_api::BlockBuilder;
+		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
+		use demo_primitives::InherentData;
 
-		let now = Instant::now();
-		let timing = ProposalTiming {
-			start: self.start.clone(),
-			attempt_propose: Interval::new(now + ATTEMPT_PROPOSE_EVERY, ATTEMPT_PROPOSE_EVERY),
+		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
+
+		// TODO: handle case when current timestamp behind that in state.
+		let timestamp = ::std::cmp::max(self.minimum_timestamp, current_timestamp());
+
+		let elapsed_since_start = self.start.elapsed();
+		let offline_indices = if elapsed_since_start > MAX_VOTE_OFFLINE_SECONDS {
+			Vec::new()
+		} else {
+			self.offline.read().reports(&self.validators[..])
 		};
 
-		future::Either::A(CreateProposal {
-			parent_hash: self.parent_hash.clone(),
-			parent_number: self.parent_number.clone(),
-			parent_id: self.parent_id.clone(),
-			client: self.client.clone(),
-			transaction_pool: self.transaction_pool.clone(),
-			offline: self.offline.clone(),
-			validators: self.validators.clone(),
-			timing,
-		})
+		if !offline_indices.is_empty() {
+			info!(
+				"Submitting offline validators {:?} for slash-vote",
+				offline_indices.iter().map(|&i| self.validators[i as usize]).collect::<Vec<_>>(),
+				)
+		}
+
+		let inherent_data = InherentData {
+			timestamp,
+			offline_indices,
+		};
+
+		let mut block_builder = self.client.build_block(&self.parent_id, inherent_data)?;
+
+		{
+			let mut unqueue_invalid = Vec::new();
+			let result = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending_iterator| {
+				let mut pending_size = 0;
+				for pending in pending_iterator {
+					if pending_size + pending.verified.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
+
+					match block_builder.push_extrinsic(pending.original.clone()) {
+						Ok(()) => {
+							pending_size += pending.verified.encoded_size();
+						}
+						Err(e) => {
+							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+							unqueue_invalid.push(pending.verified.hash().clone());
+						}
+					}
+				}
+			});
+			if let Err(e) = result {
+				warn!("Unable to get the pending set: {:?}", e);
+			}
+
+			self.transaction_pool.remove(&unqueue_invalid, false);
+		}
+
+		let block = block_builder.bake()?;
+
+		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
+			  block.header.number,
+			  Hash::from(block.header.hash()),
+			  block.header.parent_hash,
+			  block.extrinsics.iter()
+			  .map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+			  .collect::<Vec<_>>()
+			  .join(", ")
+			 );
+
+		let substrate_block = Decode::decode(&mut block.encode().as_slice())
+			.expect("blocks are defined to serialize to substrate blocks correctly; qed");
+
+		assert!(evaluation::evaluate_initial(
+				&substrate_block,
+				timestamp,
+				&self.parent_hash,
+				self.parent_number,
+				).is_ok());
+
+		Ok(substrate_block)
 	}
 
 	fn evaluate(&self, unchecked_proposal: &Block) -> Self::Evaluate {
@@ -241,9 +302,11 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			let now = Instant::now();
 
 			// the duration until the given timestamp is current
-			let proposed_timestamp = proposal.timestamp();
+			let proposed_timestamp = ::std::cmp::max(self.minimum_timestamp, proposal.timestamp());
 			let timestamp_delay = if proposed_timestamp > current_timestamp {
-				Some(now + Duration::from_secs(proposed_timestamp - current_timestamp))
+				let delay_s = proposed_timestamp - current_timestamp;
+				debug!(target: "bft", "Delaying evaluation of proposal for {} seconds", delay_s);
+				Some(now + Duration::from_secs(delay_s))
 			} else {
 				None
 			};
@@ -377,132 +440,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 }
 
 fn current_timestamp() -> Timestamp {
-	use std::time;
-
 	time::SystemTime::now().duration_since(time::UNIX_EPOCH)
 		.expect("now always later than unix epoch; qed")
 		.as_secs()
-}
-
-struct ProposalTiming {
-	start: Instant,
-	attempt_propose: Interval,
-}
-
-impl ProposalTiming {
-	// whether it's time to attempt a proposal.
-	// shouldn't be called outside of the context of a task.
-	fn poll(&mut self) -> Poll<(), ErrorKind> {
-		// first drain from the interval so when the minimum delay is up
-		// we don't have any notifications built up.
-		if let Async::Ready(x) = self.attempt_propose.poll().map_err(ErrorKind::Timer)? {
-			x.expect("timer still alive; intervals never end; qed");
-		}
-		Ok(Async::Ready(()))
-	}
-}
-
-/// Future which resolves upon the creation of a proposal.
-pub struct CreateProposal<C: Api + Send + Sync>  {
-	parent_hash: Hash,
-	parent_number: BlockNumber,
-	parent_id: BlockId,
-	client: Arc<C>,
-	transaction_pool: Arc<TransactionPool<C>>,
-	timing: ProposalTiming,
-	validators: Vec<AccountId>,
-	offline: SharedOfflineTracker,
-}
-
-impl<C> CreateProposal<C> where C: Api + Send + Sync {
-	fn propose(&self) -> Result<Block, Error> {
-		use demo_api::BlockBuilder;
-		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
-		use demo_primitives::InherentData;
-
-		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
-
-		// TODO: handle case when current timestamp behind that in state.
-		let timestamp = current_timestamp();
-
-		let elapsed_since_start = self.timing.start.elapsed();
-		let offline_indices = if elapsed_since_start > MAX_VOTE_OFFLINE_SECONDS {
-			Vec::new()
-		} else {
-			self.offline.read().reports(&self.validators[..])
-		};
-
-		if !offline_indices.is_empty() {
-			info!(
-				"Submitting offline validators {:?} for slash-vote",
-				offline_indices.iter().map(|&i| self.validators[i as usize]).collect::<Vec<_>>(),
-			)
-		}
-
-		let inherent_data = InherentData {
-			timestamp,
-			offline_indices,
-		};
-
-		let mut block_builder = self.client.build_block(&self.parent_id, inherent_data)?;
-
-		{
-			let mut unqueue_invalid = Vec::new();
-			let result = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending_iterator| {
-				let mut pending_size = 0;
-				for pending in pending_iterator {
-					if pending_size + pending.verified.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
-
-					match block_builder.push_extrinsic(pending.original.clone()) {
-						Ok(()) => {
-							pending_size += pending.verified.encoded_size();
-						}
-						Err(e) => {
-							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
-							unqueue_invalid.push(pending.verified.hash().clone());
-						}
-					}
-				}
-			});
-			if let Err(e) = result {
-				warn!("Unable to get the pending set: {:?}", e);
-			}
-
-			self.transaction_pool.remove(&unqueue_invalid, false);
-		}
-
-		let block = block_builder.bake()?;
-
-		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
-			block.header.number,
-			Hash::from(block.header.hash()),
-			block.header.parent_hash,
-			block.extrinsics.iter()
-				.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
-				.collect::<Vec<_>>()
-				.join(", ")
-		);
-
-		let substrate_block = Decode::decode(&mut block.encode().as_slice())
-			.expect("blocks are defined to serialize to substrate blocks correctly; qed");
-
-		assert!(evaluation::evaluate_initial(
-				&substrate_block,
-				timestamp,
-				&self.parent_hash,
-				self.parent_number,
-		).is_ok());
-
-		Ok(substrate_block)
-	}
-}
-
-impl<C> Future for CreateProposal<C> where C: Api + Send + Sync {
-	type Item = Block;
-	type Error = Error;
-
-	fn poll(&mut self) -> Poll<Block, Error> {
-		try_ready!(self.timing.poll());
-		self.propose().map(Async::Ready)
-	}
 }
