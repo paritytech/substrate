@@ -25,9 +25,6 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(test)]
-extern crate wabt;
-
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -78,23 +75,26 @@ pub enum LockStatus<BlockNumber: Parameter> {
 	LockedUntil(BlockNumber),
 	Bonded,
 }
-
+/*
 /// Preference of what happens on a slash event.
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[derive(Encode, Decode, Eq, PartialEq, Clone, Copy)]
-pub struct SlashPreference {
+pub struct ValidatorPrefs<Balance: Parameter + Codec + MaybeSerializeDebug + MaybeDeserialize> {
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	pub unstake_threshold: u32,
+	// Reward that validator takes up-front; only the rest is split between themself and nominators.
+	pub validator_payment: Balance,
 }
 
-impl Default for SlashPreference {
+impl<B: Parameter + Codec + Default> Default for ValidatorPrefs<B> {
 	fn default() -> Self {
-		SlashPreference {
+		ValidatorPreferences {
 			unstake_threshold: 3,
+			off_the_table: Default::default(),
 		}
 	}
 }
-
+*/
 pub trait Trait: balances::Trait + session::Trait {
 	/// The overarching event type. 
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -109,7 +109,7 @@ decl_module! {
 		fn unstake(aux, intentions_index: u32) -> Result = 1;
 		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result = 2;
 		fn unnominate(aux, target_index: u32) -> Result = 3;
-		fn register_slash_preference(aux, intentions_index: u32, p: SlashPreference) -> Result = 4;
+		fn register_preferences(aux, intentions_index: u32, unstake_threshold: u32, validator_payment: T::Balance) -> Result = 4;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -158,8 +158,8 @@ decl_storage! {
 
 		// The current era index.
 		pub CurrentEra get(current_era): required T::BlockNumber;
-		// Preference over how many times the validator should get slashed for being offline before they are automatically unstaked.
-		pub SlashPreferenceOf get(slash_preference_of): default map [ T::AccountId => SlashPreference ];
+		// Preferences that a validator has.
+		pub ValidatorPreferences: map [ T::AccountId => (u32, T::Balance) ];
 		// All the accounts with a desire to stake.
 		pub Intentions get(intentions): default Vec<T::AccountId>;
 		// All nominator -> nominee relationships.
@@ -190,6 +190,12 @@ impl<T: Trait> Module<T> {
 
 	// PUBLIC IMMUTABLES
 
+	/// ValidatorPreferences getter, introduces a default.
+	pub fn validator_preferences(who: &T::AccountId) -> (u32, T::Balance) {
+		<ValidatorPreferences<T>>::get(who).unwrap_or_else(|| (3, Zero::zero()))
+	}
+
+	/// MinimumValidatorCount getter, introduces a default.
 	pub fn minimum_validator_count() -> usize {
 		<MinimumValidatorCount<T>>::get().map(|v| v as usize).unwrap_or(DEFAULT_MINIMUM_VALIDATOR_COUNT)
 	}
@@ -301,10 +307,11 @@ impl<T: Trait> Module<T> {
 	/// Set the given account's preference for slashing behaviour should they be a validator. 
 	/// 
 	/// An error (no-op) if `Self::intentions()[intentions_index] != aux`.
-	fn register_slash_preference(
+	fn register_preferences(
 		aux: &T::PublicAux,
 		intentions_index: u32,
-		p: SlashPreference
+		unstake_threshold: u32,
+		validator_payment: T::Balance
 	) -> Result {
 		let aux = aux.ref_into();
 
@@ -312,7 +319,7 @@ impl<T: Trait> Module<T> {
 			return Err("Invalid index")
 		}
 		
-		<SlashPreferenceOf<T>>::insert(aux, p);
+		<ValidatorPreferences<T>>::insert(aux, (unstake_threshold, validator_payment));
 
 		Ok(())
 	}
@@ -381,15 +388,23 @@ impl<T: Trait> Module<T> {
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
 	/// balance, pro-rata.
 	fn reward_validator(who: &T::AccountId, reward: T::Balance) {
-		let noms = Self::current_nominators_for(who);
-		let total = noms.iter().map(<balances::Module<T>>::total_balance).fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x);
-		if !total.is_zero() {
+		let off_the_table = reward.min(Self::validator_preferences(who).1);
+		let reward = reward - off_the_table;
+		let validator_cut = if reward.is_zero() {
+			Zero::zero()
+		} else {
+			let noms = Self::current_nominators_for(who);
+			let total = noms.iter()
+				.map(<balances::Module<T>>::total_balance)
+				.fold(<balances::Module<T>>::total_balance(who), |acc, x| acc + x)
+				.max(One::one());
 			let safe_mul_rational = |b| b * reward / total;// TODO: avoid overflow
 			for n in noms.iter() {
 				let _ = <balances::Module<T>>::reward(n, safe_mul_rational(<balances::Module<T>>::total_balance(n)));
 			}
-			let _ = <balances::Module<T>>::reward(who, safe_mul_rational(<balances::Module<T>>::total_balance(who)));
-		}
+			safe_mul_rational(<balances::Module<T>>::total_balance(who))
+		};
+		let _ = <balances::Module<T>>::reward(who, validator_cut + off_the_table);
 	}
 
 	/// Actually carry out the unstake operation.
@@ -401,7 +416,7 @@ impl<T: Trait> Module<T> {
 		}
 		intentions.swap_remove(intentions_index);
 		<Intentions<T>>::put(intentions);
-		<SlashPreferenceOf<T>>::remove(who);
+		<ValidatorPreferences<T>>::remove(who);
 		<SlashCount<T>>::remove(who);
 		<Bondage<T>>::insert(who, <system::Module<T>>::block_number() + Self::bonding_duration());
 		Ok(())
@@ -531,7 +546,7 @@ impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
 			let slash = Self::early_era_slash() << instances;
 			let next_slash = slash << 1u32;
 			let _ = Self::slash_validator(&v, slash);
-			if instances >= Self::slash_preference_of(&v).unstake_threshold
+			if instances >= Self::validator_preferences(&v).0
 				|| Self::slashable_balance(&v) < next_slash
 			{
 				if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
