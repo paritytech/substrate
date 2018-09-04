@@ -42,6 +42,7 @@ mod utils;
 
 use std::sync::Arc;
 use std::path::PathBuf;
+use std::io;
 
 use codec::{Decode, Encode};
 use kvdb::{KeyValueDB, DBTransaction};
@@ -112,7 +113,7 @@ struct PendingBlock<Block: BlockT> {
 struct StateMetaDb<'a>(&'a KeyValueDB);
 
 impl<'a> state_db::MetaDb for StateMetaDb<'a> {
-	type Error = kvdb::Error;
+	type Error = io::Error;
 
 	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.get(columns::STATE_META, key).map(|r| r.map(|v| v.to_vec()))
@@ -257,7 +258,7 @@ impl<Block: BlockT> state_machine::Storage for StorageDb<Block> {
 }
 
 impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
-	type Error = kvdb::Error;
+	type Error = io::Error;
 	type Hash = H256;
 
 	fn get(&self, key: &H256) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -293,7 +294,7 @@ impl<Block: BlockT> Backend<Block> {
 
 	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, finalization_window: u64) -> Result<Self, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
-		let map_e = |e: state_db::Error<kvdb::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
+		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
 		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
 		let storage_db = StorageDb {
 			db,

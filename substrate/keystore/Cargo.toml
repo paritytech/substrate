@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-ethcore-crypto = { git = "https://github.com/paritytech/parity.git", default_features = false }
+ethcore-crypto = { git = "https://github.com/paritytech/parity.git", rev = "202c54d42398fc4b49d67ffbf9070522e38f9360" , default_features = false }
 ed25519 = { path = "../ed25519" }
 error-chain = "0.12"
 hex = "0.3"
