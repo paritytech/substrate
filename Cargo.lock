@@ -2825,6 +2825,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-runtime-example"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-runtime-balances 0.1.0",
+ "substrate-runtime-io 0.1.0",
+ "substrate-runtime-primitives 0.1.0",
+ "substrate-runtime-std 0.1.0",
+ "substrate-runtime-support 0.1.0",
+ "substrate-runtime-system 0.1.0",
+]
+
+[[package]]
 name = "substrate-runtime-executive"
 version = "0.1.0"
 dependencies = [
@@ -2989,6 +3007,24 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-runtime-consensus 0.1.0",
+ "substrate-runtime-io 0.1.0",
+ "substrate-runtime-primitives 0.1.0",
+ "substrate-runtime-std 0.1.0",
+ "substrate-runtime-support 0.1.0",
+ "substrate-runtime-system 0.1.0",
+]
+
+[[package]]
+name = "substrate-runtime-treasury"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-codec 0.1.0",
+ "substrate-codec-derive 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-runtime-balances 0.1.0",
  "substrate-runtime-io 0.1.0",
  "substrate-runtime-primitives 0.1.0",
  "substrate-runtime-std 0.1.0",

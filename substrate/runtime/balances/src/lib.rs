@@ -45,7 +45,7 @@ use rstd::{cmp, result};
 use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, One, RefInto, SimpleArithmetic, Executable, MakePayment,
+use primitives::traits::{Zero, One, RefInto, SimpleArithmetic, OnFinalise, MakePayment,
 	As, AuxLookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
 
@@ -89,6 +89,16 @@ impl<
 		X::on_free_balance_zero(who);
 		Y::on_free_balance_zero(who);
 	}
+}
+
+/// Trait for a hook to get called when some balance has been minted.
+pub trait OnMinted<Balance> {
+	/// Some balance `b` was minted.
+	fn on_minted(b: Balance);
+}
+
+impl<Balance> OnMinted<Balance> for () {
+	fn on_minted(_b: Balance) {}
 }
 
 /// Determinator for whether a given account is able to transfer balance.
@@ -400,6 +410,17 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
+	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created.
+	///
+	/// This is a sensitive function since it circumvents any fees associated with account
+	/// setup. Ensure it is only called by trusted code.
+	///
+	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
+	/// you mean to actually mint value into existence, then use `reward` instead.
+	pub fn increase_free_balance_creating(who: &T::AccountId, value: T::Balance) -> UpdateBalanceOutcome {
+		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
+	}
+
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
 	///
@@ -621,8 +642,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 

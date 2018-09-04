@@ -48,7 +48,7 @@
 //! exsistential deposit) then it reaps the account. That will lead to deletion of the associated
 //! code and storage of the account.
 //!
-//! [`Module::execute`]: struct.Module.html#impl-Executable
+//! [`Module::execute`]: struct.Module.html#impl-OnFinalise
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -101,7 +101,7 @@ use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
 use codec::Codec;
-use runtime_primitives::traits::{As, RefInto, SimpleArithmetic, Executable};
+use runtime_primitives::traits::{As, RefInto, SimpleArithmetic, OnFinalise};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
 
@@ -270,8 +270,8 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 }
 
 /// Finalization hook for the smart-contract module.
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 		<GasSpent<T>>::kill();
 	}
 }
