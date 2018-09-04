@@ -315,7 +315,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
+	use substrate_primitives::{H256, KeccakHasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256};
 
@@ -370,7 +370,7 @@ mod tests {
 			assert_eq!(Example::dummy(), Some(42));
 
 			// Check that accumulate works when we have Some value in Dummy already.
-			assert_ok!(Example::accumulate_dummy(27.into()));
+			assert_ok!(Example::accumulate_dummy(&0, 27));
 			assert_eq!(Example::dummy(), Some(69));
 			
 			// Check that finalising the block removes Dummy from storage.
@@ -378,7 +378,7 @@ mod tests {
 			assert_eq!(Example::dummy(), None);
 
 			// Check that accumulate works when we Dummy has None in it.
-			assert_ok!(Example::accumulate_dummy(42.into()));
+			assert_ok!(Example::accumulate_dummy(&0, 42));
 			assert_eq!(Example::dummy(), Some(42));
 		});
 	}

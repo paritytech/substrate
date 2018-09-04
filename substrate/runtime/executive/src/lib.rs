@@ -282,6 +282,7 @@ mod tests {
 		type Event = MetaEvent;
 	}
 	impl staking::Trait for Test {
+		type OnRewardMinted = ();
 		type Event = MetaEvent;
 	}
 	impl timestamp::Trait for Test {
