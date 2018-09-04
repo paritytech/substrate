@@ -178,7 +178,17 @@ impl_outer_event! {
 
 impl_outer_log! {
 	pub enum Log for Concrete {
-		consensus(AuthoritiesChange => consensus::AuthoritiesChange<SessionKey> => as_authorities_change)
+		consensus
+	}
+}
+
+impl DigestItem for Log {
+	type AuthoritiesChange = consensus::AuthoritiesChange<SessionKey>;
+
+	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
+		match *self {
+			Log::consensus(ref item) => item.as_authorities_change(),
+		}
 	}
 }
 
