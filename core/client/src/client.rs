@@ -910,6 +910,7 @@ mod tests {
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::Transfer;
+	use test_client::blockchain::Backend;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
@@ -1004,15 +1005,15 @@ mod tests {
 
 	#[test]
 	fn best_chain_containing_with_single_block() {
+		// G -> A
 		let client = test_client::new();
 
-		let mut builder = client.new_block().unwrap();
-		let block = builder.bake().unwrap();
-		let block_hash = block.hash();
+		let block_a = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, block_a.clone()).unwrap();
 
-		client.justify_and_import(BlockOrigin::Own, block).unwrap();
+		assert_eq!(client.backend().blockchain().leaves().unwrap(), vec![block_a.hash()]);
 
-		assert_eq!(block_hash.clone(), client.best_chain_containing_block_hash(block_hash.clone()).unwrap());
+		assert_eq!(block_a.hash().clone(), client.best_chain_containing_block_hash(block_a.hash().clone()).unwrap());
 	}
 
 	#[test]
