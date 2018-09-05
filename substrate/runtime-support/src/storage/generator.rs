@@ -477,6 +477,7 @@ macro_rules! decl_storage {
 		}
 		impl<$traitinstance: $traittype> $modulename<$traitinstance> {
 			__impl_store_fns!($traitinstance $($t)*);
+			__impl_store_json_metadata!($cratename; $($t)*);
 		}
 	};
 	(
@@ -990,12 +991,214 @@ macro_rules! __impl_store_item {
 	($name:ident $traitinstance:ident) => { type $name = $name<$traitinstance>; }
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_store_json_metadata {
+	(
+		$cratename:ident;
+		$($rest:tt)*
+	) => {
+		pub fn store_json_metadata() -> &'static str {
+			concat!(r#"{ "prefix": ""#, stringify!($cratename), r#"", "items": {"#,
+				__store_functions_to_json!(""; $($rest)*), " } }")
+		}
+	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __store_functions_to_json {
+	// simple values
+	($prefix_str:tt; $name:ident : $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty)),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident : $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty)),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; $name:ident : default $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty), default),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident : default $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty), default),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; $name:ident : required $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty), required),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident : required $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty), required),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+
+	($prefix_str:tt; $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty)),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty)),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty), default),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty), default),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty), required),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($ty), required),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+
+	// maps
+	($prefix_str:tt; $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty)),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty)),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty), default),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty), default),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty), required),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty), required),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+
+	($prefix_str:tt; $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty)),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty)),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty), default),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty), default),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty), required),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt; pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		concat!(
+			__store_function_to_json!($prefix_str, $name, __store_type_to_json!($kty, $ty), required),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt;) => { "" }
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __store_function_to_json {
+	($prefix_str:tt, $name:ident, $type:expr, $modifier:ident) => {
+		__store_function_to_json!($prefix_str; $name; $type; 
+			concat!("\"", stringify!($modifier), "\""))
+	};
+	($prefix_str:tt, $name:ident, $type:expr) => {
+		__store_function_to_json!($prefix_str; $name; $type; "null")
+	};
+	($prefix_str:tt; $name:ident; $type:expr; $modifier:expr) => {
+		concat!($prefix_str, " \"", stringify!($name), "\": { ",
+			r#""modifier": "#, $modifier, r#", "type": "#, $type, r#" }"#
+		)
+	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __store_type_to_json {
+	($name:ty) => {
+		concat!("\"", stringify!($name), "\"")
+	};
+	($key: ty, $value:ty) => {
+		concat!(r#"{ "key": ""#, stringify!($key), r#"", "value": ""#,
+			stringify!($value), "\" }")
+	}
+}
+
 #[cfg(test)]
+// Do not complain about unused `dispatch` and `dispatch_aux`.
+#[allow(dead_code)]
 mod tests {
 	use std::collections::HashMap;
 	use std::cell::RefCell;
 	use codec::Codec;
 	use super::*;
+	use serde;
+	use serde_json;
 
 	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
 		fn exists(&self, key: &[u8]) -> bool {
@@ -1059,5 +1262,87 @@ mod tests {
 		assert_eq!(Map::take(&5, &storage), Some([1; 32]));
 		assert!(Map::get(&5, &storage).is_none());
 		assert!(Map::get(&999, &storage).is_none());
+	}
+
+	pub trait Trait {
+		 type PublicAux;
+	}
+
+	decl_module! {
+		pub struct Module<T: Trait>;
+	}
+
+	decl_storage! {
+		trait Store for Module<T: Trait> as TestStorage {
+			U32 : u32;
+			GETU32 get(u32_getter): u32;
+			pub PUBU32 : u32;
+			pub GETPUBU32 get(pub_u32_getter): u32;
+			U32Default : default u32;
+			GETU32Default get(get_u32_default): default u32;
+			pub PUBU32Default : default u32;
+			pub GETPUBU32Default get(pub_get_u32_default): default u32;
+			U32Required : required u32;
+			GETU32Required get(get_u32_required): required u32;
+			pub PUBU32Required : required u32;
+			pub GETPUBU32Required get(pub_get_u32_required): required u32;
+
+			MAPU32 : map [ u32 => String ];
+			GETMAPU32 get(map_u32_getter): map [ u32 => String ];
+			pub PUBMAPU32 : map [ u32 => String ];
+			pub GETPUBMAPU32 get(map_pub_u32_getter): map [ u32 => String ];
+			MAPU32Default : default map [ u32 => String ];
+			GETMAPU32Default get(map_get_u32_default): default map [ u32 => String ];
+			pub PUBMAPU32Default : default map [ u32 => String ];
+			pub GETPUBMAPU32Default get(map_pub_get_u32_default): default map [ u32 => String ];
+			MAPU32Required : required map [ u32 => String ];
+			GETMAPU32Required get(map_get_u32_required): required map [ u32 => String ];
+			pub PUBMAPU32Required : required map [ u32 => String ];
+			pub GETPUBMAPU32Required get(map_pub_get_u32_required): required map [ u32 => String ];
+
+		}
+	}
+
+	struct TraitImpl {}
+
+	impl Trait for TraitImpl {
+		type PublicAux = u32;
+	}
+
+	const EXPECTED_METADATA: &str = concat!(
+		r#"{ "prefix": "TestStorage", "items": { "#,
+			r#""U32": { "modifier": null, "type": "u32" }, "#,
+			r#""GETU32": { "modifier": null, "type": "u32" }, "#,
+			r#""PUBU32": { "modifier": null, "type": "u32" }, "#,
+			r#""GETPUBU32": { "modifier": null, "type": "u32" }, "#,
+			r#""U32Default": { "modifier": "default", "type": "u32" }, "#,
+			r#""GETU32Default": { "modifier": "default", "type": "u32" }, "#,
+			r#""PUBU32Default": { "modifier": "default", "type": "u32" }, "#,
+			r#""GETPUBU32Default": { "modifier": "default", "type": "u32" }, "#,
+			r#""U32Required": { "modifier": "required", "type": "u32" }, "#,
+			r#""GETU32Required": { "modifier": "required", "type": "u32" }, "#,
+			r#""PUBU32Required": { "modifier": "required", "type": "u32" }, "#,
+			r#""GETPUBU32Required": { "modifier": "required", "type": "u32" }, "#,
+			r#""MAPU32": { "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETMAPU32": { "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
+			r#""PUBMAPU32": { "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETPUBMAPU32": { "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
+			r#""MAPU32Default": { "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETMAPU32Default": { "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""PUBMAPU32Default": { "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETPUBMAPU32Default": { "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""MAPU32Required": { "modifier": "required", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETMAPU32Required": { "modifier": "required", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""PUBMAPU32Required": { "modifier": "required", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETPUBMAPU32Required": { "modifier": "required", "type": { "key": "u32", "value": "String" } }"#,
+		" } }"
+	);
+
+	#[test]
+	fn store_json_metadata() {
+		let metadata = Module::<TraitImpl>::store_json_metadata();
+		assert_eq!(EXPECTED_METADATA, metadata);
+		let _: serde::de::IgnoredAny =
+			serde_json::from_str(metadata).expect("Is valid json syntax");
 	}
 }
