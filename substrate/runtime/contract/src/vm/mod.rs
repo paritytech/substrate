@@ -409,19 +409,21 @@ mod tests {
 	;; ext_create(
 	;;     code_ptr: u32,
 	;;     code_len: u32,
+	;;     salt: u64,
 	;;     gas: u64,
 	;;     value_ptr: u32,
 	;;     value_len: u32,
 	;;     input_data_ptr: u32,
 	;;     input_data_len: u32,
 	;; ) -> u32
-	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_create" (func $ext_create (param i32 i32 i64 i64 i32 i32 i32 i32) (result i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
 		(drop
 			(call $ext_create
 				(i32.const 12)   ;; Pointer to `code`
 				(i32.const 8)    ;; Length of `code`
+				(i64.const 228)  ;; Salt used for determining account address.
 				(i64.const 0)    ;; How much gas to devote for the execution. 0 = all.
 				(i32.const 4)    ;; Pointer to the buffer with value to transfer
 				(i32.const 8)    ;; Length of the buffer with value to transfer
@@ -460,8 +462,8 @@ mod tests {
 				data: vec![
 					1, 2, 3, 4,
 				],
-				gas_left: 49990,
-				salt: 0,
+				gas_left: 49989,
+				salt: 228,
 			}]
 		);
 	}
