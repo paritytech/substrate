@@ -101,6 +101,7 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 					.remote_header(RemoteHeaderRequest {
 						cht_root: self.storage.cht_root(cht::SIZE, number)?,
 						block: number,
+						retry_count: None,
 					})
 					.into_future().wait()
 					.map(Some)

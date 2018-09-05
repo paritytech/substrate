@@ -304,7 +304,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 					.map_err(|_| UserError("Invalid attempt to get memory in ext_enumerated_trie_root"))
 			)
 			.collect::<::std::result::Result<Vec<_>, UserError>>()?;
-		let r = ordered_trie_root(values.into_iter());
+		let r = ordered_trie_root::<KeccakHasher, _, _>(values.into_iter());
 		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_enumerated_trie_root"))?;
 		Ok(())
 	},
@@ -740,7 +740,7 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
-			ordered_trie_root(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
+			ordered_trie_root::<KeccakHasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
 		);
 	}
 

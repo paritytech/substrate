@@ -120,7 +120,6 @@ build it. Ensure you have Rust and the support software installed:
 curl https://sh.rustup.rs -sSf | sh
 rustup update nightly
 rustup target add wasm32-unknown-unknown --toolchain nightly
-rustup component add llvm-tools-preview --toolchain=nightly
 rustup update stable
 cargo install --git https://github.com/alexcrichton/wasm-gc
 sudo apt install cmake pkg-config libssl-dev git

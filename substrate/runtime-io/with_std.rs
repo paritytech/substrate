@@ -102,7 +102,7 @@ pub fn storage_root() -> H256 {
 
 /// A trie root formed from the enumerated items.
 pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
-	triehash::ordered_trie_root(serialised_values.iter().map(|s| s.to_vec())).0
+	triehash::ordered_trie_root::<KeccakHasher, _, _>(serialised_values.iter().map(|s| s.to_vec())).0
 }
 
 /// A trie root formed from the iterated items.
@@ -111,7 +111,7 @@ pub fn trie_root<
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
 >(input: I) -> [u8; 32] {
-	triehash::trie_root(input).0
+	triehash::trie_root::<KeccakHasher, _, _, _>(input).0
 }
 
 /// A trie root formed from the enumerated items.
@@ -119,7 +119,7 @@ pub fn ordered_trie_root<
 	I: IntoIterator<Item = A>,
 	A: AsRef<[u8]>
 >(input: I) -> [u8; 32] {
-	triehash::ordered_trie_root(input).0
+	triehash::ordered_trie_root::<KeccakHasher, _, _>(input).0
 }
 
 /// Verify a ed25519 signature.
