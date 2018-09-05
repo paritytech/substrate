@@ -13,10 +13,10 @@ environmental = { path = "../environmental", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 substrate-primitives = { path = "../primitives", default_features = false }
 substrate-codec = { path = "../codec", default_features = false }
-triehash = { git = "https://github.com/paritytech/parity-common", optional = true }
+triehash = { version = "0.2", optional = true }
 ed25519 = { path = "../ed25519", optional = true }
-hashdb = { git = "https://github.com/paritytech/parity-common", default_features = false }
-rlp = { git = "https://github.com/paritytech/parity-common", optional = true, default_features = false }
+hashdb = { version = "0.2", default_features = false }
+rlp = { version = "0.2", optional = true, default_features = false }
 
 [features]
 default = ["std"]
