@@ -218,6 +218,7 @@ macro_rules! decl_dispatch {
 }
 
 #[macro_export]
+#[doc(hidden)]
 /// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
 macro_rules! __decl_dispatch_module_without_aux {
 	(
@@ -262,6 +263,7 @@ macro_rules! __decl_dispatch_module_without_aux {
 }
 
 #[macro_export]
+#[doc(hidden)]
 /// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
 macro_rules! __decl_dispatch_module_with_aux {
 	(
@@ -308,6 +310,7 @@ macro_rules! __decl_dispatch_module_with_aux {
 
 /// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
 #[macro_export]
+#[doc(hidden)]
 macro_rules! __decl_dispatch_module_common {
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
@@ -419,6 +422,7 @@ macro_rules! __decl_dispatch_module_common {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! __impl_decode {
 	(
 		$input:expr;
@@ -452,6 +456,7 @@ macro_rules! __impl_decode {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! __impl_encode {
 	(
 		$dest:expr;
@@ -512,7 +517,7 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::AuxCallableCallFor<$camelcase> )
 			,)*
 		}
-		impl_outer_dispatch_common! { $call_type, $($camelcase,)* }
+		__impl_outer_dispatch_common! { $call_type, $($camelcase,)* }
 		impl $crate::dispatch::AuxDispatchable for $call_type {
 			type Aux = $aux;
 			type Trait = $call_type;
@@ -552,7 +557,7 @@ macro_rules! impl_outer_dispatch {
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
 			,)*
 		}
-		impl_outer_dispatch_common! { $call_type, $($camelcase,)* }
+		__impl_outer_dispatch_common! { $call_type, $($camelcase,)* }
 		impl $crate::dispatch::Dispatchable for $call_type {
 			type Trait = $call_type;
 			fn dispatch(self) -> $crate::dispatch::Result {
@@ -580,7 +585,8 @@ macro_rules! impl_outer_dispatch {
 
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
 #[macro_export]
-macro_rules! impl_outer_dispatch_common {
+#[doc(hidden)]
+macro_rules! __impl_outer_dispatch_common {
 	(
 		$call_type:ident, $( $camelcase:ident, )*
 	) => {
@@ -602,6 +608,7 @@ macro_rules! impl_outer_dispatch_common {
 
 /// Implement the `json_metadata` function.
 #[macro_export]
+#[doc(hidden)]
 macro_rules! __impl_json_metadata {
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
@@ -618,6 +625,7 @@ macro_rules! __impl_json_metadata {
 
 /// Convert the list of calls into their JSON representation, joined by ",".
 #[macro_export]
+#[doc(hidden)]
 macro_rules! __calls_to_json {
 	// WITHOUT AUX
 	(
@@ -679,6 +687,7 @@ macro_rules! __calls_to_json {
 
 /// Convert a list of function into their JSON representation, joined by ",".
 #[macro_export]
+#[doc(hidden)]
 macro_rules! __functions_to_json {
 	// WITHOUT AUX
 	(
@@ -736,6 +745,7 @@ macro_rules! __functions_to_json {
 
 /// Convert a function into its JSON representation.
 #[macro_export]
+#[doc(hidden)]
 macro_rules! __function_to_json {
 	(
 		fn $fn_name:ident(
@@ -759,6 +769,7 @@ macro_rules! __function_to_json {
 
 /// Convert a function documentation attribute into its JSON representation.
 #[macro_export]
+#[doc(hidden)]
 macro_rules! __function_doc_to_json {
 	(
 		$prefix_str:tt;
