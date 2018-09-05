@@ -727,7 +727,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// Get the most recent block hash of the best (longest) chains
 	/// that contain block with the given `target_hash`.
 	/// TODO [snd] possibly implement this for blockchain::Backend (easier to test)
-	pub fn best_chain_containing_block_hash(&self, target_hash: Block::Hash) -> error::Result<Block::Hash> {
+	pub fn best_chain_containing(&self, target_hash: Block::Hash, maybe_max_block_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>) -> error::Result<Option<Block::Hash>> {
 		let target_header = self.backend.blockchain().header(BlockId::Hash(target_hash))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", target_hash)))?;
 
 		// let best_hash = self.backend.blockchain().info()?.best_hash;
@@ -741,50 +741,42 @@ impl<B, E, Block> Client<B, E, Block> where
 		// 	return Ok(best_hash);
 		// }
 		
-		let leaves = self.backend.blockchain().leaves()?;
-
 		// for each chain. longest chain first. shortest last
-		for leaf_hash in leaves {
+		for leaf_hash in self.backend.blockchain().leaves()? {
 			// if leaf_hash == best_hash {
 			// 	// we already checked the best chain above (`is_target_in_best_chain`)
 			// 	continue;
 			// }
 			// start at the leaf
 			let mut current_hash = leaf_hash;
-			// go backwards (via parent links)
+			// go backwards through the chain (via parent links)
 			loop {
-				// until we find target...
+				// until we find target
 				if current_hash == target_hash {
-					return Ok(leaf_hash);
+					if let Some(max_block_number) = maybe_max_block_number {
+						let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
+						// found the target but it has too high a number
+						if *current_header.number() > max_block_number {
+							return Ok(None);
+						}
+					}
+
+					return Ok(Some(leaf_hash));
 				}
+
 				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
-				// ...or go below its block number
+				// stop search in this chain once we go below the target's block number
 				if current_header.number() < target_header.number() {
 					break;
 				}
 
-				// TODO [snd] is this really needed?
-				// if *current_header.number() == Zero::zero() {
-				// 	// ended up at genesis block. not found in this chain
-				// 	break;
-				// }
 
 				current_hash = *current_header.parent_hash();
 			}
 		}
 
-		// `target_hash` not found in any chain
-		// TODO [snd] replace by returning error or None
-		unreachable!();
-
-		// TODO [snd] test with:
-		// no blocks
-		// total longest = best containing
-		// total longest != best containing
-		// multiple best containing
-		// returns empty vec
-		// test for every block in test chains
+		Ok(None)
 	}
 }
 
@@ -1023,7 +1015,7 @@ mod tests {
 			client.backend().blockchain().leaves().unwrap(),
 			vec![block_a.hash()]);
 
-		assert_eq!(block_a.hash().clone(), client.best_chain_containing_block_hash(block_a.hash().clone()).unwrap());
+		assert_eq!(block_a.hash().clone(), client.best_chain_containing(block_a.hash().clone(), None).unwrap().unwrap());
 	}
 
 	#[test]
@@ -1090,13 +1082,13 @@ mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_hash, block_d.hash());
 
-		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(client.info().unwrap().chain.genesis_hash).unwrap());
-		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_a.hash().clone()).unwrap());
-		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_b.hash().clone()).unwrap());
-		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_c.hash().clone()).unwrap());
-		assert_eq!(block_d.hash(), client.best_chain_containing_block_hash(block_d.hash().clone()).unwrap());
+		assert_eq!(block_d.hash(), client.best_chain_containing(client.info().unwrap().chain.genesis_hash, None).unwrap().unwrap());
+		assert_eq!(block_d.hash(), client.best_chain_containing(block_a.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(block_d.hash(), client.best_chain_containing(block_b.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(block_d.hash(), client.best_chain_containing(block_c.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(block_d.hash(), client.best_chain_containing(block_d.hash().clone(), None).unwrap().unwrap());
 
-		assert_eq!(block_f.hash(), client.best_chain_containing_block_hash(block_e.hash().clone()).unwrap());
-		assert_eq!(block_f.hash(), client.best_chain_containing_block_hash(block_f.hash().clone()).unwrap());
+		assert_eq!(block_f.hash(), client.best_chain_containing(block_e.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(block_f.hash(), client.best_chain_containing(block_f.hash().clone(), None).unwrap().unwrap());
 	}
 }
