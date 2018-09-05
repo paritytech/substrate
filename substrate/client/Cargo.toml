@@ -8,7 +8,6 @@ error-chain = "0.12"
 fnv = "1.0"
 log = "0.3"
 parking_lot = "0.4"
-triehash = "0.1"
 hex-literal = "0.1"
 futures = "0.1.17"
 ed25519 = { path = "../ed25519" }
@@ -27,6 +26,7 @@ substrate-telemetry = { path = "../telemetry" }
 hashdb = { git = "https://github.com/paritytech/parity-common" }
 patricia-trie = { git = "https://github.com/paritytech/parity-common" }
 rlp = { git = "https://github.com/paritytech/parity-common" }
+triehash = { git = "https://github.com/paritytech/parity-common" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }

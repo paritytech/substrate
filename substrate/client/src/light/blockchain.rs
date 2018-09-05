@@ -18,16 +18,18 @@
 //! blocks. CHT roots are stored for headers of ancient blocks.
 
 use std::sync::Weak;
+use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
-use error::Result as ClientResult;
-use light::fetcher::Fetcher;
+use cht;
+use error::{ErrorKind as ClientErrorKind, Result as ClientResult};
+use light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
@@ -38,6 +40,9 @@ pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
 		header: Block::Header,
 		authorities: Option<Vec<AuthorityId>>
 	) -> ClientResult<()>;
+
+	/// Get CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
+	fn cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;
 
 	/// Get storage cache.
 	fn cache(&self) -> Option<&BlockchainCache<Block>>;
@@ -76,7 +81,31 @@ impl<S, F> Blockchain<S, F> {
 
 impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Block: BlockT, S: Storage<Block>, F: Fetcher<Block> {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
-		self.storage.header(id)
+		match self.storage.header(id)? {
+			Some(header) => Ok(Some(header)),
+			None => {
+				let number = match id {
+					BlockId::Hash(hash) => match self.storage.number(hash)? {
+						Some(number) => number,
+						None => return Ok(None),
+					},
+					BlockId::Number(number) => number,
+				};
+
+				// if the header is from future or genesis (we never prune genesis) => return
+				if number.is_zero() || self.storage.status(BlockId::Number(number))? != BlockStatus::InChain {
+					return Ok(None);
+				}
+
+				self.fetcher().upgrade().ok_or(ClientErrorKind::NotAvailableOnLightClient)?
+					.remote_header(RemoteHeaderRequest {
+						cht_root: self.storage.cht_root(cht::SIZE, number)?,
+						block: number,
+					})
+					.into_future().wait()
+					.map(Some)
+			}
+		}
 	}
 
 	fn info(&self) -> ClientResult<BlockchainInfo<Block>> {
@@ -85,6 +114,10 @@ impl<S, F, Block> BlockchainHeaderBackend<Block> for Blockchain<S, F> where Bloc
 
 	fn status(&self, id: BlockId<Block>) -> ClientResult<BlockStatus> {
 		self.storage.status(id)
+	}
+
+	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
+		self.storage.number(hash)
 	}
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {

@@ -46,7 +46,7 @@ use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, MaybeEmpty, Executable, Member, AuthoritiesChangeDigest};
+use primitives::traits::{MaybeSerializeDebug, MaybeEmpty, OnFinalise, Member, AuthoritiesChangeDigest};
 use primitives::bft::MisbehaviorReport;
 
 #[cfg(any(feature = "std", test))]
@@ -239,8 +239,8 @@ impl<T: Trait> Module<T> {
 }
 
 /// Finalization hook for the consensus module.
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 		if let Some(_) = <OriginalAuthorities<T>>::take() {
 			// TODO: call Self::deposit_log
 		}
