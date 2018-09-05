@@ -105,23 +105,23 @@ impl<N> From<RawEvent<N>> for () {
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 
-		// The current set of validators.
+		/// The current set of validators.
 		pub Validators get(validators): required Vec<T::AccountId>;
-		// Current length of the session.
+		/// Current length of the session.
 		pub SessionLength get(length): required T::BlockNumber;
-		// Current index of the session.
+		/// Current index of the session.
 		pub CurrentIndex get(current_index): required T::BlockNumber;
-		// Timestamp when current session started.
+		/// Timestamp when current session started.
 		pub CurrentStart get(current_start): required T::Moment;
 
-		// New session is being forced is this entry exists; in which case, the boolean value is whether
-		// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
+		/// New session is being forced is this entry exists; in which case, the boolean value is whether
+		/// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
 		pub ForcingNewSession get(forcing_new_session): bool;
-		// Block at which the session length last changed.
+		/// Block at which the session length last changed.
 		LastLengthChange: T::BlockNumber;
-		// The next key for a given validator.
+		/// The next key for a given validator.
 		NextKeyFor: map [ T::AccountId => T::SessionKey ];
-		// The next session length.
+		/// The next session length.
 		NextSessionLength: T::BlockNumber;
 	}
 }

@@ -136,7 +136,7 @@ decl_storage! {
 		pub ExtrinsicIndex get(extrinsic_index): u32;
 		ExtrinsicData get(extrinsic_data): required map [ u32 => Vec<u8> ];
 		RandomSeed get(random_seed): required T::Hash;
-		// The current block number being processed. Set by `execute_block`.
+		/// The current block number being processed. Set by `execute_block`.
 		Number get(block_number): required T::BlockNumber;
 		ParentHash get(parent_hash): required T::Hash;
 		ExtrinsicsRoot get(extrinsics_root): required T::Hash;
