@@ -42,7 +42,7 @@ impl traits::Digest for Digest {
 }
 
 impl traits::DigestItem for u64 {
-	type AuthoritiesChange = traits::StubDigestItem;
+	type AuthoritiesChange = ();
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]

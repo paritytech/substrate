@@ -438,11 +438,11 @@ pub trait Digest: Member + Default {
 /// Single digest item. Could be any type that implements `Member` and provides methods
 /// for casting member to 'system' log items, known to substrate.
 ///
-/// If the runtime does not supports some 'system' items, use `StubDigestItem` as a stub.
+/// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Member {
 	/// Events of this type is raised by the runtime when set of authorities is changed.
 	/// Provides access to the new set of authorities.
-	type AuthoritiesChange: AuthoritiesChangeDigest; // TODO: = StubDigestItem when associated type defaults are stabilized
+	type AuthoritiesChange: AuthoritiesChangeDigest; // TODO: = () when associated type defaults are stabilized
 
  	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
@@ -460,19 +460,15 @@ pub trait AuthoritiesChangeDigest {
 	fn authorities(&self) -> &[Self::AuthorityId];
 }
 
-/// Empty digest item that is never created and used.
+/// Stub implementations for the digest item that is never created and used.
 ///
 /// Should be used as a stub for items that are not supported by runtimes.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub struct StubDigestItem;
-
-impl DigestItem for StubDigestItem {
-	type AuthoritiesChange = StubDigestItem;
+impl DigestItem for () {
+	type AuthoritiesChange = ();
 }
 
-impl AuthoritiesChangeDigest for StubDigestItem {
+impl AuthoritiesChangeDigest for () {
 	type AuthorityId = ();
 
-	fn authorities(&self) -> &[Self::AuthorityId] { unreachable!("StubDigestItem is never created") }
+	fn authorities(&self) -> &[Self::AuthorityId] { unreachable!("() is never created") }
 }
