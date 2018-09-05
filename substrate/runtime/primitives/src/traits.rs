@@ -317,13 +317,6 @@ impl<T> MaybeDisplay for T {}
 pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
-/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
-/// each `Codec`.
-pub trait Digest {
-	type Item: Member;
-	fn push(&mut self, item: Self::Item);
-}
-
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
@@ -333,7 +326,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Member + Default;
+	type Digest: Digest;
 
 	fn new(
 		number: Self::Number,
@@ -428,4 +421,50 @@ pub trait Applyable: Sized + Send + Sync {
 	fn index(&self) -> &Self::Index;
 	fn sender(&self) -> &Self::AccountId;
 	fn apply(self) -> Result<(), &'static str>;
+}
+
+/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
+/// each `Codec`.
+pub trait Digest: Member + Default {
+	type Item: DigestItem;
+	fn logs(&self) -> &[Self::Item];
+	fn push(&mut self, item: Self::Item);
+}
+
+/// Single digest item. Could be any type that implements `Member` and provides methods
+/// for casting member to 'system' log items, known to substrate.
+///
+/// If the runtime does not supports some 'system' items, use `()` as a stub.
+pub trait DigestItem: Member {
+	/// Events of this type is raised by the runtime when set of authorities is changed.
+	/// Provides access to the new set of authorities.
+	type AuthoritiesChange: AuthoritiesChangeDigest; // TODO: = () when associated type defaults are stabilized
+
+ 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
+	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
+		None
+	}
+}
+
+/// Authorities change digest item. Created when the set of authorities is changed
+/// within the runtime.
+pub trait AuthoritiesChangeDigest {
+	/// Type of authority Id.
+	type AuthorityId: Member;
+
+	/// Get reference to the new authorities set.
+	fn authorities(&self) -> &[Self::AuthorityId];
+}
+
+/// Stub implementations for the digest item that is never created and used.
+///
+/// Should be used as a stub for items that are not supported by runtimes.
+impl DigestItem for () {
+	type AuthoritiesChange = ();
+}
+
+impl AuthoritiesChangeDigest for () {
+	type AuthorityId = ();
+
+	fn authorities(&self) -> &[Self::AuthorityId] { unreachable!("() is never created") }
 }

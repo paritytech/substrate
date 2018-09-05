@@ -79,13 +79,13 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn set_key(aux, key: T::SessionKey) -> Result = 0;
+		fn set_key(aux, key: T::SessionKey) -> Result;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		fn set_length(new: T::BlockNumber) -> Result = 0;
-		fn force_new_session(apply_rewards: bool) -> Result = 1;
+		fn set_length(new: T::BlockNumber) -> Result;
+		fn force_new_session(apply_rewards: bool) -> Result;
 	}
 }
 
@@ -295,6 +295,7 @@ mod tests {
 	pub struct Test;
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
+		type Log = u64;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
 	}

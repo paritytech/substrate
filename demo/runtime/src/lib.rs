@@ -60,7 +60,7 @@ mod checked_block;
 use rstd::prelude::*;
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256};
+use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
 
 #[cfg(any(feature = "std", test))]
@@ -101,9 +101,9 @@ impl system::Trait for Runtime {
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
 	type Hashing = BlakeTwo256;
-	type Digest = generic::Digest<Vec<u8>>;
+	type Digest = generic::Digest<Log>;
 	type AccountId = AccountId;
-	type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
+	type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 	type Event = Event;
 }
 
@@ -123,6 +123,7 @@ pub type Balances = balances::Module<Runtime>;
 
 impl consensus::Trait for Runtime {
 	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
+	type Log = Log;
 	type SessionKey = SessionKey;
 	type OnOfflineValidator = Staking;
 }
@@ -183,30 +184,46 @@ impl_outer_event! {
 	}
 }
 
+impl_outer_log! {
+	pub enum Log for Runtime {
+		consensus
+	}
+}
+
+impl DigestItem for Log {
+	type AuthoritiesChange = consensus::AuthoritiesChange<SessionKey>;
+
+	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
+		match *self {
+			Log::consensus(ref item) => item.as_authorities_change(),
+		}
+	}
+}
+
 impl_outer_dispatch! {
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum Call where aux: <Runtime as system::Trait>::PublicAux {
-		Consensus = 0,
-		Balances = 1,
-		Session = 2,
-		Staking = 3,
-		Timestamp = 4,
-		Democracy = 5,
-		Council = 6,
-		CouncilVoting = 7,
+		Consensus,
+		Balances,
+		Session,
+		Staking,
+		Timestamp,
+		Democracy,
+		Council,
+		CouncilVoting,
 	}
 
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum PrivCall {
-		Consensus = 0,
-		Balances = 1,
-		Session = 2,
-		Staking = 3,
-		Democracy = 4,
-		Council = 5,
-		CouncilVoting = 6,
+		Consensus,
+		Balances,
+		Session,
+		Staking,
+		Democracy,
+		Council,
+		CouncilVoting,
 	}
 }
 
@@ -215,7 +232,7 @@ pub use balances::address::Address as RawAddress;
 /// The address format for describing accounts.
 pub type Address = balances::Address<Runtime>;
 /// Block header type as expected by this runtime.
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, Vec<u8>>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// BlockId type as expected by this runtime.
