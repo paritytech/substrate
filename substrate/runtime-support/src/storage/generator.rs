@@ -787,7 +787,7 @@ macro_rules! __impl_store_fns {
 	};
 
 	($traitinstance:ident $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) $gettype $ty);
+		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) $ty);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
 	($traitinstance:ident pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {

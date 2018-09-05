@@ -19,7 +19,6 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::traits::HasPublicAux;
 use primitives::testing::{Digest, Header};
 use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
@@ -28,11 +27,8 @@ use {GenesisConfig, Module, Trait, system};
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Test;
-impl HasPublicAux for Test {
-	type PublicAux = u64;
-}
 impl system::Trait for Test {
-	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type PublicAux = Self::AccountId;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;

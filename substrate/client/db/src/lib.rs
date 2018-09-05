@@ -61,7 +61,8 @@ use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue, ExecutionStrategy};
-use utils::{Meta, db_err, meta_keys, number_to_db_key, open_database, read_db, read_id, read_meta};
+use utils::{Meta, db_err, meta_keys, number_to_db_key, db_key_to_number, open_database,
+	read_db, read_id, read_meta};
 use state_db::StateDb;
 pub use state_db::PruningMode;
 
@@ -183,6 +184,14 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		}
 	}
 
+	fn number(&self, hash: Block::Hash) -> Result<Option<<Block::Header as HeaderT>::Number>, client::error::Error> {
+		read_id::<Block>(&*self.db, columns::BLOCK_INDEX, BlockId::Hash(hash))
+			.and_then(|key| match key {
+				Some(key) => Ok(Some(db_key_to_number(&key)?)),
+				None => Ok(None),
+			})
+	}
+
 	fn hash(&self, number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, client::error::Error> {
 		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
 			x.map(|raw| HashFor::<Block>::hash(&raw[..])).map(Into::into)
@@ -300,12 +309,12 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	#[cfg(test)]
-	fn new_test() -> Self {
+	fn new_test(keep_blocks: u32) -> Self {
 		use utils::NUM_COLUMNS;
 
 		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
 
-		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(0), 0).expect("failed to create test-db")
+		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(keep_blocks), 0).expect("failed to create test-db")
 	}
 
 	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, finalization_window: u64) -> Result<Self, client::error::Error> {
@@ -397,13 +406,13 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 					}
 				};
 				if let Some(finalizing_hash) = finalizing_hash {
-					trace!("Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
+					trace!(target: "db", "Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
 					let commit = self.storage.state_db.finalize_block(&finalizing_hash);
 					apply_state_commit(&mut transaction, commit);
 				}
 			}
 
-			debug!("DB Commit {:?} ({}), best = {}", hash, number, pending_block.is_best);
+			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, pending_block.is_best);
 			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
 		}
@@ -454,10 +463,14 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 			_ => {}
 		}
 
-		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
-			let root: H256 = H256::from_slice(hdr.state_root().as_ref());
-			DbState::with_storage(self.storage.clone(), root)
-		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
+		match self.blockchain.header(block) {
+			Ok(Some(ref hdr)) if !self.storage.state_db.is_pruned(hdr.number().as_()) => {
+				let root = H256::from_slice(hdr.state_root().as_ref());
+				Ok(DbState::with_storage(self.storage.clone(), root))
+			},
+			Err(e) => Err(e),
+			_ => Err(client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()),
+		}
 	}
 }
 
@@ -477,7 +490,7 @@ mod tests {
 
 	#[test]
 	fn block_hash_inserted_correctly() {
-		let db = Backend::<Block>::new_test();
+		let db = Backend::<Block>::new_test(1);
 		for i in 0..10 {
 			assert!(db.blockchain().hash(i).unwrap().is_none());
 
@@ -516,7 +529,7 @@ mod tests {
 
 	#[test]
 	fn set_state_data() {
-		let db = Backend::<Block>::new_test();
+		let db = Backend::<Block>::new_test(2);
 		{
 			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
 			let mut header = Header {
@@ -595,7 +608,7 @@ mod tests {
 	#[test]
 	fn delete_only_when_negative_rc() {
 		let key;
-		let backend = Backend::<Block>::new_test();
+		let backend = Backend::<Block>::new_test(0);
 
 		let hash = {
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default())).unwrap();

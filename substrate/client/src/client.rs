@@ -36,7 +36,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {error, in_mem, block_builder, runtime_io, bft, genesis};
+use {cht, error, in_mem, block_builder, runtime_io, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -265,6 +265,24 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// No changes are made.
 	pub fn execution_proof(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
 		self.state_at(id).and_then(|state| self.executor.prove_at_state(state, &mut Default::default(), method, call_data))
+	}
+
+	/// Reads given header and generates CHT-based header proof.
+	pub fn header_proof(&self, id: &BlockId<Block>) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+		self.header_proof_with_cht_size(id, cht::SIZE)
+	}
+
+	/// Reads given header and generates CHT-based header proof for CHT of given size.
+	pub fn header_proof_with_cht_size(&self, id: &BlockId<Block>, cht_size: u64) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+		let proof_error = || error::ErrorKind::Backend(format!("Failed to generate header proof for {:?}", id));
+		let header = self.header(id)?.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", id)))?;
+		let block_num = *header.number();
+		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
+		let cht_start = cht::start_number(cht_size, cht_num);
+		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)).unwrap_or_default());
+		let proof = cht::build_proof::<Block::Header, KeccakHasher, RlpCodec, _>(cht_size, cht_num, block_num, headers)
+			.ok_or_else(proof_error)?;
+		Ok((header, proof))
 	}
 
 	/// Set up the native execution environment to call into a native runtime code.

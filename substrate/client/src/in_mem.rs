@@ -89,6 +89,7 @@ struct BlockchainStorage<Block: BlockT> {
 	best_hash: Block::Hash,
 	best_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	genesis_hash: Block::Hash,
+	cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 }
 
 /// In-memory blockchain. Supports concurrent reads.
@@ -133,6 +134,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				best_hash: Default::default(),
 				best_number: Zero::zero(),
 				genesis_hash: Default::default(),
+				cht_roots: HashMap::new(),
 			}));
 		Blockchain {
 			storage: storage.clone(),
@@ -179,6 +181,11 @@ impl<Block: BlockT> Blockchain<Block> {
 			&& this.best_number == other.best_number
 			&& this.genesis_hash == other.genesis_hash
 	}
+
+	/// Insert CHT root.
+	pub fn insert_cht_root(&self, block: NumberFor<Block>, cht_root: Block::Hash) {
+		self.storage.write().cht_roots.insert(block, cht_root);
+	}
 }
 
 impl<Block: BlockT> blockchain::HeaderBackend<Block> for Blockchain<Block> {
@@ -202,6 +209,10 @@ impl<Block: BlockT> blockchain::HeaderBackend<Block> for Blockchain<Block> {
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),
 		}
+	}
+
+	fn number(&self, hash: Block::Hash) -> error::Result<Option<NumberFor<Block>>> {
+		Ok(self.storage.read().blocks.get(&hash).map(|b| *b.header().number()))
 	}
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
@@ -229,7 +240,10 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block> {
+impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
+	where
+		Block::Hash: From<[u8; 32]>,
+{
 	fn import_header(
 		&self,
 		is_new_best: bool,
@@ -243,6 +257,11 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block> {
 			self.cache.insert(parent_hash, authorities);
 		}
 		Ok(())
+	}
+
+	fn cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
+		self.storage.read().cht_roots.get(&block).cloned()
+			.ok_or_else(|| error::ErrorKind::Backend(format!("CHT for block {} not exists", block)).into())
 	}
 
 	fn cache(&self) -> Option<&blockchain::Cache<Block>> {

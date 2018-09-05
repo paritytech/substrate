@@ -25,6 +25,15 @@ extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+#[cfg(test)]
+#[macro_use]
+extern crate serde_derive;
+#[cfg(test)]
+extern crate serde_json;
+
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
 pub use self::storage::generator::Storage as GenericStorage;
