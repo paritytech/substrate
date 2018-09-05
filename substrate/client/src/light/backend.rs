@@ -196,6 +196,7 @@ impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
 				block: self.block,
 				header: header.expect("if block above guarantees that header is_some(); qed"),
 				key: key.to_vec(),
+				retry_count: None,
 			})
 			.into_future().wait()
 	}
