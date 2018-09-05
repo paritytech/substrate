@@ -46,7 +46,7 @@ const FIRST_CONNECT_FAIL_BACKOFF: Duration = Duration::from_secs(2);
 /// Every time we fail to connect to an address, multiply the backoff by this constant.
 const FAIL_BACKOFF_MULTIPLIER: u32 = 2;
 /// We need a maximum value for the backoff, overwise we risk an overflow.
-const MAX_BACKOFF: Duration = Duration::from_secs(30 * 60);
+const MAX_BACKOFF: Duration = Duration::from_secs(60);
 
 // TODO: should be merged with the Kademlia k-buckets
 
