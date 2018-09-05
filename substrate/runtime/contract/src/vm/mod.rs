@@ -59,6 +59,7 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
+		salt: u64,
 	) -> Result<CreateReceipt<Self::T>, ()>;
 
 	/// Call (possibly transfering some amount of funds) into the specified account.
@@ -275,6 +276,7 @@ mod tests {
 		endowment: u64,
 		data: Vec<u8>,
 		gas_left: u64,
+		salt: u64,
 	}
 	#[derive(Debug, PartialEq, Eq)]
 	struct TransferEntry {
@@ -305,12 +307,14 @@ mod tests {
 			endowment: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
+			salt: u64,
 		) -> Result<CreateReceipt<Test>, ()> {
 			self.creates.push(CreateEntry {
 				code: code.to_vec(),
 				endowment,
 				data: data.to_vec(),
 				gas_left: gas_meter.gas_left(),
+				salt,
 			});
 			let address = self.next_account_id;
 			self.next_account_id += 1;
@@ -457,6 +461,7 @@ mod tests {
 					1, 2, 3, 4,
 				],
 				gas_left: 49990,
+				salt: 0,
 			}]
 		);
 	}

@@ -251,10 +251,11 @@ define_env!(init_env, <E: Ext>,
 		} else {
 			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
 		};
+		let salt = 0;
 		let ext = &mut ctx.ext;
 		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.create(&code, value, nested_meter, &input_data),
+				Some(nested_meter) => ext.create(&code, value, nested_meter, &input_data, salt),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}

@@ -113,6 +113,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		gas_meter: &mut GasMeter<T>,
 		ctor: &[u8],
 		data: &[u8],
+		salt: u64,
 	) -> Result<CreateReceipt<T>, &'static str> {
 		if self.depth == <MaxDepth<T>>::get() as usize {
 			return Err("reached maximum depth, cannot create");
@@ -123,7 +124,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base create fee");
 		}
 
-		let dest = T::DetermineContractAddress::contract_address_for(ctor, &self.self_account);
+		let dest = T::DetermineContractAddress::contract_address_for(ctor, data, salt, &self.self_account);
 		if <CodeOf<T>>::exists(&dest) {
 			// TODO: Is it enough?
 			return Err("contract already exists");
@@ -244,10 +245,11 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
+		salt: u64,
 	) -> Result<CreateReceipt<T>, ()> {
 		let caller = self.ctx.self_account.clone();
 		self.ctx
-			.create(caller, endowment, gas_meter, code, &data)
+			.create(caller, endowment, gas_meter, code, &data, salt)
 			.map_err(|_| ())
 	}
 

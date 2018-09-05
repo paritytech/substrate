@@ -115,7 +115,7 @@ pub trait Trait: balances::Trait {
 }
 
 pub trait ContractAddressFor<AccountId: Sized> {
-	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
+	fn contract_address_for(code: &[u8], data: &[u8], salt: u64, origin: &AccountId) -> AccountId;
 }
 
 decl_module! {
@@ -243,7 +243,7 @@ impl<T: Trait> Module<T> {
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
-		let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
+		let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data, 0);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
