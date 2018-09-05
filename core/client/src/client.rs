@@ -730,23 +730,8 @@ impl<B, E, Block> Client<B, E, Block> where
 	pub fn best_chain_containing(&self, target_hash: Block::Hash, maybe_max_block_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>) -> error::Result<Option<Block::Hash>> {
 		let target_header = self.backend.blockchain().header(BlockId::Hash(target_hash))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", target_hash)))?;
 
-		// let best_hash = self.backend.blockchain().info()?.best_hash;
-
-		// TODO [snd] is there a better way to do this?
-		// TODO [snd] panic here?
-		// let is_target_in_best_chain = self.backend.blockchain().hash(*target_header.number())?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))? == target_hash;
-        //
-		// if is_target_in_best_chain {
-		// 	println!("target {:?} is in best chain", target_hash);
-		// 	return Ok(best_hash);
-		// }
-		
 		// for each chain. longest chain first. shortest last
 		for leaf_hash in self.backend.blockchain().leaves()? {
-			// if leaf_hash == best_hash {
-			// 	// we already checked the best chain above (`is_target_in_best_chain`)
-			// 	continue;
-			// }
 			// start at the leaf
 			let mut current_hash = leaf_hash;
 			// go backwards through the chain (via parent links)
