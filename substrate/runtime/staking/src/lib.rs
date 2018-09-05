@@ -75,26 +75,26 @@ pub enum LockStatus<BlockNumber: Parameter> {
 	LockedUntil(BlockNumber),
 	Bonded,
 }
-/*
+
 /// Preference of what happens on a slash event.
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-#[derive(Encode, Decode, Eq, PartialEq, Clone, Copy)]
-pub struct ValidatorPrefs<Balance: Parameter + Codec + MaybeSerializeDebug + MaybeDeserialize> {
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+pub struct ValidatorPrefs<Balance> {
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	pub unstake_threshold: u32,
 	// Reward that validator takes up-front; only the rest is split between themself and nominators.
 	pub validator_payment: Balance,
 }
 
-impl<B: Parameter + Codec + Default> Default for ValidatorPrefs<B> {
+impl<B: Default> Default for ValidatorPrefs<B> {
 	fn default() -> Self {
-		ValidatorPreferences {
+		ValidatorPrefs {
 			unstake_threshold: 3,
-			off_the_table: Default::default(),
+			validator_payment: Default::default(),
 		}
 	}
 }
-*/
+
 pub trait Trait: balances::Trait + session::Trait {
 	/// Some tokens minted.
 	type OnRewardMinted: OnMinted<<Self as balances::Trait>::Balance>;
@@ -107,12 +107,13 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
 	pub enum Call where aux: T::PublicAux {
 		fn stake(aux) -> Result = 0;
 		fn unstake(aux, intentions_index: u32) -> Result = 1;
 		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result = 2;
 		fn unnominate(aux, target_index: u32) -> Result = 3;
-		fn register_preferences(aux, intentions_index: u32, unstake_threshold: u32, validator_payment: T::Balance) -> Result = 4;
+		fn register_preferences(aux, intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result = 4;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
@@ -162,7 +163,7 @@ decl_storage! {
 		// The current era index.
 		pub CurrentEra get(current_era): required T::BlockNumber;
 		// Preferences that a validator has.
-		pub ValidatorPreferences: map [ T::AccountId => (u32, T::Balance) ];
+		pub ValidatorPreferences get(validator_preferences): default map [ T::AccountId => ValidatorPrefs<T::Balance> ];
 		// All the accounts with a desire to stake.
 		pub Intentions get(intentions): default Vec<T::AccountId>;
 		// All nominator -> nominee relationships.
@@ -192,11 +193,6 @@ decl_storage! {
 impl<T: Trait> Module<T> {
 
 	// PUBLIC IMMUTABLES
-
-	/// ValidatorPreferences getter, introduces a default.
-	pub fn validator_preferences(who: &T::AccountId) -> (u32, T::Balance) {
-		<ValidatorPreferences<T>>::get(who).unwrap_or_else(|| (3, Zero::zero()))
-	}
 
 	/// MinimumValidatorCount getter, introduces a default.
 	pub fn minimum_validator_count() -> usize {
@@ -313,8 +309,7 @@ impl<T: Trait> Module<T> {
 	fn register_preferences(
 		aux: &T::PublicAux,
 		intentions_index: u32,
-		unstake_threshold: u32,
-		validator_payment: T::Balance
+		prefs: ValidatorPrefs<T::Balance>
 	) -> Result {
 		let aux = aux.ref_into();
 
@@ -322,7 +317,7 @@ impl<T: Trait> Module<T> {
 			return Err("Invalid index")
 		}
 		
-		<ValidatorPreferences<T>>::insert(aux, (unstake_threshold, validator_payment));
+		<ValidatorPreferences<T>>::insert(aux, prefs);
 
 		Ok(())
 	}
@@ -391,7 +386,7 @@ impl<T: Trait> Module<T> {
 	/// Reward a given validator by a specific amount. Add the reward to their, and their nominators'
 	/// balance, pro-rata.
 	fn reward_validator(who: &T::AccountId, reward: T::Balance) {
-		let off_the_table = reward.min(Self::validator_preferences(who).1);
+		let off_the_table = reward.min(Self::validator_preferences(who).validator_payment);
 		let reward = reward - off_the_table;
 		let validator_cut = if reward.is_zero() {
 			Zero::zero()
@@ -551,7 +546,7 @@ impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
 			let slash = Self::early_era_slash() << instances;
 			let next_slash = slash << 1u32;
 			let _ = Self::slash_validator(&v, slash);
-			if instances >= Self::validator_preferences(&v).0
+			if instances >= Self::validator_preferences(&v).unstake_threshold
 				|| Self::slashable_balance(&v) < next_slash
 			{
 				if let Some(pos) = Self::intentions().into_iter().position(|x| &x == &v) {
