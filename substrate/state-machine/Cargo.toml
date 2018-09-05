@@ -10,12 +10,12 @@ hex-literal = "0.1.0"
 log = "0.3"
 parking_lot = "0.4"
 heapsize = "0.4"
+hashdb = "0.2.1"
+memorydb = "0.2.1"
+patricia-trie = "0.2.1"
+triehash = "0.2"
+rlp = "0.2.4"
 
 substrate-primitives = { path = "../primitives", version = "0.1.0" }
 substrate-codec = { path = "../codec", default_features = false }
 
-hashdb = { git = "https://github.com/paritytech/parity-common" }
-memorydb = { git = "https://github.com/paritytech/parity-common" }
-patricia-trie = { git = "https://github.com/paritytech/parity-common" }
-triehash = { git = "https://github.com/paritytech/parity-common" }
-rlp = { git = "https://github.com/paritytech/parity-common" }
