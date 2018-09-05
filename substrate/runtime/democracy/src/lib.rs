@@ -67,15 +67,15 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) -> Result = 0;
-		fn second(aux, proposal: PropIndex) -> Result = 1;
-		fn vote(aux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result = 2;
+		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) -> Result;
+		fn second(aux, proposal: PropIndex) -> Result;
+		fn vote(aux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result = 0;
-		fn cancel_referendum(ref_index: ReferendumIndex) -> Result = 1;
+		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result;
+		fn cancel_referendum(ref_index: ReferendumIndex) -> Result;
 	}
 }
 
@@ -357,8 +357,8 @@ mod tests {
 	impl_outer_dispatch! {
 		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
 		pub enum Proposal {
-			Balances = 0,
-			Democracy = 1,
+			Balances,
+			Democracy,
 		}
 	}
 

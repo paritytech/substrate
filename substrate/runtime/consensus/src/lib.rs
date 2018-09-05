@@ -145,15 +145,15 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result = 0;
-		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 1;
-		fn remark(aux, remark: Vec<u8>) -> Result = 2;
+		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
+		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result;
+		fn remark(aux, remark: Vec<u8>) -> Result;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		fn set_code(new: Vec<u8>) -> Result = 0;
-		fn set_storage(items: Vec<KeyValue>) -> Result = 1;
+		fn set_code(new: Vec<u8>) -> Result;
+		fn set_storage(items: Vec<KeyValue>) -> Result;
 	}
 }
 
