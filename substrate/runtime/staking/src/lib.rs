@@ -109,20 +109,20 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
 	pub enum Call where aux: T::PublicAux {
-		fn stake(aux) -> Result = 0;
-		fn unstake(aux, intentions_index: u32) -> Result = 1;
-		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result = 2;
-		fn unnominate(aux, target_index: u32) -> Result = 3;
-		fn register_preferences(aux, intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result = 4;
+		fn stake(aux) -> Result;
+		fn unstake(aux, intentions_index: u32) -> Result;
+		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result;
+		fn unnominate(aux, target_index: u32) -> Result;
+		fn register_preferences(aux, intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		fn set_sessions_per_era(new: T::BlockNumber) -> Result = 0;
-		fn set_bonding_duration(new: T::BlockNumber) -> Result = 1;
-		fn set_validator_count(new: u32) -> Result = 2;
-		fn force_new_era(apply_rewards: bool) -> Result = 3;
-		fn set_offline_slash_grace(new: u32) -> Result = 4;
+		fn set_sessions_per_era(new: T::BlockNumber) -> Result;
+		fn set_bonding_duration(new: T::BlockNumber) -> Result;
+		fn set_validator_count(new: u32) -> Result;
+		fn force_new_era(apply_rewards: bool) -> Result;
+		fn set_offline_slash_grace(new: u32) -> Result;
 	}
 }
 

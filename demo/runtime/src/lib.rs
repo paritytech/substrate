@@ -193,26 +193,26 @@ impl_outer_dispatch! {
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum Call where aux: <Runtime as system::Trait>::PublicAux {
-		Consensus = 0,
-		Balances = 1,
-		Session = 2,
-		Staking = 3,
-		Timestamp = 4,
-		Democracy = 5,
-		Council = 6,
-		CouncilVoting = 7,
+		Consensus,
+		Balances,
+		Session,
+		Staking,
+		Timestamp,
+		Democracy,
+		Council,
+		CouncilVoting,
 	}
 
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 	pub enum PrivCall {
-		Consensus = 0,
-		Balances = 1,
-		Session = 2,
-		Staking = 3,
-		Democracy = 4,
-		Council = 5,
-		CouncilVoting = 6,
+		Consensus,
+		Balances,
+		Session,
+		Staking,
+		Democracy,
+		Council,
+		CouncilVoting,
 	}
 }
 
