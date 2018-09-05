@@ -110,19 +110,19 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) -> Result = 0;
-		fn reap_inactive_voter(aux, signed_index: u32, who: Address<T::AccountId, T::AccountIndex>, who_index: u32, assumed_vote_index: VoteIndex) -> Result = 1;
-		fn retract_voter(aux, index: u32) -> Result = 2;
-		fn submit_candidacy(aux, slot: u32) -> Result = 3;
-		fn present_winner(aux, candidate: Address<T::AccountId, T::AccountIndex>, total: T::Balance, index: VoteIndex) -> Result = 4;
+		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) -> Result;
+		fn reap_inactive_voter(aux, signed_index: u32, who: Address<T::AccountId, T::AccountIndex>, who_index: u32, assumed_vote_index: VoteIndex) -> Result;
+		fn retract_voter(aux, index: u32) -> Result;
+		fn submit_candidacy(aux, slot: u32) -> Result;
+		fn present_winner(aux, candidate: Address<T::AccountId, T::AccountIndex>, total: T::Balance, index: VoteIndex) -> Result;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		fn set_desired_seats(count: u32) -> Result = 0;
-		fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result = 1;
-		fn set_presentation_duration(count: T::BlockNumber) -> Result = 2;
-		fn set_term_duration(count: T::BlockNumber) -> Result = 3;
+		fn set_desired_seats(count: u32) -> Result;
+		fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result;
+		fn set_presentation_duration(count: T::BlockNumber) -> Result;
+		fn set_term_duration(count: T::BlockNumber) -> Result;
 	}
 }
 
@@ -625,8 +625,8 @@ mod tests {
 	impl_outer_dispatch! {
 		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
 		pub enum Proposal {
-			Balances = 0,
-			Democracy = 1,
+			Balances,
+			Democracy,
 		}
 	}
 

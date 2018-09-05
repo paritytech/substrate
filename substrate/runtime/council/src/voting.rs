@@ -30,15 +30,15 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn propose(aux, proposal: Box<T::Proposal>) -> Result = 0;
-		fn vote(aux, proposal: T::Hash, approve: bool) -> Result = 1;
-		fn veto(aux, proposal_hash: T::Hash) -> Result = 2;
+		fn propose(aux, proposal: Box<T::Proposal>) -> Result;
+		fn vote(aux, proposal: T::Hash, approve: bool) -> Result;
+		fn veto(aux, proposal_hash: T::Hash) -> Result;
 	}
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
-		fn set_cooloff_period(blocks: T::BlockNumber) -> Result = 0;
-		fn set_voting_period(blocks: T::BlockNumber) -> Result = 1;
+		fn set_cooloff_period(blocks: T::BlockNumber) -> Result;
+		fn set_voting_period(blocks: T::BlockNumber) -> Result;
 	}
 }
 

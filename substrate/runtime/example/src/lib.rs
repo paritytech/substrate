@@ -100,7 +100,7 @@ decl_module! {
 	pub enum Call where aux: T::PublicAux {
 		// This is just a simple example of how to interact with the module from the external
 		// world.
-		fn accumulate_dummy(aux, increase_by: T::Balance) -> Result = 0;
+		fn accumulate_dummy(aux, increase_by: T::Balance) -> Result;
 	}
 
 	// The priviledged entry points. These are provided to allow any governance modules in 
@@ -111,7 +111,7 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum PrivCall {
 		// A priviledged call; in this case it resets our dummy value to something new.
-		fn set_dummy(new_dummy: T::Balance) -> Result = 0;
+		fn set_dummy(new_dummy: T::Balance) -> Result;
 	}
 }
 

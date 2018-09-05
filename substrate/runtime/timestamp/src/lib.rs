@@ -56,7 +56,7 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn set(aux, now: T::Moment) -> Result = 0;
+		fn set(aux, now: T::Moment) -> Result;
 	}
 }
 
@@ -161,6 +161,7 @@ mod tests {
 	}
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
+		type Log = u64;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
 	}
