@@ -728,7 +728,12 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// that contain block with the given `target_hash`.
 	/// TODO [snd] possibly implement this for blockchain::Backend (easier to test)
 	pub fn best_chain_containing(&self, target_hash: Block::Hash, maybe_max_block_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>) -> error::Result<Option<Block::Hash>> {
-		let target_header = self.backend.blockchain().header(BlockId::Hash(target_hash))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", target_hash)))?;
+		let target_header = {
+			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
+				Some(x) => x,
+				None => { return Ok(None); },
+			}
+		};
 
 		// for each chain. longest chain first. shortest last
 		for leaf_hash in self.backend.blockchain().leaves()? {
