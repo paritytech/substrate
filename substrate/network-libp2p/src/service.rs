@@ -420,7 +420,7 @@ fn init_thread(
 
 	// Build the swarm. The swarm is the single entry point where successfully
 	// negotiated protocols arrive.
-	let (swarm_controller, swarm_future) = {
+	let (swarm_controller, swarm_events) = {
 		let upgraded_transport = transport.clone()
 			.and_then({
 				let shared = shared.clone();
@@ -547,7 +547,7 @@ fn init_thread(
 	let periodic = start_periodic_updates(shared.clone(), transport, swarm_controller);
 
 	// Merge all the futures into one!
-	Ok(swarm_future
+	Ok(swarm_events.for_each(|_| Ok(()))
 		.select(discovery).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
 		.select(periodic).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
 		.select(outgoing_connections).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
@@ -878,7 +878,7 @@ fn handle_custom_connection(
 fn start_kademlia_discovery<T, To, St, C>(
 	shared: Arc<Shared>,
 	transport: T,
-	swarm_controller: SwarmController<St>
+	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError>>>
 ) -> impl Future<Item = (), Error = IoError>
 	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
@@ -927,7 +927,7 @@ fn start_kademlia_discovery<T, To, St, C>(
 fn perform_kademlia_query<T, To, St, C>(
 	shared: Arc<Shared>,
 	transport: T,
-	swarm_controller: SwarmController<St>
+	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError>>>
 ) -> impl Future<Item = (), Error = IoError>
 	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
@@ -976,7 +976,7 @@ fn perform_kademlia_query<T, To, St, C>(
 fn connect_to_nodes<T, To, St, C>(
 	shared: Arc<Shared>,
 	base_transport: T,
-	swarm_controller: &SwarmController<St>
+	swarm_controller: &SwarmController<St, Box<Future<Item = (), Error = IoError>>>
 )
 	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
@@ -1016,7 +1016,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 	addr: Multiaddr,
 	expected_peer_id: Option<PeerstorePeerId>,
 	proto: RegisteredProtocol<Arc<NetworkProtocolHandler + Send + Sync>>,
-	swarm_controller: &SwarmController<St>
+	swarm_controller: &SwarmController<St, Box<Future<Item = (), Error = IoError>>>
 )
 	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
@@ -1063,7 +1063,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 			proto_id
 		);
 
-		unique_connec.dial(swarm_controller, &addr, with_peer_check);
+		let _ = unique_connec.dial(swarm_controller, &addr, with_peer_check);
 
 	} else {
 		let trans = with_timeout.map(|(_, out), _| out);
@@ -1078,7 +1078,7 @@ fn obtain_kad_connection<T, To, St, C>(
 	shared: Arc<Shared>,
 	who: PeerstorePeerId,
 	transport: T,
-	swarm_controller: SwarmController<St>
+	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError>>>
 ) -> impl Future<Item = KadConnecController, Error = IoError>
 	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
@@ -1165,7 +1165,7 @@ fn process_identify_info(
 fn start_periodic_updates<T, To, St, C>(
 	shared: Arc<Shared>,
 	transport: T,
-	swarm_controller: SwarmController<St>
+	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError>>>
 ) -> impl Future<Item = (), Error = IoError>
 	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
 		T::MultiaddrFuture: 'static,
@@ -1217,7 +1217,7 @@ fn periodic_updates<Tp, Tid, St, C>(
 	shared: Arc<Shared>,
 	ping_transport: Tp,
 	identify_transport: Tid,
-	swarm_controller: &SwarmController<St>
+	swarm_controller: &SwarmController<St, Box<Future<Item = (), Error = IoError>>>
 ) -> impl Future<Item = (), Error = IoError>
 	where Tp: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
 		Tp::MultiaddrFuture: 'static,

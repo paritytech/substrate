@@ -214,7 +214,8 @@ pub struct LightComponents<Factory: ServiceFactory> {
 
 impl<Factory: ServiceFactory> Components for LightComponents<Factory>
 	where
-		<<Factory as ServiceFactory>::Block as BlockT>::Hash: Into<H256>,
+		<<Factory as ServiceFactory>::Block as BlockT>::Hash: From<H256>,
+		H256: From<<<Factory as ServiceFactory>::Block as BlockT>::Hash>,
 {
 	type Factory = Factory;
 	type Executor = LightExecutor<Factory>;

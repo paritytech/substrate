@@ -61,7 +61,8 @@ use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue, ExecutionStrategy};
-use utils::{Meta, db_err, meta_keys, number_to_db_key, open_database, read_db, read_id, read_meta};
+use utils::{Meta, db_err, meta_keys, number_to_db_key, db_key_to_number, open_database,
+	read_db, read_id, read_meta};
 use state_db::StateDb;
 pub use state_db::PruningMode;
 
@@ -181,6 +182,14 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 			true => Ok(client::blockchain::BlockStatus::InChain),
 			false => Ok(client::blockchain::BlockStatus::Unknown),
 		}
+	}
+
+	fn number(&self, hash: Block::Hash) -> Result<Option<<Block::Header as HeaderT>::Number>, client::error::Error> {
+		read_id::<Block>(&*self.db, columns::BLOCK_INDEX, BlockId::Hash(hash))
+			.and_then(|key| match key {
+				Some(key) => Ok(Some(db_key_to_number(&key)?)),
+				None => Ok(None),
+			})
 	}
 
 	fn hash(&self, number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, client::error::Error> {
@@ -397,13 +406,13 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 					}
 				};
 				if let Some(finalizing_hash) = finalizing_hash {
-					trace!("Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
+					trace!(target: "db", "Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
 					let commit = self.storage.state_db.finalize_block(&finalizing_hash);
 					apply_state_commit(&mut transaction, commit);
 				}
 			}
 
-			debug!("DB Commit {:?} ({}), best = {}", hash, number, pending_block.is_best);
+			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, pending_block.is_best);
 			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
 		}
