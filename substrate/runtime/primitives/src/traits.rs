@@ -112,9 +112,17 @@ pub trait MaybeEmpty {
 	fn is_empty(&self) -> bool;
 }
 
-impl<T: Default + PartialEq> MaybeEmpty for T {
+// AccountId is `u64` in tests
+impl MaybeEmpty for u64 {
 	fn is_empty(&self) -> bool {
-		*self == T::default()
+		self.is_zero()
+	}
+}
+
+// AccountId is H256 in production
+impl MaybeEmpty for substrate_primitives::H256 {
+	fn is_empty(&self) -> bool {
+		self.is_zero()
 	}
 }
 
