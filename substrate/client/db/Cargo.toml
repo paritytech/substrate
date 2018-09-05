@@ -6,10 +6,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 parking_lot = "0.4"
 log = "0.3"
-kvdb = { git = "https://github.com/paritytech/parity-common" }
-kvdb-rocksdb = { git = "https://github.com/paritytech/parity-common" }
-hashdb = { git = "https://github.com/paritytech/parity-common" }
-memorydb = { git = "https://github.com/paritytech/parity-common" }
+kvdb = "0.1"
+kvdb-rocksdb = "0.1.3"
+hashdb = "0.2.1"
+memorydb = "0.2.1"
 substrate-primitives = { path = "../../../substrate/primitives" }
 substrate-runtime-primitives = { path = "../../../substrate/runtime/primitives" }
 substrate-client = { path = "../../../substrate/client" }
@@ -21,4 +21,4 @@ substrate-executor = { path = "../../../substrate/executor" }
 substrate-state-db = { path = "../../../substrate/state-db" }
 
 [dev-dependencies]
-kvdb-memorydb = { git = "https://github.com/paritytech/parity-common" }
+kvdb-memorydb = "0.1"
