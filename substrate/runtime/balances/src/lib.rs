@@ -161,55 +161,55 @@ impl<A, I> From<RawEvent<A, I>> for () {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		// The total amount of stake on the system.
+		/// The total amount of stake on the system.
 		pub TotalIssuance get(total_stake): required T::Balance;
-		// The minimum amount allowed to keep an account open.
+		/// The minimum amount allowed to keep an account open.
 		pub ExistentialDeposit get(existential_deposit): required T::Balance;
-		// The amount credited to a destination's account whose index was reclaimed.
+		/// The amount credited to a destination's account whose index was reclaimed.
 		pub ReclaimRebate get(reclaim_rebate): required T::Balance;
-		// The fee required to make a transfer.
+		/// The fee required to make a transfer.
 		pub TransferFee get(transfer_fee): required T::Balance;
-		// The fee required to create an account. At least as big as ReclaimRebate.
+		/// The fee required to create an account. At least as big as ReclaimRebate.
 		pub CreationFee get(creation_fee): required T::Balance;
 
-		// The next free enumeration set.
+		/// The next free enumeration set.
 		pub NextEnumSet get(next_enum_set): required T::AccountIndex;
-		// The enumeration sets.
+		/// The enumeration sets.
 		pub EnumSet get(enum_set): default map [ T::AccountIndex => Vec<T::AccountId> ];
 
-		// The "free" balance of a given account.
-		//
-		// This is the only balance that matters in terms of most operations on tokens. It is
-		// alone used to determine the balance when in the contract execution environment. When this
-		// balance falls below the value of `ExistentialDeposit`, then the "current account" is
-		// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
-		// is invoked, giving a chance to external modules to cleanup data associated with
-		// the deleted account.
-		//
-		// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
-		// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		/// The 'free' balance of a given account.
+		///
+		/// This is the only balance that matters in terms of most operations on tokens. It is
+		/// alone used to determine the balance when in the contract execution environment. When this
+		/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
+		/// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
+		/// is invoked, giving a chance to external modules to cleanup data associated with
+		/// the deleted account.
+		///
+		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
+		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 		pub FreeBalance get(free_balance): default map [ T::AccountId => T::Balance ];
 
-		// The amount of the balance of a given account that is exterally reserved; this can still get
-		// slashed, but gets slashed last of all.
-		//
-		// This balance is a "reserve" balance that other subsystems use in order to set aside tokens
-		// that are still "owned" by the account holder, but which are unspendable. (This is different
-		// and wholly unrelated to the `Bondage` system used in the staking module.)
-		//
-		// When this balance falls below the value of `ExistentialDeposit`, then this "reserve account"
-		// is deleted: specifically, `ReservedBalance`.
-		//
-		// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
-		// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		/// The amount of the balance of a given account that is exterally reserved; this can still get
+		/// slashed, but gets slashed last of all.
+		///
+		/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
+		/// that are still 'owned' by the account holder, but which are unspendable. (This is different
+		/// and wholly unrelated to the `Bondage` system used in the staking module.)
+		///
+		/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
+		/// is deleted: specifically, `ReservedBalance`.
+		///
+		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
+		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 		pub ReservedBalance get(reserved_balance): default map [ T::AccountId => T::Balance ];
 
 
 		// Payment stuff.
 
-		// The fee to be paid for making a transaction; the base.
+		/// The fee to be paid for making a transaction; the base.
 		pub TransactionBaseFee get(transaction_base_fee): required T::Balance;
-		// The fee to be paid for making a transaction; the per-byte portion.
+		/// The fee to be paid for making a transaction; the per-byte portion.
 		pub TransactionByteFee get(transaction_byte_fee): required T::Balance;
 	}
 }
