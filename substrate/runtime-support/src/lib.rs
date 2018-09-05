@@ -38,6 +38,7 @@ extern crate serde_json;
 pub extern crate substrate_codec as codec;
 pub use self::storage::generator::Storage as GenericStorage;
 
+#[macro_use]
 pub mod dispatch;
 pub mod storage;
 mod hashable;
