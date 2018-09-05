@@ -16,9 +16,7 @@
 
 //! Substrate Demo-specific network implementation.
 //!
-//! This manages gossip of consensus messages for BFT and for parachain statements,
-//! parachain block and extrinsic data fetching, communication between collators and validators,
-//! and more.
+//! This manages gossip of consensus messages for BFT.
 
 extern crate substrate_bft as bft;
 extern crate substrate_network;
@@ -71,9 +69,9 @@ impl Protocol {
 	}
 
 	/// Note new consensus session.
-	fn new_consensus(&mut self, hash: Hash) {
+	fn new_consensus(&mut self, parent_hash: Hash) {
 		let old_consensus = self.live_consensus.take();
-		self.live_consensus = Some(hash);
+		self.live_consensus = Some(parent_hash);
 		self.consensus_gossip.collect_garbage(old_consensus.as_ref());
 	}
 }

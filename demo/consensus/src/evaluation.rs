@@ -48,7 +48,7 @@ error_chain! {
 			description("Proposal exceeded the maximum size."),
 			display(
 				"Proposal exceeded the maximum size of {} by {} bytes.",
-				MAX_TRANSACTIONS_SIZE, MAX_TRANSACTIONS_SIZE.saturating_sub(*size)
+				MAX_TRANSACTIONS_SIZE, size.saturating_sub(MAX_TRANSACTIONS_SIZE)
 			),
 		}
 	}

@@ -191,7 +191,10 @@ impl Future for MessageProcessTask {
 				},
 				Ok(Async::Ready(None)) => return Ok(Async::Ready(())),
 				Ok(Async::NotReady) => return Ok(Async::NotReady),
-				Err(e) => debug!(target: "demo-network", "Error getting consensus message: {:?}", e),
+				Err(e) => {
+					debug!(target: "demo-network", "Error getting consensus message: {:?}", e);
+					return Err(e);
+				},
 			}
 		}
 	}
@@ -244,7 +247,7 @@ impl<P: Api + Send + Sync + 'static> Network for ConsensusNetwork<P> {
 	/// current validators.
 	type Output = BftSink<::demo_consensus::Error>;
 
-	/// Instantiate a table router using the given shared table.
+	/// Get input and output streams of BFT messages.
 	fn communication_for(
 		&self, validators: &[SessionKey],
 		local_id: SessionKey,
