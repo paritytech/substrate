@@ -137,7 +137,7 @@ macro_rules! define_env {
 
 			$(
 				env.funcs.insert(
-					stringify!( $name ).to_string(),
+					stringify!( $name ).into(),
 					HostFunction::new(
 						gen_signature!( ( $( $params ),* ) $( -> $returns )* ),
 						{
