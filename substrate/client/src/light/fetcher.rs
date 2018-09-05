@@ -43,6 +43,8 @@ pub struct RemoteCallRequest<Header: HeaderT> {
 	pub method: String,
 	/// Call data.
 	pub call_data: Vec<u8>,
+	/// Number of times to retry request. None means that default RETRY_COUNT is used.
+	pub retry_count: Option<usize>,
 }
 
 /// Remote canonical header request.
@@ -52,6 +54,8 @@ pub struct RemoteHeaderRequest<Header: HeaderT> {
 	pub cht_root: Header::Hash,
 	/// Number of the header to query.
 	pub block: Header::Number,
+	/// Number of times to retry request. None means that default RETRY_COUNT is used.
+	pub retry_count: Option<usize>,
 }
 
 /// Remote storage read request.
@@ -63,6 +67,8 @@ pub struct RemoteReadRequest<Header: HeaderT> {
 	pub header: Header,
 	/// Storage key to read.
 	pub key: Vec<u8>,
+	/// Number of times to retry request. None means that default RETRY_COUNT is used.
+	pub retry_count: Option<usize>,
 }
 
 /// Light client data fetcher. Implementations of this trait must check if remote data
@@ -264,6 +270,7 @@ pub mod tests {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
 			key: b":auth:len".to_vec(),
+			retry_count: None,
 		}, remote_read_proof).unwrap().unwrap()[0], authorities_len as u8);
 	}
 
@@ -273,6 +280,7 @@ pub mod tests {
 		assert_eq!((&local_checker as &FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 			cht_root: local_cht_root,
 			block: 1,
+			retry_count: None,
 		}, Some(remote_block_header.clone()), remote_header_proof).unwrap(), remote_block_header);
 	}
 
@@ -283,6 +291,7 @@ pub mod tests {
 		assert!((&local_checker as &FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 			cht_root: Default::default(),
 			block: 1,
+			retry_count: None,
 		}, Some(remote_block_header.clone()), remote_header_proof).is_err());
 	}
 
@@ -293,6 +302,7 @@ pub mod tests {
 		assert!((&local_checker as &FetchChecker<Block>).check_header_proof(&RemoteHeaderRequest::<Header> {
 			cht_root: local_cht_root,
 			block: 1,
+			retry_count: None,
 		}, Some(remote_block_header.clone()), remote_header_proof).is_err());
 	}
 }

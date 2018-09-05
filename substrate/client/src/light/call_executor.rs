@@ -73,6 +73,7 @@ impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExec
 			header: block_header,
 			method: method.into(),
 			call_data: call_data.to_vec(),
+			retry_count: None,
 		}).into_future().wait()
 	}
 
@@ -168,6 +169,7 @@ mod tests {
 			},
 			method: "authorities".into(),
 			call_data: vec![],
+			retry_count: None,
 		}, remote_execution_proof).unwrap();
 	}
 }
