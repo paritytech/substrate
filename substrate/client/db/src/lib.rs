@@ -87,7 +87,7 @@ pub fn new_client<E, S, Block>(
 	executor: E,
 	genesis_storage: S,
 	execution_strategy: ExecutionStrategy,
-) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E, KeccakHasher, RlpCodec>, Block>, client::error::Error>
+) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
 		E: CodeExecutor<KeccakHasher> + RuntimeInfo<KeccakHasher>,

@@ -50,8 +50,6 @@ pub type FullBackend<F> = client_db::Backend<<F as ServiceFactory>::Block>;
 pub type FullExecutor<F> = client::LocalCallExecutor<
 	client_db::Backend<<F as ServiceFactory>::Block>,
 	CodeExecutor<F>,
-	KeccakHasher,
-	RlpCodec
 >;
 
 /// Light client backend type for a factory.
@@ -148,7 +146,7 @@ pub trait ServiceFactory: 'static {
 	/// Build network protocol.
 	fn build_network_protocol(config: &FactoryFullConfiguration<Self>)
 		-> Result<Self::NetworkProtocol, error::Error>;
-} 
+}
 
 /// A collection of types and function to generalise over full / light client type.
 pub trait Components: 'static {

@@ -56,8 +56,6 @@ pub type Backend = client::in_mem::Backend<runtime::Block, KeccakHasher, RlpCode
 pub type Executor = client::LocalCallExecutor<
 		Backend,
 		executor::NativeExecutor<LocalExecutor>,
-		KeccakHasher,
-		RlpCodec
 	>;
 
 /// Creates new client instance used for tests.

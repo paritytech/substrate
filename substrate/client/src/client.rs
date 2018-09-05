@@ -164,7 +164,7 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 pub fn new_in_mem<E, Block, S>(
 	executor: E,
 	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block, KeccakHasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, KeccakHasher, RlpCodec>, E, KeccakHasher, RlpCodec>, Block>>
+) -> error::Result<Client<in_mem::Backend<Block, KeccakHasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, KeccakHasher, RlpCodec>, E>, Block>>
 	where
 		E: CodeExecutor<KeccakHasher> + RuntimeInfo<KeccakHasher>,
 		S: BuildStorage,
