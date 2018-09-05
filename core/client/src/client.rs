@@ -756,7 +756,6 @@ impl<B, E, Block> Client<B, E, Block> where
 					break;
 				}
 
-
 				current_hash = *current_header.parent_hash();
 			}
 		}
