@@ -765,7 +765,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			}
 		}
 
-		Ok(None)
+		unreachable!("this is a bug. `target_hash` is in blockchain but wasn't found following all leaves backwards");
 	}
 }
 
