@@ -25,7 +25,8 @@ use linked_hash_map::LinkedHashMap;
 use linked_hash_map::Entry;
 use parking_lot::Mutex;
 use client;
-use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest};
+use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
+	RemoteCallRequest, RemoteReadRequest};
 use io::SyncIo;
 use message;
 use network_libp2p::{Severity, NodeIndex};
@@ -45,6 +46,14 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 
 	/// Maintain peers requests.
 	fn maintain_peers(&self, io: &mut SyncIo);
+
+	/// When header response is received from remote node.
+	fn on_remote_header_response(
+		&self,
+		io: &mut SyncIo,
+		peer: NodeIndex,
+		response: message::RemoteHeaderResponse<Block::Header>
+	);
 
 	/// When read response is received from remote node.
 	fn on_remote_read_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteReadResponse);
@@ -80,6 +89,7 @@ struct Request<Block: BlockT> {
 }
 
 enum RequestData<Block: BlockT> {
+	RemoteHeader(RemoteHeaderRequest<Block::Header>, Sender<Result<Block::Header, client::error::Error>>),
 	RemoteRead(RemoteReadRequest<Block::Header>, Sender<Result<Option<Vec<u8>>, client::error::Error>>),
 	RemoteCall(RemoteCallRequest<Block::Header>, Sender<Result<client::CallResult, client::error::Error>>),
 }
@@ -198,6 +208,20 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 		core.dispatch();
 	}
 
+	fn on_remote_header_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteHeaderResponse<B::Header>) {
+		self.accept_response("header", io, peer, response.id, |request| match request.data {
+			RequestData::RemoteHeader(request, sender) => match self.checker.check_header_proof(&request, response.header, response.proof) {
+				Ok(response) => {
+					// we do not bother if receiver has been dropped already
+					let _ = sender.send(Ok(response));
+					Accept::Ok
+				},
+				Err(error) => Accept::CheckFailed(error, RequestData::RemoteHeader(request, sender)),
+			},
+			data @ _ => Accept::Unexpected(data),
+		})
+	}
+
 	fn on_remote_read_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteReadResponse) {
 		self.accept_response("read", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteRead(request, sender) => match self.checker.check_read_proof(&request, response.proof) {
@@ -232,8 +256,15 @@ impl<B, E> Fetcher<B> for OnDemand<B, E> where
 	E: service::ExecuteInContext<B>,
 	B::Header: HeaderT,
 {
+	type RemoteHeaderResult = RemoteResponse<B::Header>;
 	type RemoteReadResult = RemoteResponse<Option<Vec<u8>>>;
 	type RemoteCallResult = RemoteResponse<client::CallResult>;
+
+	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
+		let (sender, receiver) = channel();
+		self.schedule_request(RequestData::RemoteHeader(request, sender),
+			RemoteResponse { receiver })
+	}
 
 	fn remote_read(&self, request: RemoteReadRequest<B::Header>) -> Self::RemoteReadResult {
 		let (sender, receiver) = channel();
@@ -332,6 +363,11 @@ impl<B, E> OnDemandCore<B, E> where
 impl<Block: BlockT> Request<Block> {
 	pub fn message(&self) -> message::Message<Block> {
 		match self.data {
+			RequestData::RemoteHeader(ref data, _) => message::generic::Message::RemoteHeaderRequest(
+				message::RemoteHeaderRequest {
+					id: self.id,
+					block: data.block,
+				}),
 			RequestData::RemoteRead(ref data, _) => message::generic::Message::RemoteReadRequest(
 				message::RemoteReadRequest {
 					id: self.id,
@@ -357,7 +393,8 @@ pub mod tests {
 	use futures::Future;
 	use parking_lot::RwLock;
 	use client;
-	use client::light::fetcher::{Fetcher, FetchChecker, RemoteCallRequest, RemoteReadRequest};
+	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
+		RemoteCallRequest, RemoteReadRequest};
 	use message;
 	use network_libp2p::NodeIndex;
 	use service::{Roles, ExecuteInContext};
@@ -373,6 +410,18 @@ pub mod tests {
 	}
 
 	impl FetchChecker<Block> for DummyFetchChecker {
+		fn check_header_proof(
+			&self,
+			_request: &RemoteHeaderRequest<Header>,
+			header: Option<Header>,
+			_remote_proof: Vec<Vec<u8>>
+		) -> client::error::Result<Header> {
+			match self.ok {
+				true if header.is_some() => Ok(header.unwrap()),
+				_ => Err(client::error::ErrorKind::Backend("Test error".into()).into()),
+			}
+		}
+
 		fn check_read_proof(&self, _request: &RemoteReadRequest<Header>, _remote_proof: Vec<Vec<u8>>) -> client::error::Result<Option<Vec<u8>>> {
 			match self.ok {
 				true => Ok(Some(vec![42])),
@@ -513,7 +562,7 @@ pub mod tests {
 	}
 
 	#[test]
-	fn receives_remote_response() {
+	fn receives_remote_call_response() {
 		let (_x, on_demand) = dummy(true);
 		let queue = RwLock::new(VecDeque::new());
 		let mut network = TestIo::new(&queue, None);
@@ -531,6 +580,57 @@ pub mod tests {
 		});
 
 		receive_call_response(&*on_demand, &mut network, 0, 0);
+		thread.join().unwrap();
+	}
+
+	#[test]
+	fn receives_remote_read_response() {
+		let (_x, on_demand) = dummy(true);
+		let queue = RwLock::new(VecDeque::new());
+		let mut network = TestIo::new(&queue, None);
+		on_demand.on_connect(0, Roles::FULL);
+
+		let response = on_demand.remote_read(RemoteReadRequest {
+			header: dummy_header(),
+			block: Default::default(),
+			key: b":key".to_vec()
+		});
+		let thread = ::std::thread::spawn(move || {
+			let result = response.wait().unwrap();
+			assert_eq!(result, Some(vec![42]));
+		});
+
+		on_demand.on_remote_read_response(&mut network, 0, message::RemoteReadResponse {
+			id: 0,
+			proof: vec![vec![2]],
+		});
+		thread.join().unwrap();
+	}
+
+	#[test]
+	fn receives_remote_header_response() {
+		let (_x, on_demand) = dummy(true);
+		let queue = RwLock::new(VecDeque::new());
+		let mut network = TestIo::new(&queue, None);
+		on_demand.on_connect(0, Roles::FULL);
+
+		let response = on_demand.remote_header(RemoteHeaderRequest { cht_root: Default::default(), block: 1 });
+		let thread = ::std::thread::spawn(move || {
+			let result = response.wait().unwrap();
+			assert_eq!(result.hash(), "80729accb7bb10ff9c637a10e8bb59f21c52571aa7b46544c5885ca89ed190f4".into());
+		});
+
+		on_demand.on_remote_header_response(&mut network, 0, message::RemoteHeaderResponse {
+			id: 0,
+			header: Some(Header {
+				parent_hash: Default::default(),
+				number: 1,
+				state_root: Default::default(),
+				extrinsics_root: Default::default(),
+				digest: Default::default(),
+			}),
+			proof: vec![vec![2]],
+		});
 		thread.join().unwrap();
 	}
 }
