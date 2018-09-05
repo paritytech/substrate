@@ -35,6 +35,7 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_runtime_staking as staking;
 #[cfg(test)] extern crate substrate_runtime_system as system;
 #[cfg(test)] extern crate substrate_runtime_consensus as consensus;
+#[cfg(test)] extern crate substrate_runtime_timestamp as timestamp;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
 pub use substrate_executor::NativeExecutor;
@@ -53,7 +54,7 @@ mod tests {
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
-	use {balances, staking, session, system, consensus};
+	use {balances, staking, session, system, consensus, timestamp};
 	use system::{EventRecord, Phase};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, BareExtrinsic, System, Event};
@@ -229,8 +230,8 @@ mod tests {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(|extrinsic| {
-			let signature = MaybeUnsigned(Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed.0.clone())).unwrap())
-				.sign(&extrinsic.encode()).into());
+			let public = Keyring::from_public(Public::from_raw(extrinsic.signed.0.clone()));
+			let signature = MaybeUnsigned(public.map(|p| Pair::from(p).sign(&extrinsic.encode()).into()).unwrap_or_default());
 			let extrinsic = Extrinsic {
 				signed: extrinsic.signed.into(),
 				index: extrinsic.index,
@@ -260,12 +261,20 @@ mod tests {
 			// Blake
 			// hex!("3437bf4b182ab17bb322af5c67e55f6be487a77084ad2b4e27ddac7242e4ad21").into(),
 			// Keccak
-			hex!("508a68a0918f614b86b2ccfd0975754f6d2abe1026a34e42d6d8d5abdf4db010").into(),
-			vec![BareExtrinsic {
-				signed: alice(),
-				index: 0,
-				function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
-			}]
+
+			hex!("3f39c78ad382abdf07e22d8850c4d5ed82c64671d4f3cb34bbfad159ac7f870e").into(),
+			vec![
+				BareExtrinsic {
+					signed: Default::default(),
+					index: 0,
+					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				BareExtrinsic {
+					signed: alice(),
+					index: 0,
+					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+				},
+			]
 		)
 	}
 
@@ -276,8 +285,13 @@ mod tests {
 			// Blake
 			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
 			// Keccak
-			hex!("171f1b2c01c9c616e40ee2d842a699286b50a5a74874b56d826094dadedffb27").into(),
+			hex!("a4b56027b5f889d9dd3d144b3f8a337f4354321415bdd4ad064f2fe274021af6").into(),
 			vec![
+				BareExtrinsic {
+					signed: Default::default(),
+					index: 0,
+					function: Call::Timestamp(timestamp::Call::set(52)),
+				},
 				BareExtrinsic {
 					signed: bob(),
 					index: 0,
@@ -299,12 +313,19 @@ mod tests {
 			// Blake
 			// hex!("2c7231a9c210a7aa4bea169d944bc4aaacd517862b244b8021236ffa7f697991").into(),
 			// Keccak
-			hex!("e45221804da3a3609454d4e09debe6364cc6af63c2ff067d802d1af62fea32ae").into(),
-			vec![BareExtrinsic {
-				signed: alice(),
-				index: 0,
-				function: Call::Consensus(consensus::Call::remark(vec![0; 60000])),
-			}]
+			hex!("208c206ba9721c99cdc9ccaef941d867f75441866ca58db73fae289d8c504892").into(),
+			vec![
+				BareExtrinsic {
+					signed: Default::default(),
+					index: 0,
+					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				BareExtrinsic {
+					signed: alice(),
+					index: 0,
+					function: Call::Consensus(consensus::Call::remark(vec![0; 60000])),
+				}
+			]
 		)
 	}
 
@@ -320,10 +341,14 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::NewAccount(bob(), 1, balances::NewAccountOutcome::NoHint))
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess)
 				}
 			]);
@@ -341,6 +366,10 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(2),
 					event: Event::system(system::Event::ExtrinsicSuccess)
 				},
 				EventRecord {
