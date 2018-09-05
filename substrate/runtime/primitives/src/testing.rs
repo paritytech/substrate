@@ -31,9 +31,18 @@ pub struct Digest {
 
 impl traits::Digest for Digest {
 	type Item = u64;
+
+	fn logs(&self) -> &[Self::Item] {
+		&self.logs
+	}
+
 	fn push(&mut self, item: Self::Item) {
 		self.logs.push(item);
 	}
+}
+
+impl traits::DigestItem for u64 {
+	type AuthoritiesChange = ();
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
