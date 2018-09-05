@@ -144,7 +144,7 @@ dependencies = [
 name = "substrate-runtime-io"
 version = "0.1.0"
 dependencies = [
- "hashdb 0.2.1 (git+https://github.com/paritytech/parity-common)",
+ "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
