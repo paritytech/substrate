@@ -56,7 +56,7 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::PublicAux {
-		fn set(aux, now: T::Moment) -> Result = 0;
+		fn set(aux, now: T::Moment) -> Result;
 	}
 }
 

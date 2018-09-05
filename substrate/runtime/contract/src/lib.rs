@@ -130,7 +130,7 @@ decl_module! {
 			value: T::Balance,
 			gas_limit: T::Gas,
 			data: Vec<u8>
-		) -> Result = 0;
+		) -> Result;
 
 		fn create(
 			aux,
@@ -138,7 +138,7 @@ decl_module! {
 			gas_limit: T::Gas,
 			ctor: Vec<u8>,
 			data: Vec<u8>
-		) -> Result = 1;
+		) -> Result;
 	}
 }
 
