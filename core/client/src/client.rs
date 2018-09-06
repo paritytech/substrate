@@ -1074,9 +1074,9 @@ mod tests {
 	#[test]
 	fn best_containing_with_multiple_forks() {
 		// G -> A1 -> A2 -> A3 -> A4 -> A5
-		// 	    A1 -> B2 -> B3 -> B4
-		// 		      B2 -> C3
-		// 	    A1 -> D2
+		//		A1 -> B2 -> B3 -> B4
+		//			  B2 -> C3
+		//		A1 -> D2
 		let client = test_client::new();
 
 		// G -> A1
@@ -1148,16 +1148,16 @@ mod tests {
 		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
 		// TODO [snd] fix that this fails with Error(ApplyExtinsicFailed(Stale)
 		// builder.push_transfer(Transfer {
-		// 	from: Keyring::Alice.to_raw_public().into(),
-		// 	to: Keyring::Ferdie.to_raw_public().into(),
-		// 	amount: 1,
-		// 	nonce: 0,
+		//	from: Keyring::Alice.to_raw_public().into(),
+		//	to: Keyring::Ferdie.to_raw_public().into(),
+		//	amount: 1,
+		//	nonce: 0,
 		// }).unwrap();
 		// let c3 = builder.bake().unwrap();
 		// client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
 		// assert_eq!(
-		// 	client.backend().blockchain().leaves().unwrap(),
-		// 	vec![a5.hash(), b4.hash(), c3.hash()]);
+		//	client.backend().blockchain().leaves().unwrap(),
+		//	vec![a5.hash(), b4.hash(), c3.hash()]);
 
 		// A1 -> D2
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
@@ -1176,6 +1176,8 @@ mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_hash, a5.hash());
 
+		// search without restriction
+
 		assert_eq!(a5.hash(), client.best_containing(client.info().unwrap().chain.genesis_hash, None).unwrap().unwrap());
 		assert_eq!(a5.hash(), client.best_containing(a1.hash().clone(), None).unwrap().unwrap());
 		assert_eq!(a5.hash(), client.best_containing(a2.hash().clone(), None).unwrap().unwrap());
@@ -1191,5 +1193,118 @@ mod tests {
 		// assert_eq!(c3.hash(), client.best_containing(c3.hash().clone(), None).unwrap().unwrap());
 
 		assert_eq!(d2.hash(), client.best_containing(d2.hash().clone(), None).unwrap().unwrap());
+
+
+		// search only blocks with number <= 5. equivalent to without restriction for this scenario
+
+		assert_eq!(a5.hash(), client.best_containing(client.info().unwrap().chain.genesis_hash, Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a1.hash().clone(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a2.hash().clone(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a3.hash().clone(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a4.hash().clone(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a5.hash().clone(), Some(5)).unwrap().unwrap());
+
+		assert_eq!(b4.hash(), client.best_containing(b2.hash().clone(), Some(5)).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b3.hash().clone(), Some(5)).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b4.hash().clone(), Some(5)).unwrap().unwrap());
+
+		// TODO [snd] activate
+		// assert_eq!(c3.hash(), client.best_containing(c3.hash().clone(), Some(5)).unwrap().unwrap());
+
+		assert_eq!(d2.hash(), client.best_containing(d2.hash().clone(), Some(5)).unwrap().unwrap());
+
+
+		// search only blocks with number <= 4
+
+		assert_eq!(a4.hash(), client.best_containing(client.info().unwrap().chain.genesis_hash, Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a1.hash().clone(), Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a2.hash().clone(), Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a3.hash().clone(), Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a4.hash().clone(), Some(4)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a5.hash().clone(), Some(4)).unwrap());
+
+		assert_eq!(b4.hash(), client.best_containing(b2.hash().clone(), Some(4)).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b3.hash().clone(), Some(4)).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b4.hash().clone(), Some(4)).unwrap().unwrap());
+
+		// TODO [snd] activate
+		// assert_eq!(c3.hash(), client.best_containing(c3.hash().clone(), Some(4)).unwrap().unwrap());
+
+		assert_eq!(d2.hash(), client.best_containing(d2.hash().clone(), Some(4)).unwrap().unwrap());
+
+
+		// search only blocks with number <= 3
+
+		assert_eq!(a3.hash(), client.best_containing(client.info().unwrap().chain.genesis_hash, Some(3)).unwrap().unwrap());
+		assert_eq!(a3.hash(), client.best_containing(a1.hash().clone(), Some(3)).unwrap().unwrap());
+		assert_eq!(a3.hash(), client.best_containing(a2.hash().clone(), Some(3)).unwrap().unwrap());
+		assert_eq!(a3.hash(), client.best_containing(a3.hash().clone(), Some(3)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a4.hash().clone(), Some(3)).unwrap());
+		assert_eq!(None, client.best_containing(a5.hash().clone(), Some(3)).unwrap());
+
+		assert_eq!(b3.hash(), client.best_containing(b2.hash().clone(), Some(3)).unwrap().unwrap());
+		assert_eq!(b3.hash(), client.best_containing(b3.hash().clone(), Some(3)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(b4.hash().clone(), Some(3)).unwrap());
+
+		// TODO [snd] activate
+		// assert_eq!(c3.hash(), client.best_containing(c3.hash().clone(), Some(3)).unwrap().unwrap());
+
+		assert_eq!(d2.hash(), client.best_containing(d2.hash().clone(), Some(3)).unwrap().unwrap());
+
+
+		// search only blocks with number <= 2
+
+		assert_eq!(a2.hash(), client.best_containing(client.info().unwrap().chain.genesis_hash, Some(2)).unwrap().unwrap());
+		assert_eq!(a2.hash(), client.best_containing(a1.hash().clone(), Some(2)).unwrap().unwrap());
+		assert_eq!(a2.hash(), client.best_containing(a2.hash().clone(), Some(2)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a3.hash().clone(), Some(2)).unwrap());
+		assert_eq!(None, client.best_containing(a4.hash().clone(), Some(2)).unwrap());
+		assert_eq!(None, client.best_containing(a5.hash().clone(), Some(2)).unwrap());
+
+		assert_eq!(b2.hash(), client.best_containing(b2.hash().clone(), Some(2)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(b3.hash().clone(), Some(2)).unwrap());
+		assert_eq!(None, client.best_containing(b4.hash().clone(), Some(2)).unwrap());
+
+		// TODO [snd] activate
+		// assert_eq!(None, client.best_containing(c3.hash().clone(), Some(2)).unwrap());
+
+		assert_eq!(d2.hash(), client.best_containing(d2.hash().clone(), Some(2)).unwrap().unwrap());
+
+
+		// search only blocks with number <= 1
+
+		assert_eq!(a1.hash(), client.best_containing(client.info().unwrap().chain.genesis_hash, Some(1)).unwrap().unwrap());
+		assert_eq!(a1.hash(), client.best_containing(a1.hash().clone(), Some(1)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a2.hash().clone(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(a3.hash().clone(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(a4.hash().clone(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(a5.hash().clone(), Some(1)).unwrap());
+
+		assert_eq!(None, client.best_containing(b2.hash().clone(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(b3.hash().clone(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(b4.hash().clone(), Some(1)).unwrap());
+
+		// TODO [snd] activate
+		// assert_eq!(None, client.best_containing(c3.hash().clone(), Some(1)).unwrap());
+
+		assert_eq!(None, client.best_containing(d2.hash().clone(), Some(1)).unwrap());
+
+		// search only blocks with number <= 0
+
+		assert_eq!(client.info().unwrap().chain.genesis_hash, client.best_containing(client.info().unwrap().chain.genesis_hash, Some(0)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a1.hash().clone(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(a2.hash().clone(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(a3.hash().clone(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(a4.hash().clone(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(a5.hash().clone(), Some(0)).unwrap());
+
+		assert_eq!(None, client.best_containing(b2.hash().clone(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(b3.hash().clone(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(b4.hash().clone(), Some(0)).unwrap());
+
+		// TODO [snd] activate
+		// assert_eq!(None, client.best_containing(c3.hash().clone(), Some(0)).unwrap());
+
+		assert_eq!(None, client.best_containing(d2.hash().clone(), Some(0)).unwrap());
 	}
 }
