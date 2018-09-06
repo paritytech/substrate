@@ -16,6 +16,7 @@ substrate-codec = { path = "../codec", default_features = false }
 [dev-dependencies]
 pretty_assertions = "0.5.1"
 serde_json = { version = "1.0" }
+substrate-codec-derive = { path = "../../substrate/codec/derive" }
 
 [features]
 default = ["std"]
