@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use libp2p::{self, PeerId, Transport, mplex, secio, yamux};
-use libp2p::core::{MuxedTransport, either, upgrade};
+use libp2p::core::{either, upgrade, transport::BoxedMuxed};
 use libp2p::transport_timeout::TransportTimeout;
 use std::time::Duration;
 use std::usize;
@@ -24,7 +24,7 @@ use tokio_io::{AsyncRead, AsyncWrite};
 /// Builds the transport that serves as a common ground for all connections.
 pub fn build_transport(
 	local_private_key: secio::SecioKeyPair
-) -> impl MuxedTransport<Output = (PeerId, impl AsyncRead + AsyncWrite)> + Clone {
+) -> BoxedMuxed<(PeerId, impl AsyncRead + AsyncWrite)> {
 	let mut mplex_config = mplex::MplexConfig::new();
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
@@ -46,4 +46,5 @@ pub fn build_transport(
 		.map(|(key, substream), _| (key.into_peer_id(), substream));
 
 	TransportTimeout::new(base, Duration::from_secs(20))
+		.boxed_muxed()
 }
