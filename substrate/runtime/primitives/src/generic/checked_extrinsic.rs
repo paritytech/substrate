@@ -16,7 +16,7 @@
 
 //! Generic implementations of Extrinsic/Header/Block.
 
-use runtime_support::AuxDispatchable;
+use runtime_support::Dispatchable;
 use traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 
 /// Definition of something that the external world might want to say; its existence implies that
@@ -37,8 +37,8 @@ impl<AccountId, Index, Call> traits::Applyable
 where
 	AccountId: Member + MaybeDisplay,
 	Index: Member + MaybeDisplay + SimpleArithmetic,
-	Call: Member + AuxDispatchable,
-	<Call as AuxDispatchable>::Aux: From<Option<AccountId>> 
+	Call: Member + Dispatchable,
+	<Call as Dispatchable>::Origin: From<Option<AccountId>> 
 {
 	type Index = Index;
 	type AccountId = AccountId;

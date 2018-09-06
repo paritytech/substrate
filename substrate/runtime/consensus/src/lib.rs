@@ -144,13 +144,12 @@ decl_storage! {
 decl_module! {
 	pub struct Module<T: Trait>;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::Origin {
-		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
-		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result;
-		fn remark(aux, remark: Vec<u8>) -> Result;
-		fn set_code(aux, new: Vec<u8>) -> Result;
-		fn set_storage(aux, items: Vec<KeyValue>) -> Result;
+	pub enum Call where origin: T::Origin {
+		fn report_misbehavior(origin, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
+		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result;
+		fn remark(origin, remark: Vec<u8>) -> Result;
+		fn set_code(origin, new: Vec<u8>) -> Result;
+		fn set_storage(origin, items: Vec<KeyValue>) -> Result;
 	}
 }
 

@@ -21,7 +21,7 @@ use rstd::borrow::Borrow;
 use primitives::traits::{OnFinalise, Hash};
 use runtime_io::print;
 use substrate_runtime_support::dispatch::Result;
-use substrate_runtime_support::{StorageValue, StorageMap, IsAuxSubType};
+use substrate_runtime_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
 use super::{Trait, Module as Council};
 use system::{ensure_signed, ensure_root};
@@ -29,14 +29,13 @@ use system::{ensure_signed, ensure_root};
 decl_module! {
 	pub struct Module<T: Trait>;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::Origin {
-		fn propose(aux, proposal: Box<T::Proposal>) -> Result;
-		fn vote(aux, proposal: T::Hash, approve: bool) -> Result;
-		fn veto(aux, proposal_hash: T::Hash) -> Result;
+	pub enum Call where origin: T::Origin {
+		fn propose(origin, proposal: Box<T::Proposal>) -> Result;
+		fn vote(origin, proposal: T::Hash, approve: bool) -> Result;
+		fn veto(origin, proposal_hash: T::Hash) -> Result;
 
-		fn set_cooloff_period(aux, blocks: T::BlockNumber) -> Result;
-		fn set_voting_period(aux, blocks: T::BlockNumber) -> Result;
+		fn set_cooloff_period(origin, blocks: T::BlockNumber) -> Result;
+		fn set_voting_period(origin, blocks: T::BlockNumber) -> Result;
 	}
 }
 
@@ -188,7 +187,7 @@ impl<T: Trait> Module<T> {
 	fn end_block(now: T::BlockNumber) -> Result {
 		while let Some((proposal, proposal_hash)) = Self::take_proposal_if_expiring_at(now) {
 			let tally = Self::take_tally(&proposal_hash);
-			if let Some(&democracy::Call::cancel_referendum(ref_index)) = IsAuxSubType::<democracy::Module<T>>::is_aux_sub_type(&proposal) {
+			if let Some(&democracy::Call::cancel_referendum(ref_index)) = IsSubType::<democracy::Module<T>>::is_aux_sub_type(&proposal) {
 				if let (_, 0, 0) = tally {
 					<democracy::Module<T>>::internal_cancel_referendum(ref_index);
 				}

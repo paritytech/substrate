@@ -66,25 +66,24 @@ decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait>;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::Origin {
+	pub enum Call where origin: T::Origin {
 		// Put forward a suggestion for spending. A deposit proportional to the value
 		// is reserved and slashed if the proposal is rejected. It is returned once the
 		// proposal is awarded.
-		fn propose_spend(aux, value: T::Balance, beneficiary: T::AccountId) -> Result;
+		fn propose_spend(origin, value: T::Balance, beneficiary: T::AccountId) -> Result;
 
 		// Set the balance of funds available to spend.
-		fn set_pot(aux, new_pot: T::Balance) -> Result;
+		fn set_pot(origin, new_pot: T::Balance) -> Result;
 
 		// (Re-)configure this module.
-		fn configure(aux, proposal_bond: Permill, proposal_bond_minimum: T::Balance, spend_period: T::BlockNumber, burn: Permill) -> Result;
+		fn configure(origin, proposal_bond: Permill, proposal_bond_minimum: T::Balance, spend_period: T::BlockNumber, burn: Permill) -> Result;
 
 		// Reject a proposed spend. The original deposit will be slashed.
-		fn reject_proposal(aux, roposal_id: ProposalIndex) -> Result;
+		fn reject_proposal(origin, roposal_id: ProposalIndex) -> Result;
 
 		// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
 		// and the original deposit will be returned.
-		fn approve_proposal(aux, proposal_id: ProposalIndex) -> Result;
+		fn approve_proposal(origin, proposal_id: ProposalIndex) -> Result;
 	}
 }
 

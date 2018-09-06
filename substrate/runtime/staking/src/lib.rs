@@ -50,7 +50,7 @@ use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, OnFinalise,
-	As, AuxLookup};
+	As, Lookup};
 use balances::{address::Address, OnMinted};
 use system::{ensure_root, ensure_signed};
 
@@ -107,20 +107,19 @@ pub trait Trait: balances::Trait + session::Trait {
 decl_module! {
 	pub struct Module<T: Trait>;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
-	pub enum Call where aux: T::Origin {
-		fn stake(aux) -> Result;
-		fn unstake(aux, intentions_index: u32) -> Result;
-		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result;
-		fn unnominate(aux, target_index: u32) -> Result;
-		fn register_preferences(aux, intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result;
+	pub enum Call where origin: T::Origin {
+		fn stake(origin) -> Result;
+		fn unstake(origin, intentions_index: u32) -> Result;
+		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) -> Result;
+		fn unnominate(origin, target_index: u32) -> Result;
+		fn register_preferences(origin, intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result;
 
-		fn set_sessions_per_era(aux, new: T::BlockNumber) -> Result;
-		fn set_bonding_duration(aux, new: T::BlockNumber) -> Result;
-		fn set_validator_count(aux, new: u32) -> Result;
-		fn force_new_era(aux, apply_rewards: bool) -> Result;
-		fn set_offline_slash_grace(aux, new: u32) -> Result;
+		fn set_sessions_per_era(origin, new: T::BlockNumber) -> Result;
+		fn set_bonding_duration(origin, new: T::BlockNumber) -> Result;
+		fn set_validator_count(origin, new: u32) -> Result;
+		fn force_new_era(origin, apply_rewards: bool) -> Result;
+		fn set_offline_slash_grace(origin, new: u32) -> Result;
 	}
 }
 
@@ -310,7 +309,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the given account's preference for slashing behaviour should they be a validator. 
 	/// 
-	/// An error (no-op) if `Self::intentions()[intentions_index] != aux`.
+	/// An error (no-op) if `Self::intentions()[intentions_index] != origin`.
 	fn register_preferences(
 		origin: T::Origin,
 		intentions_index: u32,

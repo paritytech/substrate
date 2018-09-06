@@ -47,7 +47,7 @@ pub trait Verify {
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
-pub trait AuxLookup {
+pub trait Lookup {
 	/// Type to lookup from.
 	type Source;
 	/// Type to lookup into.

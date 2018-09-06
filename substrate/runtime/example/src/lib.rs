@@ -82,25 +82,25 @@ decl_module! {
 	// using storage space proportional to any costs paid for by the caller.
 	//
 	// The account that is calling this (i.e. the one that signed the extrinsic) is provided
-	// via the `aux` argument, always first in each function call. As such functions must
+	// via the `origin` argument, always first in each function call. As such functions must
 	// always look like:
 	// 
-	// `fn foo(aux, bar: Bar, baz: Baz) -> Result = 0;`
+	// `fn foo(origin, bar: Bar, baz: Baz) -> Result = 0;`
 	//
 	// The `Result` is required as part of the syntax (and expands to the conventional dispatch
 	// result of `Result<(), &'static str>`). The index after `=` must be unique within this
 	// enum (the `PrivCall` enum is allowed to reuse indexes).
 	// 
-	// When you come to `impl` them later in the module, you must specify the full type for `aux`:
+	// When you come to `impl` them later in the module, you must specify the full type for `origin`:
 	//
-	// `fn foo(aux: T::Origin, bar: Bar, baz: Baz) { ... }`
+	// `fn foo(origin: T::Origin, bar: Bar, baz: Baz) { ... }`
 	//
 	// This is your public interface. Be extremely careful.
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::Origin {
+	pub enum Call where origin: T::Origin {
 		// This is just a simple example of how to interact with the module from the external
 		// world.
-		fn accumulate_dummy(aux, increase_by: T::Balance) -> Result;
+		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result;
 	}
 
 	// The priviledged entry points. These are provided to allow any governance modules in 
@@ -206,7 +206,7 @@ impl<T: Trait> Module<T> {
 	// The first is relatively easy to audit for - just ensure all panickers are removed from
 	// logic that executes in production (which you do anyway, right?!). To ensure the second 
 	// is followed, you should do all tests for validity at the top of your function. This
-	// is stuff like checking the sender (`aux`) or that state is such that the operation
+	// is stuff like checking the sender (`origin`) or that state is such that the operation
 	// makes sense.
 	// 
 	// Once you've determined that it's all good, then enact the operation and change storage.
@@ -248,7 +248,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	// Implementation of a priviledged call. This doesn't have an `aux` parameter because
+	// Implementation of a priviledged call. This doesn't have an `origin` parameter because
 	// it's not (directly) from an extrinsic, but rather the system as a whole has decided
 	// to execute it. Different runtimes have different reasons for allow priviledged
 	// calls to be executed - we don't need to care why. Because it's priviledged, we can

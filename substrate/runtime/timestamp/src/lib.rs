@@ -53,9 +53,8 @@ pub trait Trait: consensus::Trait + system::Trait {
 decl_module! {
 	pub struct Module<T: Trait>;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::Origin {
-		fn set(aux, now: T::Moment) -> Result;
+	pub enum Call where origin: T::Origin {
+		fn set(origin, now: T::Moment) -> Result;
 	}
 }
 
@@ -181,7 +180,7 @@ mod tests {
 		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::aux_dispatch(Call::set(69), Origin::INHERENT));
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -194,8 +193,8 @@ mod tests {
 		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::aux_dispatch(Call::set(69), Origin::INHERENT));
-			let _ = Timestamp::aux_dispatch(Call::set(70), Origin::INHERENT);
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
+			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
 		});
 	}
 
@@ -207,7 +206,7 @@ mod tests {
 		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::aux_dispatch(Call::set(46), Origin::INHERENT);
+			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
 		});
 	}
 }

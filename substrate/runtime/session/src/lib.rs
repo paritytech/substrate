@@ -78,12 +78,11 @@ pub type Event<T> = RawEvent<<T as system::Trait>::BlockNumber>;
 decl_module! {
 	pub struct Module<T: Trait>;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::Origin {
-		fn set_key(aux, key: T::SessionKey) -> Result;
+	pub enum Call where origin: T::Origin {
+		fn set_key(origin, key: T::SessionKey) -> Result;
 
-		fn set_length(aux, new: T::BlockNumber) -> Result;
-		fn force_new_session(aux, apply_rewards: bool) -> Result;
+		fn set_length(origin, new: T::BlockNumber) -> Result;
+		fn force_new_session(origin, apply_rewards: bool) -> Result;
 	}
 }
 
@@ -137,23 +136,23 @@ impl<T: Trait> Module<T> {
 
 	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 	/// session.
-	fn set_key(aux: T::Origin, key: T::SessionKey) -> Result {
-		let who = ensure_signed(aux)?;
+	fn set_key(origin: T::Origin, key: T::SessionKey) -> Result {
+		let who = ensure_signed(origin)?;
 		// set new value for next session
 		<NextKeyFor<T>>::insert(who, key);
 		Ok(())
 	}
 
 	/// Set a new era length. Won't kick in until the next era change (at current length).
-	fn set_length(aux: T::Origin, new: T::BlockNumber) -> Result {
-		ensure_root(aux)?;
+	fn set_length(origin: T::Origin, new: T::BlockNumber) -> Result {
+		ensure_root(origin)?;
 		<NextSessionLength<T>>::put(new);
 		Ok(())
 	}
 
 	/// Forces a new session.
-	pub fn force_new_session(aux: T::Origin, apply_rewards: bool) -> Result {
-		ensure_root(aux)?;
+	pub fn force_new_session(origin: T::Origin, apply_rewards: bool) -> Result {
+		ensure_root(origin)?;
 		Self::apply_force_new_session(apply_rewards)
 	}
 

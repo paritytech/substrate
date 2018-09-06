@@ -46,7 +46,7 @@ use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
-	As, AuxLookup, Member, CheckedAdd, CheckedSub};
+	As, Lookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
 use system::{ensure_signed, ensure_root};
 
@@ -135,10 +135,9 @@ pub trait Trait: system::Trait {
 decl_module! {
 	pub struct Module<T: Trait>;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::Origin {
-		fn transfer(aux, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
-		fn set_balance(aux, who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
+	pub enum Call where origin: T::Origin {
+		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
+		fn set_balance(origin, who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
 	}
 }
 
@@ -643,7 +642,7 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	}
 }
 
-impl<T: Trait> AuxLookup for Module<T> {
+impl<T: Trait> Lookup for Module<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {

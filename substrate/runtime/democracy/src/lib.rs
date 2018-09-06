@@ -44,7 +44,7 @@ extern crate substrate_runtime_system as system;
 use rstd::prelude::*;
 use rstd::result;
 use primitives::traits::{Zero, OnFinalise, As, MaybeSerializeDebug};
-use substrate_runtime_support::{StorageValue, StorageMap, Parameter, AuxDispatchable, IsAuxSubType};
+use substrate_runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use substrate_runtime_support::dispatch::Result;
 use system::{ensure_signed, ensure_root};
 
@@ -60,20 +60,19 @@ pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
 pub trait Trait: balances::Trait + Sized {
-	type Proposal: Parameter + AuxDispatchable<Aux=Self::Origin> + IsAuxSubType<Module<Self>> + MaybeSerializeDebug;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>> + MaybeSerializeDebug;
 }
 
 decl_module! {
 	pub struct Module<T: Trait>;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::Origin {
-		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) -> Result;
-		fn second(aux, proposal: PropIndex) -> Result;
-		fn vote(aux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result;
+	pub enum Call where origin: T::Origin {
+		fn propose(origin, proposal: Box<T::Proposal>, value: T::Balance) -> Result;
+		fn second(origin, proposal: PropIndex) -> Result;
+		fn vote(origin, ref_index: ReferendumIndex, approve_proposal: bool) -> Result;
 
-		fn start_referendum(aux, proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result;
-		fn cancel_referendum(aux, ref_index: ReferendumIndex) -> Result;
+		fn start_referendum(origin, proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result;
+		fn cancel_referendum(origin, ref_index: ReferendumIndex) -> Result;
 	}
 }
 
@@ -360,7 +359,7 @@ mod tests {
 	impl_outer_dispatch! {
 		#[derive(Clone, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-		pub enum Call where aux: <Test as system::Trait>::Origin {
+		pub enum Call where origin: <Test as system::Trait>::Origin {
 			Balances,
 			Democracy,
 		}

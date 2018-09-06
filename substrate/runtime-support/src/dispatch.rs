@@ -27,28 +27,10 @@ pub use codec::{Codec, Decode, Encode, Input, Output};
 pub type Result = result::Result<(), &'static str>;
 
 pub trait Dispatchable {
+	type Origin;
 	type Trait;
-	fn dispatch(self) -> Result;
+	fn dispatch(self, origin: Self::Origin) -> Result;
 }
-
-pub trait AuxDispatchable {
-	type Aux;
-	type Trait;
-	fn dispatch(self, aux: Self::Aux) -> Result;
-}
-
-#[cfg(feature = "std")]
-pub trait AuxCallable {
-	type Call: AuxDispatchable + Codec + ::serde::Serialize + Clone + PartialEq + Eq;
-}
-#[cfg(not(feature = "std"))]
-pub trait AuxCallable {
-	type Call: AuxDispatchable + Codec + Clone + PartialEq + Eq;
-}
-
-// dirty hack to work around serde_derive issue
-// https://github.com/rust-lang/rust/issues/51331
-pub type AuxCallableCallFor<A> = <A as AuxCallable>::Call;
 
 #[cfg(feature = "std")]
 pub trait Callable {
@@ -59,9 +41,9 @@ pub trait Callable {
 	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
 }
 
-// dirty hack to work around serde_derive issue.
+// dirty hack to work around serde_derive issue
 // https://github.com/rust-lang/rust/issues/51331
-pub type CallableCallFor<C> = <C as Callable>::Call;
+pub type CallableCallFor<A> = <A as Callable>::Call;
 
 #[cfg(feature = "std")]
 pub trait Parameter: Codec + serde::Serialize + Clone + Eq + fmt::Debug {}
@@ -110,34 +92,6 @@ macro_rules! decl_module {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$($rest)*
 		}
-	};
-	(
-		$(#[$attr:meta])*
-		struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
-		$($rest:tt)*
-	) => {
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-		#[cfg(feature = "std")]
-		$(#[$attr])*
-		struct $mod_type<$trait_instance: $trait_name>(::std::marker::PhantomData<$trait_instance>);
-
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-		#[cfg(not(feature = "std"))]
-		$(#[$attr])*
-		struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
-		decl_dispatch! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$($rest)*
-		}
-
-		__impl_json_metadata! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$($rest)*
-		}
 	}
 }
 
@@ -148,10 +102,10 @@ macro_rules! decl_dispatch {
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$(#[$attr:meta])*
-		pub enum $call_type:ident where aux: $aux_type:ty {
+		pub enum $call_type:ident where origin: $aux_type:ty {
 			$(
 				$(#[$fn_attr:meta])*
-				fn $fn_name:ident(aux
+				fn $fn_name:ident(origin
 					$(
 						, $param_name:ident : $param:ty
 					)*
@@ -163,9 +117,9 @@ macro_rules! decl_dispatch {
 		__decl_dispatch_module_with_aux! {
 			impl for $mod_type<$trait_instance: $trait_name>;
 			$(#[$attr])*
-			pub enum $call_type where aux: $aux_type;
+			pub enum $call_type where origin: $aux_type;
 			$(
-				fn $fn_name(aux $(, $param_name: $param )*) -> $result;
+				fn $fn_name(origin $(, $param_name: $param )*) -> $result;
 			)*
 		}
 		decl_dispatch! {
@@ -178,11 +132,8 @@ macro_rules! decl_dispatch {
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-			pub fn aux_dispatch<D: $crate::dispatch::AuxDispatchable<Trait = $trait_instance>>(d: D, aux: D::Aux) -> $crate::dispatch::Result {
-				d.dispatch(aux)
-			}
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D) -> $crate::dispatch::Result {
-				d.dispatch()
+			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result {
+				d.dispatch(origin)
 			}
 		}
 	}
@@ -195,9 +146,9 @@ macro_rules! __decl_dispatch_module_with_aux {
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 		$(#[$attr:meta])*
-		pub enum $call_type:ident where aux: $aux_type:ty;
+		pub enum $call_type:ident where origin: $aux_type:ty;
 		$(
-			fn $fn_name:ident(aux
+			fn $fn_name:ident(origin
 				$(
 					, $param_name:ident : $param:ty
 				)*
@@ -211,22 +162,22 @@ macro_rules! __decl_dispatch_module_with_aux {
 			pub enum $call_type;
 			$( fn $fn_name( $( $param_name : $param ),* ) -> $result; )*
 		}
-		impl<$trait_instance: $trait_name> $crate::dispatch::AuxDispatchable
+		impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
 			for $call_type<$trait_instance>
 		{
 			type Trait = $trait_instance;
-			type Aux = $aux_type;
-			fn dispatch(self, aux: Self::Aux) -> $crate::dispatch::Result {
+			type Origin = $aux_type;
+			fn dispatch(self, origin: Self::Origin) -> $crate::dispatch::Result {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) =>
-							<$mod_type<$trait_instance>>::$fn_name( aux $(, $param_name )* ),
+							<$mod_type<$trait_instance>>::$fn_name( origin $(, $param_name )* ),
 					)*
 					$call_type::__PhantomItem(_) => { panic!("__PhantomItem should never be used.") },
 				}
 			}
 		}
-		impl<$trait_instance: $trait_name> $crate::dispatch::AuxCallable
+		impl<$trait_instance: $trait_name> $crate::dispatch::Callable
 			for $mod_type<$trait_instance>
 		{
 			type Call = $call_type<$trait_instance>;
@@ -253,6 +204,7 @@ macro_rules! __decl_dispatch_module_common {
 	) => {
 		#[cfg(feature = "std")]
 		$(#[$attr])*
+		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::std::marker::PhantomData<$trait_instance>),
 			$(
@@ -263,6 +215,7 @@ macro_rules! __decl_dispatch_module_common {
 
 		#[cfg(not(feature = "std"))]
 		$(#[$attr])*
+		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::core::marker::PhantomData<$trait_instance>),
 			$(
@@ -417,8 +370,8 @@ macro_rules! __impl_encode {
 	) => {{}}
 }
 
-pub trait IsAuxSubType<T: AuxCallable> {
-	fn is_aux_sub_type(&self) -> Option<&<T as AuxCallable>::Call>;
+pub trait IsSubType<T: Callable> {
+	fn is_aux_sub_type(&self) -> Option<&<T as Callable>::Call>;
 }
 
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
@@ -427,7 +380,7 @@ macro_rules! impl_outer_dispatch {
 	() => ();
 	(
 		$(#[$attr:meta])*
-		pub enum $call_type:ident where aux: $aux:ty {
+		pub enum $call_type:ident where origin: $origin:ty {
 			$(
 				$camelcase:ident,
 			)*
@@ -437,24 +390,24 @@ macro_rules! impl_outer_dispatch {
 		$(#[$attr])*
 		pub enum $call_type {
 			$(
-				$camelcase ( $crate::dispatch::AuxCallableCallFor<$camelcase> )
+				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
 			,)*
 		}
 		__impl_outer_dispatch_common! { $call_type, $($camelcase,)* }
-		impl $crate::dispatch::AuxDispatchable for $call_type {
-			type Aux = $aux;
+		impl $crate::dispatch::Dispatchable for $call_type {
+			type Origin = $origin;
 			type Trait = $call_type;
-			fn dispatch(self, aux: $aux) -> $crate::dispatch::Result {
+			fn dispatch(self, origin: $origin) -> $crate::dispatch::Result {
 				match self {
 					$(
-						$call_type::$camelcase(call) => call.dispatch(aux),
+						$call_type::$camelcase(call) => call.dispatch(origin),
 					)*
 				}
 			}
 		}
 		$(
-			impl $crate::dispatch::IsAuxSubType<$camelcase> for $call_type {
-				fn is_aux_sub_type(&self) -> Option<&<$camelcase as $crate::dispatch::AuxCallable>::Call> {
+			impl $crate::dispatch::IsSubType<$camelcase> for $call_type {
+				fn is_aux_sub_type(&self) -> Option<&<$camelcase as $crate::dispatch::Callable>::Call> {
 					if let $call_type::$camelcase ( ref r ) = *self {
 						Some(r)
 					} else {
@@ -540,10 +493,10 @@ macro_rules! __calls_to_json {
 	(
 		$prefix_str:tt;
 		$(#[$attr:meta])*
-		pub enum $call_type:ident where aux: $aux_type:ty {
+		pub enum $call_type:ident where origin: $aux_type:ty {
 			$(
 				$(#[doc = $doc_attr:tt])*
-				fn $fn_name:ident(aux
+				fn $fn_name:ident(origin
 					$(
 						, $param_name:ident : $param:ty
 					)*
@@ -556,7 +509,7 @@ macro_rules! __calls_to_json {
 			r#"{ "name": ""#, stringify!($call_type),
 			r#"", "functions": {"#,
 			__functions_to_json!(""; 0; $aux_type; $(
-				fn $fn_name(aux $(, $param_name: $param )* ) -> $result;
+				fn $fn_name(origin $(, $param_name: $param )* ) -> $result;
 				__function_doc_to_json!(""; $($doc_attr)*);
 			)*), " } }", __calls_to_json!(","; $($rest)*)
 		)
@@ -598,7 +551,7 @@ macro_rules! __functions_to_json {
 		$prefix_str:tt;
 		$fn_id:expr;
 		$aux_type:ty;
-		fn $fn_name:ident(aux
+		fn $fn_name:ident(origin
 			$(
 				, $param_name:ident : $param:ty
 			)*
@@ -609,7 +562,7 @@ macro_rules! __functions_to_json {
 			concat!($prefix_str, " ",
 				__function_to_json!(
 					fn $fn_name(
-						aux: $aux_type
+						origin: $aux_type
 						$(, $param_name : $param)*
 					) -> $result;
 					$fn_doc;
@@ -690,11 +643,11 @@ mod tests {
 		pub struct Module<T: Trait>;
 
 		#[derive(Serialize, Deserialize)]
-		pub enum Call where aux: T::Origin {
+		pub enum Call where origin: T::Origin {
 			/// Hi, this is a comment.
-			fn aux_0(aux) -> Result;
-			fn aux_1(aux, data: i32) -> Result;
-			fn aux_2(aux, data: i32, data2: String) -> Result;
+			fn aux_0(origin) -> Result;
+			fn aux_1(origin, data: i32) -> Result;
+			fn aux_2(origin, data: i32, data2: String) -> Result;
 		}
 
 		#[derive(Serialize, Deserialize)]
@@ -710,14 +663,14 @@ mod tests {
 		r#"{ "name": "Module", "calls": [ "#,
 			r#"{ "name": "Call", "functions": { "#,
 				r#""0": { "name": "aux_0", "params": [ "#,
-					r#"{ "name": "aux", "type": "T::Origin" }"#,
+					r#"{ "name": "origin", "type": "T::Origin" }"#,
 				r#" ], "description": [ " Hi, this is a comment." ] }, "#,
 				r#""0 + 1": { "name": "aux_1", "params": [ "#,
-					r#"{ "name": "aux", "type": "T::Origin" }, "#,
+					r#"{ "name": "origin", "type": "T::Origin" }, "#,
 					r#"{ "name": "data", "type": "i32" }"#,
 				r#" ], "description": [ ] }, "#,
 				r#""0 + 1 + 1": { "name": "aux_2", "params": [ "#,
-					r#"{ "name": "aux", "type": "T::Origin" }, "#,
+					r#"{ "name": "origin", "type": "T::Origin" }, "#,
 					r#"{ "name": "data", "type": "i32" }, "#,
 					r#"{ "name": "data2", "type": "String" }"#,
 				r#" ], "description": [ ] }"#,

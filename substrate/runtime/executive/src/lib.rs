@@ -51,7 +51,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	MakePayment, Hash, AuxLookup};
+	MakePayment, Hash, Lookup};
 use codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
@@ -82,7 +82,7 @@ impl<
 	Address,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Lookup: AuxLookup<Source=Address, Target=System::AccountId>,
+	Lookup: Lookup<Source=Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
@@ -219,12 +219,12 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{Header as HeaderT, BlakeTwo256, AuxLookup};
+	use primitives::traits::{Header as HeaderT, BlakeTwo256, Lookup};
 	use primitives::testing::{Digest, Header, Block};
 	use system;
 
 	struct NullLookup;
-	impl AuxLookup for NullLookup {
+	impl Lookup for NullLookup {
 		type Source = u64;
 		type Target = u64;
 		fn lookup(s: Self::Source) -> Result<Self::Target, &'static str> {

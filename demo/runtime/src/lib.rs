@@ -197,7 +197,7 @@ impl DigestItem for Log {
 impl_outer_dispatch! {
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-	pub enum Call where aux: <Runtime as system::Trait>::Origin {
+	pub enum Call where origin: <Runtime as system::Trait>::Origin {
 		Consensus,
 		Balances,
 		Session,

@@ -19,7 +19,7 @@
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use codec::Codec;
-use runtime_support::AuxDispatchable;
+use runtime_support::Dispatchable;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 
 pub use substrate_primitives::H256;
@@ -118,13 +118,13 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 
-impl<Call: Codec + Sync + Send + Serialize + AuxDispatchable, Context> Checkable<Context> for TestXt<Call> {
+impl<Call: Codec + Sync + Send + Serialize + Dispatchable, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
 	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
 impl<Call> Applyable for TestXt<Call> where
-	Call: Sized + Send + Sync + Clone + Eq + AuxDispatchable + Codec + Debug + Serialize + DeserializeOwned,
-	<Call as AuxDispatchable>::Aux: From<Option<u64>>
+	Call: Sized + Send + Sync + Clone + Eq + Dispatchable + Codec + Debug + Serialize + DeserializeOwned,
+	<Call as Dispatchable>::Origin: From<Option<u64>>
 {
 	type AccountId = u64;
 	type Index = u64;

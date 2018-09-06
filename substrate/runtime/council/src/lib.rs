@@ -40,7 +40,7 @@ extern crate substrate_runtime_system as system;
 use rstd::prelude::*;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
-use primitives::traits::{Zero, One, As, AuxLookup};
+use primitives::traits::{Zero, One, As, Lookup};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
 use balances::address::Address;
@@ -109,18 +109,17 @@ pub trait Trait: democracy::Trait {}
 decl_module! {
 	pub struct Module<T: Trait>;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::Origin {
-		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) -> Result;
-		fn reap_inactive_voter(aux, reporter_index: u32, who: Address<T::AccountId, T::AccountIndex>, who_index: u32, assumed_vote_index: VoteIndex) -> Result;
-		fn retract_voter(aux, index: u32) -> Result;
-		fn submit_candidacy(aux, slot: u32) -> Result;
-		fn present_winner(aux, candidate: Address<T::AccountId, T::AccountIndex>, total: T::Balance, index: VoteIndex) -> Result;
+	pub enum Call where origin: T::Origin {
+		fn set_approvals(origin, votes: Vec<bool>, index: VoteIndex) -> Result;
+		fn reap_inactive_voter(origin, reporter_index: u32, who: Address<T::AccountId, T::AccountIndex>, who_index: u32, assumed_vote_index: VoteIndex) -> Result;
+		fn retract_voter(origin, index: u32) -> Result;
+		fn submit_candidacy(origin, slot: u32) -> Result;
+		fn present_winner(origin, candidate: Address<T::AccountId, T::AccountIndex>, total: T::Balance, index: VoteIndex) -> Result;
 
-		fn set_desired_seats(aux, count: u32) -> Result;
-		fn remove_member(aux, who: Address<T::AccountId, T::AccountIndex>) -> Result;
-		fn set_presentation_duration(aux, count: T::BlockNumber) -> Result;
-		fn set_term_duration(aux, count: T::BlockNumber) -> Result;
+		fn set_desired_seats(origin, count: u32) -> Result;
+		fn remove_member(origin, who: Address<T::AccountId, T::AccountIndex>) -> Result;
+		fn set_presentation_duration(origin, count: T::BlockNumber) -> Result;
+		fn set_term_duration(origin, count: T::BlockNumber) -> Result;
 	}
 }
 
@@ -296,7 +295,7 @@ impl<T: Trait> Module<T> {
 			voters
 		);
 		if valid {
-			// This only fails if `who` doesn't exist, which it clearly must do since its the aux.
+			// This only fails if `who` doesn't exist, which it clearly must do since its the origin.
 			// Still, it's no more harmful to propagate any error at this point.
 			<balances::Module<T>>::repatriate_reserved(&who, &reporter, Self::voting_bond())?;
 		} else {
@@ -637,7 +636,7 @@ mod tests {
 	impl_outer_dispatch! {
 		#[derive(Clone, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-		pub enum Call where aux: <Test as system::Trait>::Origin {
+		pub enum Call where origin: <Test as system::Trait>::Origin {
 			Balances,
 			Democracy,
 		}
