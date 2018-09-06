@@ -524,7 +524,7 @@ macro_rules! impl_outer_dispatch {
 			fn dispatch(self, aux: $aux) -> $crate::dispatch::Result {
 				match self {
 					$(
-						$call_type::$camelcase(call) => call.dispatch(&aux),
+						$call_type::$camelcase(call) => call.dispatch(aux),
 					)*
 				}
 			}
