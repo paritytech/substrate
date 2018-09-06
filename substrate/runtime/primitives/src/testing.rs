@@ -41,8 +41,12 @@ impl traits::Digest for Digest {
 	}
 }
 
+impl traits::DigestItem for () {
+	type AuthorityId = ();
+}
+
 impl traits::DigestItem for u64 {
-	type AuthoritiesChange = ();
+	type AuthorityId = ();
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]

@@ -26,7 +26,7 @@ use rstd::prelude::*;
 use codec::{Decode, Encode, Codec, Input, Output};
 use runtime_support::AuxDispatchable;
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay, Block as BlockT,
-	Header as HeaderT, Hash as HashT, DigestItem as DigestItemT};
+	Header as HeaderT, Hash as HashT};
 use rstd::ops;
 use bft::Justification;
 
@@ -221,7 +221,7 @@ impl<Item> Default for Digest<Item> {
 }
 
 impl<Item> traits::Digest for Digest<Item> where
-	Item: DigestItemT + Codec
+	Item: traits::DigestItem + Codec,
 {
 	type Item = Item;
 
@@ -234,6 +234,93 @@ impl<Item> traits::Digest for Digest<Item> where
 	}
 }
 
+
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub enum DigestItem<AuthorityId> {
+	AuthoritiesChange(Vec<AuthorityId>),
+	Other(Vec<u8>),
+}
+
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum DigestItemRef<'a, AuthorityId: 'a> {
+	AuthoritiesChange(&'a Vec<AuthorityId>),
+	Other(&'a Vec<u8>),
+}
+
+#[repr(u32)]
+#[derive(Encode, Decode)]
+enum DigestItemType {
+	Other = 0,
+	AuthoritiesChange,
+}
+
+impl<AuthorityId> DigestItem<AuthorityId> {
+	pub fn as_other(&self) -> Option<&Vec<u8>> {
+		match *self {
+			DigestItem::Other(ref v) => Some(v),
+			_ => None,
+		}
+	}
+
+	fn dref<'a>(&'a self) -> DigestItemRef<'a, AuthorityId> {
+		match *self {
+			DigestItem::AuthoritiesChange(ref v) => DigestItemRef::AuthoritiesChange(v),
+			DigestItem::Other(ref v) => DigestItemRef::Other(v),
+		}
+	}
+}
+
+impl<AuthorityId: Member> traits::DigestItem for DigestItem<AuthorityId> {
+	type AuthorityId = AuthorityId;
+
+	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+		match *self {
+			DigestItem::AuthoritiesChange(ref authorities) => Some(authorities),
+			_ => None,
+		}
+	}
+}
+
+impl<AuthorityId: Encode> Encode for DigestItem<AuthorityId> {
+	fn encode(&self) -> Vec<u8> {
+		self.dref().encode()
+	}
+}
+
+impl<'a, AuthorityId: Encode> Encode for DigestItemRef<'a, AuthorityId> {
+	fn encode(&self) -> Vec<u8> {
+		let mut v = Vec::new();
+
+		match *self {
+			DigestItemRef::AuthoritiesChange(authorities) => {
+				DigestItemType::AuthoritiesChange.encode_to(&mut v);
+				authorities.encode_to(&mut v);
+			},
+			DigestItemRef::Other(val) => {
+				DigestItemType::Other.encode_to(&mut v);
+				val.encode_to(&mut v);
+			},
+		}
+
+		v
+	}
+}
+
+impl<AuthorityId: Decode> Decode for DigestItem<AuthorityId> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		let item_type: DigestItemType = Decode::decode(input)?;
+		match item_type {
+			DigestItemType::AuthoritiesChange => Some(DigestItem::AuthoritiesChange(
+				Decode::decode(input)?,
+			)),
+			DigestItemType::Other => Some(DigestItem::Other(
+				Decode::decode(input)?,
+			)),
+		}
+	}
+}
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone)]
@@ -328,7 +415,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
 	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
-	DigestItem: DigestItemT + Codec,
+	DigestItem: traits::DigestItem + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	type Number = Number;
@@ -367,7 +454,7 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 impl<Number, Hash, DigestItem> Header<Number, Hash, DigestItem> where
 	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
-	DigestItem: DigestItemT + Codec,
+	DigestItem: traits::DigestItem + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	/// Convenience helper for computing the hash of the header without having

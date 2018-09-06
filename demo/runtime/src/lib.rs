@@ -53,10 +53,14 @@ extern crate substrate_runtime_timestamp as timestamp;
 extern crate substrate_runtime_version as version;
 extern crate demo_primitives;
 
+#[cfg(not(feature = "std"))]
+use rstd::prelude::Vec;
+
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
+use codec::{Encode, Decode, Input};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -174,17 +178,17 @@ impl_outer_event! {
 }
 
 impl_outer_log! {
-	pub enum Log for Runtime {
-		consensus
+	pub enum Log(InternalLog: DigestItem<SessionKey>) for Runtime {
+		consensus(AuthoritiesChange)
 	}
 }
 
 impl DigestItem for Log {
-	type AuthoritiesChange = consensus::AuthoritiesChange<SessionKey>;
+	type AuthorityId = SessionKey;
 
-	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
-		match *self {
-			Log::consensus(ref item) => item.as_authorities_change(),
+	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+		match self.0 {
+			InternalLog::consensus(ref item) => item.as_authorities_change(),
 		}
 	}
 }
