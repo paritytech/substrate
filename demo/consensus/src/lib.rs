@@ -83,7 +83,13 @@ pub trait Network {
 	type Output: Sink<SinkItem=bft::Communication<Block>,SinkError=Error>;
 
 	/// Instantiate input and output streams.
-	fn communication_for(&self, validators: &[SessionKey], local_id: SessionKey, parent_hash: Hash, task_executor: TaskExecutor) -> (Self::Input, Self::Output);
+	fn communication_for(
+		&self,
+		validators: &[SessionKey],
+		local_id: SessionKey,
+		parent_hash: Hash,
+		task_executor: TaskExecutor
+	) -> (Self::Input, Self::Output);
 }
 
 /// Proposer factory.

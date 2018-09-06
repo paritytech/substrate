@@ -18,9 +18,10 @@
 //!
 //! This manages gossip of consensus messages for BFT.
 
+#![warn(unused_extern_crates)]
+
 extern crate substrate_bft as bft;
 extern crate substrate_network;
-extern crate substrate_primitives;
 
 extern crate demo_api;
 extern crate demo_consensus;
@@ -28,7 +29,6 @@ extern crate demo_primitives;
 
 extern crate ed25519;
 extern crate futures;
-extern crate parking_lot;
 extern crate tokio;
 extern crate rhododendron;
 
