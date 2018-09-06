@@ -108,24 +108,6 @@ impl<T> Convert<T, ()> for () {
 	fn convert(_: T) -> () { () }
 }
 
-pub trait MaybeEmpty {
-	fn is_empty(&self) -> bool;
-}
-
-// AccountId is `u64` in tests
-impl MaybeEmpty for u64 {
-	fn is_empty(&self) -> bool {
-		self.is_zero()
-	}
-}
-
-// AccountId is H256 in production
-impl MaybeEmpty for substrate_primitives::H256 {
-	fn is_empty(&self) -> bool {
-		self.is_zero()
-	}
-}
-
 pub trait RefInto<T> {
 	fn ref_into(&self) -> &T;
 }
