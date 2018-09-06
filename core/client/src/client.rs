@@ -726,8 +726,11 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get the most recent block hash of the best (longest) chains
 	/// that contain block with the given `target_hash`.
-	/// TODO [snd] possibly implement this for blockchain::Backend (easier to test)
-	pub fn best_chain_containing(&self, target_hash: Block::Hash, maybe_max_block_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>) -> error::Result<Option<Block::Hash>> {
+	/// If `maybe_max_block_number` is `Some(max_block_number)`
+	/// the operation is performed as if there are no blocks greater `max_block_number`
+	/// ignoring all blocks with numbers greater
+	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
+	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>) -> error::Result<Option<Block::Hash>> {
 		let target_header = {
 			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
 				Some(x) => x,
@@ -743,10 +746,10 @@ impl<B, E, Block> Client<B, E, Block> where
 			loop {
 				// until we find target
 				if current_hash == target_hash {
-					if let Some(max_block_number) = maybe_max_block_number {
+					if let Some(max_number) = maybe_max_number {
 						let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 						// found the target but it has too high a number
-						if *current_header.number() > max_block_number {
+						if *current_header.number() > max_number {
 							return Ok(None);
 						}
 					}
@@ -993,7 +996,7 @@ mod tests {
 	}
 
 	#[test]
-	fn best_chain_containing_with_genesis_block() {
+	fn best_containing_with_genesis_block() {
 		// block tree:
 		// G
 
@@ -1004,11 +1007,11 @@ mod tests {
 			client.backend().blockchain().leaves().unwrap(),
 			vec![genesis_hash.clone()]);
 
-		assert_eq!(genesis_hash.clone(), client.best_chain_containing(genesis_hash.clone(), None).unwrap().unwrap());
+		assert_eq!(genesis_hash.clone(), client.best_containing(genesis_hash.clone(), None).unwrap().unwrap());
 	}
 
 	#[test]
-	fn best_chain_containing_with_hash_not_found() {
+	fn best_containing_with_hash_not_found() {
 		// block tree:
 		// G
 
@@ -1016,11 +1019,11 @@ mod tests {
 
 		let uninserted_block = client.new_block().unwrap().bake().unwrap();
 
-		assert_eq!(None, client.best_chain_containing(uninserted_block.hash().clone(), None).unwrap());
+		assert_eq!(None, client.best_containing(uninserted_block.hash().clone(), None).unwrap());
 	}
 
 	#[test]
-	fn best_chain_containing_with_single_chain_3_blocks() {
+	fn best_containing_with_single_chain_3_blocks() {
 		// block tree:
 		// G -> A1 -> A2
 
@@ -1042,13 +1045,13 @@ mod tests {
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
-		assert_eq!(a2.hash().clone(), client.best_chain_containing(genesis_hash, None).unwrap().unwrap());
-		assert_eq!(a2.hash().clone(), client.best_chain_containing(a1.hash().clone(), None).unwrap().unwrap());
-		assert_eq!(a2.hash().clone(), client.best_chain_containing(a2.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(a2.hash().clone(), client.best_containing(genesis_hash, None).unwrap().unwrap());
+		assert_eq!(a2.hash().clone(), client.best_containing(a1.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(a2.hash().clone(), client.best_containing(a2.hash().clone(), None).unwrap().unwrap());
 	}
 
 	#[test]
-	fn best_chain_containing_with_single_fork() {
+	fn best_containing_with_single_fork() {
 		// block tree:
 		// G -> A1 -> A2 -> A3 -> A4
 		//      A1 -> B2 -> B3
@@ -1106,13 +1109,13 @@ mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_hash, a4.hash());
 
-		assert_eq!(a4.hash(), client.best_chain_containing(client.info().unwrap().chain.genesis_hash, None).unwrap().unwrap());
-		assert_eq!(a4.hash(), client.best_chain_containing(a1.hash().clone(), None).unwrap().unwrap());
-		assert_eq!(a4.hash(), client.best_chain_containing(a2.hash().clone(), None).unwrap().unwrap());
-		assert_eq!(a4.hash(), client.best_chain_containing(a3.hash().clone(), None).unwrap().unwrap());
-		assert_eq!(a4.hash(), client.best_chain_containing(a4.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(client.info().unwrap().chain.genesis_hash, None).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a1.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a2.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a3.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a4.hash().clone(), None).unwrap().unwrap());
 
-		assert_eq!(b3.hash(), client.best_chain_containing(b2.hash().clone(), None).unwrap().unwrap());
-		assert_eq!(b3.hash(), client.best_chain_containing(b3.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(b3.hash(), client.best_containing(b2.hash().clone(), None).unwrap().unwrap());
+		assert_eq!(b3.hash(), client.best_containing(b3.hash().clone(), None).unwrap().unwrap());
 	}
 }
