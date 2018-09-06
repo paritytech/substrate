@@ -103,19 +103,19 @@ macro_rules! impl_outer_event {
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum $name {
-			system(system::$name),
+			system(system::Event),
 			$(
-				$module($module::$name<$trait>),
+				$module($module::Event<$trait>),
 			)*
 		}
-		impl From<system::$name> for $name {
-			fn from(x: system::$name) -> Self {
+		impl From<system::Event> for $name {
+			fn from(x: system::Event) -> Self {
 				$name::system(x)
 			}
 		}
 		$(
-			impl From<$module::$name<$trait>> for $name {
-				fn from(x: $module::$name<$trait>) -> Self {
+			impl From<$module::Event<$trait>> for $name {
+				fn from(x: $module::Event<$trait>) -> Self {
 					$name::$module(x)
 				}
 			}

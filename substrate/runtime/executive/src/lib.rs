@@ -24,6 +24,10 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
+#[macro_use]
+extern crate substrate_codec_derive;
+
 #[cfg_attr(test, macro_use)]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -170,20 +174,20 @@ impl<
 		// Verify the signature is good.
 		let xt = uxt.check_with(Lookup::lookup).map_err(internal::ApplyError::BadSignature)?;
 
-		if xt.sender() != &Default::default() {
+		if let Some(sender) = xt.sender() {
 			// check index
-			let expected_index = <system::Module<System>>::account_nonce(xt.sender());
+			let expected_index = <system::Module<System>>::account_nonce(sender);
 			if xt.index() != &expected_index { return Err(
 				if xt.index() < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
 
 			// pay any fees.
-			Payment::make_payment(xt.sender(), encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
+			Payment::make_payment(sender, encoded_len).map_err(|_| internal::ApplyError::CantPay)?;
 
 			// AUDIT: Under no circumstances may this function panic from here onwards.
 
 			// increment nonce in storage
-			<system::Module<System>>::inc_account_nonce(xt.sender());
+			<system::Module<System>>::inc_account_nonce(sender);
 		}
 
 		// decode parameters and dispatch
@@ -215,7 +219,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{Identity, Header as HeaderT, BlakeTwo256, AuxLookup};
+	use primitives::traits::{Header as HeaderT, BlakeTwo256, AuxLookup};
 	use primitives::testing::{Digest, Header, Block};
 	use system;
 
@@ -232,14 +236,6 @@ mod tests {
 		pub enum Origin for Runtime {
 		}
 	}
-	impl From<Option<AccountId>> for Origin {
-		fn from(s: Option<AccountId>) -> Origin {
-			match s {
-				Some(who) => Origin::system(system::Origin<Runtime>::Signed(who)),
-				None => Origin::system(system::Origin<Runtime>::Inherent),
-			}
-		}
-	}
 
 	impl_outer_event!{
 		pub enum MetaEvent for Runtime {
@@ -250,13 +246,6 @@ mod tests {
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Runtime;
-	impl balances::Trait for Runtime {
-		type Balance = u64;
-		type AccountIndex = u64;
-		type OnFreeBalanceZero = staking::Module<Runtime>;
-		type EnsureAccountLiquid = staking::Module<Runtime>;
-		type Event = MetaEvent;
-	}
 	impl system::Trait for Runtime {
 		type Origin = Origin;
 		type Index = u64;
@@ -268,9 +257,16 @@ mod tests {
 		type Header = Header;
 		type Event = MetaEvent;
 	}
+	impl balances::Trait for Runtime {
+		type Balance = u64;
+		type AccountIndex = u64;
+		type OnFreeBalanceZero = ();
+		type EnsureAccountLiquid = ();
+		type Event = MetaEvent;
+	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, balances::Module<Runtime>, ()>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, NullLookup, balances::Module<Runtime>, ()>;
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
@@ -284,7 +280,7 @@ mod tests {
 			creation_fee: 0,
 			reclaim_rebate: 0,
 		}.build_storage().unwrap());
-		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
+		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69));
 		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
@@ -310,7 +306,7 @@ mod tests {
 					// Blake
 					// state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
 					// Keccak
-					state_root: hex!("ffe27b4c3a8b421fa10592be61fb28eca7ebbe04cbfa99cdda9f703f35522569").into(),
+					state_root: hex!("14a253cb1c5f38beeec8bee962a941b2ba0773b7593564fbe62b9c3a46784df5").into(),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -344,7 +340,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("ffe27b4c3a8b421fa10592be61fb28eca7ebbe04cbfa99cdda9f703f35522569").into(),
+					state_root: hex!("14a253cb1c5f38beeec8bee962a941b2ba0773b7593564fbe62b9c3a46784df5").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -356,7 +352,7 @@ mod tests {
 	#[test]
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext();
-		let xt = primitives::testing::TestXt((1, 42, Call::transfer(33.into(), 69)));
+		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33.into(), 69));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());
