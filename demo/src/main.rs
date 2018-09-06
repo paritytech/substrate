@@ -61,9 +61,9 @@ fn run() -> cli::error::Result<()> {
 	let version = VersionInfo {
 		commit: vergen::short_sha(),
 		version: env!("CARGO_PKG_VERSION"),
-		executable_name: "substrate-demo",
+		executable_name: "substrate",
 		author: "Parity Team <admin@parity.io>",
-		description: "Substrate Demo Implementation",
+		description: "Generic substrate node",
 	};
 	cli::run(::std::env::args(), Exit, version)
 }

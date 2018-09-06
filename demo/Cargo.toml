@@ -1,9 +1,9 @@
 [[bin]]
-name = "substrate-demo"
+name = "substrate"
 path = "src/main.rs"
 
 [package]
-name = "substrate-demo"
+name = "substrate"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 build = "build.rs"
