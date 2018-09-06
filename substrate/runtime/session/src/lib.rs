@@ -49,7 +49,7 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, OnFinalise, Convert, As};
+use primitives::traits::{Zero, One, OnFinalise, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use system::{ensure_signed, ensure_root};
@@ -138,9 +138,9 @@ impl<T: Trait> Module<T> {
 	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 	/// session.
 	fn set_key(aux: T::Origin, key: T::SessionKey) -> Result {
-		ensure_signed(aux)?;
+		let who = ensure_signed(aux)?;
 		// set new value for next session
-		<NextKeyFor<T>>::insert(aux.ref_into(), key);
+		<NextKeyFor<T>>::insert(who, key);
 		Ok(())
 	}
 
@@ -154,11 +154,16 @@ impl<T: Trait> Module<T> {
 	/// Forces a new session.
 	pub fn force_new_session(aux: T::Origin, apply_rewards: bool) -> Result {
 		ensure_root(aux)?;
-		<ForcingNewSession<T>>::put(apply_rewards);
-		Ok(())
+		Self::apply_force_new_session(apply_rewards)
 	}
 
 	// INTERNAL API (available to other runtime modules)
+
+	/// Forces a new session, no origin.
+	pub fn apply_force_new_session(apply_rewards: bool) -> Result {
+		<ForcingNewSession<T>>::put(apply_rewards);
+		Ok(())
+	}
 
 	/// Set the current set of validators.
 	///

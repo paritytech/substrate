@@ -49,9 +49,10 @@ use rstd::prelude::*;
 use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
-use primitives::traits::{Zero, One, Bounded, RefInto, OnFinalise,
+use primitives::traits::{Zero, One, Bounded, OnFinalise,
 	As, AuxLookup};
 use balances::{address::Address, OnMinted};
+use system::{ensure_root, ensure_signed};
 
 mod mock;
 
@@ -114,15 +115,12 @@ decl_module! {
 		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result;
 		fn unnominate(aux, target_index: u32) -> Result;
 		fn register_preferences(aux, intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result;
-	}
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum PrivCall {
-		fn set_sessions_per_era(new: T::BlockNumber) -> Result;
-		fn set_bonding_duration(new: T::BlockNumber) -> Result;
-		fn set_validator_count(new: u32) -> Result;
-		fn force_new_era(apply_rewards: bool) -> Result;
-		fn set_offline_slash_grace(new: u32) -> Result;
+		fn set_sessions_per_era(aux, new: T::BlockNumber) -> Result;
+		fn set_bonding_duration(aux, new: T::BlockNumber) -> Result;
+		fn set_validator_count(aux, new: u32) -> Result;
+		fn force_new_era(aux, apply_rewards: bool) -> Result;
+		fn set_offline_slash_grace(aux, new: u32) -> Result;
 	}
 }
 
@@ -192,6 +190,11 @@ decl_storage! {
 
 impl<T: Trait> Module<T> {
 
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
+
 	// PUBLIC IMMUTABLES
 
 	/// MinimumValidatorCount getter, introduces a default.
@@ -232,60 +235,62 @@ impl<T: Trait> Module<T> {
 	/// Declare the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn stake(aux: T::Origin) -> Result {
-		let aux = aux.ref_into();
-		ensure!(Self::nominating(aux).is_none(), "Cannot stake if already nominating.");
+	fn stake(origin: T::Origin) -> Result {
+		let who = ensure_signed(origin)?;
+		ensure!(Self::nominating(&who).is_none(), "Cannot stake if already nominating.");
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
-		ensure!(intentions.iter().find(|&t| t == aux).is_none(), "Cannot stake if already staked.");
-		intentions.push(aux.clone());
+		ensure!(intentions.iter().find(|&t| t == &who).is_none(), "Cannot stake if already staked.");
+
+		<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
+		intentions.push(who);
 		<Intentions<T>>::put(intentions);
-		<Bondage<T>>::insert(aux, T::BlockNumber::max_value());
 		Ok(())
 	}
 
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake(aux: T::Origin, intentions_index: u32) -> Result {
+	fn unstake(origin: T::Origin, intentions_index: u32) -> Result {
+		let who = ensure_signed(origin)?;
 		// unstake fails in degenerate case of having too few existing staked parties
 		if Self::intentions().len() <= Self::minimum_validator_count() {
 			return Err("cannot unstake when there are too few staked participants")
 		}
-		Self::apply_unstake(aux.ref_into(), intentions_index as usize)
+		Self::apply_unstake(&who, intentions_index as usize)
 	}
 
-	fn nominate(aux: T::Origin, target: Address<T::AccountId, T::AccountIndex>) -> Result {
+	fn nominate(origin: T::Origin, target: Address<T::AccountId, T::AccountIndex>) -> Result {
+		let who = ensure_signed(origin)?;
 		let target = <balances::Module<T>>::lookup(target)?;
-		let aux = aux.ref_into();
 
-		ensure!(Self::nominating(aux).is_none(), "Cannot nominate if already nominating.");
-		ensure!(Self::intentions().iter().find(|&t| t == aux.ref_into()).is_none(), "Cannot nominate if already staked.");
+		ensure!(Self::nominating(&who).is_none(), "Cannot nominate if already nominating.");
+		ensure!(Self::intentions().iter().find(|&t| t == &who).is_none(), "Cannot nominate if already staked.");
 
 		// update nominators_for
 		let mut t = Self::nominators_for(&target);
-		t.push(aux.clone());
+		t.push(who.clone());
 		<NominatorsFor<T>>::insert(&target, t);
 
 		// update nominating
-		<Nominating<T>>::insert(aux, &target);
+		<Nominating<T>>::insert(&who, &target);
 
 		// Update bondage
-		<Bondage<T>>::insert(aux.ref_into(), T::BlockNumber::max_value());
+		<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
 
 		Ok(())
 	}
 
 	/// Will panic if called when source isn't currently nominating target.
 	/// Updates Nominating, NominatorsFor and NominationBalance.
-	fn unnominate(aux: T::Origin, target_index: u32) -> Result {
-		let source = aux.ref_into();
+	fn unnominate(origin: T::Origin, target_index: u32) -> Result {
+		let source = ensure_signed(origin)?;
 		let target_index = target_index as usize;
 
-		let target = <Nominating<T>>::get(source).ok_or("Account must be nominating")?;
+		let target = <Nominating<T>>::get(&source).ok_or("Account must be nominating")?;
 
 		let mut t = Self::nominators_for(&target);
-		if t.get(target_index) != Some(source) {
+		if t.get(target_index) != Some(&source) {
 			return Err("Invalid target index")
 		}
 
@@ -296,10 +301,10 @@ impl<T: Trait> Module<T> {
 		<NominatorsFor<T>>::insert(&target, t);
 
 		// update nominating
-		<Nominating<T>>::remove(source);
+		<Nominating<T>>::remove(&source);
 
 		// update bondage
-		<Bondage<T>>::insert(aux.ref_into(), <system::Module<T>>::block_number() + Self::bonding_duration());
+		<Bondage<T>>::insert(source, <system::Module<T>>::block_number() + Self::bonding_duration());
 		Ok(())
 	}
 
@@ -307,55 +312,61 @@ impl<T: Trait> Module<T> {
 	/// 
 	/// An error (no-op) if `Self::intentions()[intentions_index] != aux`.
 	fn register_preferences(
-		aux: T::Origin,
+		origin: T::Origin,
 		intentions_index: u32,
 		prefs: ValidatorPrefs<T::Balance>
 	) -> Result {
-		let aux = aux.ref_into();
+		let who = ensure_signed(origin)?;
 
-		if Self::intentions().get(intentions_index as usize) != Some(aux) {
+		if Self::intentions().get(intentions_index as usize) != Some(&who) {
 			return Err("Invalid index")
 		}
 		
-		<ValidatorPreferences<T>>::insert(aux, prefs);
+		<ValidatorPreferences<T>>::insert(who, prefs);
 
 		Ok(())
 	}
 
 	// PRIV DISPATCH
 
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	/// Set the number of sessions in an era.
-	fn set_sessions_per_era(new: T::BlockNumber) -> Result {
+	fn set_sessions_per_era(origin: T::Origin, new: T::BlockNumber) -> Result {
+		ensure_root(origin)?;
 		<NextSessionsPerEra<T>>::put(&new);
 		Ok(())
 	}
 
 	/// The length of the bonding duration in eras.
-	fn set_bonding_duration(new: T::BlockNumber) -> Result {
+	fn set_bonding_duration(origin: T::Origin, new: T::BlockNumber) -> Result {
+		ensure_root(origin)?;
 		<BondingDuration<T>>::put(&new);
 		Ok(())
 	}
 
 	/// The length of a staking era in sessions.
-	fn set_validator_count(new: u32) -> Result {
+	fn set_validator_count(origin: T::Origin, new: u32) -> Result {
+		ensure_root(origin)?;
 		<ValidatorCount<T>>::put(&new);
 		Ok(())
 	}
 
 	/// Force there to be a new era. This also forces a new session immediately after.
 	/// `apply_rewards` should be true for validators to get the session reward.
-	fn force_new_era(apply_rewards: bool) -> Result {
-		<ForcingNewEra<T>>::put(());
-		<session::Module<T>>::force_new_session(apply_rewards)
+	fn force_new_era(origin: T::Origin, apply_rewards: bool) -> Result {
+		ensure_root(origin)?;
+		Self::apply_force_new_era(apply_rewards)
 	}
 
+	// Just force_new_era without origin check.
+	fn apply_force_new_era(apply_rewards: bool) -> Result {
+		<ForcingNewEra<T>>::put(());
+		<session::Module<T>>::apply_force_new_session(apply_rewards)
+	}
+
+
 	/// Set the offline slash grace period.
-	fn set_offline_slash_grace(new: u32) -> Result {
+	fn set_offline_slash_grace(origin: T::Origin, new: u32) -> Result {
+		ensure_root(origin)?;
 		<OfflineSlashGrace<T>>::put(&new);
 		Ok(())
 	}
@@ -555,7 +566,7 @@ impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
 							apply_unstake can only fail if pos wrong; \
 							Self::intentions() doesn't change; qed");
 				}
-				let _ = Self::force_new_era(false);
+				let _ = Self::apply_force_new_era(false);
 			}
 			RawEvent::OfflineSlash(v, slash)
 		} else {
