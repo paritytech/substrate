@@ -64,7 +64,7 @@ pub use runtime_primitives::BuildStorage;
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-/// Runtime runtime type used to parameterize the various modules.
+/// Runtime type used to collate and parameterize the various modules.
 pub struct Runtime;
 
 /// Runtime version.
@@ -84,7 +84,7 @@ impl version::Trait for Runtime {
 }
 
 impl system::Trait for Runtime {
-	type PublicAux = Self::AccountId;
+	type Origin = OuterOrigin;
 	type Index = Index;
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
@@ -179,6 +179,11 @@ impl_outer_log! {
 	}
 }
 
+impl_outer_origin! {
+	pub enum Origin for Runtime {
+	}
+}
+
 impl DigestItem for Log {
 	type AuthoritiesChange = consensus::AuthoritiesChange<SessionKey>;
 
@@ -192,7 +197,7 @@ impl DigestItem for Log {
 impl_outer_dispatch! {
 	#[derive(Clone, PartialEq, Eq)]
 	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-	pub enum Call where aux: <Runtime as system::Trait>::PublicAux {
+	pub enum Call where aux: <Runtime as system::Trait>::Origin {
 		Consensus,
 		Balances,
 		Session,
@@ -226,10 +231,8 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
-/// Extrinsic type as expected by this runtime. This is not the type that is signed.
-pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
-/// Extrinsic type that is signed.
-pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
+/// Extrinsic type that has already been checked.
+pub type CheckedExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, Balances, Balances,
 	(((((), Council), Democracy), Staking), Session)>;

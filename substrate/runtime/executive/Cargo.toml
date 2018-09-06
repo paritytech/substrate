@@ -18,10 +18,6 @@ substrate-runtime-system = { path = "../system", default_features = false }
 [dev-dependencies]
 substrate-primitives = { path = "../../primitives" }
 substrate-runtime-balances = { path = "../balances" }
-substrate-runtime-session = { path = "../session" }
-substrate-runtime-staking = { path = "../staking" }
-substrate-runtime-consensus = { path = "../consensus" }
-substrate-runtime-timestamp = { path = "../timestamp" }
 
 [features]
 default = ["std"]

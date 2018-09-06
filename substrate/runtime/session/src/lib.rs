@@ -78,7 +78,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		fn set_key(aux, key: T::SessionKey) -> Result;
 	}
 
@@ -139,7 +139,7 @@ impl<T: Trait> Module<T> {
 
 	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 	/// session.
-	fn set_key(aux: &T::PublicAux, key: T::SessionKey) -> Result {
+	fn set_key(aux: T::Origin, key: T::SessionKey) -> Result {
 		// set new value for next session
 		<NextKeyFor<T>>::insert(aux.ref_into(), key);
 		Ok(())
@@ -300,7 +300,7 @@ mod tests {
 		type OnOfflineValidator = ();
 	}
 	impl system::Trait for Test {
-		type PublicAux = Self::AccountId;
+		type Origin = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

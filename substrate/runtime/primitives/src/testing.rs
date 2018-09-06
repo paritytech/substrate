@@ -125,7 +125,7 @@ impl<Call: Codec + Sync + Send + Serialize + AuxDispatchable, Context> Checkable
 impl<Call: AuxDispatchable<Aux = u64> + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
 	type AccountId = u64;
 	type Index = u64;
-	fn sender(&self) -> &u64 { &(self.0).0 }
+	fn sender(&self) -> Option<&u64> { Some(&(self.0).0) }
 	fn index(&self) -> &u64 { &(self.0).1 }
-	fn apply(self) -> Result<(), &'static str> { (self.0).2.dispatch(&(self.0).0) }
+	fn apply(self) -> Result<(), &'static str> { (self.0).2.dispatch((self.0).0) }
 }

@@ -93,11 +93,11 @@ decl_module! {
 	// 
 	// When you come to `impl` them later in the module, you must specify the full type for `aux`:
 	//
-	// `fn foo(aux: T::PublicAux, bar: Bar, baz: Baz) { ... }`
+	// `fn foo(aux: T::Origin, bar: Bar, baz: Baz) { ... }`
 	//
 	// This is your public interface. Be extremely careful.
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		// This is just a simple example of how to interact with the module from the external
 		// world.
 		fn accumulate_dummy(aux, increase_by: T::Balance) -> Result;
@@ -227,7 +227,7 @@ impl<T: Trait> Module<T> {
 	// no progress.
 	//
 	// If you don't respect these rules, it is likely that your chain will be attackable.
-	fn accumulate_dummy(_aux: &T::PublicAux, increase_by: T::Balance) -> Result {
+	fn accumulate_dummy(_aux: T::Origin, increase_by: T::Balance) -> Result {
 		// Read the value of dummy from storage.
 		let dummy = Self::dummy();
 		// Will also work using the `::get` on the storage item type iself:
@@ -329,7 +329,7 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl system::Trait for Test {
-		type PublicAux = Self::AccountId;
+		type Origin = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

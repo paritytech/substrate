@@ -35,7 +35,7 @@ impl consensus::Trait for Test {
 	type OnOfflineValidator = ();
 }
 impl system::Trait for Test {
-	type PublicAux = Self::AccountId;
+	type Origin = Self::AccountId;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;

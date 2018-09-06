@@ -30,7 +30,7 @@ use {
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
 impl system::Trait for Test {
-	type PublicAux = Self::AccountId;
+	type Origin = Self::AccountId;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;

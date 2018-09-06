@@ -108,7 +108,7 @@ decl_module! {
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		fn stake(aux) -> Result;
 		fn unstake(aux, intentions_index: u32) -> Result;
 		fn nominate(aux, target: Address<T::AccountId, T::AccountIndex>) -> Result;
@@ -232,7 +232,7 @@ impl<T: Trait> Module<T> {
 	/// Declare the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn stake(aux: &T::PublicAux) -> Result {
+	fn stake(aux: T::Origin) -> Result {
 		let aux = aux.ref_into();
 		ensure!(Self::nominating(aux).is_none(), "Cannot stake if already nominating.");
 		let mut intentions = <Intentions<T>>::get();
@@ -247,7 +247,7 @@ impl<T: Trait> Module<T> {
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake(aux: &T::PublicAux, intentions_index: u32) -> Result {
+	fn unstake(aux: T::Origin, intentions_index: u32) -> Result {
 		// unstake fails in degenerate case of having too few existing staked parties
 		if Self::intentions().len() <= Self::minimum_validator_count() {
 			return Err("cannot unstake when there are too few staked participants")
@@ -255,7 +255,7 @@ impl<T: Trait> Module<T> {
 		Self::apply_unstake(aux.ref_into(), intentions_index as usize)
 	}
 
-	fn nominate(aux: &T::PublicAux, target: Address<T::AccountId, T::AccountIndex>) -> Result {
+	fn nominate(aux: T::Origin, target: Address<T::AccountId, T::AccountIndex>) -> Result {
 		let target = <balances::Module<T>>::lookup(target)?;
 		let aux = aux.ref_into();
 
@@ -278,7 +278,7 @@ impl<T: Trait> Module<T> {
 
 	/// Will panic if called when source isn't currently nominating target.
 	/// Updates Nominating, NominatorsFor and NominationBalance.
-	fn unnominate(aux: &T::PublicAux, target_index: u32) -> Result {
+	fn unnominate(aux: T::Origin, target_index: u32) -> Result {
 		let source = aux.ref_into();
 		let target_index = target_index as usize;
 
@@ -307,7 +307,7 @@ impl<T: Trait> Module<T> {
 	/// 
 	/// An error (no-op) if `Self::intentions()[intentions_index] != aux`.
 	fn register_preferences(
-		aux: &T::PublicAux,
+		aux: T::Origin,
 		intentions_index: u32,
 		prefs: ValidatorPrefs<T::Balance>
 	) -> Result {

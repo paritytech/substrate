@@ -66,7 +66,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		// Put forward a suggestion for spending. A deposit proportional to the value
 		// is reserved and slashed if the proposal is rejected. It is returned once the
 		// proposal is awarded.
@@ -185,7 +185,7 @@ impl<T: Trait> Module<T> {
 
 	// Implement Calls/PrivCalls and add public immutables and private mutables.
 
-	fn propose_spend(aux: &T::PublicAux, value: T::Balance, beneficiary: T::AccountId) -> Result {
+	fn propose_spend(aux: T::Origin, value: T::Balance, beneficiary: T::AccountId) -> Result {
 		let proposer = aux.ref_into();
 
 		let bond = Self::calculate_bond(value);
@@ -361,7 +361,7 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl system::Trait for Test {
-		type PublicAux = Self::AccountId;
+		type Origin = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

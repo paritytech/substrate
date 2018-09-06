@@ -24,10 +24,6 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(test)]
-#[macro_use]
-extern crate substrate_codec_derive;
-
 #[cfg_attr(test, macro_use)]
 extern crate substrate_runtime_support as runtime_support;
 
@@ -38,9 +34,6 @@ extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_runtime_system as system;
 
 #[cfg(test)]
-extern crate substrate_runtime_timestamp as timestamp;
-
-#[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
 
@@ -48,16 +41,7 @@ extern crate hex_literal;
 extern crate substrate_primitives;
 
 #[cfg(test)]
-extern crate substrate_runtime_consensus as consensus;
-
-#[cfg(test)]
-extern crate substrate_runtime_session as session;
-
-#[cfg(test)]
 extern crate substrate_runtime_balances as balances;
-
-#[cfg(test)]
-extern crate substrate_runtime_staking as staking;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
@@ -244,30 +228,37 @@ mod tests {
 		}
 	}
 
+	impl_outer_origin! {
+		pub enum Origin for Runtime {
+		}
+	}
+	impl From<Option<AccountId>> for Origin {
+		fn from(s: Option<AccountId>) -> Origin {
+			match s {
+				Some(who) => Origin::system(system::Origin<Runtime>::Signed(who)),
+				None => Origin::system(system::Origin<Runtime>::Inherent),
+			}
+		}
+	}
+
 	impl_outer_event!{
-		pub enum MetaEvent for Test {
-			balances, session, staking
+		pub enum MetaEvent for Runtime {
+			balances
 		}
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
-	pub struct Test;
-	impl consensus::Trait for Test {
-		const NOTE_OFFLINE_POSITION: u32 = 1;
-		type Log = u64;
-		type SessionKey = u64;
-		type OnOfflineValidator = staking::Module<Test>;
-	}
-	impl balances::Trait for Test {
+	pub struct Runtime;
+	impl balances::Trait for Runtime {
 		type Balance = u64;
 		type AccountIndex = u64;
-		type OnFreeBalanceZero = staking::Module<Test>;
-		type EnsureAccountLiquid = staking::Module<Test>;
+		type OnFreeBalanceZero = staking::Module<Runtime>;
+		type EnsureAccountLiquid = staking::Module<Runtime>;
 		type Event = MetaEvent;
 	}
-	impl system::Trait for Test {
-		type PublicAux = Self::AccountId;
+	impl system::Trait for Runtime {
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = substrate_primitives::H256;
@@ -277,27 +268,14 @@ mod tests {
 		type Header = Header;
 		type Event = MetaEvent;
 	}
-	impl session::Trait for Test {
-		type ConvertAccountIdToSessionKey = Identity;
-		type OnSessionChange = staking::Module<Test>;
-		type Event = MetaEvent;
-	}
-	impl staking::Trait for Test {
-		type OnRewardMinted = ();
-		type Event = MetaEvent;
-	}
-	impl timestamp::Trait for Test {
-		const TIMESTAMP_SET_POSITION: u32 = 0;
-		type Moment = u64;
-	}
 
-	type TestXt = primitives::testing::TestXt<Call<Test>>;
-	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, balances::Module<Test>, (session::Module<Test>, staking::Module<Test>)>;
+	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
+	type Executive = super::Executive<Test, Block<TestXt>, NullLookup, balances::Module<Runtime>, ()>;
 
 	#[test]
-	fn staking_balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(balances::GenesisConfig::<Test> {
+	fn balance_transfer_dispatch_works() {
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
+		t.extend(balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111)],
 			transaction_base_fee: 10,
 			transaction_byte_fee: 0,
@@ -306,34 +284,19 @@ mod tests {
 			creation_fee: 0,
 			reclaim_rebate: 0,
 		}.build_storage().unwrap());
-		t.extend(staking::GenesisConfig::<Test> {
-			sessions_per_era: 0,
-			current_era: 0,
-			intentions: vec![],
-			validator_count: 0,
-			minimum_validator_count: 0,
-			bonding_duration: 0,
-			early_era_slash: 0,
-			session_reward: 0,
-			offline_slash_grace: 0,
-		}.build_storage().unwrap());
 		let xt = primitives::testing::TestXt((1, 0, Call::transfer(2.into(), 69)));
 		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt).unwrap();
-			assert_eq!(<balances::Module<Test>>::total_balance(&1), 32);
-			assert_eq!(<balances::Module<Test>>::total_balance(&2), 69);
+			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 32);
+			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());
-		t.extend(consensus::GenesisConfig::<Test>::default().build_storage().unwrap());
-		t.extend(session::GenesisConfig::<Test>::default().build_storage().unwrap());
-		t.extend(staking::GenesisConfig::<Test>::default().build_storage().unwrap());
-		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
+		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap());
 		t.into()
 	}
 
@@ -397,7 +360,7 @@ mod tests {
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());
-			assert_eq!(<system::Module<Test>>::extrinsic_index(), Some(0));
+			assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
 		});
 	}
 }

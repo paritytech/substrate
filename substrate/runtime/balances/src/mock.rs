@@ -24,11 +24,15 @@ use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, system};
 
+impl_outer_origin!{
+	pub enum Origin for Test {}
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Test;
 impl system::Trait for Test {
-	type PublicAux = Self::AccountId;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;

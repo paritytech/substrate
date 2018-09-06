@@ -34,7 +34,7 @@ pub trait Dispatchable {
 pub trait AuxDispatchable {
 	type Aux;
 	type Trait;
-	fn dispatch(self, aux: &Self::Aux) -> Result;
+	fn dispatch(self, aux: Self::Aux) -> Result;
 }
 
 #[cfg(feature = "std")]
@@ -207,7 +207,7 @@ macro_rules! decl_dispatch {
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-			pub fn aux_dispatch<D: $crate::dispatch::AuxDispatchable<Trait = $trait_instance>>(d: D, aux: &D::Aux) -> $crate::dispatch::Result {
+			pub fn aux_dispatch<D: $crate::dispatch::AuxDispatchable<Trait = $trait_instance>>(d: D, aux: D::Aux) -> $crate::dispatch::Result {
 				d.dispatch(aux)
 			}
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D) -> $crate::dispatch::Result {
@@ -290,7 +290,7 @@ macro_rules! __decl_dispatch_module_with_aux {
 		{
 			type Trait = $trait_instance;
 			type Aux = $aux_type;
-			fn dispatch(self, aux: &Self::Aux) -> $crate::dispatch::Result {
+			fn dispatch(self, aux: Self::Aux) -> $crate::dispatch::Result {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) =>
@@ -521,7 +521,7 @@ macro_rules! impl_outer_dispatch {
 		impl $crate::dispatch::AuxDispatchable for $call_type {
 			type Aux = $aux;
 			type Trait = $call_type;
-			fn dispatch(self, aux: &$aux) -> $crate::dispatch::Result {
+			fn dispatch(self, aux: $aux) -> $crate::dispatch::Result {
 				match self {
 					$(
 						$call_type::$camelcase(call) => call.dispatch(&aux),
@@ -799,14 +799,14 @@ mod tests {
 	use serde_json;
 
 	pub trait Trait {
-		 type PublicAux;
+		 type Origin;
 	}
 
 	decl_module! {
 		pub struct Module<T: Trait>;
 
 		#[derive(Serialize, Deserialize)]
-		pub enum Call where aux: T::PublicAux {
+		pub enum Call where aux: T::Origin {
 			/// Hi, this is a comment.
 			fn aux_0(aux) -> Result;
 			fn aux_1(aux, data: i32) -> Result;
@@ -826,14 +826,14 @@ mod tests {
 		r#"{ "name": "Module", "calls": [ "#,
 			r#"{ "name": "Call", "functions": { "#,
 				r#""0": { "name": "aux_0", "params": [ "#,
-					r#"{ "name": "aux", "type": "T::PublicAux" }"#,
+					r#"{ "name": "aux", "type": "T::Origin" }"#,
 				r#" ], "description": [ " Hi, this is a comment." ] }, "#,
 				r#""0 + 1": { "name": "aux_1", "params": [ "#,
-					r#"{ "name": "aux", "type": "T::PublicAux" }, "#,
+					r#"{ "name": "aux", "type": "T::Origin" }, "#,
 					r#"{ "name": "data", "type": "i32" }"#,
 				r#" ], "description": [ ] }, "#,
 				r#""0 + 1 + 1": { "name": "aux_2", "params": [ "#,
-					r#"{ "name": "aux", "type": "T::PublicAux" }, "#,
+					r#"{ "name": "aux", "type": "T::Origin" }, "#,
 					r#"{ "name": "data", "type": "i32" }, "#,
 					r#"{ "name": "data2", "type": "String" }"#,
 				r#" ], "description": [ ] }"#,
@@ -851,15 +851,15 @@ mod tests {
 	);
 
 	impl<T: Trait> Module<T> {
-		fn aux_0(_: &T::PublicAux) -> Result {
+		fn aux_0(_: &T::Origin) -> Result {
 			unreachable!()
 		}
 
-		fn aux_1(_: &T::PublicAux, _: i32) -> Result {
+		fn aux_1(_: &T::Origin, _: i32) -> Result {
 			unreachable!()
 		}
 
-		fn aux_2(_: &T::PublicAux, _: i32, _: String) -> Result {
+		fn aux_2(_: &T::Origin, _: i32, _: String) -> Result {
 			unreachable!()
 		}
 
@@ -875,7 +875,7 @@ mod tests {
 	struct TraitImpl {}
 
 	impl Trait for TraitImpl {
-		type PublicAux = u32;
+		type Origin = u32;
 	}
 
 	#[test]

@@ -1456,7 +1456,7 @@ mod tests {
 	}
 
 	pub trait Trait {
-		 type PublicAux;
+		 type Origin;
 	}
 
 	decl_module! {
@@ -1500,7 +1500,7 @@ mod tests {
 	struct TraitImpl {}
 
 	impl Trait for TraitImpl {
-		type PublicAux = u32;
+		type Origin = u32;
 	}
 
 	const EXPECTED_METADATA: &str = concat!(

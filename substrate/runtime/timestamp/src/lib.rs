@@ -43,7 +43,7 @@ use runtime_support::dispatch::Result;
 use runtime_primitives::traits::{OnFinalise, MaybeEmpty, SimpleArithmetic, As, Zero};
 
 pub trait Trait: consensus::Trait where
-	<Self as system::Trait>::PublicAux: MaybeEmpty
+	<Self as system::Trait>::Origin: MaybeEmpty
 {
 	// the position of the required timestamp-set extrinsic.
 	const TIMESTAMP_SET_POSITION: u32;
@@ -55,7 +55,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		fn set(aux, now: T::Moment) -> Result;
 	}
 }
@@ -77,7 +77,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the current time.
-	fn set(aux: &T::PublicAux, now: T::Moment) -> Result {
+	fn set(aux: T::Origin, now: T::Moment) -> Result {
 		assert!(aux.is_empty());
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
@@ -149,7 +149,7 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl system::Trait for Test {
-		type PublicAux = Self::AccountId;
+		type Origin = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

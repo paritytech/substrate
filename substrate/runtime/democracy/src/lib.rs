@@ -66,7 +66,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) -> Result;
 		fn second(aux, proposal: PropIndex) -> Result;
 		fn vote(aux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result;
@@ -156,7 +156,7 @@ impl<T: Trait> Module<T> {
 	// dispatching.
 
 	/// Propose a sensitive action to be taken.
-	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>, value: T::Balance) -> Result {
+	fn propose(aux: T::Origin, proposal: Box<T::Proposal>, value: T::Balance) -> Result {
 		ensure!(value >= Self::minimum_deposit(), "value too low");
 		<balances::Module<T>>::reserve(aux.ref_into(), value)
 			.map_err(|_| "proposer's balance too low")?;
@@ -172,7 +172,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Propose a sensitive action to be taken.
-	fn second(aux: &T::PublicAux, proposal: PropIndex) -> Result {
+	fn second(aux: T::Origin, proposal: PropIndex) -> Result {
 		let mut deposit = Self::deposit_of(proposal)
 			.ok_or("can only second an existing proposal")?;
 		<balances::Module<T>>::reserve(aux.ref_into(), deposit.0)
@@ -184,7 +184,7 @@ impl<T: Trait> Module<T> {
 
 	/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
 	/// false would be a vote to keep the status quo..
-	fn vote(aux: &T::PublicAux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result {
+	fn vote(aux: T::Origin, ref_index: ReferendumIndex, approve_proposal: bool) -> Result {
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 		ensure!(!<balances::Module<T>>::total_balance(aux.ref_into()).is_zero(),
 			"transactor must have balance to signal approval.");
@@ -366,7 +366,7 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
 	impl system::Trait for Test {
-		type PublicAux = Self::AccountId;
+		type Origin = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;

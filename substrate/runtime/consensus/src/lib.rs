@@ -144,7 +144,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
 		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result;
 		fn remark(aux, remark: Vec<u8>) -> Result;
@@ -178,7 +178,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
+	fn report_misbehavior(_aux: T::Origin, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
 		// TODO.
 		Ok(())
 	}
@@ -186,7 +186,7 @@ impl<T: Trait> Module<T> {
 	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
 	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
 	/// for the previous block.
-	fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
+	fn note_offline(aux: T::Origin, offline_val_indices: Vec<u32>) -> Result {
 		assert!(aux.is_empty());
 		assert!(
 			<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
@@ -202,7 +202,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Make some on-chain remark.
-	fn remark(_aux: &T::PublicAux, _remark: Vec<u8>) -> Result {
+	fn remark(_aux: T::Origin, _remark: Vec<u8>) -> Result {
 		Ok(())
 	}
 

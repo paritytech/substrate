@@ -45,9 +45,10 @@ use rstd::{cmp, result};
 use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, One, RefInto, SimpleArithmetic, OnFinalise, MakePayment,
+use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
 	As, AuxLookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
+use system::{ensure_signed, ensure_root};
 
 mod mock;
 
@@ -135,13 +136,9 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		fn transfer(aux, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
-	}
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum PrivCall {
-		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
+		fn set_balance(aux, who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
 	}
 }
 
@@ -233,6 +230,11 @@ pub enum UpdateBalanceOutcome {
 
 impl<T: Trait> Module<T> {
 
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
+
 	// PUBLIC IMMUTABLES
 
 	/// The combined balance of `who`.
@@ -283,11 +285,11 @@ impl<T: Trait> Module<T> {
 	// PUBLIC DISPATCH
 
 	/// Transfer some liquid free balance to another staker.
-	pub fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
-		let dest = Self::lookup(dest)?;
+	pub fn transfer(origin: T::Origin, dest: Address<T>, value: T::Balance) -> Result {
+		let transactor = ensure_signed(origin)?;
 
-		let transactor = aux.ref_into();
-		let from_balance = Self::free_balance(transactor);
+		let dest = Self::lookup(dest)?;
+		let from_balance = Self::free_balance(&transactor);
 		let would_create = from_balance.is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
 		let liability = value + fee;
@@ -299,7 +301,7 @@ impl<T: Trait> Module<T> {
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
 		}
-		T::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
+		T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
 
 		let to_balance = Self::free_balance(&dest);
 		// NOTE: total stake being stored in the same type means that this could never overflow
@@ -309,8 +311,8 @@ impl<T: Trait> Module<T> {
 			None => return Err("destination balance too high to receive value"),
 		};
 
-		if transactor != &dest {
-			Self::set_free_balance(transactor, new_from_balance);			
+		if transactor != dest {
+			Self::set_free_balance(&transactor, new_from_balance);			
 			Self::decrease_total_stake_by(fee);
 			Self::set_free_balance_creating(&dest, new_to_balance);
 		}
@@ -318,15 +320,9 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	// PRIV DISPATCH
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	/// Set the balances of a given account.
-	fn set_balance(who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
+	fn set_balance(origin: T::Origin, who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
+		ensure_root(origin)?;
 		let who = Self::lookup(who)?;
 		Self::set_free_balance(&who, free);
 		Self::set_reserved_balance(&who, reserved);

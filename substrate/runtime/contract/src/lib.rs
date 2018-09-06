@@ -122,7 +122,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		// TODO: Change AccountId to staking::Address
 		fn call(
 			aux,
@@ -181,7 +181,7 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> Module<T> {
 	/// Make a call to a specified account, optionally transferring some balance.
 	fn call(
-		aux: &<T as system::Trait>::PublicAux,
+		aux: <T as system::Trait>::Origin,
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_limit: T::Gas,
@@ -226,7 +226,7 @@ impl<T: Trait> Module<T> {
 	///   after the execution is saved as the `code` of the account. That code will be invoked
 	///   upon any message received by this account.
 	fn create(
-		aux: &<T as system::Trait>::PublicAux,
+		aux: <T as system::Trait>::Origin,
 		endowment: T::Balance,
 		gas_limit: T::Gas,
 		ctor_code: Vec<u8>,

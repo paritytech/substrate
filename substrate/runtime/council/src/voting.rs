@@ -29,7 +29,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		fn propose(aux, proposal: Box<T::Proposal>) -> Result;
 		fn vote(aux, proposal: T::Hash, approve: bool) -> Result;
 		fn veto(aux, proposal_hash: T::Hash) -> Result;
@@ -78,7 +78,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	// Dispatch
-	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>) -> Result {
+	fn propose(aux: T::Origin, proposal: Box<T::Proposal>) -> Result {
 		let expiry = <system::Module<T>>::block_number() + Self::voting_period();
 		ensure!(Self::will_still_be_councillor_at(aux.ref_into(), expiry), "proposer would not be on council");
 
@@ -98,7 +98,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn vote(aux: &T::PublicAux, proposal: T::Hash, approve: bool) -> Result {
+	fn vote(aux: T::Origin, proposal: T::Hash, approve: bool) -> Result {
 		if Self::vote_of((proposal, aux.ref_into().clone())).is_none() {
 			let mut voters = Self::proposal_voters(&proposal);
 			voters.push(aux.ref_into().clone());
@@ -108,7 +108,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn veto(aux: &T::PublicAux, proposal_hash: T::Hash) -> Result {
+	fn veto(aux: T::Origin, proposal_hash: T::Hash) -> Result {
 		ensure!(Self::is_councillor(aux.ref_into()), "only councillors may veto council proposals");
 		ensure!(<ProposalVoters<T>>::exists(&proposal_hash), "proposal must exist to be vetoed");
 

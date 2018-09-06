@@ -427,7 +427,7 @@ pub trait Applyable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
 	fn index(&self) -> &Self::Index;
-	fn sender(&self) -> &Self::AccountId;
+	fn sender(&self) -> Option<&Self::AccountId>;
 	fn apply(self) -> Result<(), &'static str>;
 }
 

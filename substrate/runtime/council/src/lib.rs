@@ -109,7 +109,7 @@ decl_module! {
 	pub struct Module<T: Trait>;
 
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub enum Call where aux: T::Origin {
 		fn set_approvals(aux, votes: Vec<bool>, index: VoteIndex) -> Result;
 		fn reap_inactive_voter(aux, signed_index: u32, who: Address<T::AccountId, T::AccountIndex>, who_index: u32, assumed_vote_index: VoteIndex) -> Result;
 		fn retract_voter(aux, index: u32) -> Result;
@@ -235,7 +235,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set candidate approvals. Approval slots stay valid as long as candidates in those slots
 	/// are registered.
-	fn set_approvals(aux: &T::PublicAux, votes: Vec<bool>, index: VoteIndex) -> Result {
+	fn set_approvals(aux: T::Origin, votes: Vec<bool>, index: VoteIndex) -> Result {
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 		ensure!(index == Self::vote_index(), "incorrect vote index");
 		if !<LastActiveOf<T>>::exists(aux.ref_into()) {
@@ -260,7 +260,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// May be called by anyone. Returns the voter deposit to `signed`.
 	fn reap_inactive_voter(
-		aux: &T::PublicAux,
+		aux: T::Origin,
 		signed_index: u32,
 		who: Address<T::AccountId, T::AccountIndex>,
 		who_index: u32,
@@ -304,7 +304,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
-	fn retract_voter(aux: &T::PublicAux, index: u32) -> Result {
+	fn retract_voter(aux: T::Origin, index: u32) -> Result {
 		ensure!(!Self::presentation_active(), "cannot retract when presenting");
 		ensure!(<LastActiveOf<T>>::exists(aux.ref_into()), "cannot retract non-voter");
 		let voters = Self::voters();
@@ -320,7 +320,7 @@ impl<T: Trait> Module<T> {
 	/// Submit oneself for candidacy.
 	///
 	/// Account must have enough transferrable funds in it to pay the bond.
-	fn submit_candidacy(aux: &T::PublicAux, slot: u32) -> Result {
+	fn submit_candidacy(aux: T::Origin, slot: u32) -> Result {
 		ensure!(!Self::is_a_candidate(aux.ref_into()), "duplicate candidate submission");
 		let slot = slot as usize;
 		let count = Self::candidate_count() as usize;
@@ -350,7 +350,7 @@ impl<T: Trait> Module<T> {
 	/// Only works if the `block_number >= current_vote().0` and `< current_vote().0 + presentation_duration()``
 	/// `signed` should have at least
 	fn present_winner(
-		aux: &T::PublicAux,
+		aux: T::Origin,
 		candidate: Address<T::AccountId, T::AccountIndex>,
 		total: T::Balance,
 		index: VoteIndex
@@ -634,7 +634,7 @@ mod tests {
 	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
 	impl system::Trait for Test {
-		type PublicAux = Self::AccountId;
+		type Origin = Self::AccountId;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
