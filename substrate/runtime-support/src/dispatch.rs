@@ -144,35 +144,6 @@ macro_rules! decl_module {
 /// Implement several dispatch modules to create a pairing of a dispatch trait and enum.
 #[macro_export]
 macro_rules! decl_dispatch {
-	// WITHOUT AUX
-	(
-		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
-		$(#[$attr:meta])*
-		pub enum $call_type:ident {
-			$(
-				$(#[$fn_attr:meta])*
-				fn $fn_name:ident(
-					$(
-						$param_name:ident : $param:ty
-					),*
-				) -> $result:ty;
-			)*
-		}
-		$($rest:tt)*
-	) => {
-		__decl_dispatch_module_without_aux! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$(#[$attr])*
-			pub enum $call_type;
-			$(
-				fn $fn_name( $( $param_name: $param ),* ) -> $result;
-			)*
-		}
-		decl_dispatch! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$($rest)*
-		}
-	};
 	// WITH AUX
 	(
 		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
@@ -213,51 +184,6 @@ macro_rules! decl_dispatch {
 			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D) -> $crate::dispatch::Result {
 				d.dispatch()
 			}
-		}
-	}
-}
-
-#[macro_export]
-#[doc(hidden)]
-/// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
-macro_rules! __decl_dispatch_module_without_aux {
-	(
-		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
-		$(#[$attr:meta])*
-		pub enum $call_type:ident;
-		$(
-			fn $fn_name:ident(
-				$(
-					$param_name:ident : $param:ty
-				),*
-			)
-			-> $result:ty;
-		)*
-	) => {
-		__decl_dispatch_module_common! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$(#[$attr])*
-			pub enum $call_type;
-			$( fn $fn_name( $( $param_name : $param ),* ) -> $result; )*
-		}
-		impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
-			for $call_type<$trait_instance>
-		{
-			type Trait = $trait_instance;
-			fn dispatch(self) -> $crate::dispatch::Result {
-				match self {
-					$(
-						$call_type::$fn_name( $( $param_name ),* ) =>
-							<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* ),
-					)*
-					$call_type::__PhantomItem(_) => { panic!("__PhantomItem should never be used.") },
-				}
-			}
-		}
-		impl<$trait_instance: $trait_name> $crate::dispatch::Callable
-			for $mod_type<$trait_instance>
-		{
-			type Call = $call_type<$trait_instance>;
 		}
 	}
 }
@@ -491,9 +417,6 @@ macro_rules! __impl_encode {
 	) => {{}}
 }
 
-pub trait IsSubType<T: Callable> {
-	fn is_sub_type(&self) -> Option<&<T as Callable>::Call>;
-}
 pub trait IsAuxSubType<T: AuxCallable> {
 	fn is_aux_sub_type(&self) -> Option<&<T as AuxCallable>::Call>;
 }
@@ -532,45 +455,6 @@ macro_rules! impl_outer_dispatch {
 		$(
 			impl $crate::dispatch::IsAuxSubType<$camelcase> for $call_type {
 				fn is_aux_sub_type(&self) -> Option<&<$camelcase as $crate::dispatch::AuxCallable>::Call> {
-					if let $call_type::$camelcase ( ref r ) = *self {
-						Some(r)
-					} else {
-						None
-					}
-				}
-			}
-		)*
-		impl_outer_dispatch!{ $($rest)* }
-	};
-	(
-		$(#[$attr:meta])*
-		pub enum $call_type:ident {
-			$(
-				$camelcase:ident,
-			)*
-		}
-		$( $rest:tt )*
-	) => {
-		$(#[$attr])*
-		pub enum $call_type {
-			$(
-				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
-			,)*
-		}
-		__impl_outer_dispatch_common! { $call_type, $($camelcase,)* }
-		impl $crate::dispatch::Dispatchable for $call_type {
-			type Trait = $call_type;
-			fn dispatch(self) -> $crate::dispatch::Result {
-				match self {
-					$(
-						$call_type::$camelcase(call) => call.dispatch(),
-					)*
-				}
-			}
-		}
-		$(
-			impl $crate::dispatch::IsSubType<$camelcase> for $call_type {
-				fn is_sub_type(&self) -> Option<&<$camelcase as $crate::dispatch::Callable>::Call> {
 					if let $call_type::$camelcase ( ref r ) = *self {
 						Some(r)
 					} else {

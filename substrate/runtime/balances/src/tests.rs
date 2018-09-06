@@ -20,7 +20,7 @@
 
 use super::*;
 use runtime_io::with_externalities;
-use mock::{Balances, System, Test, new_test_ext};
+use mock::{Balances, System, Runtime, new_test_ext};
 
 #[test]
 fn reward_should_work() {
@@ -28,7 +28,7 @@ fn reward_should_work() {
 		assert_eq!(Balances::total_balance(&1), 10);
 		assert_ok!(Balances::reward(&1, 10));
 		assert_eq!(Balances::total_balance(&1), 20);
-		assert_eq!(<TotalIssuance<Test>>::get(), 110);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 110);
 	});
 }
 
@@ -189,7 +189,7 @@ fn slashing_balance_should_work() {
 		assert!(Balances::slash(&1, 69).is_none());
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 42);
-		assert_eq!(<TotalIssuance<Test>>::get(), 44);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 44);
 	});
 }
 
@@ -202,7 +202,7 @@ fn slashing_incomplete_balance_should_work() {
 		assert!(Balances::slash(&1, 69).is_some());
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 0);
-		assert_eq!(<TotalIssuance<Test>>::get(), 2);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 2);
 	});
 }
 
@@ -226,7 +226,7 @@ fn slashing_reserved_balance_should_work() {
 		assert!(Balances::slash_reserved(&1, 42).is_none());
 		assert_eq!(Balances::reserved_balance(&1), 69);
 		assert_eq!(Balances::free_balance(&1), 0);
-		assert_eq!(<TotalIssuance<Test>>::get(), 71);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 71);
 	});
 }
 
@@ -239,7 +239,7 @@ fn slashing_incomplete_reserved_balance_should_work() {
 		assert!(Balances::slash_reserved(&1, 69).is_some());
 		assert_eq!(Balances::free_balance(&1), 69);
 		assert_eq!(Balances::reserved_balance(&1), 0);
-		assert_eq!(<TotalIssuance<Test>>::get(), 71);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 71);
 	});
 }
 
@@ -283,8 +283,8 @@ fn transferring_incomplete_reserved_balance_should_work() {
 #[test]
 fn transferring_too_high_value_should_not_panic() {
 	with_externalities(&mut new_test_ext(0, false), || {
-		<FreeBalance<Test>>::insert(1, u64::max_value());
-		<FreeBalance<Test>>::insert(2, 1);
+		<FreeBalance<Runtime>>::insert(1, u64::max_value());
+		<FreeBalance<Runtime>>::insert(2, 1);
 
 		assert_err!(
 			Balances::transfer(Some(1).into(), 2.into(), u64::max_value()),
@@ -307,7 +307,7 @@ fn account_removal_on_free_too_low() {
 			Balances::set_free_balance(&2, 110);
 			Balances::increase_total_stake_by(110);
 
-			assert_eq!(<TotalIssuance<Test>>::get(), 732);
+			assert_eq!(<TotalIssuance<Runtime>>::get(), 732);
 		}
 
 		// Transfer funds from account 1 of such amount that after this transfer
@@ -319,6 +319,6 @@ fn account_removal_on_free_too_low() {
 		assert_eq!(Balances::free_balance(&1), 0);
 		
 		// Verify that TotalIssuance tracks balance removal when free balance is too low.
-		assert_eq!(<TotalIssuance<Test>>::get(), 642);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 642);
 	});
 }
