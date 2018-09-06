@@ -642,20 +642,11 @@ mod tests {
 	decl_module! {
 		pub struct Module<T: Trait>;
 
-		#[derive(Serialize, Deserialize)]
 		pub enum Call where origin: T::Origin {
 			/// Hi, this is a comment.
 			fn aux_0(origin) -> Result;
 			fn aux_1(origin, data: i32) -> Result;
 			fn aux_2(origin, data: i32, data2: String) -> Result;
-		}
-
-		#[derive(Serialize, Deserialize)]
-		pub enum PrivCall {
-			/// Hi, this is a comment.
-			/// Hi, this is a second comment.
-			fn priv_0(data: String) -> Result;
-			fn priv_1(data: String, data2: u32) -> Result;
 		}
 	}
 
@@ -674,37 +665,20 @@ mod tests {
 					r#"{ "name": "data", "type": "i32" }, "#,
 					r#"{ "name": "data2", "type": "String" }"#,
 				r#" ], "description": [ ] }"#,
-			r#" } }, "#,
-			r#"{ "name": "PrivCall", "functions": { "#,
-				r#""0": { "name": "priv_0", "params": [ "#,
-					r#"{ "name": "data", "type": "String" }"#,
-				r#" ], "description": [ " Hi, this is a comment.", " Hi, this is a second comment." ] }, "#,
-				r#""0 + 1": { "name": "priv_1", "params": [ "#,
-					r#"{ "name": "data", "type": "String" }, "#,
-					r#"{ "name": "data2", "type": "u32" }"#,
-				r#" ], "description": [ ] }"#,
 			r#" } }"#,
 		r#" ] }"#,
 	);
 
 	impl<T: Trait> Module<T> {
-		fn aux_0(_: &T::Origin) -> Result {
+		fn aux_0(_: T::Origin) -> Result {
 			unreachable!()
 		}
 
-		fn aux_1(_: &T::Origin, _: i32) -> Result {
+		fn aux_1(_: T::Origin, _: i32) -> Result {
 			unreachable!()
 		}
 
-		fn aux_2(_: &T::Origin, _: i32, _: String) -> Result {
-			unreachable!()
-		}
-
-		fn priv_0(_: String) -> Result {
-			unreachable!()
-		}
-
-		fn priv_1(_: String, _: u32) -> Result {
+		fn aux_2(_: T::Origin, _: i32, _: String) -> Result {
 			unreachable!()
 		}
 	}
