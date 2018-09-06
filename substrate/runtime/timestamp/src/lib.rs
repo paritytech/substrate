@@ -40,11 +40,10 @@ extern crate substrate_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{OnFinalise, MaybeEmpty, SimpleArithmetic, As, Zero};
+use runtime_primitives::traits::{OnFinalise, SimpleArithmetic, As, Zero};
+use system::ensure_inherent;
 
-pub trait Trait: consensus::Trait where
-	<Self as system::Trait>::Origin: MaybeEmpty
-{
+pub trait Trait: consensus::Trait + system::Trait {
 	// the position of the required timestamp-set extrinsic.
 	const TIMESTAMP_SET_POSITION: u32;
 
@@ -77,8 +76,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the current time.
-	fn set(aux: T::Origin, now: T::Moment) -> Result {
-		assert!(aux.is_empty());
+	fn set(origin: T::Origin, now: T::Moment) -> Result {
+		ensure_inherent(origin)?;
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
 			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
@@ -146,10 +145,14 @@ mod tests {
 	use runtime_primitives::traits::{BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 
+	impl_outer_origin!{
+		pub enum Origin for Test {}
+	}
+
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl system::Trait for Test {
-		type Origin = Self::AccountId;
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -178,7 +181,7 @@ mod tests {
 		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
+			assert_ok!(Timestamp::aux_dispatch(Call::set(69), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -191,8 +194,8 @@ mod tests {
 		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
-			let _ = Timestamp::aux_dispatch(Call::set(70), &0);
+			assert_ok!(Timestamp::aux_dispatch(Call::set(69), Origin::INHERENT));
+			let _ = Timestamp::aux_dispatch(Call::set(70), Origin::INHERENT);
 		});
 	}
 
@@ -204,7 +207,7 @@ mod tests {
 		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::aux_dispatch(Call::set(46), &0);
+			let _ = Timestamp::aux_dispatch(Call::set(46), Origin::INHERENT);
 		});
 	}
 }

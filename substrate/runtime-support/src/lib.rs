@@ -145,6 +145,11 @@ macro_rules! impl_outer_origin {
 			#[allow(dead_code)]
 			Void($crate::Void)
 		}
+		#[allow(dead_code)]
+		impl $name {
+			pub const INHERENT: Self = $name::system($system::RawOrigin::Inherent);
+			pub const ROOT: Self = $name::system($system::RawOrigin::Root);
+		}
 		impl From<$system::Origin<$trait>> for $name {
 			fn from(x: $system::Origin<$trait>) -> Self {
 				$name::system(x)
