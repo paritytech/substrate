@@ -149,6 +149,9 @@ macro_rules! impl_outer_origin {
 		impl $name {
 			pub const INHERENT: Self = $name::system($system::RawOrigin::Inherent);
 			pub const ROOT: Self = $name::system($system::RawOrigin::Root);
+			pub fn signed(by: <$trait as $system::Trait>::AccountId) -> Self {
+				$name::system($system::RawOrigin::Signed(by))
+			}
 		}
 		impl From<$system::Origin<$trait>> for $name {
 			fn from(x: $system::Origin<$trait>) -> Self {

@@ -145,7 +145,7 @@ mod tests {
 	use runtime_primitives::traits::{BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
 
-	impl_outer_origin!{
+	impl_outer_origin! {
 		pub enum Origin for Test {}
 	}
 

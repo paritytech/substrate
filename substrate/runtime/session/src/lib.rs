@@ -52,6 +52,7 @@ use rstd::prelude::*;
 use primitives::traits::{Zero, One, RefInto, OnFinalise, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
+use system::{ensure_signed, ensure_root};
 
 #[cfg(any(feature = "std", test))]
 use std::collections::HashMap;
@@ -80,12 +81,9 @@ decl_module! {
 	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 	pub enum Call where aux: T::Origin {
 		fn set_key(aux, key: T::SessionKey) -> Result;
-	}
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum PrivCall {
-		fn set_length(new: T::BlockNumber) -> Result;
-		fn force_new_session(apply_rewards: bool) -> Result;
+		fn set_length(aux, new: T::BlockNumber) -> Result;
+		fn force_new_session(aux, apply_rewards: bool) -> Result;
 	}
 }
 
@@ -140,19 +138,22 @@ impl<T: Trait> Module<T> {
 	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 	/// session.
 	fn set_key(aux: T::Origin, key: T::SessionKey) -> Result {
+		ensure_signed(aux)?;
 		// set new value for next session
 		<NextKeyFor<T>>::insert(aux.ref_into(), key);
 		Ok(())
 	}
 
 	/// Set a new era length. Won't kick in until the next era change (at current length).
-	fn set_length(new: T::BlockNumber) -> Result {
+	fn set_length(aux: T::Origin, new: T::BlockNumber) -> Result {
+		ensure_root(aux)?;
 		<NextSessionLength<T>>::put(new);
 		Ok(())
 	}
 
 	/// Forces a new session.
-	pub fn force_new_session(apply_rewards: bool) -> Result {
+	pub fn force_new_session(aux: T::Origin, apply_rewards: bool) -> Result {
+		ensure_root(aux)?;
 		<ForcingNewSession<T>>::put(apply_rewards);
 		Ok(())
 	}
@@ -291,6 +292,10 @@ mod tests {
 	use primitives::traits::{Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
+	impl_outer_origin!{
+		pub enum Origin for Test {}
+	}
+
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl consensus::Trait for Test {
@@ -300,7 +305,7 @@ mod tests {
 		type OnOfflineValidator = ();
 	}
 	impl system::Trait for Test {
-		type Origin = Self::AccountId;
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -353,7 +358,7 @@ mod tests {
 	fn should_work_with_early_exit() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(10));
+			assert_ok!(Session::set_length(Origin::ROOT, 10));
 			assert_eq!(Session::blocks_remaining(), 1);
 			Session::check_rotate_session(1);
 
@@ -365,7 +370,7 @@ mod tests {
 			System::set_block_number(7);
 			assert_eq!(Session::current_index(), 1);
 			assert_eq!(Session::blocks_remaining(), 5);
-			assert_ok!(Session::force_new_session(false));
+			assert_ok!(Session::force_new_session(Origin::ROOT, false));
 			Session::check_rotate_session(7);
 
 			System::set_block_number(8);
@@ -388,14 +393,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: Change to length 3; no visible change.
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(3));
+			assert_ok!(Session::set_length(Origin::ROOT, 3));
 			Session::check_rotate_session(1);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
 			System::set_block_number(2);
-			assert_ok!(Session::set_length(3));
+			assert_ok!(Session::set_length(Origin::ROOT, 3));
 			Session::check_rotate_session(2);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -408,7 +413,7 @@ mod tests {
 
 			// Block 4: Change to length 2; no visible change.
 			System::set_block_number(4);
-			assert_ok!(Session::set_length(2));
+			assert_ok!(Session::set_length(Origin::ROOT, 2));
 			Session::check_rotate_session(4);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -448,7 +453,7 @@ mod tests {
 
 			// Block 3: Set new key for validator 2; no visible change.
 			System::set_block_number(3);
-			assert_ok!(Session::set_key(&2, 5));
+			assert_ok!(Session::set_key(Origin::signed(2), 5));
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			Session::check_rotate_session(3);
