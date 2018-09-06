@@ -90,7 +90,7 @@ pub fn new_client<E, S, Block>(
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
-		E: CodeExecutor<KeccakHasher> + RuntimeInfo<KeccakHasher>,
+		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);

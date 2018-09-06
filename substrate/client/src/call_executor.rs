@@ -119,7 +119,7 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 impl<B, E, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for LocalCallExecutor<B, E>
 where
 	B: backend::LocalBackend<Block, KeccakHasher, RlpCodec>,
-	E: CodeExecutor<KeccakHasher> + RuntimeInfo<KeccakHasher>,
+	E: CodeExecutor<KeccakHasher> + RuntimeInfo,
 	Block: BlockT,
 {
 	type Error = E::Error;
@@ -190,6 +190,6 @@ where
 	}
 
 	fn native_runtime_version(&self) -> Option<RuntimeVersion> {
-		<E as RuntimeInfo<KeccakHasher>>::NATIVE_VERSION
+		<E as RuntimeInfo>::NATIVE_VERSION
 	}
 }

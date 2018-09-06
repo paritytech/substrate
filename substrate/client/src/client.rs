@@ -166,7 +166,7 @@ pub fn new_in_mem<E, Block, S>(
 	genesis_storage: S,
 ) -> error::Result<Client<in_mem::Backend<Block, KeccakHasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, KeccakHasher, RlpCodec>, E>, Block>>
 	where
-		E: CodeExecutor<KeccakHasher> + RuntimeInfo<KeccakHasher>,
+		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT,
 {

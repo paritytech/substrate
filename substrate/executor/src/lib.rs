@@ -76,15 +76,15 @@ pub use native_executor::{with_native_environment, NativeExecutor, NativeExecuti
 pub use state_machine::Externalities;
 pub use runtime_version::RuntimeVersion;
 pub use codec::Codec;
-use hashdb::Hasher;
+use primitives::KeccakHasher;
 
 /// Provides runtime information.
-pub trait RuntimeInfo<H: Hasher> {
+pub trait RuntimeInfo {
 	/// Native runtime information if any.
 	const NATIVE_VERSION: Option<RuntimeVersion>;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities<H>> (
+	fn runtime_version<E: Externalities<KeccakHasher>> (
 		&self,
 		ext: &mut E,
 		heap_pages: usize,

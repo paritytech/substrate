@@ -144,7 +144,7 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 	}
 }
 
-impl<D: NativeExecutionDispatch> RuntimeInfo<KeccakHasher> for NativeExecutor<D> {
+impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
 	const NATIVE_VERSION: Option<RuntimeVersion> = Some(D::VERSION);
 
 	fn runtime_version<E: Externalities<KeccakHasher>>(
