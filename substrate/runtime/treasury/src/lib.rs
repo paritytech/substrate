@@ -122,31 +122,31 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Treasury {
 		// Config...
 
-		// Proportion of funds that should be bonded in order to place a proposal. An accepted
-		// proposal gets these back. A rejected proposal doesn't.
+		/// Proportion of funds that should be bonded in order to place a proposal. An accepted
+		/// proposal gets these back. A rejected proposal doesn't.
 		ProposalBond get(proposal_bond): required Permill;
 		
-		// Minimum amount of funds that should be placed ina deposit for making a proposal.
+		/// Minimum amount of funds that should be placed ina deposit for making a proposal.
 		ProposalBondMinimum get(proposal_bond_minimum): required T::Balance;
 
-		// Period between successive spends.
+		/// Period between successive spends.
 		SpendPeriod get(spend_period): required T::BlockNumber;
 
-		// Percentage of spare funds (if any) that are burnt per spend period.
+		/// Percentage of spare funds (if any) that are burnt per spend period.
 		Burn get(burn): required Permill;
 
 		// State...
 
-		// Total funds available to this module for spending.
+		/// Total funds available to this module for spending.
 		Pot get(pot): default T::Balance;
 
-		// Number of proposals that have been made.
+		/// Number of proposals that have been made.
 		ProposalCount get(proposal_count): default ProposalIndex;
 
-		// Proposals that have been made.
+		/// Proposals that have been made.
 		Proposals get(proposals): map [ ProposalIndex => Proposal<T::AccountId, T::Balance> ];
 
-		// Proposal indices that have been approved but not yet awarded.
+		/// Proposal indices that have been approved but not yet awarded.
 		Approvals get(approvals): default Vec<ProposalIndex>;
 	}
 }

@@ -145,47 +145,47 @@ impl<B, A> From<RawEvent<B, A>> for () {
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
-		// The ideal number of staking participants.
+		/// The ideal number of staking participants.
 		pub ValidatorCount get(validator_count): required u32;
-		// Minimum number of staking participants before emergency conditions are imposed.
+		/// Minimum number of staking participants before emergency conditions are imposed.
 		pub MinimumValidatorCount: u32;
-		// The length of a staking era in sessions.
+		/// The length of a staking era in sessions.
 		pub SessionsPerEra get(sessions_per_era): required T::BlockNumber;
-		// Maximum reward, per validator, that is provided per acceptable session.
+		/// Maximum reward, per validator, that is provided per acceptable session.
 		pub SessionReward get(session_reward): required T::Balance;
-		// Slash, per validator that is taken per abnormal era end.
+		/// Slash, per validator that is taken per abnormal era end.
 		pub EarlyEraSlash get(early_era_slash): required T::Balance;
-		// Number of instances of offline reports before slashing begins for validators.
+		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace): default u32;
-		// The length of the bonding duration in blocks.
+		/// The length of the bonding duration in blocks.
 		pub BondingDuration get(bonding_duration): required T::BlockNumber;
 
-		// The current era index.
+		/// The current era index.
 		pub CurrentEra get(current_era): required T::BlockNumber;
-		// Preferences that a validator has.
+		/// Preferences that a validator has.
 		pub ValidatorPreferences get(validator_preferences): default map [ T::AccountId => ValidatorPrefs<T::Balance> ];
-		// All the accounts with a desire to stake.
+		/// All the accounts with a desire to stake.
 		pub Intentions get(intentions): default Vec<T::AccountId>;
-		// All nominator -> nominee relationships.
+		/// All nominator -> nominee relationships.
 		pub Nominating get(nominating): map [ T::AccountId => T::AccountId ];
-		// Nominators for a particular account.
+		/// Nominators for a particular account.
 		pub NominatorsFor get(nominators_for): default map [ T::AccountId => Vec<T::AccountId> ];
-		// Nominators for a particular account that is in action right now.
+		/// Nominators for a particular account that is in action right now.
 		pub CurrentNominatorsFor get(current_nominators_for): default map [ T::AccountId => Vec<T::AccountId> ];
-		// The next value of sessions per era.
+		/// The next value of sessions per era.
 		pub NextSessionsPerEra get(next_sessions_per_era): T::BlockNumber;
-		// The session index at which the era length last changed.
+		/// The session index at which the era length last changed.
 		pub LastEraLengthChange get(last_era_length_change): default T::BlockNumber;
 
-		// The current era stake threshold - unused at present. Consider for removal.
+		/// The current era stake threshold - unused at present. Consider for removal.
 		pub StakeThreshold get(stake_threshold): required T::Balance;
 
-		// The block at which the `who`'s funds become entirely liquid.
+		/// The block at which the `who`'s funds become entirely liquid.
 		pub Bondage get(bondage): default map [ T::AccountId => T::BlockNumber ];
-		// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
+		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
 		pub SlashCount get(slash_count): default map [ T::AccountId => u32 ];
 
-		// We are forcing a new era.
+		/// We are forcing a new era.
 		pub ForcingNewEra get(forcing_new_era): ();
 	}
 }
