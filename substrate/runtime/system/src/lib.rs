@@ -186,6 +186,15 @@ pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'stati
 	}
 }
 
+pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
+	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+{
+	match o.into() {
+		Some(RawOrigin::Inherent) => Ok(()),
+		_ => Err("bad origin"),
+	}
+}
+
 impl<T: Trait> Module<T> {
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
