@@ -734,29 +734,50 @@ impl<B, E, Block> Client<B, E, Block> where
 		let target_header = {
 			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
 				Some(x) => x,
+				// target not in blockchain
 				None => { return Ok(None); },
 			}
 		};
 
+		if let Some(max_number) = maybe_max_number {
+			// target outside search range
+			if target_header.number() > &max_number {
+				return Ok(None);
+			}
+		}
+
 		// for each chain. longest chain first. shortest last
 		for leaf_hash in self.backend.blockchain().leaves()? {
+
 			// start at the leaf
 			let mut current_hash = leaf_hash;
+
+			// if search is not restricted then the leaf is the best
+			let mut best_hash = leaf_hash;
+
+			// waiting until we are <= max_number
+			if let Some(max_number) = maybe_max_number {
+				loop {
+					// TODO [snd] this should be a panic
+					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
+
+					if current_header.number() <= &max_number {
+						best_hash = current_header.hash();
+						break;
+					}
+
+					current_hash = *current_header.parent_hash();
+				}
+			}
+
 			// go backwards through the chain (via parent links)
 			loop {
 				// until we find target
 				if current_hash == target_hash {
-					if let Some(max_number) = maybe_max_number {
-						let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
-						// found the target but it has too high a number
-						if *current_header.number() > max_number {
-							return Ok(None);
-						}
-					}
-
-					return Ok(Some(leaf_hash));
+					return Ok(Some(best_hash));
 				}
 
+				// TODO [snd] this should be a panic
 				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
 				// stop search in this chain once we go below the target's block number
