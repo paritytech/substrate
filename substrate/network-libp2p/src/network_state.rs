@@ -253,17 +253,6 @@ impl NetworkState {
 		(list, change)
 	}
 
-	/// Returns all the IDs of the peers on the network we have knowledge of.
-	///
-	/// This includes peers we are not connected to.
-	pub fn known_peers(&self) -> Vec<PeerId> {
-		let topology = self.topology.read();
-		// Note: I have no idea why, but fusing the two lines below fails the
-		// borrow check
-		let out: Vec<_> = topology.peers().cloned().collect();
-		out
-	}
-
 	/// Returns true if we are connected to any peer at all.
 	pub fn has_connected_peer(&self) -> bool {
 		!self.connections.read().peer_by_nodeid.is_empty()
@@ -350,16 +339,21 @@ impl NetworkState {
 
 	/// Adds an address discovered by Kademlia.
 	/// Note that we don't have to be connected to a peer to add an address.
-	pub fn add_kad_discovered_addr(&self, node_id: &PeerId, addr: Multiaddr) {
-		self.topology.write().add_kademlia_discovered_addr(node_id, addr)
+	/// If `connectable` is `true`, that means we have a hint from a remote that this node can be
+	/// connected to.
+	pub fn add_kad_discovered_addr(&self, node_id: &PeerId, addr: Multiaddr, connectable: bool) {
+		self.topology.write().add_kademlia_discovered_addr(node_id, addr, connectable)
 	}
 
 	/// Returns the known multiaddresses of a peer.
-	pub fn addrs_of_peer(&self, node_id: &PeerId) -> Vec<Multiaddr> {
+	///
+	/// The boolean associated to each address indicates whether we're connected to it.
+	pub fn addrs_of_peer(&self, node_id: &PeerId) -> Vec<(Multiaddr, bool)> {
 		let topology = self.topology.read();
 		// Note: I have no idea why, but fusing the two lines below fails the
 		// borrow check
-		let out: Vec<Multiaddr> = topology.addrs_of_peer(node_id).cloned().collect();
+		let out: Vec<_> = topology
+			.addrs_of_peer(node_id).map(|(a, c)| (a.clone(), c)).collect();
 		out
 	}
 
@@ -422,12 +416,6 @@ impl NetworkState {
 				// TODO: drop existing peers?
 				self.reserved_only.store(true, atomic::Ordering::SeqCst),
 		}
-	}
-
-	/// Returns true if we are connected to the given node.
-	pub fn has_connection(&self, node_id: &PeerId) -> bool {
-		let connections = self.connections.read();
-		connections.peer_by_nodeid.contains_key(node_id)
 	}
 
 	/// Reports that we tried to connect to the given address but failed.
