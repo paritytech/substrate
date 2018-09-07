@@ -14,13 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{BalanceOf, CallReceipt, CreateReceipt, Ext, GasMeterResult, Runtime};
+use super::{SpecialTrap, BalanceOf, CreateReceipt, Ext, GasMeterResult, Runtime};
 use codec::{Encode, Decode};
 use parity_wasm::elements::{FunctionType, ValueType};
 use rstd::prelude::*;
 use rstd::string::String;
 use rstd::collections::btree_map::BTreeMap;
-use runtime_primitives::traits::As;
+use runtime_primitives::traits::{As, CheckedMul};
 use sandbox::{self, TypedValue};
 use system;
 use Trait;
@@ -169,7 +169,6 @@ define_env!(init_env, <E: Ext>,
 		ctx.memory().get(key_ptr, &mut key)?;
 
 		if let Some(value) = ctx.ext.get_storage(&key) {
-			// TODO: Load value directly into the scratch buffer.
 			ctx.scratch_buf = value;
 			Ok(0)
 		} else {
@@ -202,19 +201,20 @@ define_env!(init_env, <E: Ext>,
 			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
 		};
 		let ext = &mut ctx.ext;
+		let scratch_buf = &mut ctx.scratch_buf;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data),
+				Some(nested_meter) => {
+					scratch_buf.clear();
+					ext.call(&callee, value, nested_meter, &input_data, scratch_buf)
+				},
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
 		});
 
 		match call_outcome {
-			Ok(CallReceipt { return_data }) => {
-				ctx.scratch_buf = return_data;
-				Ok(0)
-			},
+			Ok(()) => Ok(0),
 			Err(_) => Ok(1),
 		}
 	},
@@ -259,24 +259,31 @@ define_env!(init_env, <E: Ext>,
 
 		match create_outcome {
 			Ok(CreateReceipt { address }) => {
-				// TODO: Clear scratch_buf and `encode` directly to it.
-				ctx.scratch_buf = address.encode();
+				// Write the address to the scratch buffer.
+				ctx.scratch_buf.clear();
+				address.encode_to(&mut ctx.scratch_buf);
 				Ok(0)
 			},
 			Err(_) => Ok(1),
 		}
 	},
 
-	// TODO: doc
+	// Save a data buffer as a result of the execution.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
-		let mut data_buf = Vec::new();
-		data_buf.resize(data_len as usize, 0);
-		ctx.memory().get(data_ptr, &mut data_buf)?;
+		let data_len_in_gas = <<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(data_len as u64);
+		let price = (ctx.config.return_data_per_byte_cost)
+			.checked_mul(&data_len_in_gas)
+			.ok_or_else(|| sandbox::HostError)?;
 
-		// TODO: Can we write return data directly to the `scratch_buf` of the
-		// parent execution context?
-		ctx.store_return_data(data_buf)
-			.map_err(|_| sandbox::HostError)?;
+		match ctx.gas_meter.charge(price) {
+			GasMeterResult::Proceed => (),
+			GasMeterResult::OutOfGas => return Err(sandbox::HostError),
+		}
+
+		ctx.output_data.resize(data_len as usize, 0);
+		ctx.memory.get(data_ptr, &mut ctx.output_data)?;
+
+		ctx.special_trap = Some(SpecialTrap::Return);
 
 		// The trap mechanism is used to immediately terminate the execution.
 		// This trap should be handled appropriately before returning the result
