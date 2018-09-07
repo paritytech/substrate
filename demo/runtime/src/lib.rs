@@ -229,9 +229,20 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 pub type Executive = executive::Executive<Runtime, Block, Balances, Balances,
 	(((((), Council), Democracy), Staking), Session)>;
 
+impl_json_metadata!(for Runtime with modules
+					system::Module with Storage,
+					balances::Module with Storage,
+					consensus::Module with Storage,
+					timestamp::Module with Storage,
+					session::Module with Storage,
+					staking::Module with Storage,
+					democracy::Module with Storage,
+					council::Module with Storage);
+
 pub mod api {
 	impl_stubs!(
 		version => |()| super::VERSION,
+		metadata => |()| super::Runtime::json_metadata(),
 		authorities => |()| super::Consensus::authorities(),
 		events => |()| super::System::events(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
