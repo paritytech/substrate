@@ -46,8 +46,9 @@ use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, MaybeEmpty, OnFinalise, Member, AuthoritiesChangeDigest};
+use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member, AuthoritiesChangeDigest};
 use primitives::bft::MisbehaviorReport;
+use system::{ensure_signed, ensure_inherent, ensure_root};
 
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::KeccakHasher;
@@ -141,19 +142,12 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
-		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
-		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result;
-		fn remark(aux, remark: Vec<u8>) -> Result;
-	}
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum PrivCall {
-		fn set_code(new: Vec<u8>) -> Result;
-		fn set_storage(items: Vec<KeyValue>) -> Result;
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn report_misbehavior(origin, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
+		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result;
+		fn remark(origin, remark: Vec<u8>) -> Result;
+		fn set_code(origin, new: Vec<u8>) -> Result;
+		fn set_storage(origin, items: Vec<KeyValue>) -> Result;
 	}
 }
 
@@ -164,13 +158,15 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the new code.
-	fn set_code(new: Vec<u8>) -> Result {
+	fn set_code(origin: T::Origin, new: Vec<u8>) -> Result {
+		ensure_root(origin)?;
 		storage::unhashed::put_raw(CODE, &new);
 		Ok(())
 	}
 
 	/// Set some items of storage.
-	fn set_storage(items: Vec<KeyValue>) -> Result {
+	fn set_storage(origin: T::Origin, items: Vec<KeyValue>) -> Result {
+		ensure_root(origin)?;
 		for i in &items {
 			storage::unhashed::put_raw(&i.0, &i.1);
 		}
@@ -178,7 +174,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
+	fn report_misbehavior(origin: T::Origin, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
+		ensure_signed(origin)?;
 		// TODO.
 		Ok(())
 	}
@@ -186,8 +183,8 @@ impl<T: Trait> Module<T> {
 	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
 	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
 	/// for the previous block.
-	fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
-		assert!(aux.is_empty());
+	fn note_offline(origin: T::Origin, offline_val_indices: Vec<u32>) -> Result {
+		ensure_inherent(origin)?;
 		assert!(
 			<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
 			"note_offline extrinsic must be at position {} in the block",
@@ -202,7 +199,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Make some on-chain remark.
-	fn remark(_aux: &T::PublicAux, _remark: Vec<u8>) -> Result {
+	fn remark(origin: T::Origin, _remark: Vec<u8>) -> Result {
+		ensure_signed(origin)?;
 		Ok(())
 	}
 

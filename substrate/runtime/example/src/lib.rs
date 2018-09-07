@@ -60,6 +60,7 @@ extern crate substrate_runtime_balances as balances;
 
 use runtime_primitives::traits::OnFinalise;
 use runtime_support::{StorageValue, dispatch::Result};
+use system::{ensure_signed, ensure_root};
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -73,45 +74,44 @@ pub trait Trait: balances::Trait {
 
 // The module declaration. This states the entry points that we handle. The
 // macro takes care of the marshalling of arguments and dispatch.
+//
+// Anyone can have these functions execute by signing and submitting
+// an extrinsic. Ensure that calls into each of these execute in a time, memory and
+// using storage space proportional to any costs paid for by the caller or otherwise the
+// difficulty of forcing the call to happen.
+//
+// Generally you'll want to split these into three groups:
+// - Public calls that are signed by an external account.
+// - Root calls that are allowed to be made only by the governance system.
+// - Inherent calls that are allowed to be made only by the block authors and validators.
+//
+// Information about where this dispatch initiated from is provided as the first argument
+// "origin". As such functions must always look like:
+// 
+// `fn foo(origin, bar: Bar, baz: Baz) -> Result = 0;`
+//
+// The `Result` is required as part of the syntax (and expands to the conventional dispatch
+// result of `Result<(), &'static str>`).
+// 
+// When you come to `impl` them later in the module, you must specify the full type for `origin`:
+//
+// `fn foo(origin: T::Origin, bar: Bar, baz: Baz) { ... }`
+//
+// There are three entries in the `system::Origin` enum that correspond
+// to the above bullets: `::Signed(AccountId)`, `::Root` and `::Inherent`. You should always match
+// against them as the first thing you do in your function. There are three convenience calls
+// in system that do the matching for you and return a convenient result: `ensure_signed`,
+// `ensure_root` and `ensure_inherent`. 
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
-	pub struct Module<T: Trait>;
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// This is your public interface. Be extremely careful.
+		/// This is just a simple example of how to interact with the module from the external
+		/// world.
+		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result;
 
-	// The unpriviledged entry points. Any account can call into these by signing and submitting
-	// an extrinsic. Ensure that calls into each of these execute in a time, memory and
-	// using storage space proportional to any costs paid for by the caller.
-	//
-	// The account that is calling this (i.e. the one that signed the extrinsic) is provided
-	// via the `aux` argument, always first in each function call. As such functions must
-	// always look like:
-	// 
-	// `fn foo(aux, bar: Bar, baz: Baz) -> Result = 0;`
-	//
-	// The `Result` is required as part of the syntax (and expands to the conventional dispatch
-	// result of `Result<(), &'static str>`). The index after `=` must be unique within this
-	// enum (the `PrivCall` enum is allowed to reuse indexes).
-	// 
-	// When you come to `impl` them later in the module, you must specify the full type for `aux`:
-	//
-	// `fn foo(aux: T::PublicAux, bar: Bar, baz: Baz) { ... }`
-	//
-	// This is your public interface. Be extremely careful.
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
-		// This is just a simple example of how to interact with the module from the external
-		// world.
-		fn accumulate_dummy(aux, increase_by: T::Balance) -> Result;
-	}
-
-	// The priviledged entry points. These are provided to allow any governance modules in 
-	// the runtime to be able to execute common functions. Unlike for `Call` there is no
-	// auxilliary data to encode the sender (since there is no sender). Though still important
-	// to ensure that these execute in reasonable time and space, they can do what would
-	// otherwise be costly or unsafe operations.
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum PrivCall {
-		// A priviledged call; in this case it resets our dummy value to something new.
-		fn set_dummy(new_dummy: T::Balance) -> Result;
+		/// A priviledged call; in this case it resets our dummy value to something new.
+		fn set_dummy(origin, new_dummy: T::Balance) -> Result;
 	}
 }
 
@@ -190,7 +190,7 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
 	}
 
-	// Implement Calls/PrivCalls and add public immutables and private mutables.
+	// Implement Calls and add public immutables and private mutables.
 
 	// Implement dispatched function `accumulate_dummy`. This just increases the value
 	// of `Dummy` by `increase_by`.
@@ -206,7 +206,7 @@ impl<T: Trait> Module<T> {
 	// The first is relatively easy to audit for - just ensure all panickers are removed from
 	// logic that executes in production (which you do anyway, right?!). To ensure the second 
 	// is followed, you should do all tests for validity at the top of your function. This
-	// is stuff like checking the sender (`aux`) or that state is such that the operation
+	// is stuff like checking the sender (`origin`) or that state is such that the operation
 	// makes sense.
 	// 
 	// Once you've determined that it's all good, then enact the operation and change storage.
@@ -227,7 +227,10 @@ impl<T: Trait> Module<T> {
 	// no progress.
 	//
 	// If you don't respect these rules, it is likely that your chain will be attackable.
-	fn accumulate_dummy(_aux: &T::PublicAux, increase_by: T::Balance) -> Result {
+	fn accumulate_dummy(origin: T::Origin, increase_by: T::Balance) -> Result {
+		// This is a public call, so we ensure that the origin is some signed account.
+		let _sender = ensure_signed(origin)?;
+
 		// Read the value of dummy from storage.
 		let dummy = Self::dummy();
 		// Will also work using the `::get` on the storage item type iself:
@@ -248,13 +251,16 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	// Implementation of a priviledged call. This doesn't have an `aux` parameter because
+	// Implementation of a priviledged call. This doesn't have an `origin` parameter because
 	// it's not (directly) from an extrinsic, but rather the system as a whole has decided
 	// to execute it. Different runtimes have different reasons for allow priviledged
 	// calls to be executed - we don't need to care why. Because it's priviledged, we can
 	// assume it's a one-off operation and substantial processing/storage/memory can be used
 	// without worrying about gameability or attack scenarios.
-	fn set_dummy(new_value: T::Balance) -> Result {
+	fn set_dummy(origin: T::Origin, new_value: T::Balance) -> Result {
+		// This is a privileged call, so we ensure that the origin is "Root".
+		ensure_root(origin)?;
+
 		// Put the new value into storage.
 		<Dummy<T>>::put(new_value);
 
@@ -323,13 +329,17 @@ mod tests {
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
 	use runtime_primitives::testing::{Digest, Header};
 
+	impl_outer_origin! {
+		pub enum Origin for Test {}
+	}
+
 	// For testing the module, we construct most of a mock runtime. This means
 	// first constructing a configuration type (`Test`) which `impl`s each of the
 	// configuration traits of modules we want to use.
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl system::Trait for Test {
-		type PublicAux = Self::AccountId;
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -370,7 +380,7 @@ mod tests {
 			assert_eq!(Example::dummy(), Some(42));
 
 			// Check that accumulate works when we have Some value in Dummy already.
-			assert_ok!(Example::accumulate_dummy(&0, 27));
+			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 27));
 			assert_eq!(Example::dummy(), Some(69));
 			
 			// Check that finalising the block removes Dummy from storage.
@@ -378,7 +388,7 @@ mod tests {
 			assert_eq!(Example::dummy(), None);
 
 			// Check that accumulate works when we Dummy has None in it.
-			assert_ok!(Example::accumulate_dummy(&0, 42));
+			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 42));
 			assert_eq!(Example::dummy(), Some(42));
 		});
 	}

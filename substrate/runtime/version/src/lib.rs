@@ -30,14 +30,9 @@ extern crate serde_derive;
 extern crate substrate_runtime_std as rstd;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
-
-#[macro_use]
 extern crate substrate_codec_derive;
 
 extern crate substrate_codec as codec;
-
-use rstd::prelude::*;
 
 #[cfg(feature = "std")]
 use std::fmt;
@@ -131,20 +126,5 @@ impl RuntimeVersion {
 	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
 		self.authoring_version == other.authoring_version &&
 		self.spec_name == other.spec_name
-	}
-}
-
-pub trait Trait {
-	const VERSION: RuntimeVersion;
-}
-
-decl_module! {
-	pub struct Module<T: Trait>;
-}
-
-impl<T: Trait> Module<T> {
-	/// Get runtime version.
-	pub fn version() -> RuntimeVersion {
-		T::VERSION.clone()
 	}
 }

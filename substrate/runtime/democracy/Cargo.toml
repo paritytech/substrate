@@ -31,6 +31,7 @@ std = [
 	"substrate-runtime-io/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-primitives/std",
+	"substrate-runtime-consensus/std",
 	"substrate-runtime-balances/std",
 	"substrate-runtime-system/std",
 ]
