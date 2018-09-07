@@ -2,7 +2,7 @@ stages:
   - test
   - build
 
-image:                             parity/rust:gitlab-ci
+image:                             parity/rust:substrate
 
 variables:
   CI_SERVER_NAME:                  "GitLab CI"
