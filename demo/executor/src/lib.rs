@@ -279,7 +279,7 @@ mod tests {
 			// Blake
 			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
 			// Keccak
-			hex!("171f1b2c01c9c616e40ee2d842a699286b50a5a74874b56d826094dadedffb27").into(),
+			hex!("a72ec570c7642d9ad06ef0e5dd37be65fb04b71e0ab52b3927d760ed6c777a1f").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: Some(bob()),
@@ -306,7 +306,7 @@ mod tests {
 			vec![CheckedExtrinsic {
 				signed: Some(alice()),
 				index: 0,
-				function: Call::Consensus(consensus::Call::remark(vec![0; 60000])),
+				function: Call::Consensus(consensus::Call::remark(vec![0; 60000000])),
 			}]
 		)
 	}
