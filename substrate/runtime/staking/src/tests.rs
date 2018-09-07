@@ -21,7 +21,7 @@
 use super::*;
 use consensus::OnOfflineValidator;
 use runtime_io::with_externalities;
-use mock::{Balances, Session, Staking, System, Timestamp, Test, new_test_ext};
+use mock::{Balances, Session, Staking, System, Timestamp, Test, new_test_ext, Origin};
 
 #[test]
 fn note_null_offline_should_work() {
@@ -75,7 +75,7 @@ fn note_offline_grace_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Balances::set_free_balance(&10, 70);
 		Balances::set_free_balance(&20, 70);
-		assert_ok!(Staking::set_offline_slash_grace(1));
+		assert_ok!(Staking::set_offline_slash_grace(Origin::ROOT, 1));
 		assert_eq!(Staking::offline_slash_grace(), 1);
 
 		assert_eq!(Staking::slash_count(&10), 0);
@@ -104,7 +104,7 @@ fn note_offline_force_unstake_session_change_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Balances::set_free_balance(&10, 70);
 		Balances::set_free_balance(&20, 70);
-		assert_ok!(Staking::stake(&1));
+		assert_ok!(Staking::stake(Origin::signed(1)));
 		
 		assert_eq!(Staking::slash_count(&10), 0);
 		assert_eq!(Balances::free_balance(&10), 70);
@@ -130,7 +130,7 @@ fn note_offline_auto_unstake_session_change_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Balances::set_free_balance(&10, 7000);
 		Balances::set_free_balance(&20, 7000);
-		assert_ok!(Staking::register_preferences(&10, 0, ValidatorPrefs { unstake_threshold: 1, validator_payment: 0 }));
+		assert_ok!(Staking::register_preferences(Origin::signed(10), 0, ValidatorPrefs { unstake_threshold: 1, validator_payment: 0 }));
 		
 		assert_eq!(Staking::intentions(), vec![10, 20]);
 
@@ -236,14 +236,14 @@ fn staking_should_work() {
 		assert_eq!(Staking::validator_count(), 2);
 		assert_eq!(Session::validators(), vec![10, 20]);
 		
-		assert_ok!(Staking::set_bonding_duration(2));
+		assert_ok!(Staking::set_bonding_duration(Origin::ROOT, 2));
 		assert_eq!(Staking::bonding_duration(), 2);
 
 		// Block 1: Add three validators. No obvious change.
 		System::set_block_number(1);
-		assert_ok!(Staking::stake(&1));
-		assert_ok!(Staking::stake(&2));
-		assert_ok!(Staking::stake(&4));
+		assert_ok!(Staking::stake(Origin::signed(1)));
+		assert_ok!(Staking::stake(Origin::signed(2)));
+		assert_ok!(Staking::stake(Origin::signed(4)));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 0);
 		assert_eq!(Session::validators(), vec![10, 20]);
@@ -256,8 +256,8 @@ fn staking_should_work() {
 
 		// Block 3: Unstake highest, introduce another staker. No change yet.
 		System::set_block_number(3);
-		assert_ok!(Staking::stake(&3));
-		assert_ok!(Staking::unstake(&4, Staking::intentions().iter().position(|&x| x == 4).unwrap() as u32));
+		assert_ok!(Staking::stake(Origin::signed(3)));
+		assert_ok!(Staking::unstake(Origin::signed(4), Staking::intentions().iter().position(|&x| x == 4).unwrap() as u32));
 		assert_eq!(Staking::current_era(), 1);
 		Session::check_rotate_session(System::block_number());
 
@@ -269,7 +269,7 @@ fn staking_should_work() {
 
 		// Block 5: Transfer stake from highest to lowest. No change yet.
 		System::set_block_number(5);
-		assert_ok!(Balances::transfer(&4, 1.into(), 40));
+		assert_ok!(Balances::transfer(Origin::signed(4), 1.into(), 40));
 		Session::check_rotate_session(System::block_number());
 
 		// Block 6: Lowest now validator.
@@ -279,7 +279,7 @@ fn staking_should_work() {
 
 		// Block 7: Unstake three. No change yet.
 		System::set_block_number(7);
-		assert_ok!(Staking::unstake(&3, Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
+		assert_ok!(Staking::unstake(Origin::signed(3), Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 3]);
 
@@ -299,10 +299,10 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Session::validators(), vec![10, 20]);
 
 		System::set_block_number(1);
-		assert_ok!(Staking::stake(&1));
-		assert_ok!(Staking::stake(&2));
-		assert_ok!(Staking::stake(&3));
-		assert_ok!(Staking::nominate(&4, 1.into()));
+		assert_ok!(Staking::stake(Origin::signed(1)));
+		assert_ok!(Staking::stake(Origin::signed(2)));
+		assert_ok!(Staking::stake(Origin::signed(3)));
+		assert_ok!(Staking::nominate(Origin::signed(4), 1.into()));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 1);
 		assert_eq!(Session::validators(), vec![1, 3]);	// 4 + 1, 3
@@ -312,7 +312,7 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Balances::total_balance(&4), 40);
 
 		System::set_block_number(2);
-		assert_ok!(Staking::unnominate(&4, 0));
+		assert_ok!(Staking::unnominate(Origin::signed(4), 0));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::validators(), vec![3, 2]);
@@ -322,9 +322,9 @@ fn nominating_and_rewards_should_work() {
 		assert_eq!(Balances::total_balance(&4), 48);
 
 		System::set_block_number(3);
-		assert_ok!(Staking::stake(&4));
-		assert_ok!(Staking::unstake(&3, Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
-		assert_ok!(Staking::nominate(&3, 1.into()));
+		assert_ok!(Staking::stake(Origin::signed(4)));
+		assert_ok!(Staking::unstake(Origin::signed(3), Staking::intentions().iter().position(|&x| x == 3).unwrap() as u32));
+		assert_ok!(Staking::nominate(Origin::signed(3), 1.into()));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 4]);
 		assert_eq!(Balances::total_balance(&1), 12);
@@ -345,9 +345,9 @@ fn nominating_and_rewards_should_work() {
 fn rewards_with_off_the_table_should_work() {
 	with_externalities(&mut new_test_ext(0, 1, 1, 0, true, 10), || {
 		System::set_block_number(1);
-		assert_ok!(Staking::stake(&1));
-		assert_ok!(Staking::nominate(&2, 1.into()));
-		assert_ok!(Staking::stake(&3));
+		assert_ok!(Staking::stake(Origin::signed(1)));
+		assert_ok!(Staking::nominate(Origin::signed(2), 1.into()));
+		assert_ok!(Staking::stake(Origin::signed(3)));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 3]);	// 1 + 2, 3
 		assert_eq!(Balances::total_balance(&1), 10);
@@ -355,7 +355,7 @@ fn rewards_with_off_the_table_should_work() {
 		assert_eq!(Balances::total_balance(&3), 30);
 
 		System::set_block_number(2);
-		assert_ok!(Staking::register_preferences(&1, Staking::intentions().into_iter().position(|i| i == 1).unwrap() as u32, ValidatorPrefs { unstake_threshold: 3, validator_payment: 4 }));
+		assert_ok!(Staking::register_preferences(Origin::signed(1), Staking::intentions().into_iter().position(|i| i == 1).unwrap() as u32, ValidatorPrefs { unstake_threshold: 3, validator_payment: 4 }));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Balances::total_balance(&1), 16);
 		assert_eq!(Balances::total_balance(&2), 24);
@@ -376,10 +376,10 @@ fn nominating_slashes_should_work() {
 
 		Timestamp::set_timestamp(15);
 		System::set_block_number(4);
-		assert_ok!(Staking::stake(&1));
-		assert_ok!(Staking::stake(&3));
-		assert_ok!(Staking::nominate(&2, 3.into()));
-		assert_ok!(Staking::nominate(&4, 1.into()));
+		assert_ok!(Staking::stake(Origin::signed(1)));
+		assert_ok!(Staking::stake(Origin::signed(3)));
+		assert_ok!(Staking::nominate(Origin::signed(2), 3.into()));
+		assert_ok!(Staking::nominate(Origin::signed(4), 1.into()));
 		Session::check_rotate_session(System::block_number());
 
 		assert_eq!(Staking::current_era(), 1);
@@ -404,12 +404,12 @@ fn nominating_slashes_should_work() {
 fn double_staking_should_fail() {
 	with_externalities(&mut new_test_ext(0, 1, 2, 0, true, 0), || {
 		System::set_block_number(1);
-		assert_ok!(Staking::stake(&1));
-		assert_noop!(Staking::stake(&1), "Cannot stake if already staked.");
-		assert_noop!(Staking::nominate(&1, 1.into()), "Cannot nominate if already staked.");
-		assert_ok!(Staking::nominate(&2, 1.into()));
-		assert_noop!(Staking::stake(&2), "Cannot stake if already nominating.");
-		assert_noop!(Staking::nominate(&2, 1.into()), "Cannot nominate if already nominating.");
+		assert_ok!(Staking::stake(Origin::signed(1)));
+		assert_noop!(Staking::stake(Origin::signed(1)), "Cannot stake if already staked.");
+		assert_noop!(Staking::nominate(Origin::signed(1), 1.into()), "Cannot nominate if already staked.");
+		assert_ok!(Staking::nominate(Origin::signed(2), 1.into()));
+		assert_noop!(Staking::stake(Origin::signed(2)), "Cannot stake if already nominating.");
+		assert_noop!(Staking::nominate(Origin::signed(2), 1.into()), "Cannot nominate if already nominating.");
 	});
 }
 
@@ -440,7 +440,7 @@ fn staking_eras_work() {
 
 		// Block 3: Schedule an era length change; no visible changes.
 		System::set_block_number(3);
-		assert_ok!(Staking::set_sessions_per_era(3));
+		assert_ok!(Staking::set_sessions_per_era(Origin::ROOT, 3));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::current_index(), 3);
 		assert_eq!(Staking::sessions_per_era(), 2);
@@ -485,8 +485,8 @@ fn staking_eras_work() {
 fn staking_balance_transfer_when_bonded_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		Balances::set_free_balance(&1, 111);
-		assert_ok!(Staking::stake(&1));
-		assert_noop!(Balances::transfer(&1, 2.into(), 69), "cannot transfer illiquid funds");
+		assert_ok!(Staking::stake(Origin::signed(1)));
+		assert_noop!(Balances::transfer(Origin::signed(1), 2.into(), 69), "cannot transfer illiquid funds");
 	});
 }
 

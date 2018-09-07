@@ -101,9 +101,10 @@ use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
 use codec::Codec;
-use runtime_primitives::traits::{As, RefInto, SimpleArithmetic, OnFinalise};
+use runtime_primitives::traits::{As, SimpleArithmetic, OnFinalise};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
+use system::ensure_signed;
 
 pub trait Trait: balances::Trait {
 	/// Function type to get the contract address given the creator.
@@ -119,13 +120,10 @@ pub trait ContractAddressFor<AccountId: Sized> {
 
 decl_module! {
 	/// Contracts module.
-	pub struct Module<T: Trait>;
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// TODO: Change AccountId to staking::Address
 		fn call(
-			aux,
+			origin,
 			dest: T::AccountId,
 			value: T::Balance,
 			gas_limit: T::Gas,
@@ -133,7 +131,7 @@ decl_module! {
 		) -> Result;
 
 		fn create(
-			aux,
+			origin,
 			value: T::Balance,
 			gas_limit: T::Gas,
 			ctor: Vec<u8>,
@@ -181,26 +179,26 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> Module<T> {
 	/// Make a call to a specified account, optionally transferring some balance.
 	fn call(
-		aux: &<T as system::Trait>::PublicAux,
+		origin: <T as system::Trait>::Origin,
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_limit: T::Gas,
 		data: Vec<u8>,
 	) -> Result {
-		let aux = aux.ref_into();
+		let origin = ensure_signed(origin)?;
 
 		// Pay for the gas upfront.
 		//
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
-		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit)?;
+		let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 		let mut ctx = ExecutionContext {
-			self_account: aux.clone(),
+			self_account: origin.clone(),
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
-		let result = ctx.call(aux.clone(), dest, value, &mut gas_meter, &data);
+		let result = ctx.call(origin.clone(), dest, value, &mut gas_meter, &data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
@@ -211,7 +209,7 @@ impl<T: Trait> Module<T> {
 		//
 		// NOTE: this should go after the commit to the storage, since the storage changes
 		// can alter the balance of the caller.
-		gas::refund_unused_gas::<T>(aux, gas_meter);
+		gas::refund_unused_gas::<T>(&origin, gas_meter);
 
 		result.map(|_| ())
 	}
@@ -226,26 +224,26 @@ impl<T: Trait> Module<T> {
 	///   after the execution is saved as the `code` of the account. That code will be invoked
 	///   upon any message received by this account.
 	fn create(
-		aux: &<T as system::Trait>::PublicAux,
+		origin: <T as system::Trait>::Origin,
 		endowment: T::Balance,
 		gas_limit: T::Gas,
 		ctor_code: Vec<u8>,
 		data: Vec<u8>,
 	) -> Result {
-		let aux = aux.ref_into();
+		let origin = ensure_signed(origin)?;
 
 		// Pay for the gas upfront.
 		//
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
-		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit)?;
+		let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 		let mut ctx = ExecutionContext {
-			self_account: aux.clone(),
+			self_account: origin.clone(),
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
-		let result = ctx.create(aux.clone(), endowment, &mut gas_meter, &ctor_code, &data);
+		let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
@@ -256,7 +254,7 @@ impl<T: Trait> Module<T> {
 		//
 		// NOTE: this should go after the commit to the storage, since the storage changes
 		// can alter the balance of the caller.
-		gas::refund_unused_gas::<T>(aux, gas_meter);
+		gas::refund_unused_gas::<T>(&origin, gas_meter);
 
 		result.map(|_| ())
 	}

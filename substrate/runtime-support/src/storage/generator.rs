@@ -1456,11 +1456,11 @@ mod tests {
 	}
 
 	pub trait Trait {
-		 type PublicAux;
+		 type Origin;
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait>;
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	decl_storage! {
@@ -1500,7 +1500,7 @@ mod tests {
 	struct TraitImpl {}
 
 	impl Trait for TraitImpl {
-		type PublicAux = u32;
+		type Origin = u32;
 	}
 
 	const EXPECTED_METADATA: &str = concat!(

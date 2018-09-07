@@ -45,7 +45,7 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay, RefInto, MaybeEmpty};
+	Hash, Member, MaybeDisplay};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -69,9 +69,7 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 }
 
 pub trait Trait: Eq + Clone {
-	// We require that PublicAux impl MaybeEmpty, since we require that inherents - or unsigned
-	// user-level extrinsics - can exist.
-	type PublicAux: RefInto<Self::AccountId> + MaybeEmpty;
+	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
 	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
@@ -89,7 +87,7 @@ pub trait Trait: Eq + Clone {
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
 
 decl_module! {
-	pub struct Module<T: Trait>;
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
 /// A phase of a block's execution.
@@ -126,6 +124,30 @@ impl From<Event> for () {
 	fn from(_: Event) -> () { () }
 }
 
+/// Origin for the system module. 
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum RawOrigin<AccountId> {
+	/// The system itself ordained this dispatch to happen: this is the highest privilege level.
+	Root,
+	/// It is signed by some public key and we provide the AccountId.
+	Signed(AccountId),
+	/// It is signed by nobody but included and agreed upon by the validators anyway: it's "inherently" true.
+	Inherent,
+}
+
+impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+	fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+		match s {
+			Some(who) => RawOrigin::Signed(who),
+			None => RawOrigin::Inherent,
+		}
+	}
+}
+
+/// Exposed trait-generic origin type.
+pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 
@@ -143,6 +165,37 @@ decl_storage! {
 		Digest get(digest): default T::Digest;
 
 		Events get(events): default Vec<EventRecord<T::Event>>;
+	}
+}
+
+/// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
+/// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
+pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, &'static str>
+	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+{
+	match o.into() {
+		Some(RawOrigin::Signed(t)) => Ok(t),
+		_ => Err("bad origin: expected to be a signed origin"),
+	}
+}
+
+/// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
+pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
+	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+{
+	match o.into() {
+		Some(RawOrigin::Root) => Ok(()),
+		_ => Err("bad origin: expected to be a root origin"),
+	}
+}
+
+/// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
+pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
+	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
+{
+	match o.into() {
+		Some(RawOrigin::Inherent) => Ok(()),
+		_ => Err("bad origin: expected to be an inherent origin"),
 	}
 }
 
@@ -307,10 +360,14 @@ mod tests {
 	use primitives::traits::BlakeTwo256;
 	use primitives::testing::{Digest, Header};
 
+	impl_outer_origin!{
+		pub enum Origin for Test where system = super {}
+	}
+
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl Trait for Test {
-		type PublicAux = u64;
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -331,6 +388,8 @@ mod tests {
 	}
 
 	type System = Module<Test>;
+
+
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		GenesisConfig::<Test>::default().build_storage().unwrap().into()

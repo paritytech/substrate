@@ -50,7 +50,7 @@ mod event;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
-pub use self::dispatch::{Parameter, Dispatchable, Callable, AuxDispatchable, AuxCallable, IsSubType, IsAuxSubType};
+pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use runtime_io::print;
 
 
@@ -96,6 +96,82 @@ macro_rules! assert_ok {
 	};
 	( $x:expr, $y:expr ) => {
 		assert_eq!($x, Ok($y));
+	}
+}
+
+/// The void type - it cannot exist.
+// Oh rust, you crack me up...
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Void {}
+
+#[macro_export]
+macro_rules! impl_outer_origin {
+	($(#[$attr:meta])* pub enum $name:ident for $trait:ident where system = $system:ident { $( $module:ident ),* }) => {
+		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+		#[derive(Clone, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Debug))]
+		$(#[$attr])*
+		#[allow(non_camel_case_types)]
+		pub enum $name {
+			system($system::Origin<$trait>),
+			$(
+				$module($module::Origin<$trait>),
+			)*
+			#[allow(dead_code)]
+			Void($crate::Void)
+		}
+		#[allow(dead_code)]
+		impl $name {
+			pub const INHERENT: Self = $name::system($system::RawOrigin::Inherent);
+			pub const ROOT: Self = $name::system($system::RawOrigin::Root);
+			pub fn signed(by: <$trait as $system::Trait>::AccountId) -> Self {
+				$name::system($system::RawOrigin::Signed(by))
+			}
+		}
+		impl From<$system::Origin<$trait>> for $name {
+			fn from(x: $system::Origin<$trait>) -> Self {
+				$name::system(x)
+			}
+		}
+		impl Into<Option<$system::Origin<$trait>>> for $name {
+			fn into(self) -> Option<$system::Origin<$trait>> {
+				if let $name::system(l) = self {
+					Some(l)
+				} else {
+					None
+				}
+			}
+		}
+		impl From<Option<<$trait as $system::Trait>::AccountId>> for $name {
+			fn from(x: Option<<$trait as $system::Trait>::AccountId>) -> Self {
+				<$system::Origin<$trait>>::from(x).into()
+			}
+		}
+		$(
+			impl From<$module::Origin<$trait>> for $name {
+				fn from(x: $module::Origin<$trait>) -> Self {
+					$name::$module(x)
+				}
+			}
+			impl<T: Trait> Into<Option<$module::Origin<T>>> for $name<T> {
+				fn into(self) -> Option<$module::Origin<T>> {
+					if let $name::$module(l) = self {
+						Some(l)
+					} else {
+						None
+					}
+				}
+			}
+		)*
+	};
+	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $( $module:ident ),* }) => {
+		impl_outer_origin! {
+			$(#[$attr])*
+			pub enum $name for $trait where system = system {
+				$( $module ),* 
+			}
+		}
 	}
 }
 
