@@ -38,7 +38,7 @@ use std::sync::Arc;
 use std::sync::mpsc as sync_mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use futures::{future, Future, stream, Stream};
+use futures::{future, Future, stream, Stream, select_all};
 use futures::sync::{mpsc, oneshot};
 use tokio::runtime::current_thread;
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -546,19 +546,24 @@ fn init_thread(
 	// Start the process of pinging the active nodes on the network.
 	let periodic = start_periodic_updates(shared.clone(), transport, swarm_controller);
 
-	// Merge all the futures into one!
-	Ok(swarm_events.for_each(|_| Ok(()))
-		.select(discovery).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
-		.select(periodic).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
-		.select(outgoing_connections).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
-		.select(timeouts).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
-		.select(close_rx.then(|_| Ok(()))).map(|_| ()).map_err(|(err, _)| err)
+	let futures: Vec<Box<Future<Item = (), Error = IoError>>> = vec![
+		Box::new(swarm_events.for_each(|_| Ok(()))),
+		Box::new(discovery),
+		Box::new(periodic),
+		Box::new(outgoing_connections),
+		Box::new(timeouts),
+		Box::new(close_rx.map_err(|err| IoError::new(IoErrorKind::Other, err))),
+	];
 
+	Ok(
+		select_all(futures)
 		.and_then(move |_| {
 			debug!(target: "sub-libp2p", "Networking ended ; disconnecting all peers");
 			shared.network_state.disconnect_all();
 			Ok(())
-		}))
+		})
+		.map_err(|(r, _, _)| r)
+	)
 }
 
 /// Output of the common transport layer.

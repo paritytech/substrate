@@ -19,7 +19,7 @@ use parking_lot::Mutex;
 use libp2p::{Multiaddr, PeerId};
 use serde_json;
 use std::{cmp, fs};
-use std::io::{Read, Cursor, Error as IoError, ErrorKind as IoErrorKind, Write};
+use std::io::{Read, Cursor, Error as IoError, ErrorKind as IoErrorKind, Write, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -46,7 +46,7 @@ const FIRST_CONNECT_FAIL_BACKOFF: Duration = Duration::from_secs(2);
 /// Every time we fail to connect to an address, multiply the backoff by this constant.
 const FAIL_BACKOFF_MULTIPLIER: u32 = 2;
 /// We need a maximum value for the backoff, overwise we risk an overflow.
-const MAX_BACKOFF: Duration = Duration::from_secs(60);
+const MAX_BACKOFF: Duration = Duration::from_secs(30 * 60);
 
 // TODO: should be merged with the Kademlia k-buckets
 
@@ -101,7 +101,7 @@ impl NetTopology {
 		};
 
 		let file = fs::File::create(path)?;
-		serialize(file, &self.store)
+		serialize(BufWriter::with_capacity(1024 * 1024, file), &self.store)
 	}
 
 	/// Perform a cleanup pass, removing all obsolete addresses and peers.
@@ -497,7 +497,7 @@ fn try_load(path: impl AsRef<Path>) -> FnvHashMap<PeerId, PeerInfo> {
 	}
 
 	let mut file = match fs::File::open(path) {
-		Ok(f) => f,
+		Ok(f) => BufReader::with_capacity(1024 * 1024, f),
 		Err(err) => {
 			warn!(target: "sub-libp2p", "Failed to open peer storage file: {:?}", err);
 			info!(target: "sub-libp2p", "Deleting peer storage file {:?}", path);
