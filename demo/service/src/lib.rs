@@ -178,12 +178,12 @@ pub fn new_full(config: Configuration, executor: TaskExecutor)
 
 		let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
 		Some(consensus::Service::new(
-				client.clone(),
-				client.clone(),
-				consensus_net,
-				service.extrinsic_pool(),
-				executor,
-				key,
+			client.clone(),
+			client.clone(),
+			consensus_net,
+			service.extrinsic_pool(),
+			executor,
+			key,
 		))
 	} else {
 		None

@@ -25,10 +25,6 @@ error_chain! {
 	}
 
 	errors {
-		InvalidDutyRosterLength(expected: usize, got: usize) {
-			description("Duty Roster had invalid length"),
-			display("Invalid duty roster length: expected {}, got {}", expected, got),
-		}
 		NotValidator(id: AuthorityId) {
 			description("Local account ID not a validator at this block."),
 			display("Local account ID ({:?}) not a validator at this block.", id),

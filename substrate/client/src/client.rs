@@ -347,7 +347,7 @@ impl<B, E, Block> Client<B, E, Block> where
 				"initialise_block",
 				&header.encode(),
 				execution_manager()
-				)?;
+			)?;
 			let (r, _) = args.using_encoded(|input|
 				self.executor().call_at_state(
 				&state,
@@ -355,7 +355,7 @@ impl<B, E, Block> Client<B, E, Block> where
 				function,
 				input,
 				execution_manager()
-				))?;
+			))?;
 			Ok(R::decode(&mut &r[..])
 			   .ok_or_else(|| error::Error::from(error::ErrorKind::CallResultDecode(function)))?)
 		})

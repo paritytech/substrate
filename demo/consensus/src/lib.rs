@@ -273,11 +273,11 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 			.expect("blocks are defined to serialize to substrate blocks correctly; qed");
 
 		assert!(evaluation::evaluate_initial(
-				&substrate_block,
-				timestamp,
-				&self.parent_hash,
-				self.parent_number,
-				).is_ok());
+			&substrate_block,
+			timestamp,
+			&self.parent_hash,
+			self.parent_number,
+		).is_ok());
 
 		Ok(substrate_block)
 	}
