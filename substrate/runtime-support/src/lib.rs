@@ -33,6 +33,9 @@ extern crate pretty_assertions;
 extern crate serde_derive;
 #[cfg(test)]
 extern crate serde_json;
+#[cfg(test)]
+#[macro_use]
+extern crate substrate_codec_derive;
 
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
@@ -42,6 +45,8 @@ pub use self::storage::generator::Storage as GenericStorage;
 pub mod dispatch;
 pub mod storage;
 mod hashable;
+#[macro_use]
+mod event;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
@@ -91,35 +96,6 @@ macro_rules! assert_ok {
 	};
 	( $x:expr, $y:expr ) => {
 		assert_eq!($x, Ok($y));
-	}
-}
-
-#[macro_export]
-macro_rules! impl_outer_event {
-	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $( $module:ident ),* }) => {
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub enum $name {
-			system(system::Event),
-			$(
-				$module($module::Event<$trait>),
-			)*
-		}
-		impl From<system::Event> for $name {
-			fn from(x: system::Event) -> Self {
-				$name::system(x)
-			}
-		}
-		$(
-			impl From<$module::Event<$trait>> for $name {
-				fn from(x: $module::Event<$trait>) -> Self {
-					$name::$module(x)
-				}
-			}
-		)*
 	}
 }
 
