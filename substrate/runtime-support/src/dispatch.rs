@@ -63,8 +63,15 @@ impl<T> Parameter for T where T: Codec + Clone + Eq {}
 macro_rules! decl_module {
 	(
 		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
-		$($rest:tt)*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty {$(
+			$(#[doc = $doc_attr:tt])*
+			fn $fn_name:ident(origin
+				$(
+					, $param_name:ident : $param:ty
+				)*
+			) -> $result:ty;
+		)*}
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
@@ -73,140 +80,20 @@ macro_rules! decl_module {
 		// serde-derive for when we attempt to derive `Deserialize` on these types,
 		// in a situation where we've imported `substrate_runtime_support` as another name.
 		#[cfg(feature = "std")]
-		$(#[$attr])*
 		pub struct $mod_type<$trait_instance: $trait_name>(::std::marker::PhantomData<$trait_instance>);
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		#[cfg(not(feature = "std"))]
-		$(#[$attr])*
 		pub struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
 
-		decl_dispatch! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$($rest)*
-		}
-
-		__impl_json_metadata! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$($rest)*
-		}
-	}
-}
-
-/// Implement several dispatch modules to create a pairing of a dispatch trait and enum.
-#[macro_export]
-macro_rules! decl_dispatch {
-	// WITH AUX
-	(
-		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
-		$(#[$attr:meta])*
-		pub enum $call_type:ident where origin: $aux_type:ty {
-			$(
-				$(#[$fn_attr:meta])*
-				fn $fn_name:ident(origin
-					$(
-						, $param_name:ident : $param:ty
-					)*
-				) -> $result:ty;
-			)*
-		}
-		$($rest:tt)*
-	) => {
-		__decl_dispatch_module_with_aux! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$(#[$attr])*
-			pub enum $call_type where origin: $aux_type;
-			$(
-				fn $fn_name(origin $(, $param_name: $param )*) -> $result;
-			)*
-		}
-		decl_dispatch! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$($rest)*
-		}
-	};
-	// BASE CASE
-	(
-		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
-	) => {
-		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result {
-				d.dispatch(origin)
-			}
-		}
-	}
-}
-
-#[macro_export]
-#[doc(hidden)]
-/// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
-macro_rules! __decl_dispatch_module_with_aux {
-	(
-		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
-		$(#[$attr:meta])*
-		pub enum $call_type:ident where origin: $aux_type:ty;
-		$(
-			fn $fn_name:ident(origin
-				$(
-					, $param_name:ident : $param:ty
-				)*
-			)
-			-> $result:ty;
-		)*
-	) => {
-		__decl_dispatch_module_common! {
-			impl for $mod_type<$trait_instance: $trait_name>;
-			$(#[$attr])*
-			pub enum $call_type;
-			$( fn $fn_name( $( $param_name : $param ),* ) -> $result; )*
-		}
-		impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
-			for $call_type<$trait_instance>
-		{
-			type Trait = $trait_instance;
-			type Origin = $aux_type;
-			fn dispatch(self, origin: Self::Origin) -> $crate::dispatch::Result {
-				match self {
-					$(
-						$call_type::$fn_name( $( $param_name ),* ) =>
-							<$mod_type<$trait_instance>>::$fn_name( origin $(, $param_name )* ),
-					)*
-					$call_type::__PhantomItem(_) => { panic!("__PhantomItem should never be used.") },
-				}
-			}
-		}
-		impl<$trait_instance: $trait_name> $crate::dispatch::Callable
-			for $mod_type<$trait_instance>
-		{
-			type Call = $call_type<$trait_instance>;
-		}
-	};
-}
-
-/// Implement a single dispatch modules to create a pairing of a dispatch trait and enum.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __decl_dispatch_module_common {
-	(
-		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
-		$(#[$attr:meta])*
-		pub enum $call_type:ident;
-		$(
-			fn $fn_name:ident(
-				$(
-					$param_name:ident : $param:ty
-				),*
-			)
-			-> $result:ty;
-		)*
-	) => {
 		#[cfg(feature = "std")]
 		$(#[$attr])*
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::std::marker::PhantomData<$trait_instance>),
+			__OtherPhantomItem(::std::marker::PhantomData<$trait_instance>),
 			$(
 				#[allow(non_camel_case_types)]
 				$fn_name ( $( $param ),* ),
@@ -218,6 +105,7 @@ macro_rules! __decl_dispatch_module_common {
 		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::core::marker::PhantomData<$trait_instance>),
+			__OtherPhantomItem(::core::marker::PhantomData<$trait_instance>),
 			$(
 				#[allow(non_camel_case_types)]
 				$fn_name ( $( $param ),* ),
@@ -235,30 +123,30 @@ macro_rules! __decl_dispatch_module_common {
 						$call_type::$fn_name( $( ref $param_name ),* ) =>
 							$call_type::$fn_name( $( $param_name.clone() ),* )
 					,)*
-					$call_type::__PhantomItem(_) => unreachable!(),
+					_ => unreachable!(),
 				}
 			}
 		}
 		impl<$trait_instance: $trait_name> $crate::dispatch::PartialEq
 			for $call_type<$trait_instance>
 		{
-			fn eq(&self, other: &Self) -> bool {
+			fn eq(&self, _other: &Self) -> bool {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
 							let self_params = ( $( $param_name, )* );
-							if let $call_type::$fn_name( $( ref $param_name ),* ) = *other {
+							if let $call_type::$fn_name( $( ref $param_name ),* ) = *_other {
 								self_params == ( $( $param_name, )* )
 							} else {
-								if let $call_type::__PhantomItem(_) = *other {
-									unreachable!()
-								} else {
-									false
+								match *_other {
+									$call_type::__PhantomItem(_) => unreachable!(),
+									$call_type::__OtherPhantomItem(_) => unreachable!(),
+									_ => false,
 								}
 							}
 						}
 					)*
-					$call_type::__PhantomItem(_) => unreachable!(),
+					_ => unreachable!(),
 				}
 			}
 		}
@@ -270,32 +158,64 @@ macro_rules! __decl_dispatch_module_common {
 		impl<$trait_instance: $trait_name> $crate::dispatch::fmt::Debug
 			for $call_type<$trait_instance>
 		{
-			fn fmt(&self, f: &mut $crate::dispatch::fmt::Formatter) -> $crate::dispatch::result::Result<(), $crate::dispatch::fmt::Error> {
+			fn fmt(&self, _f: &mut $crate::dispatch::fmt::Formatter) -> $crate::dispatch::result::Result<(), $crate::dispatch::fmt::Error> {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) =>
-							write!(f, "{}{:?}",
+							write!(_f, "{}{:?}",
 								stringify!($fn_name),
 								( $( $param_name.clone(), )* )
 							)
 					,)*
-					$call_type::__PhantomItem(_) => unreachable!(),
+					_ => unreachable!(),
 				}
 			}
 		}
 
 		impl<$trait_instance: $trait_name> $crate::dispatch::Decode for $call_type<$trait_instance> {
 			fn decode<I: $crate::dispatch::Input>(input: &mut I) -> Option<Self> {
-				let input_id = input.read_byte()?;
-				__impl_decode!(input; input_id; 0; $call_type; $( fn $fn_name( $( $param_name ),* ); )*)
+				let _input_id = input.read_byte()?;
+				__impl_decode!(input; _input_id; 0; $call_type; $( fn $fn_name( $( $param_name ),* ); )*)
 			}
 		}
 
 		impl<$trait_instance: $trait_name> $crate::dispatch::Encode for $call_type<$trait_instance> {
-			fn encode_to<W: $crate::dispatch::Output>(&self, dest: &mut W) {
-				__impl_encode!(dest; *self; 0; $call_type; $( fn $fn_name( $( $param_name ),* ); )*);
+			fn encode_to<W: $crate::dispatch::Output>(&self, _dest: &mut W) {
+				__impl_encode!(_dest; *self; 0; $call_type; $( fn $fn_name( $( $param_name ),* ); )*);
 				if let $call_type::__PhantomItem(_) = *self { unreachable!() }
+				if let $call_type::__OtherPhantomItem(_) = *self { unreachable!() }
 			}
+		}
+		impl<$trait_instance: $trait_name> $crate::dispatch::Dispatchable
+			for $call_type<$trait_instance>
+		{
+			type Trait = $trait_instance;
+			type Origin = $origin_type;
+			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::Result {
+				match self {
+					$(
+						$call_type::$fn_name( $( $param_name ),* ) =>
+							<$mod_type<$trait_instance>>::$fn_name( _origin $(, $param_name )* ),
+					)*
+					_ => { panic!("__PhantomItem should never be used.") },
+				}
+			}
+		}
+		impl<$trait_instance: $trait_name> $crate::dispatch::Callable
+			for $mod_type<$trait_instance>
+		{
+			type Call = $call_type<$trait_instance>;
+		}
+
+		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
+			pub fn dispatch<D: $crate::dispatch::Dispatchable<Trait = $trait_instance>>(d: D, origin: D::Origin) -> $crate::dispatch::Result {
+				d.dispatch(origin)
+			}
+		}
+
+		__impl_json_metadata! {
+			$mod_type $trait_instance $trait_name $call_type $origin_type
+			{$( $(#[doc = $doc_attr])* fn $fn_name(origin $(, $param_name : $param )*) -> $result; )*}
 		}
 	}
 }
@@ -448,13 +368,13 @@ macro_rules! __impl_outer_dispatch_common {
 #[doc(hidden)]
 macro_rules! __impl_json_metadata {
 	(
-		impl for $mod_type:ident<$trait_instance:ident: $trait_name:ident>;
+		$mod_type:ident $trait_instance:ident $trait_name:ident
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn json_metadata() -> &'static str {
-				concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "calls": ["#,
-					__calls_to_json!(""; $($rest)*), " ] }")
+				concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "calls": [ "#,
+					__calls_to_json!($($rest)*), " ] }")
 			}
 		}
 	}
@@ -464,65 +384,30 @@ macro_rules! __impl_json_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __calls_to_json {
-	// WITHOUT AUX
-	(
-		$prefix_str:tt;
-		$(#[$attr:meta])*
-		pub enum $call_type:ident {
-			$(
-				$(#[doc = $doc_attr:tt])*
-				fn $fn_name:ident(
-					$(
-						$param_name:ident : $param:ty
-					),*
-				) -> $result:ty;
-			)*
-		}
-		$($rest:tt)*
-	) => {
-		concat!($prefix_str, " ",
-			r#"{ "name": ""#, stringify!($call_type),
-			r#"", "functions": {"#,
-			__functions_to_json!(""; 0; $(
-				fn $fn_name( $( $param_name: $param ),* ) -> $result;
-				__function_doc_to_json!(""; $($doc_attr)*);
-			)*), " } }", __calls_to_json!(","; $($rest)*)
-		)
-	};
 	// WITH AUX
 	(
-		$prefix_str:tt;
-		$(#[$attr:meta])*
-		pub enum $call_type:ident where origin: $aux_type:ty {
-			$(
+		$call_type:ident $origin_type:ty
+			{$(
 				$(#[doc = $doc_attr:tt])*
 				fn $fn_name:ident(origin
 					$(
 						, $param_name:ident : $param:ty
 					)*
 				) -> $result:ty;
-			)*
-		}
-		$($rest:tt)*
+			)*}
 	) => {
-		concat!($prefix_str, " ",
+		concat!(
 			r#"{ "name": ""#, stringify!($call_type),
 			r#"", "functions": {"#,
-			__functions_to_json!(""; 0; $aux_type; $(
+			__functions_to_json!(""; 0; $origin_type; $(
 				fn $fn_name(origin $(, $param_name: $param )* ) -> $result;
 				__function_doc_to_json!(""; $($doc_attr)*);
-			)*), " } }", __calls_to_json!(","; $($rest)*)
+			)*), " } }"
 		)
 	};
-	// BASE CASE
-	(
-		$prefix_str:tt;
-	) => {
-		""
-	}
 }
 
-/// Convert a list of function into their JSON representation, joined by ",".
+/// Convert a list of functions into their JSON representation, joined by ",".
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __functions_to_json {
@@ -550,7 +435,7 @@ macro_rules! __functions_to_json {
 	(
 		$prefix_str:tt;
 		$fn_id:expr;
-		$aux_type:ty;
+		$origin_type:ty;
 		fn $fn_name:ident(origin
 			$(
 				, $param_name:ident : $param:ty
@@ -562,19 +447,19 @@ macro_rules! __functions_to_json {
 			concat!($prefix_str, " ",
 				__function_to_json!(
 					fn $fn_name(
-						origin: $aux_type
+						origin: $origin_type
 						$(, $param_name : $param)*
 					) -> $result;
 					$fn_doc;
 					$fn_id;
-				), __functions_to_json!(","; $fn_id + 1; $aux_type; $($rest)*)
+				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
 			)
 	};
 	// BASE CASE
 	(
 		$prefix_str:tt;
 		$fn_id:expr;
-		$($aux_type:ty;)*
+		$($origin_type:ty;)*
 	) => {
 		""
 	}
@@ -636,13 +521,11 @@ mod tests {
 	use serde_json;
 
 	pub trait Trait {
-		 type Origin;
+		type Origin;
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait>;
-
-		pub enum Call where origin: T::Origin {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			/// Hi, this is a comment.
 			fn aux_0(origin) -> Result;
 			fn aux_1(origin, data: i32) -> Result;

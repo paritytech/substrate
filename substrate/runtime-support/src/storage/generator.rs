@@ -1460,7 +1460,7 @@ mod tests {
 	}
 
 	decl_module! {
-		pub struct Module<T: Trait>;
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 	}
 
 	decl_storage! {
