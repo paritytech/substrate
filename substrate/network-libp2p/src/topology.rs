@@ -19,7 +19,7 @@ use parking_lot::Mutex;
 use libp2p::{Multiaddr, PeerId};
 use serde_json;
 use std::{cmp, fs};
-use std::io::{Read, Cursor, Error as IoError, ErrorKind as IoErrorKind, Write};
+use std::io::{Read, Cursor, Error as IoError, ErrorKind as IoErrorKind, Write, BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
 
@@ -101,7 +101,8 @@ impl NetTopology {
 		};
 
 		let file = fs::File::create(path)?;
-		serialize(file, &self.store)
+		// TODO: the capacity of the BufWriter is kind of arbitrary ; decide better
+		serialize(BufWriter::with_capacity(1024 * 1024, file), &self.store)
 	}
 
 	/// Perform a cleanup pass, removing all obsolete addresses and peers.
@@ -497,7 +498,8 @@ fn try_load(path: impl AsRef<Path>) -> FnvHashMap<PeerId, PeerInfo> {
 	}
 
 	let mut file = match fs::File::open(path) {
-		Ok(f) => f,
+		// TODO: the capacity of the BufReader is kind of arbitrary ; decide better
+		Ok(f) => BufReader::with_capacity(1024 * 1024, f),
 		Err(err) => {
 			warn!(target: "sub-libp2p", "Failed to open peer storage file: {:?}", err);
 			info!(target: "sub-libp2p", "Deleting peer storage file {:?}", path);
