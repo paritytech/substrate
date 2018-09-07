@@ -19,9 +19,15 @@ use rpc;
 
 use errors;
 
+use serde_json;
+
 error_chain! {
 	links {
 		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
+	}
+
+	foreign_links {
+		Json(serde_json::Error);
 	}
 
 	errors {

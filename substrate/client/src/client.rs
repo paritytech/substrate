@@ -251,6 +251,13 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self.executor
 	}
 
+	/// Returns the runtime metadata as JSON.
+	pub fn json_metadata(&self, id: &BlockId<Block>) -> error::Result<String> {
+		self.executor.call(id, "json_metadata",&[])
+			.and_then(|r| String::decode(&mut &r.return_data[..])
+					  .ok_or("Metadata decoding failed".into()))
+	}
+
 	/// Reads storage value at a given block + key, returning read proof.
 	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
 		self.state_at(id)
