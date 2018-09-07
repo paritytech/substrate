@@ -51,7 +51,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	MakePayment, Hash, Lookup};
+	MakePayment, Hash};
 use codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
@@ -82,7 +82,7 @@ impl<
 	Address,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Lookup: Lookup<Source=Address, Target=System::AccountId>,
+	Lookup: traits::Lookup<Source=Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
