@@ -33,6 +33,7 @@ use libp2p::transport_timeout::TransportTimeout;
 use {PacketId, SessionInfo, TimerToken};
 use rand;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
+use std::iter;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::mpsc as sync_mpsc;
@@ -119,7 +120,7 @@ impl NetworkService {
 			local_peer_id: local_peer_id.clone(),
 			kbuckets_timeout: Duration::from_secs(600),
 			request_timeout: Duration::from_secs(10),
-			known_initial_peers: network_state.known_peers().into_iter(),
+			known_initial_peers: iter::empty(),
 		});
 
 		// Channel we use to signal success or failure of the bg thread
@@ -703,8 +704,11 @@ fn handle_kademlia_connection(
 			.and_then(move |(req, rest)| {
 				shared.kad_system.update_kbuckets(node_id);
 				match req {
-					Some(KadIncomingRequest::FindNode { searched, responder }) =>
-						responder.respond(build_kademlia_response(&shared, &searched)),
+					Some(KadIncomingRequest::FindNode { searched, responder }) => {
+						let resp = build_kademlia_response(&shared, &searched);
+						trace!(target: "sub-libp2p", "Responding to Kad {:?} with {:?}", searched, resp);
+						responder.respond(resp)
+					},
 					Some(KadIncomingRequest::PingPong) => (),
 					None => return Ok(future::Loop::Break(()))
 				}
@@ -734,19 +738,25 @@ fn build_kademlia_response(
 					connection_ty: KadConnectionType::Connected,
 				}
 			} else {
-				let addrs = shared.network_state.addrs_of_peer(&who);
-				let connec_ty = if shared.network_state.has_connection(&who) {
-					// TODO: this only checks connections with substrate ; but what
-					//       if we're connected through Kademlia only?
-					KadConnectionType::Connected
-				} else {
-					KadConnectionType::NotConnected
-				};
+				let mut addrs = shared.network_state.addrs_of_peer(&who);
+				let connected = addrs.iter().any(|&(_, conn)| conn);
+				// The Kademlia protocol of libp2p doesn't allow specifying which address is valid
+				// and which is outdated, therefore in order to stay honest towards the network
+				// we only report the addresses we're connected to if we're connected to any.
+				if connected {
+					addrs = addrs.into_iter()
+						.filter_map(|(a, c)| if c { Some((a, c)) } else { None })
+						.collect();
+				}
 
 				KadPeer {
 					node_id: who.clone(),
-					multiaddrs: addrs,
-					connection_ty: connec_ty,
+					multiaddrs: addrs.into_iter().map(|(a, _)| a).collect(),
+					connection_ty: if connected {
+						KadConnectionType::Connected
+					} else {
+						KadConnectionType::NotConnected
+					},
 				}
 			}
 		})
@@ -980,10 +990,21 @@ fn perform_kademlia_query<T, To, St, C>(
 		})
 		.filter_map(move |event|
 			match event {
-				KadQueryEvent::NewKnownMultiaddrs(peers) => {
-					for (peer, addrs) in peers {
-						for addr in addrs {
-							shared.network_state.add_kad_discovered_addr(&peer, addr);
+				KadQueryEvent::PeersReported(peers) => {
+					for peer in peers {
+						let connected = match peer.connection_ty {
+							KadConnectionType::NotConnected => false,
+							KadConnectionType::Connected => true,
+							KadConnectionType::CanConnect => true,
+							KadConnectionType::CannotConnect => continue,
+						};
+
+						for addr in peer.multiaddrs {
+							shared.network_state.add_kad_discovered_addr(
+								&peer.node_id,
+								addr,
+								connected
+							);
 						}
 					}
 					None
@@ -1167,7 +1188,7 @@ fn obtain_kad_connection<T, To, St, C>(
 			Ok((kad, addr))
 		})
 		.and_then(move |(unique_connec, addr)| {
-			unique_connec.dial(&swarm_controller, &addr, transport.clone())
+			unique_connec.dial(&swarm_controller, &addr.0, transport.clone())
 		})
 		.then(|result| -> Result<_, ()> { Ok(result.ok()) })
 		.filter_map(|result| result)
@@ -1215,7 +1236,7 @@ fn process_identify_info(
 
 	for addr in info.listen_addrs.iter() {
 		if let Some(node_id) = shared.network_state.node_id_from_index(node_index) {
-			shared.network_state.add_kad_discovered_addr(&node_id, addr.clone());
+			shared.network_state.add_kad_discovered_addr(&node_id, addr.clone(), true);
 		}
 	}
 }
