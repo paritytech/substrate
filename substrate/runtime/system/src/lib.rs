@@ -168,30 +168,34 @@ decl_storage! {
 	}
 }
 
+/// Ensure that the origin `o` represents a signed extrinsic (i.e. transaction).
+/// Returns `Ok` with the account that signed the extrinsic or an `Err` otherwise.
 pub fn ensure_signed<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<AccountId, &'static str>
 	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
 {
 	match o.into() {
 		Some(RawOrigin::Signed(t)) => Ok(t),
-		_ => Err("bad origin"),
+		_ => Err("bad origin: expected to be a signed origin"),
 	}
 }
 
+/// Ensure that the origin `o` represents the root. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_root<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
 	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
 {
 	match o.into() {
 		Some(RawOrigin::Root) => Ok(()),
-		_ => Err("bad origin"),
+		_ => Err("bad origin: expected to be a root origin"),
 	}
 }
 
+/// Ensure that the origin `o` represents an unsigned extrinsic. Returns `Ok` or an `Err` otherwise.
 pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'static str>
 	where OuterOrigin: Into<Option<RawOrigin<AccountId>>>
 {
 	match o.into() {
 		Some(RawOrigin::Inherent) => Ok(()),
-		_ => Err("bad origin"),
+		_ => Err("bad origin: expected to be an inherent origin"),
 	}
 }
 

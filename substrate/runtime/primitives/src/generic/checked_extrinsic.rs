@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generic implementations of Extrinsic/Header/Block.
+//! Generic implementation of an extrinsic that has passed the verification
+//! stage.
 
 use runtime_support::Dispatchable;
 use traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 
-/// Definition of something that the external world might want to say; its existence implies that
-/// it has been checked and is good.
+/// Definition of something that the external world might want to say; its
+/// existence implies that it has been checked and is good, particularly with
+/// regards to the signature.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct CheckedExtrinsic<AccountId, Index, Call> {
@@ -52,6 +54,6 @@ where
 	}
 
 	fn apply(self) -> Result<(), &'static str> {
-		self.function.dispatch(self.signed.into())	// TODO gav: remove '&'.
+		self.function.dispatch(self.signed.into())
 	}
 }

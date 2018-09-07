@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generic implementations of Extrinsic/Header/Block.
+//! Generic implementation of an unchecked (pre-verification) extrinsic.
 
 #[cfg(feature = "std")]
 use std::fmt;
@@ -24,11 +24,12 @@ use codec::{Decode, Encode, Input};
 use traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 use super::CheckedExtrinsic;
 
-/// A extrinsic right from the external world. Unchecked.
+/// A extrinsic right from the external world. This is unchecked and so
+/// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UncheckedExtrinsic<Address, Index, Call, Signature> {
-	/// The signature.
+	/// The signature and address, if this is a signed extrinsic.
 	pub signature: Option<(Address, Signature)>,
 	/// The number of extrinsics have come before from the same signer.
 	pub index: Index,

@@ -173,7 +173,7 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
 	}
 
-	// Implement Calls/PrivCalls and add public immutables and private mutables.
+	// Implement Calls and add public immutables and private mutables.
 
 	fn propose_spend(origin: T::Origin, value: T::Balance, beneficiary: T::AccountId) -> Result {
 		let proposer = ensure_signed(origin)?;

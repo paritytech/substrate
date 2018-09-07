@@ -91,8 +91,7 @@ pub trait Trait: balances::Trait {
 // `fn foo(origin, bar: Bar, baz: Baz) -> Result = 0;`
 //
 // The `Result` is required as part of the syntax (and expands to the conventional dispatch
-// result of `Result<(), &'static str>`). The index after `=` must be unique within this
-// enum (the `PrivCall` enum is allowed to reuse indexes).
+// result of `Result<(), &'static str>`).
 // 
 // When you come to `impl` them later in the module, you must specify the full type for `origin`:
 //
@@ -191,7 +190,7 @@ impl<T: Trait> Module<T> {
 		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
 	}
 
-	// Implement Calls/PrivCalls and add public immutables and private mutables.
+	// Implement Calls and add public immutables and private mutables.
 
 	// Implement dispatched function `accumulate_dummy`. This just increases the value
 	// of `Dummy` by `increase_by`.

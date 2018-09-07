@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generic implementations of Extrinsic/Header/Block.
+//! Generic implementation of a block and associated items.
 
 #[cfg(feature = "std")]
 use std::fmt;

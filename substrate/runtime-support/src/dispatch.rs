@@ -375,8 +375,8 @@ macro_rules! __impl_json_metadata {
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn json_metadata() -> &'static str {
-				concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "calls": [ "#,
-					__calls_to_json!($($rest)*), " ] }")
+				concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "call": [ "#,
+					__call_to_json!($($rest)*), " ] }")
 			}
 		}
 	}
@@ -385,7 +385,7 @@ macro_rules! __impl_json_metadata {
 /// Convert the list of calls into their JSON representation, joined by ",".
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __calls_to_json {
+macro_rules! __call_to_json {
 	// WITH AUX
 	(
 		$call_type:ident $origin_type:ty
@@ -536,7 +536,7 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: &str = concat!(
-		r#"{ "name": "Module", "calls": [ "#,
+		r#"{ "name": "Module", "call": [ "#,
 			r#"{ "name": "Call", "functions": { "#,
 				r#""0": { "name": "aux_0", "params": [ "#,
 					r#"{ "name": "origin", "type": "T::Origin" }"#,
