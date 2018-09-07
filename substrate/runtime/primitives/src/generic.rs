@@ -235,20 +235,33 @@ impl<Item> traits::Digest for Digest<Item> where
 }
 
 
+/// Generic digest item that is able to encode/decode 'system' digest items and
+/// provide access to other items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum DigestItem<AuthorityId> {
+	/// System digest item announcing that authorities set has been changed
+	/// in the block. Contains the new set of authorities.
 	AuthoritiesChange(Vec<AuthorityId>),
+	/// Any 'non-system' digest item, opaque to the native code.
 	Other(Vec<u8>),
 }
 
+/// A 'referencing view' for digest item. Does not own its contents. Used by
+/// final runtime implementations for encoding/decoding its log items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum DigestItemRef<'a, AuthorityId: 'a> {
-	AuthoritiesChange(&'a Vec<AuthorityId>),
+	/// Reference to `DigestItem::AuthoritiesChange`.
+	AuthoritiesChange(&'a [AuthorityId]),
+	/// Reference to `DigestItem::Other`.
 	Other(&'a Vec<u8>),
 }
 
+/// Type of the digest item. Used to gain explicit control over `DigestItem` encoding
+/// process. We need an explicit control, because final runtimes are encoding their own
+/// digest items using `DigestItemRef` type and we can't auto-derive `Decode`
+/// trait for `DigestItemRef`.
 #[repr(u32)]
 #[derive(Encode, Decode)]
 enum DigestItemType {
@@ -257,6 +270,7 @@ enum DigestItemType {
 }
 
 impl<AuthorityId> DigestItem<AuthorityId> {
+	/// Returns Some if `self` is a `DigestItem::Other`.
 	pub fn as_other(&self) -> Option<&Vec<u8>> {
 		match *self {
 			DigestItem::Other(ref v) => Some(v),
@@ -264,6 +278,7 @@ impl<AuthorityId> DigestItem<AuthorityId> {
 		}
 	}
 
+	/// Returns a 'referencing view' for this digest item.
 	fn dref<'a>(&'a self) -> DigestItemRef<'a, AuthorityId> {
 		match *self {
 			DigestItem::AuthoritiesChange(ref v) => DigestItemRef::AuthoritiesChange(v),
@@ -289,6 +304,20 @@ impl<AuthorityId: Encode> Encode for DigestItem<AuthorityId> {
 	}
 }
 
+impl<AuthorityId: Decode> Decode for DigestItem<AuthorityId> {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		let item_type: DigestItemType = Decode::decode(input)?;
+		match item_type {
+			DigestItemType::AuthoritiesChange => Some(DigestItem::AuthoritiesChange(
+				Decode::decode(input)?,
+			)),
+			DigestItemType::Other => Some(DigestItem::Other(
+				Decode::decode(input)?,
+			)),
+		}
+	}
+}
+
 impl<'a, AuthorityId: Encode> Encode for DigestItemRef<'a, AuthorityId> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
@@ -305,20 +334,6 @@ impl<'a, AuthorityId: Encode> Encode for DigestItemRef<'a, AuthorityId> {
 		}
 
 		v
-	}
-}
-
-impl<AuthorityId: Decode> Decode for DigestItem<AuthorityId> {
-	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		let item_type: DigestItemType = Decode::decode(input)?;
-		match item_type {
-			DigestItemType::AuthoritiesChange => Some(DigestItem::AuthoritiesChange(
-				Decode::decode(input)?,
-			)),
-			DigestItemType::Other => Some(DigestItem::Other(
-				Decode::decode(input)?,
-			)),
-		}
 	}
 }
 
@@ -548,7 +563,7 @@ pub struct SignedBlock<Header, Extrinsic, Hash> {
 mod tests {
 	use codec::{Decode, Encode};
 	use substrate_primitives::{H256, H512};
-	use super::{Digest, Header, UncheckedExtrinsic, Extrinsic};
+	use super::{Digest, DigestItem, Header, UncheckedExtrinsic, Extrinsic};
 
 	type Block = super::Block<
 		Header<u64, ::traits::BlakeTwo256, Vec<u8>>,
@@ -597,5 +612,41 @@ mod tests {
 
 			assert_eq!(block, decoded);
 		}
+	}
+
+	#[test]
+	fn system_digest_item_encoding() {
+		let item = DigestItem::AuthoritiesChange::<u32>(vec![10, 20, 30]);
+		let encoded = item.encode();
+		assert_eq!(encoded, vec![
+			// type = DigestItemType::AuthoritiesChange
+			1,
+			// number of items in athorities set
+			3, 0, 0, 0,
+			// authorities
+			10, 0, 0, 0,
+			20, 0, 0, 0,
+			30, 0, 0, 0,
+		]);
+
+		let decoded: DigestItem<u32> = Decode::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(item, decoded);
+	}
+
+	#[test]
+	fn non_system_digest_item_encoding() {
+		let item = DigestItem::Other::<u32>(vec![10, 20, 30]);
+		let encoded = item.encode();
+		assert_eq!(encoded, vec![
+			// type = DigestItemType::Other
+			0,
+			// length of other data
+			3, 0, 0, 0,
+			// authorities
+			10, 20, 30,
+		]);
+
+		let decoded: DigestItem<u32> = Decode::decode(&mut &encoded[..]).unwrap();
+		assert_eq!(item, decoded);
 	}
 }
