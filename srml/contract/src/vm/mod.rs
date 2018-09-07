@@ -48,7 +48,6 @@ pub trait Ext {
 	/// Sets the storage entry by the given key to the specified value.
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>);
 
-	// TODO: Return the address of the created contract.
 	/// Create a new account for a contract.
 	///
 	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
@@ -124,6 +123,7 @@ enum SpecialTrap {
 pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: &'data [u8],
+	scratch_buf: Vec<u8>,
 	config: &'a Config<E::T>,
 	memory: sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
@@ -213,6 +213,7 @@ pub fn execute<'a, E: Ext>(
 		ext,
 		input_data,
 		config: &config,
+		scratch_buf: Vec::new(),
 		memory,
 		gas_meter,
 		special_trap: None,

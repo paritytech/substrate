@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{BalanceOf, CallReceipt, CreateReceipt, Ext, GasMeterResult, Runtime};
-use codec::Decode;
+use codec::{Encode, Decode};
 use parity_wasm::elements::{FunctionType, ValueType};
 use rstd::prelude::*;
 use rstd::string::String;
@@ -120,8 +120,6 @@ impl<E: Ext> HostFunction<E> {
 // a function set which can be imported by an executed contract.
 define_env!(init_env, <E: Ext>,
 
-	// gas(amount: u32)
-	//
 	// Account for used gas. Traps if gas used is greater than gas limit.
 	//
 	// - amount: How much gas is used.
@@ -134,8 +132,6 @@ define_env!(init_env, <E: Ext>,
 		}
 	},
 
-	// ext_put_storage(location_ptr: u32, value_non_null: u32, value_ptr: u32);
-	//
 	// Change the value at the given location in storage or remove it.
 	//
 	// - location_ptr: pointer into the linear
@@ -144,47 +140,44 @@ define_env!(init_env, <E: Ext>,
 	//   at the given location will be removed.
 	// - value_ptr: pointer into the linear memory
 	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
-	ext_set_storage(ctx, location_ptr: u32, value_non_null: u32, value_ptr: u32) => {
-		let mut location = [0; 32];
-
-		ctx.memory().get(location_ptr, &mut location)?;
+	// - value_len: the length of the value. If `value_non_null` is set to 0, then this parameter is ignored.
+	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
+		let mut key = [0; 32];
+		ctx.memory().get(key_ptr, &mut key)?;
 
 		let value = if value_non_null != 0 {
-			let mut value = [0; 32];
-			ctx.memory().get(value_ptr, &mut value)?;
-			Some(value.to_vec())
+			let mut value_buf = Vec::new();
+			value_buf.resize(value_len as usize, 0);
+			ctx.memory().get(value_ptr, &mut value_buf)?;
+			Some(value_buf)
 		} else {
 			None
 		};
-		ctx.ext.set_storage(&location, value);
+		ctx.ext.set_storage(&key, value);
 
 		Ok(())
 	},
 
-	// ext_get_storage(location_ptr: u32, dest_ptr: u32);
+	// Retrieve the value at the given location from the strorage and return 0.
+	// If there is no entry at the given location then this function will return 1 and
+	// leave the scratch buffer unmodified.
 	//
-	// Retrieve the value at the given location from the strorage.
-	// If there is no entry at the given location then all-zero-value
-	// will be returned.
-	//
-	// - location_ptr: pointer into the linear
-	//   memory where the location of the requested value is placed.
-	// - dest_ptr: pointer where contents of the specified storage location
-	//   should be placed.
-	ext_get_storage(ctx, location_ptr: u32, dest_ptr: u32) => {
-		let mut location = [0; 32];
-		ctx.memory().get(location_ptr, &mut location)?;
+	// - key_ptr: pointer into the linear memory where the key
+	//   of the requested value is placed.
+	ext_get_storage(ctx, key_ptr: u32) -> u32 => {
+		let mut key = [0; 32];
+		ctx.memory().get(key_ptr, &mut key)?;
 
-		if let Some(value) = ctx.ext.get_storage(&location) {
-			ctx.memory().set(dest_ptr, &value)?;
+		if let Some(value) = ctx.ext.get_storage(&key) {
+			// TODO: Load value directly into the scratch buffer.
+			ctx.scratch_buf = value;
+			Ok(0)
 		} else {
-			ctx.memory().set(dest_ptr, &[0u8; 32])?;
+			Ok(1)
 		}
-
-		Ok(())
 	},
 
-	// ext_call(transfer_to_ptr: u32, transfer_to_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32)
+	// TODO: doc
 	ext_call(ctx, callee_ptr: u32, callee_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32 => {
 		let mut callee = Vec::new();
 		callee.resize(callee_len as usize, 0);
@@ -218,13 +211,15 @@ define_env!(init_env, <E: Ext>,
 		});
 
 		match call_outcome {
-			// TODO: Find a way how to pass return_data back to the this sandbox.
-			Ok(CallReceipt { .. }) => Ok(0),
+			Ok(CallReceipt { return_data }) => {
+				ctx.scratch_buf = return_data;
+				Ok(0)
+			},
 			Err(_) => Ok(1),
 		}
 	},
 
-	// ext_create(code_ptr: u32, code_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32
+	// TODO: doc
 	ext_create(
 		ctx, code_ptr: u32,
 		code_len: u32,
@@ -263,18 +258,23 @@ define_env!(init_env, <E: Ext>,
 		});
 
 		match create_outcome {
-			// TODO: Copy an address of the created contract in the sandbox.
-			Ok(CreateReceipt { .. }) => Ok(0),
+			Ok(CreateReceipt { address }) => {
+				// TODO: Clear scratch_buf and `encode` directly to it.
+				ctx.scratch_buf = address.encode();
+				Ok(0)
+			},
 			Err(_) => Ok(1),
 		}
 	},
 
-	// ext_return(data_ptr: u32, data_len: u32) -> !
+	// TODO: doc
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
 		let mut data_buf = Vec::new();
 		data_buf.resize(data_len as usize, 0);
 		ctx.memory().get(data_ptr, &mut data_buf)?;
 
+		// TODO: Can we write return data directly to the `scratch_buf` of the
+		// parent execution context?
 		ctx.store_return_data(data_buf)
 			.map_err(|_| sandbox::HostError)?;
 
@@ -284,16 +284,12 @@ define_env!(init_env, <E: Ext>,
 		Err(sandbox::HostError)
 	},
 
-	// ext_input_size() -> u32
-	//
-	// Returns size of an input buffer.
+	// Returns the size of the input buffer.
 	ext_input_size(ctx) -> u32 => {
 		Ok(ctx.input_data.len() as u32)
 	},
 
-	// ext_input_copy(dest_ptr: u32, offset: u32, len: u32)
-	//
-	// Copy data from an input buffer starting from `offset` with length `len` into the contract memory.
+	// Copy data from the input buffer starting from `offset` with length `len` into the contract memory.
 	// The region at which the data should be put is specified by `dest_ptr`.
 	ext_input_copy(ctx, dest_ptr: u32, offset: u32, len: u32) => {
 		let offset = offset as usize;
@@ -304,6 +300,31 @@ define_env!(init_env, <E: Ext>,
 
 		// This can't panic since `offset <= ctx.input_data.len()`.
 		let src = &ctx.input_data[offset..];
+		if src.len() != len as usize {
+			return Err(sandbox::HostError);
+		}
+
+		ctx.memory().set(dest_ptr, src)?;
+
+		Ok(())
+	},
+
+	// Returns the size of the scratch buffer.
+	ext_scratch_size(ctx) -> u32 => {
+		Ok(ctx.scratch_buf.len() as u32)
+	},
+
+	// Copy data from the scratch buffer starting from `offset` with length `len` into the contract memory.
+	// The region at which the data should be put is specified by `dest_ptr`.
+	ext_scratch_copy(ctx, dest_ptr: u32, offset: u32, len: u32) => {
+		let offset = offset as usize;
+		if offset > ctx.scratch_buf.len() {
+			// Offset can't be larger than scratch buffer length.
+			return Err(sandbox::HostError);
+		}
+
+		// This can't panic since `offset <= ctx.scratch_buf.len()`.
+		let src = &ctx.scratch_buf[offset..];
 		if src.len() != len as usize {
 			return Err(sandbox::HostError);
 		}
