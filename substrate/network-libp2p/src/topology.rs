@@ -27,7 +27,12 @@ use std::time::{Duration, Instant, SystemTime};
 const CONNEC_DURATION_PER_SCORE: Duration = Duration::from_secs(10);
 /// Maximum value for the score.
 const MAX_SCORE: u32 = 100;
-/// Initial score that a node discovered through Kademlia receives.
+/// When we successfully connect to a node, raises its score to the given minimum value.
+const CONNECTED_MINIMUM_SCORE: u32 = 20;
+/// Initial score that a node discovered through Kademlia receives, where we have a hint that the
+/// node is reachable.
+const KADEMLIA_DISCOVERY_INITIAL_SCORE_CONNECTABLE: u32 = 15;
+/// Initial score that a node discovered through Kademlia receives, without any hint.
 const KADEMLIA_DISCOVERY_INITIAL_SCORE: u32 = 10;
 /// Score adjustement when we fail to connect to an address.
 const SCORE_DIFF_ON_FAILED_TO_CONNECT: i32 = -1;
@@ -112,23 +117,17 @@ impl NetTopology {
 		let now_systime = SystemTime::now();
 		self.store.retain(|_, peer| {
 			peer.addrs.retain(|a| {
-				a.expires > now_systime
+				a.expires > now_systime || a.is_connected()
 			});
 			!peer.addrs.is_empty()
 		});
 	}
 
-	/// Returns a list of all the known peers.
-	pub fn peers(&self) -> impl Iterator<Item = &PeerId> {
-		self.store.keys()
-	}
-
 	/// Returns the known potential addresses of a peer, ordered by score.
 	///
-	/// If we're already connected to that peer, the address(es) we're connected with will be at
-	/// the top of the list.
+	/// The boolean associated to each address indicates whether we're connected to it.
 	// TODO: filter out backed off ones?
-	pub fn addrs_of_peer(&self, peer: &PeerId) -> impl Iterator<Item = &Multiaddr> {
+	pub fn addrs_of_peer(&self, peer: &PeerId) -> impl Iterator<Item = (&Multiaddr, bool)> {
 		let peer = if let Some(peer) = self.store.get(peer) {
 			peer
 		} else {
@@ -140,14 +139,14 @@ impl NetTopology {
 		let mut list = peer.addrs.iter().filter_map(move |addr| {
 			let (score, connected) = addr.score_and_is_connected();
 			if (addr.expires >= now && score > 0) || connected {
-				Some((score, &addr.addr))
+				Some((score, connected, &addr.addr))
 			} else {
 				None
 			}
 		}).collect::<Vec<_>>();
 		list.sort_by(|a, b| a.0.cmp(&b.0));
 		// TODO: meh, optimize
-		let l = list.into_iter().map(|(_, addr)| addr).collect::<Vec<_>>();
+		let l = list.into_iter().map(|(_, connec, addr)| (addr, connec)).collect::<Vec<_>>();
 		l.into_iter()
 	}
 
@@ -195,7 +194,7 @@ impl NetTopology {
 
 		let mut found = false;
 		peer.addrs.retain(|a| {
-			if a.expires < now_systime {
+			if a.expires < now_systime && !a.is_connected() {
 				return false;
 			}
 			if a.addr == addr {
@@ -222,7 +221,15 @@ impl NetTopology {
 	/// Adds an address discovered through the Kademlia DHT.
 	///
 	/// This address is not necessarily valid and should expire after a TTL.
-	pub fn add_kademlia_discovered_addr(&mut self, peer_id: &PeerId, addr: Multiaddr) {
+	///
+	/// If `connectable` is true, that means we have some sort of hint that this node can
+	/// be reached.
+	pub fn add_kademlia_discovered_addr(
+		&mut self,
+		peer_id: &PeerId,
+		addr: Multiaddr,
+		connectable: bool
+	) {
 		let now_systime = SystemTime::now();
 		let now = Instant::now();
 
@@ -230,7 +237,7 @@ impl NetTopology {
 
 		let mut found = false;
 		peer.addrs.retain(|a| {
-			if a.expires < now_systime {
+			if a.expires < now_systime && !a.is_connected() {
 				return false;
 			}
 			if a.addr == addr {
@@ -240,7 +247,20 @@ impl NetTopology {
 		});
 
 		if !found {
-			trace!(target: "sub-libp2p", "Peer store: adding address {} for {:?}", addr, peer_id);
+			trace!(
+				target: "sub-libp2p",
+				"Peer store: adding address {} for {:?} (connectable hint: {:?})",
+				addr,
+				peer_id,
+				connectable
+			);
+
+			let initial_score = if connectable {
+				KADEMLIA_DISCOVERY_INITIAL_SCORE_CONNECTABLE
+			} else {
+				KADEMLIA_DISCOVERY_INITIAL_SCORE
+			};
+
 			peer.addrs.push(Addr {
 				addr,
 				expires: now_systime + KADEMLIA_DISCOVERY_EXPIRATION,
@@ -248,7 +268,7 @@ impl NetTopology {
 				next_back_off: FIRST_CONNECT_FAIL_BACKOFF,
 				score: Mutex::new(AddrScore {
 					connected_since: None,
-					score: KADEMLIA_DISCOVERY_INITIAL_SCORE,
+					score: initial_score,
 					latest_score_update: now,
 				}),
 			});
@@ -269,7 +289,7 @@ impl NetTopology {
 		for (peer_in_store, info_in_store) in self.store.iter_mut() {
 			if peer == peer_in_store {
 				if let Some(addr) = info_in_store.addrs.iter_mut().find(|a| &a.addr == addr) {
-					addr.connected_now();
+					addr.connected_now(CONNECTED_MINIMUM_SCORE);
 					addr.back_off_until = now;
 					addr.next_back_off = FIRST_CONNECT_FAIL_BACKOFF;
 					continue;
@@ -284,7 +304,7 @@ impl NetTopology {
 					score: Mutex::new(AddrScore {
 						connected_since: Some(now),
 						latest_score_update: now,
-						score: KADEMLIA_DISCOVERY_INITIAL_SCORE
+						score: CONNECTED_MINIMUM_SCORE,
 					}),
 				});
 
@@ -394,12 +414,16 @@ struct AddrScore {
 }
 
 impl Addr {
-	/// Sets the addr to connected.
-	fn connected_now(&self) {
+	/// Sets the addr to connected. If the score is lower than the given value, raises it to this
+	/// value.
+	fn connected_now(&self, raise_to_min: u32) {
 		let mut score = self.score.lock();
 		let now = Instant::now();
 		Addr::flush(&mut score, now);
 		score.connected_since = Some(now);
+		if score.score < raise_to_min {
+			score.score = raise_to_min;
+		}
 	}
 
 	/// Applies a modification to the score.
@@ -423,6 +447,12 @@ impl Addr {
 		} else {
 			score.score = score.score.saturating_sub(-score_diff as u32);
 		}
+	}
+
+	/// Returns true if we are connected to this addr.
+	fn is_connected(&self) -> bool {
+		let score = self.score.lock();
+		score.connected_since.is_some()
 	}
 
 	/// Returns the score, and true if we are connected to this addr.
@@ -612,7 +642,7 @@ fn serialize<W: Write>(out: W, map: &FnvHashMap<PeerId, PeerInfo>) -> Result<(),
 		let peer = peer.to_base58();
 		let info = SerializedPeerInfo {
 			addrs: info.addrs.iter()
-				.filter(|a| a.expires > now)
+				.filter(|a| a.expires > now || a.is_connected())
 				.map(Into::into)
 				.collect(),
 		};
