@@ -30,14 +30,9 @@ extern crate serde_derive;
 extern crate substrate_runtime_std as rstd;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
-
-#[macro_use]
 extern crate substrate_codec_derive;
 
 extern crate substrate_codec as codec;
-
-use rstd::prelude::*;
 
 #[cfg(feature = "std")]
 use std::fmt;

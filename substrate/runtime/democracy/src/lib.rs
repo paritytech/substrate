@@ -354,17 +354,15 @@ mod tests {
 	use primitives::traits::{BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
+	impl_outer_origin! {
+		pub enum Origin for Test {}
+	}
+
 	impl_outer_dispatch! {
-		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-		pub enum Call where origin: <Test as system::Trait>::Origin {
+		pub enum Call where origin: Origin {
 			Balances,
 			Democracy,
 		}
-	}
-
-	impl_outer_origin! {
-		pub enum Origin for Test {}
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.

@@ -308,6 +308,8 @@ macro_rules! impl_outer_dispatch {
 		$( $rest:tt )*
 	) => {
 		$(#[$attr])*
+		#[derive(Clone, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		pub enum $call_type {
 			$(
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )

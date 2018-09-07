@@ -79,18 +79,18 @@ mod tests {
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 		match xt.signed {
-			Some((signed, signature)) => {
-				let payload = (self.index, self.function);
-				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone())).unwrap());
+			Some(signed) => {
+				let payload = (xt.index, xt.function);
+				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
 				let signature = pair.sign(&payload.encode()).into();
 				UncheckedExtrinsic {
-					signed: Some((signed, signature.into())),
+					signature: Some((balances::address::Address::Id(signed), signature)),
 					index: payload.0,
 					function: payload.1,
 				}
 			}
 			None => UncheckedExtrinsic {
-				signed: None,
+				signature: None,
 				index: xt.index,
 				function: xt.function,
 			},
@@ -265,7 +265,7 @@ mod tests {
 			// Keccak
 			hex!("508a68a0918f614b86b2ccfd0975754f6d2abe1026a34e42d6d8d5abdf4db010").into(),
 			vec![CheckedExtrinsic {
-				signed: alice(),
+				signed: Some(alice()),
 				index: 0,
 				function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
 			}]
@@ -282,12 +282,12 @@ mod tests {
 			hex!("171f1b2c01c9c616e40ee2d842a699286b50a5a74874b56d826094dadedffb27").into(),
 			vec![
 				CheckedExtrinsic {
-					signed: bob(),
+					signed: Some(bob()),
 					index: 0,
 					function: Call::Balances(balances::Call::transfer(alice().into(), 5)),
 				},
 				CheckedExtrinsic {
-					signed: alice(),
+					signed: Some(alice()),
 					index: 1,
 					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
 				}
@@ -304,7 +304,7 @@ mod tests {
 			// Keccak
 			hex!("e45221804da3a3609454d4e09debe6364cc6af63c2ff067d802d1af62fea32ae").into(),
 			vec![CheckedExtrinsic {
-				signed: alice(),
+				signed: Some(alice()),
 				index: 0,
 				function: Call::Consensus(consensus::Call::remark(vec![0; 60000])),
 			}]
