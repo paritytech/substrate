@@ -101,6 +101,7 @@ impl NetTopology {
 		};
 
 		let file = fs::File::create(path)?;
+		// TODO: the capacity of the BufWriter is kind of arbitrary ; decide better
 		serialize(BufWriter::with_capacity(1024 * 1024, file), &self.store)
 	}
 
@@ -497,6 +498,7 @@ fn try_load(path: impl AsRef<Path>) -> FnvHashMap<PeerId, PeerInfo> {
 	}
 
 	let mut file = match fs::File::open(path) {
+		// TODO: the capacity of the BufReader is kind of arbitrary ; decide better
 		Ok(f) => BufReader::with_capacity(1024 * 1024, f),
 		Err(err) => {
 			warn!(target: "sub-libp2p", "Failed to open peer storage file: {:?}", err);
