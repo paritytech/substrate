@@ -134,6 +134,7 @@ pub mod api {
 	use system;
 	impl_stubs!(
 		version => |()| super::version(),
+		json_metadata => |()| String::from("metadata"),
 		authorities => |()| system::authorities(),
 		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),

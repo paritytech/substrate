@@ -718,4 +718,29 @@ mod tests {
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
 		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
 	}
+
+	#[test]
+	fn json_metadata() {
+		let client = test_client::new();
+
+		let mut builder = client.new_block().unwrap();
+
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		}).unwrap();
+
+		assert!(builder.push_transfer(Transfer {
+			from: Keyring::Eve.to_raw_public().into(),
+			to: Keyring::Alice.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		}).is_err());
+
+		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+
+		assert_eq!(client.json_metadata(&BlockId::Number(1)).unwrap(), "metadata");
+	}
 }
