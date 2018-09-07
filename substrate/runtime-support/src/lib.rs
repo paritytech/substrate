@@ -43,10 +43,13 @@ pub use self::storage::generator::Storage as GenericStorage;
 
 #[macro_use]
 pub mod dispatch;
+#[macro_use]
 pub mod storage;
 mod hashable;
 #[macro_use]
 mod event;
+#[macro_use]
+mod metadata;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
