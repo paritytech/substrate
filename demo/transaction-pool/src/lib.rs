@@ -155,7 +155,7 @@ impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
 				RawAddress::Index(_) => Err("Index based addresses are not supported".into()),// TODO: Make index addressing optional in substrate
 			}
 		})?;
-		let sender = checked.signed.clone();
+		let sender = checked.signed.expect("Only signed extrinsics are allowed at this point");
 
 
 		if encoded_size < 1024 {

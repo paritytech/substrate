@@ -24,11 +24,15 @@ use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, system};
 
+impl_outer_origin!{
+	pub enum Origin for Runtime {}
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
-pub struct Test;
-impl system::Trait for Test {
-	type PublicAux = Self::AccountId;
+pub struct Runtime;
+impl system::Trait for Runtime {
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -38,7 +42,7 @@ impl system::Trait for Test {
 	type Header = Header;
 	type Event = ();
 }
-impl Trait for Test {
+impl Trait for Runtime {
 	type Balance = u64;
 	type AccountIndex = u64;
 	type OnFreeBalanceZero = ();
@@ -47,13 +51,13 @@ impl Trait for Test {
 }
 
 pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternalities<KeccakHasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+	let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 	let balance_factor = if ext_deposit > 0 {
 		256
 	} else {
 		1
 	};
-	t.extend(GenesisConfig::<Test>{
+	t.extend(GenesisConfig::<Runtime>{
 		balances: if monied {
 			vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
 		} else {
@@ -69,5 +73,5 @@ pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternali
 	t.into()
 }
 
-pub type System = system::Module<Test>;
-pub type Balances = Module<Test>;
+pub type System = system::Module<Runtime>;
+pub type Balances = Module<Runtime>;

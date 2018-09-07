@@ -45,7 +45,7 @@ use runtime_primitives::traits::{BlakeTwo256, DigestItem};
 /// An index to a block.
 pub type BlockNumber = u64;
 
-/// Alias to Ed25519 pubkey that identifies an account on the relay chain. This will almost
+/// Alias to Ed25519 pubkey that identifies an account on the chain. This will almost
 /// certainly continue to be the same as the substrate's `AuthorityId`.
 pub type AccountId = ::primitives::H256;
 
@@ -56,18 +56,18 @@ pub type AccountIndex = u32;
 /// Balance of an account.
 pub type Balance = u64;
 
-/// The Ed25519 pub key of an session that belongs to an authority of the relay chain. This is
+/// The Ed25519 pub key of an session that belongs to an authority of the chain. This is
 /// exactly equivalent to what the substrate calls an "authority".
 pub type SessionKey = primitives::AuthorityId;
 
-/// Index of a transaction in the relay chain.
+/// Index of a transaction in the chain.
 pub type Index = u64;
 
-/// A hash of some data used by the relay chain.
+/// A hash of some data used by the chain.
 pub type Hash = primitives::H256;
 
-/// Alias to 512-bit hash when used in the context of a signature on the relay chain.
-pub type Signature = runtime_primitives::MaybeUnsigned<runtime_primitives::Ed25519Signature>;
+/// Alias to 512-bit hash when used in the context of a signature on the chain.
+pub type Signature = runtime_primitives::Ed25519Signature;
 
 /// A timestamp: seconds since the unix epoch.
 pub type Timestamp = u64;

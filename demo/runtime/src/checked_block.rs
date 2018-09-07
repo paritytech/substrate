@@ -30,7 +30,7 @@ impl CheckedBlock {
 	/// Create a new checked block. Fails if the block is not structurally valid.
 	pub fn new(block: Block) -> Result<Self, Block> {
 		let has_timestamp = block.extrinsics.get(TIMESTAMP_SET_POSITION as usize).map_or(false, |xt| {
-			!xt.is_signed() && match xt.extrinsic.function {
+			!xt.is_signed() && match xt.function {
 				Call::Timestamp(TimestampCall::set(_)) => true,
 				_ => false,
 			}
@@ -55,7 +55,7 @@ impl CheckedBlock {
 
 	/// Extract the timestamp from the block.
 	pub fn timestamp(&self) -> ::demo_primitives::Timestamp {
-		let x = self.inner.extrinsics.get(TIMESTAMP_SET_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
+		let x = self.inner.extrinsics.get(TIMESTAMP_SET_POSITION as usize).and_then(|xt| match xt.function {
 			Call::Timestamp(TimestampCall::set(x)) => Some(x),
 			_ => None
 		});
@@ -68,7 +68,7 @@ impl CheckedBlock {
 
 	/// Extract the noted missed proposal validator indices (if any) from the block.
 	pub fn noted_offline(&self) -> &[u32] {
-		self.inner.extrinsics.get(NOTE_OFFLINE_POSITION as usize).and_then(|xt| match xt.extrinsic.function {
+		self.inner.extrinsics.get(NOTE_OFFLINE_POSITION as usize).and_then(|xt| match xt.function {
 			Call::Consensus(ConsensusCall::note_offline(ref x)) => Some(&x[..]),
 			_ => None,
 		}).unwrap_or(&[])

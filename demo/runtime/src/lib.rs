@@ -76,7 +76,7 @@ const NOTE_OFFLINE_POSITION: u32 = 1;
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-/// Runtime runtime type used to parameterize the various modules.
+/// Runtime type used to collate and parameterize the various modules.
 pub struct Runtime;
 
 /// Runtime version.
@@ -88,15 +88,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 0,
 };
 
-/// Version module for this concrete runtime.
-pub type Version = version::Module<Runtime>;
-
-impl version::Trait for Runtime {
-	const VERSION: RuntimeVersion = VERSION;
-}
-
 impl system::Trait for Runtime {
-	type PublicAux = Self::AccountId;
+	type Origin = Origin;
 	type Index = Index;
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
@@ -165,7 +158,7 @@ impl staking::Trait for Runtime {
 pub type Staking = staking::Module<Runtime>;
 
 impl democracy::Trait for Runtime {
-	type Proposal = PrivCall;
+	type Proposal = Call;
 }
 
 /// Democracy module for this concrete runtime.
@@ -190,20 +183,13 @@ impl_outer_log! {
 	}
 }
 
-impl DigestItem for Log {
-	type AuthoritiesChange = consensus::AuthoritiesChange<SessionKey>;
-
-	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
-		match *self {
-			Log::consensus(ref item) => item.as_authorities_change(),
-		}
+impl_outer_origin! {
+	pub enum Origin for Runtime {
 	}
 }
 
 impl_outer_dispatch! {
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-	pub enum Call where aux: <Runtime as system::Trait>::PublicAux {
+	pub enum Call where origin: Origin {
 		Consensus,
 		Balances,
 		Session,
@@ -213,17 +199,28 @@ impl_outer_dispatch! {
 		Council,
 		CouncilVoting,
 	}
+}
 
-	#[derive(Clone, PartialEq, Eq)]
-	#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-	pub enum PrivCall {
-		Consensus,
-		Balances,
-		Session,
-		Staking,
-		Democracy,
-		Council,
-		CouncilVoting,
+impl_outer_config! {
+	pub struct GenesisConfig for Runtime {
+		ConsensusConfig => consensus,
+		SystemConfig => system,
+		BalancesConfig => balances,
+		SessionConfig => session,
+		StakingConfig => staking,
+		DemocracyConfig => democracy,
+		CouncilConfig => council,
+		TimestampConfig => timestamp,
+	}
+}
+
+impl DigestItem for Log {
+	type AuthoritiesChange = consensus::AuthoritiesChange<SessionKey>;
+
+	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
+		match *self {
+			Log::consensus(ref item) => item.as_authorities_change(),
+		}
 	}
 }
 
@@ -239,30 +236,15 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
-/// Extrinsic type as expected by this runtime. This is not the type that is signed.
-pub type Extrinsic = generic::Extrinsic<Address, Index, Call>;
-/// Extrinsic type that is signed.
-pub type BareExtrinsic = generic::Extrinsic<AccountId, Index, Call>;
+/// Extrinsic type that has already been checked.
+pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, Balances, Balances,
 	((((((), Council), Democracy), Staking), Session), Timestamp)>;
 
-impl_outer_config! {
-	pub struct GenesisConfig for Runtime {
-		ConsensusConfig => consensus,
-		SystemConfig => system,
-		BalancesConfig => balances,
-		SessionConfig => session,
-		StakingConfig => staking,
-		DemocracyConfig => democracy,
-		CouncilConfig => council,
-		TimestampConfig => timestamp,
-	}
-}
-
 pub mod api {
 	impl_stubs!(
-		version => |()| super::Version::version(),
+		version => |()| super::VERSION,
 		authorities => |()| super::Consensus::authorities(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
@@ -280,14 +262,11 @@ pub mod api {
 
 /// Produces the list of inherent extrinsics.
 fn inherent_extrinsics(data: InherentData, _spec_version: u32) -> Vec<UncheckedExtrinsic> {
-	let make_inherent = |function| UncheckedExtrinsic::new(
-		Extrinsic {
-			signed: Default::default(),
-			function,
-			index: 0,
-		},
-		Default::default(),
-		);
+	let make_inherent = |function| UncheckedExtrinsic {
+		signature: Default::default(),
+		function,
+		index: 0,
+	};
 
 	let mut inherent = vec![
 		make_inherent(Call::Timestamp(TimestampCall::set(data.timestamp))),
