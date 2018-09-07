@@ -51,9 +51,7 @@ pub trait Trait: consensus::Trait + system::Trait {
 }
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn set(origin, now: T::Moment) -> Result;
 	}
 }

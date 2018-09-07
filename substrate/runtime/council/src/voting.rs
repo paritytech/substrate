@@ -27,9 +27,7 @@ use super::{Trait, Module as Council};
 use system::{ensure_signed, ensure_root};
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn propose(origin, proposal: Box<T::Proposal>) -> Result;
 		fn vote(origin, proposal: T::Hash, approve: bool) -> Result;
 		fn veto(origin, proposal_hash: T::Hash) -> Result;

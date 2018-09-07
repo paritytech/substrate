@@ -107,9 +107,7 @@ pub type VoteIndex = u32;
 pub trait Trait: democracy::Trait {}
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn set_approvals(origin, votes: Vec<bool>, index: VoteIndex) -> Result;
 		fn reap_inactive_voter(origin, reporter_index: u32, who: Address<T::AccountId, T::AccountIndex>, who_index: u32, assumed_vote_index: VoteIndex) -> Result;
 		fn retract_voter(origin, index: u32) -> Result;

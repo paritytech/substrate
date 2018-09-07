@@ -142,9 +142,7 @@ decl_storage! {
 }
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn report_misbehavior(origin, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
 		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result;
 		fn remark(origin, remark: Vec<u8>) -> Result;

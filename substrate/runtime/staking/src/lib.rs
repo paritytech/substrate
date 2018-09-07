@@ -105,10 +105,8 @@ pub trait Trait: balances::Trait + session::Trait {
 }
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn stake(origin) -> Result;
 		fn unstake(origin, intentions_index: u32) -> Result;
 		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) -> Result;

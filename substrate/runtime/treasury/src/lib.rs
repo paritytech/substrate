@@ -64,9 +64,7 @@ type ProposalIndex = u32;
 // macro takes care of the marshalling of arguments and dispatch.
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// Put forward a suggestion for spending. A deposit proportional to the value
 		// is reserved and slashed if the proposal is rejected. It is returned once the
 		// proposal is awarded.

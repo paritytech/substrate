@@ -133,18 +133,3 @@ impl RuntimeVersion {
 		self.spec_name == other.spec_name
 	}
 }
-
-pub trait Trait {
-	const VERSION: RuntimeVersion;
-}
-
-decl_module! {
-	pub struct Module<T: Trait>;
-}
-
-impl<T: Trait> Module<T> {
-	/// Get runtime version.
-	pub fn version() -> RuntimeVersion {
-		T::VERSION.clone()
-	}
-}

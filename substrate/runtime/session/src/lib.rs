@@ -76,9 +76,7 @@ pub trait Trait: timestamp::Trait {
 pub type Event<T> = RawEvent<<T as system::Trait>::BlockNumber>;
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn set_key(origin, key: T::SessionKey) -> Result;
 
 		fn set_length(origin, new: T::BlockNumber) -> Result;

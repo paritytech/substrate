@@ -76,13 +76,6 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 0,
 };
 
-/// Version module for this concrete runtime.
-pub type Version = version::Module<Runtime>;
-
-impl version::Trait for Runtime {
-	const VERSION: RuntimeVersion = VERSION;
-}
-
 impl system::Trait for Runtime {
 	type Origin = OuterOrigin;
 	type Index = Index;
@@ -252,7 +245,7 @@ impl_outer_config! {
 
 pub mod api {
 	impl_stubs!(
-		version => |()| super::Version::version(),
+		version => |()| super::VERSION,
 		authorities => |()| super::Consensus::authorities(),
 		events => |()| super::System::events(),
 		initialise_block => |header| super::Executive::initialise_block(&header),

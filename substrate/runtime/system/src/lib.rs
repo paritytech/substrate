@@ -87,7 +87,7 @@ pub trait Trait: Eq + Clone {
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
 
 decl_module! {
-	pub struct Module<T: Trait>;
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 }
 
 /// A phase of a block's execution.

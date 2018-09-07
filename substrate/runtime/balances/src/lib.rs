@@ -133,9 +133,7 @@ pub trait Trait: system::Trait {
 }
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
 		fn set_balance(origin, who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
 	}

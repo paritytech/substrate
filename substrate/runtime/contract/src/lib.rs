@@ -120,9 +120,7 @@ pub trait ContractAddressFor<AccountId: Sized> {
 
 decl_module! {
 	/// Contracts module.
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// TODO: Change AccountId to staking::Address
 		fn call(
 			origin,

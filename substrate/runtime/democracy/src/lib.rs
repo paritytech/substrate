@@ -64,9 +64,7 @@ pub trait Trait: balances::Trait + Sized {
 }
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn propose(origin, proposal: Box<T::Proposal>, value: T::Balance) -> Result;
 		fn second(origin, proposal: PropIndex) -> Result;
 		fn vote(origin, ref_index: ReferendumIndex, approve_proposal: bool) -> Result;

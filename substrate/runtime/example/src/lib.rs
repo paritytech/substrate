@@ -105,9 +105,7 @@ pub trait Trait: balances::Trait {
 // `ensure_root` and `ensure_inherent`. 
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
-	pub struct Module<T: Trait>;
-
-	pub enum Call where origin: T::Origin {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.
