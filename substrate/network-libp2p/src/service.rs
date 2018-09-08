@@ -33,12 +33,13 @@ use libp2p::transport_timeout::TransportTimeout;
 use {PacketId, SessionInfo, TimerToken};
 use rand;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
+use std::iter;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::sync::mpsc as sync_mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
-use futures::{future, Future, stream, Stream};
+use futures::{future, Future, stream, Stream, select_all};
 use futures::sync::{mpsc, oneshot};
 use tokio::runtime::current_thread;
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -119,7 +120,7 @@ impl NetworkService {
 			local_peer_id: local_peer_id.clone(),
 			kbuckets_timeout: Duration::from_secs(600),
 			request_timeout: Duration::from_secs(10),
-			known_initial_peers: network_state.known_peers().into_iter(),
+			known_initial_peers: iter::empty(),
 		});
 
 		// Channel we use to signal success or failure of the bg thread
@@ -395,7 +396,7 @@ fn init_thread(
 		});
 
 		let shared = shared.clone();
-		base.and_then(move |(peer_id, stream), endpoint, remote_addr| {
+		Transport::and_then(base, move |(peer_id, stream), endpoint, remote_addr| {
 			remote_addr.and_then(move |remote_addr| {
 				if &peer_id == shared.kad_system.local_peer_id() {
 					// TODO: this happens very frequently for now and floods the logs
@@ -546,19 +547,24 @@ fn init_thread(
 	// Start the process of pinging the active nodes on the network.
 	let periodic = start_periodic_updates(shared.clone(), transport, swarm_controller);
 
-	// Merge all the futures into one!
-	Ok(swarm_events.for_each(|_| Ok(()))
-		.select(discovery).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
-		.select(periodic).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
-		.select(outgoing_connections).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
-		.select(timeouts).map_err(|(err, _)| err).and_then(|(_, rest)| rest)
-		.select(close_rx.then(|_| Ok(()))).map(|_| ()).map_err(|(err, _)| err)
+	let futures: Vec<Box<Future<Item = (), Error = IoError>>> = vec![
+		Box::new(swarm_events.for_each(|_| Ok(()))),
+		Box::new(discovery),
+		Box::new(periodic),
+		Box::new(outgoing_connections),
+		Box::new(timeouts),
+		Box::new(close_rx.map_err(|err| IoError::new(IoErrorKind::Other, err))),
+	];
 
+	Ok(
+		select_all(futures)
 		.and_then(move |_| {
 			debug!(target: "sub-libp2p", "Networking ended ; disconnecting all peers");
 			shared.network_state.disconnect_all();
 			Ok(())
-		}))
+		})
+		.map_err(|(r, _, _)| r)
+	)
 }
 
 /// Output of the common transport layer.
@@ -570,13 +576,13 @@ struct TransportOutput<S> {
 
 /// Enum of all the possible protocols our service handles.
 enum FinalUpgrade<C> {
-	Kad(NodeIndex, KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError>>),
+	Kad(NodeIndex, KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>),
 	/// The remote identification system, and the multiaddress we see the remote as.
 	IdentifyListener(NodeIndex, IdentifySender<C>, Multiaddr),
 	/// The remote information about the address they see us as.
 	IdentifyDialer(NodeIndex, IdentifyInfo, Multiaddr),
-	PingDialer(NodeIndex, ping::Pinger, Box<Future<Item = (), Error = IoError>>),
-	PingListener(NodeIndex, Box<Future<Item = (), Error = IoError>>),
+	PingDialer(NodeIndex, ping::Pinger, Box<Future<Item = (), Error = IoError> + Send>),
+	PingListener(NodeIndex, Box<Future<Item = (), Error = IoError> + Send>),
 	/// `Custom` means anything not in the core libp2p and is handled
 	/// by `CustomProtoConnectionUpgrade`.
 	Custom(NodeIndex, RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>),
@@ -608,8 +614,8 @@ impl<C> From<(NodeIndex, IdentifyOutput<C>, Multiaddr)> for FinalUpgrade<C> {
 fn listener_handle<'a, C>(
 	shared: Arc<Shared>,
 	upgrade: FinalUpgrade<C>,
-) -> Box<Future<Item = (), Error = IoError> + 'a>
-	where C: AsyncRead + AsyncWrite + 'a {
+) -> Box<Future<Item = (), Error = IoError> + Send + 'a>
+	where C: AsyncRead + AsyncWrite + Send + 'a {
 	match upgrade {
 		FinalUpgrade::Kad(node_index, controller, kademlia_stream) => {
 			trace!(target: "sub-libp2p", "Opened kademlia substream with #{:?}", node_index);
@@ -669,7 +675,7 @@ fn handle_kademlia_connection(
 	shared: Arc<Shared>,
 	node_index: NodeIndex,
 	controller: KadConnecController,
-	kademlia_stream: Box<Stream<Item = KadIncomingRequest, Error = IoError>>
+	kademlia_stream: Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>
 ) -> Result<impl Future<Item = (), Error = IoError>, IoError> {
 	let kad_connec = match shared.network_state.kad_connection(node_index) {
 		Some(kad) => kad,
@@ -698,8 +704,11 @@ fn handle_kademlia_connection(
 			.and_then(move |(req, rest)| {
 				shared.kad_system.update_kbuckets(node_id);
 				match req {
-					Some(KadIncomingRequest::FindNode { searched, responder }) =>
-						responder.respond(build_kademlia_response(&shared, &searched)),
+					Some(KadIncomingRequest::FindNode { searched, responder }) => {
+						let resp = build_kademlia_response(&shared, &searched);
+						trace!(target: "sub-libp2p", "Responding to Kad {:?} with {:?}", searched, resp);
+						responder.respond(resp)
+					},
 					Some(KadIncomingRequest::PingPong) => (),
 					None => return Ok(future::Loop::Break(()))
 				}
@@ -729,19 +738,25 @@ fn build_kademlia_response(
 					connection_ty: KadConnectionType::Connected,
 				}
 			} else {
-				let addrs = shared.network_state.addrs_of_peer(&who);
-				let connec_ty = if shared.network_state.has_connection(&who) {
-					// TODO: this only checks connections with substrate ; but what
-					//       if we're connected through Kademlia only?
-					KadConnectionType::Connected
-				} else {
-					KadConnectionType::NotConnected
-				};
+				let mut addrs = shared.network_state.addrs_of_peer(&who);
+				let connected = addrs.iter().any(|&(_, conn)| conn);
+				// The Kademlia protocol of libp2p doesn't allow specifying which address is valid
+				// and which is outdated, therefore in order to stay honest towards the network
+				// we only report the addresses we're connected to if we're connected to any.
+				if connected {
+					addrs = addrs.into_iter()
+						.filter_map(|(a, c)| if c { Some((a, c)) } else { None })
+						.collect();
+				}
 
 				KadPeer {
 					node_id: who.clone(),
-					multiaddrs: addrs,
-					connection_ty: connec_ty,
+					multiaddrs: addrs.into_iter().map(|(a, _)| a).collect(),
+					connection_ty: if connected {
+						KadConnectionType::Connected
+					} else {
+						KadConnectionType::NotConnected
+					},
 				}
 			}
 		})
@@ -762,7 +777,7 @@ fn handle_custom_connection(
 	shared: Arc<Shared>,
 	node_index: NodeIndex,
 	custom_proto_out: RegisteredProtocolOutput<Arc<NetworkProtocolHandler + Send + Sync>>
-) -> impl Future<Item = (), Error = IoError> {
+) -> Box<Future<Item = (), Error = IoError> + Send> {
 	let handler = custom_proto_out.custom_data;
 	let protocol_id = custom_proto_out.protocol_id;
 
@@ -776,7 +791,7 @@ fn handle_custom_connection(
 		protocol_id,
 	) {
 		Some(c) => c,
-		None => return future::Either::A(future::err(IoErrorKind::Other.into())),
+		None => return Box::new(future::err(IoErrorKind::Other.into())) as Box<_>,
 	};
 
 	if let UniqueConnecState::Full = unique_connec.state() {
@@ -785,7 +800,7 @@ fn handle_custom_connection(
 			node_index,
 			custom_proto_out.protocol_id
 		);
-		return future::Either::A(future::ok(()))
+		return Box::new(future::ok(())) as Box<_>
 	}
 
 	struct ProtoDisconnectGuard {
@@ -868,7 +883,7 @@ fn handle_custom_connection(
 		current_peer: Some(node_index),
 	}, &node_index);
 
-	future::Either::B(final_fut)
+	Box::new(final_fut) as Box<_>
 }
 
 /// Randomly discovers peers to connect to.
@@ -878,13 +893,24 @@ fn handle_custom_connection(
 fn start_kademlia_discovery<T, To, St, C>(
 	shared: Arc<Shared>,
 	transport: T,
-	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError>>>
-) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
-		T::MultiaddrFuture: 'static,
-		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		C: 'static {
+	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError> + Send>>
+) -> Box<Future<Item = (), Error = IoError> + Send>
+	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + Send + 'static,
+		T::Dial: Send,
+		T::MultiaddrFuture: Send + 'static,
+		T::Listener: Send,
+		T::ListenerUpgrade: Send,
+		T::Incoming: Send,
+		T::IncomingUpgrade: Send,
+		To: AsyncRead + AsyncWrite + Send + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + Send + 'static,
+		St::Dial: Send,
+		St::MultiaddrFuture: Send,
+		St::Listener: Send,
+		St::ListenerUpgrade: Send,
+		St::Incoming: Send,
+		St::IncomingUpgrade: Send,
+		C: Send + 'static {
 	let kad_init = shared.kad_system.perform_initialization({
 		let shared = shared.clone();
 		let transport = transport.clone();
@@ -918,7 +944,7 @@ fn start_kademlia_discovery<T, To, St, C>(
 		.and_then(|(_, rest)| rest);
 
 	// Note that we use a Box in order to speed compilation time.
-	Box::new(final_future) as Box<Future<Item = _, Error = _>>
+	Box::new(final_future) as Box<Future<Item = _, Error = _> + Send>
 }
 
 /// Performs a kademlia request to a random node.
@@ -927,13 +953,24 @@ fn start_kademlia_discovery<T, To, St, C>(
 fn perform_kademlia_query<T, To, St, C>(
 	shared: Arc<Shared>,
 	transport: T,
-	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError>>>
-) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
-		T::MultiaddrFuture: 'static,
-		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		C: 'static {
+	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError> + Send>>
+) -> Box<Future<Item = (), Error = IoError> + Send>
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + Send + 'static,
+		T::MultiaddrFuture: Send + 'static,
+		T::Dial: Send,
+		T::Listener: Send,
+		T::ListenerUpgrade: Send,
+		T::Incoming: Send,
+		T::IncomingUpgrade: Send,
+		To: AsyncRead + AsyncWrite + Send + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Send + Clone + 'static,
+		St::Dial: Send,
+		St::MultiaddrFuture: Send,
+		St::Listener: Send,
+		St::ListenerUpgrade: Send,
+		St::Incoming: Send,
+		St::IncomingUpgrade: Send,
+		C: Send + 'static {
 	// Query the node IDs that are closest to a random ID.
 	// Note that the randomness doesn't have to be secure, as this only
 	// influences which nodes we end up being connected to.
@@ -953,10 +990,21 @@ fn perform_kademlia_query<T, To, St, C>(
 		})
 		.filter_map(move |event|
 			match event {
-				KadQueryEvent::NewKnownMultiaddrs(peers) => {
-					for (peer, addrs) in peers {
-						for addr in addrs {
-							shared.network_state.add_kad_discovered_addr(&peer, addr);
+				KadQueryEvent::PeersReported(peers) => {
+					for peer in peers {
+						let connected = match peer.connection_ty {
+							KadConnectionType::NotConnected => false,
+							KadConnectionType::Connected => true,
+							KadConnectionType::CanConnect => true,
+							KadConnectionType::CannotConnect => continue,
+						};
+
+						for addr in peer.multiaddrs {
+							shared.network_state.add_kad_discovered_addr(
+								&peer.node_id,
+								addr,
+								connected
+							);
 						}
 					}
 					None
@@ -969,20 +1017,31 @@ fn perform_kademlia_query<T, To, St, C>(
 		.map(|_| ());
 
 	// Note that we use a `Box` in order to speed up compilation.
-	Box::new(future) as Box<Future<Item = _, Error = _>>
+	Box::new(future) as Box<Future<Item = _, Error = _> + Send>
 }
 
 /// Connects to additional nodes, if necessary.
 fn connect_to_nodes<T, To, St, C>(
 	shared: Arc<Shared>,
 	base_transport: T,
-	swarm_controller: &SwarmController<St, Box<Future<Item = (), Error = IoError>>>
+	swarm_controller: &SwarmController<St, Box<Future<Item = (), Error = IoError> + Send>>
 )
-	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
-		T::MultiaddrFuture: 'static,
-		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		C: 'static {
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + Send + 'static,
+		T::MultiaddrFuture: Send + 'static,
+		T::Dial: Send,
+		T::Listener: Send,
+		T::ListenerUpgrade: Send,
+		T::Incoming: Send,
+		T::IncomingUpgrade: Send,
+		To: AsyncRead + AsyncWrite + Send + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + Send + 'static,
+		St::Dial: Send,
+		St::MultiaddrFuture: Send,
+		St::Listener: Send,
+		St::ListenerUpgrade: Send,
+		St::Incoming: Send,
+		St::IncomingUpgrade: Send,
+		C: Send + 'static {
 	let (addrs, _will_change) = shared.network_state.outgoing_connections_to_attempt();
 
 	for (peer, addr) in addrs.into_iter() {
@@ -1016,13 +1075,24 @@ fn open_peer_custom_proto<T, To, St, C>(
 	addr: Multiaddr,
 	expected_peer_id: Option<PeerstorePeerId>,
 	proto: RegisteredProtocol<Arc<NetworkProtocolHandler + Send + Sync>>,
-	swarm_controller: &SwarmController<St, Box<Future<Item = (), Error = IoError>>>
+	swarm_controller: &SwarmController<St, Box<Future<Item = (), Error = IoError> + Send>>
 )
-	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
-		T::MultiaddrFuture: 'static,
-		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		C: 'static,
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + Send + 'static,
+		T::MultiaddrFuture: Send + 'static,
+		T::Dial: Send,
+		T::Listener: Send,
+		T::ListenerUpgrade: Send,
+		T::Incoming: Send,
+		T::IncomingUpgrade: Send,
+		To: AsyncRead + AsyncWrite + Send + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + Send + 'static,
+		St::Dial: Send,
+		St::MultiaddrFuture: Send,
+		St::Listener: Send,
+		St::ListenerUpgrade: Send,
+		St::Incoming: Send,
+		St::IncomingUpgrade: Send,
+		C: Send + 'static,
 {
 	let proto_id = proto.id();
 
@@ -1078,13 +1148,24 @@ fn obtain_kad_connection<T, To, St, C>(
 	shared: Arc<Shared>,
 	who: PeerstorePeerId,
 	transport: T,
-	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError>>>
-) -> impl Future<Item = KadConnecController, Error = IoError>
-	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + 'static,
-		T::MultiaddrFuture: 'static,
-		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		C: 'static {
+	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError> + Send>>
+) -> Box<Future<Item = KadConnecController, Error = IoError> + Send>
+	where T: MuxedTransport<Output =  TransportOutput<To>> + Clone + Send + 'static,
+		T::MultiaddrFuture: Send + 'static,
+		T::Dial: Send,
+		T::Listener: Send,
+		T::ListenerUpgrade: Send,
+		T::Incoming: Send,
+		T::IncomingUpgrade: Send,
+		To: AsyncRead + AsyncWrite + Send + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + Send + 'static,
+		St::Dial: Send,
+		St::MultiaddrFuture: Send,
+		St::Listener: Send,
+		St::ListenerUpgrade: Send,
+		St::Incoming: Send,
+		St::IncomingUpgrade: Send,
+		C: Send + 'static {
 	let kad_upgrade = shared.kad_upgrade.clone();
 	let transport = transport
 		.and_then(move |out, endpoint, client_addr| {
@@ -1107,7 +1188,7 @@ fn obtain_kad_connection<T, To, St, C>(
 			Ok((kad, addr))
 		})
 		.and_then(move |(unique_connec, addr)| {
-			unique_connec.dial(&swarm_controller, &addr, transport.clone())
+			unique_connec.dial(&swarm_controller, &addr.0, transport.clone())
 		})
 		.then(|result| -> Result<_, ()> { Ok(result.ok()) })
 		.filter_map(|result| result)
@@ -1116,7 +1197,7 @@ fn obtain_kad_connection<T, To, St, C>(
 		.and_then(|(kad, _)| kad.ok_or_else(|| IoErrorKind::ConnectionRefused.into()));
 
 	// Note that we use a Box in order to speed up compilation.
-	Box::new(future) as Box<Future<Item = _, Error = _>>
+	Box::new(future) as Box<Future<Item = _, Error = _> + Send>
 }
 
 /// Processes the identification information that we received about a node.
@@ -1155,7 +1236,7 @@ fn process_identify_info(
 
 	for addr in info.listen_addrs.iter() {
 		if let Some(node_id) = shared.network_state.node_id_from_index(node_index) {
-			shared.network_state.add_kad_discovered_addr(&node_id, addr.clone());
+			shared.network_state.add_kad_discovered_addr(&node_id, addr.clone(), true);
 		}
 	}
 }
@@ -1165,13 +1246,24 @@ fn process_identify_info(
 fn start_periodic_updates<T, To, St, C>(
 	shared: Arc<Shared>,
 	transport: T,
-	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError>>>
-) -> impl Future<Item = (), Error = IoError>
-	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + 'static,
-		T::MultiaddrFuture: 'static,
-		To: AsyncRead + AsyncWrite + 'static,
-		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		C: 'static {
+	swarm_controller: SwarmController<St, Box<Future<Item = (), Error = IoError> + Send>>
+) -> Box<Future<Item = (), Error = IoError> + Send>
+	where T: MuxedTransport<Output = TransportOutput<To>> + Clone + Send + 'static,
+		T::MultiaddrFuture: Send + 'static,
+		T::Dial: Send,
+		T::Listener: Send,
+		T::ListenerUpgrade: Send,
+		T::Incoming: Send,
+		T::IncomingUpgrade: Send,
+		To: AsyncRead + AsyncWrite + Send + 'static,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + Send + 'static,
+		St::Dial: Send,
+		St::MultiaddrFuture: Send,
+		St::Listener: Send,
+		St::ListenerUpgrade: Send,
+		St::Incoming: Send,
+		St::IncomingUpgrade: Send,
+		C: Send + 'static {
 	let ping_transport = transport.clone()
 		.and_then(move |out, endpoint, client_addr| {
 			let node_index = out.node_index;
@@ -1207,7 +1299,7 @@ fn start_periodic_updates<T, To, St, C>(
 		});
 
 	// Note that we use a Box in order to speed compilation time.
-	Box::new(fut) as Box<Future<Item = _, Error = _>>
+	Box::new(fut) as Box<Future<Item = _, Error = _> + Send>
 }
 
 /// Pings all the nodes we're connected to and disconnects any node that
@@ -1217,14 +1309,32 @@ fn periodic_updates<Tp, Tid, St, C>(
 	shared: Arc<Shared>,
 	ping_transport: Tp,
 	identify_transport: Tid,
-	swarm_controller: &SwarmController<St, Box<Future<Item = (), Error = IoError>>>
-) -> impl Future<Item = (), Error = IoError>
-	where Tp: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		Tp::MultiaddrFuture: 'static,
-		Tid: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		Tid::MultiaddrFuture: 'static,
-		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + 'static,
-		C: 'static {
+	swarm_controller: &SwarmController<St, Box<Future<Item = (), Error = IoError> + Send>>
+) -> Box<Future<Item = (), Error = IoError> + Send>
+	where Tp: MuxedTransport<Output = FinalUpgrade<C>> + Clone + Send + 'static,
+		Tp::MultiaddrFuture: Send + 'static,
+		Tp::Dial: Send,
+		Tp::MultiaddrFuture: Send,
+		Tp::Listener: Send,
+		Tp::ListenerUpgrade: Send,
+		Tp::Incoming: Send,
+		Tp::IncomingUpgrade: Send,
+		Tid: MuxedTransport<Output = FinalUpgrade<C>> + Clone + Send + 'static,
+		Tid::MultiaddrFuture: Send + 'static,
+		Tid::Dial: Send,
+		Tid::MultiaddrFuture: Send,
+		Tid::Listener: Send,
+		Tid::ListenerUpgrade: Send,
+		Tid::Incoming: Send,
+		Tid::IncomingUpgrade: Send,
+		St: MuxedTransport<Output = FinalUpgrade<C>> + Clone + Send + 'static,
+		St::Dial: Send,
+		St::MultiaddrFuture: Send,
+		St::Listener: Send,
+		St::ListenerUpgrade: Send,
+		St::Incoming: Send,
+		St::IncomingUpgrade: Send,
+		C: Send + 'static {
 	trace!(target: "sub-libp2p", "Periodic update cycle");
 
 	let mut ping_futures = Vec::new();
@@ -1282,7 +1392,7 @@ fn periodic_updates<Tp, Tid, St, C>(
 	});
 
 	// Note that we use a Box in order to speed up compilation.
-	Box::new(future) as Box<Future<Item = _, Error = _>>
+	Box::new(future) as Box<Future<Item = _, Error = _> + Send>
 }
 
 /// Since new protocols are added after the networking starts, we have to load the protocols list
@@ -1291,8 +1401,8 @@ fn periodic_updates<Tp, Tid, St, C>(
 struct DelayedProtosList(Arc<Shared>);
 // `Maf` is short for `MultiaddressFuture`
 impl<C, Maf> ConnectionUpgrade<C, Maf> for DelayedProtosList
-where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
-	Maf: Future<Item = Multiaddr, Error = IoError> + 'static,		// TODO: 'static :(
+where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
+	Maf: Future<Item = Multiaddr, Error = IoError> + Send + 'static,		// TODO: 'static :(
 {
 	type NamesIter = <RegisteredProtocols<Arc<NetworkProtocolHandler + Send + Sync>> as ConnectionUpgrade<C, Maf>>::NamesIter;
 	type UpgradeIdentifier = <RegisteredProtocols<Arc<NetworkProtocolHandler + Send + Sync>> as ConnectionUpgrade<C, Maf>>::UpgradeIdentifier;

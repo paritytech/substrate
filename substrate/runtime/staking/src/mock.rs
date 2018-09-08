@@ -25,16 +25,21 @@ use substrate_primitives::{H256, KeccakHasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balances};
 
+impl_outer_origin!{
+	pub enum Origin for Test {}
+}
+
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Test;
 impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
+	type Log = u64;
 	type SessionKey = u64;
 	type OnOfflineValidator = ();
 }
 impl system::Trait for Test {
-	type PublicAux = Self::AccountId;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;

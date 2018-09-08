@@ -49,9 +49,10 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, RefInto, OnFinalise, Convert, As};
+use primitives::traits::{Zero, One, OnFinalise, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
+use system::{ensure_signed, ensure_root};
 
 #[cfg(any(feature = "std", test))]
 use std::collections::HashMap;
@@ -75,17 +76,11 @@ pub trait Trait: timestamp::Trait {
 pub type Event<T> = RawEvent<<T as system::Trait>::BlockNumber>;
 
 decl_module! {
-	pub struct Module<T: Trait>;
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn set_key(origin, key: T::SessionKey) -> Result;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
-		fn set_key(aux, key: T::SessionKey) -> Result = 0;
-	}
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum PrivCall {
-		fn set_length(new: T::BlockNumber) -> Result = 0;
-		fn force_new_session(apply_rewards: bool) -> Result = 1;
+		fn set_length(origin, new: T::BlockNumber) -> Result;
+		fn force_new_session(origin, apply_rewards: bool) -> Result;
 	}
 }
 
@@ -105,23 +100,23 @@ impl<N> From<RawEvent<N>> for () {
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 
-		// The current set of validators.
+		/// The current set of validators.
 		pub Validators get(validators): required Vec<T::AccountId>;
-		// Current length of the session.
+		/// Current length of the session.
 		pub SessionLength get(length): required T::BlockNumber;
-		// Current index of the session.
+		/// Current index of the session.
 		pub CurrentIndex get(current_index): required T::BlockNumber;
-		// Timestamp when current session started.
+		/// Timestamp when current session started.
 		pub CurrentStart get(current_start): required T::Moment;
 
-		// New session is being forced is this entry exists; in which case, the boolean value is whether
-		// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
+		/// New session is being forced is this entry exists; in which case, the boolean value is whether
+		/// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
 		pub ForcingNewSession get(forcing_new_session): bool;
-		// Block at which the session length last changed.
+		/// Block at which the session length last changed.
 		LastLengthChange: T::BlockNumber;
-		// The next key for a given validator.
+		/// The next key for a given validator.
 		NextKeyFor: map [ T::AccountId => T::SessionKey ];
-		// The next session length.
+		/// The next session length.
 		NextSessionLength: T::BlockNumber;
 	}
 }
@@ -139,25 +134,33 @@ impl<T: Trait> Module<T> {
 
 	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 	/// session.
-	fn set_key(aux: &T::PublicAux, key: T::SessionKey) -> Result {
+	fn set_key(origin: T::Origin, key: T::SessionKey) -> Result {
+		let who = ensure_signed(origin)?;
 		// set new value for next session
-		<NextKeyFor<T>>::insert(aux.ref_into(), key);
+		<NextKeyFor<T>>::insert(who, key);
 		Ok(())
 	}
 
 	/// Set a new era length. Won't kick in until the next era change (at current length).
-	fn set_length(new: T::BlockNumber) -> Result {
+	fn set_length(origin: T::Origin, new: T::BlockNumber) -> Result {
+		ensure_root(origin)?;
 		<NextSessionLength<T>>::put(new);
 		Ok(())
 	}
 
 	/// Forces a new session.
-	pub fn force_new_session(apply_rewards: bool) -> Result {
-		<ForcingNewSession<T>>::put(apply_rewards);
-		Ok(())
+	pub fn force_new_session(origin: T::Origin, apply_rewards: bool) -> Result {
+		ensure_root(origin)?;
+		Self::apply_force_new_session(apply_rewards)
 	}
 
 	// INTERNAL API (available to other runtime modules)
+
+	/// Forces a new session, no origin.
+	pub fn apply_force_new_session(apply_rewards: bool) -> Result {
+		<ForcingNewSession<T>>::put(apply_rewards);
+		Ok(())
+	}
 
 	/// Set the current set of validators.
 	///
@@ -291,15 +294,20 @@ mod tests {
 	use primitives::traits::{Identity, BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 
+	impl_outer_origin!{
+		pub enum Origin for Test {}
+	}
+
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
+		type Log = u64;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
 	}
 	impl system::Trait for Test {
-		type PublicAux = Self::AccountId;
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -352,7 +360,7 @@ mod tests {
 	fn should_work_with_early_exit() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(10));
+			assert_ok!(Session::set_length(Origin::ROOT, 10));
 			assert_eq!(Session::blocks_remaining(), 1);
 			Session::check_rotate_session(1);
 
@@ -364,7 +372,7 @@ mod tests {
 			System::set_block_number(7);
 			assert_eq!(Session::current_index(), 1);
 			assert_eq!(Session::blocks_remaining(), 5);
-			assert_ok!(Session::force_new_session(false));
+			assert_ok!(Session::force_new_session(Origin::ROOT, false));
 			Session::check_rotate_session(7);
 
 			System::set_block_number(8);
@@ -387,14 +395,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: Change to length 3; no visible change.
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(3));
+			assert_ok!(Session::set_length(Origin::ROOT, 3));
 			Session::check_rotate_session(1);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
 			System::set_block_number(2);
-			assert_ok!(Session::set_length(3));
+			assert_ok!(Session::set_length(Origin::ROOT, 3));
 			Session::check_rotate_session(2);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -407,7 +415,7 @@ mod tests {
 
 			// Block 4: Change to length 2; no visible change.
 			System::set_block_number(4);
-			assert_ok!(Session::set_length(2));
+			assert_ok!(Session::set_length(Origin::ROOT, 2));
 			Session::check_rotate_session(4);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -447,7 +455,7 @@ mod tests {
 
 			// Block 3: Set new key for validator 2; no visible change.
 			System::set_block_number(3);
-			assert_ok!(Session::set_key(&2, 5));
+			assert_ok!(Session::set_key(Origin::signed(2), 5));
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			Session::check_rotate_session(3);
