@@ -158,9 +158,11 @@ mod tests {
 		type PublicAux = u32;
 	}
 
-	impl_json_metadata!(for TestRuntime with modules
-						event_module::Module,
-						event_module2::ModuleWithStorage with Storage);
+	impl_json_metadata!(
+		for TestRuntime with modules
+			event_module::Module,
+			event_module2::ModuleWithStorage with Storage
+	);
 
 	const EXPECTED_METADATA: &str = concat!(
 		r#"{ "events": { "name": "TestEvent", "items": "#,
