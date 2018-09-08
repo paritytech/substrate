@@ -141,6 +141,9 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			};
 
 			if message_matches {
+				if let ConsensusMessage::Bft(ref msg) = entry.message {
+					trace!(target: "gossip", "Processing BFT message {:?}", msg);
+				}
 				sink.unbounded_send(entry.message.clone()).expect("receiving end known to be open; qed");
 			}
 		}
