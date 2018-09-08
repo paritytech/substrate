@@ -220,7 +220,7 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Council<T> {
 mod tests {
 	use super::*;
 	use ::tests::*;
-	use ::tests::Call;
+	use ::tests::{Call, Origin};
 	use substrate_runtime_support::Hashable;
 	use democracy::VoteThreshold;
 

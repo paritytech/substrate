@@ -25,6 +25,7 @@ substrate-runtime-session = { path = "../../../substrate/runtime/session", defau
 substrate-runtime-staking = { path = "../../../substrate/runtime/staking", default-features = false }
 substrate-runtime-system = { path = "../../../substrate/runtime/system", default-features = false }
 substrate-runtime-timestamp = { path = "../../../substrate/runtime/timestamp", default-features = false }
+substrate-runtime-treasury = { path = "../../../substrate/runtime/treasury", default-features = false }
 substrate-runtime-version = { path = "../../../substrate/runtime/version", default-features = false }
 demo-primitives = { path = "../../primitives", default-features = false }
 
@@ -47,6 +48,7 @@ std = [
 	"substrate-runtime-staking/std",
 	"substrate-runtime-system/std",
 	"substrate-runtime-timestamp/std",
+	"substrate-runtime-treasury/std",
 	"substrate-runtime-version/std",
 	"demo-primitives/std",
 ]

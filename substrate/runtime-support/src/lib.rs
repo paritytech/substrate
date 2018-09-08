@@ -116,7 +116,7 @@ macro_rules! impl_outer_origin {
 		pub enum $name {
 			system($system::Origin<$trait>),
 			$(
-				$module($module::Origin<$trait>),
+				$module($module::Origin),
 			)*
 			#[allow(dead_code)]
 			Void($crate::Void)
@@ -149,13 +149,13 @@ macro_rules! impl_outer_origin {
 			}
 		}
 		$(
-			impl From<$module::Origin<$trait>> for $name {
-				fn from(x: $module::Origin<$trait>) -> Self {
+			impl From<$module::Origin> for $name {
+				fn from(x: $module::Origin) -> Self {
 					$name::$module(x)
 				}
 			}
-			impl<T: Trait> Into<Option<$module::Origin<T>>> for $name<T> {
-				fn into(self) -> Option<$module::Origin<T>> {
+			impl Into<Option<$module::Origin>> for $name {
+				fn into(self) -> Option<$module::Origin> {
 					if let $name::$module(l) = self {
 						Some(l)
 					} else {

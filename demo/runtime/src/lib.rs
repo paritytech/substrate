@@ -49,6 +49,7 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
+extern crate substrate_runtime_treasury as treasury;
 #[macro_use]
 extern crate substrate_runtime_version as version;
 extern crate demo_primitives;
@@ -59,7 +60,7 @@ use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
 
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::BuildStorage;
+pub use runtime_primitives::{BuildStorage, Permill};
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -160,9 +161,18 @@ pub type Council = council::Module<Runtime>;
 /// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Runtime>;
 
+impl treasury::Trait for Runtime {
+	type ApproveOrigin = council::EnsureTwoMembers;
+	type RejectOrigin = council::EnsureTwoMembers;
+	type Event = Event;
+}
+
+/// Treasury module for this concrete runtime.
+pub type Treasury = treasury::Module<Runtime>;
+
 impl_outer_event! {
 	pub enum Event for Runtime {
-		balances, session, staking
+		balances, session, staking, treasury
 	}
 }
 
@@ -174,6 +184,7 @@ impl_outer_log! {
 
 impl_outer_origin! {
 	pub enum Origin for Runtime {
+		council
 	}
 }
 
@@ -187,6 +198,7 @@ impl_outer_dispatch! {
 		Democracy,
 		Council,
 		CouncilVoting,
+		Treasury,
 	}
 }
 
@@ -200,6 +212,7 @@ impl_outer_config! {
 		DemocracyConfig => democracy,
 		CouncilConfig => council,
 		TimestampConfig => timestamp,
+		TreasuryConfig => treasury,
 	}
 }
 
@@ -227,7 +240,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, 
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, Balances, Balances,
-	(((((), Council), Democracy), Staking), Session)>;
+	((((((), Treasury), Council), Democracy), Staking), Session)>;
 
 pub mod api {
 	impl_stubs!(

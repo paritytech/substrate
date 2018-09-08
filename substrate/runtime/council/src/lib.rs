@@ -38,9 +38,10 @@ extern crate substrate_runtime_democracy as democracy;
 extern crate substrate_runtime_system as system;
 
 use rstd::prelude::*;
+use rstd::result;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
-use primitives::traits::{Zero, One, As, Lookup};
+use primitives::traits::{Zero, One, As, Lookup, EnsureOrigin};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use substrate_runtime_support::dispatch::Result;
 use balances::address::Address;
@@ -105,6 +106,35 @@ pub mod voting;
 pub type VoteIndex = u32;
 
 pub trait Trait: democracy::Trait {}
+
+/// Origin for the system module. 
+#[derive(PartialEq, Eq, Clone)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Origin {
+	/// It has been condoned by a given number of council members.
+	Members(u32),
+}
+
+/// Ensure that the origin `o` represents at least `n` council members. Returns
+/// `Ok` or an `Err` otherwise.
+pub fn ensure_council_members<OuterOrigin>(o: OuterOrigin, n: u32) -> result::Result<u32, &'static str>
+	where OuterOrigin: Into<Option<Origin>>
+{
+	match o.into() {
+		Some(Origin::Members(x)) if x >= n => Ok(n),
+		_ => Err("bad origin: expected to be a threshold number of council members"),
+	}
+}
+
+pub struct EnsureTwoMembers;
+impl<O> EnsureOrigin<O> for EnsureTwoMembers
+	where O: Into<Option<Origin>>
+{
+	type Success = u32;
+	fn ensure_origin(o: O) -> result::Result<Self::Success, &'static str> {
+		ensure_council_members(o, 2)
+	}
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
