@@ -307,17 +307,15 @@ macro_rules! storage_items {
 	() => ()
 }
 
-//#[macro_export]
-//macro_rules! __handle_put_internal {
-//	(OPTION_TYPE ( $($t:stmt)* ) ) => {
-//		let Some(val) = val {
-//			$($t)*;
-//		}
-//	};
-//	(RAW_TYPE ( $($t:stmt)* ) ) => {
-//		$($t)*;
-//	};
-//}
+#[macro_export]
+macro_rules! __handle_wrap_internal {
+	(RAW_TYPE { $($raw:tt)* } { $($option:tt)* }) => {
+		$($raw)*;
+	};
+	(OPTION_TYPE { $($raw:tt)* } { $($option:tt)* }) => {
+		$($option)*;
+	};
+}
 
 #[macro_export]
 #[doc(hidden)]
@@ -327,7 +325,7 @@ macro_rules! __storage_items_internal {
 		__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $key => $ty }
 		pub fn $get_fn() -> $gettype { <$name as $crate::storage::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
 	};
-	(($($vis:tt)*) () (OPTION_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
+	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
 
 		impl $crate::storage::generator::StorageValue<$ty> for $name {
@@ -351,42 +349,19 @@ macro_rules! __storage_items_internal {
 			/// Mutate this value.
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
-				let prev_some = val.is_some();
+
 				f(&mut val);
-				match val {
-					Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
-					None if prev_some => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
-					_ => {}
-				}
-			}
-		}
-	};
-	(($($vis:tt)*) () (RAW_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
-		$($vis)* struct $name;
 
-		impl $crate::storage::generator::StorageValue<$ty> for $name {
-			type Query = $gettype;
-
-			/// Get the storage key.
-			fn key() -> &'static [u8] {
-				$key
-			}
-
-			/// Load the value from the provided storage instance.
-			fn get<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
-				storage.$getter($key)
-			}
-
-			/// Take a value from storage, removing it afterwards.
-			fn take<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
-				storage.$taker($key)
-			}
-
-			/// Mutate this value
-			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
-				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
-				f(&mut val);
-				<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage);
+				__handle_wrap_internal!($wraptype {
+					// raw type case
+					<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage)
+				} {
+					// Option<> type case
+					match val {
+						Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
+						None => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
+					}
+				});
 			}
 		}
 	};
@@ -723,7 +698,7 @@ macro_rules! __decl_storage_item {
 	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : $ty:ty) => {
 		__decl_storage_item!{ ($($vis)*) ($traittype as $traitinstance) () ($wraptype $gettype) ($getter) ($taker) $cratename $name : $ty }
 	};
-	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () (RAW_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : $ty:ty) => {
+	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : $ty:ty) => {
 		$($vis)* struct $name<$traitinstance: $traittype>($crate::storage::generator::PhantomData<$traitinstance>);
 
 		impl<$traitinstance: $traittype> $crate::storage::generator::StorageValue<$ty> for $name<$traitinstance> {
@@ -747,42 +722,19 @@ macro_rules! __decl_storage_item {
 			/// Mutate the value under a key.
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
+
 				f(&mut val);
-				<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage);
-			}
-		}
-	};
-	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () (OPTION_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : $ty:ty) => {
-		$($vis)* struct $name<$traitinstance: $traittype>($crate::storage::generator::PhantomData<$traitinstance>);
 
-		impl<$traitinstance: $traittype> $crate::storage::generator::StorageValue<$ty> for $name<$traitinstance> {
-			type Query = $gettype;
-
-			/// Get the storage key.
-			fn key() -> &'static [u8] {
-				stringify!($cratename $name).as_bytes()
-			}
-
-			/// Load the value from the provided storage instance.
-			fn get<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
-				storage.$getter(<$name<$traitinstance> as $crate::storage::generator::StorageValue<$ty>>::key())
-			}
-
-			/// Take a value from storage, removing it afterwards.
-			fn take<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
-				storage.$taker(<$name<$traitinstance> as $crate::storage::generator::StorageValue<$ty>>::key())
-			}
-
-			/// Mutate the value under a key.
-			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
-				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
-				let prev_some = val.is_some();
-				f(&mut val);
-				match val {
-					Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
-					None if prev_some => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
-					_ => {}
-				}
+				__handle_wrap_internal!($wraptype {
+					// raw type case
+					<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage)
+				} {
+					// Option<> type case
+					match val {
+						Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
+						None => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
+					}
+				})
 			}
 		}
 	};
