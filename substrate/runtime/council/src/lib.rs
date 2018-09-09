@@ -25,6 +25,10 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
+
 extern crate integer_sqrt;
 extern crate substrate_codec as codec;
 #[macro_use] extern crate substrate_codec_derive;
@@ -640,6 +644,12 @@ mod tests {
 		}
 	}
 
+	impl_outer_event! {
+		pub enum Event for Test {
+			balances, council_motions
+		}
+	}
+
 	impl_outer_dispatch! {
 		pub enum Call where origin: Origin {
 			Balances,
@@ -659,14 +669,14 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
 		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
 		type EnsureAccountLiquid = ();
-		type Event = ();
+		type Event = Event;
 	}
 	impl democracy::Trait for Test {
 		type Proposal = Call;
@@ -676,7 +686,7 @@ mod tests {
 	impl council_motions::Trait for Test {
 		type Origin = Origin;
 		type Proposal = Call;
-		type Event = ();
+		type Event = Event;
 	}
 
 	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<KeccakHasher> {

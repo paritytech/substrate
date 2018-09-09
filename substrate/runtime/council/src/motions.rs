@@ -59,6 +59,8 @@ pub enum RawEvent<Hash, AccountId> {
 	Approved(Hash),
 	/// A motion was not approved by the required threshold.
 	Disapproved(Hash),
+	/// A motion was executed; `bool` is true if returned without error.
+	Executed(Hash, bool),
 }
 
 impl<H, A> From<RawEvent<H, A>> for () {
@@ -75,10 +77,12 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as CouncilMotions {
+		/// The (hashes of) the active proposals.
 		pub Proposals get(proposals): default Vec<T::Hash>;
+		/// Actual proposal for a given hash, if it's current.
 		pub ProposalOf get(proposal_of): map [ T::Hash => <T as Trait>::Proposal ];
 		/// Votes for a given proposal: (required_yes_votes, yes_voters, no_voters).
-		pub Voting get(voting): default map [ T::Hash => (u32, Vec<T::AccountId>, Vec<T::AccountId>) ];
+		pub Voting get(voting): required map [ T::Hash => (u32, Vec<T::AccountId>, Vec<T::AccountId>) ];
 	}
 }
 
@@ -104,10 +108,7 @@ impl<T: Trait> Module<T> {
 
 		ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
 
-		let mut proposals = Self::proposals();
-		proposals.push(proposal_hash);
-		<Proposals<T>>::put(proposals);
-
+		<Proposals<T>>::mutate(|proposals| proposals.push(proposal_hash));
 		<ProposalOf<T>>::insert(proposal_hash, *proposal);
 		<Voting<T>>::insert(proposal_hash, (threshold, vec![who.clone()], vec![]));
 
@@ -119,7 +120,7 @@ impl<T: Trait> Module<T> {
 	fn vote(origin: <T as system::Trait>::Origin, proposal: T::Hash, approve: bool) -> Result {
 		let who = ensure_signed(origin)?;
 
-		ensure!(Self::is_councillor(&who), "proposer not on council");
+		ensure!(Self::is_councillor(&who), "voter not on council");
 
 		let mut voting = Self::voting(&proposal);
 
@@ -150,23 +151,27 @@ impl<T: Trait> Module<T> {
 		let no_votes = voting.2.len() as u32;
 		Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
 
-		let passed = yes_votes >= voting.0;
-		if passed {
-			Self::deposit_event(RawEvent::Approved(proposal));
+		let threshold = voting.0;
+		let potential_votes = <Council<T>>::active_council().len() as u32;
+		let approved = yes_votes >= threshold;
+		let disapproved = potential_votes - no_votes < threshold;
+		if approved || disapproved {
+			if approved {
+				Self::deposit_event(RawEvent::Approved(proposal));
 
-			// execute motion, assuming it exists.
-			if let Some(p) = <ProposalOf<T>>::take(&proposal) {
-				let _ = p.dispatch(Origin::Members(voting.0).into());
+				// execute motion, assuming it exists.
+				if let Some(p) = <ProposalOf<T>>::take(&proposal) {
+					let ok = p.dispatch(Origin::Members(threshold).into()).is_ok();
+					Self::deposit_event(RawEvent::Executed(proposal, ok));
+				}
+			} else {
+				// disapproved
+				Self::deposit_event(RawEvent::Disapproved(proposal));
 			}
-		} else {
-			Self::deposit_event(RawEvent::Disapproved(proposal));
-		}
-		if passed || <Council<T>>::active_council().len() as u32 - no_votes < voting.0 {
+
 			// remove vote
 			<Voting<T>>::remove(&proposal);
-			let mut proposals = Self::proposals();
-			proposals.retain(|h| h != &proposal);
-			<Proposals<T>>::put(proposals);
+			<Proposals<T>>::mutate(|proposals| proposals.retain(|h| h != &proposal));
 		} else {
 			// update voting
 			<Voting<T>>::insert(&proposal, voting);
@@ -201,7 +206,144 @@ impl<O> EnsureOrigin<O> for EnsureTwoMembers
 mod tests {
 	use super::*;
 	use ::tests::*;
-	use ::tests::{Call, Origin};
+	use ::tests::{Call, Origin, Event as OuterEvent};
+	use substrate_runtime_support::Hashable;
+	use system::{EventRecord, Phase};
 
 	type CouncilMotions = super::Module<Test>;
+
+	#[test]
+	fn motions_basic_environment_works() {
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(CouncilMotions::proposals(), Vec::<H256>::new());
+		});
+	}
+
+	fn set_balance_proposal(value: u64) -> Call {
+		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value, 0))
+	}
+
+	#[test]
+	fn motions_propose_works() {
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			let proposal = set_balance_proposal(42);
+			let hash = proposal.blake2_256().into();
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_eq!(CouncilMotions::proposals(), vec![hash]);
+			assert_eq!(CouncilMotions::proposal_of(&hash), Some(proposal));
+			assert_eq!(CouncilMotions::voting(&hash), (3, vec![1], Vec::<u64>::new()));
+
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Proposed(1, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
+				}
+			]);
+		});
+	}
+
+	#[test]
+	fn motions_ignoring_non_council_proposals_works() {
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			let proposal = set_balance_proposal(42);
+			assert_noop!(CouncilMotions::propose(Origin::signed(42), 3, Box::new(proposal.clone())), "proposer not on council");
+		});
+	}
+
+	#[test]
+	fn motions_ignoring_non_council_votes_works() {
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			let proposal = set_balance_proposal(42);
+			let hash: H256 = proposal.blake2_256().into();
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_noop!(CouncilMotions::vote(Origin::signed(42), hash.clone(), true), "voter not on council");
+		});
+	}
+
+	#[test]
+	fn motions_revoting_works() {
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			let proposal = set_balance_proposal(42);
+			let hash: H256 = proposal.blake2_256().into();
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
+			assert_eq!(CouncilMotions::voting(&hash), (2, vec![1], Vec::<u64>::new()));
+			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), true), "duplicate vote ignored");
+			assert_ok!(CouncilMotions::vote(Origin::signed(1), hash.clone(), false));
+			assert_eq!(CouncilMotions::voting(&hash), (2, Vec::<u64>::new(), vec![1]));
+			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), false), "duplicate vote ignored");
+
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Proposed(1, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Voted(1, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 0, 1))
+				}
+			]);
+		});
+	}
+
+	#[test]
+	fn motions_disapproval_works() {
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			let proposal = set_balance_proposal(42);
+			let hash: H256 = proposal.blake2_256().into();
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), false));
+
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Proposed(1, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 1, 1))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Disapproved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
+				}
+			]);
+		});
+	}
+
+	#[test]
+	fn motions_approval_works() {
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			let proposal = set_balance_proposal(42);
+			let hash: H256 = proposal.blake2_256().into();
+			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), true));
+
+			assert_eq!(System::events(), vec![
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Proposed(1, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), true, 2, 0))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Approved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
+					event: OuterEvent::council_motions(RawEvent::Executed(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false))
+				}
+			]);
+		});
+	}
 }
