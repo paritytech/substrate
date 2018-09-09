@@ -180,8 +180,11 @@ pub trait StorageValue<T: Codec> {
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
 
-	/// Store a value under this key into the provded storage instance.
+	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: Borrow<T>>(val: Arg);
+
+	/// Mutate the value
+	fn mutate<F: FnOnce(&mut Self::Query)>(f: F);
 
 	/// Clear the storage value.
 	fn kill();
@@ -204,6 +207,9 @@ impl<T: Codec, U> StorageValue<T> for U where U: generator::StorageValue<T> {
 	}
 	fn put<Arg: Borrow<T>>(val: Arg) {
 		U::put(val.borrow(), &RuntimeStorage)
+	}
+	fn mutate<F: FnOnce(&mut Self::Query)>(f: F) {
+		U::mutate(f, &RuntimeStorage)
 	}
 	fn kill() {
 		U::kill(&RuntimeStorage)

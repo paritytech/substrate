@@ -108,10 +108,17 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Take a value from storage, removing it afterwards.
 	fn take<S: Storage>(storage: &S) -> Self::Query;
 
-	/// Store a value under this key into the provded storage instance.
+	/// Store a value under this key into the provided storage instance.
 	fn put<S: Storage>(val: &T, storage: &S) {
 		storage.put(Self::key(), val)
 	}
+
+	fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(f: F, storage: &S);
+//	where Self::Query: codec::Codec {
+//		let mut val = Self::get(storage);
+//		f(&mut val);
+//		Self::put(&val, storage);
+//	}
 
 	/// Clear the storage value.
 	fn kill<S: Storage>(storage: &S) {
@@ -328,6 +335,12 @@ macro_rules! __storage_items_internal {
 			/// Take a value from storage, removing it afterwards.
 			fn take<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
 				storage.$taker($key)
+			}
+
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
+				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
+				f(&mut val);
+				<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage);
 			}
 		}
 	};
@@ -634,6 +647,13 @@ macro_rules! __decl_storage_item {
 			fn take<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
 				storage.$taker(<$name<$traitinstance> as $crate::storage::generator::StorageValue<$ty>>::key())
 			}
+
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
+				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
+				f(&mut val);
+				<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage);
+			}
+
 		}
 	};
 	// generator for maps.
