@@ -351,9 +351,12 @@ macro_rules! __storage_items_internal {
 			/// Mutate this value.
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
+				let prev_some = val.is_some();
 				f(&mut val);
-				if let Some(val) = val {
-					<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage);
+				match val {
+					Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
+					None if prev_some => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
+					_ => {}
 				}
 			}
 		}
@@ -464,11 +467,13 @@ macro_rules! __storage_items_internal {
 
 			/// Mutate the value under a key.
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
-				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::get(key, storage);
+				let prev_some = val.is_some();
 				f(&mut val);
 				match val {
 					Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-					None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+					None if prev_some => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+					_ => {}
 				}
 			}
 		}
@@ -771,9 +776,12 @@ macro_rules! __decl_storage_item {
 			/// Mutate the value under a key.
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
+				let prev_some = val.is_some();
 				f(&mut val);
-				if let Some(val) = val {
-					<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage);
+				match val {
+					Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
+					None if prev_some => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
+					_ => {}
 				}
 			}
 		}
@@ -852,11 +860,13 @@ macro_rules! __decl_storage_item {
 
 			/// Mutate the value under a key
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
-				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::get(key, storage);
+				let prev_some = val.is_some();
 				f(&mut val);
 				match val {
 					Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-					None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+					None if prev_some => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+					_ => {}
 				}
 			}
 		}
