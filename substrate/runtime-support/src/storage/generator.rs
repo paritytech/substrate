@@ -308,6 +308,7 @@ macro_rules! storage_items {
 }
 
 #[macro_export]
+#[doc(hidden)]
 macro_rules! __handle_wrap_internal {
 	(RAW_TYPE { $($raw:tt)* } { $($option:tt)* }) => {
 		$($raw)*;
@@ -372,7 +373,7 @@ macro_rules! __storage_items_internal {
 			<$name as $crate::storage::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
 		}
 	};
-	(($($vis:tt)*) () (RAW_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
+	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
 		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
@@ -405,51 +406,19 @@ macro_rules! __storage_items_internal {
 			/// Mutate the value under a key.
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+
 				f(&mut val);
-				<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage);
-			}
-		}
-	};
-	(($($vis:tt)*) () (OPTION_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
-		$($vis)* struct $name;
 
-		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
-			type Query = $gettype;
-
-			/// Get the prefix key in storage.
-			fn prefix() -> &'static [u8] {
-				$prefix
-			}
-
-			/// Get the storage key used to fetch a value corresponding to a specific key.
-			fn key_for(x: &$kty) -> Vec<u8> {
-				let mut key = $prefix.to_vec();
-				$crate::codec::Encode::encode_to(x, &mut key);
-				key
-			}
-
-			/// Load the value associated with the given key from the map.
-			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
-				storage.$getter(&key[..])
-			}
-
-			/// Take the value, reading and removing it.
-			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
-				storage.$taker(&key[..])
-			}
-
-			/// Mutate the value under a key.
-			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
-				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::get(key, storage);
-				let prev_some = val.is_some();
-				f(&mut val);
-				match val {
-					Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-					None if prev_some => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
-					_ => {}
-				}
+				__handle_wrap_internal!($wraptype {
+					// raw type case
+					<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
+				} {
+					// Option<> type case
+					match val {
+						Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+					}
+				});
 			}
 		}
 	};
@@ -742,7 +711,7 @@ macro_rules! __decl_storage_item {
 	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
 		__decl_storage_item!{ ($($vis)*) ($traittype as $traitinstance) () ($wraptype $gettype) ($getter) ($taker) $cratename $name : map [$kty => $ty] }
 	};
-	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () (RAW_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
+	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name<$traitinstance: $traittype>($crate::storage::generator::PhantomData<$traitinstance>);
 
 		impl<$traitinstance: $traittype> $crate::storage::generator::StorageMap<$kty, $ty> for $name<$traitinstance> {
@@ -775,51 +744,17 @@ macro_rules! __decl_storage_item {
 			/// Mutate the value under a key
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+
 				f(&mut val);
-				<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage);
-			}
-		}
-	};
-	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () (OPTION_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
-		$($vis)* struct $name<$traitinstance: $traittype>($crate::storage::generator::PhantomData<$traitinstance>);
 
-		impl<$traitinstance: $traittype> $crate::storage::generator::StorageMap<$kty, $ty> for $name<$traitinstance> {
-			type Query = $gettype;
-
-			/// Get the prefix key in storage.
-			fn prefix() -> &'static [u8] {
-				stringify!($cratename $name).as_bytes()
-			}
-
-			/// Get the storage key used to fetch a value corresponding to a specific key.
-			fn key_for(x: &$kty) -> Vec<u8> {
-				let mut key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::prefix().to_vec();
-				$crate::codec::Encode::encode_to(x, &mut key);
-				key
-			}
-
-			/// Load the value associated with the given key from the map.
-			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
-				storage.$getter(&key[..])
-			}
-
-			/// Take the value, reading and removing it.
-			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
-				let key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
-				storage.$taker(&key[..])
-			}
-
-			/// Mutate the value under a key
-			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
-				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::get(key, storage);
-				let prev_some = val.is_some();
-				f(&mut val);
-				match val {
-					Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
-					None if prev_some => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
-					_ => {}
-				}
+				__handle_wrap_internal!($wraptype {
+					<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage);
+				} {
+					match val {
+						Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+					}
+				});
 			}
 		}
 	};
@@ -1620,38 +1555,32 @@ mod tests {
 			/// Hello, this is doc!
 			U32 : u32;
 			GETU32 get(u32_getter): u32;
-//			pub PUBU32 : u32;
-//			pub GETPUBU32 get(pub_u32_getter): u32;
-//			U32Default : default u32;
+			pub PUBU32 : u32;
+			pub GETPUBU32 get(pub_u32_getter): u32;
+			U32Default : default u32;
 			GETU32Default get(get_u32_default): default u32;
-//			pub PUBU32Default : default u32;
-//			pub GETPUBU32Default get(pub_get_u32_default): default u32;
-//			U32Required : required u32;
-//			GETU32Required get(get_u32_required): required u32;
-//			pub PUBU32Required : required u32;
-//			pub GETPUBU32Required get(pub_get_u32_required): required u32;
-//
+			pub PUBU32Default : default u32;
+			pub GETPUBU32Default get(pub_get_u32_default): default u32;
+			U32Required : required u32;
+			GETU32Required get(get_u32_required): required u32;
+			pub PUBU32Required : required u32;
+			pub GETPUBU32Required get(pub_get_u32_required): required u32;
+
 			MAPU32 : map [ u32 => String ];
-//			/// Hello, this is doc!
-//			/// Hello, this is doc 2!
-//			GETMAPU32 get(map_u32_getter): map [ u32 => String ];
-//			pub PUBMAPU32 : map [ u32 => String ];
-//			pub GETPUBMAPU32 get(map_pub_u32_getter): map [ u32 => String ];
-//			MAPU32Default : default map [ u32 => String ];
+			/// Hello, this is doc!
+			/// Hello, this is doc 2!
+			GETMAPU32 get(map_u32_getter): map [ u32 => String ];
+			pub PUBMAPU32 : map [ u32 => String ];
+			pub GETPUBMAPU32 get(map_pub_u32_getter): map [ u32 => String ];
+			MAPU32Default : default map [ u32 => String ];
 			GETMAPU32Default get(map_get_u32_default): default map [ u32 => String ];
-//			pub PUBMAPU32Default : default map [ u32 => String ];
-//			pub GETPUBMAPU32Default get(map_pub_get_u32_default): default map [ u32 => String ];
-//			MAPU32Required : required map [ u32 => String ];
-//			GETMAPU32Required get(map_get_u32_required): required map [ u32 => String ];
-//			pub PUBMAPU32Required : required map [ u32 => String ];
-//			pub GETPUBMAPU32Required get(map_pub_get_u32_required): required map [ u32 => String ];
+			pub PUBMAPU32Default : default map [ u32 => String ];
+			pub GETPUBMAPU32Default get(map_pub_get_u32_default): default map [ u32 => String ];
+			MAPU32Required : required map [ u32 => String ];
+			GETMAPU32Required get(map_get_u32_required): required map [ u32 => String ];
+			pub PUBMAPU32Required : required map [ u32 => String ];
+			pub GETPUBMAPU32Required get(map_pub_get_u32_required): required map [ u32 => String ];
 
-		}
-	}
-
-	impl<T: Trait> Module<T> {
-		fn foo() {
-//			<GETU32Default<T>>::mutate(|v| println!("{}", v));
 		}
 	}
 
@@ -1692,9 +1621,9 @@ mod tests {
 
 	#[test]
 	fn store_json_metadata() {
-		let _metadata = Module::<TraitImpl>::store_json_metadata();
-//		assert_eq!(EXPECTED_METADATA, metadata);
-//		let _: serde::de::IgnoredAny =
-//			serde_json::from_str(metadata).expect("Is valid json syntax");
+		let metadata = Module::<TraitImpl>::store_json_metadata();
+		assert_eq!(EXPECTED_METADATA, metadata);
+		let _: serde::de::IgnoredAny =
+			serde_json::from_str(metadata).expect("Is valid json syntax");
 	}
 }
