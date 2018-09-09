@@ -28,7 +28,7 @@ extern crate substrate_runtime_std;
 #[cfg(test)]
 extern crate substrate_runtime_io as runtime_io;
 
-// Needed for the set of mock primatives used in our tests.
+// Needed for the set of mock primitives used in our tests.
 #[cfg(test)]
 extern crate substrate_primitives;
 
@@ -110,7 +110,9 @@ decl_module! {
 		/// world.
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result;
 
-		/// A priviledged call; in this case it resets our dummy value to something new.
+		fn accumulate_foo(origin, increase_by: T::Balance) -> Result;
+
+		/// A privileged call; in this case it resets our dummy value to something new.
 		fn set_dummy(origin, new_dummy: T::Balance) -> Result;
 	}
 }
@@ -133,7 +135,7 @@ pub enum RawEvent<B> {
 	Dummy(B),
 }
 
-// By convention we implement any trait for which a "null implemntation" makes sense
+// By convention we implement any trait for which a "null implementation" makes sense
 // for `()`. This is the case for conversion of module `Event` types and hook traits. It
 // is helpful for test code and production configurations where no eventing is necessary
 // or the hook is unused.
@@ -170,9 +172,12 @@ decl_storage! {
 		// implements `runtime_support::StorageMap`.
 		//
 		// If they have a getter (`get(getter_name)`), then your module will come
-		// equiped with `fn getter_name() -> Type` for basic value items or
+		// equipped with `fn getter_name() -> Type` for basic value items or
 		// `fn getter_name(key: KeyType) -> ValueType` for map items.
 		Dummy get(dummy): T::Balance;
+
+		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
+		Foo get(foo): default T::Balance;
 	}
 }
 
@@ -232,17 +237,23 @@ impl<T: Trait> Module<T> {
 		let _sender = ensure_signed(origin)?;
 
 		// Read the value of dummy from storage.
-		let dummy = Self::dummy();
-		// Will also work using the `::get` on the storage item type iself:
+		// let dummy = Self::dummy();
+		// Will also work using the `::get` on the storage item type itself:
 		// let dummy = <Dummy<T>>::get();
 
 		// Calculate the new value.
-		let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
+		// let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
 
 		// Put the new value into storage.
-		<Dummy<T>>::put(new_dummy);
+		// <Dummy<T>>::put(new_dummy);
 		// Will also work with a reference:
 		// <Dummy<T>>::put(&new_dummy);
+
+		// Here's the new one of read and then modify the value.
+		<Dummy<T>>::mutate(|dummy| {
+			let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
+			*dummy = Some(new_dummy);
+		});
 
 		// Let's deposit an event to let the outside world know this happened.
 		Self::deposit_event(RawEvent::Dummy(increase_by));
@@ -251,10 +262,19 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	// Implementation of a priviledged call. This doesn't have an `origin` parameter because
+	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
+		let _sender = ensure_signed(origin)?;
+
+		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
+		<Foo<T>>::mutate(|foo| *foo = *foo + increase_by);
+
+		Ok(())
+	}
+
+	// Implementation of a privileged call. This doesn't have an `origin` parameter because
 	// it's not (directly) from an extrinsic, but rather the system as a whole has decided
-	// to execute it. Different runtimes have different reasons for allow priviledged
-	// calls to be executed - we don't need to care why. Because it's priviledged, we can
+	// to execute it. Different runtimes have different reasons for allow privileged
+	// calls to be executed - we don't need to care why. Because it's privileged, we can
 	// assume it's a one-off operation and substantial processing/storage/memory can be used
 	// without worrying about gameability or attack scenarios.
 	fn set_dummy(origin: T::Origin, new_value: T::Balance) -> Result {
@@ -287,6 +307,7 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 pub struct GenesisConfig<T: Trait> {
 	/// A value with which to initialise the Dummy storage item.
 	pub dummy: T::Balance,
+	pub foo: T::Balance,
 }
 
 #[cfg(feature = "std")]
@@ -294,6 +315,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
 			dummy: Default::default(),
+			foo: Default::default(),
 		}
 	}
 }
@@ -311,7 +333,8 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
 		use codec::Encode;
 		Ok(map![
-			Self::hash(<Dummy<T>>::key()).to_vec() => self.dummy.encode()
+			Self::hash(<Dummy<T>>::key()).to_vec() => self.dummy.encode(),
+			Self::hash(<Foo<T>>::key()).to_vec() => self.foo.encode()
 		])
 	}
 }
@@ -369,12 +392,13 @@ mod tests {
 		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
 			dummy: 42,
+			foo: 24,
 		}.build_storage().unwrap());
 		t.into()
 	}
 
 	#[test]
-	fn it_works() {
+	fn it_works_for_optional_value() {
 		with_externalities(&mut new_test_ext(), || {
 			// Check that GenesisBuilder works properly.
 			assert_eq!(Example::dummy(), Some(42));
@@ -382,7 +406,7 @@ mod tests {
 			// Check that accumulate works when we have Some value in Dummy already.
 			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 27));
 			assert_eq!(Example::dummy(), Some(69));
-			
+
 			// Check that finalising the block removes Dummy from storage.
 			<Example as OnFinalise<u64>>::on_finalise(1);
 			assert_eq!(Example::dummy(), None);
@@ -390,6 +414,15 @@ mod tests {
 			// Check that accumulate works when we Dummy has None in it.
 			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 42));
 			assert_eq!(Example::dummy(), Some(42));
+		});
+	}
+
+	#[test]
+	fn it_works_for_default_value() {
+		with_externalities(&mut new_test_ext(), || {
+			assert_eq!(Example::foo(), 24);
+			assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
+			assert_eq!(Example::foo(), 25);
 		});
 	}
 }
