@@ -310,6 +310,9 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	/// Remove the value under a key.
 	fn remove<KeyArg: Borrow<K>>(key: KeyArg);
 
+	/// Mutate the value under a key.
+	fn mutate<KeyArg: Borrow<K>, F: FnOnce(&mut Self::Query)>(key: KeyArg, f: F);
+
 	/// Take the value under a key.
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 }
@@ -339,6 +342,10 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: generator::StorageMa
 
 	fn remove<KeyArg: Borrow<K>>(key: KeyArg) {
 		U::remove(key.borrow(), &RuntimeStorage)
+	}
+
+	fn mutate<KeyArg: Borrow<K>, F: FnOnce(&mut Self::Query)>(key: KeyArg, f: F) {
+		U::mutate(key.borrow(), f, &RuntimeStorage)
 	}
 
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {
