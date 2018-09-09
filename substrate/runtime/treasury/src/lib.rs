@@ -205,13 +205,7 @@ impl<T: Trait> Module<T> {
 		ensure_root(origin)?;
 		ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
 
-		{
-			let mut v = <Approvals<T>>::get();
-			v.push(proposal_id);
-			<Approvals<T>>::put(v);
-		}
-		//TODO gav: make work:
-		//<Approvals<T>>::mutate(|a| a.push(proposal_id));
+		<Approvals<T>>::mutate(|v| v.push(proposal_id));
 
 		Ok(())
 	}
