@@ -150,7 +150,7 @@ impl NetworkConfiguration {
 			max_peers: 50,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
-			client_version: "Parity-network".into(),
+			client_version: "Parity-network".into(),		// TODO: meh
 		}
 	}
 

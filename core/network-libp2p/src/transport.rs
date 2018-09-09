@@ -15,16 +15,15 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use libp2p::{self, PeerId, Transport, mplex, secio, yamux};
-use libp2p::core::{either, upgrade, transport::BoxedMuxed};
+use libp2p::core::{either, upgrade, transport::boxed::Boxed, muxing::StreamMuxerBox};
 use libp2p::transport_timeout::TransportTimeout;
 use std::time::Duration;
 use std::usize;
-use tokio_io::{AsyncRead, AsyncWrite};
 
 /// Builds the transport that serves as a common ground for all connections.
 pub fn build_transport(
 	local_private_key: secio::SecioKeyPair
-) -> BoxedMuxed<(PeerId, impl AsyncRead + AsyncWrite)> {
+) -> Boxed<(PeerId, StreamMuxerBox)> {
 	let mut mplex_config = mplex::MplexConfig::new();
 	mplex_config.max_buffer_len_behaviour(mplex::MaxBufferBehaviour::Block);
 	mplex_config.max_buffer_len(usize::MAX);
@@ -33,16 +32,15 @@ pub fn build_transport(
 		.with_upgrade(secio::SecioConfig::new(local_private_key))
 		.and_then(move |out, endpoint, client_addr| {
 			let upgrade = upgrade::or(
-				upgrade::map(mplex_config, either::EitherOutput::First),
-				upgrade::map(yamux::Config::default(), either::EitherOutput::Second),
+				upgrade::map(yamux::Config::default(), either::EitherOutput::First),
+				upgrade::map(mplex_config, either::EitherOutput::Second),
 			);
-			let key = out.remote_key;
-			let upgrade = upgrade::map(upgrade, move |muxer| (key, muxer));
+			let peer_id = out.remote_key.into_peer_id();
+			let upgrade = upgrade::map(upgrade, move |muxer| (peer_id, muxer));
 			upgrade::apply(out.stream, upgrade, endpoint, client_addr)
 		})
-		.into_connection_reuse()
-		.map(|(key, substream), _| (key.into_peer_id(), substream));
+		.map(|(id, muxer), _| (id, StreamMuxerBox::new(muxer)));
 
 	TransportTimeout::new(base, Duration::from_secs(20))
-		.boxed_muxed()
+		.boxed()
 }
