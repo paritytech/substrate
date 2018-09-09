@@ -113,6 +113,7 @@ pub trait StorageValue<T: codec::Codec> {
 		storage.put(Self::key(), val)
 	}
 
+	/// Mutate this value
 	fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(f: F, storage: &S);
 
 	/// Clear the storage value.
@@ -347,6 +348,7 @@ macro_rules! __storage_items_internal {
 				storage.$taker($key)
 			}
 
+			/// Mutate this value.
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
 				f(&mut val);
@@ -377,6 +379,7 @@ macro_rules! __storage_items_internal {
 				storage.$taker($key)
 			}
 
+			/// Mutate this value
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
 				f(&mut val);
@@ -391,7 +394,7 @@ macro_rules! __storage_items_internal {
 			<$name as $crate::storage::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
 		}
 	};
-	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
+	(($($vis:tt)*) () (RAW_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
 		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
@@ -421,11 +424,52 @@ macro_rules! __storage_items_internal {
 				storage.$taker(&key[..])
 			}
 
-			fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(key: &$kty, f: F, storage: &S) {
+			/// Mutate the value under a key.
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
 				f(&mut val);
-				// TODO: check if we need to deal with Option<> types.
 				<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage);
+			}
+		}
+	};
+	(($($vis:tt)*) () (OPTION_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
+		$($vis)* struct $name;
+
+		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
+			type Query = $gettype;
+
+			/// Get the prefix key in storage.
+			fn prefix() -> &'static [u8] {
+				$prefix
+			}
+
+			/// Get the storage key used to fetch a value corresponding to a specific key.
+			fn key_for(x: &$kty) -> Vec<u8> {
+				let mut key = $prefix.to_vec();
+				$crate::codec::Encode::encode_to(x, &mut key);
+				key
+			}
+
+			/// Load the value associated with the given key from the map.
+			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+				storage.$getter(&key[..])
+			}
+
+			/// Take the value, reading and removing it.
+			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+				storage.$taker(&key[..])
+			}
+
+			/// Mutate the value under a key.
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
+				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+				f(&mut val);
+				match val {
+					Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+					None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+				}
 			}
 		}
 	};
@@ -695,6 +739,7 @@ macro_rules! __decl_storage_item {
 				storage.$taker(<$name<$traitinstance> as $crate::storage::generator::StorageValue<$ty>>::key())
 			}
 
+			/// Mutate the value under a key.
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
 				f(&mut val);
@@ -723,6 +768,7 @@ macro_rules! __decl_storage_item {
 				storage.$taker(<$name<$traitinstance> as $crate::storage::generator::StorageValue<$ty>>::key())
 			}
 
+			/// Mutate the value under a key.
 			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
 				f(&mut val);
@@ -736,8 +782,7 @@ macro_rules! __decl_storage_item {
 	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
 		__decl_storage_item!{ ($($vis)*) ($traittype as $traitinstance) () ($wraptype $gettype) ($getter) ($taker) $cratename $name : map [$kty => $ty] }
 	};
-	// TODO: remove this following wraptype
-	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
+	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () (RAW_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name<$traitinstance: $traittype>($crate::storage::generator::PhantomData<$traitinstance>);
 
 		impl<$traitinstance: $traittype> $crate::storage::generator::StorageMap<$kty, $ty> for $name<$traitinstance> {
@@ -768,11 +813,51 @@ macro_rules! __decl_storage_item {
 			}
 
 			/// Mutate the value under a key
-			fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(key: &$kty, f: F, storage: &S) {
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
 				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
 				f(&mut val);
-				// TODO: check if we need to deal with Option<> types.
 				<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage);
+			}
+		}
+	};
+	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () (OPTION_TYPE $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
+		$($vis)* struct $name<$traitinstance: $traittype>($crate::storage::generator::PhantomData<$traitinstance>);
+
+		impl<$traitinstance: $traittype> $crate::storage::generator::StorageMap<$kty, $ty> for $name<$traitinstance> {
+			type Query = $gettype;
+
+			/// Get the prefix key in storage.
+			fn prefix() -> &'static [u8] {
+				stringify!($cratename $name).as_bytes()
+			}
+
+			/// Get the storage key used to fetch a value corresponding to a specific key.
+			fn key_for(x: &$kty) -> Vec<u8> {
+				let mut key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::prefix().to_vec();
+				$crate::codec::Encode::encode_to(x, &mut key);
+				key
+			}
+
+			/// Load the value associated with the given key from the map.
+			fn get<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+				storage.$getter(&key[..])
+			}
+
+			/// Take the value, reading and removing it.
+			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
+				let key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
+				storage.$taker(&key[..])
+			}
+
+			/// Mutate the value under a key
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
+				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+				f(&mut val);
+				match val {
+					Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+					None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+				}
 			}
 		}
 	};
