@@ -35,6 +35,7 @@ extern crate serde_derive;
 extern crate serde;
 
 extern crate substrate_codec as codec;
+extern crate substrate_primitives;
 
 #[macro_use]
 extern crate substrate_codec_derive;
@@ -59,6 +60,7 @@ use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
 use council::motions as council_motions;
+use substrate_primitives::u32_trait::{_2, _4};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::{BuildStorage, Permill};
@@ -172,8 +174,8 @@ impl council::motions::Trait for Runtime {
 pub type CouncilMotions = council_motions::Module<Runtime>;
 
 impl treasury::Trait for Runtime {
-	type ApproveOrigin = council_motions::EnsureTwoMembers;
-	type RejectOrigin = council_motions::EnsureTwoMembers;
+	type ApproveOrigin = council_motions::EnsureMembers<_4>;
+	type RejectOrigin = council_motions::EnsureMembers<_2>;
 	type Event = Event;
 }
 

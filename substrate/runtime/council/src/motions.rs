@@ -18,6 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::result;
+use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug};
 use substrate_runtime_support::dispatch::{Result, Dispatchable, Parameter};
 use substrate_runtime_support::{StorageValue, StorageMap};
@@ -192,13 +193,13 @@ pub fn ensure_council_members<OuterOrigin>(o: OuterOrigin, n: u32) -> result::Re
 	}
 }
 
-pub struct EnsureTwoMembers;
-impl<O> EnsureOrigin<O> for EnsureTwoMembers
+pub struct EnsureMembers<N: U32>(::rstd::marker::PhantomData<N>);
+impl<O, N: U32> EnsureOrigin<O> for EnsureMembers<N>
 	where O: Into<Option<Origin>>
 {
 	type Success = u32;
 	fn ensure_origin(o: O) -> result::Result<Self::Success, &'static str> {
-		ensure_council_members(o, 2)
+		ensure_council_members(o, N::VALUE)
 	}
 }
 
