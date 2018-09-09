@@ -293,7 +293,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(result, r.as_ref()).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
 		Ok(())
 	},
-	ext_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
+	ext_keccak_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
 		let values = (0..lens_len)
 			.map(|i| this.memory.read_primitive(lens_data + i * 4))
 			.collect::<::std::result::Result<Vec<u32>, UserError>>()?
@@ -301,11 +301,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.scan(0u32, |acc, v| { let o = *acc; *acc += v; Some((o, v)) })
 			.map(|(offset, len)|
 				this.memory.get(values_data + offset, len as usize)
-					.map_err(|_| UserError("Invalid attempt to get memory in ext_enumerated_trie_root"))
+					.map_err(|_| UserError("Invalid attempt to get memory in ext_keccak_enumerated_trie_root"))
 			)
 			.collect::<::std::result::Result<Vec<_>, UserError>>()?;
 		let r = ordered_trie_root::<KeccakHasher, _, _>(values.into_iter());
-		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_enumerated_trie_root"))?;
+		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_keccak_enumerated_trie_root"))?;
 		Ok(())
 	},
 	ext_chain_id() -> u64 => {

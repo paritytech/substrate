@@ -53,7 +53,10 @@ pub use local_executor::LocalExecutor;
 pub type Backend = client::in_mem::Backend<runtime::Block, KeccakHasher, RlpCodec>;
 
 /// Test client executor.
-pub type Executor = client::LocalCallExecutor<Backend, executor::NativeExecutor<LocalExecutor>>;
+pub type Executor = client::LocalCallExecutor<
+	Backend,
+	executor::NativeExecutor<LocalExecutor>,
+>;
 
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
