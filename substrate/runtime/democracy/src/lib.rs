@@ -61,6 +61,8 @@ pub type ReferendumIndex = u32;
 
 pub trait Trait: balances::Trait + Sized {
 	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>> + MaybeSerializeDebug;
+
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
 decl_module! {
@@ -106,7 +108,32 @@ decl_storage! {
 	}
 }
 
+/// An event in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawEvent<Balance, AccountId> {
+	Tabled(PropIndex, Balance, Vec<AccountId>),
+	Started(ReferendumIndex, VoteThreshold),
+	Passed(ReferendumIndex),
+	Failed(ReferendumIndex),
+	Executed(ReferendumIndex, bool),
+}
+
+impl<B, A> From<RawEvent<B, A>> for () {
+	fn from(_: RawEvent<B, A>) -> () { () }
+}
+
+pub type Event<T> = RawEvent<
+	<T as balances::Trait>::Balance,
+	<T as system::Trait>::AccountId,
+>;
+
 impl<T: Trait> Module<T> {
+
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
 
 	// exposed immutables.
 
@@ -180,16 +207,14 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
-	/// false would be a vote to keep the status quo..
+	/// false would be a vote to keep the status quo.
 	fn vote(origin: T::Origin, ref_index: ReferendumIndex, approve_proposal: bool) -> Result {
 		let who = ensure_signed(origin)?;
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
 		ensure!(!<balances::Module<T>>::total_balance(&who).is_zero(),
 			"transactor must have balance to signal approval.");
 		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-			let mut voters = Self::voters_for(ref_index);
-			voters.push(who.clone());
-			<VotersFor<T>>::insert(ref_index, voters);
+			<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
 		}
 		<VoteOf<T>>::insert(&(ref_index, who), approve_proposal);
 		Ok(())
@@ -239,6 +264,7 @@ impl<T: Trait> Module<T> {
 
 		<ReferendumCount<T>>::put(ref_index + 1);
 		<ReferendumInfoOf<T>>::insert(ref_index, (end, proposal, vote_threshold));
+		Self::deposit_event(RawEvent::Started(ref_index, vote_threshold));
 		Ok(ref_index)
 	}
 
@@ -261,15 +287,15 @@ impl<T: Trait> Module<T> {
 				.max_by_key(|x| Self::locked_for((x.1).0).unwrap_or_else(Zero::zero)/*defensive only: All current public proposals have an amount locked*/)
 			{
 				let (prop_index, proposal, _) = public_props.swap_remove(winner_index);
+				<PublicProps<T>>::put(public_props);
+
 				if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {//: (T::Balance, Vec<T::AccountId>) =
 					// refund depositors
 					for d in &depositors {
 						<balances::Module<T>>::unreserve(d, deposit);
 					}
-					<PublicProps<T>>::put(public_props);
+					Self::deposit_event(RawEvent::Tabled(prop_index, deposit, depositors));
 					Self::inject_referendum(now + Self::voting_period(), proposal, VoteThreshold::SuperMajorityApprove)?;
-				} else {
-					return Err("depositors always exist for current proposals")
 				}
 			}
 		}
@@ -280,7 +306,11 @@ impl<T: Trait> Module<T> {
 			let total_stake = <balances::Module<T>>::total_stake();
 			Self::clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
-				proposal.dispatch(system::RawOrigin::Root.into())?;
+				Self::deposit_event(RawEvent::Passed(index));
+				let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
+				Self::deposit_event(RawEvent::Executed(index, ok));
+			} else {
+				Self::deposit_event(RawEvent::Failed(index));
 			}
 			<NextTally<T>>::put(index + 1);
 		}
