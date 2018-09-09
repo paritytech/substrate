@@ -58,6 +58,7 @@ use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
+use council::motions as council_motions;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::{BuildStorage, Permill};
@@ -161,9 +162,18 @@ pub type Council = council::Module<Runtime>;
 /// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Runtime>;
 
+impl council::motions::Trait for Runtime {
+	type Origin = Origin;
+	type Proposal = Call;
+	type Event = Event;
+}
+
+/// Council motions module for this concrete runtime.
+pub type CouncilMotions = council_motions::Module<Runtime>;
+
 impl treasury::Trait for Runtime {
-	type ApproveOrigin = council::EnsureTwoMembers;
-	type RejectOrigin = council::EnsureTwoMembers;
+	type ApproveOrigin = council_motions::EnsureTwoMembers;
+	type RejectOrigin = council_motions::EnsureTwoMembers;
 	type Event = Event;
 }
 
@@ -172,7 +182,7 @@ pub type Treasury = treasury::Module<Runtime>;
 
 impl_outer_event! {
 	pub enum Event for Runtime {
-		balances, session, staking, treasury
+		balances, session, staking, treasury, council_motions
 	}
 }
 
@@ -184,7 +194,7 @@ impl_outer_log! {
 
 impl_outer_origin! {
 	pub enum Origin for Runtime {
-		council
+		council_motions
 	}
 }
 
@@ -198,6 +208,7 @@ impl_outer_dispatch! {
 		Democracy,
 		Council,
 		CouncilVoting,
+		CouncilMotions,
 		Treasury,
 	}
 }
