@@ -39,7 +39,7 @@ pub trait Trait: CouncilTrait + MaybeSerializeDebug {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-/// Origin for the system module. 
+/// Origin for the council module. 
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Origin {
