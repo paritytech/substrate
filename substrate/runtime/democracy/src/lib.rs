@@ -115,7 +115,7 @@ pub enum RawEvent<Balance, AccountId> {
 	Tabled(PropIndex, Balance, Vec<AccountId>),
 	Started(ReferendumIndex, VoteThreshold),
 	Passed(ReferendumIndex),
-	Failed(ReferendumIndex),
+	NotPassed(ReferendumIndex),
 	Executed(ReferendumIndex, bool),
 }
 
@@ -310,7 +310,7 @@ impl<T: Trait> Module<T> {
 				let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
 				Self::deposit_event(RawEvent::Executed(index, ok));
 			} else {
-				Self::deposit_event(RawEvent::Failed(index));
+				Self::deposit_event(RawEvent::NotPassed(index));
 			}
 			<NextTally<T>>::put(index + 1);
 		}

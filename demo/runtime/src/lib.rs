@@ -163,7 +163,7 @@ pub type CouncilVoting = council::voting::Module<Runtime>;
 
 impl_outer_event! {
 	pub enum Event for Runtime {
-		balances, session, staking
+		balances, session, staking, democracy
 	}
 }
 
