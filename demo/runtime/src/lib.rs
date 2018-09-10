@@ -55,12 +55,12 @@ extern crate substrate_runtime_treasury as treasury;
 extern crate substrate_runtime_version as version;
 extern crate demo_primitives;
 
+use substrate_primitives::u32_trait::{_2, _4};
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
-use council::motions as council_motions;
-use substrate_primitives::u32_trait::{_2, _4};
+use council::{motions as council_motions, voting as council_voting};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::{BuildStorage, Permill};
@@ -158,10 +158,17 @@ impl democracy::Trait for Runtime {
 /// Democracy module for this concrete runtime.
 pub type Democracy = democracy::Module<Runtime>;
 
-impl council::Trait for Runtime {}
+impl council::Trait for Runtime {
+	type Event = Event;
+}
 
 /// Council module for this concrete runtime.
 pub type Council = council::Module<Runtime>;
+
+impl council::voting::Trait for Runtime {
+	type Event = Event;
+}
+
 /// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Runtime>;
 
@@ -185,7 +192,7 @@ pub type Treasury = treasury::Module<Runtime>;
 
 impl_outer_event! {
 	pub enum Event for Runtime {
-		balances, session, staking, democracy, treasury, council_motions
+		balances, session, staking, democracy, treasury, council, council_voting, council_motions
 	}
 }
 
