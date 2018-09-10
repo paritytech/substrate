@@ -26,87 +26,100 @@
 macro_rules! impl_json_metadata {
 	(
 		for $runtime:ident with modules
-		$( $mod:ident::$module:ident $(with Storage)* ),*
+		$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn json_metadata() -> String {
-				format!(r#"{{ "events": {events}, "modules": {modules} }}"#,
-					events = Self::outer_event_json_metadata(),
-					modules = __runtime_impl_json_metadata!($runtime; $( $mod::$module; )*)
-				)
+			pub fn json_metadata() -> Vec<$crate::metadata::JSONMetadata> {
+					__impl_json_metadata!($runtime;
+						$crate::metadata::JSONMetadata::Events {
+							events: Self::outer_event_json_metadata()
+						};
+						$( $rest )*
+					)
 			}
 		}
 	}
 }
 
+#[derive(Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+#[allow(dead_code)]
+pub enum JSONMetadata {
+	Events { events: &'static str },
+	Module { module: &'static str, prefix: &'static str },
+	ModuleWithStorage { module: &'static str, prefix: &'static str, storage: &'static str }
+}
+
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __runtime_impl_json_metadata {
+macro_rules! __impl_json_metadata {
 	(
 		$runtime: ident;
-		$mod:ident::$module:ident;
+		$( $metadata:expr ),*;
+		$mod:ident::$module:ident,
 		$( $rest:tt )*
 	) => {
-		__runtime_impl_json_metadata!(
+		__impl_json_metadata!(
 			$runtime;
-			r#"{{ "prefix": "{}", "module": {} }}"#;
-			stringify!($mod), $mod::$module::<$runtime>::json_metadata();
-			$( $rest )*)
+			$( $metadata, )* $crate::metadata::JSONMetadata::Module {
+				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod)
+			};
+			$( $rest )*
+		)
 	};
 	(
 		$runtime: ident;
-		$format_str:expr;
-		$( $format_params:expr ),*;
-		$mod:ident::$module:ident;
-		$( $rest:tt )*
+		$( $metadata:expr ),*;
+		$mod:ident::$module:ident
 	) => {
-		__runtime_impl_json_metadata!(
+		__impl_json_metadata!(
 			$runtime;
-			concat!($format_str, r#", {{ "prefix": "{}", "module": {} }}"#);
-			$( $format_params, )* stringify!($mod), $mod::$module::<$runtime>::json_metadata();
-			$( $rest )*)
+			$( $metadata, )* $crate::metadata::JSONMetadata::Module {
+				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod)
+			};
+		)
 	};
 	(
 		$runtime: ident;
-		$mod:ident::$module:ident with Storage;
+		$( $metadata:expr ),*;
+		$mod:ident::$module:ident with Storage,
 		$( $rest:tt )*
 	) => {
-		__runtime_impl_json_metadata!(
+		__impl_json_metadata!(
 			$runtime;
-			r#"{{ "prefix": "{}", "module": {}, "storage": {} }}"#;
-			stringify!($mod), $mod::$module::<$runtime>::json_metadata(),
-			$mod::$module::<$runtime>::store_json_metadata(); $( $rest )*)
+			$( $metadata, )* $crate::metadata::JSONMetadata::ModuleWithStorage {
+				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod),
+				storage: $mod::$module::<$runtime>::store_json_metadata()
+			};
+			$( $rest )*
+		)
 	};
 	(
 		$runtime: ident;
-		$format_str:expr;
-		$( $format_params:expr ),*;
-		$mod:ident::$module:ident with Storage;
-		$( $rest:tt )*
+		$( $metadata:expr ),*;
+		$mod:ident::$module:ident with Storage
 	) => {
-		__runtime_impl_json_metadata!(
+		__impl_json_metadata!(
 			$runtime;
-			concat!($format_str, r#", {{ "prefix": "{}", "module": {}, "storage": {} }}"#);
-			$( $format_params, )* stringify!($mod), $mod::$module::<$runtime>::json_metadata(),
-			$mod::$module::<$runtime>::store_json_metadata(); $( $rest )*)
+			$( $metadata, )* $crate::metadata::JSONMetadata::ModuleWithStorage {
+				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod),
+				storage: $mod::$module::<$runtime>::store_json_metadata()
+			};
+		)
 	};
 	(
 		$runtime:ident;
-		$format_str:expr;
-		$( $format_params:expr ),*;
+		$( $metadata:expr ),*;
 	) => {
-		format!(concat!("[ ", $format_str, " ]"), $( $format_params, )*)
+		vec![ $( $metadata ),* ]
 	};
-	// No modules
-	() => { "null" }
 }
 
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
-	use serde;
-	use serde_json;
+	use super::*;
 	use dispatch::Result;
 
 	mod system {
@@ -123,16 +136,13 @@ mod tests {
 		}
 
 		decl_module! {
-			pub struct Module<T: Trait>;
-
-			#[derive(Serialize, Deserialize)]
-			pub enum Call where aux: T::PublicAux {
-				fn aux_0(aux) -> Result;
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+				fn aux_0(origin) -> Result;
 			}
 		}
 
 		impl<T: Trait> Module<T> {
-			fn aux_0(_: &T::PublicAux) -> Result {
+			fn aux_0(_: T::Origin) -> Result {
 				unreachable!()
 			}
 		}
@@ -147,7 +157,7 @@ mod tests {
 		}
 
 		decl_module! {
-			pub struct ModuleWithStorage<T: Trait>;
+			pub struct ModuleWithStorage<T: Trait> for enum Call where origin: T::Origin {}
 		}
 
 		decl_storage! {
@@ -167,11 +177,11 @@ mod tests {
 	}
 
 	pub trait Trait {
-		 type PublicAux;
+		 type Origin;
 	}
 
 	impl Trait for TestRuntime {
-		type PublicAux = u32;
+		type Origin = u32;
 	}
 
 	impl_json_metadata!(
@@ -180,25 +190,38 @@ mod tests {
 			event_module2::ModuleWithStorage with Storage
 	);
 
-	const EXPECTED_METADATA: &str = concat!(
-		r#"{ "events": { "name": "TestEvent", "items": "#,
-			r#"{ "system": "system::Event", "event_module": "event_module::Event<TestRuntime>", "#,
-				r#""event_module2": "event_module2::Event<TestRuntime>" } }, "#,
-		r#""modules": [ "#,
-			r#"{ "prefix": "event_module", "#,
-				r#""module": { "name": "Module", "calls": [ "#,
+	const EXPECTED_METADATA: &[JSONMetadata] = &[
+		JSONMetadata::Events {
+			events: concat!(
+				r#"{ "name": "TestEvent", "items": "#,
+					r#"{ "system": "system::Event", "#,
+					r#""event_module": "event_module::Event<TestRuntime>", "#,
+					r#""event_module2": "event_module2::Event<TestRuntime>" } }"#)
+		},
+		JSONMetadata::Module {
+			module: concat!(
+				r#"{ "name": "Module", "call": "#,
 					r#"{ "name": "Call", "functions": "#,
 						r#"{ "0": { "name": "aux_0", "params": [ "#,
-							r#"{ "name": "aux", "type": "T::PublicAux" } ], "#,
-							r#""description": [ ] } } } ] } }, "#,
-			r#"{ "prefix": "event_module2", "module": "#,
-				r#"{ "name": "ModuleWithStorage", "calls": [ ] } } ] }"#);
+							r#"{ "name": "origin", "type": "T::Origin" } ], "#,
+							r#""description": [ ] } } } }"#
+			),
+			prefix: "event_module"
+		},
+		JSONMetadata::ModuleWithStorage {
+			module: r#"{ "name": "ModuleWithStorage", "call": { "name": "Call", "functions": { } } }"#,
+			prefix: "event_module2",
+			storage: concat!(
+				r#"{ "prefix": "TestStorage", "items": { "#,
+					r#""StorageMethod": { "description": [ ], "modifier": null, "type": "u32" }"#,
+				r#" } }"#
+			)
+		}
+	];
 
 	#[test]
 	fn runtime_json_metadata() {
 		let metadata = TestRuntime::json_metadata();
-		assert_eq!(EXPECTED_METADATA, metadata);
-		let _: serde::de::IgnoredAny =
-			serde_json::from_str(&metadata).expect("Is valid json syntax");
+		assert_eq!(EXPECTED_METADATA, &metadata[..]);
 	}
 }

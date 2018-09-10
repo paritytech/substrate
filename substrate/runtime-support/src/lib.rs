@@ -49,7 +49,7 @@ mod hashable;
 #[macro_use]
 mod event;
 #[macro_use]
-mod metadata;
+pub mod metadata;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
@@ -172,7 +172,7 @@ macro_rules! impl_outer_origin {
 		impl_outer_origin! {
 			$(#[$attr])*
 			pub enum $name for $trait where system = system {
-				$( $module ),* 
+				$( $module ),*
 			}
 		}
 	}
