@@ -213,7 +213,7 @@ macro_rules! decl_module {
 			}
 		}
 
-		__impl_json_metadata! {
+		__dispatch_impl_json_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
 			{$( $(#[doc = $doc_attr])* fn $fn_name(origin $(, $param_name : $param )*) -> $result; )*}
 		}
@@ -240,7 +240,7 @@ macro_rules! __impl_decode {
 				)*
 				return Some($call_type:: $fn_name( $( $param_name ),* ));
 			}
-							
+
 			__impl_decode!($input; $input_id; $fn_id + 1; $call_type; $($rest)*)
 		}
 	};
@@ -278,7 +278,7 @@ macro_rules! __impl_encode {
 					$param_name.encode_to($dest);
 				)*
 			}
-							
+
 			__impl_encode!($dest; $self; $fn_id + 1; $call_type; $($rest)*)
 		}
 	};
@@ -368,15 +368,15 @@ macro_rules! __impl_outer_dispatch_common {
 /// Implement the `json_metadata` function.
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __impl_json_metadata {
+macro_rules! __dispatch_impl_json_metadata {
 	(
 		$mod_type:ident $trait_instance:ident $trait_name:ident
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn json_metadata() -> &'static str {
-				concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "call": [ "#,
-					__call_to_json!($($rest)*), " ] }")
+				concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "call": "#,
+					__call_to_json!($($rest)*), " }")
 			}
 		}
 	}
@@ -536,7 +536,7 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: &str = concat!(
-		r#"{ "name": "Module", "call": [ "#,
+		r#"{ "name": "Module", "call": "#,
 			r#"{ "name": "Call", "functions": { "#,
 				r#""0": { "name": "aux_0", "params": [ "#,
 					r#"{ "name": "origin", "type": "T::Origin" }"#,
@@ -551,7 +551,7 @@ mod tests {
 					r#"{ "name": "data2", "type": "String" }"#,
 				r#" ], "description": [ ] }"#,
 			r#" } }"#,
-		r#" ] }"#,
+		r#" }"#,
 	);
 
 	impl<T: Trait> Module<T> {

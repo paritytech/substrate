@@ -29,6 +29,7 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_runtime_version as runtime_version;
 extern crate tokio;
+extern crate serde_json;
 
 #[macro_use]
 extern crate error_chain;

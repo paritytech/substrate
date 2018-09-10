@@ -134,6 +134,11 @@ pub mod api {
 	use system;
 	impl_stubs!(
 		version => |()| super::version(),
+		json_metadata => |()| {
+			let mut vec = ::runtime_support::metadata::Vec::new();
+			vec.push(::runtime_support::metadata::JSONMetadata::Events { events: r#""events""# });
+			vec
+		},
 		authorities => |()| system::authorities(),
 		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),
