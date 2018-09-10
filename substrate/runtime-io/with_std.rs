@@ -23,6 +23,8 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_state_machine;
 extern crate triehash;
 extern crate ed25519;
+extern crate hashdb;
+extern crate rlp;
 
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
@@ -35,6 +37,8 @@ pub use primitives::KeccakHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 use primitives::H256;
+use hashdb::Hasher;
+use rlp::Encodable;
 
 // TODO: use the real error, not NoError.
 
@@ -43,12 +47,13 @@ environmental!(ext: trait Externalities<KeccakHasher>);
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 	ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
-		.expect("read_storage cannot be called outside of an Externalities-provided environment.")
+		.expect("storage cannot be called outside of an Externalities-provided environment.")
 }
 
-/// Get `key` from storage, placing the value into `value_out` (as much as possible) and return
-/// the number of bytes that the key in storage was beyond the offset or None if the storage entry
-/// doesn't exist at all.
+/// Get `key` from storage, placing the value into `value_out` (as much of it as possible) and return
+/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
+/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
+/// number of bytes is not equal to the number of bytes written to the `value_out`.
 pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 	ext::with(|ext| ext.storage(key).map(|value| {
 		let value = &value[value_offset..];
@@ -58,14 +63,14 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
 
-/// Set the storage of some particular key to Some value.
+/// Set the storage of a key to some value.
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	ext::with(|ext|
 		ext.set_storage(key.to_vec(), value.to_vec())
 	);
 }
 
-/// Clear the storage of some particular key.
+/// Clear the storage of a key.
 pub fn clear_storage(key: &[u8]) {
 	ext::with(|ext|
 		ext.clear_storage(key)
@@ -79,7 +84,7 @@ pub fn exists_storage(key: &[u8]) -> bool {
 	).unwrap_or(false)
 }
 
-/// Clear the storage entries key of which starts with the given prefix.
+/// Clear the storage entries with a key that starts with the given prefix.
 pub fn clear_prefix(prefix: &[u8]) {
 	ext::with(|ext|
 		ext.clear_prefix(prefix)
@@ -93,7 +98,7 @@ pub fn chain_id() -> u64 {
 	).unwrap_or(0)
 }
 
-/// "Commit" all existing operations and get the resultant storage root.
+/// "Commit" all existing operations and compute the resultant storage root.
 pub fn storage_root() -> H256 {
 	ext::with(|ext|
 		ext.storage_root()
@@ -101,25 +106,35 @@ pub fn storage_root() -> H256 {
 }
 
 /// A trie root formed from the enumerated items.
-pub fn enumerated_trie_root(serialised_values: &[&[u8]]) -> [u8; 32] {
-	triehash::ordered_trie_root::<KeccakHasher, _, _>(serialised_values.iter().map(|s| s.to_vec())).0
+pub fn enumerated_trie_root<H>(serialised_values: &[&[u8]]) -> H::Out
+where
+	H: Hasher,
+	H::Out: Encodable + Ord,
+{
+	triehash::ordered_trie_root::<H, _, _>(serialised_values.iter().map(|s| s.to_vec()))
 }
 
 /// A trie root formed from the iterated items.
-pub fn trie_root<
+pub fn trie_root<H, I, A, B>(input: I) -> H::Out
+where
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
->(input: I) -> [u8; 32] {
-	triehash::trie_root::<KeccakHasher, _, _, _>(input).0
+	H: Hasher,
+	<H as Hasher>::Out: Encodable + Ord,
+{
+	triehash::trie_root::<H, _, _, _>(input)
 }
 
 /// A trie root formed from the enumerated items.
-pub fn ordered_trie_root<
+pub fn ordered_trie_root<H, I, A>(input: I) -> H::Out
+where
 	I: IntoIterator<Item = A>,
-	A: AsRef<[u8]>
->(input: I) -> [u8; 32] {
-	triehash::ordered_trie_root::<KeccakHasher, _, _>(input).0
+	A: AsRef<[u8]>,
+	H: Hasher,
+	<H as Hasher>::Out: Encodable + Ord,
+{
+	triehash::ordered_trie_root::<H, _, _>(input)
 }
 
 /// Verify a ed25519 signature.

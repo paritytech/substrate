@@ -28,7 +28,6 @@ use primitives::H256;
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use rlp::Encodable;
-use primitives::{KeccakHasher, RlpCodec};
 
 use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
@@ -37,26 +36,32 @@ use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
 use codec::Decode;
 use heapsize::HeapSizeOf;
+use std::marker::PhantomData;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
-pub struct RemoteCallExecutor<B, F> {
+pub struct RemoteCallExecutor<B, F, H, C> {
 	blockchain: Arc<B>,
 	fetcher: Arc<F>,
+	_hasher: PhantomData<H>,
+	_codec: PhantomData<C>,
 }
 
-impl<B, F> RemoteCallExecutor<B, F> {
+impl<B, F, H, C> RemoteCallExecutor<B, F, H, C> {
 	/// Creates new instance of remote call executor.
 	pub fn new(blockchain: Arc<B>, fetcher: Arc<F>) -> Self {
-		RemoteCallExecutor { blockchain, fetcher }
+		RemoteCallExecutor { blockchain, fetcher, _hasher: PhantomData, _codec: PhantomData }
 	}
 }
 
-impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExecutor<B, F>
-	where
-		Block: BlockT,
-		B: ChainBackend<Block>,
-		F: Fetcher<Block>,
+impl<B, F, Block, H, C> CallExecutor<Block, H, C> for RemoteCallExecutor<B, F, H, C>
+where
+	Block: BlockT,
+	B: ChainBackend<Block>,
+	F: Fetcher<Block>,
+	H: Hasher,
+	H::Out: Ord + Encodable,
+	C: NodeCodec<H>
 {
 	type Error = ClientError;
 
@@ -84,7 +89,7 @@ impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExec
 	}
 
 	fn call_at_state<
-		S: StateBackend<KeccakHasher, RlpCodec>,
+		S: StateBackend<H, C>,
 		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
 	>(&self,
 		_state: &S,
@@ -96,7 +101,7 @@ impl<B, F, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for RemoteCallExec
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend<KeccakHasher, RlpCodec>>(
+	fn prove_at_state<S: StateBackend<H, C>>(
 		&self,
 		_state: S,
 		_changes: &mut OverlayedChanges,

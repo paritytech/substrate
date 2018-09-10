@@ -18,13 +18,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg_attr(any(feature = "std", test), macro_use)]
+#[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_runtime_std as rstd;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
-#[cfg(any(feature = "std", test))]
+#[cfg(feature = "std")]
 extern crate substrate_runtime_io as runtime_io;
 
 #[cfg(feature = "std")]
@@ -44,7 +44,7 @@ extern crate substrate_runtime_balances as balances;
 use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
-use runtime_primitives::{Permill, traits::{OnFinalise, Zero, One, EnsureOrigin}};
+use runtime_primitives::{Permill, traits::{OnFinalise, Zero, EnsureOrigin}};
 use balances::OnMinted;
 use system::{ensure_signed, ensure_root};
 
@@ -293,7 +293,7 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	}
 }
 
-#[cfg(any(feature = "std", test))]
+#[cfg(feature = "std")]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -306,19 +306,19 @@ pub struct GenesisConfig<T: Trait> {
 	pub burn: Permill,
 }
 
-#[cfg(any(feature = "std", test))]
+#[cfg(feature = "std")]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
 			proposal_bond: Default::default(),
 			proposal_bond_minimum: Default::default(),
-			spend_period: One::one(),
+			spend_period: runtime_primitives::traits::One::one(),
 			burn: Default::default(),
 		}
 	}
 }
 
-#[cfg(any(feature = "std", test))]
+#[cfg(feature = "std")]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
