@@ -92,6 +92,8 @@ pub use hashing::{blake2_256, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
 
+pub mod u32_trait;
+
 pub mod hash;
 mod hasher;
 pub mod sandbox;

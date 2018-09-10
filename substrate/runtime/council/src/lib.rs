@@ -25,8 +25,13 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
+
 extern crate integer_sqrt;
 extern crate substrate_codec as codec;
+#[macro_use] extern crate substrate_codec_derive;
 extern crate substrate_primitives;
 #[cfg(feature = "std")] extern crate substrate_keyring as keyring;
 #[macro_use] extern crate substrate_runtime_std as rstd;
@@ -47,6 +52,7 @@ use balances::address::Address;
 use system::{ensure_signed, ensure_root};
 
 pub mod voting;
+pub mod motions;
 
 // no polynomial attacks:
 //
@@ -630,9 +636,18 @@ mod tests {
 	use primitives::traits::{BlakeTwo256};
 	use primitives::testing::{Digest, Header};
 	use substrate_primitives::KeccakHasher;
+	use motions as council_motions;
 
 	impl_outer_origin! {
-		pub enum Origin for Test {}
+		pub enum Origin for Test {
+			council_motions
+		}
+	}
+
+	impl_outer_event! {
+		pub enum Event for Test {
+			balances, democracy, council_motions
+		}
 	}
 
 	impl_outer_dispatch! {
@@ -654,20 +669,26 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
-		type Event = ();
+		type Event = Event;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
 		type AccountIndex = u64;
 		type OnFreeBalanceZero = ();
 		type EnsureAccountLiquid = ();
-		type Event = ();
+		type Event = Event;
 	}
 	impl democracy::Trait for Test {
 		type Proposal = Call;
-		type Event = ();
+		type Event = Event;
 	}
-	impl Trait for Test {}
+	impl Trait for Test {
+	}
+	impl council_motions::Trait for Test {
+		type Origin = Origin;
+		type Proposal = Call;
+		type Event = Event;
+	}
 
 	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
