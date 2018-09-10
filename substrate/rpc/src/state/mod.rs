@@ -65,8 +65,8 @@ build_rpc_trait! {
 		fn storage_size(&self, StorageKey, Trailing<Hash>) -> Result<Option<u64>>;
 
 		/// Returns the runtime metadata as JSON.
-		#[rpc(name = "state_metadata", alias = ["state_metadataAt", ])]
-		fn json_metadata(&self, Trailing<Hash>) -> Result<serde_json::Value>;
+		#[rpc(name = "state_getMetadata")]
+		fn metadata(&self, Trailing<Hash>) -> Result<serde_json::Value>;
 
 		/// Query historical storage entries (by key) starting from a block given as the second parameter.
 		///
@@ -143,7 +143,7 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
-	fn json_metadata(&self, block: Trailing<Block::Hash>) -> Result<serde_json::Value> {
+	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<serde_json::Value> {
 		let block = self.unwrap_or_best(block)?;
 		let metadata = self.client.json_metadata(&BlockId::Hash(block))?;
 		serde_json::from_str(&metadata).map_err(Into::into)
