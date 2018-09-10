@@ -249,8 +249,6 @@ mod tests {
 	use substrate_runtime_support::Hashable;
 	use democracy::VoteThreshold;
 
-	type CouncilVoting = super::Module<Test>;
-
 	#[test]
 	fn basic_environment_works() {
 		with_externalities(&mut new_test_ext(true), || {
