@@ -244,7 +244,7 @@ impl_json_metadata!(
 pub mod api {
 	impl_stubs!(
 		version => |()| super::VERSION,
-		metadata => |()| super::Runtime::json_metadata(),
+		json_metadata => |()| super::Runtime::json_metadata(),
 		authorities => |()| super::Consensus::authorities(),
 		events => |()| super::System::events(),
 		initialise_block => |header| super::Executive::initialise_block(&header),

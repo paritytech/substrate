@@ -134,7 +134,9 @@ pub mod api {
 	use system;
 	impl_stubs!(
 		version => |()| super::version(),
-		json_metadata => |()| String::from("metadata"),
+		json_metadata => |()| vec![
+			::runtime_support::metadata::JSONMetadata::Events { events: r#""events""# }
+		],
 		authorities => |()| system::authorities(),
 		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),

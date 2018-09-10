@@ -90,6 +90,26 @@ pub enum JSONMetadataDecodable {
 }
 
 #[cfg(feature = "std")]
+impl JSONMetadataDecodable {
+	/// Returns the instance as JSON string.
+	/// The first value of the tuple is the name of the metadata type and the second in the JSON string.
+	pub fn into_json_string(self) -> (&'static str, String) {
+		match self {
+			JSONMetadataDecodable::Events { events } => {
+				("events", events)
+			},
+			JSONMetadataDecodable::Module { prefix, module } => {
+				("module", format!(r#"{{ "prefix": "{}", "module": {} }}"#, prefix, module))
+			},
+			JSONMetadataDecodable::ModuleWithStorage { prefix, module, storage } => {
+				("moduleWithStorage",
+				 format!(r#"{{ "prefix": "{}", "module": {}, "storage": {} }}"#, prefix, module, storage))
+			}
+		}
+	}
+}
+
+#[cfg(feature = "std")]
 impl Decode for JSONMetadataDecodable {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		i8::decode(input).and_then(|variant| {
