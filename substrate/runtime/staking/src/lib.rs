@@ -137,6 +137,8 @@ impl<B, A> From<RawEvent<B, A>> for () {
 	fn from(_: RawEvent<B, A>) -> () { () }
 }
 
+pub type PairOf<T> = (T, T);
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
@@ -173,7 +175,7 @@ decl_storage! {
 		pub LastEraLengthChange get(last_era_length_change): default T::BlockNumber;
 
 		/// The highest and lowest staked validator slashable balances.
-		pub StakeRange get(stake_range): default (T::Balance, T::Balance);
+		pub StakeRange get(stake_range): default PairOf<T::Balance>;
 
 		/// The block at which the `who`'s funds become entirely liquid.
 		pub Bondage get(bondage): default map [ T::AccountId => T::BlockNumber ];

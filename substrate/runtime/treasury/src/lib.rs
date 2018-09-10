@@ -280,9 +280,11 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnDilution<T::Balance> for Module<T> {
 	fn on_dilution(minted: T::Balance, portion: T::Balance) {
-		let total_issuance = <balances::Module<T>>::total_issuance();
-		let funding = (total_issuance - portion) / portion * minted;
-		<Pot<T>>::mutate(|x| *x += funding);
+		if !minted.is_zero() && !portion.is_zero() {
+			let total_issuance = <balances::Module<T>>::total_issuance();
+			let funding = (total_issuance - portion) / portion * minted;
+			<Pot<T>>::mutate(|x| *x += funding);
+		}
 	}
 }
 
