@@ -15,6 +15,12 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use codec::{Encode, Decode, Output, Input};
+use alloc;
+
+/// Make Box available on `std` and `no_std`.
+pub type Box<T> = alloc::boxed::Box<T>;
+/// Make Vec available on `std` and `no_std`.
+pub type Vec<T> = alloc::vec::Vec<T>;
 
 /// Implements the json metadata support for the given runtime and all its modules.
 ///
@@ -31,7 +37,7 @@ macro_rules! impl_json_metadata {
 		$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn json_metadata() -> Vec<$crate::metadata::JSONMetadata> {
+			pub fn json_metadata() -> $crate::metadata::Vec<$crate::metadata::JSONMetadata> {
 					__impl_json_metadata!($runtime;
 						$crate::metadata::JSONMetadata::Events {
 							events: Self::outer_event_json_metadata()
@@ -191,7 +197,7 @@ macro_rules! __impl_json_metadata {
 		$runtime:ident;
 		$( $metadata:expr ),*;
 	) => {
-		vec![ $( $metadata ),* ]
+		<[_]>::into_vec($crate::metadata::Box::new([ $( $metadata ),* ]))
 	};
 }
 

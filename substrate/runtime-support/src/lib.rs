@@ -17,6 +17,10 @@
 //! Support code for the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -40,6 +44,12 @@ extern crate substrate_codec_derive;
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
 pub use self::storage::generator::Storage as GenericStorage;
+
+#[cfg(feature = "std")]
+pub mod alloc {
+	pub use std::boxed;
+	pub use std::vec;
+}
 
 #[macro_use]
 pub mod dispatch;
