@@ -666,7 +666,12 @@ mod tests {
 	impl democracy::Trait for Test {
 		type Proposal = Call;
 	}
-	impl Trait for Test {}
+	impl voting::Trait for Test {
+		type Event = ();
+	}
+	impl Trait for Test {
+		type Event = ();
+	}
 
 	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
