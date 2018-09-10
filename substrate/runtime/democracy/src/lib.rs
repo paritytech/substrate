@@ -420,6 +420,7 @@ mod tests {
 	}
 	impl Trait for Test {
 		type Proposal = Call;
+		type Event = ();
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
