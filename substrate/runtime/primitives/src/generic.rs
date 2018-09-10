@@ -235,8 +235,8 @@ impl<Item> traits::Digest for Digest<Item> where
 }
 
 
-/// Generic digest item that is able to encode/decode 'system' digest items and
-/// provide access to other items.
+/// Digest item that is able to encode/decode 'system' digest items and
+/// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub enum DigestItem<AuthorityId> {
