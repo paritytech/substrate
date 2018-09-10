@@ -116,6 +116,7 @@ pub enum RawEvent<Balance, AccountId> {
 	Started(ReferendumIndex, VoteThreshold),
 	Passed(ReferendumIndex),
 	NotPassed(ReferendumIndex),
+	Cancelled(ReferendumIndex),
 	Executed(ReferendumIndex, bool),
 }
 
@@ -246,6 +247,7 @@ impl<T: Trait> Module<T> {
 
 	/// Remove a referendum. Can be called directly by the council.
 	pub fn internal_cancel_referendum(ref_index: ReferendumIndex) {
+		Self::deposit_event(RawEvent::Cancelled(ref_index));
 		<Module<T>>::clear_referendum(ref_index);
 	}
 
