@@ -40,12 +40,12 @@ macro_rules! impl_json_metadata {
 	) => {
 		impl $runtime {
 			pub fn json_metadata() -> $crate::metadata::Vec<$crate::metadata::JSONMetadata> {
-					__impl_json_metadata!($runtime;
-						$crate::metadata::JSONMetadata::Events {
-							events: Self::outer_event_json_metadata()
-						};
-						$( $rest )*
-					)
+				__impl_json_metadata!($runtime;
+					$crate::metadata::JSONMetadata::Events {
+						events: Self::outer_event_json_metadata()
+					};
+					$( $rest )*
+				)
 			}
 		}
 	}
