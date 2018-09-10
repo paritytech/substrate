@@ -26,3 +26,4 @@ substrate-runtime-staking = { path = "../../substrate/runtime/staking" }
 substrate-runtime-system = { path = "../../substrate/runtime/system" }
 substrate-runtime-consensus = { path = "../../substrate/runtime/consensus" }
 substrate-runtime-timestamp = { path = "../../substrate/runtime/timestamp" }
+substrate-runtime-treasury = { path = "../../substrate/runtime/treasury" }

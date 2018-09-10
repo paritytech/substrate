@@ -36,6 +36,7 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_runtime_system as system;
 #[cfg(test)] extern crate substrate_runtime_consensus as consensus;
 #[cfg(test)] extern crate substrate_runtime_timestamp as timestamp;
+#[cfg(test)] extern crate substrate_runtime_treasury as treasury;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
 pub use substrate_executor::NativeExecutor;
@@ -54,7 +55,7 @@ mod tests {
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
-	use {balances, staking, session, system, consensus, timestamp};
+	use {balances, staking, session, system, consensus, timestamp, treasury};
 	use system::{EventRecord, Phase};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, Event};
@@ -235,6 +236,7 @@ mod tests {
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
 			timestamp: Some(Default::default()),
+			treasury: Some(Default::default()),
 		}.build_storage().unwrap().into()
 	}
 
@@ -260,7 +262,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("45da5f9253d978403626ac0d1b9ff0b08b8e32e8a472a94569ec17dc5e9bb76b").into(),
+			hex!("54048fe23d4e04fda6419771037922eb43d96a7ec76aa280672609711999c3ca").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -280,7 +282,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("3431232966d63b3e6ad20d5b51196c43a95324f950ee195da6a8f16bfb1e9198").into(),
+			hex!("700c76e3b6125fd9d873629ca3f3cdc2f7704587c0a71def6b152f54b6a29805").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -305,7 +307,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("208c206ba9721c99cdc9ccaef941d867f75441866ca58db73fae289d8c504892").into(),
+			hex!("4428d38ae046f27254877b3a3bf0d8ec7731281aef65ebdb8bbbac86be5424a8").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -351,6 +353,18 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Spending(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Burnt(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				}
 			]);
 		});
@@ -394,6 +408,18 @@ mod tests {
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
 					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Spending(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Burnt(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				},
 				EventRecord {
 					phase: Phase::Finalization,

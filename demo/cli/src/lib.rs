@@ -82,7 +82,6 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-
 	match cli::prepare_execution::<service::Factory, _, _, _, _>(args, exit, version, load_spec, "substrate-demo")? {
 		cli::Action::ExecutedInternally => (),
 		cli::Action::RunService((config, exit)) => {

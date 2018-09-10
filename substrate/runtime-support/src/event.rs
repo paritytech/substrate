@@ -37,6 +37,7 @@ macro_rules! __impl_outer_event_json_metadata {
 		$( $module:ident )*
 	) => {
 		impl $runtime {
+			#[allow(dead_code)]
 			pub fn outer_event_json_metadata() -> &'static str {
 				concat!(r#"{ "name": ""#, stringify!($event_name), r#"", "items": { "#,
 					r#""system": "system::Event""#,

@@ -19,7 +19,7 @@
 use ed25519;
 use primitives::AuthorityId;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig};
+	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig, Permill};
 use service::ChainSpec;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -91,6 +91,12 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		timestamp: Some(TimestampConfig {
 			period: 5,					// 5 second block time.
+		}),
+		treasury: Some(TreasuryConfig {
+			proposal_bond: Permill::from_percent(5),
+			proposal_bond_minimum: 1_000_000,
+			spend_period: 12 * 60 * 24,
+			burn: Permill::from_percent(50),
 		}),
 	}
 }
@@ -170,6 +176,12 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 		}),
 		timestamp: Some(TimestampConfig {
 			period: 5,					// 5 second block time.
+		}),
+		treasury: Some(TreasuryConfig {
+			proposal_bond: Permill::from_percent(5),
+			proposal_bond_minimum: 1_000_000,
+			spend_period: 12 * 60 * 24,
+			burn: Permill::from_percent(50),
 		}),
 	}
 }
