@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use codec::{Encode, Decode, Output, Input};
+
 /// Implements the json metadata support for the given runtime and all its modules.
 ///
 /// Example:
@@ -41,13 +43,91 @@ macro_rules! impl_json_metadata {
 	}
 }
 
+/// The metadata of a runtime encoded as JSON.
 #[derive(Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-#[allow(dead_code)]
 pub enum JSONMetadata {
 	Events { events: &'static str },
 	Module { module: &'static str, prefix: &'static str },
 	ModuleWithStorage { module: &'static str, prefix: &'static str, storage: &'static str }
+}
+
+impl Encode for JSONMetadata {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		match self {
+			JSONMetadata::Events { events } => {
+				0i8.encode_to(dest);
+				events.encode_to(dest);
+			},
+			JSONMetadata::Module { module, prefix } => {
+				1i8.encode_to(dest);
+				prefix.encode_to(dest);
+				module.encode_to(dest);
+			},
+			JSONMetadata::ModuleWithStorage { module, prefix, storage } => {
+				2i8.encode_to(dest);
+				prefix.encode_to(dest);
+				module.encode_to(dest);
+				storage.encode_to(dest);
+			}
+		}
+	}
+}
+
+/// Utility struct for making `JSONMetadata` decodeable.
+#[derive(Eq, PartialEq, Debug)]
+#[cfg(feature = "std")]
+pub enum JSONMetadataDecodable {
+	Events { events: String },
+	Module { module: String, prefix: String },
+	ModuleWithStorage { module: String, prefix: String, storage: String }
+}
+
+#[cfg(feature = "std")]
+impl Decode for JSONMetadataDecodable {
+	fn decode<I: Input>(input: &mut I) -> Option<Self> {
+		i8::decode(input).and_then(|variant| {
+			match variant {
+				0 => String::decode(input)
+						.and_then(|events| Some(JSONMetadataDecodable::Events { events })),
+				1 => String::decode(input)
+						.and_then(|prefix| String::decode(input).map(|v| (prefix, v)))
+						.and_then(|(prefix, module)| Some(JSONMetadataDecodable::Module { prefix, module })),
+				2 => String::decode(input)
+						.and_then(|prefix| String::decode(input).map(|v| (prefix, v)))
+						.and_then(|(prefix, module)| String::decode(input).map(|v| (prefix, module, v)))
+						.and_then(|(prefix, module, storage)| Some(JSONMetadataDecodable::ModuleWithStorage { prefix, module, storage })),
+				_ => None,
+			}
+		})
+	}
+}
+
+#[cfg(test)]
+impl PartialEq<JSONMetadata> for JSONMetadataDecodable {
+	fn eq(&self, other: &JSONMetadata) -> bool {
+		match (self, other) {
+			(
+				JSONMetadataDecodable::Events { events: left },
+				JSONMetadata::Events { events: right }
+			) => {
+				left == right
+			},
+			(
+				JSONMetadataDecodable::Module { prefix: lpre, module: lmod },
+				JSONMetadata::Module { prefix: rpre, module: rmod }
+			) => {
+				lpre == rpre && lmod == rmod
+			},
+			(
+				JSONMetadataDecodable::ModuleWithStorage { prefix: lpre, module: lmod, storage: lstore },
+				JSONMetadata::ModuleWithStorage { prefix: rpre, module: rmod, storage: rstore }
+			) => {
+				lpre == rpre && lmod == rmod && lstore == rstore
+			},
+			_ => false,
+		}
+    }
 }
 
 #[macro_export]
@@ -223,5 +303,14 @@ mod tests {
 	fn runtime_json_metadata() {
 		let metadata = TestRuntime::json_metadata();
 		assert_eq!(EXPECTED_METADATA, &metadata[..]);
+	}
+
+	#[test]
+	fn json_metadata_encode_and_decode() {
+		let metadata = TestRuntime::json_metadata();
+		let metadata_encoded = metadata.encode();
+		let metadata_decoded = Vec::<JSONMetadataDecodable>::decode(&mut &metadata_encoded[..]);
+
+		assert_eq!(&metadata_decoded.unwrap()[..], &metadata[..]);
 	}
 }
