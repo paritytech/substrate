@@ -7,7 +7,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-byteorder = { version = "1.1", default-features = false }
 integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
 safe-mix = { version = "1.0", default_features = false}
 substrate-codec-derive = { path = "../../../substrate/codec/derive" }
@@ -34,7 +33,6 @@ demo-primitives = { path = "../../primitives", default-features = false }
 [features]
 default = []
 std = [
-	"byteorder/std",
 	"safe-mix/std",
 	"substrate-codec/std",
 	"substrate-primitives/std",

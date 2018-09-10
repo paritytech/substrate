@@ -93,7 +93,6 @@ dependencies = [
 name = "demo-runtime"
 version = "0.1.0"
 dependencies = [
- "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "demo-primitives 0.1.0",
  "integer-sqrt 0.1.0 (git+https://github.com/paritytech/integer-sqrt-rs.git)",
  "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",

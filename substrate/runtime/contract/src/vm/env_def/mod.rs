@@ -224,11 +224,10 @@ define_env!(init_env, <E: Ext>,
 		}
 	},
 
-	// ext_create(code_ptr: u32, code_len: u32, salt: u64, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32
+	// ext_create(code_ptr: u32, code_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32
 	ext_create(
 		ctx, code_ptr: u32,
 		code_len: u32,
-		salt: u64,
 		gas: u64,
 		value_ptr: u32,
 		value_len: u32,
@@ -257,7 +256,7 @@ define_env!(init_env, <E: Ext>,
 		let ext = &mut ctx.ext;
 		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.create(&code, value, nested_meter, &input_data, salt),
+				Some(nested_meter) => ext.create(&code, value, nested_meter, &input_data),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}

@@ -34,8 +34,6 @@ extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate serde;
 
-extern crate byteorder;
-
 extern crate substrate_codec as codec;
 extern crate substrate_primitives;
 
@@ -199,22 +197,21 @@ impl treasury::Trait for Runtime {
 /// Treasury module for this concrete runtime.
 pub type Treasury = treasury::Module<Runtime>;
 
-/// Address calculated from the code (of the constructor), input data to the constructor,
-/// salt and account id which requested the account creation.
+/// Address calculated from the code (of the constructor), input data to the constructor
+/// and account id which requested the account creation.
 ///
-/// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + LE(salt) + origin)`
+/// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + origin)`
 pub struct DetermineContractAddress;
 impl contract::ContractAddressFor<AccountId> for DetermineContractAddress {
-	fn contract_address_for(code: &[u8], data: &[u8], salt: u64, origin: &AccountId) -> AccountId {
+	fn contract_address_for(code: &[u8], data: &[u8], origin: &AccountId) -> AccountId {
 		use runtime_primitives::traits::Hash;
 
 		let code_hash = BlakeTwo256::hash(code);
 		let data_hash = BlakeTwo256::hash(data);
-		let mut buf = [0u8, 32 + 32 + 8 + 32];
+		let mut buf = [0u8, 32 + 32 + 32];
 		&mut buf[0..32].copy_from_slice(&code_hash);
 		&mut buf[32..64].copy_from_slice(&data_hash);
-		LittleEndian::write_u64(&mut buf[64..72], salt);
-		&mut buf[72..104].copy_from_slice(origin);
+		&mut buf[64..96].copy_from_slice(origin);
 		AccountId::from(BlakeTwo256::hash(&buf[..]))
 	}
 }
