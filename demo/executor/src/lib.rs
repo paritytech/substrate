@@ -35,6 +35,7 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_runtime_staking as staking;
 #[cfg(test)] extern crate substrate_runtime_system as system;
 #[cfg(test)] extern crate substrate_runtime_consensus as consensus;
+#[cfg(test)] extern crate substrate_runtime_treasury as treasury;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
 pub use substrate_executor::NativeExecutor;
@@ -53,7 +54,7 @@ mod tests {
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
-	use {balances, staking, session, system, consensus};
+	use {balances, staking, session, system, consensus, treasury};
 	use system::{EventRecord, Phase};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, Event};
@@ -234,6 +235,7 @@ mod tests {
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
 			timestamp: Some(Default::default()),
+			treasury: Some(Default::default()),
 		}.build_storage().unwrap().into()
 	}
 
@@ -260,10 +262,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			// Blake
-			// hex!("3437bf4b182ab17bb322af5c67e55f6be487a77084ad2b4e27ddac7242e4ad21").into(),
-			// Keccak
-			hex!("508a68a0918f614b86b2ccfd0975754f6d2abe1026a34e42d6d8d5abdf4db010").into(),
+			hex!("1e930ccf2a39029931fcb9173637ab99a7de9d0364e7bf57cfbcb3eb4619e0d4").into(),
 			vec![CheckedExtrinsic {
 				signed: Some(alice()),
 				index: 0,
@@ -276,10 +275,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			// Blake
-			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
-			// Keccak
-			hex!("a72ec570c7642d9ad06ef0e5dd37be65fb04b71e0ab52b3927d760ed6c777a1f").into(),
+			hex!("80e45869c9a9f513695b94baf479913ddf0bc9653f1be63baa383be8553a9e13").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: Some(bob()),
@@ -299,10 +295,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			// Blake
-			// hex!("2c7231a9c210a7aa4bea169d944bc4aaacd517862b244b8021236ffa7f697991").into(),
-			// Keccak
-			hex!("e45221804da3a3609454d4e09debe6364cc6af63c2ff067d802d1af62fea32ae").into(),
+			hex!("58bf7cd5a908de7296bfc0524d89086384df3e8010ab83c8599be036445d6c79").into(),
 			vec![CheckedExtrinsic {
 				signed: Some(alice()),
 				index: 0,
@@ -327,7 +320,28 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: Event::balances(balances::RawEvent::Transfer(
+						hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+						69,
+						0
+					))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Spending(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Burnt(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				}
 			]);
 		});
@@ -340,11 +354,45 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: Event::balances(
+						balances::RawEvent::Transfer(
+							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+							5,
+							0
+						)
+					)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(0),
 					event: Event::system(system::Event::ExtrinsicSuccess)
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(
+						balances::RawEvent::Transfer(
+							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+							15,
+							0
+						)
+					)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Spending(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Burnt(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				},
 				EventRecord {
 					phase: Phase::Finalization,

@@ -45,7 +45,7 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay};
+	Hash, Member, MaybeDisplay, EnsureOrigin};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -165,6 +165,14 @@ decl_storage! {
 		Digest get(digest): default T::Digest;
 
 		Events get(events): default Vec<EventRecord<T::Event>>;
+	}
+}
+
+pub struct EnsureRoot<AccountId>(::rstd::marker::PhantomData<AccountId>);
+impl<O: Into<Option<RawOrigin<AccountId>>>, AccountId> EnsureOrigin<O> for EnsureRoot<AccountId> {
+	type Success = ();
+	fn ensure_origin(o: O) -> Result<Self::Success, &'static str> {
+		ensure_root(o)
 	}
 }
 

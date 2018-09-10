@@ -125,6 +125,8 @@ impl<T: Trait> Module<T> {
 	fn vote(origin: T::Origin, proposal: T::Hash, approve: bool) -> Result {
 		let who = ensure_signed(origin)?;
 
+		ensure!(Self::is_councillor(&who), "only councillors may vote on council proposals");
+
 		if Self::vote_of((proposal, who.clone())).is_none() {
 			<ProposalVoters<T>>::mutate(proposal, |voters| voters.push(who.clone()));
 		}
@@ -243,7 +245,7 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 mod tests {
 	use super::*;
 	use ::tests::*;
-	use ::tests::Call;
+	use ::tests::{Call, Origin};
 	use substrate_runtime_support::Hashable;
 	use democracy::VoteThreshold;
 
@@ -492,6 +494,16 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			assert_noop!(CouncilVoting::propose(Origin::signed(4), Box::new(proposal)), "proposer would not be on council");
+		});
+	}
+
+	#[test]
+	fn vote_by_public_should_not_work() {
+		with_externalities(&mut new_test_ext(true), || {
+			System::set_block_number(1);
+			let proposal = set_balance_proposal(42);
+			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
+			assert_noop!(CouncilVoting::vote(Origin::signed(4), proposal.blake2_256().into(), true), "only councillors may vote on council proposals");
 		});
 	}
 }
