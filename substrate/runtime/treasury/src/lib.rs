@@ -286,7 +286,6 @@ impl<T: Trait> OnDilution<T::Balance> for Module<T> {
 			let total_issuance = <balances::Module<T>>::total_issuance();
 			let funding = (total_issuance - portion) / portion * minted;
 			<Pot<T>>::mutate(|x| *x += funding);
-			<balances::Module<T>>::increase_total_stake_by(funding);
 		}
 	}
 }
