@@ -1,25 +1,25 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Testing utilities.
 
 use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use codec::Codec;
-use runtime_support::AuxDispatchable;
+use runtime_support::Dispatchable;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 
 pub use substrate_primitives::H256;
@@ -31,9 +31,18 @@ pub struct Digest {
 
 impl traits::Digest for Digest {
 	type Item = u64;
+
+	fn logs(&self) -> &[Self::Item] {
+		&self.logs
+	}
+
 	fn push(&mut self, item: Self::Item) {
 		self.logs.push(item);
 	}
+}
+
+impl traits::DigestItem for u64 {
+	type AuthoritiesChange = ();
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
@@ -107,16 +116,19 @@ impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + 
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
-pub struct TestXt<Call>(pub (u64, u64, Call));
+pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 
-impl<Call: Codec + Sync + Send + Serialize + AuxDispatchable, Context> Checkable<Context> for TestXt<Call> {
+impl<Call: Codec + Sync + Send + Serialize + Dispatchable, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
 	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
-impl<Call: AuxDispatchable<Aux = u64> + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> Applyable for TestXt<Call> {
+impl<Call> Applyable for TestXt<Call> where
+	Call: Sized + Send + Sync + Clone + Eq + Dispatchable + Codec + Debug + Serialize + DeserializeOwned,
+	<Call as Dispatchable>::Origin: From<Option<u64>>
+{
 	type AccountId = u64;
 	type Index = u64;
-	fn sender(&self) -> &u64 { &(self.0).0 }
-	fn index(&self) -> &u64 { &(self.0).1 }
-	fn apply(self) -> Result<(), &'static str> { (self.0).2.dispatch(&(self.0).0) }
+	fn sender(&self) -> Option<&u64> { self.0.as_ref() }
+	fn index(&self) -> &u64 { &self.1 }
+	fn apply(self) -> Result<(), &'static str> { self.2.dispatch(self.0.into()) }
 }

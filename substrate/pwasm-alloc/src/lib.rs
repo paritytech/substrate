@@ -3,7 +3,9 @@
 #![no_std]
 #![crate_type = "rlib"]
 
+// tag::description[]
 //! Custom allocator crate for wasm
+// end::description[]
 
 /// Wasm allocator
 pub struct WasmAllocator;

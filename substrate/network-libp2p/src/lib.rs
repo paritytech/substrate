@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
+//! TODO: Missing doc
+// end::description[]
+
 #![recursion_limit="128"]
 #![type_length_limit = "268435456"]
 
@@ -27,8 +31,12 @@ extern crate ethkey;
 extern crate libc;
 extern crate libp2p;
 extern crate rand;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
 extern crate bytes;
-extern crate varint;
+extern crate unsigned_varint;
 
 extern crate ethcore_io as io;
 extern crate ethereum_types;
@@ -52,6 +60,7 @@ mod error;
 mod network_state;
 mod service;
 mod timeouts;
+mod topology;
 mod traits;
 mod transport;
 

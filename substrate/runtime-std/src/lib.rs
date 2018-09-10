@@ -14,14 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Lowest-abstraction level for the Substrate runtime: just exports useful primitives from std
 //! or core/alloc to be used with any code that depends on the runtime.
+// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(not(feature = "std"), feature(panic_implementation))]
+#![cfg_attr(not(feature = "std"), feature(panic_handler))]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
-#![cfg_attr(not(feature = "std"), feature(use_extern_macros))]
 
 #![cfg_attr(feature = "std", doc = "Polkadot runtime standard library as compiled when linked with Rust's standard library.")]
 #![cfg_attr(not(feature = "std"), doc = "Polkadot's runtime standard library as compiled without Rust's standard library.")]

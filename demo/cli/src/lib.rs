@@ -48,36 +48,77 @@ extern crate log;
 pub mod error;
 
 use std::sync::Arc;
-use demo_primitives::Hash;
-use demo_runtime::{Block, BlockId, UncheckedExtrinsic, GenesisConfig,
-	ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig, StakingConfig,
-	TimestampConfig};
+use demo_primitives::{AccountId, Hash};
+use demo_runtime::{Block, BlockId, GenesisConfig,
+	BalancesConfig, ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig,
+	StakingConfig, TimestampConfig};
 use futures::{Future, Sink, Stream};
 use tokio::runtime::Runtime;
 use demo_executor::NativeExecutor;
+use extrinsic_pool::{Pool as ExtrinsicPool, ExtrinsicFor, VerifiedFor, scoring, Readiness};
 
-struct DummyPool;
-impl extrinsic_pool::api::ExtrinsicPool<UncheckedExtrinsic, BlockId, Hash> for DummyPool {
-	type Error = extrinsic_pool::txpool::Error;
+#[derive(Debug, Clone)]
+struct VerifiedExtrinsic {
+	sender: AccountId,
+	hash: Hash,
+}
 
-	fn submit(&self, _block: BlockId, _: Vec<UncheckedExtrinsic>)
-		-> Result<Vec<Hash>, Self::Error>
-	{
-		Err("unimplemented".into())
+impl extrinsic_pool::VerifiedTransaction for VerifiedExtrinsic {
+	type Hash = Hash;
+	type Sender = AccountId;
+
+	fn hash(&self) -> &Self::Hash {
+		&self.hash
 	}
 
-	fn submit_and_watch(&self, _block: BlockId, _: UncheckedExtrinsic)
-		-> Result<extrinsic_pool::watcher::Watcher<Hash>, Self::Error>
-	{
-		Err("unimplemented".into())
+	fn sender(&self) -> &Self::Sender {
+		&self.sender
 	}
 
-	fn light_status(&self) -> extrinsic_pool::txpool::LightStatus {
-		unreachable!()
+	fn mem_usage(&self) -> usize {
+		0
+	}
+}
+
+struct Pool;
+impl extrinsic_pool::ChainApi for Pool {
+	type Block = Block;
+	type Hash = Hash;
+	type Sender = AccountId;
+	type VEx = VerifiedExtrinsic;
+	type Ready = ();
+	type Error = extrinsic_pool::Error;
+	type Score = u64;
+	type Event = ();
+
+	fn verify_transaction(&self, _at: &BlockId, _xt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error> {
+		unimplemented!()
 	}
 
-	fn import_notification_stream(&self) -> extrinsic_pool::api::EventStream {
-		unreachable!()
+	fn ready(&self) -> Self::Ready { }
+
+	fn is_ready(&self, _at: &BlockId, _ready: &mut Self::Ready, _xt: &VerifiedFor<Self>) -> Readiness {
+		unimplemented!()
+	}
+
+	fn compare(_old: &VerifiedFor<Self>, _other: &VerifiedFor<Self>) -> ::std::cmp::Ordering {
+		unimplemented!()
+	}
+
+	fn choose(_old: &VerifiedFor<Self>, _new: &VerifiedFor<Self>) -> scoring::Choice {
+		unimplemented!()
+	}
+
+	fn update_scores(
+		_xts: &[extrinsic_pool::Transaction<VerifiedFor<Self>>],
+		_scores: &mut [Self::Score],
+		_change: scoring::Change<()>
+	) {
+		unimplemented!()
+	}
+
+	fn should_replace(_old: &VerifiedFor<Self>, _new: &VerifiedFor<Self>) -> scoring::Choice {
+		unimplemented!()
 	}
 }
 
@@ -114,7 +155,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 	init_logger(log_pattern);
 
 	// Create client
-	let executor = NativeExecutor::with_heap_pages(8);
+	let executor = NativeExecutor::new();
 
 	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
 	let genesis_config = GenesisConfig {
@@ -123,14 +164,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			authorities: vec![god_key.clone().into()],
 		}),
 		system: None,
-		session: Some(SessionConfig {
-			validators: vec![god_key.clone().into()],
-			session_length: 720,	// that's 1 hour per session.
-			broken_percent_late: 30,
-		}),
-		staking: Some(StakingConfig {
-			current_era: 0,
-			intentions: vec![],
+		balances: Some(BalancesConfig {
 			transaction_base_fee: 100,
 			transaction_byte_fee: 1,
 			transfer_fee: 0,
@@ -138,11 +172,21 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 			reclaim_rebate: 0,
 			existential_deposit: 500,
 			balances: vec![(god_key.clone().into(), 1u64 << 63)].into_iter().collect(),
+		}),
+		session: Some(SessionConfig {
+			validators: vec![god_key.clone().into()],
+			session_length: 720,	// that's 1 hour per session.
+		}),
+		staking: Some(StakingConfig {
+			current_era: 0,
+			intentions: vec![],
 			validator_count: 12,
+			minimum_validator_count: 4,
 			sessions_per_era: 24,	// 24 hours per era.
-			bonding_duration: 90,	// 90 days per bond.
+			bonding_duration: 90 * 24 * 720,	// 90 days per bond.
 			early_era_slash: 10000,
 			session_reward: 100,
+			offline_slash_grace: 0,
 		}),
 		democracy: Some(DemocracyConfig {
 			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
@@ -175,8 +219,8 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		let handler = || {
 			let state = rpc::apis::state::State::new(client.clone(), runtime.executor());
 			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
-			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(DummyPool), runtime.executor());
-			rpc::rpc_handler::<Block, _, _, _, _>(state, chain, author, DummySystem)
+			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(ExtrinsicPool::new(Default::default(), Pool)), runtime.executor());
+			rpc::rpc_handler::<Block, Hash, _, _, _, _, _>(state, chain, author, DummySystem)
 		};
 		let http_address = "127.0.0.1:9933".parse().unwrap();
 		let ws_address = "127.0.0.1:9944".parse().unwrap();

@@ -16,6 +16,7 @@ substrate-codec = { path = "../codec", default_features = false }
 
 [dev-dependencies]
 wabt = "0.4"
+assert_matches = "1.1"
 
 [features]
 default = ["std"]

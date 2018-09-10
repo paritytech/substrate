@@ -22,7 +22,6 @@ use jsonrpc_macros::pubsub;
 use rustc_hex::FromHex;
 use test_client::{self, runtime, keyring::Keyring, TestClient, BlockBuilderExt};
 
-
 #[test]
 fn should_return_storage() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
@@ -120,4 +119,68 @@ fn should_send_initial_storage_changes_and_notifications() {
 	assert!(notification.is_some());
 	// no more notifications on this channel
 	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+}
+
+#[test]
+fn should_query_storage() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
+	let api = State::new(client.clone(), core.executor());
+
+	let add_block = |nonce| {
+		let mut builder = client.new_block().unwrap();
+		builder.push_transfer(runtime::Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 42,
+			nonce,
+		}).unwrap();
+		let block = builder.bake().unwrap();
+		let hash = block.header.hash();
+		client.justify_and_import(BlockOrigin::Own, block).unwrap();
+		hash
+	};
+	let block1_hash = add_block(0);
+	let block2_hash = add_block(1);
+	let genesis_hash = client.genesis_hash();
+
+
+	let mut expected = vec![
+		StorageChangeSet {
+			block: genesis_hash,
+			changes: vec![
+				(StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap()), Some(StorageData(vec![232, 3, 0, 0, 0, 0, 0, 0]))),
+			],
+		},
+		StorageChangeSet {
+			block: block1_hash,
+			changes: vec![
+				(StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap()), Some(StorageData(vec![190, 3, 0, 0, 0, 0, 0, 0]))),
+			],
+		},
+	];
+
+	// Query changes only up to block1
+	let result = api.query_storage(
+		vec![StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap())],
+		genesis_hash,
+		Some(block1_hash).into(),
+	);
+
+	assert_eq!(result.unwrap(), expected);
+
+	// Query all changes
+	let result = api.query_storage(
+		vec![StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap())],
+		genesis_hash,
+		None.into(),
+	);
+
+	expected.push(StorageChangeSet {
+		block: block2_hash,
+		changes: vec![
+			(StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap()), Some(StorageData(vec![148, 3, 0, 0, 0, 0, 0, 0]))),
+		],
+	});
+	assert_eq!(result.unwrap(), expected);
 }

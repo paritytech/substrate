@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Stuff to do with the runtime's storage.
 
@@ -180,8 +180,11 @@ pub trait StorageValue<T: Codec> {
 	/// Load the value from the provided storage instance.
 	fn get() -> Self::Query;
 
-	/// Store a value under this key into the provded storage instance.
+	/// Store a value under this key into the provided storage instance.
 	fn put<Arg: Borrow<T>>(val: Arg);
+
+	/// Mutate the value
+	fn mutate<F: FnOnce(&mut Self::Query)>(f: F);
 
 	/// Clear the storage value.
 	fn kill();
@@ -204,6 +207,9 @@ impl<T: Codec, U> StorageValue<T> for U where U: generator::StorageValue<T> {
 	}
 	fn put<Arg: Borrow<T>>(val: Arg) {
 		U::put(val.borrow(), &RuntimeStorage)
+	}
+	fn mutate<F: FnOnce(&mut Self::Query)>(f: F) {
+		U::mutate(f, &RuntimeStorage)
 	}
 	fn kill() {
 		U::kill(&RuntimeStorage)
@@ -304,6 +310,9 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	/// Remove the value under a key.
 	fn remove<KeyArg: Borrow<K>>(key: KeyArg);
 
+	/// Mutate the value under a key.
+	fn mutate<KeyArg: Borrow<K>, F: FnOnce(&mut Self::Query)>(key: KeyArg, f: F);
+
 	/// Take the value under a key.
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
 }
@@ -333,6 +342,10 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: generator::StorageMa
 
 	fn remove<KeyArg: Borrow<K>>(key: KeyArg) {
 		U::remove(key.borrow(), &RuntimeStorage)
+	}
+
+	fn mutate<KeyArg: Borrow<K>, F: FnOnce(&mut Self::Query)>(key: KeyArg, f: F) {
+		U::mutate(key.borrow(), f, &RuntimeStorage)
 	}
 
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query {

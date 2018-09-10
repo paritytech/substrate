@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-rhododendron = "0.2"
+rhododendron = "0.3"
 substrate-bft = { path = "../bft" }
 substrate-client = { path = "../client" }
 substrate-codec = { path = "../codec" }
@@ -14,3 +14,5 @@ substrate-primitives = { path = "../primitives" }
 substrate-runtime-support = { path = "../runtime-support" }
 substrate-test-runtime = { path = "../test-runtime" }
 substrate-runtime-primitives = { path = "../runtime/primitives" }
+hashdb = "0.2.1"
+

@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
@@ -61,6 +61,9 @@ pub mod generic;
 pub mod bft;
 
 use traits::{Verify, Lazy};
+
+#[cfg(feature = "std")]
+pub use serde::{Serialize, de::DeserializeOwned};
 
 /// A set of key value pairs for storage.
 #[cfg(feature = "std")]
@@ -142,44 +145,6 @@ impl codec::Encode for ApplyError {
 
 /// Result from attempt to apply an extrinsic.
 pub type ApplyResult = Result<ApplyOutcome, ApplyError>;
-
-/// Potentially "unsigned" signature verification.
-#[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct MaybeUnsigned<T>(pub T);
-
-impl<T: Verify> MaybeUnsigned<T> where
-	T: Default + Eq,
-	<T as Verify>::Signer: Default + Eq,
-{
-	fn is_signed(&self) -> bool {
-		self.0 != T::default()
-	}
-
-	fn is_addressed(&self, signer: &<Self as Verify>::Signer) -> bool {
-		signer != &Default::default()
-	}
-}
-
-impl<T: Verify> Verify for MaybeUnsigned<T> where
-	T: Default + Eq,
-	<T as Verify>::Signer: Default + Eq,
-{
-	type Signer = T::Signer;
-	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool {
-		if !self.is_signed() {
-			!self.is_addressed(signer)
-		} else {
-			self.0.verify(msg, signer)
-		}
-	}
-}
-
-impl<T> From<T> for MaybeUnsigned<T> {
-	fn from(t: T) -> Self {
-		MaybeUnsigned(t)
-	}
-}
 
 /// Verify a signature on an encoded value in a lazy manner. This can be
 /// an optimization if the signature scheme has an "unsigned" escape hash.

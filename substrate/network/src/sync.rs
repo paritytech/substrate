@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -237,7 +237,16 @@ impl<B: BlockT> ChainSync<B> {
 		let is_best = new_blocks.first().and_then(|b| b.block.header.as_ref()).map(|h| best_seen.as_ref().map_or(false, |n| h.number() >= n));
 		let origin = if is_best.unwrap_or_default() { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
 		let import_queue = self.import_queue.clone();
-		import_queue.import_blocks(self, protocol, (origin, new_blocks))
+		if let Some((hash, number)) = new_blocks.last()
+			.and_then(|b| b.block.header.as_ref().map(|h|(b.block.hash.clone(), *h.number())))
+		{
+			if number > self.best_queued_number {
+				self.best_queued_number = number;
+				self.best_queued_hash = hash;
+			}
+		}
+		import_queue.import_blocks(self, protocol, (origin, new_blocks));
+		self.maintain_sync(protocol);
 	}
 
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {

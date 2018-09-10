@@ -1,20 +1,22 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Client backend that uses RocksDB database as storage.
+// end::description[]
 
 extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
@@ -46,27 +48,30 @@ mod utils;
 
 use std::sync::Arc;
 use std::path::PathBuf;
+use std::io;
 
 use codec::{Decode, Encode};
+use hashdb::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
-use primitives::{H256, AuthorityId};
+use primitives::{H256, AuthorityId, KeccakHasher, RlpCodec};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, NumberFor, Zero};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
-use state_machine::{CodeExecutor, TrieH256, DBValue, ExecutionStrategy};
-use utils::{Meta, db_err, meta_keys, number_to_db_key, open_database, read_db, read_id, read_meta};
+use state_machine::{CodeExecutor, DBValue, ExecutionStrategy};
+use utils::{Meta, db_err, meta_keys, number_to_db_key, db_key_to_number, open_database,
+	read_db, read_id, read_meta};
 use state_db::StateDb;
 pub use state_db::PruningMode;
 
 const FINALIZATION_WINDOW: u64 = 32;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend;
+pub type DbState = state_machine::TrieBackend<KeccakHasher, RlpCodec>;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -87,7 +92,7 @@ pub fn new_client<E, S, Block>(
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
-		E: CodeExecutor + RuntimeInfo,
+		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
@@ -116,7 +121,7 @@ struct PendingBlock<Block: BlockT> {
 struct StateMetaDb<'a>(&'a KeyValueDB);
 
 impl<'a> state_db::MetaDb for StateMetaDb<'a> {
-	type Error = kvdb::Error;
+	type Error = io::Error;
 
 	fn get_meta(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		self.0.get(columns::STATE_META, key).map(|r| r.map(|v| v.to_vec()))
@@ -181,6 +186,14 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		}
 	}
 
+	fn number(&self, hash: Block::Hash) -> Result<Option<<Block::Header as HeaderT>::Number>, client::error::Error> {
+		read_id::<Block>(&*self.db, columns::BLOCK_INDEX, BlockId::Hash(hash))
+			.and_then(|key| match key {
+				Some(key) => Ok(Some(db_key_to_number(&key)?)),
+				None => Ok(None),
+			})
+	}
+
 	fn hash(&self, number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, client::error::Error> {
 		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
 			x.map(|raw| HashFor::<Block>::hash(&raw[..])).map(Into::into)
@@ -215,13 +228,16 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 }
 
 /// Database transaction
-pub struct BlockImportOperation<Block: BlockT> {
+pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: DbState,
-	updates: MemoryDB,
+	updates: MemoryDB<H>,
 	pending_block: Option<PendingBlock<Block>>,
 }
 
-impl<Block: BlockT> client::backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
+impl<Block> client::backend::BlockImportOperation<Block, KeccakHasher, RlpCodec>
+for BlockImportOperation<Block, KeccakHasher>
+where Block: BlockT,
+{
 	type State = DbState;
 
 	fn state(&self) -> Result<Option<&Self::State>, client::error::Error> {
@@ -243,7 +259,7 @@ impl<Block: BlockT> client::backend::BlockImportOperation<Block> for BlockImport
 		// currently authorities are not cached on full nodes
 	}
 
-	fn update_storage(&mut self, update: MemoryDB) -> Result<(), client::error::Error> {
+	fn update_storage(&mut self, update: MemoryDB<KeccakHasher>) -> Result<(), client::error::Error> {
 		self.updates = update;
 		Ok(())
 	}
@@ -261,15 +277,15 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, H256>,
 }
 
-impl<Block: BlockT> state_machine::Storage for StorageDb<Block> {
-	fn get(&self, key: &TrieH256) -> Result<Option<DBValue>, String> {
+impl<Block: BlockT> state_machine::Storage<KeccakHasher> for StorageDb<Block> {
+	fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
 		self.state_db.get(&key.0.into(), self).map(|r| r.map(|v| DBValue::from_slice(&v)))
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
 
 impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
-	type Error = kvdb::Error;
+	type Error = io::Error;
 	type Hash = H256;
 
 	fn get(&self, key: &H256) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -295,17 +311,17 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	#[cfg(test)]
-	fn new_test() -> Self {
+	fn new_test(keep_blocks: u32) -> Self {
 		use utils::NUM_COLUMNS;
 
 		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
 
-		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(0), 0).expect("failed to create test-db")
+		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(keep_blocks), 0).expect("failed to create test-db")
 	}
 
 	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, finalization_window: u64) -> Result<Self, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
-		let map_e = |e: state_db::Error<kvdb::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
+		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
 		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
 		let storage_db = StorageDb {
 			db,
@@ -335,8 +351,8 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
-	type BlockImportOperation = BlockImportOperation<Block>;
+impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<Block> where Block: BlockT {
+	type BlockImportOperation = BlockImportOperation<Block, KeccakHasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
 
@@ -392,13 +408,13 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 					}
 				};
 				if let Some(finalizing_hash) = finalizing_hash {
-					trace!("Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
+					trace!(target: "db", "Finalizing block #{} ({:?})", number_u64 - self.finalization_window, finalizing_hash);
 					let commit = self.storage.state_db.finalize_block(&finalizing_hash);
 					apply_state_commit(&mut transaction, commit);
 				}
 			}
 
-			debug!("DB Commit {:?} ({}), best = {}", hash, number, pending_block.is_best);
+			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, pending_block.is_best);
 			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(hash, number, pending_block.is_best);
 		}
@@ -449,15 +465,19 @@ impl<Block: BlockT> client::backend::Backend<Block> for Backend<Block> {
 			_ => {}
 		}
 
-		self.blockchain.header(block).and_then(|maybe_hdr| maybe_hdr.map(|hdr| {
-			let root: TrieH256  = TrieH256::from_slice(hdr.state_root().as_ref());
-			DbState::with_storage(self.storage.clone(), root)
-		}).ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()))
+		match self.blockchain.header(block) {
+			Ok(Some(ref hdr)) if !self.storage.state_db.is_pruned(hdr.number().as_()) => {
+				let root = H256::from_slice(hdr.state_root().as_ref());
+				Ok(DbState::with_storage(self.storage.clone(), root))
+			},
+			Err(e) => Err(e),
+			_ => Err(client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()),
+		}
 	}
 }
 
-impl<Block: BlockT> client::backend::LocalBackend<Block> for Backend<Block>
-{}
+impl<Block> client::backend::LocalBackend<Block, KeccakHasher, RlpCodec> for Backend<Block>
+where Block: BlockT {}
 
 #[cfg(test)]
 mod tests {
@@ -472,7 +492,7 @@ mod tests {
 
 	#[test]
 	fn block_hash_inserted_correctly() {
-		let db = Backend::<Block>::new_test();
+		let db = Backend::<Block>::new_test(1);
 		for i in 0..10 {
 			assert!(db.blockchain().hash(i).unwrap().is_none());
 
@@ -511,7 +531,7 @@ mod tests {
 
 	#[test]
 	fn set_state_data() {
-		let db = Backend::<Block>::new_test();
+		let db = Backend::<Block>::new_test(2);
 		{
 			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
 			let mut header = Header {
@@ -590,7 +610,7 @@ mod tests {
 	#[test]
 	fn delete_only_when_negative_rc() {
 		let key;
-		let backend = Backend::<Block>::new_test();
+		let backend = Backend::<Block>::new_test(0);
 
 		let hash = {
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default())).unwrap();

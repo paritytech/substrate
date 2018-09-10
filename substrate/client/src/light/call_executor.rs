@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Light client call exector. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
@@ -23,7 +23,11 @@ use futures::{IntoFuture, Future};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
-	execution_proof_check, TrieH256, ExecutionManager};
+	execution_proof_check, ExecutionManager};
+use primitives::H256;
+use patricia_trie::NodeCodec;
+use hashdb::Hasher;
+use rlp::Encodable;
 
 use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
@@ -31,26 +35,33 @@ use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as Client
 use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
 use codec::Decode;
+use heapsize::HeapSizeOf;
+use std::marker::PhantomData;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
-pub struct RemoteCallExecutor<B, F> {
+pub struct RemoteCallExecutor<B, F, H, C> {
 	blockchain: Arc<B>,
 	fetcher: Arc<F>,
+	_hasher: PhantomData<H>,
+	_codec: PhantomData<C>,
 }
 
-impl<B, F> RemoteCallExecutor<B, F> {
+impl<B, F, H, C> RemoteCallExecutor<B, F, H, C> {
 	/// Creates new instance of remote call executor.
 	pub fn new(blockchain: Arc<B>, fetcher: Arc<F>) -> Self {
-		RemoteCallExecutor { blockchain, fetcher }
+		RemoteCallExecutor { blockchain, fetcher, _hasher: PhantomData, _codec: PhantomData }
 	}
 }
 
-impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
-	where
-		Block: BlockT,
-		B: ChainBackend<Block>,
-		F: Fetcher<Block>,
+impl<B, F, Block, H, C> CallExecutor<Block, H, C> for RemoteCallExecutor<B, F, H, C>
+where
+	Block: BlockT,
+	B: ChainBackend<Block>,
+	F: Fetcher<Block>,
+	H: Hasher,
+	H::Out: Ord + Encodable,
+	C: NodeCodec<H>
 {
 	type Error = ClientError;
 
@@ -60,11 +71,14 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 			BlockId::Number(number) => self.blockchain.hash(number)?
 				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", number)))?,
 		};
+		let block_header = self.blockchain.expect_header(id.clone())?;
 
 		self.fetcher.remote_call(RemoteCallRequest {
-			block: block_hash.clone(),
+			block: block_hash,
+			header: block_header,
 			method: method.into(),
 			call_data: call_data.to_vec(),
+			retry_count: None,
 		}).into_future().wait()
 	}
 
@@ -75,19 +89,25 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 	}
 
 	fn call_at_state<
-		S: StateBackend,
-		H: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
+		S: StateBackend<H, C>,
+		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
 	>(&self,
 		_state: &S,
 		_changes: &mut OverlayedChanges,
 		_method: &str,
 		_call_data: &[u8],
-		_m: ExecutionManager<H>
+		_m: ExecutionManager<FF>
 	) -> ClientResult<(Vec<u8>, S::Transaction)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend>(&self, _state: S, _changes: &mut OverlayedChanges, _method: &str, _call_data: &[u8]) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
+	fn prove_at_state<S: StateBackend<H, C>>(
+		&self,
+		_state: S,
+		_changes: &mut OverlayedChanges,
+		_method: &str,
+		_call_data: &[u8]
+	) -> ClientResult<(Vec<u8>, Vec<Vec<u8>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
@@ -97,37 +117,23 @@ impl<B, F, Block> CallExecutor<Block> for RemoteCallExecutor<B, F>
 }
 
 /// Check remote execution proof using given backend.
-pub fn check_execution_proof<Block, B, E>(
-	blockchain: &B,
+pub fn check_execution_proof<Header, E, H, C>(
 	executor: &E,
-	request: &RemoteCallRequest<Block::Hash>,
+	request: &RemoteCallRequest<Header>,
 	remote_proof: Vec<Vec<u8>>
 ) -> ClientResult<CallResult>
 	where
-		Block: BlockT,
-		B: ChainBackend<Block>,
-		E: CodeExecutor,
+		Header: HeaderT,
+		E: CodeExecutor<H>,
+		H: Hasher,
+		H::Out: Ord + Encodable + HeapSizeOf + From<H256>,
+		C: NodeCodec<H>,
 {
-	let local_header = blockchain.header(BlockId::Hash(request.block))?;
-	let local_header = local_header.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", request.block)))?;
-	let local_state_root = *local_header.state_root();
-	do_check_execution_proof(local_state_root.into(), executor, request, remote_proof)
-}
+	let local_state_root = request.header.state_root();
 
-/// Check remote execution proof using given state root.
-fn do_check_execution_proof<Hash, E>(
-	local_state_root: Hash,
-	executor: &E,
-	request: &RemoteCallRequest<Hash>,
-	remote_proof: Vec<Vec<u8>>,
-) -> ClientResult<CallResult>
-	where
-		Hash: ::std::fmt::Display + ::std::convert::AsRef<[u8]>,
-		E: CodeExecutor,
-{
 	let mut changes = OverlayedChanges::default();
-	let (local_result, _) = execution_proof_check(
-		TrieH256::from_slice(local_state_root.as_ref()).into(),
+	let (local_result, _) = execution_proof_check::<H, C, _>(
+		H256::from_slice(local_state_root.as_ref()).into(),
 		remote_proof,
 		&mut changes,
 		executor,
@@ -142,6 +148,7 @@ mod tests {
 	use test_client;
 	use executor::NativeExecutionDispatch;
 	use super::*;
+	use primitives::RlpCodec;
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
@@ -153,13 +160,21 @@ mod tests {
 
 		// 'fetch' execution proof from remote node
 		let remote_execution_proof = remote_client.execution_proof(&remote_block_id, "authorities", &[]).unwrap().1;
-		
+
 		// check remote execution proof locally
-		let local_executor = test_client::LocalExecutor::with_heap_pages(8);
-		do_check_execution_proof(remote_block_storage_root.into(), &local_executor, &RemoteCallRequest {
+		let local_executor = test_client::LocalExecutor::new();
+		check_execution_proof::<_, _, _, RlpCodec>(&local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
+			header: test_client::runtime::Header {
+				state_root: remote_block_storage_root.into(),
+				parent_hash: Default::default(),
+				number: 0,
+				extrinsics_root: Default::default(),
+				digest: Default::default(),
+			},
 			method: "authorities".into(),
 			call_data: vec![],
+			retry_count: None,
 		}, remote_execution_proof).unwrap();
 	}
 }

@@ -1,35 +1,42 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Light client backend. Only stores headers and justifications of blocks.
 //! Everything else is requested from full nodes on demand.
 
 use std::sync::{Arc, Weak};
+use futures::{Future, IntoFuture};
+use parking_lot::RwLock;
 
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use state_machine::{Backend as StateBackend, TrieBackend as StateTrieBackend,
-	TryIntoTrieBackend as TryIntoStateTrieBackend};
+use state_machine::{
+	Backend as StateBackend,
+	TrieBackend as StateTrieBackend,
+	TryIntoTrieBackend as TryIntoStateTrieBackend
+};
 
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
-use light::fetcher::Fetcher;
+use light::fetcher::{Fetcher, RemoteReadRequest};
+use patricia_trie::NodeCodec;
+use hashdb::Hasher;
 
 /// Light client backend.
 pub struct Backend<S, F> {
@@ -37,17 +44,19 @@ pub struct Backend<S, F> {
 }
 
 /// Light block (header and justification) import operation.
-pub struct ImportOperation<Block: BlockT, F> {
+pub struct ImportOperation<Block: BlockT, S, F> {
 	is_new_best: bool,
 	header: Option<Block::Header>,
 	authorities: Option<Vec<AuthorityId>>,
-	_phantom: ::std::marker::PhantomData<F>,
+	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
 /// On-demand state.
-pub struct OnDemandState<Block: BlockT, F> {
+pub struct OnDemandState<Block: BlockT, S, F> {
 	fetcher: Weak<F>,
+	blockchain: Weak<Blockchain<S, F>>,
 	block: Block::Hash,
+	cached_header: RwLock<Option<Block::Header>>,
 }
 
 impl<S, F> Backend<S, F> {
@@ -62,14 +71,16 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
+impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
 {
-	type BlockImportOperation = ImportOperation<Block, F>;
+	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
-	type State = OnDemandState<Block, F>;
+	type State = OnDemandState<Block, S, F>;
 
 	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
@@ -96,8 +107,10 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
 		};
 
 		Ok(OnDemandState {
-			block: block_hash.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", block)))?,
 			fetcher: self.blockchain.fetcher(),
+			blockchain: Arc::downgrade(&self.blockchain),
+			block: block_hash.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", block)))?,
+			cached_header: RwLock::new(None),
 		})
 	}
 
@@ -106,10 +119,24 @@ impl<S, F, Block> ClientBackend<Block> for Backend<S, F> where
 	}
 }
 
-impl<S, F, Block> RemoteBackend<Block> for Backend<S, F> where Block: BlockT, S: BlockchainStorage<Block>, F: Fetcher<Block> {}
+impl<S, F, Block, H, C> RemoteBackend<Block, H, C> for Backend<S, F>
+where
+	Block: BlockT,
+	S: BlockchainStorage<Block>,
+	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
+{}
 
-impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where Block: BlockT, F: Fetcher<Block> {
-	type State = OnDemandState<Block, F>;
+impl<S, F, Block, H, C> BlockImportOperation<Block, H, C> for ImportOperation<Block, S, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+	S: BlockchainStorage<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
+{
+	type State = OnDemandState<Block, S, F>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		// None means 'locally-stateless' backend
@@ -132,7 +159,7 @@ impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where B
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend>::Transaction) -> ClientResult<()> {
+	fn update_storage(&mut self, _update: <Self::State as StateBackend<H, C>>::Transaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -143,30 +170,44 @@ impl<F, Block> BlockImportOperation<Block> for ImportOperation<Block, F> where B
 	}
 }
 
-impl<Block: BlockT, F> Clone for OnDemandState<Block, F> {
-	fn clone(&self) -> Self {
-		OnDemandState {
-			fetcher: self.fetcher.clone(),
-			block: self.block,
-		}
-	}
-}
-
-impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: Fetcher<Block> {
+impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
+	where
+		Block: BlockT,
+		S: BlockchainStorage<Block>,
+		F: Fetcher<Block>,
+		H: Hasher,
+		C: NodeCodec<H>,
+{
 	type Error = ClientError;
 	type Transaction = ();
 
-	fn storage(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
-		Err(ClientErrorKind::NotAvailableOnLightClient.into()) // TODO: fetch from remote node
+	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		let mut header = self.cached_header.read().clone();
+		if header.is_none() {
+			let cached_header = self.blockchain.upgrade()
+				.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", self.block)).into())
+				.and_then(|blockchain| blockchain.expect_header(BlockId::Hash(self.block)))?;
+			header = Some(cached_header.clone());
+			*self.cached_header.write() = Some(cached_header);
+		}
+
+		self.fetcher.upgrade().ok_or(ClientErrorKind::NotAvailableOnLightClient)?
+			.remote_read(RemoteReadRequest {
+				block: self.block,
+				header: header.expect("if block above guarantees that header is_some(); qed"),
+				key: key.to_vec(),
+				retry_count: None,
+			})
+			.into_future().wait()
 	}
 
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, _prefix: &[u8], _action: A) {
 		// whole state is not available on light node
 	}
 
-	fn storage_root<I>(&self, _delta: I) -> ([u8; 32], Self::Transaction)
+	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
-		([0; 32], ())
+		(H::Out::default(), ())
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -175,28 +216,14 @@ impl<Block, F> StateBackend for OnDemandState<Block, F> where Block: BlockT, F: 
 	}
 }
 
-impl<Block, F> TryIntoStateTrieBackend for OnDemandState<Block, F> where Block: BlockT, F: Fetcher<Block> {
-	fn try_into_trie_backend(self) -> Option<StateTrieBackend> {
+impl<Block, S, F, H, C> TryIntoStateTrieBackend<H, C> for OnDemandState<Block, S, F>
+where
+	Block: BlockT,
+	F: Fetcher<Block>,
+	H: Hasher,
+	C: NodeCodec<H>,
+{
+	fn try_into_trie_backend(self) -> Option<StateTrieBackend<H, C>> {
 		None
-	}
-}
-
-#[cfg(test)]
-pub mod tests {
-	use futures::future::{ok, FutureResult};
-	use parking_lot::Mutex;
-	use call_executor::CallResult;
-	use error::Error as ClientError;
-	use test_client::runtime::{Hash, Block};
-	use light::fetcher::{Fetcher, RemoteCallRequest};
-
-	pub type OkCallFetcher = Mutex<CallResult>;
-
-	impl Fetcher<Block> for OkCallFetcher {
-		type RemoteCallResult = FutureResult<CallResult, ClientError>;
-
-		fn remote_call(&self, _request: RemoteCallRequest<Hash>) -> Self::RemoteCallResult {
-			ok((*self.lock()).clone())
-		}
 	}
 }

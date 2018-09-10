@@ -1,5 +1,5 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -21,6 +21,7 @@ use client::error::Error;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
+use primitives::{KeccakHasher, RlpCodec};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
@@ -45,13 +46,19 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	/// Get block justification.
 	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, Error>;
 
+	/// Get block header proof.
+	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<(Block::Header, Vec<Vec<u8>>), Error>;
+
+	/// Get storage read execution proof.
+	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error>;
+
 	/// Get method execution proof.
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
 }
 
 impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
-	B: client::backend::Backend<Block> + Send + Sync + 'static,
-	E: CallExecutor<Block> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
 	Block: BlockT,
 {
 	fn import(&self, origin: BlockOrigin, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error> {
@@ -82,6 +89,14 @@ impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
 
 	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, Error> {
 		(self as &SubstrateClient<B, E, Block>).justification(id)
+	}
+
+	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<(Block::Header, Vec<Vec<u8>>), Error> {
+		(self as &SubstrateClient<B, E, Block>).header_proof(&BlockId::Number(block_number))
+	}
+
+	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
+		(self as &SubstrateClient<B, E, Block>).read_proof(&BlockId::Hash(block.clone()), key)
 	}
 
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {

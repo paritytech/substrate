@@ -23,7 +23,7 @@ use std::vec::IntoIter as VecIntoIter;
 use futures::{future, Future, stream, Stream, Sink};
 use futures::sync::mpsc;
 use tokio_io::{AsyncRead, AsyncWrite};
-use varint::VarintCodec;
+use unsigned_varint::codec::UviBytes;
 
 /// Connection upgrade for a single protocol.
 ///
@@ -64,7 +64,7 @@ pub struct RegisteredProtocolOutput<T> {
 
 	/// Stream where incoming messages are received. The stream ends whenever
 	/// either side is closed.
-	pub incoming: Box<Stream<Item = (PacketId, Bytes), Error = IoError>>,
+	pub incoming: Box<Stream<Item = (PacketId, Bytes), Error = IoError> + Send>,
 }
 
 impl<T> RegisteredProtocol<T> {
@@ -101,8 +101,8 @@ impl<T> RegisteredProtocol<T> {
 
 // `Maf` is short for `MultiaddressFuture`
 impl<T, C, Maf> ConnectionUpgrade<C, Maf> for RegisteredProtocol<T>
-where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
-	Maf: Future<Item = Multiaddr, Error = IoError> + 'static,		// TODO: 'static :(
+where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
+	Maf: Future<Item = Multiaddr, Error = IoError> + Send + 'static,		// TODO: 'static :(
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
 	type UpgradeIdentifier = u8;		// Protocol version
@@ -157,7 +157,7 @@ where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
 		}
 
 		let (sink, stream) = {
-			let framed = AsyncRead::framed(socket, VarintCodec::default());
+			let framed = AsyncRead::framed(socket, UviBytes::default());
 			let msg_rx = msg_rx.map(Message::SendReq)
 				.map_err(|()| unreachable!("mpsc::UnboundedReceiver never errors"));
 			let (sink, stream) = framed.split();
@@ -252,8 +252,8 @@ impl<T> Default for RegisteredProtocols<T> {
 }
 
 impl<T, C, Maf> ConnectionUpgrade<C, Maf> for RegisteredProtocols<T>
-where C: AsyncRead + AsyncWrite + 'static,		// TODO: 'static :-/
-	Maf: Future<Item = Multiaddr, Error = IoError> + 'static,		// TODO: 'static :(
+where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
+	Maf: Future<Item = Multiaddr, Error = IoError> + Send + 'static,		// TODO: 'static :(
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
 	type UpgradeIdentifier = (usize,

@@ -152,7 +152,7 @@ pub struct Entry {
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EnvironmentDefinition {
-	/// Vector of all entries in the environment defintion.
+	/// Vector of all entries in the environment definition.
 	pub entries: Vec<Entry>,
 }
 
@@ -176,7 +176,7 @@ pub const ERR_MODULE: u32 = -1i32 as u32;
 /// For FFI purposes.
 pub const ERR_OUT_OF_BOUNDS: u32 = -2i32 as u32;
 
-/// Execution error occured (typically trap).
+/// Execution error occurred (typically trap).
 ///
 /// For FFI purposes.
 pub const ERR_EXECUTION: u32 = -3i32 as u32;

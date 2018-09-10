@@ -36,6 +36,10 @@ extern crate fnv;
 extern crate futures;
 extern crate parking_lot;
 extern crate triehash;
+extern crate patricia_trie;
+extern crate hashdb;
+extern crate rlp;
+extern crate heapsize;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
@@ -45,6 +49,7 @@ extern crate triehash;
 pub mod error;
 pub mod blockchain;
 pub mod backend;
+pub mod cht;
 pub mod in_mem;
 pub mod genesis;
 pub mod block_builder;

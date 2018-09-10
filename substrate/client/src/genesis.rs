@@ -51,14 +51,15 @@ mod tests {
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
 	use ed25519::{Public, Pair};
+	use primitives::{KeccakHasher, RlpCodec};
 
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
 	fn executor() -> ::executor::NativeExecutor<Executor> {
-		NativeExecutionDispatch::with_heap_pages(8)
+		NativeExecutionDispatch::new()
 	}
 
-	fn construct_block(backend: &InMemory, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transfer>) -> (Vec<u8>, Hash) {
+	fn construct_block(backend: &InMemory<KeccakHasher, RlpCodec>, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transfer>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
@@ -68,7 +69,7 @@ mod tests {
 			Extrinsic { transfer: tx, signature }
 		}).collect::<Vec<_>>();
 
-		let extrinsics_root = ordered_trie_root(transactions.iter().map(Encode::encode)).0.into();
+		let extrinsics_root = ordered_trie_root::<KeccakHasher, _, _>(transactions.iter().map(Encode::encode)).into();
 
 		println!("root before: {:?}", extrinsics_root);
 		let mut header = Header {
@@ -115,7 +116,7 @@ mod tests {
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
 
-	fn block1(genesis_hash: Hash, backend: &InMemory) -> (Vec<u8>, Hash) {
+	fn block1(genesis_hash: Hash, backend: &InMemory<KeccakHasher, RlpCodec>) -> (Vec<u8>, Hash) {
 		construct_block(
 			backend,
 			1,
@@ -193,7 +194,7 @@ mod tests {
 		let _ = execute(
 			&backend,
 			&mut overlay,
-			&Executor::with_heap_pages(8),
+			&Executor::new(),
 			"execute_block",
 			&b1data,
 			ExecutionStrategy::NativeWhenPossible,

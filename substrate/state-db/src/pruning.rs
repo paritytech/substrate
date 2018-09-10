@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Pruning window.
 //!
@@ -60,7 +60,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			.map_err(|e| Error::Db(e))?;
 		let pending_number: u64 = match last_pruned {
 			Some(buffer) => u64::decode(&mut buffer.as_slice()).ok_or(Error::Decoding)? + 1,
-			None => 1,
+			None => 0,
 		};
 		let mut block = pending_number;
 		let mut pruning = RefWindow {
@@ -69,7 +69,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 			pending_number: pending_number,
 		};
 		// read the journal
-		trace!(target: "state-db", "Reading pruning journal. Last pruned #{}", pending_number - 1);
+		trace!(target: "state-db", "Reading pruning journal. Pending #{}", pending_number);
 		loop {
 			let journal_key = to_journal_key(block);
 			match db.get_meta(&journal_key).map_err(|e| Error::Db(e))? {
@@ -117,6 +117,10 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 
 	pub fn mem_used(&self) -> usize {
 		0
+	}
+
+	pub fn pending(&self) -> u64 {
+		self.pending_number
 	}
 
 	/// Prune next block. Expects at least one block in the window. Adds changes to `commit`.
@@ -168,7 +172,7 @@ mod tests {
 	fn created_from_empty_db() {
 		let db = make_db(&[]);
 		let pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
-		assert_eq!(pruning.pending_number, 1);
+		assert_eq!(pruning.pending_number, 0);
 		assert!(pruning.death_rows.is_empty());
 		assert!(pruning.death_index.is_empty());
 	}
@@ -202,7 +206,7 @@ mod tests {
 		assert!(db.data_eq(&make_db(&[2, 4, 5])));
 		assert!(pruning.death_rows.is_empty());
 		assert!(pruning.death_index.is_empty());
-		assert_eq!(pruning.pending_number, 2);
+		assert_eq!(pruning.pending_number, 1);
 	}
 
 	#[test]
@@ -227,7 +231,7 @@ mod tests {
 		pruning.prune_one(&mut commit);
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[3, 4, 5])));
-		assert_eq!(pruning.pending_number, 3);
+		assert_eq!(pruning.pending_number, 2);
 	}
 
 	#[test]
@@ -258,6 +262,6 @@ mod tests {
 		pruning.prune_one(&mut commit);
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 3])));
-		assert_eq!(pruning.pending_number, 4);
+		assert_eq!(pruning.pending_number, 3);
 	}
 }

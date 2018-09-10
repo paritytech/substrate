@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Temporary crate for contracts implementations.
 //!
 //! This will be replaced with WASM contracts stored on-chain.
@@ -24,6 +25,7 @@
 //! - init_block(PrevBlock?) -> InProgressBlock
 //! - add_transaction(InProgressBlock) -> InProgressBlock
 //! I leave it as is for now as it might be removed before this is ever done.
+// end::description[]
 
 #![warn(missing_docs)]
 #![recursion_limit="128"]
@@ -42,6 +44,9 @@ extern crate byteorder;
 extern crate triehash;
 extern crate parking_lot;
 extern crate twox_hash;
+extern crate hashdb;
+extern crate tiny_keccak;
+
 #[macro_use] extern crate log;
 
 #[macro_use]
@@ -73,6 +78,7 @@ pub use native_executor::{with_native_environment, NativeExecutor, NativeExecuti
 pub use state_machine::Externalities;
 pub use runtime_version::RuntimeVersion;
 pub use codec::Codec;
+use primitives::KeccakHasher;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
@@ -80,9 +86,10 @@ pub trait RuntimeInfo {
 	const NATIVE_VERSION: Option<RuntimeVersion>;
 
 	/// Extract RuntimeVersion of given :code block
-	fn runtime_version<E: Externalities> (
+	fn runtime_version<E: Externalities<KeccakHasher>> (
 		&self,
 		ext: &mut E,
+		heap_pages: usize,
 		code: &[u8]
 	) -> Option<RuntimeVersion>;
 }

@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Timestamp manager: just handles the current timestamp.
 
@@ -40,11 +40,10 @@ extern crate substrate_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{Executable, MaybeEmpty, SimpleArithmetic, As, Zero};
+use runtime_primitives::traits::{OnFinalise, SimpleArithmetic, As, Zero};
+use system::ensure_inherent;
 
-pub trait Trait: consensus::Trait where
-	<Self as consensus::Trait>::PublicAux: MaybeEmpty
-{
+pub trait Trait: consensus::Trait + system::Trait {
 	// the position of the required timestamp-set extrinsic.
 	const TIMESTAMP_SET_POSITION: u32;
 
@@ -52,22 +51,20 @@ pub trait Trait: consensus::Trait where
 }
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
-		fn set(aux, now: T::Moment) -> Result = 0;
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn set(origin, now: T::Moment) -> Result;
 	}
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
-	pub Now get(now): b"tim:val" => required T::Moment;
-	// The minimum (and advised) period between blocks.
-	pub BlockPeriod get(block_period): b"tim:block_period" => required T::Moment;
+	trait Store for Module<T: Trait> as Timestamp {
+		pub Now get(now): required T::Moment;
+		/// The minimum (and advised) period between blocks.
+		pub BlockPeriod get(block_period): required T::Moment;
 
-	// Did the timestamp get updated in this block?
-	DidUpdate: b"tim:did" => default bool;
+		/// Did the timestamp get updated in this block?
+		DidUpdate: default bool;
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -76,11 +73,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the current time.
-	fn set(aux: &T::PublicAux, now: T::Moment) -> Result {
-		assert!(aux.is_empty());
+	fn set(origin: T::Origin, now: T::Moment) -> Result {
+		ensure_inherent(origin)?;
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
-			<system::Module<T>>::extrinsic_index() == T::TIMESTAMP_SET_POSITION,
+			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
 			"Timestamp extrinsic must be at position {} in the block",
 			T::TIMESTAMP_SET_POSITION
 		);
@@ -100,8 +97,8 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 		assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 	}
 }
@@ -142,15 +139,17 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{HasPublicAux, BlakeTwo256};
+	use runtime_primitives::traits::{BlakeTwo256};
 	use runtime_primitives::testing::{Digest, Header};
+
+	impl_outer_origin! {
+		pub enum Origin for Test {}
+	}
 
 	#[derive(Clone, Eq, PartialEq)]
 	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
 	impl system::Trait for Test {
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -158,10 +157,13 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
+		type Event = ();
 	}
 	impl consensus::Trait for Test {
-		type PublicAux = u64;
+		const NOTE_OFFLINE_POSITION: u32 = 1;
+		type Log = u64;
 		type SessionKey = u64;
+		type OnOfflineValidator = ();
 	}
 	impl Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
@@ -173,10 +175,10 @@ mod tests {
 	fn timestamp_works() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
-
+		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -186,11 +188,11 @@ mod tests {
 	fn double_timestamp_should_fail() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
-
+		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::aux_dispatch(Call::set(69), &0));
-			let _ = Timestamp::aux_dispatch(Call::set(70), &0);
+			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
+			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
 		});
 	}
 
@@ -199,10 +201,10 @@ mod tests {
 	fn block_period_is_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
-
+		let mut t = runtime_io::TestExternalities::from(t);
 		with_externalities(&mut t, || {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::aux_dispatch(Call::set(46), &0);
+			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
 		});
 	}
 }

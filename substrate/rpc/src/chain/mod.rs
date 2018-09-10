@@ -19,13 +19,15 @@
 use std::sync::Arc;
 
 use client::{self, Client, BlockchainEvents};
-use jsonrpc_macros::pubsub;
+use jsonrpc_macros::{pubsub, Trailing};
 use jsonrpc_pubsub::SubscriptionId;
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::generic::{BlockId, SignedBlock};
+use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
+use runtime_version::RuntimeVersion;
 use tokio::runtime::TaskExecutor;
+use primitives::{KeccakHasher, RlpCodec};
 
 use subscriptions::Subscriptions;
 
@@ -37,16 +39,26 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Polkadot blockchain API
-	pub trait ChainApi<Hash, Header> {
+	pub trait ChainApi<Hash, Header, Number, Extrinsic> {
 		type Metadata;
 
 		/// Get header of a relay chain block.
 		#[rpc(name = "chain_getHeader")]
-		fn header(&self, Hash) -> Result<Option<Header>>;
+		fn header(&self, Trailing<Hash>) -> Result<Option<Header>>;
 
-		/// Get hash of the head.
-		#[rpc(name = "chain_getHead")]
-		fn head(&self) -> Result<Hash>;
+		/// Get header and body of a relay chain block.
+		#[rpc(name = "chain_getBlock")]
+		fn block(&self, Trailing<Hash>) -> Result<Option<SignedBlock<Header, Extrinsic, Hash>>>;
+
+		/// Get hash of the n-th block in the canon chain.
+		///
+		/// By default returns latest block hash.
+		#[rpc(name = "chain_getBlockHash", alias = ["chain_getHead", ])]
+		fn block_hash(&self, Trailing<Number>) -> Result<Option<Hash>>;
+
+		/// Get the runtime version.
+		#[rpc(name = "chain_getRuntimeVersion")]
+		fn runtime_version(&self, Trailing<Hash>) -> Result<RuntimeVersion>;
 
 		#[pubsub(name = "chain_newHead")] {
 			/// New head subscription
@@ -78,26 +90,53 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	}
 }
 
-impl<B, E, Block> ChainApi<Block::Hash, Block::Header> for Chain<B, E, Block> where
+impl<B, E, Block> Chain<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block> + Send + Sync + 'static,
-	E: client::CallExecutor<Block> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+{
+	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
+		Ok(match hash.into() {
+			None => self.client.info()?.chain.best_hash,
+			Some(hash) => hash,
+		})
+	}
+}
+
+impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic> for Chain<B, E, Block> where
+	Block: BlockT + 'static,
+	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 
-	fn header(&self, hash: Block::Hash) -> Result<Option<Block::Header>> {
+	fn header(&self, hash: Trailing<Block::Hash>) -> Result<Option<Block::Header>> {
+		let hash = self.unwrap_or_best(hash)?;
 		Ok(self.client.header(&BlockId::Hash(hash))?)
 	}
 
-	fn head(&self) -> Result<Block::Hash> {
-		Ok(self.client.info()?.chain.best_hash)
+	fn block(&self, hash: Trailing<Block::Hash>) -> Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+		let hash = self.unwrap_or_best(hash)?;
+		Ok(self.client.block(&BlockId::Hash(hash))?)
+	}
+
+	fn block_hash(&self, number: Trailing<NumberFor<Block>>) -> Result<Option<Block::Hash>> {
+		Ok(match number.into() {
+			None => Some(self.client.info()?.chain.best_hash),
+			Some(number) => self.client.header(&BlockId::number(number))?.map(|h| h.hash()),
+		})
+	}
+
+	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
+		let at = self.unwrap_or_best(at)?;
+		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
 		self.subscriptions.add(subscriber, |sink| {
 			// send current head right at the start.
-			let header = self.head()
-				.and_then(|hash| self.header(hash))
+			let header = self.block_hash(None.into())
+				.and_then(|hash| self.header(hash.into()))
 				.and_then(|header| {
 					header.ok_or_else(|| self::error::ErrorKind::Unimplemented.into())
 				})

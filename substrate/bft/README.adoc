@@ -1,3 +1,13 @@
+
 = Substrate BFT
 
-TBD
+.Summary
+[source, toml]
+----
+include::Cargo.toml[lines=2..5]
+----
+
+.Description
+----
+include::src/lib.rs[tag=description]
+----

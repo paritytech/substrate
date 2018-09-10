@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Substrate RPC interfaces.
+// end::description[]
 
 #![warn(missing_docs)]
 
@@ -27,6 +29,7 @@ extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_runtime_version as runtime_version;
 extern crate tokio;
 
 #[macro_use]
@@ -45,6 +48,7 @@ extern crate substrate_test_client as test_client;
 extern crate rustc_hex;
 
 mod errors;
+mod helpers;
 mod subscriptions;
 
 pub mod author;

@@ -1,18 +1,18 @@
 // Copyright 2018 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
 	sync::Arc,
@@ -76,18 +76,18 @@ impl<H, T> txpool::Listener<T> for Listener<H> where
 	}
 
 	fn rejected(&mut self, tx: &Arc<T>, reason: &txpool::ErrorKind) {
-		warn!("Extrinsic rejected ({}): {:?}", reason, tx);
+		warn!(target: "extrinsic-pool", "Extrinsic rejected ({}): {:?}", reason, tx);
 	}
 
 	fn invalid(&mut self, tx: &Arc<T>) {
-		warn!("Extrinsic invalid: {:?}", tx);
+		warn!(target: "extrinsic-pool", "Extrinsic invalid: {:?}", tx);
 	}
 
 	fn canceled(&mut self, tx: &Arc<T>) {
-		warn!("Extrinsic canceled: {:?}", tx);
+		debug!(target: "extrinsic-pool", "Extrinsic canceled: {:?}", tx);
 	}
 
-	fn mined(&mut self, tx: &Arc<T>) {
+	fn culled(&mut self, tx: &Arc<T>) {
 		// TODO [ToDr] latest block number?
 		let header_hash = Default::default();
 		self.fire(tx.hash(), |watcher| watcher.finalised(header_hash))

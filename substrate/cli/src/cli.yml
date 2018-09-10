@@ -41,10 +41,16 @@ args:
       long: dev
       help: Run in development mode; implies --chain=dev --validator --key Alice
       takes_value: false
+  - listen-addr:
+      long: listen-addr
+      value_name: LISTEN_ADDR
+      help: Listen on this multiaddress
+      takes_value: true
+      multiple: true
   - port:
       long: port
       value_name: PORT
-      help: Specify p2p protocol TCP port
+      help: Specify p2p protocol TCP port. Only used if --listen-addr is not specified.
       takes_value: true
   - rpc-external:
       long: rpc-external
@@ -70,6 +76,22 @@ args:
       help: Specify a list of bootnodes
       takes_value: true
       multiple: true
+  - reserved-nodes:
+      long: reserved-nodes
+      value_name: URL
+      help: Specify a list of reserved node addresses
+      takes_value: true
+      multiple: true
+  - min-peers:
+      long: min-peers
+      value_name: MIN_PEERS
+      help: Specify the minimum number of peers
+      takes_value: true
+  - max-peers:
+      long: max-peers
+      value_name: MAX_PEERS
+      help: Specify the maximum number of peers
+      takes_value: true
   - chain:
       long: chain
       value_name: CHAIN_SPEC
@@ -103,10 +125,6 @@ args:
       long: execution
       value_name: STRATEGY
       help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
-  - max-heap-pages:
-      long: max-heap-pages
-      value_name: COUNT
-      help: The maximum number of 64KB pages to ever allocate for Wasm execution. Don't alter this unless you know what you're doing.
 subcommands:
   - build-spec:
       about: Build a spec.json file, outputing to stdout
@@ -184,6 +202,20 @@ subcommands:
           - NUM:
               index: 1
               help: Number of blocks to revert. Default is 256.
+          - chain:
+              long: chain
+              value_name: CHAIN_SPEC
+              help: Specify the chain specification.
+              takes_value: true
+          - base-path:
+              long: base-path
+              short: d
+              value_name: PATH
+              help: Specify custom base path.
+              takes_value: true
+  - purge-chain:
+      about: Remove the whole chain data.
+      args:
           - chain:
               long: chain
               value_name: CHAIN_SPEC

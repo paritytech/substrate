@@ -40,7 +40,7 @@ error_chain! {
 			display("Invalid Code: {:?}", c),
 		}
 
-		/// Cound not get runtime version.
+		/// Could not get runtime version.
 		VersionInvalid {
 			description("Runtime version error"),
 			display("On-chain runtime does not specify version"),

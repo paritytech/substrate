@@ -1,7 +1,0 @@
-
-= Polkadot Src
-
-.Description
-----
-include::main.rs[tag=description]
-----

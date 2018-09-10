@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Substrate CLI library.
+// end::description[]
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
@@ -30,12 +32,12 @@ extern crate futures;
 extern crate tokio;
 extern crate names;
 extern crate backtrace;
+extern crate sysinfo;
 
 extern crate substrate_client as client;
 extern crate substrate_network as network;
 extern crate substrate_network_libp2p as network_libp2p;
 extern crate substrate_runtime_primitives as runtime_primitives;
-extern crate substrate_extrinsic_pool;
 extern crate substrate_service as service;
 #[macro_use]
 extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
@@ -61,9 +63,11 @@ use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
 	FactoryGenesis, PruningMode, ChainSpec,
 };
+use network::NonReservedPeerMode;
 
 use std::io::{Write, Read, stdin, stdout};
 use std::iter;
+use std::fs;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
@@ -212,6 +216,12 @@ where
 		return Ok(Action::ExecutedInternally);
 	}
 
+	if let Some(matches) = matches.subcommand_matches("purge-chain") {
+		let spec = load_spec(&matches, spec_factory)?;
+		purge_chain::<F>(matches, spec)?;
+		return Ok(Action::ExecutedInternally);
+	}
+
 	let spec = load_spec(&matches, spec_factory)?;
 	let mut config = service::Configuration::default_with_spec(spec);
 
@@ -258,10 +268,6 @@ where
 			service::Roles::FULL
 		};
 
-	if let Some(v) = matches.value_of("max-heap-pages") {
-		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
-	}
-
 	if let Some(s) = matches.value_of("execution") {
 		config.execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
@@ -278,22 +284,52 @@ where
 			.map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
 		config.network.config_path = Some(network_path(&base_path, config.chain_spec.id()).to_string_lossy().into());
 		config.network.net_config_path = config.network.config_path.clone();
+		config.network.reserved_nodes.extend(matches
+			 .values_of("reserved-nodes")
+			 .map_or(Default::default(), |v| v.map(|n| n.to_owned()).collect::<Vec<_>>()));
+		if !config.network.reserved_nodes.is_empty() {
+			config.network.non_reserved_mode = NonReservedPeerMode::Deny;
+		}
 
-		let port = match matches.value_of("port") {
-			Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
-			None => 30333,
-		};
+		config.network.listen_addresses = Vec::new();
+		for addr in matches.values_of("listen-addr").unwrap_or_default() {
+			let addr = addr.parse().map_err(|_| "Invalid listen multiaddress")?;
+			config.network.listen_addresses.push(addr);
+		}
+		if config.network.listen_addresses.is_empty() {
+			let port = match matches.value_of("port") {
+				Some(port) => port.parse().map_err(|_| "Invalid p2p port value specified.")?,
+				None => 30333,
+			};
+			config.network.listen_addresses = vec![
+				iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
+					.chain(iter::once(AddrComponent::TCP(port)))
+					.collect()
+			];
+		}
 
-		config.network.listen_address = iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
-			.chain(iter::once(AddrComponent::TCP(port)))
-			.collect();
-		config.network.public_address = None;
+		config.network.public_addresses = Vec::new();
+
 		config.network.client_version = config.client_id();
 		config.network.use_secret = match matches.value_of("node-key").map(|s| s.parse()) {
 			Some(Ok(secret)) => Some(secret),
 			Some(Err(err)) => return Err(format!("Error parsing node key: {}", err).into()),
 			None => None,
 		};
+
+		let min_peers = match matches.value_of("min-peers") {
+			Some(min_peers) => min_peers.parse().map_err(|_| "Invalid min-peers value specified.")?,
+			None => 25,
+		};
+		let max_peers = match matches.value_of("max-peers") {
+			Some(max_peers) => max_peers.parse().map_err(|_| "Invalid max-peers value specified.")?,
+			None => 50,
+		};
+		if min_peers > max_peers {
+			return Err(error::ErrorKind::Input("Min-peers mustn't be larger than max-peers.".to_owned()).into());
+		}
+		config.network.min_peers = min_peers;
+		config.network.max_peers = max_peers;
 	}
 
 	config.keys = matches.values_of("key").unwrap_or_default().map(str::to_owned).collect();
@@ -360,10 +396,6 @@ fn import_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesi
 	let mut config = service::Configuration::default_with_spec(spec);
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 
-	if let Some(v) = matches.value_of("max-heap-pages") {
-		config.max_heap_pages = v.parse().map_err(|_| "Invalid --max-heap-pages argument")?;
-	}
-
 	if let Some(s) = matches.value_of("execution") {
 		config.execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
@@ -394,6 +426,30 @@ fn revert_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>
 	};
 
 	Ok(service::chain_ops::revert_chain::<F>(config, As::sa(blocks))?)
+}
+
+fn purge_chain<F>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesis<F>>) -> error::Result<()>
+	where F: ServiceFactory,
+{
+	let base_path = base_path(matches);
+	let database_path = db_path(&base_path, spec.id());
+
+	print!("Are you sure to remove {:?}? (y/n)", &database_path);
+	stdout().flush().expect("failed to flush stdout");
+
+	let mut input = String::new();
+	stdin().read_line(&mut input)?;
+	let input = input.trim();
+
+	match input.chars().nth(0) {
+		Some('y') | Some('Y') => {
+			fs::remove_dir_all(&database_path)?;
+			println!("{:?} removed.", &database_path);
+		},
+		_ => println!("Aborted"),
+	}
+
+	Ok(())
 }
 
 fn parse_address(default: &str, port_param: &str, matches: &clap::ArgMatches) -> Result<SocketAddr, String> {

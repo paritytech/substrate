@@ -1,25 +1,26 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::{HashMap, HashSet};
 use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, As};
+use rustc_hex::ToHex;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor, As};
 use runtime_primitives::generic::BlockId;
 use network_libp2p::{NodeIndex, Severity};
 use codec::{Encode, Decode};
@@ -28,7 +29,7 @@ use message::{self, Message};
 use message::generic::Message as GenericMessage;
 use specialization::Specialization;
 use sync::{ChainSync, Status as SyncStatus, SyncState};
-use service::{Roles, TransactionPool};
+use service::{Roles, TransactionPool, ExHashT};
 use import_queue::ImportQueue;
 use config::ProtocolConfig;
 use chain::Client;
@@ -47,16 +48,16 @@ pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT, S: Specialization<B>> {
+pub struct Protocol<B: BlockT, S: Specialization<B>, H: ExHashT> {
 	config: ProtocolConfig,
 	on_demand: Option<Arc<OnDemandService<B>>>,
 	genesis_hash: B::Hash,
 	sync: Arc<RwLock<ChainSync<B>>>,
 	specialization: RwLock<S>,
-	context_data: ContextData<B>,
+	context_data: ContextData<B, H>,
 	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<NodeIndex, time::Instant>>,
-	transaction_pool: Arc<TransactionPool<B>>,
+	transaction_pool: Arc<TransactionPool<H, B>>,
 }
 /// Syncing status and statistics
 #[derive(Clone)]
@@ -70,7 +71,7 @@ pub struct ProtocolStatus<B: BlockT> {
 }
 
 /// Peer information
-struct Peer<B: BlockT> {
+struct Peer<B: BlockT, H: ExHashT> {
 	/// Protocol version
 	protocol_version: u32,
 	/// Roles
@@ -84,7 +85,7 @@ struct Peer<B: BlockT> {
 	/// Request timestamp
 	request_timestamp: Option<time::Instant>,
 	/// Holds a set of transactions known to this peer.
-	known_extrinsics: HashSet<B::Hash>,
+	known_extrinsics: HashSet<H>,
 	/// Holds a set of blocks known to this peer.
 	known_blocks: HashSet<B::Hash>,
 	/// Request counter,
@@ -120,13 +121,13 @@ pub trait Context<B: BlockT> {
 }
 
 /// Protocol context.
-pub(crate) struct ProtocolContext<'a, B: 'a + BlockT> {
+pub(crate) struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
 	io: &'a mut SyncIo,
-	context_data: &'a ContextData<B>,
+	context_data: &'a ContextData<B, H>,
 }
 
-impl<'a, B: BlockT + 'a> ProtocolContext<'a, B> {
-	pub(crate) fn new(context_data: &'a ContextData<B>, io: &'a mut SyncIo) -> Self {
+impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
+	pub(crate) fn new(context_data: &'a ContextData<B, H>, io: &'a mut SyncIo) -> Self {
 		ProtocolContext {
 			io,
 			context_data,
@@ -156,7 +157,7 @@ impl<'a, B: BlockT + 'a> ProtocolContext<'a, B> {
 	}
 }
 
-impl<'a, B: BlockT + 'a> Context<B> for ProtocolContext<'a, B> {
+impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
 	fn send_message(&mut self, who: NodeIndex, message: Message<B>) {
 		ProtocolContext::send_message(self, who, message);
 	}
@@ -175,22 +176,22 @@ impl<'a, B: BlockT + 'a> Context<B> for ProtocolContext<'a, B> {
 }
 
 /// Data necessary to create a context.
-pub(crate) struct ContextData<B: BlockT> {
+pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
-	peers: RwLock<HashMap<NodeIndex, Peer<B>>>,
+	peers: RwLock<HashMap<NodeIndex, Peer<B, H>>>,
 	chain: Arc<Client<B>>,
 }
 
-impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
+impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
 		import_queue: Arc<ImportQueue<B>>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
-		transaction_pool: Arc<TransactionPool<B>>,
+		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
-	) -> error::Result<Self>  {
+	) -> error::Result<Self> {
 		let info = chain.info()?;
 		let sync = ChainSync::new(config.roles, &info, import_queue);
 		let protocol = Protocol {
@@ -209,7 +210,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 		Ok(protocol)
 	}
 
-	pub(crate) fn context_data(&self) -> &ContextData<B> {
+	pub(crate) fn context_data(&self) -> &ContextData<B, H> {
 		&self.context_data
 	}
 
@@ -268,12 +269,16 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 			GenericMessage::Transactions(m) => self.on_extrinsics(io, who, m),
 			GenericMessage::RemoteCallRequest(request) => self.on_remote_call_request(io, who, request),
 			GenericMessage::RemoteCallResponse(response) => self.on_remote_call_response(io, who, response),
+			GenericMessage::RemoteReadRequest(request) => self.on_remote_read_request(io, who, request),
+			GenericMessage::RemoteReadResponse(response) => self.on_remote_read_response(io, who, response),
+			GenericMessage::RemoteHeaderRequest(request) => self.on_remote_header_request(io, who, request),
+			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(io, who, response),
 			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, other),
 		}
 	}
 
 	pub fn send_message(&self, io: &mut SyncIo, who: NodeIndex, message: Message<B>) {
-		send_message::<B>(&self.context_data.peers, io, who, message)
+		send_message::<B, H>(&self.context_data.peers, io, who, message)
 	}
 
 	/// Called when a new peer is connected
@@ -318,7 +323,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 		let get_body = request.fields.contains(message::BlockAttributes::BODY);
 		let get_justification = request.fields.contains(message::BlockAttributes::JUSTIFICATION);
 		while let Some(header) = self.context_data.chain.header(&id).unwrap_or(None) {
-			if blocks.len() >= max{
+			if blocks.len() >= max {
 				break;
 			}
 			let number = header.number().clone();
@@ -487,7 +492,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 			let (hashes, to_send): (Vec<_>, Vec<_>) = extrinsics
 				.iter()
 				.cloned()
-				.filter(|&(hash, _)| peer.known_extrinsics.insert(hash))
+				.filter(|&(ref hash, _)| peer.known_extrinsics.insert(hash.clone()))
 				.unzip();
 
 			if !to_send.is_empty() {
@@ -602,6 +607,47 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 		self.on_demand.as_ref().map(|s| s.on_remote_call_response(io, who, response));
 	}
 
+	fn on_remote_read_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteReadRequest<B::Hash>) {
+		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
+			request.id, who, request.key.to_hex(), request.block);
+		let proof = match self.context_data.chain.read_proof(&request.block, &request.key) {
+			Ok(proof) => proof,
+			Err(error) => {
+				trace!(target: "sync", "Remote read request {} from {} ({} at {}) failed with: {}",
+					request.id, who, request.key.to_hex(), request.block, error);
+				Default::default()
+			},
+		};
+		self.send_message(io, who, GenericMessage::RemoteReadResponse(message::RemoteReadResponse {
+			id: request.id, proof,
+		}));
+	}
+	fn on_remote_read_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteReadResponse) {
+		trace!(target: "sync", "Remote read response {} from {}", response.id, who);
+		self.on_demand.as_ref().map(|s| s.on_remote_read_response(io, who, response));
+	}
+
+	fn on_remote_header_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteHeaderRequest<NumberFor<B>>) {
+		trace!(target: "sync", "Remote header proof request {} from {} ({})",
+			request.id, who, request.block);
+		let (header, proof) = match self.context_data.chain.header_proof(request.block) {
+			Ok((header, proof)) => (Some(header), proof),
+			Err(error) => {
+				trace!(target: "sync", "Remote header proof request {} from {} ({}) failed with: {}",
+					request.id, who, request.block, error);
+				(Default::default(), Default::default())
+			},
+		};
+ 		self.send_message(io, who, GenericMessage::RemoteHeaderResponse(message::RemoteHeaderResponse {
+			id: request.id, header, proof,
+		}));
+	}
+
+ 	fn on_remote_header_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteHeaderResponse<B::Header>) {
+		trace!(target: "sync", "Remote header proof response {} from {}", response.id, who);
+		self.on_demand.as_ref().map(|s| s.on_remote_header_response(io, who, response));
+	}
+
 	/// Execute a closure with access to a network context and specialization.
 	pub fn with_spec<F, U>(&self, io: &mut SyncIo, f: F) -> U
 		where F: FnOnce(&mut S, &mut Context<B>) -> U
@@ -610,7 +656,7 @@ impl<B: BlockT, S: Specialization<B>> Protocol<B, S> {
 	}
 }
 
-fn send_message<B: BlockT>(peers: &RwLock<HashMap<NodeIndex, Peer<B>>>, io: &mut SyncIo, who: NodeIndex, mut message: Message<B>) {
+fn send_message<B: BlockT, H: ExHashT>(peers: &RwLock<HashMap<NodeIndex, Peer<B, H>>>, io: &mut SyncIo, who: NodeIndex, mut message: Message<B>) {
 	match &mut message {
 		&mut GenericMessage::BlockRequest(ref mut r) => {
 			let mut peers = peers.write();

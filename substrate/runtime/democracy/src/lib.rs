@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Substrate Demo.
+// This file is part of Substrate.
 
-// Substrate Demo is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Substrate Demo is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Substrate Demo.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Democratic system: Handles administration of general stakeholder voting.
 
@@ -38,18 +38,18 @@ extern crate substrate_runtime_support;
 extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
-extern crate substrate_runtime_consensus as consensus;
-extern crate substrate_runtime_session as session;
-extern crate substrate_runtime_staking as staking;
+extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_system as system;
-#[cfg(test)]
-extern crate substrate_runtime_timestamp as timestamp;
 
 use rstd::prelude::*;
 use rstd::result;
-use primitives::traits::{Zero, Executable, RefInto, As, MaybeSerializeDebug};
+use primitives::traits::{Zero, OnFinalise, As, MaybeSerializeDebug};
 use substrate_runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use substrate_runtime_support::dispatch::Result;
+use system::{ensure_signed, ensure_root};
+
+#[cfg(any(feature = "std", test))]
+use std::collections::HashMap;
 
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
@@ -59,56 +59,51 @@ pub type PropIndex = u32;
 /// A referendum index.
 pub type ReferendumIndex = u32;
 
-pub trait Trait: staking::Trait + Sized {
-	type Proposal: Parameter + Dispatchable + IsSubType<Module<Self>> + MaybeSerializeDebug;
+pub trait Trait: balances::Trait + Sized {
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>> + MaybeSerializeDebug;
 }
 
 decl_module! {
-	pub struct Module<T: Trait>;
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn propose(origin, proposal: Box<T::Proposal>, value: T::Balance) -> Result;
+		fn second(origin, proposal: PropIndex) -> Result;
+		fn vote(origin, ref_index: ReferendumIndex, approve_proposal: bool) -> Result;
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
-		fn propose(aux, proposal: Box<T::Proposal>, value: T::Balance) -> Result = 0;
-		fn second(aux, proposal: PropIndex) -> Result = 1;
-		fn vote(aux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result = 2;
-	}
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum PrivCall {
-		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result = 0;
-		fn cancel_referendum(ref_index: ReferendumIndex) -> Result = 1;
+		fn start_referendum(origin, proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result;
+		fn cancel_referendum(origin, ref_index: ReferendumIndex) -> Result;
 	}
 }
 
 decl_storage! {
-	trait Store for Module<T: Trait>;
+	trait Store for Module<T: Trait> as Democracy {
 
-	// The number of (public) proposals that have been made so far.
-	pub PublicPropCount get(public_prop_count): b"dem:ppc" => default PropIndex;
-	// The public proposals. Unsorted.
-	pub PublicProps get(public_props): b"dem:pub" => default Vec<(PropIndex, T::Proposal, T::AccountId)>;
-	// Those who have locked a deposit.
-	pub DepositOf get(deposit_of): b"dem:dep:" => map [ PropIndex => (T::Balance, Vec<T::AccountId>) ];
-	// How often (in blocks) new public referenda are launched.
-	pub LaunchPeriod get(launch_period): b"dem:lau" => required T::BlockNumber;
-	// The minimum amount to be used as a deposit for a public referendum proposal.
-	pub MinimumDeposit get(minimum_deposit): b"dem:min" => required T::Balance;
+		/// The number of (public) proposals that have been made so far.
+		pub PublicPropCount get(public_prop_count): default PropIndex;
+		/// The public proposals. Unsorted.
+		pub PublicProps get(public_props): default Vec<(PropIndex, T::Proposal, T::AccountId)>;
+		/// Those who have locked a deposit.
+		pub DepositOf get(deposit_of): map [ PropIndex => (T::Balance, Vec<T::AccountId>) ];
+		/// How often (in blocks) new public referenda are launched.
+		pub LaunchPeriod get(launch_period): required T::BlockNumber;
+		/// The minimum amount to be used as a deposit for a public referendum proposal.
+		pub MinimumDeposit get(minimum_deposit): required T::Balance;
 
-	// How often (in blocks) to check for new votes.
-	pub VotingPeriod get(voting_period): b"dem:per" => required T::BlockNumber;
+		/// How often (in blocks) to check for new votes.
+		pub VotingPeriod get(voting_period): required T::BlockNumber;
 
-	// The next free referendum index, aka the number of referendums started so far.
-	pub ReferendumCount get(referendum_count): b"dem:rco" => required ReferendumIndex;
-	// The next referendum index that should be tallied.
-	pub NextTally get(next_tally): b"dem:nxt" => required ReferendumIndex;
-	// Information concerning any given referendum.
-	pub ReferendumInfoOf get(referendum_info): b"dem:pro:" => map [ ReferendumIndex => (T::BlockNumber, T::Proposal, VoteThreshold) ];
+		/// The next free referendum index, aka the number of referendums started so far.
+		pub ReferendumCount get(referendum_count): required ReferendumIndex;
+		/// The next referendum index that should be tallied.
+		pub NextTally get(next_tally): required ReferendumIndex;
+		/// Information concerning any given referendum.
+		pub ReferendumInfoOf get(referendum_info): map [ ReferendumIndex => (T::BlockNumber, T::Proposal, VoteThreshold) ];
 
-	// Get the voters for the current proposal.
-	pub VotersFor get(voters_for): b"dem:vtr:" => default map [ ReferendumIndex => Vec<T::AccountId> ];
+		/// Get the voters for the current proposal.
+		pub VotersFor get(voters_for): default map [ ReferendumIndex => Vec<T::AccountId> ];
 
-	// Get the vote, if Some, of `who`.
-	pub VoteOf get(vote_of): b"dem:vot:" => map [ (ReferendumIndex, T::AccountId) => bool ];
+		/// Get the vote, if Some, of `who`.
+		pub VoteOf get(vote_of): map [ (ReferendumIndex, T::AccountId) => bool ];
+	}
 }
 
 impl<T: Trait> Module<T> {
@@ -148,7 +143,7 @@ impl<T: Trait> Module<T> {
 	/// Get the voters for the current proposal.
 	pub fn tally(ref_index: ReferendumIndex) -> (T::Balance, T::Balance) {
 		Self::voters_for(ref_index).iter()
-			.map(|a| (<staking::Module<T>>::voting_balance(a), Self::vote_of((ref_index, a.clone())).unwrap_or(false)/*defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed*/))
+			.map(|a| (<balances::Module<T>>::total_balance(a), Self::vote_of((ref_index, a.clone())).unwrap_or(false)/*defensive only: all items come from `voters`; for an item to be in `voters` there must be a vote registered; qed*/))
 			.map(|(bal, vote)| if vote { (bal, Zero::zero()) } else { (Zero::zero(), bal) })
 			.fold((Zero::zero(), Zero::zero()), |(a, b), (c, d)| (a + c, b + d))
 	}
@@ -156,49 +151,53 @@ impl<T: Trait> Module<T> {
 	// dispatching.
 
 	/// Propose a sensitive action to be taken.
-	fn propose(aux: &T::PublicAux, proposal: Box<T::Proposal>, value: T::Balance) -> Result {
+	fn propose(origin: T::Origin, proposal: Box<T::Proposal>, value: T::Balance) -> Result {
+		let who = ensure_signed(origin)?;
 		ensure!(value >= Self::minimum_deposit(), "value too low");
-		<staking::Module<T>>::reserve(aux.ref_into(), value)
+		<balances::Module<T>>::reserve(&who, value)
 			.map_err(|_| "proposer's balance too low")?;
 
 		let index = Self::public_prop_count();
 		<PublicPropCount<T>>::put(index + 1);
-		<DepositOf<T>>::insert(index, (value, vec![aux.ref_into().clone()]));
+		<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
 
 		let mut props = Self::public_props();
-		props.push((index, (*proposal).clone(), aux.ref_into().clone()));
+		props.push((index, (*proposal).clone(), who));
 		<PublicProps<T>>::put(props);
 		Ok(())
 	}
 
 	/// Propose a sensitive action to be taken.
-	fn second(aux: &T::PublicAux, proposal: PropIndex) -> Result {
+	fn second(origin: T::Origin, proposal: PropIndex) -> Result {
+		let who = ensure_signed(origin)?;
 		let mut deposit = Self::deposit_of(proposal)
 			.ok_or("can only second an existing proposal")?;
-		<staking::Module<T>>::reserve(aux.ref_into(), deposit.0)
+		<balances::Module<T>>::reserve(&who, deposit.0)
 			.map_err(|_| "seconder's balance too low")?;
-		deposit.1.push(aux.ref_into().clone());
+		deposit.1.push(who);
 		<DepositOf<T>>::insert(proposal, deposit);
 		Ok(())
 	}
 
 	/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
 	/// false would be a vote to keep the status quo..
-	fn vote(aux: &T::PublicAux, ref_index: ReferendumIndex, approve_proposal: bool) -> Result {
+	fn vote(origin: T::Origin, ref_index: ReferendumIndex, approve_proposal: bool) -> Result {
+		let who = ensure_signed(origin)?;
 		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-		ensure!(!<staking::Module<T>>::voting_balance(aux.ref_into()).is_zero(),
+		ensure!(!<balances::Module<T>>::total_balance(&who).is_zero(),
 			"transactor must have balance to signal approval.");
-		if !<VoteOf<T>>::exists(&(ref_index, aux.ref_into().clone())) {
+		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
 			let mut voters = Self::voters_for(ref_index);
-			voters.push(aux.ref_into().clone());
+			voters.push(who.clone());
 			<VotersFor<T>>::insert(ref_index, voters);
 		}
-		<VoteOf<T>>::insert(&(ref_index, aux.ref_into().clone()), approve_proposal);
+		<VoteOf<T>>::insert(&(ref_index, who), approve_proposal);
 		Ok(())
 	}
 
 	/// Start a referendum.
-	fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
+	fn start_referendum(origin: T::Origin, proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
+		ensure_root(origin)?;
 		Self::inject_referendum(
 			<system::Module<T>>::block_number() + Self::voting_period(),
 			*proposal,
@@ -207,7 +206,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove a referendum.
-	fn cancel_referendum(ref_index: ReferendumIndex) -> Result {
+	fn cancel_referendum(origin: T::Origin, ref_index: ReferendumIndex) -> Result {
+		ensure_root(origin)?;
 		Self::clear_referendum(ref_index);
 		Ok(())
 	}
@@ -264,7 +264,7 @@ impl<T: Trait> Module<T> {
 				if let Some((deposit, depositors)) = <DepositOf<T>>::take(prop_index) {//: (T::Balance, Vec<T::AccountId>) =
 					// refund depositors
 					for d in &depositors {
-						<staking::Module<T>>::unreserve(d, deposit);
+						<balances::Module<T>>::unreserve(d, deposit);
 					}
 					<PublicProps<T>>::put(public_props);
 					Self::inject_referendum(now + Self::voting_period(), proposal, VoteThreshold::SuperMajorityApprove)?;
@@ -277,10 +277,10 @@ impl<T: Trait> Module<T> {
 		// tally up votes for any expiring referenda.
 		for (index, _, proposal, vote_threshold) in Self::maturing_referendums_at(now) {
 			let (approve, against) = Self::tally(index);
-			let total_stake = <staking::Module<T>>::total_stake();
+			let total_stake = <balances::Module<T>>::total_stake();
 			Self::clear_referendum(index);
 			if vote_threshold.approved(approve, against, total_stake) {
-				proposal.dispatch()?;
+				proposal.dispatch(system::RawOrigin::Root.into())?;
 			}
 			<NextTally<T>>::put(index + 1);
 		}
@@ -288,9 +288,9 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
-		if let Err(e) = Self::end_block(<system::Module<T>>::block_number()) {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(n: T::BlockNumber) {
+		if let Err(e) = Self::end_block(n) {
 			runtime_io::print(e);
 		}
 	}
@@ -315,14 +315,6 @@ impl<T: Trait> GenesisConfig<T> {
 			minimum_deposit: T::Balance::sa(1),
 		}
 	}
-
-	pub fn extended() -> Self {
-		GenesisConfig {
-			launch_period: T::BlockNumber::sa(1),
-			voting_period: T::BlockNumber::sa(3),
-			minimum_deposit: T::Balance::sa(1),
-		}
-	}
 }
 
 #[cfg(any(feature = "std", test))]
@@ -339,7 +331,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<runtime_io::TestExternalities, String> {
+	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
 		use codec::Encode;
 
 		Ok(map![
@@ -357,32 +349,27 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::H256;
+	use substrate_primitives::{H256, KeccakHasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{HasPublicAux, Identity, BlakeTwo256};
+	use primitives::traits::{BlakeTwo256};
 	use primitives::testing::{Digest, Header};
-	use session::OnSessionChange;
+
+	impl_outer_origin! {
+		pub enum Origin for Test {}
+	}
 
 	impl_outer_dispatch! {
-		#[derive(Debug, Clone, Eq, Serialize, Deserialize, PartialEq)]
-		pub enum Proposal {
-			Session = 0,
-			Staking = 1,
-			Democracy = 2,
+		pub enum Call where origin: Origin {
+			Balances,
+			Democracy,
 		}
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Test;
-	impl HasPublicAux for Test {
-		type PublicAux = u64;
-	}
-	impl consensus::Trait for Test {
-		type PublicAux = <Self as HasPublicAux>::PublicAux;
-		type SessionKey = u64;
-	}
 	impl system::Trait for Test {
+		type Origin = Origin;
 		type Index = u64;
 		type BlockNumber = u64;
 		type Hash = H256;
@@ -390,63 +377,40 @@ mod tests {
 		type Digest = Digest;
 		type AccountId = u64;
 		type Header = Header;
+		type Event = ();
 	}
-	impl session::Trait for Test {
-		type ConvertAccountIdToSessionKey = Identity;
-		type OnSessionChange = staking::Module<Test>;
-	}
-	impl staking::Trait for Test {
+	impl balances::Trait for Test {
 		type Balance = u64;
 		type AccountIndex = u64;
-		type OnAccountKill = ();
-	}
-	impl timestamp::Trait for Test {
-		const TIMESTAMP_SET_POSITION: u32 = 0;
-		type Moment = u64;
+		type OnFreeBalanceZero = ();
+		type EnsureAccountLiquid = ();
+		type Event = ();
 	}
 	impl Trait for Test {
-		type Proposal = Proposal;
+		type Proposal = Call;
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities {
+	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(consensus::GenesisConfig::<Test>{
-			code: vec![],
-			authorities: vec![],
-		}.build_storage().unwrap());
-		t.extend(session::GenesisConfig::<Test>{
-			session_length: 1,		//??? or 2?
-			validators: vec![10, 20],
-			broken_percent_late: 100,
-		}.build_storage().unwrap());
-		t.extend(staking::GenesisConfig::<Test>{
-			sessions_per_era: 1,
-			current_era: 0,
+		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
-			intentions: vec![],
-			validator_count: 2,
-			bonding_duration: 3,
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
 			existential_deposit: 0,
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-			early_era_slash: 0,
-			session_reward: 0,
 		}.build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 1,
 			minimum_deposit: 1,
 		}.build_storage().unwrap());
-		t.extend(timestamp::GenesisConfig::<Test>::default().build_storage().unwrap());
-		t
+		t.into()
 	}
 
 	type System = system::Module<Test>;
-	type Session = session::Module<Test>;
-	type Staking = staking::Module<Test>;
+	type Balances = balances::Module<Test>;
 	type Democracy = Module<Test>;
 
 	#[test]
@@ -456,22 +420,26 @@ mod tests {
 			assert_eq!(Democracy::voting_period(), 1);
 			assert_eq!(Democracy::minimum_deposit(), 1);
 			assert_eq!(Democracy::referendum_count(), 0);
-			assert_eq!(Staking::sessions_per_era(), 1);
-			assert_eq!(Staking::total_stake(), 210);
+			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(Balances::total_stake(), 210);
 		});
 	}
 
-	fn propose_sessions_per_era(who: u64, value: u64, locked: u64) -> super::Result {
-		Democracy::propose(&who, Box::new(Proposal::Staking(staking::PrivCall::set_sessions_per_era(value))), locked)
+	fn set_balance_proposal(value: u64) -> Call {
+		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value, 0))
+	}
+
+	fn propose_set_balance(who: u64, value: u64, locked: u64) -> super::Result {
+		Democracy::propose(Origin::signed(who), Box::new(set_balance_proposal(value)), locked)
 	}
 
 	#[test]
 	fn locked_for_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(1, 2, 2));
-			assert_ok!(propose_sessions_per_era(1, 4, 4));
-			assert_ok!(propose_sessions_per_era(1, 3, 3));
+			assert_ok!(propose_set_balance(1, 2, 2));
+			assert_ok!(propose_set_balance(1, 4, 4));
+			assert_ok!(propose_set_balance(1, 3, 3));
 			assert_eq!(Democracy::locked_for(0), Some(2));
 			assert_eq!(Democracy::locked_for(1), Some(4));
 			assert_eq!(Democracy::locked_for(2), Some(3));
@@ -482,12 +450,12 @@ mod tests {
 	fn single_proposal_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(1, 2, 1));
+			assert_ok!(propose_set_balance(1, 2, 1));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
 			System::set_block_number(2);
 			let r = 0;
-			assert_ok!(Democracy::vote(&1, r, true));
+			assert_ok!(Democracy::vote(Origin::signed(1), r, true));
 
 			assert_eq!(Democracy::referendum_count(), 1);
 			assert_eq!(Democracy::voters_for(r), vec![1]);
@@ -495,9 +463,8 @@ mod tests {
 			assert_eq!(Democracy::tally(r), (10, 0));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
 
-			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 
@@ -505,14 +472,14 @@ mod tests {
 	fn deposit_for_proposals_should_be_taken() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(1, 2, 5));
-			assert_ok!(Democracy::second(&2, 0));
-			assert_ok!(Democracy::second(&5, 0));
-			assert_ok!(Democracy::second(&5, 0));
-			assert_ok!(Democracy::second(&5, 0));
-			assert_eq!(Staking::free_balance(&1), 5);
-			assert_eq!(Staking::free_balance(&2), 15);
-			assert_eq!(Staking::free_balance(&5), 35);
+			assert_ok!(propose_set_balance(1, 2, 5));
+			assert_ok!(Democracy::second(Origin::signed(2), 0));
+			assert_ok!(Democracy::second(Origin::signed(5), 0));
+			assert_ok!(Democracy::second(Origin::signed(5), 0));
+			assert_ok!(Democracy::second(Origin::signed(5), 0));
+			assert_eq!(Balances::free_balance(&1), 5);
+			assert_eq!(Balances::free_balance(&2), 15);
+			assert_eq!(Balances::free_balance(&5), 35);
 		});
 	}
 
@@ -520,15 +487,15 @@ mod tests {
 	fn deposit_for_proposals_should_be_returned() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(1, 2, 5));
-			assert_ok!(Democracy::second(&2, 0));
-			assert_ok!(Democracy::second(&5, 0));
-			assert_ok!(Democracy::second(&5, 0));
-			assert_ok!(Democracy::second(&5, 0));
+			assert_ok!(propose_set_balance(1, 2, 5));
+			assert_ok!(Democracy::second(Origin::signed(2), 0));
+			assert_ok!(Democracy::second(Origin::signed(5), 0));
+			assert_ok!(Democracy::second(Origin::signed(5), 0));
+			assert_ok!(Democracy::second(Origin::signed(5), 0));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			assert_eq!(Staking::free_balance(&1), 10);
-			assert_eq!(Staking::free_balance(&2), 20);
-			assert_eq!(Staking::free_balance(&5), 50);
+			assert_eq!(Balances::free_balance(&1), 10);
+			assert_eq!(Balances::free_balance(&2), 20);
+			assert_eq!(Balances::free_balance(&5), 50);
 		});
 	}
 
@@ -536,7 +503,7 @@ mod tests {
 	fn proposal_with_deposit_below_minimum_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_noop!(propose_sessions_per_era(1, 2, 0), "value too low");
+			assert_noop!(propose_set_balance(1, 2, 0), "value too low");
 		});
 	}
 
@@ -544,7 +511,7 @@ mod tests {
 	fn poor_proposer_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_noop!(propose_sessions_per_era(1, 2, 11), "proposer\'s balance too low");
+			assert_noop!(propose_set_balance(1, 2, 11), "proposer\'s balance too low");
 		});
 	}
 
@@ -552,63 +519,50 @@ mod tests {
 	fn poor_seconder_should_not_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(propose_sessions_per_era(2, 2, 11));
-			assert_noop!(Democracy::second(&1, 0), "seconder\'s balance too low");
+			assert_ok!(propose_set_balance(2, 2, 11));
+			assert_noop!(Democracy::second(Origin::signed(1), 0), "seconder\'s balance too low");
 		});
-	}
-
-	fn propose_bonding_duration(who: u64, value: u64, locked: u64) -> super::Result {
-		Democracy::propose(&who, Box::new(Proposal::Staking(staking::PrivCall::set_bonding_duration(value))), locked)
 	}
 
 	#[test]
 	fn runners_up_should_come_after() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(0);
-			assert_ok!(propose_bonding_duration(1, 2, 2));
-			assert_ok!(propose_bonding_duration(1, 4, 4));
-			assert_ok!(propose_bonding_duration(1, 3, 3));
+			assert_ok!(propose_set_balance(1, 2, 2));
+			assert_ok!(propose_set_balance(1, 4, 4));
+			assert_ok!(propose_set_balance(1, 3, 3));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 
 			System::set_block_number(1);
-			assert_ok!(Democracy::vote(&1, 0, true));
+			assert_ok!(Democracy::vote(Origin::signed(1), 0, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
-			assert_eq!(Staking::bonding_duration(), 4);
+			assert_eq!(Balances::free_balance(&42), 4);
 
 			System::set_block_number(2);
-			assert_ok!(Democracy::vote(&1, 1, true));
+			assert_ok!(Democracy::vote(Origin::signed(1), 1, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
-			assert_eq!(Staking::bonding_duration(), 3);
+			assert_eq!(Balances::free_balance(&42), 3);
 
 			System::set_block_number(3);
-			assert_ok!(Democracy::vote(&1, 2, true));
+			assert_ok!(Democracy::vote(Origin::signed(1), 2, true));
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
-			assert_eq!(Staking::bonding_duration(), 2);
 		});
-	}
-
-	fn sessions_per_era_proposal(value: u64) -> Proposal {
-		Proposal::Staking(staking::PrivCall::set_sessions_per_era(value))
 	}
 
 	#[test]
 	fn simple_passing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			assert_ok!(Democracy::vote(&1, r, true));
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			assert_ok!(Democracy::vote(Origin::signed(1), r, true));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), Some(true));
 			assert_eq!(Democracy::tally(r), (10, 0));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
 
-			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 
@@ -616,14 +570,13 @@ mod tests {
 	fn cancel_referendum_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			assert_ok!(Democracy::vote(&1, r, true));
-			assert_ok!(Democracy::cancel_referendum(r));
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			assert_ok!(Democracy::vote(Origin::signed(1), r, true));
+			assert_ok!(Democracy::cancel_referendum(Origin::ROOT, r));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
 
-			assert_eq!(Staking::era_length(), 1);
+			assert_eq!(Balances::free_balance(&42), 0);
 		});
 	}
 
@@ -631,17 +584,16 @@ mod tests {
 	fn simple_failing_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			assert_ok!(Democracy::vote(&1, r, false));
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			assert_ok!(Democracy::vote(Origin::signed(1), r, false));
 
 			assert_eq!(Democracy::voters_for(r), vec![1]);
 			assert_eq!(Democracy::vote_of((r, 1)), Some(false));
 			assert_eq!(Democracy::tally(r), (0, 10));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
 
-			assert_eq!(Staking::era_length(), 1);
+			assert_eq!(Balances::free_balance(&42), 0);
 		});
 	}
 
@@ -649,20 +601,19 @@ mod tests {
 	fn controversial_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			assert_ok!(Democracy::vote(&1, r, true));
-			assert_ok!(Democracy::vote(&2, r, false));
-			assert_ok!(Democracy::vote(&3, r, false));
-			assert_ok!(Democracy::vote(&4, r, true));
-			assert_ok!(Democracy::vote(&5, r, false));
-			assert_ok!(Democracy::vote(&6, r, true));
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			assert_ok!(Democracy::vote(Origin::signed(1), r, true));
+			assert_ok!(Democracy::vote(Origin::signed(2), r, false));
+			assert_ok!(Democracy::vote(Origin::signed(3), r, false));
+			assert_ok!(Democracy::vote(Origin::signed(4), r, true));
+			assert_ok!(Democracy::vote(Origin::signed(5), r, false));
+			assert_ok!(Democracy::vote(Origin::signed(6), r, true));
 
 			assert_eq!(Democracy::tally(r), (110, 100));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
 
-			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 
@@ -670,37 +621,35 @@ mod tests {
 	fn controversial_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			assert_ok!(Democracy::vote(&5, r, false));
-			assert_ok!(Democracy::vote(&6, r, true));
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			assert_ok!(Democracy::vote(Origin::signed(5), r, false));
+			assert_ok!(Democracy::vote(Origin::signed(6), r, true));
 
 			assert_eq!(Democracy::tally(r), (60, 50));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
 
-			assert_eq!(Staking::era_length(), 1);
+			assert_eq!(Balances::free_balance(&42), 0);
 		});
 	}
 
 	#[test]
 	fn passing_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Staking::era_length(), 1);
-			assert_eq!(Staking::total_stake(), 210);
+			assert_eq!(Balances::free_balance(&42), 0);
+			assert_eq!(Balances::total_stake(), 210);
 
 			System::set_block_number(1);
-			let r = Democracy::inject_referendum(1, sessions_per_era_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
-			assert_ok!(Democracy::vote(&4, r, true));
-			assert_ok!(Democracy::vote(&5, r, false));
-			assert_ok!(Democracy::vote(&6, r, true));
+			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
+			assert_ok!(Democracy::vote(Origin::signed(4), r, true));
+			assert_ok!(Democracy::vote(Origin::signed(5), r, false));
+			assert_ok!(Democracy::vote(Origin::signed(6), r, true));
 
 			assert_eq!(Democracy::tally(r), (100, 50));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
-			Staking::on_session_change(true, 0);
 
-			assert_eq!(Staking::era_length(), 2);
+			assert_eq!(Balances::free_balance(&42), 2);
 		});
 	}
 }

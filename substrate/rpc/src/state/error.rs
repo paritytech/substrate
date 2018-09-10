@@ -25,6 +25,11 @@ error_chain! {
 	}
 
 	errors {
+		/// Provided block range couldn't be resolved to a list of blocks.
+		InvalidBlockRange(from: String, to: String, details: String) {
+			description("Invalid block range"),
+			display("Cannot resolve a block range ['{:?}' ... '{:?}]. {}", from, to, details),
+		}
 		/// Not implemented yet
 		Unimplemented {
 			description("not implemented yet"),

@@ -1,18 +1,18 @@
 // Copyright 2017 Parity Technologies (UK) Ltd.
-// This file is part of Polkadot.
+// This file is part of Substrate.
 
-// Polkadot is free software: you can redistribute it and/or modify
+// Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// Polkadot is distributed in the hope that it will be useful,
+// Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! In memory client backend
 
@@ -28,6 +28,9 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, Numbe
 use runtime_primitives::bft::Justification;
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
+use patricia_trie::NodeCodec;
+use hashdb::Hasher;
+use heapsize::HeapSizeOf;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -86,6 +89,7 @@ struct BlockchainStorage<Block: BlockT> {
 	best_hash: Block::Hash,
 	best_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	genesis_hash: Block::Hash,
+	cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 }
 
 /// In-memory blockchain. Supports concurrent reads.
@@ -130,6 +134,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				best_hash: Default::default(),
 				best_number: Zero::zero(),
 				genesis_hash: Default::default(),
+				cht_roots: HashMap::new(),
 			}));
 		Blockchain {
 			storage: storage.clone(),
@@ -176,6 +181,11 @@ impl<Block: BlockT> Blockchain<Block> {
 			&& this.best_number == other.best_number
 			&& this.genesis_hash == other.genesis_hash
 	}
+
+	/// Insert CHT root.
+	pub fn insert_cht_root(&self, block: NumberFor<Block>, cht_root: Block::Hash) {
+		self.storage.write().cht_roots.insert(block, cht_root);
+	}
 }
 
 impl<Block: BlockT> blockchain::HeaderBackend<Block> for Blockchain<Block> {
@@ -199,6 +209,10 @@ impl<Block: BlockT> blockchain::HeaderBackend<Block> for Blockchain<Block> {
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),
 		}
+	}
+
+	fn number(&self, hash: Block::Hash) -> error::Result<Option<NumberFor<Block>>> {
+		Ok(self.storage.read().blocks.get(&hash).map(|b| *b.header().number()))
 	}
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
@@ -226,7 +240,10 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block> {
+impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
+	where
+		Block::Hash: From<[u8; 32]>,
+{
 	fn import_header(
 		&self,
 		is_new_best: bool,
@@ -242,21 +259,32 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block> {
 		Ok(())
 	}
 
+	fn cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
+		self.storage.read().cht_roots.get(&block).cloned()
+			.ok_or_else(|| error::ErrorKind::Backend(format!("CHT for block {} not exists", block)).into())
+	}
+
 	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
 		Some(&self.cache)
 	}
 }
 
 /// In-memory operation.
-pub struct BlockImportOperation<Block: BlockT> {
+pub struct BlockImportOperation<Block: BlockT, H: Hasher, C: NodeCodec<H>> {
 	pending_block: Option<PendingBlock<Block>>,
 	pending_authorities: Option<Vec<AuthorityId>>,
-	old_state: InMemory,
-	new_state: Option<InMemory>,
+	old_state: InMemory<H, C>,
+	new_state: Option<InMemory<H, C>>,
 }
 
-impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperation<Block> {
-	type State = InMemory;
+impl<Block, H, C> backend::BlockImportOperation<Block, H, C> for BlockImportOperation<Block, H, C>
+where
+	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>,
+	H::Out: HeapSizeOf,
+{
+	type State = InMemory<H, C>;
 
 	fn state(&self) -> error::Result<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -281,7 +309,7 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 		self.pending_authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, update: <InMemory as StateBackend>::Transaction) -> error::Result<()> {
+	fn update_storage(&mut self, update: <InMemory<H, C> as StateBackend<H, C>>::Transaction) -> error::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
 		Ok(())
 	}
@@ -293,18 +321,24 @@ impl<Block: BlockT> backend::BlockImportOperation<Block> for BlockImportOperatio
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
-pub struct Backend<Block> where
+pub struct Backend<Block, H, C>
+where
 	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>
 {
-	states: RwLock<HashMap<Block::Hash, InMemory>>,
+	states: RwLock<HashMap<Block::Hash, InMemory<H, C>>>,
 	blockchain: Blockchain<Block>,
 }
 
-impl<Block> Backend<Block> where
+impl<Block, H, C> Backend<Block, H, C>
+where
 	Block: BlockT,
+	H: Hasher,
+	C: NodeCodec<H>
 {
 	/// Create a new instance of in-mem backend.
-	pub fn new() -> Backend<Block> {
+	pub fn new() -> Backend<Block, H, C> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
 			blockchain: Blockchain::new(),
@@ -312,12 +346,16 @@ impl<Block> Backend<Block> where
 	}
 }
 
-impl<Block> backend::Backend<Block> for Backend<Block> where
+impl<Block, H, C> backend::Backend<Block, H, C> for Backend<Block, H, C>
+where
 	Block: BlockT,
+	H: Hasher,
+	H::Out: HeapSizeOf,
+	C: NodeCodec<H> + Send + Sync,
 {
-	type BlockImportOperation = BlockImportOperation<Block>;
+	type BlockImportOperation = BlockImportOperation<Block, H, C>;
 	type Blockchain = Blockchain<Block>;
-	type State = InMemory;
+	type State = InMemory<H, C>;
 
 	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
@@ -366,7 +404,13 @@ impl<Block> backend::Backend<Block> for Backend<Block> where
 	}
 }
 
-impl<Block: BlockT> backend::LocalBackend<Block> for Backend<Block> {}
+impl<Block, H, C> backend::LocalBackend<Block, H, C> for Backend<Block, H, C>
+where
+	Block: BlockT,
+	H: Hasher,
+	H::Out: HeapSizeOf,
+	C: NodeCodec<H> + Send + Sync,
+{}
 
 impl<Block: BlockT> Cache<Block> {
 	fn insert(&self, at: Block::Hash, authorities: Option<Vec<AuthorityId>>) {

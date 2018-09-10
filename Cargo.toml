@@ -1,41 +1,5 @@
-[[bin]]
-name = "polkadot"
-path = "polkadot/src/main.rs"
-
-[package]
-name = "polkadot"
-version = "0.3.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-build = "build.rs"
-
-[dependencies]
-error-chain = "0.12"
-polkadot-cli = { path = "polkadot/cli" }
-futures = "0.1"
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
-
-[build-dependencies]
-vergen = "0.1"
-
 [workspace]
 members = [
-	"polkadot/api",
-	"polkadot/availability-store",
-	"polkadot/cli",
-	"polkadot/collator",
-	"polkadot/consensus",
-	"polkadot/executor",
-	"polkadot/network",
-	"polkadot/primitives",
-	"polkadot/runtime",
-	"polkadot/service",
-	"polkadot/statement-table",
-	"polkadot/transaction-pool",
-	"polkadot/service",
-
-	"polkadot/test-parachains/adder",
-	"polkadot/test-parachains/adder/collator",
-
 	"substrate/bft",
 	"substrate/cli",
 	"substrate/client",
@@ -55,16 +19,19 @@ members = [
 	"substrate/runtime-sandbox",
 	"substrate/runtime-std",
 	"substrate/runtime-support",
+	"substrate/runtime/balances",
 	"substrate/runtime/consensus",
 	"substrate/runtime/contract",
 	"substrate/runtime/council",
 	"substrate/runtime/democracy",
+	"substrate/runtime/example",
 	"substrate/runtime/executive",
 	"substrate/runtime/primitives",
 	"substrate/runtime/session",
 	"substrate/runtime/staking",
 	"substrate/runtime/system",
 	"substrate/runtime/timestamp",
+	"substrate/runtime/treasury",
 	"substrate/runtime/version",
 	"substrate/serializer",
 	"substrate/service",
@@ -77,12 +44,9 @@ members = [
 	"demo/executor",
 	"demo/primitives",
 	"demo/runtime",
-	"safe-mix",
 	"subkey",
 ]
 exclude = [
-	"polkadot/runtime/wasm",
-	"polkadot/test-parachains/adder/wasm",
 	"demo/runtime/wasm",
 	"substrate/executor/wasm",
 	"substrate/pwasm-alloc",
@@ -91,10 +55,10 @@ exclude = [
 ]
 
 [badges]
-travis-ci = { repository = "paritytech/polkadot", branch = "master" }
+travis-ci = { repository = "paritytech/substrate", branch = "master" }
 maintenance = { status = "actively-developed" }
-is-it-maintained-issue-resolution = { repository = "paritytech/polkadot" }
-is-it-maintained-open-issues = { repository = "paritytech/polkadot" }
+is-it-maintained-issue-resolution = { repository = "paritytech/substrate" }
+is-it-maintained-open-issues = { repository = "paritytech/substrate" }
 
 [profile.release]
 # Substrate runtime requires unwinding.

@@ -22,8 +22,7 @@ use vm;
 use rstd::prelude::*;
 use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
 use runtime_support::{StorageMap, StorageValue};
-use staking;
-use system;
+use balances::{self, EnsureAccountLiquid};
 
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
@@ -48,7 +47,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		_data: &[u8],
+		data: &[u8],
 	) -> Result<CallReceipt, &'static str> {
 		if self.depth == <MaxDepth<T>>::get() as usize {
 			return Err("reached maximum depth, cannot make a call");
@@ -83,6 +82,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			let exec_result = if !dest_code.is_empty() {
 				vm::execute(
 					&dest_code,
+					data,
 					&mut CallContext {
 						ctx: &mut nested,
 						_caller: caller,
@@ -112,7 +112,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		ctor: &[u8],
-		_data: &[u8],
+		data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
 		if self.depth == <MaxDepth<T>>::get() as usize {
 			return Err("reached maximum depth, cannot create");
@@ -151,6 +151,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			let exec_result = {
 				vm::execute(
 					ctor,
+					data,
 					&mut CallContext {
 						ctx: &mut nested,
 						_caller: caller,
@@ -185,9 +186,9 @@ fn transfer<T: Trait>(
 		<Module<T>>::contract_fee()
 	} else {
 		if would_create {
-			<staking::Module<T>>::creation_fee()
+			<balances::Module<T>>::creation_fee()
 		} else {
-			<staking::Module<T>>::transfer_fee()
+			<balances::Module<T>>::transfer_fee()
 		}
 	};
 
@@ -200,12 +201,10 @@ fn transfer<T: Trait>(
 		Some(b) => b,
 		None => return Err("balance too low to send value"),
 	};
-	if would_create && value < <staking::Module<T>>::existential_deposit() {
+	if would_create && value < <balances::Module<T>>::existential_deposit() {
 		return Err("value too low to create account");
 	}
-	if <staking::Module<T>>::bondage(transactor) > <system::Module<T>>::block_number() {
-		return Err("bondage too high to send value");
-	}
+	<T as balances::Trait>::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
 
 	let to_balance = overlay.get_balance(dest);
 	let new_to_balance = match to_balance.checked_add(&value) {
@@ -226,7 +225,9 @@ struct CallContext<'a, 'b: 'a, T: Trait + 'b> {
 	_caller: T::AccountId,
 }
 
-impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext<T> for CallContext<'a, 'b, T> {
+impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
+	type T = T;
+
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.ctx.overlay.get_storage(&self.ctx.self_account, key)
 	}
