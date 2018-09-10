@@ -28,7 +28,7 @@ Substrate is designed to be used in one of three ways:
 
 === The Basics of Substrate
 
-Substrate is a blockchain platform with a completely generic state transition function. That said, it does come with both standards and conventions (particularly regarding the Runtime Module Library) regarding underlying datastructures. Roughly speaking, these core datatypes correspond to as `trait`s in terms of the actual non-negotiable standard and generic `struct`s in terms of the convention.
+Substrate is a blockchain platform with a completely generic state transition function. That said, it does come with both standards and conventions (particularly regarding the Runtime Module Library) regarding underlying datastructures. Roughly speaking, these core datatypes correspond to as +trait+s in terms of the actual non-negotiable standard and generic +struct+s in terms of the convention.
 
 ```
 Header := Parent + ExtrinsicsRoot + StorageRoot + Digest
@@ -44,6 +44,7 @@ Inherents, meanwhile, are not passed on the network and are not signed. They rep
 To give an example, there is the timestamp inherent which sets the current timestamp of the block. This is not a fixed part of Substrate, but does come as part of the Substrate Runtime Module Library to be used as desired. No signature could fundamentally prove that a block were authored at a given time in quite the same way that a signature can "prove" the desire to spend some particular funds. Rather, it is the business of each validator to ensure that they believe the timestamp is set to something reasonable before they agree that the block candidate is valid.
 
 Other examples include the parachain-heads extrinsic in Polkadot and the "note-missed-proposal" extrinsic used in the Substrate Runtime Module Library to determine and punish or deactivate offline validators.
+
 
 === Runtime and API
 
@@ -143,9 +144,9 @@ Then build the code:
 
 [source, shell]
 ----
-./scripts/build.sh  # Builds the WebAssembly binaries
-./scripts/build-demos.sh  # Builds the WebAssembly binaries
-cargo build # Builds all native code
+./scripts/build.sh  		# Builds the WebAssembly binaries
+./scripts/build-demos.sh  	# Builds the WebAssembly binaries
+cargo build 				# Builds all native code
 ----
 
 You can run the tests if you like:
@@ -157,30 +158,6 @@ You can start a development chain with:
 
 [source, shell]
 cargo run -- --dev
-
-=== Development
-
-You can run a simple single-node development "network" on your machine by
-running in a terminal:
-
-[source, shell]
-substrate --dev
-
-== Local Two-node Testnet
-
-If you want to see the multi-node consensus algorithm in action locally, then
-you can create a local testnet. You'll need two terminals open. In one, run:
-
-[source, shell]
-substrate --chain=local --validator --key Alice -d /tmp/alice
-
-and in the other, run:
-
-[source, shell]
-substrate --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes '/ip4/127.0.0.1/tcp/30333/p2p/ALICE_BOOTNODE_ID_HERE'
-
-Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of
-the first terminal.
 
 include::doc/packages/packages.adoc[]
 
