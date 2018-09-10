@@ -362,8 +362,8 @@ mod tests {
 			assert_eq!(Balances::total_balance(&bob()), 78);
 			assert_eq!(System::events(), vec![
 				EventRecord {
-				   phase: Phase::ApplyExtrinsic(0),
-				   event: Event::system(system::Event::ExtrinsicSuccess)
+					phase: Phase::ApplyExtrinsic(0),
+					event: Event::system(system::Event::ExtrinsicSuccess)
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
