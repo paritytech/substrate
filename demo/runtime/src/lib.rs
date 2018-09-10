@@ -152,6 +152,7 @@ pub type Staking = staking::Module<Runtime>;
 
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
+	type Event = Event;
 }
 
 /// Democracy module for this concrete runtime.
@@ -184,7 +185,7 @@ pub type Treasury = treasury::Module<Runtime>;
 
 impl_outer_event! {
 	pub enum Event for Runtime {
-		balances, session, staking, treasury, council_motions
+		balances, session, staking, democracy, treasury, council_motions
 	}
 }
 

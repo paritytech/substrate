@@ -646,7 +646,7 @@ mod tests {
 
 	impl_outer_event! {
 		pub enum Event for Test {
-			balances, council_motions
+			balances, democracy, council_motions
 		}
 	}
 
@@ -680,6 +680,7 @@ mod tests {
 	}
 	impl democracy::Trait for Test {
 		type Proposal = Call;
+		type Event = Event;
 	}
 	impl Trait for Test {
 	}
