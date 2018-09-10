@@ -262,7 +262,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("54048fe23d4e04fda6419771037922eb43d96a7ec76aa280672609711999c3ca").into(),
+			hex!("b7d85f23689ae4ae7951eda80e817dffb1c0925e77f5c0de8c94b265df80b9cf").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -282,7 +282,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("700c76e3b6125fd9d873629ca3f3cdc2f7704587c0a71def6b152f54b6a29805").into(),
+			hex!("a17d6006e9bb4292b8ebea3b14995672a88caff2c99eeef1d84aeb234e5a0534").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -307,7 +307,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("4428d38ae046f27254877b3a3bf0d8ec7731281aef65ebdb8bbbac86be5424a8").into(),
+			hex!("27555b6e51bfdb689457fc076a54153a4f5188f47a17607da75e180d844db527").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -411,6 +411,14 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::Finalization,
+					event: Event::session(session::RawEvent::NewSession(1))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::staking(staking::RawEvent::Reward(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Spending(0))
 				},
 				EventRecord {
@@ -420,14 +428,6 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::treasury(treasury::RawEvent::Rollover(0))
-				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::session(session::RawEvent::NewSession(1))
-				},
-				EventRecord {
-					phase: Phase::Finalization,
-					event: Event::staking(staking::RawEvent::Reward(0))
 				}
 			]);
 		});

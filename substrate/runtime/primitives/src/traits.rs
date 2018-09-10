@@ -185,12 +185,32 @@ pub trait OnFinalise<BlockNumber> {
 }
 
 impl<N> OnFinalise<N> for () {}
-impl<N: Copy, A: OnFinalise<N>, B: OnFinalise<N>> OnFinalise<N> for (A, B) {
-	fn on_finalise(n: N) {
-		A::on_finalise(n);
-		B::on_finalise(n);
+
+macro_rules! tuple_impl {
+	($one:ident,) => {
+		impl<Number: Copy, $one: OnFinalise<Number>> OnFinalise<Number> for ($one,) {
+			fn on_finalise(n: Number) {
+				$one::on_finalise(n);
+			}
+		}
+	};
+	($first:ident, $($rest:ident,)+) => {
+		impl<
+			Number: Copy,
+			$first: OnFinalise<Number>,
+			$($rest: OnFinalise<Number>),+
+		> OnFinalise<Number> for ($first, $($rest),+) {
+			fn on_finalise(n: Number) {
+				$first::on_finalise(n);
+				$($rest::on_finalise(n);)+
+			}
+		}
+		tuple_impl!($($rest,)+);
 	}
 }
+
+#[allow(non_snake_case)]
+tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,);
 
 /// Abstraction around hashing
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived

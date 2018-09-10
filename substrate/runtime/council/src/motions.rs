@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use rstd::result;
 use substrate_primitives::u32_trait::Value as U32;
-use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug};
+use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug, OnFinalise};
 use substrate_runtime_support::dispatch::{Result, Dispatchable, Parameter};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use super::{Trait as CouncilTrait, Module as Council};
@@ -167,7 +167,7 @@ impl<T: Trait> Module<T> {
 		let threshold = voting.1;
 		let potential_votes = <Council<T>>::active_council().len() as u32;
 		let approved = yes_votes >= threshold;
-		let disapproved = potential_votes - no_votes < threshold;
+		let disapproved = potential_votes.saturating_sub(no_votes) < threshold;
 		if approved || disapproved {
 			if approved {
 				Self::deposit_event(RawEvent::Approved(proposal));
@@ -191,6 +191,11 @@ impl<T: Trait> Module<T> {
 		}
 
 		Ok(())
+	}
+}
+
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 
@@ -218,12 +223,11 @@ impl<O, N: U32> EnsureOrigin<O> for EnsureMembers<N>
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use super::RawEvent;
 	use ::tests::*;
 	use ::tests::{Call, Origin, Event as OuterEvent};
 	use substrate_runtime_support::Hashable;
 	use system::{EventRecord, Phase};
-
-	type CouncilMotions = super::Module<Test>;
 
 	#[test]
 	fn motions_basic_environment_works() {
@@ -252,7 +256,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
 				}
 			]);
 		});
@@ -305,11 +309,11 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Voted(1, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 0, 1))
+					event: OuterEvent::motions(RawEvent::Voted(1, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 0, 1))
 				}
 			]);
 		});
@@ -327,15 +331,15 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 1, 1))
+					event: OuterEvent::motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 1, 1))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Disapproved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
+					event: OuterEvent::motions(RawEvent::Disapproved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
 				}
 			]);
 		});
@@ -353,19 +357,19 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), true, 2, 0))
+					event: OuterEvent::motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), true, 2, 0))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Approved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
+					event: OuterEvent::motions(RawEvent::Approved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::council_motions(RawEvent::Executed(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false))
+					event: OuterEvent::motions(RawEvent::Executed(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false))
 				}
 			]);
 		});
