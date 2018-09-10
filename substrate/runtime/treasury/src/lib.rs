@@ -280,10 +280,13 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> OnDilution<T::Balance> for Module<T> {
 	fn on_dilution(minted: T::Balance, portion: T::Balance) {
+		// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
+		// pre dilution and post-dilution.
 		if !minted.is_zero() && !portion.is_zero() {
 			let total_issuance = <balances::Module<T>>::total_issuance();
 			let funding = (total_issuance - portion) / portion * minted;
 			<Pot<T>>::mutate(|x| *x += funding);
+			<balances::Module<T>>::increase_total_stake_by(funding);
 		}
 	}
 }
