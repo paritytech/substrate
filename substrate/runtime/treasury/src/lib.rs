@@ -18,13 +18,13 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg_attr(any(feature = "std", test), macro_use)]
+#[cfg_attr(feature = "std", macro_use)]
 extern crate substrate_runtime_std as rstd;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
-#[cfg(any(feature = "std", test))]
+#[cfg(feature = "std")]
 extern crate substrate_runtime_io as runtime_io;
 
 #[cfg(feature = "std")]
@@ -41,10 +41,10 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_balances as balances;
 
-use rstd::ops::{Mul, Div};
+use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{As, OnFinalise, Zero};
+use runtime_primitives::{Permill, traits::{OnFinalise, Zero, EnsureOrigin}};
 use balances::OnMinted;
 use system::{ensure_signed, ensure_root};
 
@@ -54,6 +54,12 @@ use system::{ensure_signed, ensure_root};
 /// 
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: balances::Trait {
+	/// Origin from which approvals must come.
+	type ApproveOrigin: EnsureOrigin<Self::Origin>;
+
+	/// Origin from which rejections must come.
+	type RejectOrigin: EnsureOrigin<Self::Origin>;
+
 	/// The overarching event type. 
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
@@ -93,19 +99,6 @@ pub struct Proposal<AccountId, Balance> {
 	value: Balance,
 	beneficiary: AccountId,
 	bond: Balance,
-}
-
-/// Permill is parts-per-million (i.e. after multiplying by this, divide by `PERMILL`).
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
-pub struct Permill(u32);
-
-// TODO: impl Mul<Permill> for N where N: As<usize>
-impl Permill {
-	fn times<N: As<usize> + Mul<N, Output=N> + Div<N, Output=N>>(self, b: N) -> N {
-		// TODO: handle overflows
-		b * <N as As<usize>>::sa(self.0 as usize) / <N as As<usize>>::sa(1000000)
-	}
 }
 
 decl_storage! {
@@ -192,7 +185,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn reject_proposal(origin: T::Origin, proposal_id: ProposalIndex) -> Result {
-		ensure_root(origin)?;
+		T::RejectOrigin::ensure_origin(origin)?;
+
 		let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
 		
 		let value = proposal.bond;
@@ -202,7 +196,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn approve_proposal(origin: T::Origin, proposal_id: ProposalIndex) -> Result {
-		ensure_root(origin)?;
+		T::ApproveOrigin::ensure_origin(origin)?;
+
 		ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
 
 		<Approvals<T>>::mutate(|v| v.push(proposal_id));
@@ -298,7 +293,7 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	}
 }
 
-#[cfg(any(feature = "std", test))]
+#[cfg(feature = "std")]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
@@ -311,19 +306,19 @@ pub struct GenesisConfig<T: Trait> {
 	pub burn: Permill,
 }
 
-#[cfg(any(feature = "std", test))]
+#[cfg(feature = "std")]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
 			proposal_bond: Default::default(),
 			proposal_bond_minimum: Default::default(),
-			spend_period: Default::default(),
+			spend_period: runtime_primitives::traits::One::one(),
 			burn: Default::default(),
 		}
 	}
 }
 
-#[cfg(any(feature = "std", test))]
+#[cfg(feature = "std")]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
@@ -372,6 +367,8 @@ mod tests {
 		type Event = ();
 	}
 	impl Trait for Test {
+		type ApproveOrigin = system::EnsureRoot<u64>;
+		type RejectOrigin = system::EnsureRoot<u64>;
 		type Event = ();
 	}
 	type Balances = balances::Module<Test>;
@@ -389,10 +386,10 @@ mod tests {
 			reclaim_rebate: 0,
 		}.build_storage().unwrap());
 		t.extend(GenesisConfig::<Test>{
-			proposal_bond: Permill(50_000),	// 5%
+			proposal_bond: Permill::from_percent(5),
 			proposal_bond_minimum: 1,
 			spend_period: 2,
-			burn: Permill(500_000),			// 50%
+			burn: Permill::from_percent(50),
 		}.build_storage().unwrap());
 		t.into()
 	}
@@ -400,10 +397,10 @@ mod tests {
 	#[test]
 	fn genesis_config_works() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_eq!(Treasury::proposal_bond(), Permill(50_000));
+			assert_eq!(Treasury::proposal_bond(), Permill::from_percent(5));
 			assert_eq!(Treasury::proposal_bond_minimum(), 1);
 			assert_eq!(Treasury::spend_period(), 2);
-			assert_eq!(Treasury::burn(), Permill(500_000));
+			assert_eq!(Treasury::burn(), Permill::from_percent(50));
 			assert_eq!(Treasury::pot(), 0);
 			assert_eq!(Treasury::proposal_count(), 0);
 		});

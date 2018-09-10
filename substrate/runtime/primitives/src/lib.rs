@@ -87,6 +87,40 @@ impl BuildStorage for StorageMap {
 	}
 }
 
+/// Permill is parts-per-million (i.e. after multiplying by this, divide by 1000000).
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+pub struct Permill(u32);
+
+// TODO: impl Mul<Permill> for N where N: As<usize>
+impl Permill {
+	pub fn times<N: traits::As<usize> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
+		// TODO: handle overflows
+		b * <N as traits::As<usize>>::sa(self.0 as usize) / <N as traits::As<usize>>::sa(1000000)
+	}
+
+	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
+
+	pub fn from_percent(x: u32) -> Permill { Permill(x * 10_000) }
+
+	#[cfg(feature = "std")]
+	pub fn from_fraction(x: f64) -> Permill { Permill((x * 1_000_000.0) as u32) }
+}
+
+#[cfg(feature = "std")]
+impl From<f64> for Permill {
+	fn from(x: f64) -> Permill {
+		Permill::from_fraction(x)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<f32> for Permill {
+	fn from(x: f32) -> Permill {
+		Permill::from_fraction(x as f64)
+	}
+}
+
 /// Ed25519 signature verify.
 #[derive(Eq, PartialEq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]

@@ -35,6 +35,7 @@ extern crate serde_derive;
 extern crate serde;
 
 extern crate substrate_codec as codec;
+extern crate substrate_primitives;
 
 #[macro_use]
 extern crate substrate_codec_derive;
@@ -49,6 +50,7 @@ extern crate substrate_runtime_session as session;
 extern crate substrate_runtime_staking as staking;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
+extern crate substrate_runtime_treasury as treasury;
 #[macro_use]
 extern crate substrate_runtime_version as version;
 extern crate demo_primitives;
@@ -61,9 +63,11 @@ use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
 use codec::{Encode, Decode, Input};
+use council::motions as council_motions;
+use substrate_primitives::u32_trait::{_2, _4};
 
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::BuildStorage;
+pub use runtime_primitives::{BuildStorage, Permill};
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -152,6 +156,7 @@ pub type Staking = staking::Module<Runtime>;
 
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
+	type Event = Event;
 }
 
 /// Democracy module for this concrete runtime.
@@ -164,9 +169,27 @@ pub type Council = council::Module<Runtime>;
 /// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Runtime>;
 
+impl council::motions::Trait for Runtime {
+	type Origin = Origin;
+	type Proposal = Call;
+	type Event = Event;
+}
+
+/// Council motions module for this concrete runtime.
+pub type CouncilMotions = council_motions::Module<Runtime>;
+
+impl treasury::Trait for Runtime {
+	type ApproveOrigin = council_motions::EnsureMembers<_4>;
+	type RejectOrigin = council_motions::EnsureMembers<_2>;
+	type Event = Event;
+}
+
+/// Treasury module for this concrete runtime.
+pub type Treasury = treasury::Module<Runtime>;
+
 impl_outer_event! {
 	pub enum Event for Runtime {
-		balances, session, staking
+		balances, session, staking, democracy, treasury, council_motions
 	}
 }
 
@@ -178,6 +201,7 @@ impl_outer_log! {
 
 impl_outer_origin! {
 	pub enum Origin for Runtime {
+		council_motions
 	}
 }
 
@@ -191,6 +215,8 @@ impl_outer_dispatch! {
 		Democracy,
 		Council,
 		CouncilVoting,
+		CouncilMotions,
+		Treasury,
 	}
 }
 
@@ -204,6 +230,7 @@ impl_outer_config! {
 		DemocracyConfig => democracy,
 		CouncilConfig => council,
 		TimestampConfig => timestamp,
+		TreasuryConfig => treasury,
 	}
 }
 
@@ -231,7 +258,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, 
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, Balances, Balances,
-	(((((), Council), Democracy), Staking), Session)>;
+	((((((), Treasury), Council), Democracy), Staking), Session)>;
 
 pub mod api {
 	impl_stubs!(
