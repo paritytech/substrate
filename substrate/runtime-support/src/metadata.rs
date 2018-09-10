@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use codec::{Encode, Decode, Output, Input};
+use codec::{Encode, Output};
+#[cfg(feature = "std")]
+use codec::{Decode, Input};
 use alloc;
 
 /// Make Box available on `std` and `no_std`.
