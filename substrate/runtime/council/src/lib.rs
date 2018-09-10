@@ -179,16 +179,20 @@ decl_storage! {
 	}
 }
 
-pub type Event<T> = RawEvent<<T as system::Trait>::Hash>;
+pub type Event<T> = RawEvent<<T as system::Trait>::AccountId>;
 
 /// An event in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<Hash> {
-	/// A voting tally has happened for a referendum cancelation vote. Last three are yes, no, abstain counts.
-	TallyCancelation(Hash, u32, u32, u32),
-	/// A voting tally has happened for a referendum vote. Last three are yes, no, abstain counts.
-	TallyReferendum(Hash, u32, u32, u32),
+pub enum RawEvent<AccountId> {
+	/// reaped voter, reaper
+	VoterReaped(AccountId, AccountId),
+	/// slashed reaper
+	BadReaperSlashed(AccountId),
+	/// A tally (for approval votes of council seat(s)) has started.
+	TallyStarted,
+	/// A tally (for approval votes of council seat(s)) has ended (with one or more new members).
+	TallyFinalised,
 }
 
 impl<N> From<RawEvent<N>> for () {
@@ -320,8 +324,10 @@ impl<T: Trait> Module<T> {
 			// This only fails if `who` doesn't exist, which it clearly must do since its the origin.
 			// Still, it's no more harmful to propagate any error at this point.
 			<balances::Module<T>>::repatriate_reserved(&who, &reporter, Self::voting_bond())?;
+			Self::deposit_event(RawEvent::VoterReaped(who, reporter));
 		} else {
 			<balances::Module<T>>::slash_reserved(&reporter, Self::voting_bond());
+			Self::deposit_event(RawEvent::BadReaperSlashed(reporter));
 		}
 		Ok(())
 	}
@@ -449,7 +455,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Set the presentation duration. If there is current a vote being presented for, will
+	/// Set the presentation duration. If there is currently a vote being presented for, will
 	/// invoke `finalise_vote`.
 	fn set_presentation_duration(origin: T::Origin, count: T::BlockNumber) -> Result {
 		ensure_root(origin)?;
@@ -508,6 +514,8 @@ impl<T: Trait> Module<T> {
 			// initialise leaderboard.
 			let leaderboard_size = empty_seats + Self::carry_count() as usize;
 			<Leaderboard<T>>::put(vec![(T::Balance::zero(), T::AccountId::default()); leaderboard_size]);
+
+			Self::deposit_event(RawEvent::TallyStarted);
 		}
 	}
 
@@ -569,6 +577,9 @@ impl<T: Trait> Module<T> {
 		if let Some(last_index) = new_candidates.iter().rposition(|c| *c != T::AccountId::default()) {
 			new_candidates.truncate(last_index + 1);
 		}
+
+		Self::deposit_event(RawEvent::TallyFinalised);
+
 		<Candidates<T>>::put(new_candidates);
 		<CandidateCount<T>>::put(count);
 		<VoteCount<T>>::put(Self::vote_index() + 1);
