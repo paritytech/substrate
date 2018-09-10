@@ -16,6 +16,8 @@
 
 //! Build the contract module part of the genesis block storage.
 
+#![cfg(feature = "std")]
+
 use {Trait, ContractFee, CallBaseFee, CreateBaseFee, GasPrice, MaxDepth, BlockGasLimit};
 
 use runtime_primitives;
