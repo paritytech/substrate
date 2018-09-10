@@ -1,0 +1,27 @@
+[package]
+name = "demo-consensus"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+futures = "0.1.17"
+parking_lot = "0.4"
+tokio = "0.1.7"
+ed25519 = { path = "../../substrate/ed25519" }
+error-chain = "0.12"
+log = "0.3"
+exit-future = "0.1"
+rhododendron = "0.3"
+demo-api = { path = "../api" }
+demo-primitives = { path = "../primitives" }
+demo-runtime = { path = "../runtime" }
+demo-transaction-pool = { path = "../transaction-pool" }
+substrate-bft = { path = "../../substrate/bft" }
+substrate-codec = { path = "../../substrate/codec" }
+substrate-primitives = { path = "../../substrate/primitives" }
+substrate-runtime-support = { path = "../../substrate/runtime-support" }
+substrate-client = { path = "../../substrate/client" }
+substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
+
+[dev-dependencies]
+substrate-keyring = { path = "../../substrate/keyring" }

@@ -47,6 +47,17 @@ pub struct RemoteCallExecutor<B, F, H, C> {
 	_codec: PhantomData<C>,
 }
 
+impl<B, F, H, C> Clone for RemoteCallExecutor<B, F, H, C> {
+	fn clone(&self) -> Self {
+		RemoteCallExecutor {
+			blockchain: self.blockchain.clone(),
+			fetcher: self.fetcher.clone(),
+			_hasher: Default::default(),
+			_codec: Default::default(),
+		}
+	}
+}
+
 impl<B, F, H, C> RemoteCallExecutor<B, F, H, C> {
 	/// Creates new instance of remote call executor.
 	pub fn new(blockchain: Arc<B>, fetcher: Arc<F>) -> Self {

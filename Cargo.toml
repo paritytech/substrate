@@ -40,10 +40,16 @@ members = [
 	"substrate/test-runtime",
 	"substrate/telemetry",
 	"substrate/keystore",
+	"demo",
 	"demo/cli",
+	"demo/api",
+	"demo/consensus",
 	"demo/executor",
+	"demo/network",
 	"demo/primitives",
 	"demo/runtime",
+	"demo/service",
+	"demo/transaction-pool",
 	"subkey",
 ]
 exclude = [

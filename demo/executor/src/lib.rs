@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate Demo.
 
 // Substrate Demo is free software: you can redistribute it and/or modify
@@ -35,6 +35,7 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_runtime_staking as staking;
 #[cfg(test)] extern crate substrate_runtime_system as system;
 #[cfg(test)] extern crate substrate_runtime_consensus as consensus;
+#[cfg(test)] extern crate substrate_runtime_timestamp as timestamp;
 #[cfg(test)] extern crate substrate_runtime_treasury as treasury;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
@@ -54,7 +55,7 @@ mod tests {
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
-	use {balances, staking, session, system, consensus, treasury};
+	use {balances, staking, session, system, consensus, timestamp, treasury};
 	use system::{EventRecord, Phase};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, Event};
@@ -243,7 +244,6 @@ mod tests {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
-
 		let extrinsics_root = ordered_trie_root::<KeccakHasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
 
 		let header = Header {
@@ -262,12 +262,19 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("1e930ccf2a39029931fcb9173637ab99a7de9d0364e7bf57cfbcb3eb4619e0d4").into(),
-			vec![CheckedExtrinsic {
-				signed: Some(alice()),
-				index: 0,
-				function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
-			}]
+			hex!("54048fe23d4e04fda6419771037922eb43d96a7ec76aa280672609711999c3ca").into(),
+			vec![
+				CheckedExtrinsic {
+					signed: None,
+					index: 0,
+					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some(alice()),
+					index: 0,
+					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+				},
+			]
 		)
 	}
 
@@ -275,8 +282,13 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("80e45869c9a9f513695b94baf479913ddf0bc9653f1be63baa383be8553a9e13").into(),
+			hex!("700c76e3b6125fd9d873629ca3f3cdc2f7704587c0a71def6b152f54b6a29805").into(),
 			vec![
+				CheckedExtrinsic {
+					signed: None,
+					index: 0,
+					function: Call::Timestamp(timestamp::Call::set(52)),
+				},
 				CheckedExtrinsic {
 					signed: Some(bob()),
 					index: 0,
@@ -295,12 +307,19 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("58bf7cd5a908de7296bfc0524d89086384df3e8010ab83c8599be036445d6c79").into(),
-			vec![CheckedExtrinsic {
-				signed: Some(alice()),
-				index: 0,
-				function: Call::Consensus(consensus::Call::remark(vec![0; 60000000])),
-			}]
+			hex!("4428d38ae046f27254877b3a3bf0d8ec7731281aef65ebdb8bbbac86be5424a8").into(),
+			vec![
+				CheckedExtrinsic {
+					signed: None,
+					index: 0,
+					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some(alice()),
+					index: 0,
+					function: Call::Consensus(consensus::Call::remark(vec![0; 120000])),
+				}
+			]
 		)
 	}
 
@@ -316,10 +335,14 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::NewAccount(bob(), 1, balances::NewAccountOutcome::NoHint))
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::Transfer(
 						hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
 						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
@@ -328,7 +351,7 @@ mod tests {
 					))
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess)
 				},
 				EventRecord {
@@ -354,6 +377,10 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
 							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
@@ -364,11 +391,11 @@ mod tests {
 					)
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess)
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
+					phase: Phase::ApplyExtrinsic(2),
 					event: Event::balances(
 						balances::RawEvent::Transfer(
 							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
@@ -379,7 +406,7 @@ mod tests {
 					)
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(1),
+					phase: Phase::ApplyExtrinsic(2),
 					event: Event::system(system::Event::ExtrinsicSuccess)
 				},
 				EventRecord {
