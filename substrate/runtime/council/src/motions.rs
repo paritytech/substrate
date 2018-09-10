@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use rstd::result;
 use substrate_primitives::u32_trait::Value as U32;
-use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug};
+use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug, OnFinalise};
 use substrate_runtime_support::dispatch::{Result, Dispatchable, Parameter};
 use substrate_runtime_support::{StorageValue, StorageMap};
 use super::{Trait as CouncilTrait, Module as Council};
@@ -191,6 +191,11 @@ impl<T: Trait> Module<T> {
 		}
 
 		Ok(())
+	}
+}
+
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 

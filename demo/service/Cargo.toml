@@ -1,0 +1,27 @@
+[package]
+name = "demo-service"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+parking_lot = "0.4"
+error-chain = "0.12"
+lazy_static = "1.0"
+log = "0.3"
+slog = "^2"
+tokio = "0.1.7"
+hex-literal = "0.1"
+ed25519 = { path = "../../substrate/ed25519" }
+demo-api = { path = "../api" }
+demo-primitives = { path = "../primitives" }
+demo-runtime = { path = "../runtime" }
+demo-executor = { path = "../executor" }
+demo-consensus = { path = "../consensus" }
+demo-network = { path = "../network" }
+demo-transaction-pool = { path = "../transaction-pool" }
+substrate-runtime-io = { path = "../../substrate/runtime-io" }
+substrate-primitives = { path = "../../substrate/primitives" }
+substrate-network = { path = "../../substrate/network" }
+substrate-client = { path = "../../substrate/client" }
+substrate-service = { path = "../../substrate/service" }
+substrate-telemetry = { path = "../../substrate/telemetry" }
