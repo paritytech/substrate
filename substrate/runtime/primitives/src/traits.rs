@@ -47,6 +47,12 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
+/// Some sort of check on the origin is performed by this object.
+pub trait EnsureOrigin<OuterOrigin> {
+	type Success;
+	fn ensure_origin(o: OuterOrigin) -> Result<Self::Success, &'static str>;
+}
+
 /// Means of changing one type into another in a manner dependent on the source type.
 pub trait Lookup {
 	/// Type to lookup from.
