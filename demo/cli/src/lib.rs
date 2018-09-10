@@ -211,7 +211,7 @@ pub fn run<I, T>(args: I) -> error::Result<()> where
 		timestamp: Some(TimestampConfig {
 			period: 5,					// 5 second block time.
 		}),
-		treasury:  Some(TreasuryConfig {
+		treasury: Some(TreasuryConfig {
 			proposal_bond: Permill::from_percent(5),
 			proposal_bond_minimum: 1_000_000,
 			spend_period: 12 * 60 * 24,
