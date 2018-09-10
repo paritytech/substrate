@@ -23,10 +23,10 @@ use state_machine::{self, OverlayedChanges, Ext,
 use runtime_io::Externalities;
 use executor::{RuntimeVersion, RuntimeInfo};
 use patricia_trie::NodeCodec;
-use primitives::{KeccakHasher, RlpCodec};
 use hashdb::Hasher;
 use rlp::Encodable;
 use codec::Decode;
+use primitives::{KeccakHasher, RlpCodec};
 
 use backend;
 use error;

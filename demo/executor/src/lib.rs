@@ -52,11 +52,11 @@ mod tests {
 	use primitives::{twox_128, KeccakHasher};
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
-	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
+	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
 	use {balances, staking, session, system, consensus};
 	use system::{EventRecord, Phase};
-	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Runtime, Balances,
-		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, BareExtrinsic, System, Event};
+	use demo_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
+		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, Event};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -77,20 +77,32 @@ mod tests {
 		AccountId::from(Keyring::Bob.to_raw_public())
 	}
 
+	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
+		match xt.signed {
+			Some(signed) => {
+				let payload = (xt.index, xt.function);
+				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
+				let signature = pair.sign(&payload.encode()).into();
+				UncheckedExtrinsic {
+					signature: Some((balances::address::Address::Id(signed), signature)),
+					index: payload.0,
+					function: payload.1,
+				}
+			}
+			None => UncheckedExtrinsic {
+				signature: None,
+				index: xt.index,
+				function: xt.function,
+			},
+		}
+	}
+
 	fn xt() -> UncheckedExtrinsic {
-		let extrinsic = BareExtrinsic {
-			signed: alice(),
+		sign(CheckedExtrinsic {
+			signed: Some(alice()),
 			index: 0,
 			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69)),
-		};
-		let signature = MaybeUnsigned(Keyring::from_raw_public(extrinsic.signed.0.clone()).unwrap()
-			.sign(&extrinsic.encode()).into());
-		let extrinsic = Extrinsic {
-			signed: extrinsic.signed.into(),
-			index: extrinsic.index,
-			function: extrinsic.function,
-		};
-		UncheckedExtrinsic::new(extrinsic, signature)
+		})
 	}
 
 	fn from_block_number(n: u64) -> Header {
@@ -225,19 +237,10 @@ mod tests {
 		}.build_storage().unwrap().into()
 	}
 
-	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<BareExtrinsic>) -> (Vec<u8>, Hash) {
+	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<CheckedExtrinsic>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
-		let extrinsics = extrinsics.into_iter().map(|extrinsic| {
-			let signature = MaybeUnsigned(Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed.0.clone())).unwrap())
-				.sign(&extrinsic.encode()).into());
-			let extrinsic = Extrinsic {
-				signed: extrinsic.signed.into(),
-				index: extrinsic.index,
-				function: extrinsic.function,
-			};
-			UncheckedExtrinsic::new(extrinsic, signature)
-		}).collect::<Vec<_>>();
+		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 
 		let extrinsics_root = ordered_trie_root::<KeccakHasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
 
@@ -261,8 +264,8 @@ mod tests {
 			// hex!("3437bf4b182ab17bb322af5c67e55f6be487a77084ad2b4e27ddac7242e4ad21").into(),
 			// Keccak
 			hex!("508a68a0918f614b86b2ccfd0975754f6d2abe1026a34e42d6d8d5abdf4db010").into(),
-			vec![BareExtrinsic {
-				signed: alice(),
+			vec![CheckedExtrinsic {
+				signed: Some(alice()),
 				index: 0,
 				function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
 			}]
@@ -276,15 +279,15 @@ mod tests {
 			// Blake
 			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
 			// Keccak
-			hex!("171f1b2c01c9c616e40ee2d842a699286b50a5a74874b56d826094dadedffb27").into(),
+			hex!("a72ec570c7642d9ad06ef0e5dd37be65fb04b71e0ab52b3927d760ed6c777a1f").into(),
 			vec![
-				BareExtrinsic {
-					signed: bob(),
+				CheckedExtrinsic {
+					signed: Some(bob()),
 					index: 0,
 					function: Call::Balances(balances::Call::transfer(alice().into(), 5)),
 				},
-				BareExtrinsic {
-					signed: alice(),
+				CheckedExtrinsic {
+					signed: Some(alice()),
 					index: 1,
 					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
 				}
@@ -300,10 +303,10 @@ mod tests {
 			// hex!("2c7231a9c210a7aa4bea169d944bc4aaacd517862b244b8021236ffa7f697991").into(),
 			// Keccak
 			hex!("e45221804da3a3609454d4e09debe6364cc6af63c2ff067d802d1af62fea32ae").into(),
-			vec![BareExtrinsic {
-				signed: alice(),
+			vec![CheckedExtrinsic {
+				signed: Some(alice()),
 				index: 0,
-				function: Call::Consensus(consensus::Call::remark(vec![0; 60000])),
+				function: Call::Consensus(consensus::Call::remark(vec![0; 60000000])),
 			}]
 		)
 	}

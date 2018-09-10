@@ -53,4 +53,4 @@ pub type Index = u64;
 pub type Hash = primitives::H256;
 
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
-pub type Signature = runtime_primitives::MaybeUnsigned<runtime_primitives::Ed25519Signature>;
+pub type Signature = runtime_primitives::Ed25519Signature;

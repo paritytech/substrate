@@ -22,6 +22,7 @@ use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 use substrate_primitives;
+use substrate_primitives::KeccakHasher;
 use codec::{Codec, Encode};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
@@ -47,7 +48,7 @@ pub trait Verify {
 }
 
 /// Means of changing one type into another in a manner dependent on the source type.
-pub trait AuxLookup {
+pub trait Lookup {
 	/// Type to lookup from.
 	type Source;
 	/// Type to lookup into.
@@ -106,24 +107,6 @@ impl<T> Convert<T, T> for Identity {
 }
 impl<T> Convert<T, ()> for () {
 	fn convert(_: T) -> () { () }
-}
-
-pub trait MaybeEmpty {
-	fn is_empty(&self) -> bool;
-}
-
-// AccountId is `u64` in tests
-impl MaybeEmpty for u64 {
-	fn is_empty(&self) -> bool {
-		self.is_zero()
-	}
-}
-
-// AccountId is H256 in production
-impl MaybeEmpty for substrate_primitives::H256 {
-	fn is_empty(&self) -> bool {
-		self.is_zero()
-	}
 }
 
 pub trait RefInto<T> {
@@ -248,20 +231,20 @@ impl Hash for BlakeTwo256 {
 		runtime_io::blake2_256(s).into()
 	}
 	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output {
-		runtime_io::enumerated_trie_root(items).into()
+		runtime_io::enumerated_trie_root::<KeccakHasher>(items).into()
 	}
 	fn trie_root<
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>
 	>(input: I) -> Self::Output {
-		runtime_io::trie_root(input).into()
+		runtime_io::trie_root::<KeccakHasher, _, _, _>(input).into()
 	}
 	fn ordered_trie_root<
 		I: IntoIterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output {
-		runtime_io::ordered_trie_root(input).into()
+		runtime_io::ordered_trie_root::<KeccakHasher, _, _>(input).into()
 	}
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
@@ -427,7 +410,7 @@ pub trait Applyable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
 	fn index(&self) -> &Self::Index;
-	fn sender(&self) -> &Self::AccountId;
+	fn sender(&self) -> Option<&Self::AccountId>;
 	fn apply(self) -> Result<(), &'static str>;
 }
 
