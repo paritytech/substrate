@@ -23,8 +23,12 @@ use runtime_io::print;
 use substrate_runtime_support::dispatch::Result;
 use substrate_runtime_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
-use super::{Trait, Module as Council};
+use super::{Trait as CouncilTrait, Module as Council};
 use system::{ensure_signed, ensure_root};
+
+pub trait Trait: CouncilTrait {
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -49,7 +53,25 @@ decl_storage! {
 	}
 }
 
+pub type Event<T> = RawEvent<<T as system::Trait>::BlockNumber>;
+
+/// An event in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawEvent<BlockNumber> {
+}
+
+impl<N> From<RawEvent<N>> for () {
+	fn from(_: RawEvent<N>) -> () { () }
+}
+
 impl<T: Trait> Module<T> {
+
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
+
 	pub fn is_vetoed<B: Borrow<T::Hash>>(proposal: B) -> bool {
 		Self::veto_of(proposal.borrow())
 			.map(|(expiry, _): (T::BlockNumber, Vec<T::AccountId>)| <system::Module<T>>::block_number() < expiry)

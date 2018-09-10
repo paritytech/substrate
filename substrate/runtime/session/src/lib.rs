@@ -122,6 +122,12 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
+
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
+
 	/// The number of validators currently.
 	pub fn validator_count() -> u32 {
 		<Validators<T>>::get().len() as u32	// TODO: can probably optimised
@@ -184,11 +190,6 @@ impl<T: Trait> Module<T> {
 		if should_end_session {
 			Self::rotate_session(is_final_block, apply_rewards);
 		}
-	}
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
 	}
 
 	/// Move onto next session: register the new authority set.
