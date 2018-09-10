@@ -17,6 +17,8 @@
 use super::{BalanceOf, CallReceipt, CreateReceipt, Ext, GasMeterResult, Runtime};
 use codec::Decode;
 use parity_wasm::elements::{FunctionType, ValueType};
+use rstd::prelude::*;
+use rstd::string::String;
 use rstd::collections::btree_map::BTreeMap;
 use runtime_primitives::traits::As;
 use sandbox::{self, TypedValue};
