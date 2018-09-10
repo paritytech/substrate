@@ -14,6 +14,60 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+/// Implement an `Event`/`RawEvent` for a module.
+#[macro_export]
+macro_rules! impl_event {
+	(
+		$(#[$attr:meta])*
+		pub enum Event<$( $evt_generic_param:ident )*> with RawEvent<$( $generic_param:ident ),*>
+			where $( <$generic:ident as $trait:path>::$trait_type:ident),*
+			for $module:ident<$trait_instance:ident: $trait_name:ident> {
+			$(
+				$(#[doc = $doc_attr:tt])*
+				$event:ident( $( $param:ident ),* ),
+			)*
+		}
+	) => {
+		pub type Event<$( $evt_generic_param )*> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
+		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		$(#[$attr])*
+		pub enum RawEvent<$( $generic_param ),*> {
+			$(
+				$( #[doc = $doc_attr] )*
+				$event($( $param ),*),
+			)*
+		}
+		impl<$( $generic_param ),*> From<RawEvent<$( $generic_param ),*>> for () {
+			fn from(_: RawEvent<$( $generic_param ),*>) -> () { () }
+		}
+	};
+	(
+		$(#[$attr:meta])*
+		pub enum Event for $module:ident<$trait_instance:ident: $trait_name:ident> {
+			$(
+				$(#[doc = $doc_attr:tt])*
+				$event:ident,
+			)*
+		}
+	) => {
+		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		$(#[$attr])*
+		pub enum Event {
+			$(
+				$( #[doc = $doc_attr] )*
+				$event,
+			)*
+		}
+		impl From<Event> for () {
+			fn from(_: Event) -> () { () }
+		}
+	}
+}
+
 #[macro_export]
 macro_rules! impl_outer_event {
 	($(#[$attr:meta])* pub enum $name:ident for $runtime:ident { $( $module:ident ),* }) => {
@@ -57,7 +111,7 @@ macro_rules! __impl_outer_event_json_metadata {
 			pub fn outer_event_json_metadata() -> &'static str {
 				concat!(r#"{ "name": ""#, stringify!($event_name), r#"", "items": { "#,
 					r#""system": "system::Event""#,
-					$(concat!(", \"", stringify!($module), r#"": ""#, 
+					$(concat!(", \"", stringify!($module), r#"": ""#,
 						stringify!($module), "::Event<", stringify!($runtime), r#">""#),)*
 					" } }")
 			}

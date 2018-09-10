@@ -6,6 +6,8 @@
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
+
+
 // Substrate is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -64,11 +66,6 @@ pub use genesis_config::GenesisConfig;
 
 const DEFAULT_MINIMUM_VALIDATOR_COUNT: usize = 4;
 
-pub type Event<T> = RawEvent<
-	<T as balances::Trait>::Balance,
-	<T as system::Trait>::AccountId
->;
-
 #[derive(PartialEq, Clone)]
 #[cfg_attr(test, derive(Debug))]
 pub enum LockStatus<BlockNumber: Parameter> {
@@ -100,7 +97,7 @@ pub trait Trait: balances::Trait + session::Trait {
 	/// Some tokens minted.
 	type OnRewardMinted: OnMinted<<Self as balances::Trait>::Balance>;
 
-	/// The overarching event type. 
+	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -122,20 +119,19 @@ decl_module! {
 }
 
 /// An event in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<Balance, AccountId> {
-	/// All validators have been rewarded by the given balance.
-	Reward(Balance),
-	/// One validator (and their nominators) has been given a offline-warning (they're still within
-	/// their grace). The accrued number of slashes is recorded, too.
-	OfflineWarning(AccountId, u32),
-	/// One validator (and their nominators) has been slashed by the given amount.
-	OfflineSlash(AccountId, Balance),
-}
-impl<B, A> From<RawEvent<B, A>> for () {
-	fn from(_: RawEvent<B, A>) -> () { () }
-}
+impl_event!(
+	pub enum Event<T> with RawEvent<Balance, AccountId>
+		where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId
+		for Module<T: Trait> {
+		/// All validators have been rewarded by the given balance.
+		Reward(Balance),
+		/// One validator (and their nominators) has been given a offline-warning (they're still
+		/// within their grace). The accrued number of slashes is recorded, too.
+		OfflineWarning(AccountId, u32),
+		/// One validator (and their nominators) has been slashed by the given amount.
+		OfflineSlash(AccountId, Balance),
+	}
+);
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
@@ -305,8 +301,8 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Set the given account's preference for slashing behaviour should they be a validator. 
-	/// 
+	/// Set the given account's preference for slashing behaviour should they be a validator.
+	///
 	/// An error (no-op) if `Self::intentions()[intentions_index] != origin`.
 	fn register_preferences(
 		origin: T::Origin,
@@ -318,7 +314,7 @@ impl<T: Trait> Module<T> {
 		if Self::intentions().get(intentions_index as usize) != Some(&who) {
 			return Err("Invalid index")
 		}
-		
+
 		<ValidatorPreferences<T>>::insert(who, prefs);
 
 		Ok(())
