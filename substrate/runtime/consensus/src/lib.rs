@@ -46,7 +46,7 @@ use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member, AuthoritiesChangeDigest};
+use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member, DigestItem};
 use primitives::bft::MisbehaviorReport;
 use system::{ensure_signed, ensure_inherent, ensure_root};
 
@@ -80,29 +80,23 @@ pub type Log<T> = RawLog<
 	<T as Trait>::SessionKey,
 >;
 
-/// An logs in this module.
+/// A logs in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
 pub enum RawLog<SessionKey> {
 	/// Authorities set has been changed. Contains the new set of authorities.
-	AuthoritiesChange(AuthoritiesChange<SessionKey>),
+	AuthoritiesChange(Vec<SessionKey>),
 }
 
-impl<SessionKey> RawLog<SessionKey> {
+impl<SessionKey: Member> DigestItem for RawLog<SessionKey> {
+	type AuthorityId = SessionKey;
+
 	/// Try to cast the log entry as AuthoritiesChange log entry.
-	pub fn as_authorities_change(&self) -> Option<&AuthoritiesChange<SessionKey>> {
+	fn as_authorities_change(&self) -> Option<&[SessionKey]> {
 		match *self {
-			RawLog::AuthoritiesChange(ref item) => Some(item),
+			RawLog::AuthoritiesChange(ref item) => Some(&item),
 		}
 	}
-}
-
-/// Authorities change log entry.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub struct AuthoritiesChange<SessionKey> {
-	/// New set of authorities.
-	pub new_authorities: Vec<SessionKey>,
 }
 
 // Implementation for tests outside of this crate.
@@ -111,14 +105,6 @@ impl<N> From<RawLog<N>> for u64 {
 		match log {
 			RawLog::AuthoritiesChange(_) => 1,
 		}
-	}
-}
-
-impl<SessionKey: Member> AuthoritiesChangeDigest for AuthoritiesChange<SessionKey> {
-	type AuthorityId = SessionKey;
-
-	fn authorities(&self) -> &[Self::AuthorityId] {
-		&self.new_authorities
 	}
 }
 

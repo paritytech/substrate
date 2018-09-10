@@ -433,35 +433,10 @@ pub trait Digest: Member + Default {
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Member {
-	/// Events of this type is raised by the runtime when set of authorities is changed.
-	/// Provides access to the new set of authorities.
-	type AuthoritiesChange: AuthoritiesChangeDigest; // TODO: = () when associated type defaults are stabilized
+	type AuthorityId;
 
  	/// Returns Some if the entry is the `AuthoritiesChange` entry.
-	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
+	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
 		None
 	}
-}
-
-/// Authorities change digest item. Created when the set of authorities is changed
-/// within the runtime.
-pub trait AuthoritiesChangeDigest {
-	/// Type of authority Id.
-	type AuthorityId: Member;
-
-	/// Get reference to the new authorities set.
-	fn authorities(&self) -> &[Self::AuthorityId];
-}
-
-/// Stub implementations for the digest item that is never created and used.
-///
-/// Should be used as a stub for items that are not supported by runtimes.
-impl DigestItem for () {
-	type AuthoritiesChange = ();
-}
-
-impl AuthoritiesChangeDigest for () {
-	type AuthorityId = ();
-
-	fn authorities(&self) -> &[Self::AuthorityId] { unreachable!("() is never created") }
 }
