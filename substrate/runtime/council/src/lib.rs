@@ -665,6 +665,7 @@ mod tests {
 	}
 	impl democracy::Trait for Test {
 		type Proposal = Call;
+		type Event = ();
 	}
 	impl Trait for Test {}
 

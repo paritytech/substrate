@@ -260,10 +260,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			// Blake
-			// hex!("3437bf4b182ab17bb322af5c67e55f6be487a77084ad2b4e27ddac7242e4ad21").into(),
-			// Keccak
-			hex!("3f39c78ad382abdf07e22d8850c4d5ed82c64671d4f3cb34bbfad159ac7f870e").into(),
+			hex!("45da5f9253d978403626ac0d1b9ff0b08b8e32e8a472a94569ec17dc5e9bb76b").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -283,10 +280,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			// Blake
-			// hex!("741fcb660e6fa9f625fbcd993b49f6c1cc4040f5e0cc8727afdedf11fd3c464b").into(),
-			// Keccak
-			hex!("892f270de5c640d7713c0f21f1267d396b99a5836d3580464bf863c3aed8b28b").into(),
+			hex!("3431232966d63b3e6ad20d5b51196c43a95324f950ee195da6a8f16bfb1e9198").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -311,9 +305,6 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			// Blake
-			// hex!("2c7231a9c210a7aa4bea169d944bc4aaacd517862b244b8021236ffa7f697991").into(),
-			// Keccak
 			hex!("208c206ba9721c99cdc9ccaef941d867f75441866ca58db73fae289d8c504892").into(),
 			vec![
 				CheckedExtrinsic {
@@ -350,6 +341,15 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(balances::RawEvent::Transfer(
+						hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+						69,
+						0
+					))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess)
 				}
 			]);
@@ -362,12 +362,34 @@ mod tests {
 			assert_eq!(Balances::total_balance(&bob()), 78);
 			assert_eq!(System::events(), vec![
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
-					event: Event::system(system::Event::ExtrinsicSuccess)
+				   phase: Phase::ApplyExtrinsic(0),
+				   event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(
+						balances::RawEvent::Transfer(
+							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+							5,
+							0
+						)
+					)
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(2),
+					event: Event::balances(
+						balances::RawEvent::Transfer(
+							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+							15,
+							0
+						)
+					)
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(2),
