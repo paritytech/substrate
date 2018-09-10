@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate Demo.
 
 // Substrate Demo is free software: you can redistribute it and/or modify
@@ -40,6 +40,7 @@ extern crate substrate_primitives;
 #[macro_use]
 extern crate substrate_codec_derive;
 
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_consensus as consensus;
@@ -55,7 +56,11 @@ extern crate substrate_runtime_treasury as treasury;
 extern crate substrate_runtime_version as version;
 extern crate demo_primitives;
 
-use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature};
+#[cfg(feature = "std")]
+mod checked_block;
+
+use rstd::prelude::*;
+use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
@@ -63,7 +68,15 @@ use council::motions as council_motions;
 use substrate_primitives::u32_trait::{_2, _4};
 
 #[cfg(any(feature = "std", test))]
-pub use runtime_primitives::{BuildStorage, Permill};
+pub use runtime_primitives::BuildStorage;
+pub use consensus::Call as ConsensusCall;
+pub use timestamp::Call as TimestampCall;
+pub use runtime_primitives::Permill;
+#[cfg(any(feature = "std", test))]
+pub use checked_block::CheckedBlock;
+
+const TIMESTAMP_SET_POSITION: u32 = 0;
+const NOTE_OFFLINE_POSITION: u32 = 1;
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -74,7 +87,7 @@ pub struct Runtime;
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("demo"),
-	impl_name: ver_str!("parity-demo"),
+	impl_name: ver_str!("substrate-demo"),
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
@@ -107,7 +120,7 @@ impl balances::Trait for Runtime {
 pub type Balances = balances::Module<Runtime>;
 
 impl consensus::Trait for Runtime {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
+	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
 	type Log = Log;
 	type SessionKey = SessionKey;
 	type OnOfflineValidator = Staking;
@@ -117,8 +130,7 @@ impl consensus::Trait for Runtime {
 pub type Consensus = consensus::Module<Runtime>;
 
 impl timestamp::Trait for Runtime {
-	const TIMESTAMP_SET_POSITION: u32 = 0;
-
+	const TIMESTAMP_SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
 	type Moment = u64;
 }
 
@@ -241,6 +253,8 @@ impl DigestItem for Log {
 }
 
 /// The address format for describing accounts.
+pub use balances::address::Address as RawAddress;
+/// The address format for describing accounts.
 pub type Address = balances::Address<Runtime>;
 /// Block header type as expected by this runtime.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
@@ -254,18 +268,43 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, 
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, Balances, Balances,
-	((((((), Treasury), Council), Democracy), Staking), Session)>;
+	(((((((), Treasury), Council), Democracy), Staking), Session), Timestamp)>;
 
 pub mod api {
 	impl_stubs!(
 		version => |()| super::VERSION,
 		authorities => |()| super::Consensus::authorities(),
-		events => |()| super::System::events(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),
 		finalise_block => |()| super::Executive::finalise_block(),
+		inherent_extrinsics => |(inherent, spec_version)| super::inherent_extrinsics(inherent, spec_version),
 		validator_count => |()| super::Session::validator_count(),
-		validators => |()| super::Session::validators()
+		validators => |()| super::Session::validators(),
+		timestamp => |()| super::Timestamp::get(),
+		random_seed => |()| super::System::random_seed(),
+		account_nonce => |account| super::System::account_nonce(&account),
+		lookup_address => |address| super::Balances::lookup_address(address)
 	);
+}
+
+/// Produces the list of inherent extrinsics.
+fn inherent_extrinsics(data: InherentData, _spec_version: u32) -> Vec<UncheckedExtrinsic> {
+	let make_inherent = |function| UncheckedExtrinsic {
+		signature: Default::default(),
+		function,
+		index: 0,
+	};
+
+	let mut inherent = vec![
+		make_inherent(Call::Timestamp(TimestampCall::set(data.timestamp))),
+	];
+
+	if !data.offline_indices.is_empty() {
+		inherent.push(make_inherent(
+				Call::Consensus(ConsensusCall::note_offline(data.offline_indices))
+		));
+	}
+
+	inherent
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate Demo.
 
 // Substrate Demo is free software: you can redistribute it and/or modify
@@ -17,256 +17,106 @@
 //! Substrate Demo CLI library.
 
 #![warn(missing_docs)]
+#![warn(unused_extern_crates)]
 
-extern crate ctrlc;
-extern crate ed25519;
-extern crate env_logger;
-extern crate futures;
 extern crate tokio;
-extern crate triehash;
-extern crate substrate_client as client;
-extern crate substrate_codec as codec;
-extern crate substrate_primitives as primitives;
-extern crate substrate_rpc;
-extern crate substrate_rpc_servers as rpc;
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_state_machine as state_machine;
-extern crate substrate_extrinsic_pool as extrinsic_pool;
-extern crate demo_executor;
-extern crate demo_primitives;
-extern crate demo_runtime;
 
-#[macro_use]
-extern crate hex_literal;
-#[macro_use]
-extern crate clap;
-#[macro_use]
-extern crate error_chain;
+extern crate substrate_cli as cli;
+extern crate demo_service as service;
+extern crate exit_future;
+
 #[macro_use]
 extern crate log;
 
-pub mod error;
+pub use cli::error;
 
-use std::sync::Arc;
-use demo_primitives::{AccountId, Hash};
-use demo_runtime::{Block, BlockId, GenesisConfig,
-	BalancesConfig, ConsensusConfig, CouncilConfig, DemocracyConfig, SessionConfig,
-	StakingConfig, TimestampConfig, TreasuryConfig, Permill};
-use futures::{Future, Sink, Stream};
 use tokio::runtime::Runtime;
-use demo_executor::NativeExecutor;
-use extrinsic_pool::{Pool as ExtrinsicPool, ExtrinsicFor, VerifiedFor, scoring, Readiness};
+pub use service::{Components as ServiceComponents, Service, CustomConfiguration};
+pub use cli::{VersionInfo, IntoExit};
 
-#[derive(Debug, Clone)]
-struct VerifiedExtrinsic {
-	sender: AccountId,
-	hash: Hash,
+/// The chain specification option.
+#[derive(Clone, Debug)]
+pub enum ChainSpec {
+	/// Whatever the current runtime is, with just Alice as an auth.
+	Development,
+	/// Whatever the current runtime is, with simple Alice/Bob auths.
+	LocalTestnet,
+	/// The PoC-1 & PoC-2 era testnet.
+	Testnet,
+	/// Whatever the current runtime is with the "global testnet" defaults.
+	StagingTestnet,
 }
 
-impl extrinsic_pool::VerifiedTransaction for VerifiedExtrinsic {
-	type Hash = Hash;
-	type Sender = AccountId;
-
-	fn hash(&self) -> &Self::Hash {
-		&self.hash
+/// Get a chain config from a spec setting.
+impl ChainSpec {
+	pub(crate) fn load(self) -> Result<service::ChainSpec, String> {
+		Ok(match self {
+			ChainSpec::Testnet => service::chain_spec::testnet_config()?,
+			ChainSpec::Development => service::chain_spec::development_config(),
+			ChainSpec::LocalTestnet => service::chain_spec::local_testnet_config(),
+			ChainSpec::StagingTestnet => service::chain_spec::staging_testnet_config(),
+		})
 	}
 
-	fn sender(&self) -> &Self::Sender {
-		&self.sender
-	}
-
-	fn mem_usage(&self) -> usize {
-		0
-	}
-}
-
-struct Pool;
-impl extrinsic_pool::ChainApi for Pool {
-	type Block = Block;
-	type Hash = Hash;
-	type Sender = AccountId;
-	type VEx = VerifiedExtrinsic;
-	type Ready = ();
-	type Error = extrinsic_pool::Error;
-	type Score = u64;
-	type Event = ();
-
-	fn verify_transaction(&self, _at: &BlockId, _xt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error> {
-		unimplemented!()
-	}
-
-	fn ready(&self) -> Self::Ready { }
-
-	fn is_ready(&self, _at: &BlockId, _ready: &mut Self::Ready, _xt: &VerifiedFor<Self>) -> Readiness {
-		unimplemented!()
-	}
-
-	fn compare(_old: &VerifiedFor<Self>, _other: &VerifiedFor<Self>) -> ::std::cmp::Ordering {
-		unimplemented!()
-	}
-
-	fn choose(_old: &VerifiedFor<Self>, _new: &VerifiedFor<Self>) -> scoring::Choice {
-		unimplemented!()
-	}
-
-	fn update_scores(
-		_xts: &[extrinsic_pool::Transaction<VerifiedFor<Self>>],
-		_scores: &mut [Self::Score],
-		_change: scoring::Change<()>
-	) {
-		unimplemented!()
-	}
-
-	fn should_replace(_old: &VerifiedFor<Self>, _new: &VerifiedFor<Self>) -> scoring::Choice {
-		unimplemented!()
+	pub(crate) fn from(s: &str) -> Option<Self> {
+		match s {
+			"dev" => Some(ChainSpec::Development),
+			"local" => Some(ChainSpec::LocalTestnet),
+			"" | "test" => Some(ChainSpec::Testnet),
+			"staging" => Some(ChainSpec::StagingTestnet),
+			_ => None,
+		}
 	}
 }
 
-struct DummySystem;
-impl substrate_rpc::system::SystemApi for DummySystem {
-	fn system_name(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok("substrate-demo".into())
-	}
-	fn system_version(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok(crate_version!().into())
-	}
-	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
-		Ok("default".into())
-	}
+fn load_spec(id: &str) -> Result<Option<service::ChainSpec>, String> {
+	Ok(match ChainSpec::from(id) {
+		Some(spec) => Some(spec.load()?),
+		None => None,
+	})
 }
 
-/// Parse command line arguments and start the node.
-///
-/// IANA unassigned port ranges that we could use:
-/// 6717-6766		Unassigned
-/// 8504-8553		Unassigned
-/// 9556-9591		Unassigned
-/// 9803-9874		Unassigned
-/// 9926-9949		Unassigned
-pub fn run<I, T>(args: I) -> error::Result<()> where
+/// Parse command line arguments into service configuration.
+pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
+	E: IntoExit,
 {
-	let yaml = load_yaml!("./cli.yml");
-	let matches = clap::App::from_yaml(yaml).version(crate_version!()).get_matches_from_safe(args)?;
-
-	// TODO [ToDr] Split parameters parsing from actual execution.
-	let log_pattern = matches.value_of("log").unwrap_or("");
-	init_logger(log_pattern);
-
-	// Create client
-	let executor = NativeExecutor::new();
-
-	let god_key = hex!["3d866ec8a9190c8343c2fc593d21d8a6d0c5c4763aaab2349de3a6111d64d124"];
-	let genesis_config = GenesisConfig {
-		consensus: Some(ConsensusConfig {
-			code: vec![],	// TODO
-			authorities: vec![god_key.clone().into()],
-		}),
-		system: None,
-		balances: Some(BalancesConfig {
-			transaction_base_fee: 100,
-			transaction_byte_fee: 1,
-			transfer_fee: 0,
-			creation_fee: 0,
-			reclaim_rebate: 0,
-			existential_deposit: 500,
-			balances: vec![(god_key.clone().into(), 1u64 << 63)].into_iter().collect(),
-		}),
-		session: Some(SessionConfig {
-			validators: vec![god_key.clone().into()],
-			session_length: 720,	// that's 1 hour per session.
-		}),
-		staking: Some(StakingConfig {
-			current_era: 0,
-			intentions: vec![],
-			validator_count: 12,
-			minimum_validator_count: 4,
-			sessions_per_era: 24,	// 24 hours per era.
-			bonding_duration: 90 * 24 * 720,	// 90 days per bond.
-			early_era_slash: 10000,
-			session_reward: 100,
-			offline_slash_grace: 0,
-		}),
-		democracy: Some(DemocracyConfig {
-			launch_period: 120 * 24 * 14,	// 2 weeks per public referendum
-			voting_period: 120 * 24 * 28,	// 4 weeks to discuss & vote on an active referendum
-			minimum_deposit: 1000,	// 1000 as the minimum deposit for a referendum
-		}),
-		council: Some(CouncilConfig {
-			active_council: vec![],
-			candidacy_bond: 1000,	// 1000 to become a council candidate
-			voter_bond: 100,		// 100 down to vote for a candidate
-			present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
-			carry_count: 24,		// carry over the 24 runners-up to the next council election
-			presentation_duration: 120 * 24,	// one day for presenting winners.
-			approval_voting_period: 7 * 120 * 24,	// one week period between possible council elections.
-			term_duration: 180 * 120 * 24,	// 180 day term duration for the council.
-			desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
-			inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
-
-			cooloff_period: 90 * 120 * 24, // 90 day cooling off period if council member vetoes a proposal.
-			voting_period: 7 * 120 * 24, // 7 day voting period for council members.
-		}),
-		timestamp: Some(TimestampConfig {
-			period: 5,					// 5 second block time.
-		}),
-		treasury: Some(TreasuryConfig {
-			proposal_bond: Permill::from_percent(5),
-			proposal_bond_minimum: 1_000_000,
-			spend_period: 12 * 60 * 24,
-			burn: Permill::from_percent(50),
-		}),
-	};
-
-	let client = Arc::new(client::new_in_mem::<NativeExecutor<demo_executor::Executor>, Block, _>(executor, genesis_config)?);
-	let mut runtime = Runtime::new()?;
-	let _rpc_servers = {
-		let handler = || {
-			let state = rpc::apis::state::State::new(client.clone(), runtime.executor());
-			let chain = rpc::apis::chain::Chain::new(client.clone(), runtime.executor());
-			let author = rpc::apis::author::Author::new(client.clone(), Arc::new(ExtrinsicPool::new(Default::default(), Pool)), runtime.executor());
-			rpc::rpc_handler::<Block, Hash, _, _, _, _, _>(state, chain, author, DummySystem)
-		};
-		let http_address = "127.0.0.1:9933".parse().unwrap();
-		let ws_address = "127.0.0.1:9944".parse().unwrap();
-
-		(
-			rpc::start_http(&http_address, handler())?,
-			rpc::start_ws(&ws_address, handler())?
-		)
-	};
-
-	if let Some(_) = matches.subcommand_matches("validator") {
-		info!("Starting validator.");
-		let (exit_send, exit) = futures::sync::mpsc::channel(1);
-		ctrlc::CtrlC::set_handler(move || {
-			exit_send.clone().send(()).wait().expect("Error sending exit notification");
-		});
-
-		runtime.block_on(exit.into_future()).expect("Error running informant event loop");
-		return Ok(())
+	match cli::prepare_execution::<service::Factory, _, _, _, _>(args, exit, version, load_spec, "substrate-demo")? {
+		cli::Action::ExecutedInternally => (),
+		cli::Action::RunService((config, exit)) => {
+			info!("Parity ·:· Substrate");
+			info!("  version {}", config.full_version());
+			info!("  by Parity Technologies, 2017, 2018");
+			info!("Chain specification: {}", config.chain_spec.name());
+			info!("Node name: {}", config.name);
+			info!("Roles: {:?}", config.roles);
+			let mut runtime = Runtime::new()?;
+			let executor = runtime.executor();
+			match config.roles == service::Roles::LIGHT {
+				true => run_until_exit(&mut runtime, service::new_light(config, executor)?, exit)?,
+				false => run_until_exit(&mut runtime, service::new_full(config, executor)?, exit)?,
+			}
+		}
 	}
-
-	println!("No command given.\n");
-	let _ = clap::App::from_yaml(yaml).print_long_help();
-
 	Ok(())
 }
 
-fn init_logger(pattern: &str) {
-	let mut builder = env_logger::LogBuilder::new();
-	// Disable info logging by default for some modules:
-	builder.filter(Some("hyper"), log::LogLevelFilter::Warn);
-	// Enable info for others.
-	builder.filter(None, log::LogLevelFilter::Info);
+fn run_until_exit<C, E>(
+	runtime: &mut Runtime,
+	service: service::Service<C>,
+	e: E,
+) -> error::Result<()>
+	where
+		C: service::Components,
+		E: IntoExit,
+{
+	let (exit_send, exit) = exit_future::signal();
 
-	if let Ok(lvl) = std::env::var("RUST_LOG") {
-		builder.parse(&lvl);
-	}
+	let executor = runtime.executor();
+	cli::informant::start(&service, exit.clone(), executor.clone());
 
-	builder.parse(pattern);
-
-
-	builder.init().expect("Logger initialized only once.");
+	let _ = runtime.block_on(e.into_exit());
+	exit_send.fire();
+	Ok(())
 }

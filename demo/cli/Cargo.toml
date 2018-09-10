@@ -5,25 +5,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate Demo node implementation in Rust."
 
 [dependencies]
-clap = { version = "2.27", features = ["yaml"] }
-ctrlc = { git = "https://github.com/paritytech/rust-ctrlc.git" }
-ed25519 = { path = "../../substrate/ed25519" }
-env_logger = "0.4"
-futures = "0.1.17"
-error-chain = "0.12"
-hex-literal = "0.1"
 log = "0.3"
 tokio = "0.1.7"
-triehash = "0.2"
-substrate-client = { path = "../../substrate/client" }
-substrate-codec = { path = "../../substrate/codec" }
-substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
-substrate-runtime-io = { path = "../../substrate/runtime-io" }
-substrate-state-machine = { path = "../../substrate/state-machine" }
-substrate-executor = { path = "../../substrate/executor" }
-substrate-primitives = { path = "../../substrate/primitives" }
-substrate-rpc-servers = { path = "../../substrate/rpc-servers" }
-substrate-rpc = { path = "../../substrate/rpc" }
-demo-primitives = { path = "../primitives" }
-demo-executor = { path = "../executor" }
-demo-runtime = { path = "../runtime" }
+exit-future = "0.1"
+substrate-cli = { path = "../../substrate/cli" }
+demo-service = { path = "../service" }

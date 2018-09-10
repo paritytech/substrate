@@ -25,7 +25,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, 
 use runtime_primitives::BuildStorage;
 use primitives::{KeccakHasher, RlpCodec};
 use primitives::storage::{StorageKey, StorageData};
-use codec::Decode;
+use codec::{Encode, Decode};
 use state_machine::{
 	Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, prove_read
@@ -314,6 +314,51 @@ impl<B, E, Block> Client<B, E, Block> where
 	where E: Clone
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
+	}
+
+	/// Call a runtime function at given block.
+	pub fn call_api<A, R>(&self, at: &BlockId<Block>, function: &'static str, args: &A) -> error::Result<R>
+	where
+	A: Encode,
+	R: Decode,
+	{
+		let parent = at;
+		let header = <<Block as BlockT>::Header as HeaderT>::new(
+			self.block_number_from_id(&parent)?
+				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))? + As::sa(1),
+			Default::default(),
+			Default::default(),
+			self.block_hash_from_id(&parent)?
+				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
+			Default::default()
+		);
+		self.state_at(&parent).and_then(|state| {
+			let mut overlay = Default::default();
+			let execution_manager = || ExecutionManager::Both(|wasm_result, native_result| {
+				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
+				warn!("   Function {:?}", function);
+				warn!("   Native result {:?}", native_result);
+				warn!("   Wasm result {:?}", wasm_result);
+				wasm_result
+			});
+			self.executor().call_at_state(
+				&state,
+				&mut overlay,
+				"initialise_block",
+				&header.encode(),
+				execution_manager()
+			)?;
+			let (r, _) = args.using_encoded(|input|
+				self.executor().call_at_state(
+				&state,
+				&mut overlay,
+				function,
+				input,
+				execution_manager()
+			))?;
+			Ok(R::decode(&mut &r[..])
+			   .ok_or_else(|| error::Error::from(error::ErrorKind::CallResultDecode(function)))?)
+		})
 	}
 
 	/// Check a header's justification.

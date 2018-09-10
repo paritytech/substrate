@@ -235,10 +235,12 @@ impl<B: Block, P: Proposer<B>> BftInstance<B, P>
 
 {
 	fn round_timeout_duration(&self, round: usize) -> Duration {
-		const ROUND_INCREMENT_STEP: usize = 10000;
+		// 2^(min(6, x/8)) * 10
+		// Grows exponentially starting from 10 seconds, capped at 640 seconds.
+		const ROUND_INCREMENT_STEP: usize = 8;
 
 		let round = round / ROUND_INCREMENT_STEP;
-		let round = ::std::cmp::min(63, round) as u32;
+		let round = ::std::cmp::min(6, round) as u32;
 
 		let timeout = 1u64.checked_shl(round)
 			.unwrap_or_else(u64::max_value)
@@ -470,7 +472,7 @@ impl<B, P, I> BftService<B, P, I>
 				hash: None,
 				start_round: 0,
 			})),
-			round_timeout_multiplier: 4,
+			round_timeout_multiplier: 10,
 			key: key, // TODO: key changing over time.
 			factory,
 		}
@@ -866,7 +868,7 @@ mod tests {
 				hash: None,
 				start_round: 0,
 			})),
-			round_timeout_multiplier: 4,
+			round_timeout_multiplier: 10,
 			key: Arc::new(Keyring::One.into()),
 			factory: DummyFactory
 		}
