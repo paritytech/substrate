@@ -27,6 +27,7 @@ extern crate serde_derive;
 
 extern crate integer_sqrt;
 extern crate substrate_codec as codec;
+#[macro_use] extern crate substrate_codec_derive;
 extern crate substrate_primitives;
 #[cfg(feature = "std")] extern crate substrate_keyring as keyring;
 #[macro_use] extern crate substrate_runtime_std as rstd;
@@ -40,9 +41,9 @@ extern crate substrate_runtime_system as system;
 use rstd::prelude::*;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
-use primitives::traits::{Zero, One, As, Lookup};
-use substrate_runtime_support::{StorageValue, StorageMap};
-use substrate_runtime_support::dispatch::Result;
+use primitives::traits::{Zero, One, As, Lookup, OnFinalise};
+use runtime_io::print;
+use substrate_runtime_support::{StorageValue, StorageMap, dispatch::Result};
 use balances::address::Address;
 use system::{ensure_signed, ensure_root};
 
@@ -104,7 +105,9 @@ pub mod voting;
 
 pub type VoteIndex = u32;
 
-pub trait Trait: democracy::Trait {}
+pub trait Trait: democracy::Trait {
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -176,7 +179,28 @@ decl_storage! {
 	}
 }
 
+pub type Event<T> = RawEvent<<T as system::Trait>::Hash>;
+
+/// An event in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawEvent<Hash> {
+	/// A voting tally has happened for a referendum cancelation vote. Last three are yes, no, abstain counts.
+	TallyCancelation(Hash, u32, u32, u32),
+	/// A voting tally has happened for a referendum vote. Last three are yes, no, abstain counts.
+	TallyReferendum(Hash, u32, u32, u32),
+}
+
+impl<N> From<RawEvent<N>> for () {
+	fn from(_: RawEvent<N>) -> () { () }
+}
+
 impl<T: Trait> Module<T> {
+
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
 
 	// exposed immutables.
 
@@ -552,6 +576,15 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(n: T::BlockNumber) {
+		if let Err(e) = Self::end_block(n) {
+			print("Guru meditation");
+			print(e);
+		}
+	}
+}
+
 #[cfg(feature = "std")]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -569,14 +602,13 @@ pub struct GenesisConfig<T: Trait> {
 	pub term_duration: T::BlockNumber,
 	pub inactive_grace_period: T::BlockNumber,
 
-
 	// for the council's votes.
 	pub cooloff_period: T::BlockNumber,
 	pub voting_period: T::BlockNumber,
 }
 
 #[cfg(feature = "std")]
-impl<T: Trait> Default for GenesisConfig<T> {
+impl<T: Trait + voting::Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
 		GenesisConfig {
 			candidacy_bond: T::Balance::sa(9),
@@ -596,7 +628,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 #[cfg(feature = "std")]
-impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
+impl<T: Trait + voting::Trait> primitives::BuildStorage for GenesisConfig<T>
 {
 	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
 		use codec::Encode;
@@ -714,6 +746,7 @@ mod tests {
 	pub type Balances = balances::Module<Test>;
 	pub type Democracy = democracy::Module<Test>;
 	pub type Council = Module<Test>;
+	pub type CouncilVoting = voting::Module<Test>;
 
 	#[test]
 	fn params_should_work() {
