@@ -95,7 +95,8 @@ impl<
 
 /// Trait for a hook to get called when some balance has been minted, causing dilution.
 pub trait OnDilution<Balance> {
-	/// Some `portion` of the total balance "grew" by `minted`.
+	/// Some `portion` of the total balance just "grew" by `minted`. `portion` is the pre-growth
+	/// amount (it doesn't take account of the recent growth).
 	fn on_dilution(minted: Balance, portion: Balance);
 }
 
