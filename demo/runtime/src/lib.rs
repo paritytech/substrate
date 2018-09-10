@@ -148,6 +148,7 @@ pub type Staking = staking::Module<Runtime>;
 
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
+	type Event = Event;
 }
 
 /// Democracy module for this concrete runtime.
