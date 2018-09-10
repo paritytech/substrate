@@ -35,8 +35,8 @@ pub fn build_transport(
 		})
 		.and_then(move |out, endpoint, client_addr| {
 			let upgrade = upgrade::or(
-				upgrade::map(mplex_config, either::EitherOutput::First),
-				upgrade::map(yamux::Config::default(), either::EitherOutput::Second),
+				upgrade::map(yamux::Config::default(), either::EitherOutput::First),
+				upgrade::map(mplex_config, either::EitherOutput::Second),
 			);
 			let key = out.remote_key;
 			let upgrade = upgrade::map(upgrade, move |muxer| (key, muxer));
