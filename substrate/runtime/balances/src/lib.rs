@@ -93,14 +93,14 @@ impl<
 	}
 }
 
-/// Trait for a hook to get called when some balance has been minted.
-pub trait OnMinted<Balance> {
-	/// Some balance `b` was minted.
-	fn on_minted(b: Balance);
+/// Trait for a hook to get called when some balance has been minted, causing dilution.
+pub trait OnDilution<Balance> {
+	/// Some `portion` of the total balance "grew" by `minted`.
+	fn on_dilution(minted: Balance, portion: Balance);
 }
 
-impl<Balance> OnMinted<Balance> for () {
-	fn on_minted(_b: Balance) {}
+impl<Balance> OnDilution<Balance> for () {
+	fn on_dilution(_minted: Balance, _portion: Balance) {}
 }
 
 /// Determinator for whether a given account is able to transfer balance.
@@ -159,7 +159,7 @@ impl<A, I, B> From<RawEvent<A, I, B>> for () {
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
 		/// The total amount of stake on the system.
-		pub TotalIssuance get(total_stake): required T::Balance;
+		pub TotalIssuance get(total_issuance): required T::Balance;
 		/// The minimum amount allowed to keep an account open.
 		pub ExistentialDeposit get(existential_deposit): required T::Balance;
 		/// The amount credited to a destination's account whose index was reclaimed.
@@ -627,13 +627,13 @@ impl<T: Trait> Module<T> {
 
 	/// Increase TotalIssuance by Value.
 	pub fn increase_total_stake_by(value: T::Balance) {
-		if let Some(v) = <Module<T>>::total_stake().checked_add(&value) {
+		if let Some(v) = <Module<T>>::total_issuance().checked_add(&value) {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
 	/// Decrease TotalIssuance by Value.
 	pub fn decrease_total_stake_by(value: T::Balance) {
-		if let Some(v) = <Module<T>>::total_stake().checked_sub(&value) {
+		if let Some(v) = <Module<T>>::total_issuance().checked_sub(&value) {
 			<TotalIssuance<T>>::put(v);
 		}
 	}

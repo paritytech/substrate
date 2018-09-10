@@ -229,7 +229,7 @@ mod tests {
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
-				early_era_slash: 0,
+				offline_slash: 0,
 				session_reward: 0,
 				offline_slash_grace: 0,
 			}),

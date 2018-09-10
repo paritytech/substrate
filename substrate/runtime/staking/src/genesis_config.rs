@@ -26,7 +26,7 @@ use primitives::traits::As;
 use substrate_primitives::KeccakHasher;
 use {runtime_io, primitives};
 use super::{Trait, Intentions, CurrentEra, OfflineSlashGrace, MinimumValidatorCount,
-	BondingDuration, SessionsPerEra, ValidatorCount, SessionReward, EarlyEraSlash};
+	BondingDuration, SessionsPerEra, ValidatorCount, SessionReward, OfflineSlash};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,7 +39,7 @@ pub struct GenesisConfig<T: Trait> {
 	pub minimum_validator_count: u32,
 	pub bonding_duration: T::BlockNumber,
 	pub session_reward: T::Balance,
-	pub early_era_slash: T::Balance,
+	pub offline_slash: T::Balance,
 	pub offline_slash_grace: u32,
 }
 
@@ -53,7 +53,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			minimum_validator_count: 0,
 			bonding_duration: T::BlockNumber::sa(1000),
 			session_reward: T::Balance::sa(0),
-			early_era_slash: T::Balance::sa(0),
+			offline_slash: T::Balance::sa(0),
 			offline_slash_grace: 0,
 		}
 	}
@@ -69,7 +69,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			Self::hash(<BondingDuration<T>>::key()).to_vec() => self.bonding_duration.encode(),
 			Self::hash(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
 			Self::hash(<SessionReward<T>>::key()).to_vec() => self.session_reward.encode(),
-			Self::hash(<EarlyEraSlash<T>>::key()).to_vec() => self.early_era_slash.encode(),
+			Self::hash(<OfflineSlash<T>>::key()).to_vec() => self.offline_slash.encode(),
 			Self::hash(<OfflineSlashGrace<T>>::key()).to_vec() => self.offline_slash_grace.encode()
 		];
 		Ok(r.into())
