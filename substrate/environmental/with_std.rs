@@ -20,6 +20,7 @@ pub mod imp {
 	pub use std::thread::LocalKey;
 	pub use std::mem::transmute;
 	pub use std::mem::replace;
+	pub use std::marker::PhantomData;
 }
 
 #[doc(hidden)]

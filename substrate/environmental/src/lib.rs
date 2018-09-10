@@ -217,6 +217,32 @@ macro_rules! environmental {
 			}
 		}
 	};
+	($name:ident<$traittype:ident> : trait $t:ident <$concretetype:ty>) => {
+		#[allow(non_camel_case_types, dead_code)]
+		struct $name <H: $traittype> { _private_field: $crate::imp::PhantomData<H> }
+
+		thread_local_impl!(static GLOBAL: $crate::imp::RefCell<Option<*mut ($t<$concretetype> + 'static)>>
+			= $crate::imp::RefCell::new(None));
+
+		impl<H: $traittype> $name<H> {
+			#[allow(unused_imports)]
+			pub fn using<R, F: FnOnce() -> R>(
+				protected: &mut $t<H>,
+				f: F
+			) -> R {
+				let lifetime_extended = unsafe {
+					$crate::imp::transmute::<&mut $t<H>, &mut ($t<$concretetype> + 'static)>(protected)
+				};
+				$crate::using(&GLOBAL, lifetime_extended, f)
+			}
+
+			pub fn with<R, F: for<'a> FnOnce(&'a mut ($t<$concretetype> + 'a)) -> R>(
+				f: F
+			) -> Option<R> {
+				$crate::with(&GLOBAL, |x| f(x))
+			}
+		}
+	};
 	($name:ident : trait $t:ident <>) => { environmental! { $name : trait @$t [] } };
 	($name:ident : trait $t:ident < $($args:ty),* $(,)* >) => { environmental! { $name : trait @$t [$($args,)*] } };
 	($name:ident : trait $t:ident) => { environmental! { $name : trait @$t [] } };
@@ -345,11 +371,11 @@ mod tests {
 
 		let numbers = vec![1, 2, 3];
 		let mut numbers = &numbers[..];
-		let out = foo::using(&mut numbers, || {
-			foo::with(|x| x.mul_and_add() )
+		let out = foo::<ConcretePlus>::using(&mut numbers, || {
+			foo::<ConcretePlus>::with(|x| x.mul_and_add() )
 		}).unwrap();
 
 		assert_eq!(out, 6 + 42);
-		environmental!(foo: trait Multiplier<ConcretePlus>);
+		environmental!(foo<Plus>: trait Multiplier<ConcretePlus>);
 	}
 }
