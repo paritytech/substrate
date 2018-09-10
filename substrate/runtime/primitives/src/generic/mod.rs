@@ -20,10 +20,12 @@ mod unchecked_extrinsic;
 mod checked_extrinsic;
 mod header;
 mod block;
+mod digest;
 #[cfg(test)]
 mod tests;
 
 pub use self::unchecked_extrinsic::UncheckedExtrinsic;
 pub use self::checked_extrinsic::CheckedExtrinsic;
-pub use self::header::{Header, Digest};
+pub use self::header::Header;
 pub use self::block::{Block, SignedBlock, BlockId};
+pub use self::digest::{Digest, DigestItem, DigestItemRef};

@@ -64,6 +64,7 @@ use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
+use codec::{Encode, Decode, Input};
 use council::motions as council_motions;
 use substrate_primitives::u32_trait::{_2, _4};
 
@@ -202,8 +203,8 @@ impl_outer_event! {
 }
 
 impl_outer_log! {
-	pub enum Log for Runtime {
-		consensus
+	pub enum Log(InternalLog: DigestItem<SessionKey>) for Runtime {
+		consensus(AuthoritiesChange)
 	}
 }
 
@@ -243,11 +244,11 @@ impl_outer_config! {
 }
 
 impl DigestItem for Log {
-	type AuthoritiesChange = consensus::AuthoritiesChange<SessionKey>;
+	type AuthorityId = SessionKey;
 
-	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
-		match *self {
-			Log::consensus(ref item) => item.as_authorities_change(),
+	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+		match self.0 {
+			InternalLog::consensus(ref item) => item.as_authorities_change(),
 		}
 	}
 }

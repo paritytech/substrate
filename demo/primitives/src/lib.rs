@@ -40,7 +40,7 @@ use rstd::prelude::*;
 use runtime_primitives::generic;
 #[cfg(feature = "std")]
 use primitives::bytes;
-use runtime_primitives::traits::{BlakeTwo256, DigestItem};
+use runtime_primitives::traits::BlakeTwo256;
 
 /// An index to a block.
 pub type BlockNumber = u64;
@@ -73,24 +73,11 @@ pub type Signature = runtime_primitives::Ed25519Signature;
 pub type Timestamp = u64;
 
 /// Header type.
-pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
+pub type Header = generic::Header<BlockNumber, BlakeTwo256, generic::DigestItem<()>>;
 /// Block type.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// Block ID.
 pub type BlockId = generic::BlockId<Block>;
-
-/// A log entry in the block.
-#[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct Log(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
-
-//TODO: remove this. Generic primitives should not require DigestItem
-impl DigestItem for Log {
-	type AuthoritiesChange = ();
-	fn as_authorities_change(&self) -> Option<&()> {
-		unreachable!()
-	}
-}
 
 /// Opaque, encoded, unchecked extrinsic.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
