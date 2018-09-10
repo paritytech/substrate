@@ -69,7 +69,8 @@ pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::
 
 pub type Event<T> = RawEvent<
 	<T as system::Trait>::AccountId,
-	<T as Trait>::AccountIndex
+	<T as Trait>::AccountIndex,
+	<T as Trait>::Balance,
 >;
 
 /// The account with the given id was killed.
@@ -142,15 +143,17 @@ decl_module! {
 /// An event in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<AccountId, AccountIndex> {
+pub enum RawEvent<AccountId, AccountIndex, Balance> {
 	/// A new account was created.
 	NewAccount(AccountId, AccountIndex, NewAccountOutcome),
 	/// An account was reaped.
 	ReapedAccount(AccountId),
+	/// Transfer succeeded (from, to, value, fees).
+	Transfer(AccountId, AccountId, Balance, Balance),
 }
 
-impl<A, I> From<RawEvent<A, I>> for () {
-	fn from(_: RawEvent<A, I>) -> () { () }
+impl<A, I, B> From<RawEvent<A, I, B>> for () {
+	fn from(_: RawEvent<A, I, B>) -> () { () }
 }
 
 decl_storage! {
@@ -312,6 +315,7 @@ impl<T: Trait> Module<T> {
 			Self::set_free_balance(&transactor, new_from_balance);			
 			Self::decrease_total_stake_by(fee);
 			Self::set_free_balance_creating(&dest, new_to_balance);
+			Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
 		}
 
 		Ok(())
