@@ -523,6 +523,7 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-runtime-balances 0.1.0",
  "substrate-runtime-consensus 0.1.0",
+ "substrate-runtime-contract 0.1.0",
  "substrate-runtime-council 0.1.0",
  "substrate-runtime-democracy 0.1.0",
  "substrate-runtime-executive 0.1.0",

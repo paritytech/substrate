@@ -44,6 +44,7 @@ extern crate substrate_codec_derive;
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_consensus as consensus;
+extern crate substrate_runtime_contract as contract;
 extern crate substrate_runtime_council as council;
 extern crate substrate_runtime_democracy as democracy;
 extern crate substrate_runtime_executive as executive;
@@ -196,6 +197,33 @@ impl treasury::Trait for Runtime {
 /// Treasury module for this concrete runtime.
 pub type Treasury = treasury::Module<Runtime>;
 
+/// Address calculated from the code (of the constructor), input data to the constructor
+/// and account id which requested the account creation.
+///
+/// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + origin)`
+pub struct DetermineContractAddress;
+impl contract::ContractAddressFor<AccountId> for DetermineContractAddress {
+	fn contract_address_for(code: &[u8], data: &[u8], origin: &AccountId) -> AccountId {
+		use runtime_primitives::traits::Hash;
+
+		let code_hash = BlakeTwo256::hash(code);
+		let data_hash = BlakeTwo256::hash(data);
+		let mut buf = [0u8, 32 + 32 + 32];
+		&mut buf[0..32].copy_from_slice(&code_hash);
+		&mut buf[32..64].copy_from_slice(&data_hash);
+		&mut buf[64..96].copy_from_slice(origin);
+		AccountId::from(BlakeTwo256::hash(&buf[..]))
+	}
+}
+
+impl contract::Trait for Runtime {
+	type Gas = u64;
+	type DetermineContractAddress = DetermineContractAddress;
+}
+
+/// Contract module for this concrete runtime.
+pub type Contract = contract::Module<Runtime>;
+
 impl_outer_event! {
 	pub enum Event for Runtime {
 		balances, session, staking, democracy, treasury, council_motions
@@ -226,6 +254,7 @@ impl_outer_dispatch! {
 		CouncilVoting,
 		CouncilMotions,
 		Treasury,
+		Contract,
 	}
 }
 
@@ -269,7 +298,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, 
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, Balances, Balances,
-	(((((((), Treasury), Council), Democracy), Staking), Session), Timestamp)>;
+	((((((((), Treasury), Council), Democracy), Staking), Session), Timestamp), Contract)>;
 
 impl_json_metadata!(
 	for Runtime with modules

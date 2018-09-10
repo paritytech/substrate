@@ -123,7 +123,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base create fee");
 		}
 
-		let dest = T::DetermineContractAddress::contract_address_for(ctor, &self.self_account);
+		let dest = T::DetermineContractAddress::contract_address_for(ctor, data, &self.self_account);
 		if <CodeOf<T>>::exists(&dest) {
 			// TODO: Is it enough?
 			return Err("contract already exists");

@@ -19,6 +19,7 @@
 
 use super::env_def::HostFunctionSet;
 use super::{Config, Error, Ext};
+use rstd::prelude::*;
 use parity_wasm::elements::{self, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;

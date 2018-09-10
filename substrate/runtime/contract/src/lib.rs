@@ -66,7 +66,7 @@ extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_sandbox as sandbox;
 
-#[cfg_attr(feature = "std", macro_use)]
+#[macro_use]
 extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_runtime_balances as balances;
@@ -90,16 +90,19 @@ mod double_map;
 mod exec;
 mod vm;
 mod gas;
+
 mod genesis_config;
 
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
 use exec::ExecutionContext;
 use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
+use rstd::prelude::*;
 use codec::Codec;
 use runtime_primitives::traits::{As, SimpleArithmetic, OnFinalise};
 use runtime_support::dispatch::Result;
@@ -115,7 +118,7 @@ pub trait Trait: balances::Trait {
 }
 
 pub trait ContractAddressFor<AccountId: Sized> {
-	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
+	fn contract_address_for(code: &[u8], data: &[u8], origin: &AccountId) -> AccountId;
 }
 
 decl_module! {

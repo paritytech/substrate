@@ -61,7 +61,7 @@ type Contract = Module<Test>;
 
 pub struct DummyContractAddressFor;
 impl ContractAddressFor<u64> for DummyContractAddressFor {
-	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
+	fn contract_address_for(_code: &[u8], _data: &[u8], origin: &u64) -> u64 {
 		origin + 1
 	}
 }
@@ -357,6 +357,7 @@ fn contract_create() {
 
 		let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 			&code_ctor_transfer,
+			&[],
 			&1,
 		);
 
@@ -395,6 +396,7 @@ fn top_level_create() {
 	with_externalities(&mut ExtBuilder::default().gas_price(3).build(), || {
 		let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 			&code_ctor_transfer,
+			&[],
 			&0,
 		);
 
