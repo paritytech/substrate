@@ -17,7 +17,6 @@
 //! Council system: Handles the voting in and maintenance of council members.
 
 use rstd::prelude::*;
-#[cfg(feature = "std")]
 use primitives::traits::{Zero, One, As, Lookup, OnFinalise};
 use runtime_io::print;
 use substrate_runtime_support::{StorageValue, StorageMap, dispatch::Result};

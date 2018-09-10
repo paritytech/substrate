@@ -58,7 +58,6 @@ use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::collections::HashMap;
-use std::fmt::Write;
 use futures::prelude::*;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
@@ -79,7 +78,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
-	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis, 
+	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
 	ComponentExHash, ComponentExtrinsic,
 };
 
@@ -234,12 +233,8 @@ impl<Components> Service<Components>
 		// Telemetry
 		let telemetry = match config.telemetry_url {
 			Some(url) => {
-				let mut pubkey = String::new();
-
-				for ch in public_key.as_slice() {
-					write!(pubkey, "{:02x}", ch).expect("Cannot fail on u8 slices; qed");
-				}
-
+				let is_authority = config.roles == Roles::AUTHORITY;
+				let pubkey = format!("{}", public_key);
 				let name = config.name.clone();
 				let impl_name = config.impl_name.to_owned();
 				let version = version.clone();
@@ -254,6 +249,7 @@ impl<Components> Service<Components>
 							"config" => "",
 							"chain" => chain_name.clone(),
 							"pubkey" => &pubkey,
+							"authority" => is_authority
 						);
 					}),
 				}))

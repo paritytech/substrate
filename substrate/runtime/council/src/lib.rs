@@ -42,10 +42,13 @@ extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_democracy as democracy;
 extern crate substrate_runtime_system as system;
 
+#[cfg(feature = "std")]
 use rstd::prelude::*;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
+#[cfg(feature = "std")]
 use primitives::traits::As;
+#[cfg(feature = "std")]
 use substrate_runtime_support::StorageValue;
 
 pub mod voting;

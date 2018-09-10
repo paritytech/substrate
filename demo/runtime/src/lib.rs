@@ -61,6 +61,7 @@ mod checked_block;
 
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
+use codec::{Encode, Decode, Input};
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
@@ -218,8 +219,8 @@ impl_outer_event! {
 }
 
 impl_outer_log! {
-	pub enum Log for Runtime {
-		consensus
+	pub enum Log(InternalLog: DigestItem<SessionKey>) for Runtime {
+		consensus(AuthoritiesChange)
 	}
 }
 
@@ -271,12 +272,27 @@ type AllModules = (
 	Treasury,
 );
 
-impl DigestItem for Log {
-	type AuthoritiesChange = consensus::AuthoritiesChange<SessionKey>;
+impl_json_metadata!(
+	for Runtime with modules
+		system::Module with Storage,
+		consensus::Module with Storage,
+		balances::Module with Storage,
+		timestamp::Module with Storage,
+		session::Module with Storage,
+		staking::Module with Storage,
+		democracy::Module with Storage,
+		council::Module with Storage,
+		council_voting::Module with Storage,
+		council_motions::Module with Storage,
+		treasury::Module with Storage,
+);
 
-	fn as_authorities_change(&self) -> Option<&Self::AuthoritiesChange> {
-		match *self {
-			Log::consensus(ref item) => item.as_authorities_change(),
+impl DigestItem for Log {
+	type AuthorityId = SessionKey;
+
+	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+		match self.0 {
+			InternalLog::consensus(ref item) => item.as_authorities_change(),
 		}
 	}
 }
@@ -301,6 +317,7 @@ pub type Executive = executive::Executive<Runtime, Block, Balances, Balances, Al
 pub mod api {
 	impl_stubs!(
 		version => |()| super::VERSION,
+		json_metadata => |()| super::Runtime::json_metadata(),
 		authorities => |()| super::Consensus::authorities(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),

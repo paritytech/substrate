@@ -17,6 +17,10 @@
 //! Support code for the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -41,12 +45,21 @@ extern crate substrate_codec_derive;
 pub extern crate substrate_codec as codec;
 pub use self::storage::generator::Storage as GenericStorage;
 
+#[cfg(feature = "std")]
+pub mod alloc {
+	pub use std::boxed;
+	pub use std::vec;
+}
+
 #[macro_use]
 pub mod dispatch;
+#[macro_use]
 pub mod storage;
 mod hashable;
 #[macro_use]
 mod event;
+#[macro_use]
+pub mod metadata;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
@@ -169,32 +182,8 @@ macro_rules! impl_outer_origin {
 		impl_outer_origin! {
 			$(#[$attr])*
 			pub enum $name for $trait where system = system {
-				$( $module ),* 
+				$( $module ),*
 			}
 		}
 	}
-}
-
-#[macro_export]
-macro_rules! impl_outer_log {
-
-	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $( $module:ident ),* }) => {
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-		$(#[$attr])*
-		#[allow(non_camel_case_types)]
-		pub enum $name {
-			$(
-				$module($module::Log<$trait>),
-			)*
-		}
-		$(
-			impl From<$module::Log<$trait>> for $name {
-				fn from(x: $module::Log<$trait>) -> Self {
-					$name::$module(x)
-				}
-			}
-		)*
-	};
 }

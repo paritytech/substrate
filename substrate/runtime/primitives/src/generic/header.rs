@@ -14,41 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generic implementation of a header and digest.
+//! Generic implementation of a block header.
 
 #[cfg(feature = "std")]
 use serde::{Deserialize, Deserializer};
 
-use rstd::prelude::*;
 use codec::{Decode, Encode, Codec, Input, Output};
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT};
-
-#[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub struct Digest<Item> {
-	pub logs: Vec<Item>,
-}
-
-impl<Item> Default for Digest<Item> {
-	fn default() -> Self {
-		Digest { logs: Vec::new(), }
-	}
-}
-
-impl<Item> traits::Digest for Digest<Item> where
-	Item: DigestItemT + Codec
-{
-	type Item = Item;
-
-	fn logs(&self) -> &[Self::Item] {
-		&self.logs
-	}
-
-	fn push(&mut self, item: Self::Item) {
-		self.logs.push(item);
-	}
-}
+use generic::Digest;
 
 /// Abstraction over a block header for a substrate chain.
 #[derive(PartialEq, Eq, Clone)]
@@ -112,7 +86,7 @@ impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 	Number: Decode,
 	Hash: HashT,
 	Hash::Output: Decode,
-	DigestItem: Decode,
+	DigestItem: DigestItemT + Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
@@ -129,7 +103,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 	Number: Encode,
 	Hash: HashT,
 	Hash::Output: Encode,
-	DigestItem: Encode,
+	DigestItem: DigestItemT + Encode,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent_hash);
