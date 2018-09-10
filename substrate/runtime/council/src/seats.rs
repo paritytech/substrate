@@ -166,9 +166,9 @@ pub enum RawEvent<AccountId> {
 	/// slashed reaper
 	BadReaperSlashed(AccountId),
 	/// A tally (for approval votes of council seat(s)) has started.
-	TallyStarted,
+	TallyStarted(u32),
 	/// A tally (for approval votes of council seat(s)) has ended (with one or more new members).
-	TallyFinalised,
+	TallyFinalised(Vec<AccountId>, Vec<AccountId>),
 }
 
 impl<N> From<RawEvent<N>> for () {
@@ -491,7 +491,7 @@ impl<T: Trait> Module<T> {
 			let leaderboard_size = empty_seats + Self::carry_count() as usize;
 			<Leaderboard<T>>::put(vec![(T::Balance::zero(), T::AccountId::default()); leaderboard_size]);
 
-			Self::deposit_event(RawEvent::TallyStarted);
+			Self::deposit_event(RawEvent::TallyStarted(empty_seats as u32));
 		}
 	}
 
@@ -508,24 +508,22 @@ impl<T: Trait> Module<T> {
 
 		// return bond to winners.
 		let candidacy_bond = Self::candidacy_bond();
-		for &(_, ref w) in leaderboard.iter()
+		let incoming: Vec<T::AccountId> = leaderboard.iter()
 			.rev()
 			.take_while(|&&(b, _)| !b.is_zero())
 			.take(coming as usize)
-		{
-			<balances::Module<T>>::unreserve(w, candidacy_bond);
-		}
+			.map(|(_, a)| a)
+			.cloned()
+			.inspect(|a| {<balances::Module<T>>::unreserve(a, candidacy_bond);})
+			.collect();
+		let active_council = Self::active_council();
+		let outgoing = active_council.iter().take(expiring.len()).map(|a| a.0.clone()).collect();
 
 		// set the new council.
-		let mut new_council: Vec<_> = Self::active_council()
+		let mut new_council: Vec<_> = active_council
 			.into_iter()
 			.skip(expiring.len())
-			.chain(leaderboard.iter()
-				.rev()
-				.take_while(|&&(b, _)| !b.is_zero())
-				.take(coming as usize)
-				.cloned()
-				.map(|(_, a)| (a, new_expiry)))
+			.chain(incoming.iter().cloned().map(|a| (a, new_expiry)))
 			.collect();
 		new_council.sort_by_key(|&(_, expiry)| expiry);
 		<ActiveCouncil<T>>::put(new_council);
@@ -554,7 +552,7 @@ impl<T: Trait> Module<T> {
 			new_candidates.truncate(last_index + 1);
 		}
 
-		Self::deposit_event(RawEvent::TallyFinalised);
+		Self::deposit_event(RawEvent::TallyFinalised(incoming, outgoing));
 
 		<Candidates<T>>::put(new_candidates);
 		<CandidateCount<T>>::put(count);
