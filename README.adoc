@@ -1,5 +1,8 @@
 = Substrate
+:Author: Polkadot developers
+:Revision: 0.2.0
 :toc:
+:sectnums:
 
 == Intro
 
@@ -178,10 +181,6 @@ substrate --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnod
 
 Ensure you replace `ALICE_BOOTNODE_ID_HERE` with the node ID from the output of
 the first terminal.
-
-include::doc/networks/networks.adoc[leveloffset=+1]
-
-include::doc/docker.adoc[leveloffset=+1]
 
 include::doc/packages/packages.adoc[]
 
