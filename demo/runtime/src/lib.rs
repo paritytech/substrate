@@ -61,13 +61,13 @@ extern crate demo_primitives;
 mod checked_block;
 
 use rstd::prelude::*;
+use substrate_primitives::u32_trait::{_2, _4};
+use codec::{Encode, Decode, Input};
 use demo_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::RuntimeVersion;
-use codec::{Encode, Decode, Input};
-use council::motions as council_motions;
-use substrate_primitives::u32_trait::{_2, _4};
+use council::{motions as council_motions, voting as council_voting};
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -113,7 +113,7 @@ pub type System = system::Module<Runtime>;
 impl balances::Trait for Runtime {
 	type Balance = Balance;
 	type AccountIndex = AccountIndex;
-	type OnFreeBalanceZero = Staking;
+	type OnFreeBalanceZero = (Staking, Contract);
 	type EnsureAccountLiquid = Staking;
 	type Event = Event;
 }
@@ -157,7 +157,7 @@ impl session::Trait for Runtime {
 pub type Session = session::Module<Runtime>;
 
 impl staking::Trait for Runtime {
-	type OnRewardMinted = ();
+	type OnRewardMinted = Treasury;
 	type Event = Event;
 }
 
@@ -172,10 +172,17 @@ impl democracy::Trait for Runtime {
 /// Democracy module for this concrete runtime.
 pub type Democracy = democracy::Module<Runtime>;
 
-impl council::Trait for Runtime {}
+impl council::Trait for Runtime {
+	type Event = Event;
+}
 
 /// Council module for this concrete runtime.
 pub type Council = council::Module<Runtime>;
+
+impl council::voting::Trait for Runtime {
+	type Event = Event;
+}
+
 /// Council voting module for this concrete runtime.
 pub type CouncilVoting = council::voting::Module<Runtime>;
 
@@ -226,7 +233,16 @@ pub type Contract = contract::Module<Runtime>;
 
 impl_outer_event! {
 	pub enum Event for Runtime {
-		balances, session, staking, democracy, treasury, council_motions
+		//consensus,
+		balances,
+		//timetstamp,
+		session,
+		staking,
+		democracy,
+		council,
+		council_voting,
+		council_motions,
+		treasury
 	}
 }
 
@@ -246,9 +262,9 @@ impl_outer_dispatch! {
 	pub enum Call where origin: Origin {
 		Consensus,
 		Balances,
+		Timestamp,
 		Session,
 		Staking,
-		Timestamp,
 		Democracy,
 		Council,
 		CouncilVoting,
@@ -260,17 +276,47 @@ impl_outer_dispatch! {
 
 impl_outer_config! {
 	pub struct GenesisConfig for Runtime {
-		ConsensusConfig => consensus,
 		SystemConfig => system,
+		ConsensusConfig => consensus,
 		BalancesConfig => balances,
+		TimestampConfig => timestamp,
 		SessionConfig => session,
 		StakingConfig => staking,
 		DemocracyConfig => democracy,
 		CouncilConfig => council,
-		TimestampConfig => timestamp,
 		TreasuryConfig => treasury,
 	}
 }
+
+type AllModules = (
+	Consensus,
+	Balances,
+	Timestamp,
+	Session,
+	Staking,
+	Democracy,
+	Council,
+	CouncilVoting,
+	CouncilMotions,
+	Treasury,
+	Contract,
+);
+
+impl_json_metadata!(
+	for Runtime with modules
+		system::Module with Storage,
+		consensus::Module with Storage,
+		balances::Module with Storage,
+		timestamp::Module with Storage,
+		session::Module with Storage,
+		staking::Module with Storage,
+		democracy::Module with Storage,
+		council::Module with Storage,
+		council_voting::Module with Storage,
+		council_motions::Module with Storage,
+		treasury::Module with Storage,
+		contract::Module with Storage,
+);
 
 impl DigestItem for Log {
 	type AuthorityId = SessionKey;
@@ -297,20 +343,7 @@ pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, Balances, Balances,
-	((((((((), Treasury), Council), Democracy), Staking), Session), Timestamp), Contract)>;
-
-impl_json_metadata!(
-	for Runtime with modules
-		system::Module with Storage,
-		balances::Module with Storage,
-		consensus::Module with Storage,
-		timestamp::Module with Storage,
-		session::Module with Storage,
-		staking::Module with Storage,
-		democracy::Module with Storage,
-		council::Module with Storage
-);
+pub type Executive = executive::Executive<Runtime, Block, Balances, Balances, AllModules>;
 
 pub mod api {
 	impl_stubs!(

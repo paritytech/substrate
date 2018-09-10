@@ -23,8 +23,12 @@ use runtime_io::print;
 use substrate_runtime_support::dispatch::Result;
 use substrate_runtime_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
-use super::{Trait, Module as Council};
+use super::{Trait as CouncilTrait, Module as Council};
 use system::{ensure_signed, ensure_root};
+
+pub trait Trait: CouncilTrait {
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+}
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -49,7 +53,29 @@ decl_storage! {
 	}
 }
 
+pub type Event<T> = RawEvent<<T as system::Trait>::Hash>;
+
+/// An event in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawEvent<Hash> {
+	/// A voting tally has happened for a referendum cancelation vote. Last three are yes, no, abstain counts.
+	TallyCancelation(Hash, u32, u32, u32),
+	/// A voting tally has happened for a referendum vote. Last three are yes, no, abstain counts.
+	TallyReferendum(Hash, u32, u32, u32),
+}
+
+impl<N> From<RawEvent<N>> for () {
+	fn from(_: RawEvent<N>) -> () { () }
+}
+
 impl<T: Trait> Module<T> {
+
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
+
 	pub fn is_vetoed<B: Borrow<T::Hash>>(proposal: B) -> bool {
 		Self::veto_of(proposal.borrow())
 			.map(|(expiry, _): (T::BlockNumber, Vec<T::AccountId>)| <system::Module<T>>::block_number() < expiry)
@@ -91,7 +117,8 @@ impl<T: Trait> Module<T> {
 
 		<ProposalOf<T>>::insert(proposal_hash, *proposal);
 		<ProposalVoters<T>>::insert(proposal_hash, vec![who.clone()]);
-		<CouncilVoteOf<T>>::insert((proposal_hash, who), true);
+		<CouncilVoteOf<T>>::insert((proposal_hash, who.clone()), true);
+
 		Ok(())
 	}
 
@@ -101,9 +128,7 @@ impl<T: Trait> Module<T> {
 		ensure!(Self::is_councillor(&who), "only councillors may vote on council proposals");
 
 		if Self::vote_of((proposal, who.clone())).is_none() {
-			let mut voters = Self::proposal_voters(&proposal);
-			voters.push(who.clone());
-			<ProposalVoters<T>>::insert(proposal, voters);
+			<ProposalVoters<T>>::mutate(proposal, |voters| voters.push(who.clone()));
 		}
 		<CouncilVoteOf<T>>::insert((proposal, who), approve);
 		Ok(())
@@ -188,10 +213,12 @@ impl<T: Trait> Module<T> {
 		while let Some((proposal, proposal_hash)) = Self::take_proposal_if_expiring_at(now) {
 			let tally = Self::take_tally(&proposal_hash);
 			if let Some(&democracy::Call::cancel_referendum(ref_index)) = IsSubType::<democracy::Module<T>>::is_aux_sub_type(&proposal) {
+				Self::deposit_event(RawEvent::TallyCancelation(proposal_hash, tally.0, tally.1, tally.2));
 				if let (_, 0, 0) = tally {
 					<democracy::Module<T>>::internal_cancel_referendum(ref_index);
 				}
 			} else {
+				Self::deposit_event(RawEvent::TallyReferendum(proposal_hash.clone(), tally.0, tally.1, tally.2));
 				if tally.0 > tally.1 + tally.2 {
 					Self::kill_veto_of(&proposal_hash);
 					match tally {
@@ -205,13 +232,9 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFinalise<T::BlockNumber> for Council<T> {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	fn on_finalise(n: T::BlockNumber) {
 		if let Err(e) = Self::end_block(n) {
-			print("Guru meditation");
-			print(e);
-		}
-		if let Err(e) = <Module<T>>::end_block(n) {
 			print("Guru meditation");
 			print(e);
 		}
@@ -225,8 +248,6 @@ mod tests {
 	use ::tests::{Call, Origin};
 	use substrate_runtime_support::Hashable;
 	use democracy::VoteThreshold;
-
-	type CouncilVoting = super::Module<Test>;
 
 	#[test]
 	fn basic_environment_works() {
