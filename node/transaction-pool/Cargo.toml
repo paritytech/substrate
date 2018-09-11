@@ -16,4 +16,3 @@ substrate-keyring = { path = "../../substrate/keyring" }
 substrate-extrinsic-pool = { path = "../../substrate/extrinsic-pool" }
 substrate-primitives = { path = "../../substrate/primitives" }
 substrate-runtime-primitives = { path = "../../substrate/runtime/primitives" }
-ed25519 = { path = "../../substrate/ed25519" }

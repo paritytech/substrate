@@ -11,8 +11,6 @@ include::../../substrate/client/README.adoc[]
 
 include::../../substrate/codec/README.adoc[]
 
-include::../../substrate/ed25519/README.adoc[]
-
 include::../../substrate/environmental/README.adoc[]
 
 include::../../substrate/executor/README.adoc[]

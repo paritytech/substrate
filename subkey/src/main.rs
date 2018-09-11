@@ -1,14 +1,12 @@
 #![cfg_attr(feature = "bench", feature(test))]
 #[cfg(feature = "bench")]
 extern crate test;
-extern crate ed25519;
 extern crate substrate_primitives;
 extern crate rand;
 
 use rand::{OsRng, Rng};
 use std::env::args;
-use ed25519::Pair;
-use substrate_primitives::hexdisplay::HexDisplay;
+use substrate_primitives::{ed25519::Pair, hexdisplay::HexDisplay};
 use std::cmp;
 
 fn good_waypoint(done: u64) -> u64 {

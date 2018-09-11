@@ -6,7 +6,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 log = { version = "0.3", optional = true }
 hex-literal = { version = "0.1.0", optional = true }
-ed25519 = { path = "../ed25519", optional = true }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
 substrate-keyring = { path = "../keyring", optional = true }
@@ -24,7 +23,6 @@ default = ["std"]
 std = [
 	"log",
 	"hex-literal",
-	"ed25519",
 	"serde",
 	"serde_derive",
 	"substrate-keyring",

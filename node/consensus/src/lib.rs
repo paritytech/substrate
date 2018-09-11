@@ -16,7 +16,6 @@
 
 //! This service uses BFT consensus provided by the substrate.
 
-extern crate ed25519;
 extern crate parking_lot;
 extern crate node_api;
 extern crate node_transaction_pool as transaction_pool;
@@ -50,7 +49,7 @@ use std::time::{self, Duration, Instant};
 use codec::{Decode, Encode};
 use node_api::Api;
 use node_primitives::{AccountId, Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
-use primitives::AuthorityId;
+use primitives::{AuthorityId, ed25519};
 use transaction_pool::TransactionPool;
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Delay;
@@ -427,7 +426,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 		// alter the message based on whether we think the empty proposer was forced to skip the round.
 		// this is determined by checking if our local validator would have been forced to skip the round.
 		if !was_proposed {
-			let public = ::ed25519::Public::from_raw(primary_validator.0);
+			let public = ed25519::Public::from_raw(primary_validator.0);
 			info!(
 				"Potential Offline Validator: {} failed to propose during assigned slot: {}",
 				public,

@@ -16,8 +16,7 @@
 
 //! Substrate chain configurations.
 
-use ed25519;
-use primitives::AuthorityId;
+use primitives::{AuthorityId, ed25519};
 use node_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
 	ContractConfig, Permill};

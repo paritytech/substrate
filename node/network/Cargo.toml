@@ -10,7 +10,7 @@ node-consensus = { path = "../consensus" }
 node-primitives = { path = "../primitives" }
 substrate-bft = { path = "../../substrate/bft" }
 substrate-network = { path = "../../substrate/network" }
-ed25519 = { path = "../../substrate/ed25519" }
+substrate-primitives = { path = "../../substrate/primitives" }
 futures = "0.1"
 tokio = "0.1.7"
 log = "0.4"

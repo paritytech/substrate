@@ -11,7 +11,6 @@ parking_lot = "0.4"
 triehash = "0.2"
 hex-literal = "0.1"
 futures = "0.1.17"
-ed25519 = { path = "../ed25519" }
 slog = "^2"
 heapsize = "0.4"
 substrate-bft = { path = "../bft" }

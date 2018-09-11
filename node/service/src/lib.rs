@@ -18,7 +18,6 @@
 
 //! Substrate service. Specialized wrapper over substrate service.
 
-extern crate ed25519;
 extern crate node_api;
 extern crate node_primitives;
 extern crate node_runtime;

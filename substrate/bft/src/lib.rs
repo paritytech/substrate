@@ -41,7 +41,6 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_runtime_version as runtime_version;
-extern crate ed25519;
 extern crate tokio;
 extern crate parking_lot;
 extern crate rhododendron;
@@ -63,7 +62,7 @@ use ed25519::LocalizedSignature;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block, Header};
 use runtime_primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction, Justification as PrimitiveJustification};
-use primitives::AuthorityId;
+use primitives::{AuthorityId, ed25519};
 
 use futures::{Async, Stream, Sink, Future, IntoFuture};
 use futures::sync::oneshot;
@@ -316,7 +315,7 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 		use std::collections::HashSet;
 
 		let collect_pubkeys = |participants: HashSet<&Self::AuthorityId>| participants.into_iter()
-			.map(|p| ::ed25519::Public::from_raw(p.0))
+			.map(|p| ed25519::Public::from_raw(p.0))
 			.collect::<Vec<_>>();
 
 		let round_timeout = self.round_timeout_duration(next_round);

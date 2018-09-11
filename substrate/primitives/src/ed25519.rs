@@ -18,19 +18,11 @@
 //! Simple Ed25519 API.
 // end::description[]
 
-extern crate ring;
-extern crate base58;
-extern crate substrate_primitives as primitives;
-extern crate untrusted;
-extern crate blake2_rfc;
-
+use untrusted;
+use blake2_rfc;
 use ring::{rand, signature};
-use primitives::{hash::H512, AuthorityId};
+use {hash::H512, AuthorityId};
 use base58::{ToBase58, FromBase58};
-
-#[cfg(test)]
-#[macro_use]
-extern crate hex_literal;
 
 /// Alias to 512-bit hash when used in the context of a signature on the relay chain.
 pub type Signature = H512;
@@ -72,11 +64,16 @@ impl ::std::hash::Hash for Public {
 	}
 }
 
+/// An error type for SS58 decoding.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum PublicError {
+	/// Bad alphabet.
 	BadBase58,
+	/// Bad length.
 	BadLength,
+	/// Unknown version.
 	UnknownVersion,
+	/// Invalid checksum.
 	InvalidChecksum,
 }
 
@@ -189,7 +186,7 @@ impl ::std::fmt::Display for Public {
 impl ::std::fmt::Debug for Public {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		let s = self.to_ss58check();
-		write!(f, "{} ({}...)", ::primitives::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
+		write!(f, "{} ({}...)", ::hexdisplay::HexDisplay::from(&self.0), &s[0..8])
 	}
 }
 
@@ -261,6 +258,7 @@ pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: 
 	}
 }
 
+/// Something that acts as a signature allowing a message to be verified.
 pub trait Verifiable {
 	/// Verify something that acts like a signature.
 	fn verify<P: AsRef<Public>>(&self, message: &[u8], pubkey: P) -> bool;
@@ -285,7 +283,7 @@ mod test {
 
 	fn _test_primitives_signature_and_local_the_same() {
 		fn takes_two<T>(_: T, _: T) { }
-		takes_two(Signature::default(), primitives::Signature::default())
+		takes_two(Signature::default(), ::Signature::default())
 	}
 
 	#[test]
@@ -310,7 +308,7 @@ mod test {
 
 	#[test]
 	fn seeded_pair_should_work() {
-		use primitives::hexdisplay::HexDisplay;
+		use ::hexdisplay::HexDisplay;
 
 		let pair = Pair::from_seed(b"12345678901234567890123456789012");
 		let public = pair.public();

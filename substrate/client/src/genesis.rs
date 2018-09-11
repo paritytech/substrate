@@ -50,8 +50,7 @@ mod tests {
 	use test_client;
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
-	use ed25519::{Public, Pair};
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::{Blake2Hasher, RlpCodec, ed25519::{Public, Pair}};
 
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 

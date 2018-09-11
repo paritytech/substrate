@@ -147,9 +147,8 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use primitives::AuthorityId;
+	use primitives::{AuthorityId, ed25519};
 	use runtime_primitives::bft::Justification;
-	use ed25519;
 	use service::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,

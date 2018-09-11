@@ -45,8 +45,6 @@ extern crate substrate_runtime_version as runtime_version;
 #[macro_use]
 extern crate hex_literal;
 #[cfg(test)]
-extern crate ed25519;
-#[cfg(test)]
 extern crate substrate_keyring as keyring;
 #[cfg_attr(test, macro_use)]
 extern crate substrate_primitives as primitives;

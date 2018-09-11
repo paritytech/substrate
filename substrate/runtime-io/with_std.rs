@@ -22,14 +22,13 @@ extern crate substrate_primitives as primitives;
 
 extern crate substrate_state_machine;
 extern crate triehash;
-extern crate ed25519;
 extern crate hashdb;
 extern crate rlp;
 
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
 // re-export hashing functions.
-pub use primitives::{blake2_256, twox_128, twox_256};
+pub use primitives::{blake2_256, twox_128, twox_256, ed25519};
 
 pub use primitives::Blake2Hasher;
 // Switch to this after PoC-3

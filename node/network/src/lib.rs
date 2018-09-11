@@ -22,12 +22,12 @@
 
 extern crate substrate_bft as bft;
 extern crate substrate_network;
+extern crate substrate_primitives;
 
 extern crate node_api;
 extern crate node_consensus;
 extern crate node_primitives;
 
-extern crate ed25519;
 extern crate futures;
 extern crate tokio;
 extern crate rhododendron;

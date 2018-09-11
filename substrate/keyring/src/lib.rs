@@ -20,11 +20,12 @@
 
 #[macro_use] extern crate hex_literal;
 #[macro_use] extern crate lazy_static;
-pub extern crate ed25519;
+extern crate substrate_primitives;
 
 use std::collections::HashMap;
 use std::ops::Deref;
-use ed25519::{Pair, Public, Signature};
+use substrate_primitives::ed25519::{Pair, Public, Signature};
+pub use substrate_primitives::ed25519;
 
 /// Set of test accounts.
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

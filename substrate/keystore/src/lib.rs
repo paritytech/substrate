@@ -21,7 +21,6 @@
 extern crate substrate_primitives;
 extern crate parity_crypto as crypto;
 extern crate subtle;
-extern crate ed25519;
 extern crate rand;
 extern crate serde_json;
 extern crate serde;
@@ -41,8 +40,7 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use substrate_primitives::hashing::blake2_256;
-use ed25519::{Pair, Public, PKCS_LEN};
+use substrate_primitives::{hashing::blake2_256, ed25519::{Pair, Public, PKCS_LEN}};
 
 pub use crypto::KEY_ITERATIONS;
 

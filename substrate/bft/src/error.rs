@@ -16,6 +16,7 @@
 
 //! Error types in the BFT service.
 use runtime_version::RuntimeVersion;
+use primitives::ed25519;
 
 error_chain! {
 	errors {
@@ -44,7 +45,7 @@ error_chain! {
 		}
 
 		/// Error checking signature
-		InvalidSignature(s: ::ed25519::Signature, a: ::primitives::AuthorityId) {
+		InvalidSignature(s: ed25519::Signature, a: ::primitives::AuthorityId) {
 			description("Message signature is invalid"),
 			display("Message signature {:?} by {:?} is invalid.", s, a),
 		}

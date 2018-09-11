@@ -6,7 +6,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 log = { version = "0.3", optional = true }
 hex-literal = { version = "0.1.0", optional = true }
-ed25519 = { path = "../../ed25519", optional = true }
 substrate-codec = { path = "../../codec", default-features = false }
 substrate-codec-derive = { path = "../../codec/derive", default-features = false }
 substrate-runtime-std = { path = "../../runtime-std", default-features = false }
@@ -21,7 +20,6 @@ default = []
 std = [
 	"log",
 	"hex-literal",
-	"ed25519",
 	"substrate-codec/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",

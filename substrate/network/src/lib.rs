@@ -31,7 +31,6 @@ extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_network_libp2p as network_libp2p;
 extern crate substrate_codec as codec;
 extern crate futures;
-extern crate ed25519;
 extern crate rustc_hex;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;

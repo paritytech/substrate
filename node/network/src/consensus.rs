@@ -19,7 +19,7 @@
 //! each time consensus begins on a new chain head.
 
 use bft;
-use ed25519;
+use substrate_primitives::ed25519;
 use substrate_network::{self as net, generic_message as msg};
 use substrate_network::consensus_gossip::ConsensusMessage;
 use node_api::Api;

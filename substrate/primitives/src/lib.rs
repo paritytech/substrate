@@ -45,6 +45,15 @@ extern crate twox_hash;
 
 #[cfg(feature = "std")]
 extern crate blake2_rfc;
+#[cfg(feature = "std")]
+extern crate ring;
+#[cfg(feature = "std")]
+extern crate base58;
+#[cfg(feature = "std")]
+extern crate untrusted;
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -90,6 +99,8 @@ pub mod hashing;
 pub use hashing::{blake2_256, twox_128, twox_256};
 #[cfg(feature = "std")]
 pub mod hexdisplay;
+#[cfg(feature = "std")]
+pub mod ed25519;
 
 pub mod u32_trait;
 
