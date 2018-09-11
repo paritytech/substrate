@@ -23,8 +23,6 @@ patricia-trie = { version = "0.2.1", optional = true }
 plain_hasher = { version = "0.2", default_features = false }
 
 blake2-rfc = { version = "0.2.18", optional = true }
-# Switch back to Blake after PoC-3 is out and remove this
-tiny-keccak = { version = "1.4", optional = true }
 
 [dev-dependencies]
 substrate-serializer = { path = "../serializer" }
@@ -45,7 +43,6 @@ std = [
 	"rustc-hex/std",
 	"twox-hash",
 	"blake2-rfc",
-	"tiny-keccak",
 	"serde_derive",
 	"byteorder/std",
 	"patricia-trie",

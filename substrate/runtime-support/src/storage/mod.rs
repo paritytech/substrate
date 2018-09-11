@@ -40,22 +40,6 @@ impl<'a> Input for IncrementalInput<'a> {
 	}
 }
 
-// TODO: only introduce this wrapper for types where it makes sense, ideally have it within the module declaration.
-
-struct AppendZeroes<'a, I: Input + 'a> {
-	input: &'a mut I,
-}
-
-impl<'a, I: Input + 'a> Input for AppendZeroes<'a, I> {
-	fn read(&mut self, into: &mut [u8]) -> usize {
-		let r = self.input.read(into);
-		for z in &mut into[r..] {
-			*z = 0;
-		};
-		into.len()
-	}
-}
-
  /// Return the value of the item in storage under `key`, or `None` if there is no explicit entry.
 pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 	let key = twox_128(key);
@@ -64,7 +48,7 @@ pub fn get<T: Codec + Sized>(key: &[u8]) -> Option<T> {
 			key: &key[..],
 			pos: 0,
 		};
-		Decode::decode(&mut AppendZeroes { input: &mut input } ).expect("storage is not null, therefore must be a valid type")
+		Decode::decode(&mut input).expect("storage is not null, therefore must be a valid type")
 	})
 }
 

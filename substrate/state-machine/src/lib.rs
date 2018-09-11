@@ -484,7 +484,7 @@ mod tests {
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
-	use primitives::{KeccakHasher, RlpCodec, H256};
+	use primitives::{Blake2Hasher, RlpCodec, H256};
 
 	struct DummyCodeExecutor {
 		native_available: bool,
@@ -557,7 +557,7 @@ mod tests {
 			b"dogglesworth".to_vec() => b"catXXX".to_vec(),
 			b"doug".to_vec() => b"notadog".to_vec()
 		];
-		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial);
+		let backend = InMemory::<Blake2Hasher, RlpCodec>::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"dog".to_vec() => Some(b"puppy".to_vec()),
@@ -570,10 +570,7 @@ mod tests {
 			],
 		};
 		let mut ext = Ext::new(&mut overlay, &backend);
-		// Blake
-		// const ROOT: [u8; 32] = hex!("6ca394ff9b13d6690a51dea30b1b5c43108e52944d30b9095227c49bae03ff8b");
-		// Keccak
-		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+		const ROOT: [u8; 32] = hex!("6ca394ff9b13d6690a51dea30b1b5c43108e52944d30b9095227c49bae03ff8b");
 		assert_eq!(ext.storage_root(), H256(ROOT));
 	}
 
@@ -630,7 +627,7 @@ mod tests {
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check proof locally
-		let (local_result, _) = execution_proof_check::<KeccakHasher, RlpCodec,_,>(remote_root, remote_proof,
+		let (local_result, _) = execution_proof_check::<Blake2Hasher, RlpCodec,_,>(remote_root, remote_proof,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check that both results are correct
@@ -646,7 +643,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial).try_into_trie_backend().unwrap();
+		let backend = InMemory::<Blake2Hasher, RlpCodec>::from(initial).try_into_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"aba".to_vec() => Some(b"1312".to_vec()),
@@ -685,8 +682,8 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, b"value2").unwrap().1;
  		// check proof locally
-		let local_result1 = read_proof_check::<KeccakHasher, RlpCodec>(remote_root, remote_proof.clone(), b"value2").unwrap();
-		let local_result2 = read_proof_check::<KeccakHasher, RlpCodec>(remote_root, remote_proof.clone(), &[0xff]).is_ok();
+		let local_result1 = read_proof_check::<Blake2Hasher, RlpCodec>(remote_root, remote_proof.clone(), b"value2").unwrap();
+		let local_result2 = read_proof_check::<Blake2Hasher, RlpCodec>(remote_root, remote_proof.clone(), &[0xff]).is_ok();
  		// check that results are correct
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);

@@ -331,7 +331,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, KeccakHasher};
+	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256};
 
@@ -373,7 +373,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());

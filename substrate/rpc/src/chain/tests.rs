@@ -36,7 +36,7 @@ fn should_return_header() {
 			parent_hash: 0.into(),
 			number: 0,
 			state_root: x.state_root.clone(),
-			extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
+			extrinsics_root: "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0".into(),
 			digest: Default::default(),
 		}
 	);
@@ -47,7 +47,7 @@ fn should_return_header() {
 			parent_hash: 0.into(),
 			number: 0,
 			state_root: x.state_root.clone(),
-			extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
+			extrinsics_root: "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0".into(),
 			digest: Default::default(),
 		}
 	);
@@ -86,7 +86,7 @@ fn should_return_a_block() {
 				parent_hash: api.client.genesis_hash(),
 				number: 1,
 				state_root: x.block.header.state_root.clone(),
-				extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
+				extrinsics_root: "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0".into(),
 				digest: Default::default(),
 			},
 			extrinsics: vec![],
@@ -100,7 +100,7 @@ fn should_return_a_block() {
 				parent_hash: api.client.genesis_hash(),
 				number: 1,
 				state_root: x.block.header.state_root.clone(),
-				extrinsics_root: "56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421".into(),
+				extrinsics_root: "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0".into(),
 				digest: Default::default(),
 			},
 			extrinsics: vec![],

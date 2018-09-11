@@ -609,7 +609,6 @@ dependencies = [
  "substrate-codec 0.1.0",
  "substrate-codec-derive 0.1.0",
  "substrate-runtime-std 0.1.0",
- "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",

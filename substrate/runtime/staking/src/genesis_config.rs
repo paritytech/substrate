@@ -23,7 +23,7 @@ use rstd::prelude::*;
 use codec::Encode;
 use runtime_support::StorageValue;
 use primitives::traits::As;
-use substrate_primitives::KeccakHasher;
+use substrate_primitives::Blake2Hasher;
 use {runtime_io, primitives};
 use super::{Trait, Intentions, CurrentEra, OfflineSlashGrace, MinimumValidatorCount,
 	BondingDuration, SessionsPerEra, ValidatorCount, SessionReward, OfflineSlash};
@@ -61,7 +61,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
-		let r: runtime_io::TestExternalities<KeccakHasher> = map![
+		let r: runtime_io::TestExternalities<Blake2Hasher> = map![
 			Self::hash(<Intentions<T>>::key()).to_vec() => self.intentions.encode(),
 			Self::hash(<SessionsPerEra<T>>::key()).to_vec() => self.sessions_per_era.encode(),
 			Self::hash(<ValidatorCount<T>>::key()).to_vec() => self.validator_count.encode(),

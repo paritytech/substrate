@@ -22,7 +22,6 @@ lazy_static = "1.0"
 parking_lot = "*"
 log = "0.3"
 hashdb = "0.2.1"
-tiny-keccak = "1.4"
 
 [dev-dependencies]
 assert_matches = "1.1"

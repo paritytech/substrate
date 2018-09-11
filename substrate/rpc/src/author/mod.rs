@@ -32,7 +32,7 @@ use extrinsic_pool::{
 };
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
-use primitives::{Bytes, KeccakHasher, RlpCodec};
+use primitives::{Bytes, Blake2Hasher, RlpCodec};
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
 use subscriptions::Subscriptions;
@@ -100,8 +100,8 @@ impl<B, E, P> Author<B, E, P> where
 }
 
 impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author<B, E, P> where
-	B: client::backend::Backend<<P as PoolChainApi>::Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
-	E: client::CallExecutor<<P as PoolChainApi>::Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
 	P::Error: 'static,
 {

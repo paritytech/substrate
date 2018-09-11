@@ -133,7 +133,7 @@ mod tests {
 	pub use primitives::BuildStorage;
 	pub use primitives::traits::{BlakeTwo256};
 	pub use primitives::testing::{Digest, Header};
-	pub use substrate_primitives::KeccakHasher;
+	pub use substrate_primitives::Blake2Hasher;
 	pub use {seats, motions, voting};
 
 	impl_outer_origin! {
@@ -192,7 +192,7 @@ mod tests {
 		type Event = Event;
 	}
 
-	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<KeccakHasher> {
+	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],

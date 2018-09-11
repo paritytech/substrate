@@ -187,7 +187,7 @@ pub mod tests {
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
-	use primitives::{KeccakHasher, RlpCodec};
+	use primitives::{Blake2Hasher, RlpCodec};
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
@@ -213,7 +213,7 @@ pub mod tests {
 	}
 
 	fn prepare_for_read_proof_check() -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, KeccakHasher, RlpCodec>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, RlpCodec>,
 		Header, Vec<Vec<u8>>, usize)
 	{
 		// prepare remote client
@@ -236,7 +236,7 @@ pub mod tests {
 	}
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, KeccakHasher, RlpCodec>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, RlpCodec>,
 		Hash, Header, Vec<Vec<u8>>)
 	{
 		// prepare remote client
@@ -254,7 +254,7 @@ pub mod tests {
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
-		let local_cht_root = cht::compute_root::<Header, KeccakHasher, _>(4, 0, local_headers_hashes.into_iter()).unwrap();
+		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(4, 0, local_headers_hashes.into_iter()).unwrap();
 		if insert_cht {
 			local_storage.insert_cht_root(1, local_cht_root);
 		}
