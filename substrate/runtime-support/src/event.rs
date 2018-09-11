@@ -42,6 +42,13 @@ macro_rules! impl_event {
 		impl<$( $generic_param ),*> From<RawEvent<$( $generic_param ),*>> for () {
 			fn from(_: RawEvent<$( $generic_param ),*>) -> () { () }
 		}
+		__impl_event_json_metadata!(
+			$module<$trait_instance: $trait_name>;
+			$(
+				$event ( $( $param ),* );
+				__function_doc_to_json!(""; $($doc_attr)*);
+			)*
+		);
 	};
 	(
 		$(#[$attr:meta])*
@@ -65,6 +72,51 @@ macro_rules! impl_event {
 		impl From<Event> for () {
 			fn from(_: Event) -> () { () }
 		}
+	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_event_json_metadata {
+	(
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$( $rest:tt )*
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance>  {
+			#[allow(dead_code)]
+			pub fn event_json_metadata() -> &'static str {
+				concat!("{", __impl_event_json_metadata!(""; $( $rest )* ), " }")
+			}
+		}
+	};
+	(
+		$prefix_str:expr;
+		$event:ident( $first_param:ident $(, $param:ident )* );
+		$event_doc:expr;
+		$( $rest:tt )*
+	) => {
+		concat!($prefix_str, "", "\"", stringify!($event), r#"": { "params": [ ""#,
+				stringify!($first_param), "\""
+				$(, concat!(", \"", stringify!($param), "\"") )*, r#" ], "description": ["#,
+				$event_doc, " ] }",
+				__impl_event_json_metadata!(","; $( $rest )*)
+		)
+	};
+	(
+		$prefix_str:expr;
+		$event:ident;
+		$event_doc:expr;
+		$( $rest:tt )*
+	) => {
+		concat!($prefix_str, "", "\"", stringify!($event),
+				r#"": { "params": null, "description": ["#, $event_doc, " ] }",
+				__impl_event_json_metadata!(","; $( $rest )*)
+		)
+	};
+	(
+		$prefix_str:expr;
+	) => {
+		""
 	}
 }
 
@@ -120,27 +172,56 @@ macro_rules! __impl_outer_event_json_metadata {
 }
 
 #[cfg(test)]
+#[allow(dead_code)]
 mod tests {
 	use serde;
 	use serde_json;
 
 	mod system {
-		#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
-		pub struct Event;
+		impl_event!(
+			pub enum Event for Module<T: Trait> {
+				SystemEvent,
+			}
+		);
 	}
 
 	mod event_module {
-		#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
-		pub struct Event<T> {
-			t: T,
+		pub trait Trait {
+			type Origin;
+			type Balance;
 		}
+
+		decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		}
+
+		impl_event!(
+			pub enum Event<T> with RawEvent<Balance>
+				where <T as Trait>::Balance
+				for Module<T: Trait> {
+				/// Hi, I am a comment.
+				TestEvent(Balance),
+			}
+		);
 	}
 
 	mod event_module2 {
-		#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
-		pub struct Event<T> {
-			t: T,
+		pub trait Trait {
+			type Origin;
+			type Balance;
 		}
+
+		decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		}
+
+		impl_event!(
+			pub enum Event<T> with RawEvent<Balance>
+				where <T as Trait>::Balance
+				for Module<T: Trait> {
+				TestEvent(Balance),
+			}
+		);
 	}
 
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
@@ -150,6 +231,16 @@ mod tests {
 		pub enum TestEvent for TestRuntime {
 			event_module, event_module2
 		}
+	}
+
+	impl event_module::Trait for TestRuntime {
+		type Origin = u32;
+		type Balance = u32;
+	}
+
+	impl event_module2::Trait for TestRuntime {
+		type Origin = u32;
+		type Balance = u32;
 	}
 
 	const EXPECTED_METADATA: &str = concat!(
