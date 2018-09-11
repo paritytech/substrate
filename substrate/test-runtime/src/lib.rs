@@ -134,13 +134,19 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	[stxs.len() as u8].encode()
 }
 
+fn test_event_json() -> &'static str {
+	"hallo"
+}
+
 pub mod api {
 	use system;
 	impl_stubs!(
 		version => |()| super::version(),
 		json_metadata => |()| {
 			let mut vec = ::runtime_support::metadata::Vec::new();
-			vec.push(::runtime_support::metadata::JSONMetadata::Events { events: r#""events""# });
+			vec.push(::runtime_support::metadata::JSONMetadata::Events {
+				name: "Test", events: &[ ("event", super::test_event_json) ]
+			});
 			vec
 		},
 		authorities => |()| system::authorities(),

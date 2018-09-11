@@ -110,21 +110,17 @@ pub struct EventRecord<E: Parameter + Member> {
 	pub event: E,
 }
 
-/// Event for the system module. 
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub enum Event {
-	/// An extrinsic completed successfully.
-	ExtrinsicSuccess,
-	/// An extrinsic failed.
-	ExtrinsicFailed,
-}
+/// Event for the system module.
+decl_event!(
+	pub enum Event {
+		/// An extrinsic completed successfully.
+		ExtrinsicSuccess,
+		/// An extrinsic failed.
+		ExtrinsicFailed,
+	}
+);
 
-impl From<Event> for () {
-	fn from(_: Event) -> () { () }
-}
-
-/// Origin for the system module. 
+/// Origin for the system module.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum RawOrigin<AccountId> {
@@ -388,7 +384,7 @@ mod tests {
 
 	impl From<Event> for u16 {
 		fn from(e: Event) -> u16 {
-			match e { 
+			match e {
 				Event::ExtrinsicSuccess => 100,
 				Event::ExtrinsicFailed => 101,
 			}
