@@ -28,7 +28,7 @@ extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate substrate_executor as executor;
 extern crate substrate_state_db as state_db;
 
@@ -36,7 +36,7 @@ extern crate substrate_state_db as state_db;
 extern crate log;
 
 #[macro_use]
-extern crate substrate_codec_derive;
+extern crate parity_codec_derive;
 
 #[cfg(test)]
 extern crate kvdb_memorydb;

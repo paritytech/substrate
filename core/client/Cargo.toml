@@ -14,7 +14,7 @@ futures = "0.1.17"
 slog = "^2"
 heapsize = "0.4"
 substrate-bft = { path = "../bft" }
-substrate-codec = { path = "../../codec" }
+parity-codec = { path = "../../codec" }
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
 substrate-runtime-io = { path = "../runtime-io" }

@@ -1,5 +1,5 @@
 [package]
-name = "substrate-codec-derive"
+name = "parity-codec-derive"
 description = "Serialization and deserialization derive macro"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
@@ -13,7 +13,7 @@ quote = "0.6"
 proc-macro2 = "0.4"
 
 [dev-dependencies]
-substrate-codec = { path = "../" }
+parity-codec = { path = "../" }
 
 [features]
 default = ["std"]

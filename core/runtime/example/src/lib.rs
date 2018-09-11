@@ -41,8 +41,8 @@ extern crate serde_derive;
 
 // Needed for deriving `Encode` and `Decode` for `RawEvent`.
 #[macro_use]
-extern crate substrate_codec_derive;
-extern crate substrate_codec as codec;
+extern crate parity_codec_derive;
+extern crate parity_codec as codec;
 
 // Needed for type-safe access to storage DB.
 #[macro_use]

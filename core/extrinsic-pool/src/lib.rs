@@ -33,7 +33,7 @@ extern crate serde_derive;
 extern crate transaction_pool as txpool;
 #[cfg(test)] extern crate substrate_test_client as test_client;
 #[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate substrate_codec as codec;
+#[cfg(test)] extern crate parity_codec as codec;
 
 pub mod watcher;
 mod error;

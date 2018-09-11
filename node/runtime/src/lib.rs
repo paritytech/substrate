@@ -34,11 +34,11 @@ extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate serde;
 
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate substrate_primitives;
 
 #[macro_use]
-extern crate substrate_codec_derive;
+extern crate parity_codec_derive;
 
 #[cfg_attr(not(feature = "std"), macro_use)]
 extern crate substrate_runtime_std as rstd;

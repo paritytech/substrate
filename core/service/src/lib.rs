@@ -32,7 +32,7 @@ extern crate substrate_network as network;
 extern crate substrate_executor;
 extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;

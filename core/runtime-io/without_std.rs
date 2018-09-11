@@ -22,7 +22,7 @@ extern crate hashdb;
 pub extern crate substrate_runtime_std as rstd;
 
 #[doc(hidden)]
-pub extern crate substrate_codec as codec;
+pub extern crate parity_codec as codec;
 
 use core::intrinsics;
 use rstd::vec::Vec;

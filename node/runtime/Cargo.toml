@@ -10,8 +10,8 @@ log = { version = "0.3", optional = true }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default_features = false}
-substrate-codec = { path = "../../codec" }
-substrate-codec-derive = { path = "../../codec/derive" }
+parity-codec = { path = "../../codec" }
+parity-codec-derive = { path = "../../codec/derive" }
 substrate-runtime-std = { path = "../../core/runtime-std" }
 substrate-runtime-io = { path = "../../core/runtime-io" }
 substrate-runtime-support = { path = "../../core/runtime/support" }
@@ -35,7 +35,7 @@ node-primitives = { path = "../primitives" }
 [features]
 default = ["std"]
 std = [
-	"substrate-codec/std",
+	"parity-codec/std",
 	"substrate-primitives/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",

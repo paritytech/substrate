@@ -21,7 +21,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate substrate_runtime_std as rstd;
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate substrate_runtime_primitives as runtime_primitives;
 
 #[cfg(feature = "std")]
@@ -34,7 +34,7 @@ extern crate serde_derive;
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 #[macro_use]
-extern crate substrate_codec_derive;
+extern crate parity_codec_derive;
 #[macro_use]
 extern crate substrate_runtime_io as runtime_io;
 #[macro_use]

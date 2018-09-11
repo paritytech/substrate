@@ -33,9 +33,9 @@
 // end::description[]
 
 #[macro_use] extern crate log;
-#[macro_use] extern crate substrate_codec_derive;
+#[macro_use] extern crate parity_codec_derive;
 extern crate parking_lot;
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 
 mod unfinalized;

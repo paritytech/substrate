@@ -36,7 +36,7 @@ extern crate rlp;
 extern crate heapsize;
 #[cfg(test)]
 extern crate substrate_primitives as primitives;
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 
 use std::collections::HashMap;
 use std::fmt;

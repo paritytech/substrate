@@ -30,11 +30,11 @@ extern crate fixed_hash;
 #[macro_use]
 extern crate uint as uint_crate;
 #[macro_use]
-extern crate substrate_codec_derive;
+extern crate parity_codec_derive;
 
 extern crate rustc_hex;
 extern crate byteorder;
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 #[cfg(feature = "std")]
 extern crate rlp;
 

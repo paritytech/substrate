@@ -15,8 +15,8 @@ substrate-runtime-primitives = { path = "../../../core/runtime/primitives" }
 substrate-client = { path = "../../../core/client" }
 substrate-state-machine = { path = "../../../core/state-machine" }
 substrate-runtime-support = { path = "../../../core/runtime/support" }
-substrate-codec = { path = "../../../codec" }
-substrate-codec-derive = { path = "../../../codec/derive" }
+parity-codec = { path = "../../../codec" }
+parity-codec-derive = { path = "../../../codec/derive" }
 substrate-executor = { path = "../../../core/executor" }
 substrate-state-db = { path = "../../../core/state-db" }
 

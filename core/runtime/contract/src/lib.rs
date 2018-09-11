@@ -62,7 +62,7 @@ extern crate serde;
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_sandbox as sandbox;
 

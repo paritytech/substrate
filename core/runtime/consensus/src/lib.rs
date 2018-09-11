@@ -33,11 +33,11 @@ extern crate serde;
 extern crate serde_derive;
 
 #[macro_use]
-extern crate substrate_codec_derive;
+extern crate parity_codec_derive;
 
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate substrate_runtime_system as system;
 extern crate substrate_primitives;
 

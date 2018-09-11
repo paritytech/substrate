@@ -20,7 +20,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as runtime_primitives;

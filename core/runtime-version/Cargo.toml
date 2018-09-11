@@ -6,8 +6,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-substrate-codec = { path = "../../codec", default_features = false }
-substrate-codec-derive = { path = "../../codec/derive", default_features = false }
+parity-codec = { path = "../../codec", default_features = false }
+parity-codec-derive = { path = "../../codec/derive", default_features = false }
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 substrate-runtime-support = { path = "../runtime/support", default_features = false }
 
@@ -16,7 +16,7 @@ default = ["std"]
 std = [
 	"serde/std",
 	"serde_derive",
-	"substrate-codec/std",
+	"parity-codec/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-support/std",
 ]

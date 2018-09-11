@@ -30,8 +30,8 @@ extern crate serde_derive;
 extern crate hex_literal;
 
 extern crate integer_sqrt;
-extern crate substrate_codec as codec;
-#[macro_use] extern crate substrate_codec_derive;
+extern crate parity_codec as codec;
+#[macro_use] extern crate parity_codec_derive;
 extern crate substrate_primitives;
 #[cfg(feature = "std")] extern crate substrate_keyring as keyring;
 #[macro_use] extern crate substrate_runtime_std as rstd;

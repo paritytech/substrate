@@ -9,8 +9,8 @@ crate-type = ["cdylib"]
 [dependencies]
 integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
 safe-mix = { version = "1.0", default_features = false}
-substrate-codec-derive = { path = "../../../codec/derive" }
-substrate-codec = { path = "../../../codec", default-features = false }
+parity-codec-derive = { path = "../../../codec/derive" }
+parity-codec = { path = "../../../codec", default-features = false }
 substrate-primitives = { path = "../../../core/primitives", default-features = false }
 substrate-runtime-std = { path = "../../../core/runtime-std", default-features = false }
 substrate-runtime-io = { path = "../../../core/runtime-io", default-features = false }
@@ -34,7 +34,7 @@ node-primitives = { path = "../../primitives", default-features = false }
 default = []
 std = [
 	"safe-mix/std",
-	"substrate-codec/std",
+	"parity-codec/std",
 	"substrate-primitives/std",
 	"substrate-runtime-std/std",
 	"substrate-runtime-io/std",

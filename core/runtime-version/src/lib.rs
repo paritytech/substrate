@@ -30,9 +30,9 @@ extern crate serde_derive;
 extern crate substrate_runtime_std as rstd;
 
 #[macro_use]
-extern crate substrate_codec_derive;
+extern crate parity_codec_derive;
 
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 
 #[cfg(feature = "std")]
 use std::fmt;

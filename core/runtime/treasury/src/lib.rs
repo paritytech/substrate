@@ -32,9 +32,9 @@ extern crate substrate_runtime_io as runtime_io;
 extern crate serde_derive;
 
 #[macro_use]
-extern crate substrate_codec_derive;
+extern crate parity_codec_derive;
 
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 #[cfg(test)]
 extern crate substrate_primitives;
 extern crate substrate_runtime_primitives as runtime_primitives;

@@ -12,7 +12,7 @@ wasmi = { version = "0.4", optional = true }
 substrate-primitives = { path = "../primitives", default_features = false }
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
 substrate-runtime-io = { path = "../runtime-io", default_features = false }
-substrate-codec = { path = "../../codec", default_features = false }
+parity-codec = { path = "../../codec", default_features = false }
 
 [dev-dependencies]
 wabt = "0.4"
@@ -24,7 +24,7 @@ std = [
 	"wasmi",
 	"substrate-primitives/std",
 	"substrate-runtime-std/std",
-	"substrate-codec/std",
+	"parity-codec/std",
 	"substrate-runtime-io/std",
 ]
 nightly = []

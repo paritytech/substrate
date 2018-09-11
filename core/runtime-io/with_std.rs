@@ -26,7 +26,7 @@ extern crate hashdb;
 extern crate rlp;
 
 #[doc(hidden)]
-pub extern crate substrate_codec as codec;
+pub extern crate parity_codec as codec;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256, ed25519};
 

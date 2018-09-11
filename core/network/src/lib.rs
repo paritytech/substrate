@@ -29,13 +29,13 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_client as client;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_network_libp2p as network_libp2p;
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate futures;
 extern crate rustc_hex;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate error_chain;
-#[macro_use] extern crate substrate_codec_derive;
+#[macro_use] extern crate parity_codec_derive;
 
 #[cfg(test)] extern crate env_logger;
 #[cfg(test)] extern crate substrate_keyring as keyring;

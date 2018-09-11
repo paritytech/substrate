@@ -20,7 +20,7 @@
 #![recursion_limit="128"]
 
 extern crate substrate_bft as bft;
-extern crate substrate_codec as codec;
+extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_support as runtime_support;

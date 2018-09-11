@@ -41,10 +41,10 @@ extern crate serde_derive;
 extern crate serde_json;
 #[cfg(test)]
 #[macro_use]
-extern crate substrate_codec_derive;
+extern crate parity_codec_derive;
 
 #[doc(hidden)]
-pub extern crate substrate_codec as codec;
+pub extern crate parity_codec as codec;
 pub use self::storage::generator::Storage as GenericStorage;
 
 #[cfg(feature = "std")]
