@@ -16,4 +16,4 @@ substrate-runtime-primitives = { path = "../../core/runtime/primitives" }
 [dev-dependencies]
 substrate-test-client = { path = "../../core/test-client" }
 substrate-keyring = { path = "../../core/keyring" }
-substrate-codec = { path = "../../core/codec" }
+substrate-codec = { path = "../../codec" }

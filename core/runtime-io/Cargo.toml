@@ -12,7 +12,7 @@ substrate-runtime-std = { path = "../runtime-std", default_features = false }
 environmental = { path = "../environmental", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 substrate-primitives = { path = "../primitives", default_features = false }
-substrate-codec = { path = "../codec", default_features = false }
+substrate-codec = { path = "../../codec", default_features = false }
 triehash = { version = "0.2", optional = true }
 hashdb = { version = "0.2", default_features = false }
 rlp = { version = "0.2", optional = true, default_features = false }

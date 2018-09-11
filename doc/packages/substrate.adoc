@@ -9,7 +9,7 @@ include::../../core/cli/README.adoc[]
 
 include::../../core/client/README.adoc[]
 
-include::../../core/codec/README.adoc[]
+include::../../codec/README.adoc[]
 
 include::../../core/environmental/README.adoc[]
 

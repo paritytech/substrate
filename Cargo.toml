@@ -1,11 +1,11 @@
 [workspace]
 members = [
+	"codec",
+	"codec/derive",
 	"core/bft",
 	"core/cli",
 	"core/client",
 	"core/client/db",
-	"core/codec",
-	"core/codec/derive",
 	"core/environmental",
 	"core/executor",
 	"core/extrinsic-pool",

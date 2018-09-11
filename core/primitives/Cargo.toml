@@ -6,8 +6,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 crunchy = "0.1"
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
-substrate-codec = { path = "../codec", default_features = false }
-substrate-codec-derive = { path = "../codec/derive", default_features = false }
+substrate-codec = { path = "../../codec", default_features = false }
+substrate-codec-derive = { path = "../../codec/derive", default_features = false }
 elastic-array = {version = "0.10", optional = true }
 fixed-hash = { version = "0.2.2", default_features = false }
 rustc-hex = { version = "2.0", default_features = false }
