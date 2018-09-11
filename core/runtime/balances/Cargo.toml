@@ -14,7 +14,7 @@ substrate-codec-derive = { path = "../../codec/derive", default_features = false
 substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-io = { path = "../../runtime-io", default_features = false }
-substrate-runtime-support = { path = "../../runtime-support", default_features = false }
+substrate-runtime-support = { path = "../../runtime/support", default_features = false }
 substrate-runtime-primitives = { path = "../primitives", default_features = false }
 substrate-runtime-system = { path = "../system", default_features = false }
 

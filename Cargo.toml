@@ -18,7 +18,7 @@ members = [
 	"core/runtime-io",
 	"core/runtime-sandbox",
 	"core/runtime-std",
-	"core/runtime-support",
+	"core/runtime/support",
 	"core/runtime/balances",
 	"core/runtime/consensus",
 	"core/runtime/contract",

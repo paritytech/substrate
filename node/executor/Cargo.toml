@@ -9,7 +9,7 @@ hex-literal = "0.1"
 triehash = "0.2"
 substrate-codec = { path = "../../core/codec" }
 substrate-runtime-io = { path = "../../core/runtime-io" }
-substrate-runtime-support = { path = "../../core/runtime-support" }
+substrate-runtime-support = { path = "../../core/runtime/support" }
 substrate-state-machine = { path = "../../core/state-machine" }
 substrate-executor = { path = "../../core/executor" }
 substrate-primitives = { path = "../../core/primitives" }

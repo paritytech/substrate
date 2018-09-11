@@ -12,7 +12,7 @@ substrate-runtime-primitives = { path = "../../runtime/primitives", default_feat
 substrate-runtime-io = { path = "../../runtime-io", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-sandbox = { path = "../../runtime-sandbox", default_features = false }
-substrate-runtime-support = { path = "../../runtime-support", default_features = false }
+substrate-runtime-support = { path = "../../runtime/support", default_features = false }
 substrate-runtime-system = { path = "../../runtime/system", default_features = false }
 substrate-runtime-balances = { path = "../balances", default_features = false }
 parity-wasm = { version = "0.31", default_features = false }

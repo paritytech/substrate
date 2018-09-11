@@ -18,7 +18,7 @@ node-transaction-pool = { path = "../transaction-pool" }
 substrate-bft = { path = "../../core/bft" }
 substrate-codec = { path = "../../core/codec" }
 substrate-primitives = { path = "../../core/primitives" }
-substrate-runtime-support = { path = "../../core/runtime-support" }
+substrate-runtime-support = { path = "../../core/runtime/support" }
 substrate-client = { path = "../../core/client" }
 substrate-runtime-primitives = { path = "../../core/runtime/primitives" }
 

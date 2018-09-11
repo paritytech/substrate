@@ -14,7 +14,7 @@ substrate-codec = { path = "../../core/codec" }
 substrate-codec-derive = { path = "../../core/codec/derive" }
 substrate-runtime-std = { path = "../../core/runtime-std" }
 substrate-runtime-io = { path = "../../core/runtime-io" }
-substrate-runtime-support = { path = "../../core/runtime-support" }
+substrate-runtime-support = { path = "../../core/runtime/support" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-keyring = { path = "../../core/keyring" }
 substrate-runtime-balances = { path = "../../core/runtime/balances" }

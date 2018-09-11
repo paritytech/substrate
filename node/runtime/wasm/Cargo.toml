@@ -14,7 +14,7 @@ substrate-codec = { path = "../../../core/codec", default-features = false }
 substrate-primitives = { path = "../../../core/primitives", default-features = false }
 substrate-runtime-std = { path = "../../../core/runtime-std", default-features = false }
 substrate-runtime-io = { path = "../../../core/runtime-io", default-features = false }
-substrate-runtime-support = { path = "../../../core/runtime-support", default-features = false }
+substrate-runtime-support = { path = "../../../core/runtime/support", default-features = false }
 substrate-runtime-balances = { path = "../../../core/runtime/balances", default-features = false }
 substrate-runtime-consensus = { path = "../../../core/runtime/consensus", default-features = false }
 substrate-runtime-contract = { path = "../../../core/runtime/contract", default-features = false }
