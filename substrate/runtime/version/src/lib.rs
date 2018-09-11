@@ -62,7 +62,7 @@ macro_rules! ver_str {
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize, Decode))]
 pub struct RuntimeVersion {
-	/// Identifies the different Substrate runtimes. There'll be at least polkadot and demo.
+	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
 	/// A different on-chain spec_name to that of the native runtime would normally result
 	/// in node not attempting to sync or author blocks.
 	pub spec_name: VersionString,

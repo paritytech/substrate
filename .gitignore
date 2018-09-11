@@ -9,7 +9,7 @@ substrate/pwasm-alloc/target/
 substrate/pwasm-libc/target/
 substrate/pwasm-alloc/Cargo.lock
 substrate/pwasm-libc/Cargo.lock
-demo/runtime/wasm/target/
+node/runtime/wasm/target/
 **/._*
 .vscode
 polkadot.*
