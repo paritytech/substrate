@@ -136,8 +136,10 @@ macro_rules! decl_module {
 		root
 		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident [ $( $param_name:ident),* ]
 	) => {
-		ensure_root($origin)?;
-		<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* )
+		{
+			ensure_root($origin)?;
+			<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* )
+		}
 	};
 
 	(@imp
