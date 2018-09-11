@@ -51,7 +51,7 @@ use runtime_support::dispatch::Result;
 use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, OnFinalise,
 	As, Lookup};
-use balances::{address::Address, OnMinted};
+use balances::{address::Address, OnDilution};
 use system::{ensure_root, ensure_signed};
 
 mod mock;
@@ -98,7 +98,7 @@ impl<B: Default> Default for ValidatorPrefs<B> {
 
 pub trait Trait: balances::Trait + session::Trait {
 	/// Some tokens minted.
-	type OnRewardMinted: OnMinted<<Self as balances::Trait>::Balance>;
+	type OnRewardMinted: OnDilution<<Self as balances::Trait>::Balance>;
 
 	/// The overarching event type. 
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -137,6 +137,8 @@ impl<B, A> From<RawEvent<B, A>> for () {
 	fn from(_: RawEvent<B, A>) -> () { () }
 }
 
+pub type PairOf<T> = (T, T);
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
@@ -148,8 +150,8 @@ decl_storage! {
 		pub SessionsPerEra get(sessions_per_era): required T::BlockNumber;
 		/// Maximum reward, per validator, that is provided per acceptable session.
 		pub SessionReward get(session_reward): required T::Balance;
-		/// Slash, per validator that is taken per abnormal era end.
-		pub EarlyEraSlash get(early_era_slash): required T::Balance;
+		/// Slash, per validator that is taken for the first time they are found to be offline.
+		pub OfflineSlash get(offline_slash): required T::Balance;
 		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace): default u32;
 		/// The length of the bonding duration in blocks.
@@ -172,8 +174,8 @@ decl_storage! {
 		/// The session index at which the era length last changed.
 		pub LastEraLengthChange get(last_era_length_change): default T::BlockNumber;
 
-		/// The current era stake threshold - unused at present. Consider for removal.
-		pub StakeThreshold get(stake_threshold): required T::Balance;
+		/// The highest and lowest staked validator slashable balances.
+		pub StakeRange get(stake_range): default PairOf<T::Balance>;
 
 		/// The block at which the `who`'s funds become entirely liquid.
 		pub Bondage get(bondage): default map [ T::AccountId => T::BlockNumber ];
@@ -446,7 +448,9 @@ impl<T: Trait> Module<T> {
 				Self::reward_validator(v, reward);
 			}
 			Self::deposit_event(RawEvent::Reward(reward));
-			T::OnRewardMinted::on_minted(reward * <T::Balance as As<usize>>::sa(validators.len()));
+			let total_minted = reward * <T::Balance as As<usize>>::sa(validators.len());
+			let total_rewarded_stake = Self::stake_range().0 * <T::Balance as As<usize>>::sa(validators.len());
+			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);
 		}
 
 		let session_index = <session::Module<T>>::current_index();
@@ -491,11 +495,13 @@ impl<T: Trait> Module<T> {
 
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
-		<StakeThreshold<T>>::put(
+		<StakeRange<T>>::put(
 			if !intentions.is_empty() {
-				let i = (<ValidatorCount<T>>::get() as usize).min(intentions.len() - 1);
-				intentions[i].0.clone()
-			} else { Zero::zero() }
+				let n = <ValidatorCount<T>>::get() as usize;
+				(intentions[0].0, intentions[n - 1].0)
+			} else {
+				(Zero::zero(), Zero::zero())
+			}
 		);
 		let vals = &intentions.into_iter()
 			.map(|(_, v)| v)
@@ -551,7 +557,7 @@ impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
 
 		let event = if slash_count >= grace {
 			let instances = slash_count - grace;
-			let slash = Self::early_era_slash() << instances;
+			let slash = Self::offline_slash() << instances;
 			let next_slash = slash << 1u32;
 			let _ = Self::slash_validator(&v, slash);
 			if instances >= Self::validator_preferences(&v).unstake_threshold

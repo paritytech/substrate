@@ -61,7 +61,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
-			early_era_slash: 10000,
+			offline_slash: 10000,
 			session_reward: 100,
 			validator_count: 12,
 			sessions_per_era: 12,	// 1 hour per era
@@ -148,7 +148,7 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			validator_count: 2,
 			sessions_per_era: 5,
 			bonding_duration: 2 * 60 * 12,
-			early_era_slash: 0,
+			offline_slash: 0,
 			session_reward: 0,
 			offline_slash_grace: 0,
 		}),
