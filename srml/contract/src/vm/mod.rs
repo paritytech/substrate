@@ -523,4 +523,89 @@ mod tests {
 			}]
 		);
 	}
+
+	const CODE_GET_STORAGE: &str = r#"
+(module
+	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		(local $buf_size i32)
+
+
+		;; Load a storage value into the scratch buf.
+		(call $assert
+			(i32.eq
+				(call $ext_get_storage
+					(i32.const 4)		;; The pointer to the storage key to fetch
+				)
+
+				;; Return value 0 means that the value is found and there were
+				;; no errors.
+				(i32.const 0)
+			)
+		)
+
+		;; Find out the size of the scratch buffer
+		(set_local $buf_size
+			(call $ext_scratch_size)
+		)
+
+		;; Copy scratch buffer into this contract memory.
+		(call $ext_scratch_copy
+			(i32.const 36)		;; The pointer where to store the scratch buffer contents,
+								;; 36 = 4 + 32
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(get_local			;; Count of bytes to copy.
+				$buf_size
+			)
+		)
+
+		;; Return the contents of the buffer
+		(call $ext_return
+			(i32.const 36)
+			(get_local $buf_size)
+		)
+
+		;; env:ext_return doesn't return, so this is effectively unreachable.
+		(unreachable)
+	)
+
+	(data (i32.const 4) "\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11")
+)
+"#;
+
+	#[test]
+	fn get_storage_puts_data_into_scratch_buf() {
+		let code_get_storage = wabt::wat2wasm(CODE_GET_STORAGE).unwrap();
+
+		let mut mock_ext = MockExt::default();
+		mock_ext.storage.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
+
+		let mut return_buf = Vec::new();
+		execute(
+			&code_get_storage,
+			&[],
+			&mut return_buf,
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		).unwrap();
+
+		assert_eq!(
+			return_buf,
+			[0x22; 32].to_vec(),
+		);
+	}
 }
