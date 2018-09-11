@@ -126,6 +126,20 @@ macro_rules! decl_module {
 		);
 	};
 
+	(@call
+		origin
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident [ $( $param_name:ident),* ]
+	) => {
+		<$mod_type<$trait_instance>>::$fn_name( $origin $(, $param_name )* )
+	};
+	(@call
+		root
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident [ $( $param_name:ident),* ]
+	) => {
+		ensure_root($origin)?;
+		<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* )
+	};
+
 	(@imp
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
@@ -256,8 +270,9 @@ macro_rules! decl_module {
 			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::Result {
 				match self {
 					$(
-						$call_type::$fn_name( $( $param_name ),* ) =>
-							<$mod_type<$trait_instance>>::$fn_name( _origin $(, $param_name )* ),
+						$call_type::$fn_name( $( $param_name ),* ) => {
+							decl_module!(@call $from $mod_type $trait_instance $fn_name _origin [ $( $param_name ),* ])
+						},
 					)*
 					_ => { panic!("__PhantomItem should never be used.") },
 				}
