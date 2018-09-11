@@ -134,7 +134,7 @@ decl_module! {
 	}
 }
 
-impl_event!(
+decl_event!(
 	pub enum Event<T> with RawEvent<AccountId, AccountIndex, Balance>
 		where <T as system::Trait>::AccountId, <T as Trait>::AccountIndex, <T as Trait>::Balance {
 		/// A new account was created.

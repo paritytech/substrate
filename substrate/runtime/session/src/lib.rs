@@ -83,7 +83,7 @@ decl_module! {
 }
 
 /// An event in this module.
-impl_event!(
+decl_event!(
 	pub enum Event<T> with RawEvent<BlockNumber>
 		where <T as system::Trait>::BlockNumber {
 		/// New session has happened. Note that the argument is the session index, not the block

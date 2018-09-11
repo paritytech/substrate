@@ -120,7 +120,7 @@ decl_module! {
 /// An event in this module. Events are simple means of reporting specific conditions and
 /// circumstances that have happened that users, Dapps and/or chain explorers would find
 /// interesting and otherwise difficult to detect.
-impl_event!(
+decl_event!(
 	pub enum Event<T> with RawEvent<B>
 		where <T as balances::Trait>::Balance {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.

@@ -135,7 +135,7 @@ decl_storage! {
 }
 
 /// An event in this module.
-impl_event!(
+decl_event!(
 	pub enum Event<T> with RawEvent<Balance, AccountId>
 		where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId {
 		/// New proposal.

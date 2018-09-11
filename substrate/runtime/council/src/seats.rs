@@ -154,7 +154,7 @@ decl_storage! {
 	}
 }
 
-impl_event!(
+decl_event!(
 	/// An event in this module.
 	pub enum Event<T> with RawEvent<AccountId>
 		where <T as system::Trait>::AccountId {

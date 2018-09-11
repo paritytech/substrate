@@ -16,7 +16,7 @@
 
 /// Implement an `Event`/`RawEvent` for a module.
 #[macro_export]
-macro_rules! impl_event {
+macro_rules! decl_event {
 	(
 		$(#[$attr:meta])*
 		pub enum Event<$( $evt_generic_param:ident )*> with RawEvent<$( $generic_param:ident ),*>
@@ -205,7 +205,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 
-		impl_event!(
+		decl_event!(
 			pub enum Event {
 				SystemEvent,
 			}
@@ -222,7 +222,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 
-		impl_event!(
+		decl_event!(
 			pub enum Event<T> with RawEvent<Balance>
 				where <T as Trait>::Balance {
 				/// Hi, I am a comment.
@@ -241,7 +241,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 
-		impl_event!(
+		decl_event!(
 			pub enum Event<T> with RawEvent<Balance>
 				where <T as Trait>::Balance {
 				TestEvent(Balance),

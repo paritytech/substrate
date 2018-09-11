@@ -296,7 +296,7 @@ mod tests {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 
-		impl_event!(
+		decl_event!(
 			pub enum Event {
 				SystemEvent,
 			}
@@ -311,7 +311,7 @@ mod tests {
 			type Balance;
 		}
 
-		impl_event!(
+		decl_event!(
 			pub enum Event<T> with RawEvent<Balance>
 			where <T as Trait>::Balance {
 				/// Hi, I am a comment.
@@ -338,7 +338,7 @@ mod tests {
 			type Balance;
 		}
 
-		impl_event!(
+		decl_event!(
 			pub enum Event<T> with RawEvent<Balance>
 			where <T as Trait>::Balance {
 				TestEvent(Balance),
