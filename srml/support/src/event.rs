@@ -19,23 +19,22 @@
 macro_rules! decl_event {
 	(
 		$(#[$attr:meta])*
-		pub enum Event<$( $evt_generic_param:ident )*> with RawEvent<$( $generic_param:ident ),*>
-			where $( <$generic:ident as $trait:path>::$trait_type:ident),* {
+		pub enum Event<$evt_generic_param:ident>
+			where $($generic_param:ident = <$generic:ident as $trait:path>::$trait_type:ident),*
+		{
 			$(
-				$(#[doc = $doc_attr:tt])*
-				$event:ident( $( $param:path ),* ),
+				$events:tt
 			)*
 		}
 	) => {
-		pub type Event<$( $evt_generic_param )*> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
+		pub type Event<$evt_generic_param> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		$(#[$attr])*
 		pub enum RawEvent<$( $generic_param ),*> {
 			$(
-				$( #[doc = $doc_attr] )*
-				$event($( $param ),*),
+				$events
 			)*
 		}
 		impl<$( $generic_param ),*> From<RawEvent<$( $generic_param ),*>> for () {
@@ -44,16 +43,7 @@ macro_rules! decl_event {
 		impl<$( $generic_param ),*> RawEvent<$( $generic_param ),*> {
 			#[allow(dead_code)]
 			pub fn event_json_metadata() -> &'static str {
-				concat!(
-					"{",
-					__impl_event_json_metadata!("";
-						$(
-							$event ( $( $param ),* );
-							__function_doc_to_json!(""; $($doc_attr)*);
-						)*
-					),
-					" }"
-				)
+				concat!("{", __events_to_json!(""; $( $events )* ), " }")
 			}
 		}
 	};
@@ -61,8 +51,7 @@ macro_rules! decl_event {
 		$(#[$attr:meta])*
 		pub enum Event {
 			$(
-				$(#[doc = $doc_attr:tt])*
-				$event:ident,
+				$events:tt
 			)*
 		}
 	) => {
@@ -72,8 +61,7 @@ macro_rules! decl_event {
 		$(#[$attr])*
 		pub enum Event {
 			$(
-				$( #[doc = $doc_attr] )*
-				$event,
+				$events
 			)*
 		}
 		impl From<Event> for () {
@@ -82,16 +70,7 @@ macro_rules! decl_event {
 		impl Event {
 			#[allow(dead_code)]
 			pub fn event_json_metadata() -> &'static str {
-				concat!(
-					"{",
-					__impl_event_json_metadata!("";
-						$(
-							$event;
-							__function_doc_to_json!(""; $($doc_attr)*);
-						)*
-					),
-					" }"
-				)
+				concat!("{", __events_to_json!(""; $( $events )* ), " }")
 			}
 		}
 	}
@@ -99,29 +78,30 @@ macro_rules! decl_event {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __impl_event_json_metadata {
+macro_rules! __events_to_json {
 	(
 		$prefix_str:expr;
-		$event:ident( $first_param:path $(, $param:path )* );
-		$event_doc:expr;
+		$( #[doc = $doc_attr:tt] )*
+		$event:ident( $first_param:path $(, $param:path )* ),
 		$( $rest:tt )*
 	) => {
 		concat!($prefix_str, " ", "\"", stringify!($event), r#"": { "params": [ ""#,
 				stringify!($first_param), "\""
 				$(, concat!(", \"", stringify!($param), "\"") )*, r#" ], "description": ["#,
-				$event_doc, " ] }",
-				__impl_event_json_metadata!(","; $( $rest )*)
+				__function_doc_to_json!(""; $( $doc_attr )*), " ] }",
+				__events_to_json!(","; $( $rest )*)
 		)
 	};
 	(
 		$prefix_str:expr;
-		$event:ident;
-		$event_doc:expr;
+		$( #[doc = $doc_attr:tt] )*
+		$event:ident,
 		$( $rest:tt )*
 	) => {
 		concat!($prefix_str, " ", "\"", stringify!($event),
-				r#"": { "params": null, "description": ["#, $event_doc, " ] }",
-				__impl_event_json_metadata!(","; $( $rest )*)
+				r#"": { "params": null, "description": ["#,
+				__function_doc_to_json!(""; $( $doc_attr )*), " ] }",
+				__events_to_json!(","; $( $rest )*)
 		)
 	};
 	(
@@ -223,11 +203,12 @@ mod tests {
 		}
 
 		decl_event!(
-			pub enum Event<T> with RawEvent<Balance>
-				where <T as Trait>::Balance
+			pub enum Event<T> where Balance = <T as Trait>::Balance
 			{
 				/// Hi, I am a comment.
 				TestEvent(Balance),
+				/// Dog
+				EventWithoutParams,
 			}
 		);
 	}
@@ -243,8 +224,7 @@ mod tests {
 		}
 
 		decl_event!(
-			pub enum Event<T> with RawEvent<Balance>
-				where <T as Trait>::Balance
+			pub enum Event<T> where Balance = <T as Trait>::Balance
 			{
 				TestEvent(Balance),
 			}
@@ -277,7 +257,14 @@ mod tests {
 	const EXPECTED_METADATA: (&str, &[(&str, &str)]) = (
 		"TestEvent", &[
 			("system", r#"{ "SystemEvent": { "params": null, "description": [ ] } }"#),
-			("event_module", r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ " Hi, I am a comment." ] } }"#),
+			("event_module",
+				concat!(
+					"{",
+					r#" "TestEvent": { "params": [ "Balance" ], "description": [ " Hi, I am a comment." ] },"#,
+					r#" "EventWithoutParams": { "params": null, "description": [ " Dog" ] }"#,
+					" }"
+				)
+			),
 			("event_module2", r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ ] } }"#),
 		]
 	);

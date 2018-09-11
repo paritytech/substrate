@@ -120,8 +120,9 @@ decl_module! {
 
 /// An event in this module.
 decl_event!(
-	pub enum Event<T> with RawEvent<Balance, AccountId>
-		where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId
+	pub enum Event<T> where
+		Balance = <T as balances::Trait>::Balance,
+		AccountId = <T as system::Trait>::AccountId
 	{
 		/// All validators have been rewarded by the given balance.
 		Reward(Balance),
