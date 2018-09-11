@@ -42,13 +42,21 @@ macro_rules! impl_event {
 		impl<$( $generic_param ),*> From<RawEvent<$( $generic_param ),*>> for () {
 			fn from(_: RawEvent<$( $generic_param ),*>) -> () { () }
 		}
-		__impl_event_json_metadata!(
-			$module<$trait_instance: $trait_name>;
-			$(
-				$event ( $( $param ),* );
-				__function_doc_to_json!(""; $($doc_attr)*);
-			)*
-		);
+		impl<$( $generic_param ),*> RawEvent<$( $generic_param ),*> {
+			#[allow(dead_code)]
+			pub fn event_json_metadata() -> &'static str {
+				concat!(
+					"{",
+					__impl_event_json_metadata!("";
+						$(
+							$event ( $( $param ),* );
+							__function_doc_to_json!(""; $($doc_attr)*);
+						)*
+					),
+					" }"
+				)
+			}
+		}
 	};
 	(
 		$(#[$attr:meta])*
@@ -72,6 +80,21 @@ macro_rules! impl_event {
 		impl From<Event> for () {
 			fn from(_: Event) -> () { () }
 		}
+		impl Event {
+			#[allow(dead_code)]
+			pub fn event_json_metadata() -> &'static str {
+				concat!(
+					"{",
+					__impl_event_json_metadata!("";
+						$(
+							$event;
+							__function_doc_to_json!(""; $($doc_attr)*);
+						)*
+					),
+					" }"
+				)
+			}
+		}
 	}
 }
 
@@ -79,23 +102,12 @@ macro_rules! impl_event {
 #[doc(hidden)]
 macro_rules! __impl_event_json_metadata {
 	(
-		$module:ident<$trait_instance:ident: $trait_name:ident>;
-		$( $rest:tt )*
-	) => {
-		impl<$trait_instance: $trait_name> $module<$trait_instance>  {
-			#[allow(dead_code)]
-			pub fn event_json_metadata() -> &'static str {
-				concat!("{", __impl_event_json_metadata!(""; $( $rest )* ), " }")
-			}
-		}
-	};
-	(
 		$prefix_str:expr;
 		$event:ident( $first_param:ident $(, $param:ident )* );
 		$event_doc:expr;
 		$( $rest:tt )*
 	) => {
-		concat!($prefix_str, "", "\"", stringify!($event), r#"": { "params": [ ""#,
+		concat!($prefix_str, " ", "\"", stringify!($event), r#"": { "params": [ ""#,
 				stringify!($first_param), "\""
 				$(, concat!(", \"", stringify!($param), "\"") )*, r#" ], "description": ["#,
 				$event_doc, " ] }",
@@ -108,7 +120,7 @@ macro_rules! __impl_event_json_metadata {
 		$event_doc:expr;
 		$( $rest:tt )*
 	) => {
-		concat!($prefix_str, "", "\"", stringify!($event),
+		concat!($prefix_str, " ", "\"", stringify!($event),
 				r#"": { "params": null, "description": ["#, $event_doc, " ] }",
 				__impl_event_json_metadata!(","; $( $rest )*)
 		)
@@ -160,12 +172,20 @@ macro_rules! __impl_outer_event_json_metadata {
 	) => {
 		impl $runtime {
 			#[allow(dead_code)]
-			pub fn outer_event_json_metadata() -> &'static str {
-				concat!(r#"{ "name": ""#, stringify!($event_name), r#"", "items": { "#,
-					r#""system": "system::Event""#,
-					$(concat!(", \"", stringify!($module), r#"": ""#,
-						stringify!($module), "::Event<", stringify!($runtime), r#">""#),)*
-					" } }")
+			pub fn outer_event_json_metadata() -> (&'static str, &'static [(&'static str, fn() -> &'static str)]) {
+				static METADATA: &[(&str, fn() -> &'static str)] = &[
+					("system", system::Event::event_json_metadata)
+					$(
+						, (
+							stringify!($module),
+							$module::Event::<$runtime>::event_json_metadata
+						)
+					)*
+				];
+				(
+					stringify!($event_name),
+					METADATA
+				)
 			}
 		}
 	}
@@ -178,6 +198,14 @@ mod tests {
 	use serde_json;
 
 	mod system {
+		pub trait Trait {
+			type Origin;
+		}
+
+		decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		}
+
 		impl_event!(
 			pub enum Event for Module<T: Trait> {
 				SystemEvent,
@@ -243,19 +271,29 @@ mod tests {
 		type Balance = u32;
 	}
 
-	const EXPECTED_METADATA: &str = concat!(
-		r#"{ "name": "TestEvent", "items": { "#,
-			r#""system": "system::Event", "#,
-			r#""event_module": "event_module::Event<TestRuntime>", "#,
-			r#""event_module2": "event_module2::Event<TestRuntime>" "#,
-		r#"} }"#
+	impl system::Trait for TestRuntime {
+		type Origin = u32;
+	}
+
+	const EXPECTED_METADATA: (&str, &[(&str, &str)]) = (
+		"TestEvent", &[
+			("system", r#"{ "SystemEvent": { "params": null, "description": [ ] } }"#),
+			("event_module", r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ " Hi, I am a comment." ] } }"#),
+			("event_module2", r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ ] } }"#),
+		]
 	);
 
 	#[test]
 	fn outer_event_json_metadata() {
 		let metadata = TestRuntime::outer_event_json_metadata();
-		assert_eq!(EXPECTED_METADATA, metadata);
-		let _: serde::de::IgnoredAny =
-			serde_json::from_str(metadata).expect("Is valid json syntax");
+		assert_eq!(EXPECTED_METADATA.0, metadata.0);
+		assert_eq!(EXPECTED_METADATA.1.len(), metadata.1.len());
+
+		for (expected, got) in EXPECTED_METADATA.1.iter().zip(metadata.1.iter()) {
+			assert_eq!(expected.0, got.0);
+			assert_eq!(expected.1, got.1());
+			let _: serde::de::IgnoredAny =
+				serde_json::from_str(got.1()).expect(&format!("Is valid json syntax: {}", got.1()));
+		}
 	}
 }
