@@ -11,7 +11,7 @@ include::../../core/client/README.adoc[]
 
 include::../../codec/README.adoc[]
 
-include::../../core/environmental/README.adoc[]
+include::../../environmental/README.adoc[]
 
 include::../../core/executor/README.adoc[]
 

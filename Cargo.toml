@@ -2,11 +2,11 @@
 members = [
 	"codec",
 	"codec/derive",
+	"environmental",
 	"core/bft",
 	"core/cli",
 	"core/client",
 	"core/client/db",
-	"core/environmental",
 	"core/executor",
 	"core/extrinsic-pool",
 	"core/keyring",

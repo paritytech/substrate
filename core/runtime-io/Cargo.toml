@@ -9,7 +9,7 @@ rustc_version = "0.2"
 
 [dependencies]
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
-environmental = { path = "../environmental", optional = true }
+environmental = { path = "../../environmental", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 substrate-primitives = { path = "../primitives", default_features = false }
 parity-codec = { path = "../../codec", default_features = false }
