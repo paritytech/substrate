@@ -58,11 +58,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Instant, Duration};
 
 use codec::Encode;
-use ed25519::LocalizedSignature;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block, Header};
 use runtime_primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction, Justification as PrimitiveJustification};
-use primitives::{AuthorityId, ed25519};
+use primitives::{AuthorityId, ed25519, ed25519::LocalizedSignature};
 
 use futures::{Async, Stream, Sink, Future, IntoFuture};
 use futures::sync::oneshot;
