@@ -655,12 +655,12 @@ mod tests {
 					r#"{ "name": "origin", "type": "T::Origin" }, "#,
 					r#"{ "name": "data", "type": "i32" }, "#,
 					r#"{ "name": "data2", "type": "String" }"#,
-				r#" ], "description": [ ] }"#,
+				r#" ], "description": [ ] }, "#,
 
 				r#""0 + 1 + 1 + 1": { "name": "aux_3", "params": [ "#,
-				r#" ], "description": [ ] }"#,
+				r#" ], "description": [ ] }, "#,
 
-				r#""0 + 1 + 1 + 1 + 1": { "name": "aux_2", "params": [ "#,
+				r#""0 + 1 + 1 + 1 + 1": { "name": "aux_4", "params": [ "#,
 					r#"{ "name": "data", "type": "i32" }, "#,
 				r#" ], "description": [ ] }"#,
 			r#" } }"#,
