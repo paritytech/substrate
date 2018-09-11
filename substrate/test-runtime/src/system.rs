@@ -226,7 +226,7 @@ mod tests {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
 				state_root: hex!("0425393fd07e2a806cfd7e990ee91dc92fe6bba34eab2bf45d5be7d67e24d467").into(),
-				extrinsics_root: hex!("951508f2cc0071500a74765ab0fb2f280fdcdd329d5f989dda675010adee99d6").into(),
+				extrinsics_root: hex!("83fd59e8fe7cee53d7421713a09fe0abae1aec5f4db94fe5193737b12195f013").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
@@ -251,7 +251,7 @@ mod tests {
 				parent_hash: b.header.hash(),
 				number: 2,
 				state_root: hex!("e32dd1d84d9133ca48078d2d83f2b0db19f9d47229ba98bf5ced0e9f86fac2c7").into(),
-				extrinsics_root: hex!("3563642676d7e042c894eedc579ba2d6eeedf9a6c66d9d557599effc9f674372").into(),
+				extrinsics_root: hex!("5d2d0a93201744f0df878c33b07da40cd38e24ac2358cc2811ea640835c31b68").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
