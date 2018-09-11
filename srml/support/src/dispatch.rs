@@ -71,7 +71,22 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type
+			for enum $call_type where origin: $origin_type where system = system
+			[]
+			$($t)*
+		);
+	};
+	(
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
+			$($t:tt)*
+		}
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type where system = $system
 			[]
 			$($t)*
 		);
@@ -80,7 +95,7 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn $fn_name:ident(origin $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
@@ -89,7 +104,7 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type
+			for enum $call_type where origin: $origin_type where system = $system
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(origin $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
 		);
@@ -97,7 +112,7 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn $fn_name:ident($( $param_name:ident : $param:ty),* ) -> $result:ty ;
@@ -106,7 +121,7 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type
+			for enum $call_type where origin: $origin_type where system = $system
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(root $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
 		);
@@ -114,13 +129,13 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
 		[ $($t:tt)* ]
 	) => {
 		decl_module!(@imp
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type {
+			for enum $call_type where origin: $origin_type where system = $system {
 				$($t)*
 			}
 		);
@@ -128,16 +143,16 @@ macro_rules! decl_module {
 
 	(@call
 		origin
-		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident [ $( $param_name:ident),* ]
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
 	) => {
 		<$mod_type<$trait_instance>>::$fn_name( $origin $(, $param_name )* )
 	};
 	(@call
 		root
-		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident [ $( $param_name:ident),* ]
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
 	) => {
 		{
-			ensure_root($origin)?;
+			$system::ensure_root($origin)?;
 			<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* )
 		}
 	};
@@ -145,7 +160,7 @@ macro_rules! decl_module {
 	(@imp
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty {
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
 		$(
 			$(#[doc = $doc_attr:tt])*
 			fn $fn_name:ident($from:ident $( , $param_name:ident : $param:ty)*) -> $result:ty;
@@ -273,7 +288,7 @@ macro_rules! decl_module {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
-							decl_module!(@call $from $mod_type $trait_instance $fn_name _origin [ $( $param_name ),* ])
+							decl_module!(@call $from $mod_type $trait_instance $fn_name _origin $system [ $( $param_name ),* ])
 						},
 					)*
 					_ => { panic!("__PhantomItem should never be used.") },
@@ -603,6 +618,14 @@ mod tests {
 
 	pub trait Trait {
 		type Origin;
+	}
+
+	pub mod system {
+		use super::Result;
+
+		pub fn ensure_root<R>(_: R) -> Result {
+			Ok(())
+		}
 	}
 
 	decl_module! {
