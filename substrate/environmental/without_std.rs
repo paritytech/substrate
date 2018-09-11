@@ -19,6 +19,7 @@ pub mod imp {
 	pub use core::cell::RefCell;
 	pub use core::mem::transmute;
 	pub use core::mem::replace;
+	pub use core::marker::PhantomData;
 
 	// This code is a simplified version of [`LocalKey`] and it's wasm32 specialization: [`statik::Key`].
 	// [`LocalKey`]: https://github.com/alexcrichton/rust/blob/98931165a23a1c2860d99759385f45d6807c8982/src/libstd/thread/local.rs#L89
