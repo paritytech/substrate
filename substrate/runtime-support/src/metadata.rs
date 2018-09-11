@@ -40,9 +40,11 @@ macro_rules! impl_json_metadata {
 	) => {
 		impl $runtime {
 			pub fn json_metadata() -> $crate::metadata::Vec<$crate::metadata::JSONMetadata> {
+				let events = Self::outer_event_json_metadata();
 				__impl_json_metadata!($runtime;
 					$crate::metadata::JSONMetadata::Events {
-						events: Self::outer_event_json_metadata()
+						name: events.0,
+						events: events.1,
 					};
 					$( $rest )*
 				)
@@ -52,10 +54,10 @@ macro_rules! impl_json_metadata {
 }
 
 /// The metadata of a runtime encoded as JSON.
-#[derive(Eq, PartialEq)]
+#[derive(Eq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum JSONMetadata {
-	Events { events: &'static str },
+	Events { name: &'static str, events: &'static [(&'static str, fn() -> &'static str)] },
 	Module { module: &'static str, prefix: &'static str },
 	ModuleWithStorage { module: &'static str, prefix: &'static str, storage: &'static str }
 }
@@ -63,9 +65,14 @@ pub enum JSONMetadata {
 impl Encode for JSONMetadata {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		match self {
-			JSONMetadata::Events { events } => {
+			JSONMetadata::Events { name, events } => {
 				0i8.encode_to(dest);
-				events.encode_to(dest);
+				name.encode_to(dest);
+				events.iter().fold(0u32, |count, _| count + 1).encode_to(dest);
+				events
+					.iter()
+					.map(|(module, data)| (module, data()))
+					.for_each(|val| val.encode_to(dest));
 			},
 			JSONMetadata::Module { module, prefix } => {
 				1i8.encode_to(dest);
@@ -82,11 +89,39 @@ impl Encode for JSONMetadata {
 	}
 }
 
+impl PartialEq<JSONMetadata> for JSONMetadata {
+	fn eq(&self, other: &JSONMetadata) -> bool {
+		match (self, other) {
+			(
+				JSONMetadata::Events { name: lname, events: left },
+				JSONMetadata::Events { name: rname, events: right }
+			) => {
+				lname == rname && left.iter().zip(right.iter()).fold(true, |res, (l, r)| {
+					res && l.0 == r.0 && l.1() == r.1()
+				})
+			},
+			(
+				JSONMetadata::Module { prefix: lpre, module: lmod },
+				JSONMetadata::Module { prefix: rpre, module: rmod }
+			) => {
+				lpre == rpre && lmod == rmod
+			},
+			(
+				JSONMetadata::ModuleWithStorage { prefix: lpre, module: lmod, storage: lstore },
+				JSONMetadata::ModuleWithStorage { prefix: rpre, module: rmod, storage: rstore }
+			) => {
+				lpre == rpre && lmod == rmod && lstore == rstore
+			},
+			_ => false,
+		}
+    }
+}
+
 /// Utility struct for making `JSONMetadata` decodeable.
 #[derive(Eq, PartialEq, Debug)]
 #[cfg(feature = "std")]
 pub enum JSONMetadataDecodable {
-	Events { events: String },
+	Events { name: String, events: Vec<(String, String)> },
 	Module { module: String, prefix: String },
 	ModuleWithStorage { module: String, prefix: String, storage: String }
 }
@@ -97,15 +132,33 @@ impl JSONMetadataDecodable {
 	/// The first value of the tuple is the name of the metadata type and the second in the JSON string.
 	pub fn into_json_string(self) -> (&'static str, String) {
 		match self {
-			JSONMetadataDecodable::Events { events } => {
-				("events", events)
+			JSONMetadataDecodable::Events { name, events } => {
+				(
+					"events",
+					format!(
+						r#"{{ "name": "{}", "events": {{ {} }} }}"#, name,
+						events.iter().enumerate()
+							.fold(String::from(""), |mut json, (i, (name, data))| {
+								if i > 0 {
+									json.push_str(", ");
+								}
+								json.push_str(&format!(r#""{}": {}"#, name, data));
+								json
+							})
+					)
+				)
 			},
 			JSONMetadataDecodable::Module { prefix, module } => {
 				("module", format!(r#"{{ "prefix": "{}", "module": {} }}"#, prefix, module))
 			},
 			JSONMetadataDecodable::ModuleWithStorage { prefix, module, storage } => {
-				("moduleWithStorage",
-				 format!(r#"{{ "prefix": "{}", "module": {}, "storage": {} }}"#, prefix, module, storage))
+				(
+					"moduleWithStorage",
+					format!(
+						r#"{{ "prefix": "{}", "module": {}, "storage": {} }}"#,
+						prefix, module, storage
+					)
+				)
 			}
 		}
 	}
@@ -117,7 +170,8 @@ impl Decode for JSONMetadataDecodable {
 		i8::decode(input).and_then(|variant| {
 			match variant {
 				0 => String::decode(input)
-						.and_then(|events| Some(JSONMetadataDecodable::Events { events })),
+						.and_then(|name| Vec::<(String, String)>::decode(input).map(|events| (name, events)))
+						.and_then(|(name, events)| Some(JSONMetadataDecodable::Events { name, events })),
 				1 => String::decode(input)
 						.and_then(|prefix| String::decode(input).map(|v| (prefix, v)))
 						.and_then(|(prefix, module)| Some(JSONMetadataDecodable::Module { prefix, module })),
@@ -136,10 +190,12 @@ impl PartialEq<JSONMetadata> for JSONMetadataDecodable {
 	fn eq(&self, other: &JSONMetadata) -> bool {
 		match (self, other) {
 			(
-				JSONMetadataDecodable::Events { events: left },
-				JSONMetadata::Events { events: right }
+				JSONMetadataDecodable::Events { name: lname, events: left },
+				JSONMetadata::Events { name: rname, events: right }
 			) => {
-				left == right
+				lname == rname && left.iter().zip(right.iter()).fold(true, |res, (l, r)| {
+					res && l.0 == r.0 && l.1 == r.1()
+				})
 			},
 			(
 				JSONMetadataDecodable::Module { prefix: lpre, module: lmod },
@@ -228,20 +284,41 @@ macro_rules! __impl_json_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use dispatch::Result;
+	use serde;
+	use serde_json;
 
 	mod system {
-		#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
-		pub struct Event;
+		pub trait Trait {
+			type Origin;
+		}
+
+		decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		}
+
+		decl_event!(
+			pub enum Event {
+				SystemEvent,
+			}
+		);
 	}
 
 	mod event_module {
-		use super::*;
+		use dispatch::Result;
 
-		#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
-		pub struct Event<T> {
-			t: T,
+		pub trait Trait {
+			type Origin;
+			type Balance;
 		}
+
+		decl_event!(
+			pub enum Event<T> with RawEvent<Balance>
+				where <T as Trait>::Balance
+			{
+				/// Hi, I am a comment.
+				TestEvent(Balance),
+			}
+		);
 
 		decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -257,12 +334,18 @@ mod tests {
 	}
 
 	mod event_module2 {
-		use super::*;
-
-		#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
-		pub struct Event<T> {
-			t: T,
+		pub trait Trait {
+			type Origin;
+			type Balance;
 		}
+
+		decl_event!(
+			pub enum Event<T> with RawEvent<Balance>
+				where <T as Trait>::Balance
+			{
+				TestEvent(Balance),
+			}
+		);
 
 		decl_module! {
 			pub struct ModuleWithStorage<T: Trait> for enum Call where origin: T::Origin {}
@@ -284,11 +367,17 @@ mod tests {
 		}
 	}
 
-	pub trait Trait {
-		 type Origin;
+	impl event_module::Trait for TestRuntime {
+		type Origin = u32;
+		type Balance = u32;
 	}
 
-	impl Trait for TestRuntime {
+	impl event_module2::Trait for TestRuntime {
+		type Origin = u32;
+		type Balance = u32;
+	}
+
+	impl system::Trait for TestRuntime {
 		type Origin = u32;
 	}
 
@@ -298,13 +387,26 @@ mod tests {
 			event_module2::ModuleWithStorage with Storage
 	);
 
+	fn system_event_json() -> &'static str {
+		r#"{ "SystemEvent": { "params": null, "description": [ ] } }"#
+	}
+
+	fn event_module_event_json() -> &'static str {
+		r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ " Hi, I am a comment." ] } }"#
+	}
+
+	fn event_module2_event_json() -> &'static str {
+		r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ ] } }"#
+	}
+
 	const EXPECTED_METADATA: &[JSONMetadata] = &[
 		JSONMetadata::Events {
-			events: concat!(
-				r#"{ "name": "TestEvent", "items": "#,
-					r#"{ "system": "system::Event", "#,
-					r#""event_module": "event_module::Event<TestRuntime>", "#,
-					r#""event_module2": "event_module2::Event<TestRuntime>" } }"#)
+			name: "TestEvent",
+			events: &[
+				("system", system_event_json),
+				("event_module", event_module_event_json),
+				("event_module2", event_module2_event_json),
+			]
 		},
 		JSONMetadata::Module {
 			module: concat!(
@@ -340,5 +442,18 @@ mod tests {
 		let metadata_decoded = Vec::<JSONMetadataDecodable>::decode(&mut &metadata_encoded[..]);
 
 		assert_eq!(&metadata_decoded.unwrap()[..], &metadata[..]);
+	}
+
+	#[test]
+	fn into_json_string_is_valid_json() {
+		let metadata = TestRuntime::json_metadata();
+		let metadata_encoded = metadata.encode();
+		let metadata_decoded = Vec::<JSONMetadataDecodable>::decode(&mut &metadata_encoded[..]);
+
+		for mdata in metadata_decoded.unwrap().into_iter() {
+			let json = mdata.into_json_string();
+			let _: serde::de::IgnoredAny =
+				serde_json::from_str(&json.1).expect(&format!("Is valid json syntax: {}", json.1));
+		}
 	}
 }

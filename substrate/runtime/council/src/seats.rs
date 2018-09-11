@@ -154,25 +154,21 @@ decl_storage! {
 	}
 }
 
-pub type Event<T> = RawEvent<<T as system::Trait>::AccountId>;
-
-/// An event in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<AccountId> {
-	/// reaped voter, reaper
-	VoterReaped(AccountId, AccountId),
-	/// slashed reaper
-	BadReaperSlashed(AccountId),
-	/// A tally (for approval votes of council seat(s)) has started.
-	TallyStarted(u32),
-	/// A tally (for approval votes of council seat(s)) has ended (with one or more new members).
-	TallyFinalised(Vec<AccountId>, Vec<AccountId>),
-}
-
-impl<N> From<RawEvent<N>> for () {
-	fn from(_: RawEvent<N>) -> () { () }
-}
+decl_event!(
+	/// An event in this module.
+	pub enum Event<T> with RawEvent<AccountId>
+		where <T as system::Trait>::AccountId
+	{
+		/// reaped voter, reaper
+		VoterReaped(AccountId, AccountId),
+		/// slashed reaper
+		BadReaperSlashed(AccountId),
+		/// A tally (for approval votes of council seat(s)) has started.
+		TallyStarted(u32),
+		/// A tally (for approval votes of council seat(s)) has ended (with one or more new members).
+		TallyFinalised(Vec<AccountId>, Vec<AccountId>),
+	}
+);
 
 impl<T: Trait> Module<T> {
 
@@ -235,7 +231,7 @@ impl<T: Trait> Module<T> {
 	/// are registered.
 	fn set_approvals(origin: T::Origin, votes: Vec<bool>, index: VoteIndex) -> Result {
 		let who = ensure_signed(origin)?;
-		
+
 		ensure!(!Self::presentation_active(), "no approval changes during presentation period");
 		ensure!(index == Self::vote_index(), "incorrect vote index");
 		if !<LastActiveOf<T>>::exists(&who) {
@@ -267,7 +263,7 @@ impl<T: Trait> Module<T> {
 		assumed_vote_index: VoteIndex
 	) -> Result {
 		let reporter = ensure_signed(origin)?;
-		
+
 		let who = <balances::Module<T>>::lookup(who)?;
 		ensure!(!Self::presentation_active(), "cannot reap during presentation period");
 		ensure!(Self::voter_last_active(&reporter).is_some(), "reporter must be a voter");
@@ -310,7 +306,7 @@ impl<T: Trait> Module<T> {
 	/// Remove a voter. All votes are cancelled and the voter deposit is returned.
 	fn retract_voter(origin: T::Origin, index: u32) -> Result {
 		let who = ensure_signed(origin)?;
-		
+
 		ensure!(!Self::presentation_active(), "cannot retract when presenting");
 		ensure!(<LastActiveOf<T>>::exists(&who), "cannot retract non-voter");
 		let voters = Self::voters();
@@ -328,7 +324,7 @@ impl<T: Trait> Module<T> {
 	/// Account must have enough transferrable funds in it to pay the bond.
 	fn submit_candidacy(origin: T::Origin, slot: u32) -> Result {
 		let who = ensure_signed(origin)?;
-		
+
 		ensure!(!Self::is_a_candidate(&who), "duplicate candidate submission");
 		let slot = slot as usize;
 		let count = Self::candidate_count() as usize;

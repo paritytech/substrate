@@ -51,7 +51,7 @@ use system::{ensure_signed, ensure_root};
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
-/// 
+///
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: balances::Trait {
 	/// Origin from which approvals must come.
@@ -60,7 +60,7 @@ pub trait Trait: balances::Trait {
 	/// Origin from which rejections must come.
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
 
-	/// The overarching event type. 
+	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -108,7 +108,7 @@ decl_storage! {
 		/// Proportion of funds that should be bonded in order to place a proposal. An accepted
 		/// proposal gets these back. A rejected proposal doesn't.
 		ProposalBond get(proposal_bond): required Permill;
-		
+
 		/// Minimum amount of funds that should be placed ina deposit for making a proposal.
 		ProposalBondMinimum get(proposal_bond_minimum): required T::Balance;
 
@@ -134,31 +134,23 @@ decl_storage! {
 	}
 }
 
-/// Exported Event type that's generic over the configuration trait.
-pub type Event<T> = RawEvent<
-	<T as balances::Trait>::Balance,
-	<T as system::Trait>::AccountId,
->;
-
 /// An event in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<Balance, AccountId> {
-	/// New proposal.
-	Proposed(ProposalIndex),
-	/// We have ended a spend period and will now allocate funds.
-	Spending(Balance),
-	/// Some funds have been allocated.
-	Awarded(ProposalIndex, Balance, AccountId),
-	/// Some of our funds have been burnt.
-	Burnt(Balance),
-	/// Spending has finished; this is the amount that rolls over until next spend.
-	Rollover(Balance),
-}
-
-impl<B, A> From<RawEvent<B, A>> for () {
-	fn from(_: RawEvent<B, A>) -> () { () }
-}
+decl_event!(
+	pub enum Event<T> with RawEvent<Balance, AccountId>
+		where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId
+	{
+		/// New proposal.
+		Proposed(ProposalIndex),
+		/// We have ended a spend period and will now allocate funds.
+		Spending(Balance),
+		/// Some funds have been allocated.
+		Awarded(ProposalIndex, Balance, AccountId),
+		/// Some of our funds have been burnt.
+		Burnt(Balance),
+		/// Spending has finished; this is the amount that rolls over until next spend.
+		Rollover(Balance),
+	}
+);
 
 impl<T: Trait> Module<T> {
 	/// Deposit one of this module's events.
@@ -188,7 +180,7 @@ impl<T: Trait> Module<T> {
 		T::RejectOrigin::ensure_origin(origin)?;
 
 		let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
-		
+
 		let value = proposal.bond;
 		let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
 
@@ -215,7 +207,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn configure(
-		origin: T::Origin, 
+		origin: T::Origin,
 		proposal_bond: Permill,
 		proposal_bond_minimum: T::Balance,
 		spend_period: T::BlockNumber,
@@ -260,7 +252,7 @@ impl<T: Trait> Module<T> {
 					true
 				}
 			} else {
-				false	
+				false
 			}
 		}).collect();
 		<Approvals<T>>::put(remaining_approvals);
