@@ -77,7 +77,7 @@ mod tests {
 			Extrinsic { transfer: tx, signature }
 		}).collect::<Vec<_>>();
 
-		let extrinsics_root = ordered_trie_root(transactions.iter().map(Encode::encode)).0.into();
+		let extrinsics_root = ordered_trie_root::<KeccakHasher, _, _>(transactions.iter().map(Encode::encode)).into();
 
 		println!("root before: {:?}", extrinsics_root);
 		let mut header = Header {

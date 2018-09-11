@@ -20,14 +20,13 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{self, OverlayedChanges, Ext,
 	CodeExecutor, ExecutionManager, native_when_possible};
-use runtime_io::Externalities;
 use executor::{RuntimeVersion, RuntimeInfo};
 use patricia_trie::NodeCodec;
-use primitives::{KeccakHasher, RlpCodec};
 use hashdb::Hasher;
 use rlp::Encodable;
 use memorydb::MemoryDB;
 use codec::Decode;
+use primitives::{KeccakHasher, RlpCodec};
 
 use backend;
 use error;
@@ -144,13 +143,18 @@ where
 	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
-		let changes_trie_storage = self.backend.changes_trie_storage();
-		let mut externalities = Ext::new(&mut overlay, &state, changes_trie_storage);
-		let code = externalities.storage(b":code").ok_or(error::ErrorKind::VersionInvalid)?
+		use state_machine::Backend;
+		let code = state.storage(b":code")
+			.map_err(|e| error::ErrorKind::Execution(Box::new(e)))?
+			.ok_or(error::ErrorKind::VersionInvalid)?
 			.to_vec();
-		let heap_pages = externalities.storage(b":heappages").and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
+		let heap_pages = state.storage(b":heappages")
+			.map_err(|e| error::ErrorKind::Execution(Box::new(e)))?
+			.and_then(|v| u64::decode(&mut &v[..]))
+			.unwrap_or(8) as usize;
 
-		self.executor.runtime_version(&mut externalities, heap_pages, &code)
+		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage());
+		self.executor.runtime_version(&mut ext, heap_pages, &code)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 

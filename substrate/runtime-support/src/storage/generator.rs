@@ -108,10 +108,13 @@ pub trait StorageValue<T: codec::Codec> {
 	/// Take a value from storage, removing it afterwards.
 	fn take<S: Storage>(storage: &S) -> Self::Query;
 
-	/// Store a value under this key into the provded storage instance.
+	/// Store a value under this key into the provided storage instance.
 	fn put<S: Storage>(val: &T, storage: &S) {
 		storage.put(Self::key(), val)
 	}
+
+	/// Mutate this value
+	fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(f: F, storage: &S);
 
 	/// Clear the storage value.
 	fn kill<S: Storage>(storage: &S) {
@@ -180,6 +183,9 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	fn remove<S: Storage>(key: &K, storage: &S) {
 		storage.kill(&Self::key_for(key)[..]);
 	}
+
+	/// Mutate the value under a key.
+	fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(key: &K, f: F, storage: &S);
 }
 
 // TODO: Remove this in favour of `decl_storage` macro.
@@ -188,103 +194,103 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 macro_rules! storage_items {
 	// simple values
 	($name:ident : $key:expr => $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!(() () (Option<$ty>) (get) (take) $name: $key => $ty);
+		__storage_items_internal!(() () (OPTION_TYPE Option<$ty>) (get) (take) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $key:expr => $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!((pub) () (Option<$ty>) (get) (take) $name: $key => $ty);
+		__storage_items_internal!((pub) () (OPTION_TYPE Option<$ty>) (get) (take) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!(() () ($ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		__storage_items_internal!(() () (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $key:expr => default $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!((pub) () ($ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		__storage_items_internal!((pub) () (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!(() () ($ty) (require) (take_or_panic) $name: $key => $ty);
+		__storage_items_internal!(() () (RAW_TYPE $ty) (require) (take_or_panic) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $key:expr => required $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!((pub) () ($ty) (require) (take_or_panic) $name: $key => $ty);
+		__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (take_or_panic) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 
 	($name:ident get($getfn:ident) : $key:expr => $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!(() ($getfn) (Option<$ty>) (get) (take) $name: $key => $ty);
+		__storage_items_internal!(() ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $key:expr => $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!((pub) ($getfn) (Option<$ty>) (get) (take) $name: $key => $ty);
+		__storage_items_internal!((pub) ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!(() ($getfn) ($ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $key:expr => default $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!((pub) ($getfn) ($ty) (get_or_default) (take_or_default) $name: $key => $ty);
+		__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!(() ($getfn) ($ty) (require) (take_or_panic) $name: $key => $ty);
+		__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $key:expr => required $ty:ty; $($t:tt)*) => {
-		__storage_items_internal!((pub) ($getfn) ($ty) (require) (take_or_panic) $name: $key => $ty);
+		__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $name: $key => $ty);
 		storage_items!($($t)*);
 	};
 
 	// maps
 	($name:ident : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!(() () (Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!(() () (OPTION_TYPE Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!((pub) () (Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!((pub) () (OPTION_TYPE Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!(() () ($ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!(() () (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!((pub) () ($ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!((pub) () (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!(() () ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!(() () (RAW_TYPE $ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!((pub) () ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!((pub) () (RAW_TYPE $ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 
 	($name:ident get($getfn:ident) : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!(() ($getfn) (Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!(() ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $prefix:expr => map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!((pub) ($getfn) (Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!((pub) ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!(() ($getfn) ($ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $prefix:expr => default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!((pub) ($getfn) ($ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	($name:ident get($getfn:ident) : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!(() ($getfn) ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!(() ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 	(pub $name:ident get($getfn:ident) : $prefix:expr => required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__storage_items_internal!((pub) ($getfn) ($ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
+		__storage_items_internal!((pub) ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $name: $prefix => map [$kty => $ty]);
 		storage_items!($($t)*);
 	};
 
@@ -303,13 +309,24 @@ macro_rules! storage_items {
 
 #[macro_export]
 #[doc(hidden)]
+macro_rules! __handle_wrap_internal {
+	(RAW_TYPE { $($raw:tt)* } { $($option:tt)* }) => {
+		$($raw)*;
+	};
+	(OPTION_TYPE { $($raw:tt)* } { $($option:tt)* }) => {
+		$($option)*;
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
 macro_rules! __storage_items_internal {
 	// generator for values.
-	(($($vis:tt)*) ($get_fn:ident) ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
-		__storage_items_internal!{ ($($vis)*) () ($gettype) ($getter) ($taker) $name : $key => $ty }
+	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
+		__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $key => $ty }
 		pub fn $get_fn() -> $gettype { <$name as $crate::storage::generator::StorageValue<$ty>> :: get(&$crate::storage::RuntimeStorage) }
 	};
-	(($($vis:tt)*) () ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
+	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $key:expr => $ty:ty) => {
 		$($vis)* struct $name;
 
 		impl $crate::storage::generator::StorageValue<$ty> for $name {
@@ -329,16 +346,34 @@ macro_rules! __storage_items_internal {
 			fn take<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
 				storage.$taker($key)
 			}
+
+			/// Mutate this value.
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
+				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
+
+				f(&mut val);
+
+				__handle_wrap_internal!($wraptype {
+					// raw type case
+					<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage)
+				} {
+					// Option<> type case
+					match val {
+						Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
+						None => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
+					}
+				});
+			}
 		}
 	};
 	// generator for maps.
-	(($($vis:tt)*) ($get_fn:ident) ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
-		__storage_items_internal!{ ($($vis)*) () ($gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
+	(($($vis:tt)*) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
+		__storage_items_internal!{ ($($vis)*) () ($wraptype $gettype) ($getter) ($taker) $name : $prefix => map [$kty => $ty] }
 		pub fn $get_fn<K: $crate::storage::generator::Borrow<$kty>>(key: K) -> $gettype {
 			<$name as $crate::storage::generator::StorageMap<$kty, $ty>> :: get(key.borrow(), &$crate::storage::RuntimeStorage)
 		}
 	};
-	(($($vis:tt)*) () ($gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
+	(($($vis:tt)*) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $name:ident : $prefix:expr => map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name;
 
 		impl $crate::storage::generator::StorageMap<$kty, $ty> for $name {
@@ -366,6 +401,24 @@ macro_rules! __storage_items_internal {
 			fn take<S: $crate::GenericStorage>(key: &$kty, storage: &S) -> Self::Query {
 				let key = <$name as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$taker(&key[..])
+			}
+
+			/// Mutate the value under a key.
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
+				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+
+				f(&mut val);
+
+				__handle_wrap_internal!($wraptype {
+					// raw type case
+					<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage)
+				} {
+					// Option<> type case
+					match val {
+						Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+					}
+				});
 			}
 		}
 	};
@@ -477,6 +530,7 @@ macro_rules! decl_storage {
 		}
 		impl<$traitinstance: $traittype> $modulename<$traitinstance> {
 			__impl_store_fns!($traitinstance $($t)*);
+			__impl_store_json_metadata!($cratename; $($t)*);
 		}
 	};
 	(
@@ -501,104 +555,104 @@ macro_rules! decl_storage {
 #[doc(hidden)]
 macro_rules! __decl_storage_items {
 	// simple values
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident : $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) () (Option<$ty>) (get) (take) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) () (OPTION_TYPE Option<$ty>) (get) (take) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident : $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) () (Option<$ty>) (get) (take) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) () (OPTION_TYPE Option<$ty>) (get) (take) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident : default $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) () ($ty) (get_or_default) (take_or_default) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident : default $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) () (RAW_TYPE $ty) (get_or_default) (take_or_default) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident : default $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) () ($ty) (get_or_default) (take_or_default) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident : default $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) () (RAW_TYPE $ty) (get_or_default) (take_or_default) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident : required $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) () ($ty) (require) (take_or_panic) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident : required $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) () (RAW_TYPE $ty) (require) (take_or_panic) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident : required $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) () ($ty) (require) (take_or_panic) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident : required $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) () (RAW_TYPE $ty) (require) (take_or_panic) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
 
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) (Option<$ty>) (get) (take) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) (Option<$ty>) (get) (take) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) ($ty) (get_or_default) (take_or_default) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) ($ty) (get_or_default) (take_or_default) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) ($ty) (require) (take_or_panic) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) ($ty) (require) (take_or_panic) $cratename $name: $ty);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $cratename $name: $ty);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
 
 	// maps
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) () (Option<$ty>) (get) (take) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) () (OPTION_TYPE Option<$ty>) (get) (take) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) () (Option<$ty>) (get) (take) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) () (OPTION_TYPE Option<$ty>) (get) (take) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) () ($ty) (get_or_default) (take_or_default) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) () (RAW_TYPE $ty) (get_or_default) (take_or_default) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) () ($ty) (get_or_default) (take_or_default) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) () (RAW_TYPE $ty) (get_or_default) (take_or_default) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) () ($ty) (require) (take_or_panic) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) () (RAW_TYPE $ty) (require) (take_or_panic) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) () ($ty) (require) (take_or_panic) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) () (RAW_TYPE $ty) (require) (take_or_panic) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
 
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) (Option<$ty>) (get) (take) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) (Option<$ty>) (get) (take) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) (OPTION_TYPE Option<$ty>) (get) (take) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) ($ty) (get_or_default) (take_or_default) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) ($ty) (get_or_default) (take_or_default) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) (RAW_TYPE $ty) (get_or_default) (take_or_default) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) ($ty) (require) (take_or_panic) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!(() ($traittype as $traitinstance) ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
-	($cratename:ident $traittype:ident $traitinstance:ident pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) ($ty) (require) (take_or_panic) $cratename $name: map [$kty => $ty]);
+	($cratename:ident $traittype:ident $traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_storage_item!((pub) ($traittype as $traitinstance) ($getfn) (RAW_TYPE $ty) (require) (take_or_panic) $cratename $name: map [$kty => $ty]);
 		__decl_storage_items!($cratename $traittype $traitinstance $($t)*);
 	};
 
@@ -610,10 +664,10 @@ macro_rules! __decl_storage_items {
 #[doc(hidden)]
 macro_rules! __decl_storage_item {
 	// generator for values.
-	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) ($get_fn:ident) ($gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : $ty:ty) => {
-		__decl_storage_item!{ ($($vis)*) ($traittype as $traitinstance) () ($gettype) ($getter) ($taker) $cratename $name : $ty }
+	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : $ty:ty) => {
+		__decl_storage_item!{ ($($vis)*) ($traittype as $traitinstance) () ($wraptype $gettype) ($getter) ($taker) $cratename $name : $ty }
 	};
-	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () ($gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : $ty:ty) => {
+	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : $ty:ty) => {
 		$($vis)* struct $name<$traitinstance: $traittype>($crate::storage::generator::PhantomData<$traitinstance>);
 
 		impl<$traitinstance: $traittype> $crate::storage::generator::StorageValue<$ty> for $name<$traitinstance> {
@@ -633,13 +687,31 @@ macro_rules! __decl_storage_item {
 			fn take<S: $crate::GenericStorage>(storage: &S) -> Self::Query {
 				storage.$taker(<$name<$traitinstance> as $crate::storage::generator::StorageValue<$ty>>::key())
 			}
+
+			/// Mutate the value under a key.
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
+				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
+
+				f(&mut val);
+
+				__handle_wrap_internal!($wraptype {
+					// raw type case
+					<Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage)
+				} {
+					// Option<> type case
+					match val {
+						Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
+						None => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
+					}
+				})
+			}
 		}
 	};
 	// generator for maps.
-	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) ($get_fn:ident) ($gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
-		__decl_storage_item!{ ($($vis)*) ($traittype as $traitinstance) () ($gettype) ($getter) ($taker) $cratename $name : map [$kty => $ty] }
+	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) ($get_fn:ident) ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
+		__decl_storage_item!{ ($($vis)*) ($traittype as $traitinstance) () ($wraptype $gettype) ($getter) ($taker) $cratename $name : map [$kty => $ty] }
 	};
-	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () ($gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
+	(($($vis:tt)*) ($traittype:ident as $traitinstance:ident) () ($wraptype:ident $gettype:ty) ($getter:ident) ($taker:ident) $cratename:ident $name:ident : map [$kty:ty => $ty:ty]) => {
 		$($vis)* struct $name<$traitinstance: $traittype>($crate::storage::generator::PhantomData<$traitinstance>);
 
 		impl<$traitinstance: $traittype> $crate::storage::generator::StorageMap<$kty, $ty> for $name<$traitinstance> {
@@ -668,6 +740,22 @@ macro_rules! __decl_storage_item {
 				let key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::key_for(key);
 				storage.$taker(&key[..])
 			}
+
+			/// Mutate the value under a key
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
+				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
+
+				f(&mut val);
+
+				__handle_wrap_internal!($wraptype {
+					<Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage);
+				} {
+					match val {
+						Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
+					}
+				});
+			}
 		}
 	};
 }
@@ -676,80 +764,80 @@ macro_rules! __decl_storage_item {
 #[doc(hidden)]
 macro_rules! __decl_store_items {
 	// simple values
-	($name:ident : $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident : $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	($name:ident : default $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident : default $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident : default $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident : default $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	($name:ident : required $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident : required $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident : required $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident : required $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
 
-	($name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	($name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	($name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
 
 	// maps
-	($name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	($name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	($name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
 
-	($name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	($name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	($name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
-	(pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
 
@@ -767,91 +855,91 @@ macro_rules! __decl_store_item {
 #[doc(hidden)]
 macro_rules! __impl_store_fns {
 	// simple values
-	($traitinstance:ident $name:ident : $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident : default $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : default $ty:ty; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : default $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : default $ty:ty; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident : required $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : required $ty:ty; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : required $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : required $ty:ty; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
 
-	($traitinstance:ident $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) $gettype $ty);
-		__impl_store_fns!($traitinstance $($t)*);
-	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) $ty);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) $ty);
+		__impl_store_fns!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) $ty);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) $ty);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) $ty);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) $ty);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
 
 	// maps
-	($traitinstance:ident $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
 
-	($traitinstance:ident $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) map [$kty => $ty]);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) map [$kty => $ty]);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) map [$kty => $ty]);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) map [$kty => $ty]);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) map [$kty => $ty]);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) map [$kty => $ty]);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
@@ -879,103 +967,103 @@ macro_rules! __impl_store_fn {
 #[doc(hidden)]
 macro_rules! __impl_store_items {
 	// simple values
-	($traitinstance:ident $name:ident : $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident : default $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : default $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : default $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : default $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident : required $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : required $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : required $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : required $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
 
-	($traitinstance:ident $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
 
 	// maps
-	($traitinstance:ident $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
 
-	($traitinstance:ident $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
-	($traitinstance:ident pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
@@ -990,12 +1078,405 @@ macro_rules! __impl_store_item {
 	($name:ident $traitinstance:ident) => { type $name = $name<$traitinstance>; }
 }
 
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_store_json_metadata {
+	(
+		$cratename:ident;
+		$($rest:tt)*
+	) => {
+		pub fn store_json_metadata() -> &'static str {
+			concat!(r#"{ "prefix": ""#, stringify!($cratename), r#"", "items": {"#,
+				__store_functions_to_json!(""; $($rest)*), " } }")
+		}
+	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __store_functions_to_json {
+	// simple values
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident :
+			$ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident :
+			$ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident :
+			default $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident :
+			default $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident :
+			required $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident :
+			required $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident get($getfn:ident) :
+			$ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident get($getfn:ident) :
+			$ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident get($getfn:ident) :
+			default $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident get($getfn:ident) :
+			default $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident get($getfn:ident) :
+			required $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident get($getfn:ident) :
+			required $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+
+	// maps
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident :
+			map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident :
+			map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident :
+			default map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident :
+			default map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident :
+			required map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident :
+			required map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident get($getfn:ident) :
+			map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident get($getfn:ident) :
+		map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])* $name:ident get($getfn:ident) :
+			default map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident get($getfn:ident) :
+			default map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])* $name:ident get($getfn:ident) :
+			required map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident get($getfn:ident) :
+			required map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	($prefix_str:tt;) => { "" }
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __store_function_to_json {
+	($prefix_str:tt, $fn_doc:expr, $name:ident, $type:expr, $modifier:ident) => {
+		__store_function_to_json!($prefix_str; $fn_doc; $name; $type; 
+			concat!("\"", stringify!($modifier), "\""))
+	};
+	($prefix_str:tt, $fn_doc:expr, $name:ident, $type:expr) => {
+		__store_function_to_json!($prefix_str; $fn_doc; $name; $type; "null")
+	};
+	($prefix_str:tt; $fn_doc:expr; $name:ident; $type:expr; $modifier:expr) => {
+		concat!($prefix_str, " \"", stringify!($name), "\": { ",
+			r#""description": ["#, $fn_doc, " ], ",
+			r#""modifier": "#, $modifier, r#", "type": "#, $type, r#" }"#
+		)
+	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __store_type_to_json {
+	($name:ty) => {
+		concat!("\"", stringify!($name), "\"")
+	};
+	($key: ty, $value:ty) => {
+		concat!(r#"{ "key": ""#, stringify!($key), r#"", "value": ""#,
+			stringify!($value), "\" }")
+	}
+}
+
 #[cfg(test)]
+// Do not complain about unused `dispatch` and `dispatch_aux`.
+#[allow(dead_code)]
 mod tests {
 	use std::collections::HashMap;
 	use std::cell::RefCell;
 	use codec::Codec;
 	use super::*;
+	use serde;
+	use serde_json;
 
 	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
 		fn exists(&self, key: &[u8]) -> bool {
@@ -1059,5 +1540,90 @@ mod tests {
 		assert_eq!(Map::take(&5, &storage), Some([1; 32]));
 		assert!(Map::get(&5, &storage).is_none());
 		assert!(Map::get(&999, &storage).is_none());
+	}
+
+	pub trait Trait {
+		 type Origin;
+	}
+
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	}
+
+	decl_storage! {
+		trait Store for Module<T: Trait> as TestStorage {
+			/// Hello, this is doc!
+			U32 : u32;
+			GETU32 get(u32_getter): u32;
+			pub PUBU32 : u32;
+			pub GETPUBU32 get(pub_u32_getter): u32;
+			U32Default : default u32;
+			GETU32Default get(get_u32_default): default u32;
+			pub PUBU32Default : default u32;
+			pub GETPUBU32Default get(pub_get_u32_default): default u32;
+			U32Required : required u32;
+			GETU32Required get(get_u32_required): required u32;
+			pub PUBU32Required : required u32;
+			pub GETPUBU32Required get(pub_get_u32_required): required u32;
+
+			MAPU32 : map [ u32 => String ];
+			/// Hello, this is doc!
+			/// Hello, this is doc 2!
+			GETMAPU32 get(map_u32_getter): map [ u32 => String ];
+			pub PUBMAPU32 : map [ u32 => String ];
+			pub GETPUBMAPU32 get(map_pub_u32_getter): map [ u32 => String ];
+			MAPU32Default : default map [ u32 => String ];
+			GETMAPU32Default get(map_get_u32_default): default map [ u32 => String ];
+			pub PUBMAPU32Default : default map [ u32 => String ];
+			pub GETPUBMAPU32Default get(map_pub_get_u32_default): default map [ u32 => String ];
+			MAPU32Required : required map [ u32 => String ];
+			GETMAPU32Required get(map_get_u32_required): required map [ u32 => String ];
+			pub PUBMAPU32Required : required map [ u32 => String ];
+			pub GETPUBMAPU32Required get(map_pub_get_u32_required): required map [ u32 => String ];
+
+		}
+	}
+
+	struct TraitImpl {}
+
+	impl Trait for TraitImpl {
+		type Origin = u32;
+	}
+
+	const EXPECTED_METADATA: &str = concat!(
+		r#"{ "prefix": "TestStorage", "items": { "#,
+			r#""U32": { "description": [ " Hello, this is doc!" ], "modifier": null, "type": "u32" }, "#,
+			r#""GETU32": { "description": [ ], "modifier": null, "type": "u32" }, "#,
+			r#""PUBU32": { "description": [ ], "modifier": null, "type": "u32" }, "#,
+			r#""GETPUBU32": { "description": [ ], "modifier": null, "type": "u32" }, "#,
+			r#""U32Default": { "description": [ ], "modifier": "default", "type": "u32" }, "#,
+			r#""GETU32Default": { "description": [ ], "modifier": "default", "type": "u32" }, "#,
+			r#""PUBU32Default": { "description": [ ], "modifier": "default", "type": "u32" }, "#,
+			r#""GETPUBU32Default": { "description": [ ], "modifier": "default", "type": "u32" }, "#,
+			r#""U32Required": { "description": [ ], "modifier": "required", "type": "u32" }, "#,
+			r#""GETU32Required": { "description": [ ], "modifier": "required", "type": "u32" }, "#,
+			r#""PUBU32Required": { "description": [ ], "modifier": "required", "type": "u32" }, "#,
+			r#""GETPUBU32Required": { "description": [ ], "modifier": "required", "type": "u32" }, "#,
+			r#""MAPU32": { "description": [ ], "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETMAPU32": { "description": [ " Hello, this is doc!", " Hello, this is doc 2!" ], "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
+			r#""PUBMAPU32": { "description": [ ], "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETPUBMAPU32": { "description": [ ], "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
+			r#""MAPU32Default": { "description": [ ], "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETMAPU32Default": { "description": [ ], "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""PUBMAPU32Default": { "description": [ ], "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETPUBMAPU32Default": { "description": [ ], "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""MAPU32Required": { "description": [ ], "modifier": "required", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETMAPU32Required": { "description": [ ], "modifier": "required", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""PUBMAPU32Required": { "description": [ ], "modifier": "required", "type": { "key": "u32", "value": "String" } }, "#,
+			r#""GETPUBMAPU32Required": { "description": [ ], "modifier": "required", "type": { "key": "u32", "value": "String" } }"#,
+		" } }"
+	);
+
+	#[test]
+	fn store_json_metadata() {
+		let metadata = Module::<TraitImpl>::store_json_metadata();
+		assert_eq!(EXPECTED_METADATA, metadata);
+		let _: serde::de::IgnoredAny =
+			serde_json::from_str(metadata).expect("Is valid json syntax");
 	}
 }

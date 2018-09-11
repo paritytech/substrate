@@ -17,6 +17,10 @@
 //! Support code for the runtime.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -25,17 +29,41 @@ extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_primitives as primitives;
 
+#[cfg(test)]
+#[macro_use]
+extern crate pretty_assertions;
+#[cfg(test)]
+#[macro_use]
+extern crate serde_derive;
+#[cfg(test)]
+extern crate serde_json;
+#[cfg(test)]
+#[macro_use]
+extern crate substrate_codec_derive;
+
 #[doc(hidden)]
 pub extern crate substrate_codec as codec;
 pub use self::storage::generator::Storage as GenericStorage;
 
+#[cfg(feature = "std")]
+pub mod alloc {
+	pub use std::boxed;
+	pub use std::vec;
+}
+
+#[macro_use]
 pub mod dispatch;
+#[macro_use]
 pub mod storage;
 mod hashable;
+#[macro_use]
+mod event;
+#[macro_use]
+pub mod metadata;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
-pub use self::dispatch::{Parameter, Dispatchable, Callable, AuxDispatchable, AuxCallable, IsSubType, IsAuxSubType};
+pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use runtime_io::print;
 
 
@@ -84,31 +112,78 @@ macro_rules! assert_ok {
 	}
 }
 
+/// The void type - it cannot exist.
+// Oh rust, you crack me up...
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum Void {}
+
 #[macro_export]
-macro_rules! impl_outer_event {
-	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $( $module:ident ),* }) => {
+macro_rules! impl_outer_origin {
+	($(#[$attr:meta])* pub enum $name:ident for $trait:ident where system = $system:ident { $( $module:ident ),* }) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[derive(Clone, PartialEq, Eq)]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum $name {
-			system(system::Event),
+			system($system::Origin<$trait>),
 			$(
-				$module($module::Event<$trait>),
+				$module($module::Origin),
 			)*
+			#[allow(dead_code)]
+			Void($crate::Void)
 		}
-		impl From<system::Event> for $name {
-			fn from(x: system::Event) -> Self {
+		#[allow(dead_code)]
+		impl $name {
+			pub const INHERENT: Self = $name::system($system::RawOrigin::Inherent);
+			pub const ROOT: Self = $name::system($system::RawOrigin::Root);
+			pub fn signed(by: <$trait as $system::Trait>::AccountId) -> Self {
+				$name::system($system::RawOrigin::Signed(by))
+			}
+		}
+		impl From<$system::Origin<$trait>> for $name {
+			fn from(x: $system::Origin<$trait>) -> Self {
 				$name::system(x)
 			}
 		}
+		impl Into<Option<$system::Origin<$trait>>> for $name {
+			fn into(self) -> Option<$system::Origin<$trait>> {
+				if let $name::system(l) = self {
+					Some(l)
+				} else {
+					None
+				}
+			}
+		}
+		impl From<Option<<$trait as $system::Trait>::AccountId>> for $name {
+			fn from(x: Option<<$trait as $system::Trait>::AccountId>) -> Self {
+				<$system::Origin<$trait>>::from(x).into()
+			}
+		}
 		$(
-			impl From<$module::Event<$trait>> for $name {
-				fn from(x: $module::Event<$trait>) -> Self {
+			impl From<$module::Origin> for $name {
+				fn from(x: $module::Origin) -> Self {
 					$name::$module(x)
 				}
 			}
+			impl Into<Option<$module::Origin>> for $name {
+				fn into(self) -> Option<$module::Origin> {
+					if let $name::$module(l) = self {
+						Some(l)
+					} else {
+						None
+					}
+				}
+			}
 		)*
+	};
+	($(#[$attr:meta])* pub enum $name:ident for $trait:ident { $( $module:ident ),* }) => {
+		impl_outer_origin! {
+			$(#[$attr])*
+			pub enum $name for $trait where system = system {
+				$( $module ),*
+			}
+		}
 	}
 }

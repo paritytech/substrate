@@ -32,6 +32,9 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+#[macro_use]
+extern crate substrate_codec_derive;
+
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_primitives as primitives;
 extern crate substrate_codec as codec;
@@ -41,9 +44,11 @@ extern crate substrate_primitives;
 use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
+use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, MaybeEmpty};
+use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member, DigestItem};
 use primitives::bft::MisbehaviorReport;
+use system::{ensure_signed, ensure_inherent, ensure_root};
 
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
@@ -66,28 +71,64 @@ impl OnOfflineValidator for () {
 	fn on_offline_validator(_validator_index: usize) {}
 }
 
+pub type Log<T> = RawLog<
+	<T as Trait>::SessionKey,
+>;
+
+/// A logs in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<SessionKey> {
+	/// Authorities set has been changed. Contains the new set of authorities.
+	AuthoritiesChange(Vec<SessionKey>),
+}
+
+impl<SessionKey: Member> DigestItem for RawLog<SessionKey> {
+	type AuthorityId = SessionKey;
+
+	/// Try to cast the log entry as AuthoritiesChange log entry.
+	fn as_authorities_change(&self) -> Option<&[SessionKey]> {
+		match *self {
+			RawLog::AuthoritiesChange(ref item) => Some(&item),
+		}
+	}
+}
+
+// Implementation for tests outside of this crate.
+impl<N> From<RawLog<N>> for u64 {
+	fn from(log: RawLog<N>) -> u64 {
+		match log {
+			RawLog::AuthoritiesChange(_) => 1,
+		}
+	}
+}
+
 pub trait Trait: system::Trait {
 	/// The allowed extrinsic position for `note_offline` inherent.
 	const NOTE_OFFLINE_POSITION: u32;
+
+	/// Type for all log entries of this module.
+	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
 
 	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 	type OnOfflineValidator: OnOfflineValidator;
 }
 
-decl_module! {
-	pub struct Module<T: Trait>;
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
-		fn report_misbehavior(aux, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result = 0;
-		fn note_offline(aux, offline_val_indices: Vec<u32>) -> Result = 1;
-		fn remark(aux, remark: Vec<u8>) -> Result = 2;
+decl_storage! {
+	trait Store for Module<T: Trait> as Consensus {
+		// Authorities set actual at the block execution start. IsSome only if
+		// the set has been changed.
+		OriginalAuthorities: Vec<T::SessionKey>;
 	}
+}
 
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum PrivCall {
-		fn set_code(new: Vec<u8>) -> Result = 0;
-		fn set_storage(items: Vec<KeyValue>) -> Result = 1;
+decl_module! {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn report_misbehavior(origin, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
+		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result;
+		fn remark(origin, remark: Vec<u8>) -> Result;
+		fn set_code(origin, new: Vec<u8>) -> Result;
+		fn set_storage(origin, items: Vec<KeyValue>) -> Result;
 	}
 }
 
@@ -98,13 +139,15 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the new code.
-	fn set_code(new: Vec<u8>) -> Result {
+	fn set_code(origin: T::Origin, new: Vec<u8>) -> Result {
+		ensure_root(origin)?;
 		storage::unhashed::put_raw(CODE, &new);
 		Ok(())
 	}
 
 	/// Set some items of storage.
-	fn set_storage(items: Vec<KeyValue>) -> Result {
+	fn set_storage(origin: T::Origin, items: Vec<KeyValue>) -> Result {
+		ensure_root(origin)?;
 		for i in &items {
 			storage::unhashed::put_raw(&i.0, &i.1);
 		}
@@ -112,7 +155,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(_aux: &T::PublicAux, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
+	fn report_misbehavior(origin: T::Origin, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
+		ensure_signed(origin)?;
 		// TODO.
 		Ok(())
 	}
@@ -120,8 +164,8 @@ impl<T: Trait> Module<T> {
 	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
 	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
 	/// for the previous block.
-	fn note_offline(aux: &T::PublicAux, offline_val_indices: Vec<u32>) -> Result {
-		assert!(aux.is_empty());
+	fn note_offline(origin: T::Origin, offline_val_indices: Vec<u32>) -> Result {
+		ensure_inherent(origin)?;
 		assert!(
 			<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
 			"note_offline extrinsic must be at position {} in the block",
@@ -136,7 +180,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Make some on-chain remark.
-	fn remark(_aux: &T::PublicAux, _remark: Vec<u8>) -> Result {
+	fn remark(origin: T::Origin, _remark: Vec<u8>) -> Result {
+		ensure_signed(origin)?;
 		Ok(())
 	}
 
@@ -144,12 +189,40 @@ impl<T: Trait> Module<T> {
 	///
 	/// Called by `next_session` only.
 	pub fn set_authorities(authorities: &[T::SessionKey]) {
-		AuthorityStorageVec::<T::SessionKey>::set_items(authorities);
+		let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
+		if current_authorities != authorities {
+			Self::save_original_authorities(Some(current_authorities));
+			AuthorityStorageVec::<T::SessionKey>::set_items(authorities);
+		}
 	}
 
 	/// Set a single authority by index.
 	pub fn set_authority(index: u32, key: &T::SessionKey) {
-		AuthorityStorageVec::<T::SessionKey>::set_item(index, key);
+		let current_authority = AuthorityStorageVec::<T::SessionKey>::item(index);
+		if current_authority != *key {
+			Self::save_original_authorities(None);
+			AuthorityStorageVec::<T::SessionKey>::set_item(index, key);
+		}
+	}
+
+	/// Save original authorities set.
+	fn save_original_authorities(current_authorities: Option<Vec<T::SessionKey>>) {
+		if OriginalAuthorities::<T>::get().is_some() {
+			// if we have already saved original set before, do not overwrite
+			return;
+		}
+
+		<OriginalAuthorities<T>>::put(current_authorities.unwrap_or_else(||
+			AuthorityStorageVec::<T::SessionKey>::items()));
+	}
+}
+
+/// Finalization hook for the consensus module.
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
+		if let Some(_) = <OriginalAuthorities<T>>::take() {
+			// TODO: call Self::deposit_log
+		}
 	}
 }
 

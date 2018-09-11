@@ -27,6 +27,10 @@ extern crate ethkey;
 extern crate libc;
 extern crate libp2p;
 extern crate rand;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+extern crate serde_json;
 extern crate bytes;
 extern crate unsigned_varint;
 
@@ -52,6 +56,7 @@ mod error;
 mod network_state;
 mod service;
 mod timeouts;
+mod topology;
 mod traits;
 mod transport;
 

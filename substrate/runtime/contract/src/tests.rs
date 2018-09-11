@@ -17,7 +17,7 @@
 use double_map::StorageDoubleMap;
 use runtime_io::with_externalities;
 use runtime_primitives::testing::{Digest, H256, Header};
-use runtime_primitives::traits::{BlakeTwo256, HasPublicAux};
+use runtime_primitives::traits::{BlakeTwo256};
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
 use substrate_primitives::{KeccakHasher, RlpCodec};
@@ -27,13 +27,14 @@ use {
 	GenesisConfig, Module, StorageOf, Trait,
 };
 
+impl_outer_origin! {
+	pub enum Origin for Test {}
+}
+
 #[derive(Clone, Eq, PartialEq)]
 pub struct Test;
-impl HasPublicAux for Test {
-	type PublicAux = u64;
-}
 impl system::Trait for Test {
-	type PublicAux = <Self as HasPublicAux>::PublicAux;
+	type Origin = Origin;
 	type Index = u64;
 	type BlockNumber = u64;
 	type Hash = H256;
@@ -60,7 +61,7 @@ type Contract = Module<Test>;
 
 pub struct DummyContractAddressFor;
 impl ContractAddressFor<u64> for DummyContractAddressFor {
-	fn contract_address_for(_code: &[u8], origin: &u64) -> u64 {
+	fn contract_address_for(_code: &[u8], _data: &[u8], origin: &u64) -> u64 {
 		origin + 1
 	}
 }
@@ -173,7 +174,7 @@ fn contract_transfer() {
 		Balances::set_free_balance(&1, 11);
 		Balances::increase_total_stake_by(11);
 
-		assert_ok!(Contract::call(&0, 1, 3, 100_000, Vec::new()));
+		assert_ok!(Contract::call(Origin::signed(0), 1, 3, 100_000, Vec::new()));
 
 		assert_eq!(
 			Balances::free_balance(&0),
@@ -208,7 +209,7 @@ fn contract_transfer_oog() {
 		Balances::set_free_balance(&1, 11);
 		Balances::increase_total_stake_by(11);
 
-		assert_ok!(Contract::call(&0, 1, 3, 135 + 135 + 7, Vec::new()));
+		assert_ok!(Contract::call(Origin::signed(0), 1, 3, 135 + 135 + 7, Vec::new()));
 
 		assert_eq!(
 			Balances::free_balance(&0),
@@ -240,7 +241,7 @@ fn contract_transfer_max_depth() {
 		Balances::set_free_balance(&CONTRACT_SHOULD_TRANSFER_TO, 11);
 		Balances::increase_total_stake_by(11);
 
-		assert_ok!(Contract::call(&0, CONTRACT_SHOULD_TRANSFER_TO, 3, 100_000, Vec::new()));
+		assert_ok!(Contract::call(Origin::signed(0), CONTRACT_SHOULD_TRANSFER_TO, 3, 100_000, Vec::new()));
 
 		assert_eq!(
 			Balances::free_balance(&0),
@@ -352,10 +353,11 @@ fn contract_create() {
 		<CodeOf<Test>>::insert(1, code_create.to_vec());
 
 		// When invoked, the contract at address `1` must create a contract with 'transfer' code.
-		assert_ok!(Contract::call(&0, 1, 11, 100_000, Vec::new()));
+		assert_ok!(Contract::call(Origin::signed(0), 1, 11, 100_000, Vec::new()));
 
 		let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 			&code_ctor_transfer,
+			&[],
 			&1,
 		);
 
@@ -371,7 +373,7 @@ fn contract_create() {
 		assert_eq!(Balances::free_balance(&derived_address), 3);
 
 		// Initiate transfer to the newly created contract.
-		assert_ok!(Contract::call(&0, derived_address, 22, 100_000, Vec::new()));
+		assert_ok!(Contract::call(Origin::signed(0), derived_address, 22, 100_000, Vec::new()));
 
 		assert_eq!(
 			Balances::free_balance(&0),
@@ -394,6 +396,7 @@ fn top_level_create() {
 	with_externalities(&mut ExtBuilder::default().gas_price(3).build(), || {
 		let derived_address = <Test as Trait>::DetermineContractAddress::contract_address_for(
 			&code_ctor_transfer,
+			&[],
 			&0,
 		);
 
@@ -403,7 +406,7 @@ fn top_level_create() {
 		Balances::increase_total_stake_by(30);
 
 		assert_ok!(Contract::create(
-			&0,
+			Origin::signed(0),
 			11,
 			100_000,
 			code_ctor_transfer.clone(),
@@ -442,7 +445,7 @@ fn refunds_unused_gas() {
 		Balances::set_free_balance(&0, 100_000_000);
 		Balances::increase_total_stake_by(100_000_000);
 
-		assert_ok!(Contract::call(&0, 1, 0, 100_000, Vec::new()));
+		assert_ok!(Contract::call(Origin::signed(0), 1, 0, 100_000, Vec::new()));
 
 		assert_eq!(Balances::free_balance(&0), 100_000_000 - 4 - (2 * 135));
 	});
@@ -456,7 +459,7 @@ fn call_with_zero_value() {
 		Balances::set_free_balance(&0, 100_000_000);
 		Balances::increase_total_stake_by(100_000_000);
 
-		assert_ok!(Contract::call(&0, 1, 0, 100_000, Vec::new()));
+		assert_ok!(Contract::call(Origin::signed(0), 1, 0, 100_000, Vec::new()));
 
 		assert_eq!(Balances::free_balance(&0), 100_000_000 - (2 * 135));
 	});
@@ -470,7 +473,7 @@ fn create_with_zero_endowment() {
 		Balances::set_free_balance(&0, 100_000_000);
 		Balances::increase_total_stake_by(100_000_000);
 
-		assert_ok!(Contract::create(&0, 0, 100_000, code_nop, Vec::new()));
+		assert_ok!(Contract::create(Origin::signed(0), 0, 100_000, code_nop, Vec::new()));
 
 		assert_eq!(
 			Balances::free_balance(&0),
@@ -503,7 +506,7 @@ fn account_removal_removes_storage() {
 			// the balance of account 1 is will be below than exsistential threshold.
 			//
 			// This should lead to the removal of all storage associated with this account.
-			assert_ok!(Balances::transfer(&1, 2.into(), 20));
+			assert_ok!(Balances::transfer(Origin::signed(1), 2.into(), 20));
 
 			// Verify that all entries from account 1 is removed, while
 			// entries from account 2 is in place.
@@ -543,7 +546,7 @@ fn top_level_call_refunds_even_if_fails() {
 		Balances::increase_total_stake_by(100_000_000);
 
 		assert_err!(
-			Contract::call(&0, 1, 0, 100_000, Vec::new()),
+			Contract::call(Origin::signed(0), 1, 0, 100_000, Vec::new()),
 			"vm execute returned error while call"
 		);
 
@@ -574,19 +577,19 @@ fn block_gas_limit() {
 
 			// Spend 50_000 units of gas (OOG).
 			assert_err!(
-				Contract::call(&0, 1, 0, 50_000, Vec::new()),
+				Contract::call(Origin::signed(0), 1, 0, 50_000, Vec::new()),
 				"vm execute returned error while call"
 			);
 
 			// Ensure we can't spend more gas than available in block gas limit.
 			assert_err!(
-				Contract::call(&0, 1, 0, 50_001, Vec::new()),
+				Contract::call(Origin::signed(0), 1, 0, 50_001, Vec::new()),
 				"block gas limit is reached"
 			);
 
 			// However, we can spend another 50_000
 			assert_err!(
-				Contract::call(&0, 1, 0, 50_000, Vec::new()),
+				Contract::call(Origin::signed(0), 1, 0, 50_000, Vec::new()),
 				"vm execute returned error while call"
 			);
 		},
@@ -659,7 +662,7 @@ fn input_data() {
 			Balances::set_free_balance(&0, 100_000_000);
 			Balances::increase_total_stake_by(100_000_000);
 
-			assert_ok!(Contract::call(&0, 1, 0, 50_000, vec![0, 1, 2, 3]));
+			assert_ok!(Contract::call(Origin::signed(0), 1, 0, 50_000, vec![0, 1, 2, 3]));
 
 			// all asserts are made within contract code itself.
 		},

@@ -22,6 +22,7 @@ use runtime_io;
 #[cfg(feature = "std")] use std::fmt::{Debug, Display};
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 use substrate_primitives;
+use substrate_primitives::KeccakHasher;
 use codec::{Codec, Encode};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
@@ -46,8 +47,14 @@ pub trait Verify {
 	fn verify<L: Lazy<[u8]>>(&self, msg: L, signer: &Self::Signer) -> bool;
 }
 
+/// Some sort of check on the origin is performed by this object.
+pub trait EnsureOrigin<OuterOrigin> {
+	type Success;
+	fn ensure_origin(o: OuterOrigin) -> Result<Self::Success, &'static str>;
+}
+
 /// Means of changing one type into another in a manner dependent on the source type.
-pub trait AuxLookup {
+pub trait Lookup {
 	/// Type to lookup from.
 	type Source;
 	/// Type to lookup into.
@@ -106,20 +113,6 @@ impl<T> Convert<T, T> for Identity {
 }
 impl<T> Convert<T, ()> for () {
 	fn convert(_: T) -> () { () }
-}
-
-pub trait MaybeEmpty {
-	fn is_empty(&self) -> bool;
-}
-
-impl<T: Default + PartialEq> MaybeEmpty for T {
-	fn is_empty(&self) -> bool {
-		*self == T::default()
-	}
-}
-
-pub trait HasPublicAux {
-	type PublicAux: MaybeEmpty;
 }
 
 pub trait RefInto<T> {
@@ -184,20 +177,40 @@ impl<T:
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
-/// Something that can be executed.
-pub trait Executable {
-	fn execute();
+/// The block finalisation trait. Implementing this lets you express what should happen
+/// for your module when the block is ending.
+pub trait OnFinalise<BlockNumber> {
+	/// The block is being finalised. Implement to have something happen.
+	fn on_finalise(_n: BlockNumber) {}
 }
 
-impl Executable for () {
-	fn execute() {}
-}
-impl<A: Executable, B: Executable> Executable for (A, B) {
-	fn execute() {
-		A::execute();
-		B::execute();
+impl<N> OnFinalise<N> for () {}
+
+macro_rules! tuple_impl {
+	($one:ident,) => {
+		impl<Number: Copy, $one: OnFinalise<Number>> OnFinalise<Number> for ($one,) {
+			fn on_finalise(n: Number) {
+				$one::on_finalise(n);
+			}
+		}
+	};
+	($first:ident, $($rest:ident,)+) => {
+		impl<
+			Number: Copy,
+			$first: OnFinalise<Number>,
+			$($rest: OnFinalise<Number>),+
+		> OnFinalise<Number> for ($first, $($rest),+) {
+			fn on_finalise(n: Number) {
+				$first::on_finalise(n);
+				$($rest::on_finalise(n);)+
+			}
+		}
+		tuple_impl!($($rest,)+);
 	}
 }
+
+#[allow(non_snake_case)]
+tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z,);
 
 /// Abstraction around hashing
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
@@ -247,20 +260,20 @@ impl Hash for BlakeTwo256 {
 		runtime_io::blake2_256(s).into()
 	}
 	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output {
-		runtime_io::enumerated_trie_root(items).into()
+		runtime_io::enumerated_trie_root::<KeccakHasher>(items).into()
 	}
 	fn trie_root<
 		I: IntoIterator<Item = (A, B)>,
 		A: AsRef<[u8]> + Ord,
 		B: AsRef<[u8]>
 	>(input: I) -> Self::Output {
-		runtime_io::trie_root(input).into()
+		runtime_io::trie_root::<KeccakHasher, _, _, _>(input).into()
 	}
 	fn ordered_trie_root<
 		I: IntoIterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output {
-		runtime_io::ordered_trie_root(input).into()
+		runtime_io::ordered_trie_root::<KeccakHasher, _, _>(input).into()
 	}
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
@@ -349,13 +362,6 @@ impl<T> MaybeDisplay for T {}
 pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
-/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
-/// each `Codec`.
-pub trait Digest {
-	type Item: Member;
-	fn push(&mut self, item: Self::Item);
-}
-
 /// Something which fulfills the abstract idea of a Substrate header. It has types for a `Number`,
 /// a `Hash` and a `Digest`. It provides access to an `extrinsics_root`, `state_root` and
 /// `parent_hash`, as well as a `digest` and a block `number`.
@@ -365,7 +371,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Member + Default;
+	type Digest: Digest;
 
 	fn new(
 		number: Self::Number,
@@ -462,6 +468,27 @@ pub trait Applyable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
 	fn index(&self) -> &Self::Index;
-	fn sender(&self) -> &Self::AccountId;
+	fn sender(&self) -> Option<&Self::AccountId>;
 	fn apply(self) -> Result<(), &'static str>;
+}
+
+/// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
+/// each `Codec`.
+pub trait Digest: Member + Default {
+	type Item: DigestItem;
+	fn logs(&self) -> &[Self::Item];
+	fn push(&mut self, item: Self::Item);
+}
+
+/// Single digest item. Could be any type that implements `Member` and provides methods
+/// for casting member to 'system' log items, known to substrate.
+///
+/// If the runtime does not supports some 'system' items, use `()` as a stub.
+pub trait DigestItem: Member {
+	type AuthorityId;
+
+ 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
+	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+		None
+	}
 }

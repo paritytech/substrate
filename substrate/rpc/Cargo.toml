@@ -19,6 +19,7 @@ substrate-runtime-primitives = { path = "../runtime/primitives" }
 substrate-runtime-version = { path = "../runtime/version" }
 substrate-state-machine = { path = "../state-machine" }
 tokio = "0.1.7"
+serde_json = "1.0"
 
 [dev-dependencies]
 assert_matches = "1.1"

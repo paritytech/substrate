@@ -50,6 +50,7 @@ extern crate memorydb;
 pub mod error;
 pub mod blockchain;
 pub mod backend;
+pub mod cht;
 pub mod in_mem;
 pub mod genesis;
 pub mod block_builder;

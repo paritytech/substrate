@@ -20,7 +20,7 @@
 
 use super::*;
 use runtime_io::with_externalities;
-use mock::{Balances, System, Test, new_test_ext};
+use mock::{Balances, System, Runtime, new_test_ext};
 
 #[test]
 fn reward_should_work() {
@@ -28,7 +28,7 @@ fn reward_should_work() {
 		assert_eq!(Balances::total_balance(&1), 10);
 		assert_ok!(Balances::reward(&1, 10));
 		assert_eq!(Balances::total_balance(&1), 20);
-		assert_eq!(<TotalIssuance<Test>>::get(), 110);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 110);
 	});
 }
 
@@ -47,7 +47,7 @@ fn indexing_lookup_should_work() {
 fn default_indexing_on_new_accounts_should_work() {
 	with_externalities(&mut new_test_ext(10, true), || {
 		assert_eq!(Balances::lookup_index(4), None);
-		assert_ok!(Balances::transfer(&1, 5.into(), 10));
+		assert_ok!(Balances::transfer(Some(1).into(), 5.into(), 10));
 		assert_eq!(Balances::lookup_index(4), Some(5));
 	});
 }
@@ -59,7 +59,7 @@ fn dust_account_removal_should_work() {
 		assert_eq!(System::account_nonce(&2), 1);
 		assert_eq!(Balances::total_balance(&2), 256 * 20);
 
-		assert_ok!(Balances::transfer(&2, 5.into(), 256 * 10 + 1));	// index 1 (account 2) becomes zombie
+		assert_ok!(Balances::transfer(Some(2).into(), 5.into(), 256 * 10 + 1));	// index 1 (account 2) becomes zombie
 		assert_eq!(Balances::total_balance(&2), 0);
 		assert_eq!(Balances::total_balance(&5), 256 * 10 + 1);
 		assert_eq!(System::account_nonce(&2), 0);
@@ -73,10 +73,10 @@ fn reclaim_indexing_on_new_accounts_should_work() {
 		assert_eq!(Balances::lookup_index(4), None);
 		assert_eq!(Balances::total_balance(&2), 256 * 20);
 
-		assert_ok!(Balances::transfer(&2, 5.into(), 256 * 20));	// account 2 becomes zombie freeing index 1 for reclaim)
+		assert_ok!(Balances::transfer(Some(2).into(), 5.into(), 256 * 20));	// account 2 becomes zombie freeing index 1 for reclaim)
 		assert_eq!(Balances::total_balance(&2), 0);
 
-		assert_ok!(Balances::transfer(&5, 6.into(), 256 * 1 + 0x69));	// account 6 takes index 1.
+		assert_ok!(Balances::transfer(Some(5).into(), 6.into(), 256 * 1 + 0x69));	// account 6 takes index 1.
 		assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
 		assert_eq!(Balances::lookup_index(1), Some(6));
 	});
@@ -95,7 +95,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 		assert_eq!(Balances::total_balance(&2), 256 * 19 + 1);			// reserve still exists.
 		assert_eq!(System::account_nonce(&2), 1);
 
-		assert_ok!(Balances::transfer(&4, 5.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 for account 5.
+		assert_ok!(Balances::transfer(Some(4).into(), 5.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 for account 5.
 		assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
 		assert_eq!(Balances::lookup_index(1), Some(2));					// but fails.
 		assert_eq!(System::account_nonce(&2), 1);
@@ -104,7 +104,7 @@ fn reserved_balance_should_prevent_reclaim_count() {
 		assert_eq!(Balances::total_balance(&2), 0);						// "free" account deleted."
 		assert_eq!(System::account_nonce(&2), 0);
 
-		assert_ok!(Balances::transfer(&4, 6.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 again for account 6.
+		assert_ok!(Balances::transfer(Some(4).into(), 6.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 again for account 6.
 		assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
 		assert_eq!(Balances::lookup_index(1), Some(6));					// and succeeds.
 	});
@@ -128,7 +128,7 @@ fn balance_transfer_works() {
 	with_externalities(&mut new_test_ext(0, false), || {
 		Balances::set_free_balance(&1, 111);
 		Balances::increase_total_stake_by(111);
-		assert_ok!(Balances::transfer(&1, 2.into(), 69));
+		assert_ok!(Balances::transfer(Some(1).into(), 2.into(), 69));
 		assert_eq!(Balances::total_balance(&1), 42);
 		assert_eq!(Balances::total_balance(&2), 69);
 	});
@@ -156,7 +156,7 @@ fn balance_transfer_when_reserved_should_not_work() {
 	with_externalities(&mut new_test_ext(0, false), || {
 		Balances::set_free_balance(&1, 111);
 		assert_ok!(Balances::reserve(&1, 69));
-		assert_noop!(Balances::transfer(&1, 2.into(), 69), "balance too low to send value");
+		assert_noop!(Balances::transfer(Some(1).into(), 2.into(), 69), "balance too low to send value");
 	});
 }
 
@@ -189,7 +189,7 @@ fn slashing_balance_should_work() {
 		assert!(Balances::slash(&1, 69).is_none());
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 42);
-		assert_eq!(<TotalIssuance<Test>>::get(), 44);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 44);
 	});
 }
 
@@ -202,7 +202,7 @@ fn slashing_incomplete_balance_should_work() {
 		assert!(Balances::slash(&1, 69).is_some());
 		assert_eq!(Balances::free_balance(&1), 0);
 		assert_eq!(Balances::reserved_balance(&1), 0);
-		assert_eq!(<TotalIssuance<Test>>::get(), 2);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 2);
 	});
 }
 
@@ -226,7 +226,7 @@ fn slashing_reserved_balance_should_work() {
 		assert!(Balances::slash_reserved(&1, 42).is_none());
 		assert_eq!(Balances::reserved_balance(&1), 69);
 		assert_eq!(Balances::free_balance(&1), 0);
-		assert_eq!(<TotalIssuance<Test>>::get(), 71);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 71);
 	});
 }
 
@@ -239,7 +239,7 @@ fn slashing_incomplete_reserved_balance_should_work() {
 		assert!(Balances::slash_reserved(&1, 69).is_some());
 		assert_eq!(Balances::free_balance(&1), 69);
 		assert_eq!(Balances::reserved_balance(&1), 0);
-		assert_eq!(<TotalIssuance<Test>>::get(), 71);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 71);
 	});
 }
 
@@ -283,11 +283,11 @@ fn transferring_incomplete_reserved_balance_should_work() {
 #[test]
 fn transferring_too_high_value_should_not_panic() {
 	with_externalities(&mut new_test_ext(0, false), || {
-		<FreeBalance<Test>>::insert(1, u64::max_value());
-		<FreeBalance<Test>>::insert(2, 1);
+		<FreeBalance<Runtime>>::insert(1, u64::max_value());
+		<FreeBalance<Runtime>>::insert(2, 1);
 
 		assert_err!(
-			Balances::transfer(&1, 2.into(), u64::max_value()),
+			Balances::transfer(Some(1).into(), 2.into(), u64::max_value()),
 			"destination balance too high to receive value"
 		);
 
@@ -307,18 +307,18 @@ fn account_removal_on_free_too_low() {
 			Balances::set_free_balance(&2, 110);
 			Balances::increase_total_stake_by(110);
 
-			assert_eq!(<TotalIssuance<Test>>::get(), 732);
+			assert_eq!(<TotalIssuance<Runtime>>::get(), 732);
 		}
 
 		// Transfer funds from account 1 of such amount that after this transfer
 		// the balance of account 1 will be below the exsistential threshold.
 		// This should lead to the removal of all balance of this account.
-		assert_ok!(Balances::transfer(&1, 2.into(), 20));
+		assert_ok!(Balances::transfer(Some(1).into(), 2.into(), 20));
 
 		// Verify free balance removal of account 1.
 		assert_eq!(Balances::free_balance(&1), 0);
 		
 		// Verify that TotalIssuance tracks balance removal when free balance is too low.
-		assert_eq!(<TotalIssuance<Test>>::get(), 642);
+		assert_eq!(<TotalIssuance<Runtime>>::get(), 642);
 	});
 }

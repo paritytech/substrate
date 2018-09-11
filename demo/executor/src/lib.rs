@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate Demo.
 
 // Substrate Demo is free software: you can redistribute it and/or modify
@@ -35,6 +35,8 @@ extern crate triehash;
 #[cfg(test)] extern crate substrate_runtime_staking as staking;
 #[cfg(test)] extern crate substrate_runtime_system as system;
 #[cfg(test)] extern crate substrate_runtime_consensus as consensus;
+#[cfg(test)] extern crate substrate_runtime_timestamp as timestamp;
+#[cfg(test)] extern crate substrate_runtime_treasury as treasury;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
 pub use substrate_executor::NativeExecutor;
@@ -52,13 +54,12 @@ mod tests {
 	use primitives::{twox_128, KeccakHasher, RlpCodec, ChangesTrieConfiguration};
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
-	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult, MaybeUnsigned};
-	use {balances, staking, session, system, consensus};
+	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
+	use {balances, staking, session, system, consensus, timestamp, treasury};
 	use system::{EventRecord, Phase};
-	use demo_runtime::{Header, Block, UncheckedExtrinsic, Extrinsic, Call, Concrete, Balances,
-		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, BareExtrinsic, System,
+	use demo_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
+		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
 		SystemConfig, Event};
-
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -79,20 +80,32 @@ mod tests {
 		AccountId::from(Keyring::Bob.to_raw_public())
 	}
 
+	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
+		match xt.signed {
+			Some(signed) => {
+				let payload = (xt.index, xt.function);
+				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
+				let signature = pair.sign(&payload.encode()).into();
+				UncheckedExtrinsic {
+					signature: Some((balances::address::Address::Id(signed), signature)),
+					index: payload.0,
+					function: payload.1,
+				}
+			}
+			None => UncheckedExtrinsic {
+				signature: None,
+				index: xt.index,
+				function: xt.function,
+			},
+		}
+	}
+
 	fn xt() -> UncheckedExtrinsic {
-		let extrinsic = BareExtrinsic {
-			signed: alice(),
+		sign(CheckedExtrinsic {
+			signed: Some(alice()),
 			index: 0,
-			function: Call::Balances(balances::Call::transfer::<Concrete>(bob().into(), 69)),
-		};
-		let signature = MaybeUnsigned(Keyring::from_raw_public(extrinsic.signed.0.clone()).unwrap()
-			.sign(&extrinsic.encode()).into());
-		let extrinsic = Extrinsic {
-			signed: extrinsic.signed.into(),
-			index: extrinsic.index,
-			function: extrinsic.function,
-		};
-		UncheckedExtrinsic::new(extrinsic, signature)
+			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69)),
+		})
 	}
 
 	fn from_block_number(n: u64) -> Header {
@@ -106,14 +119,14 @@ mod tests {
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
-			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
-			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = executor().call(&mut t, 8, BLOATY_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
@@ -126,14 +139,14 @@ mod tests {
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
-			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
-			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = executor().call(&mut t, 8, COMPACT_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
@@ -146,14 +159,14 @@ mod tests {
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
-			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = executor().call(&mut t, 8, COMPACT_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
@@ -170,14 +183,14 @@ mod tests {
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
-			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let r = executor().call(&mut t, 8, BLOATY_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
@@ -230,24 +243,15 @@ mod tests {
 			democracy: Some(Default::default()),
 			council: Some(Default::default()),
 			timestamp: Some(Default::default()),
+			treasury: Some(Default::default()),
 		}.build_storage().unwrap())
 	}
 
-	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, changes_root: Option<Hash>, extrinsics: Vec<BareExtrinsic>) -> (Vec<u8>, Hash) {
+	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, changes_root: Option<Hash>, extrinsics: Vec<CheckedExtrinsic>) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
-		let extrinsics = extrinsics.into_iter().map(|extrinsic| {
-			let signature = MaybeUnsigned(Pair::from(Keyring::from_public(Public::from_raw(extrinsic.signed.0.clone())).unwrap())
-				.sign(&extrinsic.encode()).into());
-			let extrinsic = Extrinsic {
-				signed: extrinsic.signed.into(),
-				index: extrinsic.index,
-				function: extrinsic.function,
-			};
-			UncheckedExtrinsic::new(extrinsic, signature)
-		}).collect::<Vec<_>>();
-
-		let extrinsics_root = ordered_trie_root(extrinsics.iter().map(Encode::encode)).0.into();
+		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
+		let extrinsics_root = ordered_trie_root::<KeccakHasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
 
 		let header = Header {
 			parent_hash,
@@ -267,20 +271,27 @@ mod tests {
 			1,
 			[69u8; 32].into(),
 			if support_changes_trie {
-				hex!("cde8427275a60122e02e06953823f3476566fdf4cdca6eb7ca9df30d35945202").into()
+				hex!("5714fdd7bda168e5683ca98488f2976ae54953d28a31a1e9847be32f597b6038").into()
 			} else {
-				hex!("508a68a0918f614b86b2ccfd0975754f6d2abe1026a34e42d6d8d5abdf4db010").into()
+				hex!("b7d85f23689ae4ae7951eda80e817dffb1c0925e77f5c0de8c94b265df80b9cf").into()
 			},
 			if support_changes_trie {
-				Some(hex!("c8c5b04a9cc5d51a556fd821ca59f34bab64953da1c472860ff686e1270f01b1").into())
+				Some(hex!("7098746cf0f3f55f4eb29845a239c055e5dfd7e1298a09c46a80fe153af8ca0b").into())
 			} else {
 				None
 			},
-			vec![BareExtrinsic {
-				signed: alice(),
-				index: 0,
-				function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
-			}]
+			vec![
+				CheckedExtrinsic {
+					signed: None,
+					index: 0,
+					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some(alice()),
+					index: 0,
+					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+				},
+			]
 		)
 	}
 
@@ -288,16 +299,21 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("ff6c7facb1e0c2e98c2c49d2ffafa6f56b3b825755bb04a6f14904e6c075eb70").into(),
+			hex!("8dc14809168c9f52efaae5dae54c231789c59adf8bf5624a8d1f74eb724afbe8").into(),
 			None,
 			vec![
-				BareExtrinsic {
-					signed: bob(),
+				CheckedExtrinsic {
+					signed: None,
+					index: 0,
+					function: Call::Timestamp(timestamp::Call::set(52)),
+				},
+				CheckedExtrinsic {
+					signed: Some(bob()),
 					index: 0,
 					function: Call::Balances(balances::Call::transfer(alice().into(), 5)),
 				},
-				BareExtrinsic {
-					signed: alice(),
+				CheckedExtrinsic {
+					signed: Some(alice()),
 					index: 1,
 					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
 				}
@@ -309,13 +325,20 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("e45221804da3a3609454d4e09debe6364cc6af63c2ff067d802d1af62fea32ae").into(),
+			hex!("27555b6e51bfdb689457fc076a54153a4f5188f47a17607da75e180d844db527").into(),
 			None,
-			vec![BareExtrinsic {
-				signed: alice(),
-				index: 0,
-				function: Call::Consensus(consensus::Call::remark(vec![0; 60000])),
-			}]
+			vec![
+				CheckedExtrinsic {
+					signed: None,
+					index: 0,
+					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some(alice()),
+					index: 0,
+					function: Call::Consensus(consensus::Call::remark(vec![0; 120000])),
+				}
+			]
 		)
 	}
 
@@ -331,11 +354,36 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
+					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::balances(balances::RawEvent::NewAccount(bob(), 1, balances::NewAccountOutcome::NoHint))
 				},
 				EventRecord {
-					phase: Phase::ApplyExtrinsic(0),
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(balances::RawEvent::Transfer(
+						hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+						hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+						69,
+						0
+					))
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
 					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Spending(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Burnt(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				}
 			]);
 		});
@@ -352,6 +400,32 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
+					event: Event::balances(
+						balances::RawEvent::Transfer(
+							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+							5,
+							0
+						)
+					)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(1),
+					event: Event::system(system::Event::ExtrinsicSuccess)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(2),
+					event: Event::balances(
+						balances::RawEvent::Transfer(
+							hex!["d172a74cda4c865912c32ba0a80a57ae69abae410e5ccb59dee84e2f4432db4f"].into(),
+							hex!["d7568e5f0a7eda67a82691ff379ac4bba4f9c9b859fe779b5d46363b61ad2db9"].into(),
+							15,
+							0
+						)
+					)
+				},
+				EventRecord {
+					phase: Phase::ApplyExtrinsic(2),
 					event: Event::system(system::Event::ExtrinsicSuccess)
 				},
 				EventRecord {
@@ -361,6 +435,18 @@ mod tests {
 				EventRecord {
 					phase: Phase::Finalization,
 					event: Event::staking(staking::RawEvent::Reward(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Spending(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Burnt(0))
+				},
+				EventRecord {
+					phase: Phase::Finalization,
+					event: Event::treasury(treasury::RawEvent::Rollover(0))
 				}
 			]);
 		});
@@ -412,14 +498,14 @@ mod tests {
 	#[test]
 	fn panic_execution_gives_error() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
-			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![70u8; 8],
-			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -433,14 +519,14 @@ mod tests {
 	#[test]
 	fn successful_execution_gives_ok() {
 		let mut t = TestExternalities::<KeccakHasher, RlpCodec>::new(map![
-			twox_128(&<balances::FreeBalance<Concrete>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Concrete>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransactionByteFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Concrete>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(&<system::BlockHash<Concrete>>::key_for(0)).to_vec() => vec![0u8; 32]
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.compact.wasm");

@@ -45,9 +45,10 @@ use rstd::{cmp, result};
 use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, One, RefInto, SimpleArithmetic, Executable, MakePayment,
-	As, AuxLookup, Member, CheckedAdd, CheckedSub};
+use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
+	As, Lookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
+use system::{ensure_signed, ensure_root};
 
 mod mock;
 
@@ -68,7 +69,8 @@ pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::
 
 pub type Event<T> = RawEvent<
 	<T as system::Trait>::AccountId,
-	<T as Trait>::AccountIndex
+	<T as Trait>::AccountIndex,
+	<T as Trait>::Balance,
 >;
 
 /// The account with the given id was killed.
@@ -89,6 +91,16 @@ impl<
 		X::on_free_balance_zero(who);
 		Y::on_free_balance_zero(who);
 	}
+}
+
+/// Trait for a hook to get called when some balance has been minted.
+pub trait OnMinted<Balance> {
+	/// Some balance `b` was minted.
+	fn on_minted(b: Balance);
+}
+
+impl<Balance> OnMinted<Balance> for () {
+	fn on_minted(_b: Balance) {}
 }
 
 /// Determinator for whether a given account is able to transfer balance.
@@ -122,84 +134,79 @@ pub trait Trait: system::Trait {
 }
 
 decl_module! {
-	pub struct Module<T: Trait>;
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
-		fn transfer(aux, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result = 0;
-	}
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum PrivCall {
-		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result = 0;
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
+		fn set_balance(origin, who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
 	}
 }
 
 /// An event in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<AccountId, AccountIndex> {
+pub enum RawEvent<AccountId, AccountIndex, Balance> {
 	/// A new account was created.
 	NewAccount(AccountId, AccountIndex, NewAccountOutcome),
 	/// An account was reaped.
 	ReapedAccount(AccountId),
+	/// Transfer succeeded (from, to, value, fees).
+	Transfer(AccountId, AccountId, Balance, Balance),
 }
 
-impl<A, I> From<RawEvent<A, I>> for () {
-	fn from(_: RawEvent<A, I>) -> () { () }
+impl<A, I, B> From<RawEvent<A, I, B>> for () {
+	fn from(_: RawEvent<A, I, B>) -> () { () }
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
-		// The total amount of stake on the system.
+		/// The total amount of stake on the system.
 		pub TotalIssuance get(total_stake): required T::Balance;
-		// The minimum amount allowed to keep an account open.
+		/// The minimum amount allowed to keep an account open.
 		pub ExistentialDeposit get(existential_deposit): required T::Balance;
-		// The amount credited to a destination's account whose index was reclaimed.
+		/// The amount credited to a destination's account whose index was reclaimed.
 		pub ReclaimRebate get(reclaim_rebate): required T::Balance;
-		// The fee required to make a transfer.
+		/// The fee required to make a transfer.
 		pub TransferFee get(transfer_fee): required T::Balance;
-		// The fee required to create an account. At least as big as ReclaimRebate.
+		/// The fee required to create an account. At least as big as ReclaimRebate.
 		pub CreationFee get(creation_fee): required T::Balance;
 
-		// The next free enumeration set.
+		/// The next free enumeration set.
 		pub NextEnumSet get(next_enum_set): required T::AccountIndex;
-		// The enumeration sets.
+		/// The enumeration sets.
 		pub EnumSet get(enum_set): default map [ T::AccountIndex => Vec<T::AccountId> ];
 
-		// The "free" balance of a given account.
-		//
-		// This is the only balance that matters in terms of most operations on tokens. It is
-		// alone used to determine the balance when in the contract execution environment. When this
-		// balance falls below the value of `ExistentialDeposit`, then the "current account" is
-		// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
-		// is invoked, giving a chance to external modules to cleanup data associated with
-		// the deleted account.
-		//
-		// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
-		// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		/// The 'free' balance of a given account.
+		///
+		/// This is the only balance that matters in terms of most operations on tokens. It is
+		/// alone used to determine the balance when in the contract execution environment. When this
+		/// balance falls below the value of `ExistentialDeposit`, then the 'current account' is
+		/// deleted: specifically `FreeBalance`. Furthermore, `OnFreeBalanceZero` callback
+		/// is invoked, giving a chance to external modules to cleanup data associated with
+		/// the deleted account.
+		///
+		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
+		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 		pub FreeBalance get(free_balance): default map [ T::AccountId => T::Balance ];
 
-		// The amount of the balance of a given account that is exterally reserved; this can still get
-		// slashed, but gets slashed last of all.
-		//
-		// This balance is a "reserve" balance that other subsystems use in order to set aside tokens
-		// that are still "owned" by the account holder, but which are unspendable. (This is different
-		// and wholly unrelated to the `Bondage` system used in the staking module.)
-		//
-		// When this balance falls below the value of `ExistentialDeposit`, then this "reserve account"
-		// is deleted: specifically, `ReservedBalance`.
-		//
-		// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
-		// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
+		/// The amount of the balance of a given account that is exterally reserved; this can still get
+		/// slashed, but gets slashed last of all.
+		///
+		/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
+		/// that are still 'owned' by the account holder, but which are unspendable. (This is different
+		/// and wholly unrelated to the `Bondage` system used in the staking module.)
+		///
+		/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
+		/// is deleted: specifically, `ReservedBalance`.
+		///
+		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
+		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
 		pub ReservedBalance get(reserved_balance): default map [ T::AccountId => T::Balance ];
 
 
 		// Payment stuff.
 
-		// The fee to be paid for making a transaction; the base.
+		/// The fee to be paid for making a transaction; the base.
 		pub TransactionBaseFee get(transaction_base_fee): required T::Balance;
-		// The fee to be paid for making a transaction; the per-byte portion.
+		/// The fee to be paid for making a transaction; the per-byte portion.
 		pub TransactionByteFee get(transaction_byte_fee): required T::Balance;
 	}
 }
@@ -222,6 +229,11 @@ pub enum UpdateBalanceOutcome {
 }
 
 impl<T: Trait> Module<T> {
+
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
 
 	// PUBLIC IMMUTABLES
 
@@ -273,11 +285,11 @@ impl<T: Trait> Module<T> {
 	// PUBLIC DISPATCH
 
 	/// Transfer some liquid free balance to another staker.
-	pub fn transfer(aux: &T::PublicAux, dest: Address<T>, value: T::Balance) -> Result {
-		let dest = Self::lookup(dest)?;
+	pub fn transfer(origin: T::Origin, dest: Address<T>, value: T::Balance) -> Result {
+		let transactor = ensure_signed(origin)?;
 
-		let transactor = aux.ref_into();
-		let from_balance = Self::free_balance(transactor);
+		let dest = Self::lookup(dest)?;
+		let from_balance = Self::free_balance(&transactor);
 		let would_create = from_balance.is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
 		let liability = value + fee;
@@ -289,7 +301,7 @@ impl<T: Trait> Module<T> {
 		if would_create && value < Self::existential_deposit() {
 			return Err("value too low to create account");
 		}
-		T::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
+		T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
 
 		let to_balance = Self::free_balance(&dest);
 		// NOTE: total stake being stored in the same type means that this could never overflow
@@ -299,24 +311,19 @@ impl<T: Trait> Module<T> {
 			None => return Err("destination balance too high to receive value"),
 		};
 
-		if transactor != &dest {
-			Self::set_free_balance(transactor, new_from_balance);			
+		if transactor != dest {
+			Self::set_free_balance(&transactor, new_from_balance);			
 			Self::decrease_total_stake_by(fee);
 			Self::set_free_balance_creating(&dest, new_to_balance);
+			Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
 		}
 
 		Ok(())
 	}
 
-	// PRIV DISPATCH
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	/// Set the balances of a given account.
-	fn set_balance(who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
+	fn set_balance(origin: T::Origin, who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
+		ensure_root(origin)?;
 		let who = Self::lookup(who)?;
 		Self::set_free_balance(&who, free);
 		Self::set_reserved_balance(&who, reserved);
@@ -398,6 +405,17 @@ impl<T: Trait> Module<T> {
 
 			UpdateBalanceOutcome::Updated
 		}
+	}
+
+	/// Adds up to `value` to the free balance of `who`. If `who` doesn't exist, it is created.
+	///
+	/// This is a sensitive function since it circumvents any fees associated with account
+	/// setup. Ensure it is only called by trusted code.
+	///
+	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
+	/// you mean to actually mint value into existence, then use `reward` instead.
+	pub fn increase_free_balance_creating(who: &T::AccountId, value: T::Balance) -> UpdateBalanceOutcome {
+		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
 	}
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
@@ -621,12 +639,12 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 
-impl<T: Trait> AuxLookup for Module<T> {
+impl<T: Trait> Lookup for Module<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {

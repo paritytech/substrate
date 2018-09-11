@@ -23,9 +23,10 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
+use runtime_support::metadata::JSONMetadataDecodable;
 use primitives::{KeccakHasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
-use codec::Decode;
+use codec::{Encode, Decode};
 use state_machine::{
 	Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, prove_read
@@ -36,7 +37,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {error, in_mem, block_builder, runtime_io, bft, genesis};
+use {cht, error, in_mem, block_builder, runtime_io, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -252,6 +253,28 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self.executor
 	}
 
+	/// Returns the runtime metadata as JSON.
+	pub fn json_metadata(&self, id: &BlockId<Block>) -> error::Result<String> {
+		self.executor.call(id, "json_metadata",&[])
+			.and_then(|r| Vec::<JSONMetadataDecodable>::decode(&mut &r.return_data[..])
+					  .ok_or("JSON Metadata decoding failed".into()))
+			.and_then(|metadata| {
+				let mut json = metadata.into_iter().enumerate().fold(String::from("{"),
+					|mut json, (i, m)| {
+						if i > 0 {
+							json.push_str(",");
+						}
+						let (mtype, val) = m.into_json_string();
+						json.push_str(&format!(r#" "{}": {}"#, mtype, val));
+						json
+					}
+				);
+				json.push_str(" }");
+
+				Ok(json)
+			})
+	}
+
 	/// Reads storage value at a given block + key, returning read proof.
 	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
 		self.state_at(id)
@@ -266,6 +289,24 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// No changes are made.
 	pub fn execution_proof(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> error::Result<(Vec<u8>, Vec<Vec<u8>>)> {
 		self.state_at(id).and_then(|state| self.executor.prove_at_state(state, &mut Default::default(), method, call_data))
+	}
+
+	/// Reads given header and generates CHT-based header proof.
+	pub fn header_proof(&self, id: &BlockId<Block>) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+		self.header_proof_with_cht_size(id, cht::SIZE)
+	}
+
+	/// Reads given header and generates CHT-based header proof for CHT of given size.
+	pub fn header_proof_with_cht_size(&self, id: &BlockId<Block>, cht_size: u64) -> error::Result<(Block::Header, Vec<Vec<u8>>)> {
+		let proof_error = || error::ErrorKind::Backend(format!("Failed to generate header proof for {:?}", id));
+		let header = self.header(id)?.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", id)))?;
+		let block_num = *header.number();
+		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
+		let cht_start = cht::start_number(cht_size, cht_num);
+		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)).unwrap_or_default());
+		let proof = cht::build_proof::<Block::Header, KeccakHasher, RlpCodec, _>(cht_size, cht_num, block_num, headers)
+			.ok_or_else(proof_error)?;
+		Ok((header, proof))
 	}
 
 	/// Set up the native execution environment to call into a native runtime code.
@@ -300,6 +341,52 @@ impl<B, E, Block> Client<B, E, Block> where
 	where E: Clone
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
+	}
+
+	/// Call a runtime function at given block.
+	pub fn call_api<A, R>(&self, at: &BlockId<Block>, function: &'static str, args: &A) -> error::Result<R>
+	where
+	A: Encode,
+	R: Decode,
+	{
+		let parent = at;
+		let header = <<Block as BlockT>::Header as HeaderT>::new(
+			self.block_number_from_id(&parent)?
+				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))? + As::sa(1),
+			Default::default(),
+			Default::default(),
+			Default::default(),
+			self.block_hash_from_id(&parent)?
+				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
+			Default::default()
+		);
+		self.state_at(&parent).and_then(|state| {
+			let mut overlay = Default::default();
+			let execution_manager = || ExecutionManager::Both(|wasm_result, native_result| {
+				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
+				warn!("   Function {:?}", function);
+				warn!("   Native result {:?}", native_result);
+				warn!("   Wasm result {:?}", wasm_result);
+				wasm_result
+			});
+			self.executor().call_at_state(
+				&state,
+				&mut overlay,
+				"initialise_block",
+				&header.encode(),
+				execution_manager()
+			)?;
+			let (r, _, _) = args.using_encoded(|input|
+				self.executor().call_at_state(
+				&state,
+				&mut overlay,
+				function,
+				input,
+				execution_manager()
+			))?;
+			Ok(R::decode(&mut &r[..])
+			   .ok_or_else(|| error::Error::from(error::ErrorKind::CallResultDecode(function)))?)
+		})
 	}
 
 	/// Check a header's justification.
@@ -699,5 +786,30 @@ mod tests {
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
 		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
+	}
+
+	#[test]
+	fn json_metadata() {
+		let client = test_client::new();
+
+		let mut builder = client.new_block().unwrap();
+
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		}).unwrap();
+
+		assert!(builder.push_transfer(Transfer {
+			from: Keyring::Eve.to_raw_public().into(),
+			to: Keyring::Alice.to_raw_public().into(),
+			amount: 42,
+			nonce: 0,
+		}).is_err());
+
+		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+
+		assert_eq!(client.json_metadata(&BlockId::Number(1)).unwrap(), r#"{ "events": "events" }"#);
 	}
 }

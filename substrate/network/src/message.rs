@@ -20,7 +20,8 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use codec::{Encode, Decode, Input, Output};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
-	ConsensusVote, SignedConsensusVote, FromBlock
+	RemoteHeaderRequest, RemoteHeaderResponse, ConsensusVote,
+	SignedConsensusVote, FromBlock
 };
 
 /// A unique ID of a request.
@@ -270,6 +271,10 @@ pub mod generic {
 		RemoteReadRequest(RemoteReadRequest<Hash>),
 		/// Remote storage read response.
 		RemoteReadResponse(RemoteReadResponse),
+		/// Remote header request.
+		RemoteHeaderRequest(RemoteHeaderRequest<Number>),
+		/// Remote header response.
+		RemoteHeaderResponse(RemoteHeaderResponse<Header>),
 		/// Chain-specific message
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
@@ -347,5 +352,25 @@ pub mod generic {
 		pub block: H,
 		/// Storage key.
 		pub key: Vec<u8>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Remote header request.
+	pub struct RemoteHeaderRequest<N> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Block number to request header for.
+		pub block: N,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Remote header response.
+	pub struct RemoteHeaderResponse<Header> {
+		/// Id of a request this response was made for.
+		pub id: RequestId,
+		/// Header. None if proof generation has failed (e.g. header is unknown).
+		pub header: Option<Header>,
+		/// Header proof.
+		pub proof: Vec<Vec<u8>>,
 	}
 }

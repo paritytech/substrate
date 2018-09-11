@@ -48,7 +48,7 @@
 //! exsistential deposit) then it reaps the account. That will lead to deletion of the associated
 //! code and storage of the account.
 //!
-//! [`Module::execute`]: struct.Module.html#impl-Executable
+//! [`Module::execute`]: struct.Module.html#impl-OnFinalise
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -66,7 +66,7 @@ extern crate substrate_codec as codec;
 extern crate substrate_runtime_io as runtime_io;
 extern crate substrate_runtime_sandbox as sandbox;
 
-#[cfg_attr(feature = "std", macro_use)]
+#[macro_use]
 extern crate substrate_runtime_std as rstd;
 
 extern crate substrate_runtime_balances as balances;
@@ -90,20 +90,24 @@ mod double_map;
 mod exec;
 mod vm;
 mod gas;
+
 mod genesis_config;
 
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "std")]
 pub use genesis_config::GenesisConfig;
 use exec::ExecutionContext;
 use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
+use rstd::prelude::*;
 use codec::Codec;
-use runtime_primitives::traits::{As, RefInto, SimpleArithmetic, Executable};
+use runtime_primitives::traits::{As, SimpleArithmetic, OnFinalise};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
+use system::ensure_signed;
 
 pub trait Trait: balances::Trait {
 	/// Function type to get the contract address given the creator.
@@ -114,52 +118,49 @@ pub trait Trait: balances::Trait {
 }
 
 pub trait ContractAddressFor<AccountId: Sized> {
-	fn contract_address_for(code: &[u8], origin: &AccountId) -> AccountId;
+	fn contract_address_for(code: &[u8], data: &[u8], origin: &AccountId) -> AccountId;
 }
 
 decl_module! {
 	/// Contracts module.
-	pub struct Module<T: Trait>;
-
-	#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-	pub enum Call where aux: T::PublicAux {
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// TODO: Change AccountId to staking::Address
 		fn call(
-			aux,
+			origin,
 			dest: T::AccountId,
 			value: T::Balance,
 			gas_limit: T::Gas,
 			data: Vec<u8>
-		) -> Result = 0;
+		) -> Result;
 
 		fn create(
-			aux,
+			origin,
 			value: T::Balance,
 			gas_limit: T::Gas,
 			ctor: Vec<u8>,
 			data: Vec<u8>
-		) -> Result = 1;
+		) -> Result;
 	}
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
-		// The fee required to create a contract. At least as big as staking's ReclaimRebate.
+		/// The fee required to create a contract. At least as big as staking's ReclaimRebate.
 		ContractFee get(contract_fee): required T::Balance;
-		// The fee charged for a call into a contract.
+		/// The fee charged for a call into a contract.
 		CallBaseFee get(call_base_fee): required T::Gas;
-		// The fee charged for a create of a contract.
+		/// The fee charged for a create of a contract.
 		CreateBaseFee get(create_base_fee): required T::Gas;
-		// The price of one unit of gas.
+		/// The price of one unit of gas.
 		GasPrice get(gas_price): required T::Balance;
-		// The maximum nesting level of a call/create stack.
+		/// The maximum nesting level of a call/create stack.
 		MaxDepth get(max_depth): required u32;
-		// The maximum amount of gas that could be expended per block.
+		/// The maximum amount of gas that could be expended per block.
 		BlockGasLimit get(block_gas_limit): required T::Gas;
-		// Gas spent so far in this block.
+		/// Gas spent so far in this block.
 		GasSpent get(gas_spent): default T::Gas;
 
-		// The code associated with an account.
+		/// The code associated with an account.
 		pub CodeOf: default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
 	}
 }
@@ -181,26 +182,26 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> Module<T> {
 	/// Make a call to a specified account, optionally transferring some balance.
 	fn call(
-		aux: &<T as system::Trait>::PublicAux,
+		origin: <T as system::Trait>::Origin,
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_limit: T::Gas,
 		data: Vec<u8>,
 	) -> Result {
-		let aux = aux.ref_into();
+		let origin = ensure_signed(origin)?;
 
 		// Pay for the gas upfront.
 		//
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
-		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit)?;
+		let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 		let mut ctx = ExecutionContext {
-			self_account: aux.clone(),
+			self_account: origin.clone(),
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
-		let result = ctx.call(aux.clone(), dest, value, &mut gas_meter, &data);
+		let result = ctx.call(origin.clone(), dest, value, &mut gas_meter, &data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
@@ -211,7 +212,7 @@ impl<T: Trait> Module<T> {
 		//
 		// NOTE: this should go after the commit to the storage, since the storage changes
 		// can alter the balance of the caller.
-		gas::refund_unused_gas::<T>(aux, gas_meter);
+		gas::refund_unused_gas::<T>(&origin, gas_meter);
 
 		result.map(|_| ())
 	}
@@ -226,26 +227,26 @@ impl<T: Trait> Module<T> {
 	///   after the execution is saved as the `code` of the account. That code will be invoked
 	///   upon any message received by this account.
 	fn create(
-		aux: &<T as system::Trait>::PublicAux,
+		origin: <T as system::Trait>::Origin,
 		endowment: T::Balance,
 		gas_limit: T::Gas,
 		ctor_code: Vec<u8>,
 		data: Vec<u8>,
 	) -> Result {
-		let aux = aux.ref_into();
+		let origin = ensure_signed(origin)?;
 
 		// Pay for the gas upfront.
 		//
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
-		let mut gas_meter = gas::buy_gas::<T>(aux, gas_limit)?;
+		let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
 		let mut ctx = ExecutionContext {
-			self_account: aux.clone(),
+			self_account: origin.clone(),
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
-		let result = ctx.create(aux.clone(), endowment, &mut gas_meter, &ctor_code, &data);
+		let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
@@ -256,7 +257,7 @@ impl<T: Trait> Module<T> {
 		//
 		// NOTE: this should go after the commit to the storage, since the storage changes
 		// can alter the balance of the caller.
-		gas::refund_unused_gas::<T>(aux, gas_meter);
+		gas::refund_unused_gas::<T>(&origin, gas_meter);
 
 		result.map(|_| ())
 	}
@@ -270,8 +271,8 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 }
 
 /// Finalization hook for the smart-contract module.
-impl<T: Trait> Executable for Module<T> {
-	fn execute() {
+impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
+	fn on_finalise(_n: T::BlockNumber) {
 		<GasSpent<T>>::kill();
 	}
 }
