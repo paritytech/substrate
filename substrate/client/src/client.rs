@@ -28,7 +28,7 @@ use primitives::{Blake2Hasher, RlpCodec};
 use primitives::storage::{StorageKey, StorageData};
 use codec::{Encode, Decode};
 use state_machine::{
-	Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor,
+	Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, prove_read
 };
 
@@ -37,7 +37,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {cht, error, in_mem, block_builder, runtime_io, bft, genesis};
+use {cht, error, in_mem, block_builder, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -308,23 +308,6 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok((header, proof))
 	}
 
-	/// Set up the native execution environment to call into a native runtime code.
-	pub fn using_environment<F: FnOnce() -> T, T>(
-		&self, f: F
-	) -> error::Result<T> {
-		self.using_environment_at(&BlockId::Number(self.info()?.chain.best_number), &mut Default::default(), f)
-	}
-
-	/// Set up the native execution environment to call into a native runtime code.
-	pub fn using_environment_at<F: FnOnce() -> T, T>(
-		&self,
-		id: &BlockId<Block>,
-		overlay: &mut OverlayedChanges,
-		f: F
-	) -> error::Result<T> {
-		Ok(runtime_io::with_externalities(&mut Ext::new(overlay, &self.state_at(id)?), f))
-	}
-
 	/// Create a new block, built on the head of the chain.
 	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>>
 	where E: Clone
@@ -339,11 +322,16 @@ impl<B, E, Block> Client<B, E, Block> where
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
+	/// Set up the native execution environment to call into a native runtime code.
+	pub fn call_api<A, R>(&self, function: &'static str, args: &A) -> error::Result<R>
+		where A: Encode, R: Decode
+	{
+		self.call_api_at(&BlockId::Number(self.info()?.chain.best_number), function, args)
+	}
+
 	/// Call a runtime function at given block.
-	pub fn call_api<A, R>(&self, at: &BlockId<Block>, function: &'static str, args: &A) -> error::Result<R>
-	where
-	A: Encode,
-	R: Decode,
+	pub fn call_api_at<A, R>(&self, at: &BlockId<Block>, function: &'static str, args: &A) -> error::Result<R>
+		where A: Encode, R: Decode
 	{
 		let parent = at;
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
@@ -686,15 +674,15 @@ mod tests {
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
-	use test_client::{runtime as test_runtime, BlockBuilderExt};
+	use test_client::BlockBuilderExt;
 	use test_client::runtime::Transfer;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = test_client::new();
 
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 1000);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 0);
+		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Alice.to_raw_public()).unwrap(), 1000);
+		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Ferdie.to_raw_public()).unwrap(), 0);
 	}
 
 	#[test]
@@ -737,8 +725,8 @@ mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 958);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 42);
+		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Alice.to_raw_public()).unwrap(), 958);
+		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Ferdie.to_raw_public()).unwrap(), 42);
 	}
 
 	#[test]
