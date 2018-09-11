@@ -108,26 +108,19 @@ decl_storage! {
 	}
 }
 
-/// An event in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<Balance, AccountId> {
-	Tabled(PropIndex, Balance, Vec<AccountId>),
-	Started(ReferendumIndex, VoteThreshold),
-	Passed(ReferendumIndex),
-	NotPassed(ReferendumIndex),
-	Cancelled(ReferendumIndex),
-	Executed(ReferendumIndex, bool),
-}
-
-impl<B, A> From<RawEvent<B, A>> for () {
-	fn from(_: RawEvent<B, A>) -> () { () }
-}
-
-pub type Event<T> = RawEvent<
-	<T as balances::Trait>::Balance,
-	<T as system::Trait>::AccountId,
->;
+decl_event!(
+	/// An event in this module.
+	pub enum Event<T> with RawEvent<Balance, AccountId>
+		where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId
+	{
+		Tabled(PropIndex, Balance, Vec<AccountId>),
+		Started(ReferendumIndex, VoteThreshold),
+		Passed(ReferendumIndex),
+		NotPassed(ReferendumIndex),
+		Cancelled(ReferendumIndex),
+		Executed(ReferendumIndex, bool),
+	}
+);
 
 impl<T: Trait> Module<T> {
 

@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Generic implementations of Extrinsic/Header/Block.
+// end::description[]
 
 mod unchecked_extrinsic;
 mod checked_extrinsic;

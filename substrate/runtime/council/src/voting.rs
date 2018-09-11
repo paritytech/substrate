@@ -53,21 +53,19 @@ decl_storage! {
 	}
 }
 
-pub type Event<T> = RawEvent<<T as system::Trait>::Hash>;
-
 /// An event in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<Hash> {
-	/// A voting tally has happened for a referendum cancelation vote. Last three are yes, no, abstain counts.
-	TallyCancelation(Hash, u32, u32, u32),
-	/// A voting tally has happened for a referendum vote. Last three are yes, no, abstain counts.
-	TallyReferendum(Hash, u32, u32, u32),
-}
-
-impl<N> From<RawEvent<N>> for () {
-	fn from(_: RawEvent<N>) -> () { () }
-}
+decl_event!(
+	pub enum Event<T> with RawEvent<Hash>
+		where <T as system::Trait>::Hash
+	{
+		/// A voting tally has happened for a referendum cancelation vote.
+		/// Last three are yes, no, abstain counts.
+		TallyCancelation(Hash, u32, u32, u32),
+		/// A voting tally has happened for a referendum vote.
+		/// Last three are yes, no, abstain counts.
+		TallyReferendum(Hash, u32, u32, u32),
+	}
+);
 
 impl<T: Trait> Module<T> {
 

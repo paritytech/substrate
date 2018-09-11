@@ -802,6 +802,9 @@ mod tests {
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		assert_eq!(client.json_metadata(&BlockId::Number(1)).unwrap(), r#"{ "events": "events" }"#);
+		assert_eq!(
+			client.json_metadata(&BlockId::Number(1)).unwrap(),
+			r#"{ "events": { "name": "Test", "events": { "event": hallo } } }"#
+		);
 	}
 }

@@ -65,10 +65,10 @@ use system::{ensure_signed, ensure_root};
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
-/// 
+///
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: balances::Trait {
-	/// The overarching event type. 
+	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -87,12 +87,12 @@ pub trait Trait: balances::Trait {
 //
 // Information about where this dispatch initiated from is provided as the first argument
 // "origin". As such functions must always look like:
-// 
+//
 // `fn foo(origin, bar: Bar, baz: Baz) -> Result = 0;`
 //
 // The `Result` is required as part of the syntax (and expands to the conventional dispatch
 // result of `Result<(), &'static str>`).
-// 
+//
 // When you come to `impl` them later in the module, you must specify the full type for `origin`:
 //
 // `fn foo(origin: T::Origin, bar: Bar, baz: Baz) { ... }`
@@ -101,7 +101,7 @@ pub trait Trait: balances::Trait {
 // to the above bullets: `::Signed(AccountId)`, `::Root` and `::Inherent`. You should always match
 // against them as the first thing you do in your function. There are three convenience calls
 // in system that do the matching for you and return a convenient result: `ensure_signed`,
-// `ensure_root` and `ensure_inherent`. 
+// `ensure_root` and `ensure_inherent`.
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
@@ -117,31 +117,18 @@ decl_module! {
 	}
 }
 
-/// Exported Event type that's generic over the configuration trait.
-// NOTE: External macro-fu expects this type to exist and be generic over
-// the configuration trait.
-pub type Event<T> = RawEvent<
-	<T as balances::Trait>::Balance,
->;
-
 /// An event in this module. Events are simple means of reporting specific conditions and
 /// circumstances that have happened that users, Dapps and/or chain explorers would find
 /// interesting and otherwise difficult to detect.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<B> {
-	// Just a normal `enum`, here's a dummy event to ensure it compiles.
-	/// Dummy event, just here so there's a generic type that's used.
-	Dummy(B),
-}
-
-// By convention we implement any trait for which a "null implementation" makes sense
-// for `()`. This is the case for conversion of module `Event` types and hook traits. It
-// is helpful for test code and production configurations where no eventing is necessary
-// or the hook is unused.
-impl<B> From<RawEvent<B>> for () {
-	fn from(_: RawEvent<B>) -> () { () }
-}
+decl_event!(
+	pub enum Event<T> with RawEvent<B>
+		where <T as balances::Trait>::Balance
+	{
+		// Just a normal `enum`, here's a dummy event to ensure it compiles.
+		/// Dummy event, just here so there's a generic type that's used.
+		Dummy(B),
+	}
+);
 
 decl_storage! {
 	// A macro for the Storage trait, and its implementation, for this module.
@@ -205,15 +192,15 @@ impl<T: Trait> Module<T> {
 	//
 	// - MUST NOT PANIC: Under no circumstances (save, perhaps, storage getting into an
 	// irreparably damaged state) must this function panic.
-	// - NO SIDE-EFFECTS ON ERROR: This function must either complete totally (and return 
+	// - NO SIDE-EFFECTS ON ERROR: This function must either complete totally (and return
 	// `Ok(())` or it must have no side-effects on storage and return `Err('Some reason')`.
 	//
 	// The first is relatively easy to audit for - just ensure all panickers are removed from
-	// logic that executes in production (which you do anyway, right?!). To ensure the second 
+	// logic that executes in production (which you do anyway, right?!). To ensure the second
 	// is followed, you should do all tests for validity at the top of your function. This
 	// is stuff like checking the sender (`origin`) or that state is such that the operation
 	// makes sense.
-	// 
+	//
 	// Once you've determined that it's all good, then enact the operation and change storage.
 	// If you can't be certain that the operation will succeed without substantial computation
 	// then you have a classic blockchain attack scenario. The normal way of managing this is
@@ -322,10 +309,10 @@ impl<T: Trait> Default for GenesisConfig<T> {
 
 // This expresses the specific key/value pairs that must be placed in storage in order
 // to initialise the module and properly reflect the configuration.
-// 
+//
 // Ideally this would re-use the `::put` logic in the storage item type for introducing
 // the values into the `StorageMap` (which is just a `HashMap<Vec<u8>, Vec<u8>>`). That
-// is not yet in place, though, so for now we do everything "manually", using `hash`, 
+// is not yet in place, though, so for now we do everything "manually", using `hash`,
 // `::key()` and `.to_vec()` for the key and `.encode()` for the value.
 #[cfg(feature = "std")]
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>

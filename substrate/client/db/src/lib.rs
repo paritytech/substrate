@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Client backend that uses RocksDB database as storage.
+// end::description[]
 
 extern crate substrate_client as client;
 extern crate kvdb_rocksdb;

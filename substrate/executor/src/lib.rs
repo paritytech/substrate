@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Temporary crate for contracts implementations.
 //!
 //! This will be replaced with WASM contracts stored on-chain.
@@ -24,6 +25,7 @@
 //! - init_block(PrevBlock?) -> InProgressBlock
 //! - add_transaction(InProgressBlock) -> InProgressBlock
 //! I leave it as is for now as it might be removed before this is ever done.
+// end::description[]
 
 #![warn(missing_docs)]
 #![recursion_limit="128"]

@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Utility for substrate-based runtimes that want to check misbehavior reports.
+// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
