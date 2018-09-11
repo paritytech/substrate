@@ -609,6 +609,8 @@ mod tests {
 			fn aux_0(origin) -> Result;
 			fn aux_1(origin, data: i32) -> Result;
 			fn aux_2(origin, data: i32, data2: String) -> Result;
+			fn aux_3() -> Result;
+			fn aux_4(data: i32) -> Result;
 		}
 	}
 
@@ -618,14 +620,23 @@ mod tests {
 				r#""0": { "name": "aux_0", "params": [ "#,
 					r#"{ "name": "origin", "type": "T::Origin" }"#,
 				r#" ], "description": [ " Hi, this is a comment." ] }, "#,
+
 				r#""0 + 1": { "name": "aux_1", "params": [ "#,
 					r#"{ "name": "origin", "type": "T::Origin" }, "#,
 					r#"{ "name": "data", "type": "i32" }"#,
 				r#" ], "description": [ ] }, "#,
+
 				r#""0 + 1 + 1": { "name": "aux_2", "params": [ "#,
 					r#"{ "name": "origin", "type": "T::Origin" }, "#,
 					r#"{ "name": "data", "type": "i32" }, "#,
 					r#"{ "name": "data2", "type": "String" }"#,
+				r#" ], "description": [ ] }"#,
+
+				r#""0 + 1 + 1 + 1": { "name": "aux_3", "params": [ "#,
+				r#" ], "description": [ ] }"#,
+
+				r#""0 + 1 + 1 + 1 + 1": { "name": "aux_2", "params": [ "#,
+					r#"{ "name": "data", "type": "i32" }, "#,
 				r#" ], "description": [ ] }"#,
 			r#" } }"#,
 		r#" }"#,
@@ -641,6 +652,14 @@ mod tests {
 		}
 
 		fn aux_2(_: T::Origin, _: i32, _: String) -> Result {
+			unreachable!()
+		}
+
+		fn aux_3() -> Result {
+			unreachable!()
+		}
+
+		fn aux_4(_: i32) -> Result {
 			unreachable!()
 		}
 	}
