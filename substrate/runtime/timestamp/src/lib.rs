@@ -14,7 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Timestamp manager: just handles the current timestamp.
+//! Timestamp manager: provides means to find out the current time.
+//!
+//! It is expected that the timestamp is set by the validator in the
+//! beginning of each block, typically one of the first extrinsics. The timestamp
+//! can be set only once per block and must be set each block.
+//!
+//! Note, that there might be a constraint on how much time must pass
+//! before setting the new timestamp, specified by the `tim:block_period`
+//! storage entry.
+//!
+//! # Interaction with the system
+//!
+//! ## Finalization
+//!
+//! This module should be hooked up to the finalization routine.
+//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -44,9 +59,10 @@ use runtime_primitives::traits::{OnFinalise, SimpleArithmetic, As, Zero};
 use system::ensure_inherent;
 
 pub trait Trait: consensus::Trait + system::Trait {
-	// the position of the required timestamp-set extrinsic.
+	/// The position of the required timestamp-set extrinsic.
 	const TIMESTAMP_SET_POSITION: u32;
 
+	/// Type used for expressing timestamp.
 	type Moment: Parameter + Default + SimpleArithmetic + As<Self::BlockNumber>;
 }
 
@@ -58,6 +74,7 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
+		/// Current time for the current block.
 		pub Now get(now): required T::Moment;
 		/// The minimum (and advised) period between blocks.
 		pub BlockPeriod get(block_period): required T::Moment;
@@ -68,11 +85,23 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
+
+	/// Get the current time for the current block.
+	///
+	/// NOTE: if this function is called prior the setting the timestamp,
+	/// it will return the timestamp of the previous block.
 	pub fn get() -> T::Moment {
 		Self::now()
 	}
 
 	/// Set the current time.
+	///
+	/// Extrinsic with this call should be placed at the specific position in the each block
+	/// (specified by the Trait::TIMESTAMP_SET_POSITION) typically at the start of the each block.
+	/// This call should be invoked exactly once per block. It will panic at the finalization phase,
+	/// if this call hasn't been invoked by that time.
+	///
+	/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
 	fn set(origin: T::Origin, now: T::Moment) -> Result {
 		ensure_inherent(origin)?;
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
@@ -103,11 +132,13 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	}
 }
 
+/// Configuration of a genesis block for the timestamp module.
 #[cfg(any(feature = "std", test))]
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
 pub struct GenesisConfig<T: Trait> {
+	/// The minimum (and advised) period between blocks.
 	pub period: T::Moment,
 }
 
