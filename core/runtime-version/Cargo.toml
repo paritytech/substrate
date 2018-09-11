@@ -9,7 +9,6 @@ serde_derive = { version = "1.0", optional = true }
 parity-codec = { path = "../../codec", default_features = false }
 parity-codec-derive = { path = "../../codec/derive", default_features = false }
 substrate-runtime-std = { path = "../runtime-std", default_features = false }
-substrate-runtime-support = { path = "../runtime/support", default_features = false }
 
 [features]
 default = ["std"]
@@ -18,5 +17,4 @@ std = [
 	"serde_derive",
 	"parity-codec/std",
 	"substrate-runtime-std/std",
-	"substrate-runtime-support/std",
 ]
