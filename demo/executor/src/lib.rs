@@ -237,6 +237,7 @@ mod tests {
 			council: Some(Default::default()),
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
+			contract: Some(Default::default()),
 		}.build_storage().unwrap().into()
 	}
 
