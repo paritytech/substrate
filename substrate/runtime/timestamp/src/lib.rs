@@ -74,7 +74,7 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
-		// Current time for the current block.
+		/// Current time for the current block.
 		pub Now get(now): required T::Moment;
 		/// The minimum (and advised) period between blocks.
 		pub BlockPeriod get(block_period): required T::Moment;
