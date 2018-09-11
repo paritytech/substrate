@@ -278,6 +278,7 @@ impl_outer_config! {
 	pub struct GenesisConfig for Runtime {
 		SystemConfig => system,
 		ConsensusConfig => consensus,
+		ContractConfig => contract,
 		BalancesConfig => balances,
 		TimestampConfig => timestamp,
 		SessionConfig => session,
