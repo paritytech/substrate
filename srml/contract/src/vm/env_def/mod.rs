@@ -160,7 +160,7 @@ define_env!(init_env, <E: Ext>,
 
 	// Retrieve the value at the given location from the strorage and return 0.
 	// If there is no entry at the given location then this function will return 1 and
-	// leave the scratch buffer unmodified.
+	// clear the scratch buffer.
 	//
 	// - key_ptr: pointer into the linear memory where the key
 	//   of the requested value is placed.
@@ -172,6 +172,7 @@ define_env!(init_env, <E: Ext>,
 			ctx.scratch_buf = value;
 			Ok(0)
 		} else {
+			ctx.scratch_buf.clear();
 			Ok(1)
 		}
 	},
@@ -179,7 +180,8 @@ define_env!(init_env, <E: Ext>,
 	// Make a call to another contract.
 	//
 	// Returns 0 on the successful execution and puts the result data returned
-	// by the callee into the scratch buffer. Otherwise, returns 1 and doesn't modify the return buffer.
+	// by the callee into the scratch buffer. Otherwise, returns 1 and clears the scratch
+	// buffer.
 	//
 	// - callee_ptr: a pointer to the address of the callee contract.
 	//   Should be decodable as an `T::AccountId`. Traps otherwise.
@@ -217,6 +219,9 @@ define_env!(init_env, <E: Ext>,
 		input_data.resize(input_data_len as usize, 0u8);
 		ctx.memory().get(input_data_ptr, &mut input_data)?;
 
+		// Clear the scratch buffer in any case.
+		ctx.scratch_buf.clear();
+
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
@@ -226,10 +231,7 @@ define_env!(init_env, <E: Ext>,
 		let scratch_buf = &mut ctx.scratch_buf;
 		let call_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => {
-					scratch_buf.clear();
-					ext.call(&callee, value, nested_meter, &input_data, scratch_buf)
-				},
+				Some(nested_meter) => ext.call(&callee, value, nested_meter, &input_data, scratch_buf),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}
@@ -248,7 +250,7 @@ define_env!(init_env, <E: Ext>,
 	//
 	// Returns 0 on the successful contract creation and puts the address
 	// of the created contract into the scratch buffer.
-	// Otherwise, returns 1 and leaves the scratch buffer unmodified.
+	// Otherwise, returns 1 and clears the scratch buffer.
 	//
 	// - init_code_ptr: a pointer to the buffer that contains the initializer code.
 	// - init_code_len: length of the initializer code buffer.
@@ -282,6 +284,9 @@ define_env!(init_env, <E: Ext>,
 		input_data.resize(input_data_len as usize, 0u8);
 		ctx.memory().get(input_data_ptr, &mut input_data)?;
 
+		// Clear the scratch buffer in any case.
+		ctx.scratch_buf.clear();
+
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
@@ -295,11 +300,9 @@ define_env!(init_env, <E: Ext>,
 				None => Err(()),
 			}
 		});
-
 		match create_outcome {
 			Ok(CreateReceipt { address }) => {
 				// Write the address to the scratch buffer.
-				ctx.scratch_buf.clear();
 				address.encode_to(&mut ctx.scratch_buf);
 				Ok(0)
 			},
