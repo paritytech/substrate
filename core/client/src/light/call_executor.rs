@@ -22,7 +22,7 @@ use std::sync::Arc;
 use futures::{IntoFuture, Future};
 
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Chain, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	execution_proof_check, ExecutionManager};
 use primitives::H256;
@@ -41,43 +41,41 @@ use memorydb::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
-pub struct RemoteCallExecutor<B, F, H, C> {
+pub struct RemoteCallExecutor<B, F, H, C, Ch> {
 	blockchain: Arc<B>,
 	fetcher: Arc<F>,
-	_hasher: PhantomData<H>,
-	_codec: PhantomData<C>,
+	_phantom: PhantomData<(H, C, Ch)>
 }
 
-impl<B, F, H, C> Clone for RemoteCallExecutor<B, F, H, C> {
+impl<B, F, H, C, Ch> Clone for RemoteCallExecutor<B, F, H, C, Ch> {
 	fn clone(&self) -> Self {
 		RemoteCallExecutor {
 			blockchain: self.blockchain.clone(),
 			fetcher: self.fetcher.clone(),
-			_hasher: Default::default(),
-			_codec: Default::default(),
+			_phantom: Default::default(),
 		}
 	}
 }
 
-impl<B, F, H, C> RemoteCallExecutor<B, F, H, C> {
+impl<B, F, H, C, Ch> RemoteCallExecutor<B, F, H, C, Ch> {
 	/// Creates new instance of remote call executor.
 	pub fn new(blockchain: Arc<B>, fetcher: Arc<F>) -> Self {
-		RemoteCallExecutor { blockchain, fetcher, _hasher: PhantomData, _codec: PhantomData }
+		RemoteCallExecutor { blockchain, fetcher, _phantom: PhantomData }
 	}
 }
 
-impl<B, F, Block, H, C> CallExecutor<Block, H, C> for RemoteCallExecutor<B, F, H, C>
+impl<B, F, H, C, Ch> CallExecutor<Ch::Block, H, C> for RemoteCallExecutor<B, F, H, C, Ch>
 where
-	Block: BlockT,
-	B: ChainBackend<Block>,
-	F: Fetcher<Block>,
+	B: ChainBackend<Ch>,
+	F: Fetcher<Ch::Block>,
 	H: Hasher,
 	H::Out: Ord + Encodable,
-	C: NodeCodec<H>
+	C: NodeCodec<H>,
+	Ch: Chain,
 {
 	type Error = ClientError;
 
-	fn call(&self, id: &BlockId<Block>, method: &str, call_data: &[u8]) -> ClientResult<CallResult> {
+	fn call(&self, id: &BlockId<Ch::Block>, method: &str, call_data: &[u8]) -> ClientResult<CallResult> {
 		let block_hash = match *id {
 			BlockId::Hash(hash) => hash,
 			BlockId::Number(number) => self.blockchain.hash(number)?
@@ -94,7 +92,7 @@ where
 		}).into_future().wait()
 	}
 
-	fn runtime_version(&self, id: &BlockId<Block>) -> ClientResult<RuntimeVersion> {
+	fn runtime_version(&self, id: &BlockId<Ch::Block>) -> ClientResult<RuntimeVersion> {
 		let call_result = self.call(id, "version", &[])?;
 		RuntimeVersion::decode(&mut call_result.return_data.as_slice())
 			.ok_or_else(|| ClientErrorKind::VersionInvalid.into())

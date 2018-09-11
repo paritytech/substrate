@@ -423,6 +423,25 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stati
 	}
 }
 
+
+/// Implementing the Consensus protocol
+pub trait Consensus: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+	/// The Blocks this Consensus can be agreed upon
+	type Block: Block;
+	/// The Network Message(s) this consensus uses
+	type Message: Member + Codec;
+	/// Signature attached to some block
+	type Signature: Member + Codec; 
+
+	/// Confirm the signature with the authorities at the given block confirm
+	/// consensus has been reached, error otherwise
+	fn confirm(
+		block: Self::Block,
+		signature: Self::Signature,
+		authorities: &[substrate_primitives::AuthorityId]
+	) -> Result<(), &'static str>;
+}
+
 /// Extract the hashing type for a block.
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
@@ -504,4 +523,14 @@ pub trait DigestItem: Member {
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 		None
 	}
+}
+
+
+// putting it all together
+/// Configuration for a specific chain
+pub trait Chain: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+	/// The Blocks this chain contains
+	type Block: Block;
+	/// The consensus algorithm of this chain
+	type Consensus: Consensus<Block=Self::Block>;
 }

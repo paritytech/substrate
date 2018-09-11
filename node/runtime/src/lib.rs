@@ -45,7 +45,7 @@ extern crate parity_codec_derive;
 #[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 extern crate srml_balances as balances;
-extern crate srml_consensus as consensus;
+extern crate srml_consensus_rhd as consensus;
 extern crate srml_contract as contract;
 extern crate srml_council as council;
 extern crate srml_democracy as democracy;
@@ -220,6 +220,8 @@ pub type Address = balances::Address<Runtime>;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+/// A Block signed with a Justification
+pub type SignedBlock = generic::SignedBlock<Block, consensus::messages::Justification<BlakeTwo256>>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.

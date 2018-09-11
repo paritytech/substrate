@@ -22,7 +22,7 @@ use runtime_primitives::StorageMap;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use executor::NativeExecutor;
 use runtime;
-use bft;
+use primitives::{AuthorityId};
 use {Backend, Executor};
 
 /// Extension trait for a test client.
@@ -31,20 +31,23 @@ pub trait TestClient {
 	fn new_for_tests() -> Self;
 
 	/// Justify and import block to the chain.
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()>;
+	fn justify_and_import(&mut self, origin: client::BlockOrigin, block: runtime::Block)
+		-> client::error::Result<()>;
 
 	/// Returns hash of the genesis block.
 	fn genesis_hash(&self) -> runtime::Hash;
 }
 
-impl TestClient for Client<Backend, Executor, runtime::Block> {
+impl TestClient for Client<Backend, Executor, runtime::Chain> {
 	fn new_for_tests() -> Self {
 		client::new_in_mem(NativeExecutor::new(), genesis_storage()).unwrap()
 	}
 
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
+	fn justify_and_import(&mut self, origin: client::BlockOrigin, block: runtime::Block)
+		-> client::error::Result<()>
+	{
 		let justification = fake_justify(&block.header);
-		let justified = self.check_justification(block.header, justification)?;
+		let justified = self.check_justification(block.clone(), justification)?;
 		self.import_block(origin, justified, Some(block.extrinsics))?;
 
 		Ok(())
@@ -61,30 +64,15 @@ impl TestClient for Client<Backend, Executor, runtime::Block> {
 /// headers.
 /// TODO: remove this in favor of custom verification pipelines for the
 /// client
-fn fake_justify(header: &runtime::Header) -> bft::UncheckedJustification<runtime::Hash> {
+fn fake_justify(header: &runtime::Header) -> runtime::ConsensusSignature {
 	let hash = header.hash();
 	let authorities = vec![
-		Keyring::Alice.into(),
-		Keyring::Bob.into(),
-		Keyring::Charlie.into(),
+		AuthorityId(<[u8; 32]>::from(Keyring::Alice)),
+		AuthorityId(<[u8; 32]>::from(Keyring::Bob)),
+		AuthorityId(<[u8; 32]>::from(Keyring::Charlie))
 	];
 
-	bft::UncheckedJustification::new(
-		hash,
-		authorities.iter().map(|key| {
-			let msg = bft::sign_message::<runtime::Block>(
-				::rhododendron::Vote::Commit(1, hash).into(),
-				key,
-				header.parent_hash
-			);
-
-			match msg {
-				::rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
-				_ => panic!("signing vote leads to signed vote"),
-			}
-		}).collect(),
-		1,
-	)
+	runtime::ConsensusSignature(hash, authorities)
 }
 
 fn genesis_config() -> GenesisConfig {

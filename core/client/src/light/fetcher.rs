@@ -182,7 +182,7 @@ pub mod tests {
 	use call_executor::CallResult;
 	use executor::{self, NativeExecutionDispatch};
 	use error::Error as ClientError;
-	use test_client::{self, TestClient, runtime::{Hash, Block, Header}};
+	use test_client::{self, TestClient, runtime::{Hash, Block, Header, Chain}};
 	use test_client::client::BlockOrigin;
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
@@ -229,7 +229,7 @@ pub mod tests {
 		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::AUTHORITY_COUNT).unwrap();
 
 		// check remote read proof locally
-		let local_storage = InMemoryBlockchain::<Block>::new();
+		let local_storage = InMemoryBlockchain::<Chain>::new();
 		local_storage.insert(remote_block_hash, remote_block_header.clone(), None, None, true);
 		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = LightDataChecker::new(local_executor);
@@ -241,7 +241,7 @@ pub mod tests {
 		Hash, Header, Vec<Vec<u8>>)
 	{
 		// prepare remote client
-		let remote_client = test_client::new();
+		let mut remote_client = test_client::new();
 		let mut local_headers_hashes = Vec::new();
 		for i in 0..4 {
 			let builder = remote_client.new_block().unwrap();
@@ -254,7 +254,7 @@ pub mod tests {
 		let (remote_block_header, remote_header_proof) = remote_client.header_proof_with_cht_size(&remote_block_id, 4).unwrap();
 
 		// check remote read proof locally
-		let local_storage = InMemoryBlockchain::<Block>::new();
+		let local_storage = InMemoryBlockchain::<Chain>::new();
 		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(4, 0, local_headers_hashes.into_iter()).unwrap();
 		if insert_cht {
 			local_storage.insert_cht_root(1, local_cht_root);

@@ -301,7 +301,7 @@ fn read_storage_entry<Block, T>(
 
 #[cfg(test)]
 mod tests {
-	use runtime_primitives::testing::Block as RawBlock;
+	use runtime_primitives::testing::{Block as RawBlock, TestChain};
 	use light::{AUTHORITIES_ENTRIES_TO_KEEP, columns, LightStorage};
 	use light::tests::insert_block;
 	use super::*;
@@ -377,7 +377,7 @@ mod tests {
 
 	#[test]
 	fn best_authorities_are_pruned() {
-		let db = LightStorage::<Block>::new_test();
+		let db = LightStorage::<TestChain>::new_test();
 		let mut transaction = DBTransaction::new();
 
 		// insert first entry at block#100

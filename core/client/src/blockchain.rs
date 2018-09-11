@@ -17,40 +17,40 @@
 //! Polkadot blockchain trait
 
 use primitives::AuthorityId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Chain, Header as HeaderT, 
+	Consensus as ConsensusT, NumberFor};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::bft::Justification;
 
 use error::{ErrorKind, Result};
 
 /// Blockchain database header backend. Does not perform any validation.
-pub trait HeaderBackend<Block: BlockT>: Send + Sync {
+pub trait HeaderBackend<Ch: Chain>: Send + Sync {
 	/// Get block header. Returns `None` if block is not found.
-	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>>;
+	fn header(&self, id: BlockId<Ch::Block>) -> Result<Option<<Ch::Block as BlockT>::Header>>;
 	/// Get blockchain info.
-	fn info(&self) -> Result<Info<Block>>;
+	fn info(&self) -> Result<Info<Ch::Block>>;
 	/// Get block status.
-	fn status(&self, id: BlockId<Block>) -> Result<BlockStatus>;
+	fn status(&self, id: BlockId<Ch::Block>) -> Result<BlockStatus>;
 	/// Get block number by hash. Returns `None` if the header is not in the chain.
-	fn number(&self, hash: Block::Hash) -> Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>>;
+	fn number(&self, hash: <Ch::Block as BlockT>::Hash) -> Result<Option<<<Ch::Block as BlockT>::Header as HeaderT>::Number>>;
 	/// Get block hash by number. Returns `None` if the header is not in the chain.
-	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>>;
+	fn hash(&self, number: NumberFor<Ch::Block>) -> Result<Option<<Ch::Block as BlockT>::Hash>>;
 
 	/// Get block header. Returns `UnknownBlock` error if block is not found.
-	fn expect_header(&self, id: BlockId<Block>) -> Result<Block::Header> {
+	fn expect_header(&self, id: BlockId<Ch::Block>) -> Result<<Ch::Block as BlockT>::Header> {
 		self.header(id)?.ok_or_else(|| ErrorKind::UnknownBlock(format!("{}", id)).into())
 	}
 }
 
 /// Blockchain database backend. Does not perform any validation.
-pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
+pub trait Backend<Ch: Chain>: HeaderBackend<Ch> {
 	/// Get block body. Returns `None` if block is not found.
-	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
+	fn body(&self, id: BlockId<Ch::Block>) -> Result<Option<Vec<<Ch::Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>>;
+	fn justification(&self, id: BlockId<Ch::Block>) -> Result<Option<<Ch::Consensus as ConsensusT>::Signature>>;
 
 	/// Returns data cache reference, if it is enabled on this backend.
-	fn cache(&self) -> Option<&Cache<Block>>;
+	fn cache(&self) -> Option<&Cache<Ch::Block>>;
 }
 
 /// Blockchain optional data cache.

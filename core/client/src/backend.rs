@@ -18,9 +18,8 @@
 
 use error;
 use primitives::AuthorityId;
-use runtime_primitives::bft::Justification;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Chain, Consensus as ConsensusT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use patricia_trie::NodeCodec;
@@ -28,11 +27,11 @@ use hashdb::Hasher;
 use memorydb::MemoryDB;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
-pub trait BlockImportOperation<Block, H, C>
+pub trait BlockImportOperation<H, C, Ch>
 where
-	Block: BlockT,
 	H: Hasher,
 	C: NodeCodec<H>,
+	Ch: Chain,
 {
 	/// Associated state backend type.
 	type State: StateBackend<H, C>;
@@ -42,9 +41,9 @@ where
 	/// Append block data to the transaction.
 	fn set_block_data(
 		&mut self,
-		header: Block::Header,
-		body: Option<Vec<Block::Extrinsic>>,
-		justification: Option<Justification<Block::Hash>>,
+		header: <Ch::Block as BlockT>::Header,
+		body: Option<Vec<<Ch::Block as BlockT>::Extrinsic>>,
+		justification: Option<<Ch::Consensus as ConsensusT>::Signature>,
 		is_new_best: bool
 	) -> error::Result<()>;
 
@@ -67,16 +66,16 @@ where
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
 /// is alive, the state for `P` should not be pruned.
-pub trait Backend<Block, H, C>: Send + Sync
+pub trait Backend<H, C, Ch>: Send + Sync
 where
-	Block: BlockT,
 	H: Hasher,
 	C: NodeCodec<H>,
+	Ch: Chain,
 {
 	/// Associated block insertion operation type.
-	type BlockImportOperation: BlockImportOperation<Block, H, C>;
+	type BlockImportOperation: BlockImportOperation<H, C, Ch>;
 	/// Associated blockchain backend type.
-	type Blockchain: ::blockchain::Backend<Block>;
+	type Blockchain: ::blockchain::Backend<Ch>;
 	/// Associated state backend type.
 	type State: StateBackend<H, C>;
 	/// Changes trie storage.
@@ -84,7 +83,7 @@ where
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
-	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation>;
+	fn begin_operation(&self, block: BlockId<Ch::Block>) -> error::Result<Self::BlockImportOperation>;
 	/// Commit block insertion.
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
@@ -92,24 +91,24 @@ where
 	/// Returns reference to changes trie storage.
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
 	/// Returns state backend with post-state of given block.
-	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
+	fn state_at(&self, block: BlockId<Ch::Block>) -> error::Result<Self::State>;
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
 	/// successfully reverted.
-	fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>>;
+	fn revert(&self, n: NumberFor<Ch::Block>) -> error::Result<NumberFor<Ch::Block>>;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.
-pub trait LocalBackend<Block, H, C>: Backend<Block, H, C>
+pub trait LocalBackend<H, C, Ch>: Backend<H, C, Ch>
 where
-	Block: BlockT,
 	H: Hasher,
 	C: NodeCodec<H>,
+	Ch: Chain,
 {}
 
 /// Mark for all Backend implementations, that are fetching required state data from remote nodes.
-pub trait RemoteBackend<Block, H, C>: Backend<Block, H, C>
+pub trait RemoteBackend<H, C, Ch>: Backend<H, C, Ch>
 where
-	Block: BlockT,
 	H: Hasher,
 	C: NodeCodec<H>,
+	Ch: Chain,
 {}

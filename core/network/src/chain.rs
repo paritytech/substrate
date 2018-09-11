@@ -16,90 +16,121 @@
 
 //! Blockchain access trait
 
-use client::{self, Client as SubstrateClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin, CallExecutor};
+use client::{self, Client as SubstrateClient, ImportResult, ClientInfo, BlockStatus,
+		BlockOrigin, CallExecutor};
 use client::error::Error;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Chain as ChainT,
+		Consensus as ConsensusT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use primitives::{Blake2Hasher, RlpCodec};
 
 /// Local client abstraction for the network.
-pub trait Client<Block: BlockT>: Send + Sync {
+pub trait Client<C: Chain>: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
-	fn import(&self, origin: BlockOrigin, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error>;
+	fn import(&self,
+		origin: BlockOrigin,
+		header: <C::Block as BlockT>::Header,
+		justification: C,
+		body: Option<Vec<<C::Block as BlockT>::Extrinsic>>)
+	-> Result<ImportResult, Error>;
 
 	/// Get blockchain info.
-	fn info(&self) -> Result<ClientInfo<Block>, Error>;
+	fn info(&self) -> Result<ClientInfo<C::Block>, Error>;
 
 	/// Get block status.
-	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error>;
+	fn block_status(&self, id: &BlockId<C::Block>) -> Result<BlockStatus, Error>;
 
 	/// Get block hash by number.
-	fn block_hash(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, Error>;
+	fn block_hash(&self, block_number: <<C::Block as BlockT>::Header as HeaderT>::Number)
+		-> Result<Option<<C::Block as BlockT>::Hash>, Error>;
 
 	/// Get block header.
-	fn header(&self, id: &BlockId<Block>) -> Result<Option<Block::Header>, Error>;
+	fn header(&self, id: &BlockId<C::Block>)
+		-> Result<Option<<C::Block as BlockT>::Header>, Error>;
 
 	/// Get block body.
-	fn body(&self, id: &BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, Error>;
+	fn body(&self, id: &BlockId<C::Block>)
+		-> Result<Option<Vec<<C::Block as BlockT>::Extrinsic>>, Error>;
 
 	/// Get block justification.
-	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, Error>;
+	fn justification(&self, id: &BlockId<C::Block>) -> Result<Option<<C::Consensus as ConsensusT>::Signature>, Error>;
 
 	/// Get block header proof.
-	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<(Block::Header, Vec<Vec<u8>>), Error>;
+	fn header_proof(&self, block_number: <<C::Block as BlockT>::Header as HeaderT>::Number)
+		-> Result<(<C::Block as BlockT>::Header, Vec<Vec<u8>>), Error>;
 
 	/// Get storage read execution proof.
-	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error>;
+	fn read_proof(&self, block: &<C::Block as BlockT>::Hash, key: &[u8])
+		-> Result<Vec<Vec<u8>>, Error>;
 
 	/// Get method execution proof.
-	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
+	fn execution_proof(&self, block: &<C::Block as BlockT>::Hash, method: &str, data: &[u8])
+		-> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
 }
 
-impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	Block: BlockT,
+impl<B, E, C> Client<C> for SubstrateClient<B, E, C> where
+	C: Chain,
+	B: client::backend::Backend<C, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+	E: CallExecutor<C::Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
 {
-	fn import(&self, origin: BlockOrigin, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error> {
+	fn import(&self,
+		origin: BlockOrigin,
+		header: <C::Block as BlockT>::Header,
+		justification: C,
+		body: Option<Vec<<C::Block as BlockT>::Extrinsic>>
+	) -> Result<ImportResult, Error> {
 		// TODO: defer justification check.
 		let justified_header = self.check_justification(header, justification.into())?;
-		(self as &SubstrateClient<B, E, Block>).import_block(origin, justified_header, body)
+		(self as &SubstrateClient<B, E, C>).import_block(origin, justified_header, body)
 	}
 
-	fn info(&self) -> Result<ClientInfo<Block>, Error> {
-		(self as &SubstrateClient<B, E, Block>).info()
+	fn info(&self) -> Result<ClientInfo<C::Block>, Error> {
+		(self as &SubstrateClient<B, E, C>).info()
 	}
 
-	fn block_status(&self, id: &BlockId<Block>) -> Result<BlockStatus, Error> {
-		(self as &SubstrateClient<B, E, Block>).block_status(id)
+	fn block_status(&self, id: &BlockId<C::Block>) -> Result<BlockStatus, Error> {
+		(self as &SubstrateClient<B, E, C>).block_status(id)
 	}
 
-	fn block_hash(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, Error> {
-		(self as &SubstrateClient<B, E, Block>).block_hash(block_number)
+	fn block_hash(&self, block_number: <<C::Block as BlockT>::Header as HeaderT>::Number)
+		-> Result<Option<<C::Block as BlockT>::Hash>, Error>
+	{
+		(self as &SubstrateClient<B, E, C>).block_hash(block_number)
 	}
 
-	fn header(&self, id: &BlockId<Block>) -> Result<Option<Block::Header>, Error> {
-		(self as &SubstrateClient<B, E, Block>).header(id)
+	fn header(&self, id: &BlockId<C::Block>)
+		-> Result<Option<<C::Block as BlockT>::Header>, Error>
+	{
+		(self as &SubstrateClient<B, E, C>).header(id)
 	}
 
-	fn body(&self, id: &BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, Error> {
-		(self as &SubstrateClient<B, E, Block>).body(id)
+	fn body(&self, id: &BlockId<C::Block>)
+		-> Result<Option<Vec<<C::Block as BlockT>::Extrinsic>>, Error>
+	{
+		(self as &SubstrateClient<B, E, C>).body(id)
 	}
 
-	fn justification(&self, id: &BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, Error> {
-		(self as &SubstrateClient<B, E, Block>).justification(id)
+	fn justification(&self, id: &BlockId<C::Block>) -> Result<Option<<C::Consensus as ConsensusT>::Signature>, Error> {
+		(self as &SubstrateClient<B, E, C>).justification(id)
 	}
 
-	fn header_proof(&self, block_number: <Block::Header as HeaderT>::Number) -> Result<(Block::Header, Vec<Vec<u8>>), Error> {
-		(self as &SubstrateClient<B, E, Block>).header_proof(&BlockId::Number(block_number))
+	fn header_proof(&self, block_number: <<C::Block as BlockT>::Header as HeaderT>::Number)
+		-> Result<(<C::Block as BlockT>::Header, Vec<Vec<u8>>), Error>
+	{
+		(self as &SubstrateClient<B, E, C>).header_proof(&BlockId::Number(block_number))
 	}
 
-	fn read_proof(&self, block: &Block::Hash, key: &[u8]) -> Result<Vec<Vec<u8>>, Error> {
-		(self as &SubstrateClient<B, E, Block>).read_proof(&BlockId::Hash(block.clone()), key)
+	fn read_proof(&self, block: &<C::Block as BlockT>::Hash, key: &[u8])
+		-> Result<Vec<Vec<u8>>, Error>
+	{
+		(self as &SubstrateClient<B, E, C>).read_proof(&BlockId::Hash(block.clone()), key)
 	}
 
-	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
-		(self as &SubstrateClient<B, E, Block>).execution_proof(&BlockId::Hash(block.clone()), method, data)
+	fn execution_proof(&self, block: &<C::Block as BlockT>::Hash, method: &str, data: &[u8])
+	-> Result<(Vec<u8>, Vec<Vec<u8>>), Error>
+	{
+		(self as &SubstrateClient<B, E, C>)
+			.execution_proof(&BlockId::Hash(block.clone()), method, data)
 	}
 }

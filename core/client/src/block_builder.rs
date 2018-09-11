@@ -19,7 +19,7 @@
 use std::vec::Vec;
 use codec::{Decode, Encode};
 use state_machine::{self, native_when_possible};
-use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
+use runtime_primitives::traits::{Header as HeaderT, Chain, Hash, Block as BlockT, One, HashFor};
 use runtime_primitives::generic::BlockId;
 use {backend, error, Client, CallExecutor};
 use runtime_primitives::{ApplyResult, ApplyOutcome};
@@ -29,36 +29,36 @@ use hashdb::Hasher;
 use rlp::Encodable;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<B, E, Block, H, C>
+pub struct BlockBuilder<B, E, H, C, Ch>
 where
-	B: backend::Backend<Block, H, C>,
-	E: CallExecutor<Block, H, C> + Clone,
-	Block: BlockT,
+	B: backend::Backend<H, C, Ch>,
+	E: CallExecutor<Ch::Block, H, C> + Clone,
 	H: Hasher,
 	H::Out: Encodable + Ord,
 	C: NodeCodec<H>,
+	Ch: Chain,
 {
-	header: <Block as BlockT>::Header,
-	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
+	header: <Ch::Block as BlockT>::Header,
+	extrinsics: Vec<<Ch::Block as BlockT>::Extrinsic>,
 	executor: E,
 	state: B::State,
 	changes: state_machine::OverlayedChanges,
 }
 
-impl<B, E, Block> BlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>
+impl<B, E, Ch> BlockBuilder<B, E, Blake2Hasher, RlpCodec, Ch>
 where
-	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
-	Block: BlockT,
+	B: backend::Backend<Blake2Hasher, RlpCodec, Ch>,
+	E: CallExecutor<Ch::Block, Blake2Hasher, RlpCodec> + Clone,
+	Ch: Chain,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
-	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {
+	pub fn new(client: &Client<B, E, Ch>) -> error::Result<Self> {
 		client.info().and_then(|i| Self::at_block(&BlockId::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
 	/// build upon.
-	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block>) -> error::Result<Self> {
+	pub fn at_block(block_id: &BlockId<Ch::Block>, client: &Client<B, E, Ch>) -> error::Result<Self> {
 		let number = client.block_number_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?
 			+ One::one();
@@ -69,7 +69,7 @@ where
 		let executor = client.executor().clone();
 		let state = client.state_at(block_id)?;
 		let mut changes = Default::default();
-		let header = <<Block as BlockT>::Header as HeaderT>::new(
+		let header = <<Ch::Block as BlockT>::Header as HeaderT>::new(
 			number,
 			Default::default(),
 			Default::default(),
@@ -92,7 +92,7 @@ where
 	/// Push onto the block's list of extrinsics. This will ensure the extrinsic
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
-	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
+	pub fn push(&mut self, xt: <Ch::Block as BlockT>::Extrinsic) -> error::Result<()> {
 		match self.executor.call_at_state(&self.state, &mut self.changes, "apply_extrinsic", &xt.encode(), native_when_possible()) {
 			Ok((result, _, _)) => {
 				match ApplyResult::decode(&mut result.as_slice()) {
@@ -119,22 +119,23 @@ where
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
-	pub fn bake(mut self) -> error::Result<Block> {
-		let (output, _, _) = self.executor.call_at_state(
+
+	pub fn bake(mut self) -> error::Result<Ch::Block> {
+		let (output, _) = self.executor.call_at_state(
 			&self.state,
 			&mut self.changes,
 			"finalise_block",
 			&[],
 			native_when_possible(),
 		)?;
-		self.header = <<Block as BlockT>::Header as Decode>::decode(&mut &output[..])
+		self.header = <<Ch::Block as BlockT>::Header as Decode>::decode(&mut &output[..])
 			.expect("Header came straight out of runtime so must be valid");
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),
-			HashFor::<Block>::ordered_trie_root(self.extrinsics.iter().map(Encode::encode)),
+			HashFor::<Ch::Block>::ordered_trie_root(self.extrinsics.iter().map(Encode::encode)),
 		);
 
-		Ok(<Block as BlockT>::new(self.header, self.extrinsics))
+		Ok(<Ch::Block as BlockT>::new(self.header, self.extrinsics))
 	}
 }

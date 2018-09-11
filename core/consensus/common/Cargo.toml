@@ -1,0 +1,8 @@
+[package]
+name = "substrate-consensus-common"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Common utilities for substrate consensus"
+
+[dev-dependencies]
+substrate-primitives = { path= "../../primitives"}

@@ -17,7 +17,7 @@
 use std::sync::Arc;
 use std::cmp::Ord;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::Block as BlockT;
+use runtime_primitives::traits::{Block as BlockT, Chain};
 use state_machine::{self, OverlayedChanges, Ext,
 	CodeExecutor, ExecutionManager, native_when_possible};
 use executor::{RuntimeVersion, RuntimeInfo};
@@ -96,37 +96,39 @@ where
 
 /// Call executor that executes methods locally, querying all required
 /// data from local backend.
-pub struct LocalCallExecutor<B, E> {
+pub struct LocalCallExecutor<B, E, Ch> {
 	backend: Arc<B>,
 	executor: E,
+	_chain: ::std::marker::PhantomData<Ch>,
 }
 
-impl<B, E> LocalCallExecutor<B, E> {
+impl<B, E, Ch> LocalCallExecutor<B, E, Ch> {
 	/// Creates new instance of local call executor.
 	pub fn new(backend: Arc<B>, executor: E) -> Self {
-		LocalCallExecutor { backend, executor }
+		LocalCallExecutor { backend, executor, _chain: Default::default() }
 	}
 }
 
-impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
+impl<B, E, Ch> Clone for LocalCallExecutor<B, E, Ch> where E: Clone {
 	fn clone(&self) -> Self {
 		LocalCallExecutor {
 			backend: self.backend.clone(),
 			executor: self.executor.clone(),
+			_chain: Default::default(),
 		}
 	}
 }
 
-impl<B, E, Block> CallExecutor<Block, Blake2Hasher, RlpCodec> for LocalCallExecutor<B, E>
+impl<B, E, Ch> CallExecutor<Ch::Block, Blake2Hasher, RlpCodec> for LocalCallExecutor<B, E, Ch>
 where
-	B: backend::LocalBackend<Block, Blake2Hasher, RlpCodec>,
+	B: backend::LocalBackend<Blake2Hasher, RlpCodec, Ch>,
 	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-	Block: BlockT,
+	Ch: Chain
 {
 	type Error = E::Error;
 
 	fn call(&self,
-		id: &BlockId<Block>,
+		id: &BlockId<Ch::Block>,
 		method: &str,
 		call_data: &[u8],
 	) -> error::Result<CallResult> {
@@ -141,7 +143,7 @@ where
 		Ok(CallResult { return_data, changes })
 	}
 
-	fn runtime_version(&self, id: &BlockId<Block>) -> error::Result<RuntimeVersion> {
+	fn runtime_version(&self, id: &BlockId<Ch::Block>) -> error::Result<RuntimeVersion> {
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		use state_machine::Backend;

@@ -24,7 +24,7 @@ use parking_lot::{Condvar, Mutex, RwLock};
 use client::{BlockOrigin, ImportResult};
 use network_libp2p::{NodeIndex, Severity};
 
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use runtime_primitives::traits::{Chain, Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 use blocks::BlockData;
 use chain::Client;
@@ -34,17 +34,20 @@ use service::ExecuteInContext;
 use sync::ChainSync;
 
 /// Blocks import queue API.
-pub trait ImportQueue<B: BlockT>: Send + Sync {
+pub trait ImportQueue<C: Chain>: Send + Sync {
 	/// Clear the queue when sync is restarting.
 	fn clear(&self);
 	/// Clears the import queue and stops importing.
 	fn stop(&self);
 	/// Get queue status.
-	fn status(&self) -> ImportQueueStatus<B>;
+	fn status(&self) -> ImportQueueStatus<C::Block>;
 	/// Is block with given hash currently in the queue.
-	fn is_importing(&self, hash: &B::Hash) -> bool;
+	fn is_importing(&self, hash: &<C::Block as BlockT>::Hash) -> bool;
 	/// Import bunch of blocks.
-	fn import_blocks(&self, sync: &mut ChainSync<B>, protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>));
+	fn import_blocks(&self,
+		sync: &mut ChainSync<C::Block>,
+		protocol: &mut Context<C>,
+		blocks: (BlockOrigin, Vec<BlockData<C>>));
 }
 
 /// Import queue status. It isn't completely accurate.
@@ -56,21 +59,21 @@ pub struct ImportQueueStatus<B: BlockT> {
 }
 
 /// Blocks import queue that is importing blocks in the separate thread.
-pub struct AsyncImportQueue<B: BlockT> {
+pub struct AsyncImportQueue<C: Chain> {
 	handle: Mutex<Option<::std::thread::JoinHandle<()>>>,
-	data: Arc<AsyncImportQueueData<B>>,
+	data: Arc<AsyncImportQueueData<C>>,
 }
 
 /// Locks order: queue, queue_blocks, best_importing_number
-struct AsyncImportQueueData<B: BlockT> {
+struct AsyncImportQueueData<C: Chain> {
 	signal: Condvar,
-	queue: Mutex<VecDeque<(BlockOrigin, Vec<BlockData<B>>)>>,
-	queue_blocks: RwLock<HashSet<B::Hash>>,
-	best_importing_number: RwLock<<<B as BlockT>::Header as HeaderT>::Number>,
+	queue: Mutex<VecDeque<(BlockOrigin, Vec<BlockData<C>>)>>,
+	queue_blocks: RwLock<HashSet<<C::Block as BlockT>::Hash>>,
+	best_importing_number: RwLock<<<C::Block as BlockT>::Header as HeaderT>::Number>,
 	is_stopping: AtomicBool,
 }
 
-impl<B: BlockT> AsyncImportQueue<B> {
+impl<C: Chain> AsyncImportQueue<C> {
 	pub fn new() -> Self {
 		Self {
 			handle: Mutex::new(None),
@@ -78,7 +81,12 @@ impl<B: BlockT> AsyncImportQueue<B> {
 		}
 	}
 
-	pub fn start<E: 'static + ExecuteInContext<B>>(&self, sync: Weak<RwLock<ChainSync<B>>>, service: Weak<E>, chain: Weak<Client<B>>) -> Result<(), Error> {
+	pub fn start<E: 'static + ExecuteInContext<C>>(
+		&self,
+		sync: Weak<RwLock<ChainSync<C::Block>>>,
+		service: Weak<E>,
+		chain: Weak<Client<C>>
+	) -> Result<(), Error> {
 		debug_assert!(self.handle.lock().is_none());
 
 		let qdata = self.data.clone();
@@ -89,7 +97,7 @@ impl<B: BlockT> AsyncImportQueue<B> {
 	}
 }
 
-impl<B: BlockT> AsyncImportQueueData<B> {
+impl<C: Chain> AsyncImportQueueData<C> {
 	pub fn new() -> Self {
 		Self {
 			signal: Default::default(),
@@ -101,7 +109,7 @@ impl<B: BlockT> AsyncImportQueueData<B> {
 	}
 }
 
-impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
+impl<C: Chain> ImportQueue<C> for AsyncImportQueue<C> {
 	fn clear(&self) {
 		let mut queue = self.data.queue.lock();
 		let mut queue_blocks = self.data.queue_blocks.write();
@@ -121,18 +129,22 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 		}
 	}
 
-	fn status(&self) -> ImportQueueStatus<B> {
+	fn status(&self) -> ImportQueueStatus<C::Block> {
 		ImportQueueStatus {
 			importing_count: self.data.queue_blocks.read().len(),
 			best_importing_number: *self.data.best_importing_number.read(),
 		}
 	}
 
-	fn is_importing(&self, hash: &B::Hash) -> bool {
+	fn is_importing(&self, hash: &<C::Block as BlockT>::Hash) -> bool {
 		self.data.queue_blocks.read().contains(hash)
 	}
 
-	fn import_blocks(&self, _sync: &mut ChainSync<B>, _protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>)) {
+	fn import_blocks(&self,
+		_sync: &mut ChainSync<C::Block>,
+		_protocol: &mut Context<C>,
+		blocks: (BlockOrigin, Vec<BlockData<C>>)
+	) {
 		if blocks.1.is_empty() {
 			return;
 		}
@@ -152,14 +164,19 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 	}
 }
 
-impl<B: BlockT> Drop for AsyncImportQueue<B> {
+impl<C: Chain> Drop for AsyncImportQueue<C> {
 	fn drop(&mut self) {
 		self.stop();
 	}
 }
 
 /// Blocks import thread.
-fn import_thread<B: BlockT, E: ExecuteInContext<B>>(sync: Weak<RwLock<ChainSync<B>>>, service: Weak<E>, chain: Weak<Client<B>>, qdata: Arc<AsyncImportQueueData<B>>) {
+fn import_thread<C: Chain, E: ExecuteInContext<C>>(
+	sync: Weak<RwLock<ChainSync<C::Block>>>,
+	service: Weak<E>,
+	chain: Weak<Client<C>>,
+	qdata: Arc<AsyncImportQueueData<C>>
+) {
 	trace!(target: "sync", "Starting import thread");
 	loop {
 		if qdata.is_stopping.load(Ordering::SeqCst) {
@@ -198,11 +215,11 @@ fn import_thread<B: BlockT, E: ExecuteInContext<B>>(sync: Weak<RwLock<ChainSync<
 }
 
 /// ChainSync link trait.
-trait SyncLinkApi<B: BlockT> {
+trait SyncLinkApi<C> {
 	/// Get chain reference.
-	fn chain(&self) -> &Client<B>;
+	fn chain(&self) -> &Client<C>;
 	/// Block imported.
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>);
+	fn block_imported(&mut self, hash: &<C::Block as BlockT>::Hash, number: NumberFor<C::Block>);
 	/// Maintain sync.
 	fn maintain_sync(&mut self);
 	/// Disconnect from peer.
@@ -214,12 +231,12 @@ trait SyncLinkApi<B: BlockT> {
 }
 
 /// Link with the ChainSync service.
-enum SyncLink<'a, B: 'a + BlockT, E: 'a + ExecuteInContext<B>> {
+enum SyncLink<'a, C: 'a + Chain, E: 'a + ExecuteInContext<C>> {
 	/// Indirect link (through service).
-	Indirect(&'a RwLock<ChainSync<B>>, &'a Client<B>, &'a E),
+	Indirect(&'a RwLock<ChainSync<C::Block>>, &'a Client<C>, &'a E),
 	/// Direct references are given.
 	#[cfg(test)]
-	Direct(&'a mut ChainSync<B>, &'a mut Context<B>),
+	Direct(&'a mut ChainSync<C::Block>, &'a mut Context<C>),
 }
 
 /// Block import successful result.
@@ -243,10 +260,10 @@ enum BlockImportError {
 }
 
 /// Import a bunch of blocks.
-fn import_many_blocks<'a, B: BlockT>(
-	link: &mut SyncLinkApi<B>,
-	qdata: Option<&AsyncImportQueueData<B>>,
-	blocks: (BlockOrigin, Vec<BlockData<B>>)
+fn import_many_blocks<'a, C: Chain>(
+	link: &mut SyncLinkApi<C::Block>,
+	qdata: Option<&AsyncImportQueueData<C>>,
+	blocks: (BlockOrigin, Vec<BlockData<C>>)
 ) -> bool
 {
 	let (blocks_origin, blocks) = blocks;
@@ -284,11 +301,17 @@ fn import_many_blocks<'a, B: BlockT>(
 }
 
 /// Single block import function.
-fn import_single_block<B: BlockT>(
-	chain: &Client<B>,
+fn import_single_block<C: Chain>(
+	chain: &Client<C>,
 	block_origin: BlockOrigin,
-	block: BlockData<B>
-) -> Result<BlockImportResult<B::Hash, <<B as BlockT>::Header as HeaderT>::Number>, BlockImportError>
+	block: BlockData<C>
+) -> Result<
+	BlockImportResult<
+		<C::Block as BlockT>::Hash,
+		<<C::Block as BlockT>::Header as HeaderT>::Number
+	>,
+	BlockImportError
+>
 {
 	let origin = block.origin;
 	let block = block.block;
@@ -376,9 +399,9 @@ fn process_import_result<'a, B: BlockT>(
 	}
 }
 
-impl<'a, B: 'static + BlockT, E: 'a + ExecuteInContext<B>> SyncLink<'a, B, E> {
+impl<'a, C: 'static + Chain, E: 'a + ExecuteInContext<C>> SyncLink<'a, C, E> {
 	/// Execute closure with locked ChainSync.
-	fn with_sync<F: Fn(&mut ChainSync<B>, &mut Context<B>)>(&mut self, closure: F) {
+	fn with_sync<F: Fn(&mut ChainSync<C::Block>, &mut Context<C>)>(&mut self, closure: F) {
 		match *self {
 			#[cfg(test)]
 			SyncLink::Direct(ref mut sync, ref mut protocol) =>
@@ -392,8 +415,8 @@ impl<'a, B: 'static + BlockT, E: 'a + ExecuteInContext<B>> SyncLink<'a, B, E> {
 	}
 }
 
-impl<'a, B: 'static + BlockT, E: ExecuteInContext<B>> SyncLinkApi<B> for SyncLink<'a, B, E> {
-	fn chain(&self) -> &Client<B> {
+impl<'a, C: 'static + Chain, E: ExecuteInContext<C>, C> SyncLinkApi<C::Block> for SyncLink<'a, C, E> {
+	fn chain(&self) -> &Client<C> {
 		match *self {
 			#[cfg(test)]
 			SyncLink::Direct(_, ref protocol) => protocol.client(),
@@ -401,7 +424,7 @@ impl<'a, B: 'static + BlockT, E: ExecuteInContext<B>> SyncLinkApi<B> for SyncLin
 		}
 	}
 
-	fn block_imported(&mut self, hash: &B::Hash, number: NumberFor<B>) {
+	fn block_imported(&mut self, hash: &<C::Block as BlockT>::Hash, number: NumberFor<C::Block>) {
 		self.with_sync(|sync, _| sync.block_imported(&hash, number))
 	}
 
@@ -438,12 +461,13 @@ pub mod tests {
 	/// Blocks import queue that is importing blocks in the same thread.
 	pub struct SyncImportQueue;
 	struct DummyExecuteInContext;
+	struct ConsensusMessage;
 
-	impl<B: 'static + BlockT> ExecuteInContext<B> for DummyExecuteInContext {
-		fn execute_in_context<F: Fn(&mut Context<B>)>(&self, _closure: F) { }
+	impl<B: 'static + BlockT> ExecuteInContext<B, ConsensusMessage> for DummyExecuteInContext {
+		fn execute_in_context<F: Fn(&mut Context<B, ConsensusMessage>)>(&self, _closure: F) { }
 	}
 
-	impl<B: 'static + BlockT> ImportQueue<B> for SyncImportQueue {
+	impl<B: 'static + BlockT> ImportQueue<B, ConsensusMessage> for SyncImportQueue {
 		fn clear(&self) { }
 
 		fn stop(&self) { }
@@ -459,7 +483,12 @@ pub mod tests {
 			false
 		}
 
-		fn import_blocks(&self, sync: &mut ChainSync<B>, protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>)) {
+		fn import_blocks(
+			&self,
+			sync: &mut ChainSync<B>,
+			protocol: &mut Context<B, ConsensusMessage>,
+			blocks: (BlockOrigin, Vec<BlockData<B, ConsensusMessage>>)
+		) {
 			import_many_blocks(&mut SyncLink::Direct::<_, DummyExecuteInContext>(sync, protocol), None, blocks);
 		}
 	}
@@ -497,7 +526,13 @@ pub mod tests {
 		fn restart(&mut self) { self.restarts += 1; }
 	}
 
-	fn prepare_good_block() -> (client::Client<test_client::Backend, test_client::Executor, Block>, Hash, u64, BlockData<Block>) {
+	fn prepare_good_block()
+		-> (
+			client::Client<test_client::Backend, test_client::Executor, Block>,
+			Hash,
+			u64,
+			BlockData<Block, ConsensusMessage>)
+	{
 		let client = test_client::new();
 		let block = client.new_block().unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::File, block).unwrap();

@@ -30,8 +30,8 @@ use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
 use primitives::{Blake2Hasher, RlpCodec};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header};
+use runtime_primitives::generiC::BlockId;
+use runtime_primitives::traits::{Block as BlockT, Chain, Header};
 use tokio::runtime::TaskExecutor;
 use serde_json;
 
@@ -88,16 +88,16 @@ build_rpc_trait! {
 }
 
 /// State API with subscriptions support.
-pub struct State<B, E, Block: BlockT> {
+pub struct State<B, E, C: Chain> {
 	/// Substrate client.
-	client: Arc<Client<B, E, Block>>,
+	client: Arc<Client<B, E, C>>,
 	/// Current subscriptions.
 	subscriptions: Subscriptions,
 }
 
-impl<B, E, Block: BlockT> State<B, E, Block> {
+impl<B, E, C: Chain> State<B, E, C> {
 	/// Create new State API RPC handler.
-	pub fn new(client: Arc<Client<B, E, Block>>, executor: TaskExecutor) -> Self {
+	pub fn new(client: Arc<Client<B, E, C>>, executor: TaskExecutor) -> Self {
 		Self {
 			client,
 			subscriptions: Subscriptions::new(executor),
@@ -105,51 +105,52 @@ impl<B, E, Block: BlockT> State<B, E, Block> {
 	}
 }
 
-impl<B, E, Block> State<B, E, Block> where
-	Block: BlockT,
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
+impl<B, E, C> State<B, E, C> where
+	C: Chain,
+	B: client::backend::Backend<Blake2Hasher, RlpCodec, C>,
+	E: CallExecutor<C::Block, Blake2Hasher, RlpCodec>,
 {
-	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
+	fn unwrap_or_best(&self, hash: Trailing<<C::Block as BlockT>::Hash>) -> Result<<C::Block as BlockT>::Hash> {
 		::helpers::unwrap_or_else(|| Ok(self.client.info()?.chain.best_hash), hash)
 	}
 }
 
-impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
-	Block: BlockT + 'static,
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+impl<B, E, C> StateApi<<C::Block as BlockT>::Hash> for State<B, E, C>
+where
+	C: Chain, // + 'static,
+	B: client::backend::Backend<Blake2Hasher, RlpCodec, C> + Send + Sync + 'static,
+	E: CallExecutor<C::Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 
-	fn call(&self, method: String, data: Vec<u8>, block: Trailing<Block::Hash>) -> Result<Vec<u8>> {
+	fn call(&self, method: String, data: Vec<u8>, block: Trailing<<C::Block as BlockT>::Hash>) -> Result<Vec<u8>> {
 		let block = self.unwrap_or_best(block)?;
 		trace!(target: "rpc", "Calling runtime at {:?} for method {} ({})", block, method, HexDisplay::from(&data));
 		Ok(self.client.executor().call(&BlockId::Hash(block), &method, &data)?.return_data)
 	}
 
-	fn storage(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<StorageData>> {
+	fn storage(&self, key: StorageKey, block: Trailing<<C::Block as BlockT>::Hash>) -> Result<Option<StorageData>> {
 		let block = self.unwrap_or_best(block)?;
 		trace!(target: "rpc", "Querying storage at {:?} for key {}", block, HexDisplay::from(&key.0));
 		Ok(self.client.storage(&BlockId::Hash(block), &key)?)
 	}
 
-	fn storage_hash(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<Block::Hash>> {
+	fn storage_hash(&self, key: StorageKey, block: Trailing<<C::Block as BlockT>::Hash>) -> Result<Option<<C::Block as BlockT>::Hash>> {
 		use runtime_primitives::traits::{Hash, Header as HeaderT};
-		Ok(self.storage(key, block)?.map(|x| <Block::Header as HeaderT>::Hashing::hash(&x.0)))
+		Ok(self.storage(key, block)?.map(|x| <<C::Block as BlockT>::Header as HeaderT>::Hashing::hash(&x.0)))
 	}
 
-	fn storage_size(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<u64>> {
+	fn storage_size(&self, key: StorageKey, block: Trailing<<C::Block as BlockT>::Hash>) -> Result<Option<u64>> {
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
-	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<serde_json::Value> {
+	fn metadata(&self, block: Trailing<<C::Block as BlockT>::Hash>) -> Result<serde_json::Value> {
 		let block = self.unwrap_or_best(block)?;
 		let metadata = self.client.metadata(&BlockId::Hash(block))?;
 		serde_json::to_value(metadata).map_err(Into::into)
 	}
 
-	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
+	fn query_storage(&self, keys: Vec<StorageKey>, from: <C::Block as BlockT>::Hash, to: Trailing<<C::Block as BlockT>::Hash>) -> Result<Vec<StorageChangeSet<<C::Block as BlockT>::Hash>>> {
 		let to = self.unwrap_or_best(to)?;
 
 		let from_hdr = self.client.header(&BlockId::hash(from))?;
@@ -220,7 +221,7 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 	fn subscribe_storage(
 		&self,
 		_meta: Self::Metadata,
-		subscriber: pubsub::Subscriber<StorageChangeSet<Block::Hash>>,
+		subscriber: pubsub::Subscriber<StorageChangeSet<<C::Block as BlockT>::Hash>>,
 		keys: Trailing<Vec<StorageKey>>
 	) {
 		let keys = Into::<Option<Vec<_>>>::into(keys);

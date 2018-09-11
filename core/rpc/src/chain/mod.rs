@@ -24,7 +24,8 @@ use jsonrpc_pubsub::SubscriptionId;
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::{BlockId, SignedBlock};
-use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Chain as ChainT, 
+	Consensus as ConsensusT, Header, NumberFor};
 use runtime_version::RuntimeVersion;
 use tokio::runtime::TaskExecutor;
 use primitives::{Blake2Hasher, RlpCodec};
@@ -39,7 +40,7 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Polkadot blockchain API
-	pub trait ChainApi<Hash, Header, Number, Extrinsic> {
+	pub trait ChainApi<Hash, Header, Number, Extrinsic, SignedBlock> {
 		type Metadata;
 
 		/// Get header of a relay chain block.
@@ -48,7 +49,7 @@ build_rpc_trait! {
 
 		/// Get header and body of a relay chain block.
 		#[rpc(name = "chain_getBlock")]
-		fn block(&self, Trailing<Hash>) -> Result<Option<SignedBlock<Header, Extrinsic, Hash>>>;
+		fn block(&self, Trailing<Hash>) -> Result<Option<SignedBlock>>;
 
 		/// Get hash of the n-th block in the canon chain.
 		///
@@ -73,16 +74,16 @@ build_rpc_trait! {
 }
 
 /// Chain API with subscriptions support.
-pub struct Chain<B, E, Block: BlockT> {
+pub struct Chain<B, E, C: ChainT> {
 	/// Substrate client.
-	client: Arc<Client<B, E, Block>>,
+	client: Arc<Client<B, E, C>>,
 	/// Current subscriptions.
 	subscriptions: Subscriptions,
 }
 
-impl<B, E, Block: BlockT> Chain<B, E, Block> {
+impl<B, E, C: ChainT> Chain<B, E, C> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client<B, E, Block>>, executor: TaskExecutor) -> Self {
+	pub fn new(client: Arc<Client<B, E, C>>, executor: TaskExecutor) -> Self {
 		Self {
 			client,
 			subscriptions: Subscriptions::new(executor),
@@ -90,12 +91,14 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	}
 }
 
-impl<B, E, Block> Chain<B, E, Block> where
-	Block: BlockT + 'static,
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+impl<B, E, C> Chain<B, E, C> where
+	C: ChainT, // + 'static,
+	B: client::backend::Backend<Blake2Hasher, RlpCodec, C> + Send + Sync + 'static,
+	E: client::CallExecutor<C::Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
 {
-	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
+	fn unwrap_or_best(&self, hash: Trailing<<C::Block as BlockT>::Hash>)
+		-> Result<<C::Block as BlockT>::Hash>
+	{
 		Ok(match hash.into() {
 			None => self.client.info()?.chain.best_hash,
 			Some(hash) => hash,
@@ -103,36 +106,52 @@ impl<B, E, Block> Chain<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic> for Chain<B, E, Block> where
-	Block: BlockT + 'static,
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+impl<B, E, C> ChainApi<
+	<C::Block as BlockT>::Hash,
+	<C::Block as BlockT>::Header,
+	NumberFor<C::Block>,
+	<C::Block as BlockT>::Extrinsic,
+	SignedBlock<C::Block, <C::Consensus as ConsensusT>::Message>
+> for Chain<B, E, C>
+where
+	C: ChainT + 'static,
+	B: client::backend::Backend<Blake2Hasher, RlpCodec, C> + Send + Sync + 'static,
+	E: client::CallExecutor<C::Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 
-	fn header(&self, hash: Trailing<Block::Hash>) -> Result<Option<Block::Header>> {
+	fn header(&self, hash: Trailing<<C::Block as BlockT>::Hash>)
+		-> Result<Option<<C::Block as BlockT>::Header>>
+	{
 		let hash = self.unwrap_or_best(hash)?;
 		Ok(self.client.header(&BlockId::Hash(hash))?)
 	}
 
-	fn block(&self, hash: Trailing<Block::Hash>) -> Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+	fn block(&self, hash: Trailing<<C::Block as BlockT>::Hash>)
+		-> Result<Option<SignedBlock<C::Block, J::Message>>>
+	{
 		let hash = self.unwrap_or_best(hash)?;
-		Ok(self.client.block(&BlockId::Hash(hash))?)
+		Ok(self.client.block::<C>(&BlockId::Hash(hash))?)
 	}
 
-	fn block_hash(&self, number: Trailing<NumberFor<Block>>) -> Result<Option<Block::Hash>> {
+	fn block_hash(&self, number: Trailing<NumberFor<C::Block>>)
+		-> Result<Option<<C::Block as BlockT>::Hash>>
+	{
 		Ok(match number.into() {
 			None => Some(self.client.info()?.chain.best_hash),
 			Some(number) => self.client.header(&BlockId::number(number))?.map(|h| h.hash()),
 		})
 	}
 
-	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
+	fn runtime_version(&self, at: Trailing<<C::Block as BlockT>::Hash>) -> Result<RuntimeVersion> {
 		let at = self.unwrap_or_best(at)?;
 		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
 	}
 
-	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
+	fn subscribe_new_head(&self,
+		_metadata: Self::Metadata,
+		subscriber: pubsub::Subscriber<<C::Block as BlockT>::Header>)
+	{
 		self.subscriptions.add(subscriber, |sink| {
 			// send current head right at the start.
 			let header = self.block_hash(None.into())

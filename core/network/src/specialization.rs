@@ -21,7 +21,7 @@ use runtime_primitives::traits::Block as BlockT;
 use protocol::Context;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
-pub trait Specialization<B: BlockT>: Send + Sync + 'static {
+pub trait Specialization<B: BlockT, C>: Send + Sync + 'static {
 	/// Get the current specialization-status.
 	fn status(&self) -> Vec<u8>;
 
@@ -29,20 +29,20 @@ pub trait Specialization<B: BlockT>: Send + Sync + 'static {
 	fn on_start(&mut self) { }
 
 	/// Called when a peer successfully handshakes.
-	fn on_connect(&mut self, ctx: &mut Context<B>, who: NodeIndex, status: ::message::Status<B>);
+	fn on_connect(&mut self, ctx: &mut Context<B, C>, who: NodeIndex, status: ::message::Status<B>);
 
 	/// Called when a peer is disconnected. If the peer ID is unknown, it should be ignored.
-	fn on_disconnect(&mut self, ctx: &mut Context<B>, who: NodeIndex);
+	fn on_disconnect(&mut self, ctx: &mut Context<B, C>, who: NodeIndex);
 
 	/// Called when a network-specific message arrives.
-	fn on_message(&mut self, ctx: &mut Context<B>, who: NodeIndex, message: ::message::Message<B>);
+	fn on_message(&mut self, ctx: &mut Context<B, C>, who: NodeIndex, message: ::message::Message<B, C>);
 
 	/// Called on abort.
 	fn on_abort(&mut self) { }
 
 	/// Called periodically to maintain peers and handle timeouts.
-	fn maintain_peers(&mut self, _ctx: &mut Context<B>) { }
+	fn maintain_peers(&mut self, _ctx: &mut Context<B, C>) { }
 
 	/// Called when a block is _imported_ at the head of the chain (not during major sync).
-	fn on_block_imported(&mut self, _ctx: &mut Context<B>, _hash: B::Hash, _header: &B::Header) { }
+	fn on_block_imported(&mut self, _ctx: &mut Context<B, C>, _hash: B::Hash, _header: &B::Header) { }
 }

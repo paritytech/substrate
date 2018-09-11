@@ -21,7 +21,7 @@
 #![warn(missing_docs)]
 
 extern crate rhododendron;
-extern crate substrate_bft as bft;
+extern crate substrate_consensus_rhd as bft;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate srml_support as runtime_support;
@@ -52,15 +52,16 @@ mod local_executor {
 pub use local_executor::LocalExecutor;
 
 /// Test client database backend.
-pub type Backend = client::in_mem::Backend<runtime::Block, Blake2Hasher, RlpCodec>;
+pub type Backend = client::in_mem::Backend<Blake2Hasher, RlpCodec, runtime::Chain>;
 
 /// Test client executor.
 pub type Executor = client::LocalCallExecutor<
 	Backend,
 	executor::NativeExecutor<LocalExecutor>,
+	runtime::Chain
 >;
 
 /// Creates new client instance used for tests.
-pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
+pub fn new() -> client::Client<Backend, Executor, runtime::Chain> {
 	TestClient::new_for_tests()
 }

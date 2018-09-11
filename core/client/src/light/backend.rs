@@ -22,9 +22,9 @@ use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::generic::BlockId;
 use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
+use runtime_primitives::traits::{Block as BlockT, Chain, Consensus as ConsensusT, NumberFor};
 
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -50,11 +50,12 @@ pub struct ImportOperation<Block: BlockT, S, F> {
 }
 
 /// On-demand state.
-pub struct OnDemandState<Block: BlockT, S, F> {
+pub struct OnDemandState<S, F, Ch: Chain> {
 	fetcher: Weak<F>,
 	blockchain: Weak<Blockchain<S, F>>,
-	block: Block::Hash,
-	cached_header: RwLock<Option<Block::Header>>,
+	block: <Ch::Block as BlockT>::Hash,
+	cached_header: RwLock<Option<<Ch::Block as BlockT>::Header>>,
+	_chain: ::std::marker::PhantomData<Ch>
 }
 
 impl<S, F> Backend<S, F> {
@@ -69,20 +70,20 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
-	Block: BlockT,
-	S: BlockchainStorage<Block>,
-	F: Fetcher<Block>,
+impl<S, F, H, C, Ch> ClientBackend<H, C, Ch> for Backend<S, F> where
+	S: BlockchainStorage<Ch>,
+	F: Fetcher<Ch::Block>,
 	H: Hasher,
 	C: NodeCodec<H>,
 	H::Out: HeapSizeOf,
+	Ch: Chain,
 {
-	type BlockImportOperation = ImportOperation<Block, S, F>;
+	type BlockImportOperation = ImportOperation<Ch::Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
-	type State = OnDemandState<Block, S, F>;
+	type State = OnDemandState<S, F, Ch>;
 	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
 
-	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
+	fn begin_operation(&self, _block: BlockId<Ch::Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
 			is_new_best: false,
 			header: None,
@@ -103,8 +104,7 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
 		None
 	}
-
-	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
+	fn state_at(&self, block: BlockId<Ch::Block>) -> ClientResult<Self::State> {
 		let block_hash = match block {
 			BlockId::Hash(h) => Some(h),
 			BlockId::Number(n) => self.blockchain.hash(n).unwrap_or_default(),
@@ -115,33 +115,34 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 			blockchain: Arc::downgrade(&self.blockchain),
 			block: block_hash.ok_or_else(|| ClientErrorKind::UnknownBlock(format!("{}", block)))?,
 			cached_header: RwLock::new(None),
+			_chain: Default::default(),
 		})
 	}
 
-	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
+	fn revert(&self, _n: NumberFor<Ch::Block>) -> ClientResult<NumberFor<Ch::Block>> {
 		unimplemented!()
 	}
 }
 
-impl<S, F, Block, H, C> RemoteBackend<Block, H, C> for Backend<S, F>
+impl<S, F, H, C, Ch> RemoteBackend<H, C, Ch> for Backend<S, F>
 where
-	Block: BlockT,
-	S: BlockchainStorage<Block>,
-	F: Fetcher<Block>,
+	S: BlockchainStorage<Ch>,
+	F: Fetcher<Ch::Block>,
 	H: Hasher,
 	H::Out: HeapSizeOf,
 	C: NodeCodec<H>,
+	Ch: Chain,
 {}
 
-impl<S, F, Block, H, C> BlockImportOperation<Block, H, C> for ImportOperation<Block, S, F>
+impl<S, F, H, C, Ch> BlockImportOperation<H, C, Ch> for ImportOperation<Ch::Block, S, F>
 where
-	Block: BlockT,
-	F: Fetcher<Block>,
-	S: BlockchainStorage<Block>,
+	F: Fetcher<Ch::Block>,
+	S: BlockchainStorage<Ch>,
 	H: Hasher,
 	C: NodeCodec<H>,
+	Ch: Chain,
 {
-	type State = OnDemandState<Block, S, F>;
+	type State = OnDemandState<S, F, Ch>;
 
 	fn state(&self) -> ClientResult<Option<&Self::State>> {
 		// None means 'locally-stateless' backend
@@ -150,9 +151,9 @@ where
 
 	fn set_block_data(
 		&mut self,
-		header: Block::Header,
-		_body: Option<Vec<Block::Extrinsic>>,
-		_justification: Option<Justification<Block::Hash>>,
+		header: <Ch::Block as BlockT>::Header,
+		_body: Option<Vec<<Ch::Block as BlockT>::Extrinsic>>,
+		_justification: Option<<Ch::Consensus as ConsensusT>::Signature>,
 		is_new_best: bool
 	) -> ClientResult<()> {
 		self.is_new_best = is_new_best;
@@ -180,13 +181,13 @@ where
 	}
 }
 
-impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
+impl<S, F, H, C, Ch> StateBackend<H, C> for OnDemandState<S, F, Ch>
 	where
-		Block: BlockT,
-		S: BlockchainStorage<Block>,
-		F: Fetcher<Block>,
+		S: BlockchainStorage<Ch>,
+		F: Fetcher<Ch::Block>,
 		H: Hasher,
 		C: NodeCodec<H>,
+		Ch: Chain,
 {
 	type Error = ClientError;
 	type Transaction = ();

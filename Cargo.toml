@@ -21,14 +21,15 @@ vergen = "0.1"
 
 [workspace]
 members = [
-	"core/bft",
 	"core/cli",
 	"core/client",
 	"core/client/db",
+	"core/consensus/common",
+	"core/consensus/rhd",
+	"core/consensus/trk",
 	"core/executor",
 	"core/transaction-pool",
 	"core/keyring",
-	"core/misbehavior-check",
 	"core/network",
 	"core/primitives",
 	"core/rpc",
@@ -39,7 +40,7 @@ members = [
 	"core/sr-version",
 	"srml/support",
 	"srml/balances",
-	"srml/consensus",
+	"srml/consensus/rhd",
 	"srml/contract",
 	"srml/council",
 	"srml/democracy",

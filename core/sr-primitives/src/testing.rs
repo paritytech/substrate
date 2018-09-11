@@ -22,7 +22,7 @@ use codec::Codec;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 use generic::DigestItem as GenDigestItem;
 
-pub use substrate_primitives::H256;
+pub use substrate_primitives::{H256, AuthorityId};
 
 pub type DigestItem = GenDigestItem<H256, u64>;
 
@@ -99,6 +99,32 @@ pub struct Block<Xt> {
 	pub extrinsics: Vec<Xt>,
 }
 
+// Dummy protocols
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+pub enum ConsensusMessage<Xt> {
+	Propose(Xt),
+	Vote(Xt),
+	Ack(Xt)
+}
+
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+pub struct ConsensusSignature;
+
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+pub struct Consensus<Xt> (::std::marker::PhantomData<Xt>);
+impl<Xt> traits::Consensus for Consensus<Xt>
+where Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug
+ {
+	type Block = Block<Xt>;
+	type Message = ConsensusMessage<Xt>;
+	type Signature = ConsensusSignature; 
+
+	fn confirm(_block: Self::Block, _sig: Self::Signature, _authorities: &[AuthorityId])
+	-> Result<(), &'static str> {
+		Err("Not implemented")
+	}
+}
+
 impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
 	type Extrinsic = Xt;
 	type Header = Header;
@@ -136,4 +162,14 @@ impl<Call> Applyable for TestXt<Call> where
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
 		(self.2, self.0)
 	}
+}
+
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+pub struct TestChain<Xt>(Xt);
+
+impl<Xt> traits::Chain for TestChain<Xt>
+where Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug
+{
+	type Block = Block<Xt>;
+	type Consensus = Consensus<Xt>;
 }

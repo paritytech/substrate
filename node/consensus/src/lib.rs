@@ -22,10 +22,14 @@ extern crate node_transaction_pool as transaction_pool;
 extern crate node_runtime;
 extern crate node_primitives;
 
-extern crate substrate_bft as bft;
 extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
+extern crate substrate_consensus_common as consensus;
+extern crate substrate_consensus_rhd as rhd;
 extern crate sr_primitives as runtime_primitives;
+
+extern crate sr_support as runtime_support;
+extern crate srml_primitives as runtime_primitives;
+extern crate srml_consensus_rhd as rhd_runtime;
 extern crate substrate_client as client;
 
 extern crate exit_future;
@@ -50,6 +54,7 @@ use node_api::Api;
 use node_primitives::{AccountId, Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
 use runtime_primitives::generic::Era;
 use primitives::{AuthorityId, ed25519};
+use consensus::offline_tracker::OfflineTracker;
 use transaction_pool::TransactionPool;
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Delay;
@@ -59,16 +64,14 @@ use futures::future;
 use parking_lot::RwLock;
 
 pub use self::error::{ErrorKind, Error};
-pub use self::offline_tracker::OfflineTracker;
 pub use service::Service;
 
 mod evaluation;
 mod error;
-mod offline_tracker;
 mod service;
 
 /// Shared offline validator tracker.
-pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
+pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker<AccountId>>>;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
@@ -76,10 +79,10 @@ const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 /// A long-lived network which can create BFT message routing processes on demand.
 pub trait Network {
 	/// The input stream of BFT messages. Should never logically conclude.
-	type Input: Stream<Item=bft::Communication<Block>,Error=Error>;
+	type Input: Stream<Item=rhd::Communication<Block>,Error=Error>;
 	/// The output sink of BFT messages. Messages sent here should eventually pass to all
 	/// current authorities.
-	type Output: Sink<SinkItem=bft::Communication<Block>,SinkError=Error>;
+	type Output: Sink<SinkItem=rhd::Communication<Block>,SinkError=Error>;
 
 	/// Instantiate input and output streams.
 	fn communication_for(
@@ -108,7 +111,7 @@ pub struct ProposerFactory<N, P>
 	pub offline: SharedOfflineTracker,
 }
 
-impl<N, P> bft::Environment<Block> for ProposerFactory<N, P>
+impl<N, P> rhd::Environment<Block> for ProposerFactory<N, P>
 	where
 		N: Network,
 		P: Api + Send + Sync + 'static,
@@ -192,7 +195,7 @@ impl<C: Api + Send + Sync> Proposer<C> {
 	}
 }
 
-impl<C> bft::Proposer<Block> for Proposer<C>
+impl<C> rhd::Proposer<Block> for Proposer<C>
 	where
 		C: Api + Send + Sync,
 {
@@ -359,11 +362,11 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 		proposer
 	}
 
-	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<Hash>)>) {
+	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, rhd::Misbehavior<Hash>)>) {
 		use rhododendron::Misbehavior as GenericMisbehavior;
-		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
-		use node_primitives::UncheckedExtrinsic as GenericExtrinsic;
-		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
+		use rhd_runtime::messages::{MisbehaviorKind, MisbehaviorReport};
+		use demo_primitives::UncheckedExtrinsic as GenericExtrinsic;
+		use demo_runtime::{Call, UncheckedExtrinsic, ConsensusCall};\
 
 		let local_id = self.local_key.public().0.into();
 		let mut next_index = {

@@ -20,7 +20,7 @@ use std::{sync::Arc, result::Result};
 use codec::Encode;
 use transaction_pool::{VerifiedTransaction, scoring, Transaction, ChainApi, Error as PoolError,
 	Readiness, ExtrinsicFor, VerifiedFor};
-use test_client::runtime::{Block, Extrinsic, Transfer};
+use test_client::runtime::{Block, Extrinsic, Transfer, Chain};
 use test_client;
 use tokio::runtime;
 use runtime_primitives::generic::BlockId;
@@ -44,7 +44,7 @@ impl VerifiedTransaction for Verified {
 struct TestApi;
 
 impl ChainApi for TestApi {
-	type Block = Block;
+	type Chain = Chain;
 	type Hash = u64;
 	type Sender = u64;
 	type Error = PoolError;

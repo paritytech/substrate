@@ -31,7 +31,7 @@ use io::SyncIo;
 use message;
 use network_libp2p::{Severity, NodeIndex};
 use service;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Chain, Block as BlockT, Header as HeaderT};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -39,7 +39,7 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const RETRY_COUNT: usize = 1;
 
 /// On-demand service API.
-pub trait OnDemandService<Block: BlockT>: Send + Sync {
+pub trait OnDemandService<C: Chain>: Send + Sync {
 	/// When new node is connected.
 	fn on_connect(&self, peer: NodeIndex, role: service::Roles);
 
@@ -54,7 +54,7 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 		&self,
 		io: &mut SyncIo,
 		peer: NodeIndex,
-		response: message::RemoteHeaderResponse<Block::Header>
+		response: message::RemoteHeaderResponse<<C::Block as BlockT>::Header>
 	);
 
 	/// When read response is received from remote node.
@@ -65,9 +65,9 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 }
 
 /// On-demand requests service. Dispatches requests to appropriate peers.
-pub struct OnDemand<B: BlockT, E: service::ExecuteInContext<B>> {
-	core: Mutex<OnDemandCore<B, E>>,
-	checker: Arc<FetchChecker<B>>,
+pub struct OnDemand<C: Chain, E: service::ExecuteInContext<C>> {
+	core: Mutex<OnDemandCore<C, E>>,
+	checker: Arc<FetchChecker<C::Block>>,
 }
 
 /// On-demand remote call response.
@@ -76,11 +76,11 @@ pub struct RemoteResponse<T> {
 }
 
 #[derive(Default)]
-struct OnDemandCore<B: BlockT, E: service::ExecuteInContext<B>> {
+struct OnDemandCore<C: Chain, E: service::ExecuteInContext<C>> {
 	service: Weak<E>,
 	next_request_id: u64,
-	pending_requests: VecDeque<Request<B>>,
-	active_peers: LinkedHashMap<NodeIndex, Request<B>>,
+	pending_requests: VecDeque<Request<C::Block>>,
+	active_peers: LinkedHashMap<NodeIndex, Request<C::Block>>,
 	idle_peers: VecDeque<NodeIndex>,
 }
 
@@ -118,12 +118,12 @@ impl<T> Future for RemoteResponse<T> {
 	}
 }
 
-impl<B: BlockT, E> OnDemand<B, E> where
-	E: service::ExecuteInContext<B>,
-	B::Header: HeaderT,
+impl<C: Chain, E, C> OnDemand<C, E> where
+	E: service::ExecuteInContext<C>,
+	<C::Block as BlockT>::Header: HeaderT,
 {
 	/// Creates new on-demand service.
-	pub fn new(checker: Arc<FetchChecker<B>>) -> Self {
+	pub fn new(checker: Arc<FetchChecker<C::Block>>) -> Self {
 		OnDemand {
 			checker,
 			core: Mutex::new(OnDemandCore {
@@ -142,7 +142,12 @@ impl<B: BlockT, E> OnDemand<B, E> where
 	}
 
 	/// Schedule && dispatch all scheduled requests.
-	fn schedule_request<R>(&self, retry_count: Option<usize>, data: RequestData<B>, result: R) -> R {
+	fn schedule_request<R>(
+		&self,
+		retry_count: Option<usize>,
+		data: RequestData<C::Block>,
+		result: R
+	) -> R {
 		let mut core = self.core.lock();
 		core.insert(retry_count.unwrap_or(RETRY_COUNT), data);
 		core.dispatch();
@@ -150,7 +155,14 @@ impl<B: BlockT, E> OnDemand<B, E> where
 	}
 
 	/// Try to accept response from given peer.
-	fn accept_response<F: FnOnce(Request<B>) -> Accept<B>>(&self, rtype: &str, io: &mut SyncIo, peer: NodeIndex, request_id: u64, try_accept: F) {
+	fn accept_response<F: FnOnce(Request<C::Block>) -> Accept<B>>(
+		&self,
+		rtype: &str,
+		io: &mut SyncIo,
+		peer: NodeIndex,
+		request_id: u64,
+		try_accept: F
+	) {
 		let mut core = self.core.lock();
 		let request = match core.remove(peer, request_id) {
 			Some(request) => request,
@@ -192,10 +204,10 @@ impl<B: BlockT, E> OnDemand<B, E> where
 	}
 }
 
-impl<B, E> OnDemandService<B> for OnDemand<B, E> where
-	B: BlockT,
-	E: service::ExecuteInContext<B>,
-	B::Header: HeaderT,
+impl<C, E> OnDemandService<C> for OnDemand<C, E> where
+	C: Chain,
+	E: service::ExecuteInContext<C>,
+	<C::Block as BlockT>::Header: HeaderT,
 {
 	fn on_connect(&self, peer: NodeIndex, role: service::Roles) {
 		if !role.intersects(service::Roles::FULL | service::Roles::AUTHORITY) { // TODO: correct?
@@ -221,7 +233,12 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 		core.dispatch();
 	}
 
-	fn on_remote_header_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteHeaderResponse<B::Header>) {
+	fn on_remote_header_response(
+		&self,
+		io: &mut SyncIo,
+		peer: NodeIndex,
+		response: message::RemoteHeaderResponse<<C::Block as BlockT>::Header>
+	) {
 		self.accept_response("header", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteHeader(request, sender) => match self.checker.check_header_proof(&request, response.header, response.proof) {
 				Ok(response) => {
@@ -235,7 +252,12 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 		})
 	}
 
-	fn on_remote_read_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteReadResponse) {
+	fn on_remote_read_response(
+		&self,
+		io: &mut SyncIo,
+		peer: NodeIndex,
+		response: message::RemoteReadResponse
+	) {
 		self.accept_response("read", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteRead(request, sender) => match self.checker.check_read_proof(&request, response.proof) {
 				Ok(response) => {
@@ -249,7 +271,12 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 		})
 	}
 
-	fn on_remote_call_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteCallResponse) {
+	fn on_remote_call_response(
+		&self,
+		io: &mut SyncIo,
+		peer: NodeIndex,
+		response: message::RemoteCallResponse
+	) {
 		self.accept_response("call", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteCall(request, sender) => match self.checker.check_execution_proof(&request, response.proof) {
 				Ok(response) => {
@@ -264,38 +291,38 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 	}
 }
 
-impl<B, E> Fetcher<B> for OnDemand<B, E> where
-	B: BlockT,
-	E: service::ExecuteInContext<B>,
-	B::Header: HeaderT,
+impl<C, E> Fetcher<C::Block> for OnDemand<C, E,> where
+	C: Chain,
+	E: service::ExecuteInContext<C>,
+	<C::Block as BlockT>::Header: HeaderT,
 {
-	type RemoteHeaderResult = RemoteResponse<B::Header>;
+	type RemoteHeaderResult = RemoteResponse<<C::Block as BlockT>::Header>;
 	type RemoteReadResult = RemoteResponse<Option<Vec<u8>>>;
 	type RemoteCallResult = RemoteResponse<client::CallResult>;
 
-	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
+	fn remote_header(&self, request: RemoteHeaderRequest<<C::Block as BlockT>::Header>) -> Self::RemoteHeaderResult {
 		let (sender, receiver) = channel();
 		self.schedule_request(request.retry_count.clone(), RequestData::RemoteHeader(request, sender),
 			RemoteResponse { receiver })
 	}
 
-	fn remote_read(&self, request: RemoteReadRequest<B::Header>) -> Self::RemoteReadResult {
+	fn remote_read(&self, request: RemoteReadRequest<<C::Block as BlockT>::Header>) -> Self::RemoteReadResult {
 		let (sender, receiver) = channel();
 		self.schedule_request(request.retry_count.clone(), RequestData::RemoteRead(request, sender),
 			RemoteResponse { receiver })
 	}
 
-	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
+	fn remote_call(&self, request: RemoteCallRequest<<C::Block as BlockT>::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = channel();
 		self.schedule_request(request.retry_count.clone(), RequestData::RemoteCall(request, sender),
 			RemoteResponse { receiver })
 	}
 }
 
-impl<B, E> OnDemandCore<B, E> where
-	B: BlockT,
-	E: service::ExecuteInContext<B>,
-	B::Header: HeaderT,
+impl<C, E> OnDemandCore<C, E> where
+	C: Chain,
+	E: service::ExecuteInContext<C>,
+	<C::Block as BlockT>::Header: HeaderT,
 {
 	pub fn add_peer(&mut self, peer: NodeIndex) {
 		self.idle_peers.push_back(peer);
@@ -327,7 +354,7 @@ impl<B, E> OnDemandCore<B, E> where
 		}
 	}
 
-	pub fn insert(&mut self, retry_count: usize, data: RequestData<B>) {
+	pub fn insert(&mut self, retry_count: usize, data: RequestData<C::Block>) {
 		let request_id = self.next_request_id;
 		self.next_request_id += 1;
 
@@ -339,7 +366,7 @@ impl<B, E> OnDemandCore<B, E> where
 		});
 	}
 
-	pub fn remove(&mut self, peer: NodeIndex, id: u64) -> Option<Request<B>> {
+	pub fn remove(&mut self, peer: NodeIndex, id: u64) -> Option<Request<C::Block>> {
 		match self.active_peers.entry(peer) {
 			Entry::Occupied(entry) => match entry.get().id == id {
 				true => {
@@ -374,8 +401,8 @@ impl<B, E> OnDemandCore<B, E> where
 	}
 }
 
-impl<Block: BlockT> Request<Block> {
-	pub fn message(&self) -> message::Message<Block> {
+impl<C: Chain> Request<C> {
+	pub fn message(&self) -> message::Message<C> {
 		match self.data {
 			RequestData::RemoteHeader(ref data, _) => message::generic::Message::RemoteHeaderRequest(
 				message::RemoteHeaderRequest {
@@ -429,9 +456,10 @@ pub mod tests {
 
 	pub struct DummyExecutor;
 	struct DummyFetchChecker { ok: bool }
+	struct ConsensusMessage;
 
-	impl ExecuteInContext<Block> for DummyExecutor {
-		fn execute_in_context<F: Fn(&mut ::protocol::Context<Block>)>(&self, _closure: F) {}
+	impl ExecuteInContext<Block, ConsensusMessage> for DummyExecutor {
+		fn execute_in_context<F: Fn(&mut ::protocol::Context<Block, ConsensusMessage>)>(&self, _closure: F) {}
 	}
 
 	impl FetchChecker<Block> for DummyFetchChecker {
@@ -465,19 +493,19 @@ pub mod tests {
 		}
 	}
 
-	fn dummy(ok: bool) -> (Arc<DummyExecutor>, Arc<OnDemand<Block, DummyExecutor>>) {
+	fn dummy(ok: bool) -> (Arc<DummyExecutor>, Arc<OnDemand<Block, DummyExecutor, ConsensusMessage>>) {
 		let executor = Arc::new(DummyExecutor);
 		let service = Arc::new(OnDemand::new(Arc::new(DummyFetchChecker { ok })));
 		service.set_service_link(Arc::downgrade(&executor));
 		(executor, service)
 	}
 
-	fn total_peers(on_demand: &OnDemand<Block, DummyExecutor>) -> usize {
+	fn total_peers(on_demand: &OnDemand<Block, DummyExecutor, ConsensusMessage>) -> usize {
 		let core = on_demand.core.lock();
 		core.idle_peers.len() + core.active_peers.len()
 	}
 
-	fn receive_call_response(on_demand: &OnDemand<Block, DummyExecutor>, network: &mut TestIo, peer: NodeIndex, id: message::RequestId) {
+	fn receive_call_response(on_demand: &OnDemand<Block, DummyExecutor, ConsensusMessage>, network: &mut TestIo, peer: NodeIndex, id: message::RequestId) {
 		on_demand.on_remote_call_response(network, peer, message::RemoteCallResponse {
 			id: id,
 			proof: vec![vec![2]],

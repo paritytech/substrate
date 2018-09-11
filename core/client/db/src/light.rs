@@ -30,7 +30,7 @@ use codec::{Decode, Encode};
 use primitives::{AuthorityId, H256, Blake2Hasher};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor,
-	Zero, One, As, NumberFor};
+	Zero, One, As, NumberFor, Chain};
 use cache::DbCache;
 use utils::{meta_keys, Meta, db_err, number_to_db_key, db_key_to_number, open_database,
 	read_db, read_id, read_meta};
@@ -48,10 +48,10 @@ pub(crate) mod columns {
 pub(crate) const AUTHORITIES_ENTRIES_TO_KEEP: u64 = cht::SIZE;
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
-pub struct LightStorage<Block: BlockT> {
+pub struct LightStorage<C: Chain> {
 	db: Arc<KeyValueDB>,
-	meta: RwLock<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>>,
-	cache: DbCache<Block>,
+	meta: RwLock<Meta<<<C::Block as BlockT>::Header as HeaderT>::Number, <C::Block as BlockT>::Hash>>,
+	cache: DbCache<C::Block>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -62,9 +62,9 @@ struct BestAuthorities<N> {
 	authorities: Option<Vec<AuthorityId>>,
 }
 
-impl<Block> LightStorage<Block>
+impl<C> LightStorage<C>
 	where
-		Block: BlockT,
+		C: Chain,
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
@@ -84,7 +84,7 @@ impl<Block> LightStorage<Block>
 
 	fn from_kvdb(db: Arc<KeyValueDB>) -> ClientResult<Self> {
 		let cache = DbCache::new(db.clone(), columns::BLOCK_INDEX, columns::AUTHORITIES)?;
-		let meta = RwLock::new(read_meta::<Block>(&*db, columns::HEADER)?);
+		let meta = RwLock::new(read_meta::<C::Block>(&*db, columns::HEADER)?);
 
 		Ok(LightStorage {
 			db,
@@ -99,14 +99,18 @@ impl<Block> LightStorage<Block>
 	}
 
 	#[cfg(test)]
-	pub(crate) fn cache(&self) -> &DbCache<Block> {
+	pub(crate) fn cache(&self) -> &DbCache<C::Block> {
 		&self.cache
 	}
 
-	fn update_meta(&self, hash: Block::Hash, number: <<Block as BlockT>::Header as HeaderT>::Number, is_best: bool) {
+	fn update_meta(&self,
+		hash: <C::Block as BlockT>::Hash,
+		number: <<C::Block as BlockT>::Header as HeaderT>::Number,
+		is_best: bool
+	) {
 		if is_best {
 			let mut meta = self.meta.write();
-			if number == <<Block as BlockT>::Header as HeaderT>::Number::zero() {
+			if number == <<C::Block as BlockT>::Header as HeaderT>::Number::zero() {
 				meta.genesis_hash = hash;
 			}
 
@@ -116,13 +120,13 @@ impl<Block> LightStorage<Block>
 	}
 }
 
-impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
+impl<C> BlockchainHeaderBackend<C> for LightStorage<C>
 	where
-		Block: BlockT,
+		C: Chain,
 {
-	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
+	fn header(&self, id: BlockId<C::Block>) -> ClientResult<Option<<C::Block as BlockT>::Header>> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, id)? {
-			Some(header) => match Block::Header::decode(&mut &header[..]) {
+			Some(header) => match <C::Block as BlockT>::Header::decode(&mut &header[..]) {
 				Some(header) => Ok(Some(header)),
 				None => return Err(ClientErrorKind::Backend("Error decoding header".into()).into()),
 			}
@@ -130,7 +134,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		}
 	}
 
-	fn info(&self) -> ClientResult<BlockchainInfo<Block>> {
+	fn info(&self) -> ClientResult<BlockchainInfo<C::Block>> {
 		let meta = self.meta.read();
 		Ok(BlockchainInfo {
 			best_hash: meta.best_hash,
@@ -139,7 +143,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		})
 	}
 
-	fn status(&self, id: BlockId<Block>) -> ClientResult<BlockStatus> {
+	fn status(&self, id: BlockId<C::Block>) -> ClientResult<BlockStatus> {
 		let exists = match id {
 			BlockId::Hash(_) => read_id(&*self.db, columns::BLOCK_INDEX, id)?.is_some(),
 			BlockId::Number(n) => n <= self.meta.read().best_number,
@@ -150,27 +154,27 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		}
 	}
 
-	fn number(&self, hash: Block::Hash) -> ClientResult<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
-		read_id::<Block>(&*self.db, columns::BLOCK_INDEX, BlockId::Hash(hash))
+	fn number(&self, hash: <C::Block as BlockT>::Hash) -> ClientResult<Option<<<C::Block as BlockT>::Header as HeaderT>::Number>> {
+		read_id::<C::Block>(&*self.db, columns::BLOCK_INDEX, BlockId::Hash(hash))
 			.and_then(|key| match key {
 				Some(key) => Ok(Some(db_key_to_number(&key)?)),
 				None => Ok(None),
 			})
 	}
 
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
-		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
-			x.map(|raw| HashFor::<Block>::hash(&raw[..])).map(Into::into)
+	fn hash(&self, number: <<C::Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<<C::Block as BlockT>::Hash>> {
+		read_db::<C::Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
+			x.map(|raw| HashFor::<C::Block>::hash(&raw[..])).map(Into::into)
 		)
 	}
 }
 
-impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
+impl<C> LightBlockchainStorage<C> for LightStorage<C>
 	where
-		Block: BlockT,
-		Block::Hash: From<H256>,
+		C: Chain,
+		<C::Block as BlockT>::Hash: From<H256>,
 {
-	fn import_header(&self, is_new_best: bool, header: Block::Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()> {
+	fn import_header(&self, is_new_best: bool, header: <C::Block as BlockT>::Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();
 
 		let hash = header.hash();
@@ -202,8 +206,8 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		// build new CHT if required
 		if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
-			let new_cht_start: NumberFor<Block> = cht::start_number(cht::SIZE, new_cht_number);
-			let new_cht_root: Option<Block::Hash> = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+			let new_cht_start: NumberFor<C::Block> = cht::start_number(cht::SIZE, new_cht_number);
+			let new_cht_root: Option<<C::Block as BlockT>::Hash> = cht::compute_root::<<C::Block as BlockT>::Header, Blake2Hasher, _>(
 				cht::SIZE, new_cht_number, (new_cht_start.as_()..)
 				.map(|num| self.hash(As::sa(num)).unwrap_or_default()));
 
@@ -216,7 +220,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 				while prune_block <= new_cht_end {
 					transaction.delete(columns::HEADER, &number_to_db_key(prune_block));
- 					prune_block += <<Block as BlockT>::Header as HeaderT>::Number::one();
+ 					prune_block += <<C::Block as BlockT>::Header as HeaderT>::Number::one();
 				}
 			}
 		}
@@ -231,17 +235,17 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		Ok(())
 	}
 
-	fn cht_root(&self, cht_size: u64, block: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Block::Hash> {
+	fn cht_root(&self, cht_size: u64, block: <<C::Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<<C::Block as BlockT>::Hash> {
 		let no_cht_for_block = || ClientErrorKind::Backend(format!("CHT for block {} not exists", block)).into();
 
 		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
 		let cht_start = cht::start_number(cht_size, cht_number);
 		self.db.get(columns::CHT, &number_to_db_key(cht_start)).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
-			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
+			.and_then(|hash| <C::Block as BlockT>::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
 	}
 
-	fn cache(&self) -> Option<&BlockchainCache<Block>> {
+	fn cache(&self) -> Option<&BlockchainCache<C::Block>> {
 		Some(&self.cache)
 	}
 }
@@ -249,13 +253,15 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 #[cfg(test)]
 pub(crate) mod tests {
 	use client::cht;
-	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock};
+	use runtime_primitives::testing::{H256 as Hash, Justification as RawJustification,
+		Header, Block as RawBlock};
 	use super::*;
 
 	type Block = RawBlock<u32>;
+	type Justification = RawJustification<u64>;
 
 	pub fn insert_block(
-		db: &LightStorage<Block>,
+		db: &LightStorage<Justification>,
 		parent: &Hash,
 		number: u64,
 		authorities: Option<Vec<AuthorityId>>
@@ -284,7 +290,7 @@ pub(crate) mod tests {
 
 	#[test]
 	fn does_not_return_unknown_header() {
-		let db = LightStorage::<Block>::new_test();
+		let db = LightStorage::<Justification>::new_test();
 		assert!(db.header(BlockId::Hash(1.into())).unwrap().is_none());
 		assert!(db.header(BlockId::Number(0)).unwrap().is_none());
 	}
@@ -365,12 +371,12 @@ pub(crate) mod tests {
 
 	#[test]
 	fn get_cht_fails_for_genesis_block() {
-		assert!(LightStorage::<Block>::new_test().cht_root(cht::SIZE, 0).is_err());
+		assert!(LightStorage::<Justification>::new_test().cht_root(cht::SIZE, 0).is_err());
 	}
 
 	#[test]
 	fn get_cht_fails_for_non_existant_cht() {
-		assert!(LightStorage::<Block>::new_test().cht_root(cht::SIZE, (cht::SIZE / 2) as u64).is_err());
+		assert!(LightStorage::<Justification>::new_test().cht_root(cht::SIZE, (cht::SIZE / 2) as u64).is_err());
 	}
 
 	#[test]

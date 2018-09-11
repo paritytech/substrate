@@ -44,7 +44,7 @@ extern crate parity_codec_derive;
 extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
 extern crate sr_primitives as primitives;
-extern crate srml_consensus as consensus;
+extern crate srml_consensus_rhd as consensus;
 extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 

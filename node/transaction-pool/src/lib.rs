@@ -44,7 +44,7 @@ use std::{
 use codec::{Decode, Encode};
 use transaction_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
 use node_api::Api;
-use primitives::{AccountId, BlockId, Block, Hash, Index, BlockNumber};
+use primitives::{AccountId, BlockId, Block, Justification, Hash, Index, BlockNumber};
 use runtime::{Address, UncheckedExtrinsic};
 use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup, CurrentHeight, BlockNumberToHash};
 
@@ -147,7 +147,7 @@ impl<'a, A: 'a + Api> Lookup for LocalContext<'a, A> {
 impl<A> transaction_pool::ChainApi for ChainApi<A> where
 	A: Api + Send + Sync,
 {
-	type Block = Block;
+	type Justification = Justification;
 	type Hash = Hash;
 	type Sender = AccountId;
 	type VEx = VerifiedTransaction;

@@ -30,7 +30,7 @@ use listener::Listener;
 use rotator::PoolRotator;
 use watcher::Watcher;
 
-use runtime_primitives::{generic::BlockId, traits::Block as BlockT};
+use runtime_primitives::{generic::BlockId, traits::Block as BlockT, traits::Chain as ChainT};
 
 /// Modification notification event stream type;
 pub type EventStream = mpsc::UnboundedReceiver<()>;
@@ -38,7 +38,7 @@ pub type EventStream = mpsc::UnboundedReceiver<()>;
 /// Extrinsic hash type for a pool.
 pub type ExHash<A> = <A as ChainApi>::Hash;
 /// Extrinsic type for a pool.
-pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as BlockT>::Extrinsic;
+pub type ExtrinsicFor<A> = <<<A as ChainApi>::Chain as ChainT>::Block as BlockT>::Extrinsic;
 /// Verified extrinsic data for `ChainApi`.
 pub type VerifiedFor<A> = Verified<ExtrinsicFor<A>, <A as ChainApi>::VEx>;
 /// A collection of all extrinsics.
@@ -79,8 +79,8 @@ where
 
 /// Concrete extrinsic validation and query logic.
 pub trait ChainApi: Send + Sync {
-	/// Block type.
-	type Block: BlockT;
+	/// Justification and Block type.
+	type Chain: ChainT;
 	/// Extrinsic hash type.
 	type Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Serialize + DeserializeOwned + ::std::str::FromStr + Send + Sync + Default + 'static;
 	/// Extrinsic sender type.
@@ -97,13 +97,13 @@ pub trait ChainApi: Send + Sync {
 	/// Custom scoring update event type.
 	type Event: ::std::fmt::Debug;
 	/// Verify extrinsic at given block.
-	fn verify_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error>;
+	fn verify_transaction(&self, at: &BlockId<<Self::Chain as ChainT>::Block>, uxt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error>;
 
 	/// Create new readiness evaluator.
 	fn ready(&self) -> Self::Ready;
 
 	/// Check readiness for verified extrinsic at given block.
-	fn is_ready(&self, at: &BlockId<Self::Block>, context: &mut Self::Ready, xt: &VerifiedFor<Self>) -> Readiness;
+	fn is_ready(&self, at: &BlockId<<Self::Chain as ChainT>::Block>, context: &mut Self::Ready, xt: &VerifiedFor<Self>) -> Readiness;
 
 	/// Decides on ordering of `T`s from a particular sender.
 	fn compare(old: &VerifiedFor<Self>, other: &VerifiedFor<Self>) -> ::std::cmp::Ordering;
@@ -124,7 +124,7 @@ pub trait ChainApi: Send + Sync {
 
 pub struct Ready<'a, 'b, B: 'a + ChainApi> {
 	api: &'a B,
-	at: &'b BlockId<B::Block>,
+	at: &'b BlockId<<B::Chain as ChainT>::Block>,
 	context: B::Ready,
 	rotator: &'a PoolRotator<B::Hash>,
 	now: time::Instant,
@@ -223,7 +223,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<Arc<VerifiedFor<B>>>, B::Error> where
+	pub fn submit_at<T>(&self, at: &BlockId<<B::Chain as ChainT>::Block>, xts: T) -> Result<Vec<Arc<VerifiedFor<B>>>, B::Error> where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
 		xts
@@ -248,12 +248,12 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Imports one unverified extrinsic to the pool
-	pub fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Arc<VerifiedFor<B>>, B::Error> {
+	pub fn submit_one(&self, at: &BlockId<<B::Chain as ChainT>::Block>, xt: ExtrinsicFor<B>) -> Result<Arc<VerifiedFor<B>>, B::Error> {
 		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed"))
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
-	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<B::Hash>, B::Error> {
+	pub fn submit_and_watch(&self, at: &BlockId<<B::Chain as ChainT>::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<B::Hash>, B::Error> {
 		let xt = self.submit_at(at, Some(xt))?.pop().expect("One extrinsic passed; one result returned; qed");
 		Ok(self.pool.write().listener_mut().create_watcher(xt))
 	}
@@ -279,7 +279,7 @@ impl<B: ChainApi> Pool<B> {
 	/// Cull transactions from the queue.
 	pub fn cull_from(
 		&self,
-		at: &BlockId<B::Block>,
+		at: &BlockId<<B::Chain as ChainT>::Block>,
 		senders: Option<&[<B::VEx as txpool::VerifiedTransaction>::Sender]>,
 	) -> usize
 	{
@@ -289,12 +289,12 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Cull old transactions from the queue.
-	pub fn cull(&self, at: &BlockId<B::Block>) -> Result<usize, B::Error> {
+	pub fn cull(&self, at: &BlockId<<B::Chain as ChainT>::Block>) -> Result<usize, B::Error> {
 		Ok(self.cull_from(at, None))
 	}
 
 	/// Cull transactions from the queue and then compute the pending set.
-	pub fn cull_and_get_pending<F, T>(&self, at: &BlockId<B::Block>, f: F) -> Result<T, B::Error> where
+	pub fn cull_and_get_pending<F, T>(&self, at: &BlockId<<B::Chain as ChainT>::Block>, f: F) -> Result<T, B::Error> where
 		F: FnOnce(txpool::PendingIterator<VerifiedFor<B>, Ready<B>, ScoringAdapter<B>, Listener<B::Hash>>) -> T,
 	{
 		self.cull_from(at, None);
@@ -321,7 +321,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Retrieve the pending set. Be careful to not leak the pool `ReadGuard` to prevent deadlocks.
-	pub fn pending<F, T>(&self, at: &BlockId<B::Block>, f: F) -> T where
+	pub fn pending<F, T>(&self, at: &BlockId<<B::Chain as ChainT>::Block>, f: F) -> T where
 		F: FnOnce(txpool::PendingIterator<VerifiedFor<B>, Ready<B>, ScoringAdapter<B>, Listener<B::Hash>>) -> T,
 	{
 		let ready = self.ready(at);
@@ -329,7 +329,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Retry to import all verified transactions from given sender.
-	pub fn retry_verification(&self, at: &BlockId<B::Block>, sender: <B::VEx as txpool::VerifiedTransaction>::Sender) -> Result<(), B::Error> {
+	pub fn retry_verification(&self, at: &BlockId<<B::Chain as ChainT>::Block>, sender: <B::VEx as txpool::VerifiedTransaction>::Sender) -> Result<(), B::Error> {
 		let to_reverify = self.remove_sender(sender);
 		self.submit_at(at, to_reverify.into_iter().map(|ex| Arc::try_unwrap(ex).expect("Removed items have no references").original))?;
 		Ok(())
@@ -343,7 +343,7 @@ impl<B: ChainApi> Pool<B> {
 	/// TODO [ToDr] That method is currently unused, should be used together with BlockBuilder
 	/// when we detect that particular transaction has failed.
 	/// In such case we will attempt to remove or re-verify it.
-	pub fn reverify_transaction(&self, at: &BlockId<B::Block>, hash: B::Hash) -> Result<Option<Arc<VerifiedFor<B>>>, B::Error> {
+	pub fn reverify_transaction(&self, at: &BlockId<<B::Chain as ChainT>::Block>, hash: B::Hash) -> Result<Option<Arc<VerifiedFor<B>>>, B::Error> {
 		let result = self.remove(&[hash], false).pop().expect("One hash passed; one result received; qed");
 		if let Some(ex) = result {
 			self.submit_one(at, Arc::try_unwrap(ex).expect("Removed items have no references").original).map(Some)
@@ -367,7 +367,7 @@ impl<B: ChainApi> Pool<B> {
 		})
 	}
 
-	fn ready<'a, 'b>(&'a self, at: &'b BlockId<B::Block>) -> Ready<'a, 'b, B> {
+	fn ready<'a, 'b>(&'a self, at: &'b BlockId<<B::Chain as ChainT>::Block>) -> Ready<'a, 'b, B> {
 		Ready {
 			api: &self.api,
 			rotator: &self.rotator,
@@ -395,7 +395,7 @@ pub mod tests {
 	use {Pool, ChainApi, scoring, Readiness};
 	use keyring::Keyring::{self, *};
 	use codec::Encode;
-	use test_client::runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer};
+	use test_client::runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer, Chain};
 	use runtime_primitives::{generic, traits::{Hash as HashT, BlindCheckable, BlakeTwo256}};
 	use VerifiedTransaction as VerifiedExtrinsic;
 
@@ -434,7 +434,7 @@ pub mod tests {
 	}
 
 	impl ChainApi for TestApi {
-		type Block = Block;
+		type Chain = Chain;
 		type Hash = Hash;
 		type Sender = AccountId;
 		type Error = txpool::Error;

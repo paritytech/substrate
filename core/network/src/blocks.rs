@@ -20,29 +20,29 @@ use std::ops::Range;
 use std::collections::{HashMap, BTreeMap};
 use std::collections::hash_map::Entry;
 use network_libp2p::NodeIndex;
-use runtime_primitives::traits::{Block as BlockT, NumberFor, As};
+use runtime_primitives::traits::{Chain, Block as BlockT, NumberFor, As};
 use message;
 
 const MAX_PARALLEL_DOWNLOADS: u32 = 1;
 
 /// Block data with origin.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct BlockData<B: BlockT> {
-	pub block: message::BlockData<B>,
+pub struct BlockData<C: Chain> {
+	pub block: message::BlockData<C>,
 	pub origin: NodeIndex,
 }
 
 #[derive(Debug)]
-enum BlockRangeState<B: BlockT> {
+enum BlockRangeState<C: Chain> {
 	Downloading {
-		len: NumberFor<B>,
+		len: NumberFor<C::Block>,
 		downloading: u32,
 	},
-	Complete(Vec<BlockData<B>>),
+	Complete(Vec<BlockData<C>>),
 }
 
-impl<B: BlockT> BlockRangeState<B> {
-	pub fn len(&self) -> NumberFor<B> {
+impl<C: Chain> BlockRangeState<C> {
+	pub fn len(&self) -> NumberFor<C::Block> {
 		match *self {
 			BlockRangeState::Downloading { len, .. } => len,
 			BlockRangeState::Complete(ref blocks) => As::sa(blocks.len() as u64),
@@ -52,13 +52,13 @@ impl<B: BlockT> BlockRangeState<B> {
 
 /// A collection of blocks being downloaded.
 #[derive(Default)]
-pub struct BlockCollection<B: BlockT> {
+pub struct BlockCollection<C: Chain> {
 	/// Downloaded blocks.
-	blocks: BTreeMap<NumberFor<B>, BlockRangeState<B>>,
-	peer_requests: HashMap<NodeIndex, NumberFor<B>>,
+	blocks: BTreeMap<NumberFor<C::Block>, BlockRangeState<C>>,
+	peer_requests: HashMap<NodeIndex, NumberFor<C::Block>>,
 }
 
-impl<B: BlockT> BlockCollection<B> {
+impl<C: Chain> BlockCollection<C> {
 	/// Create a new instance.
 	pub fn new() -> Self {
 		BlockCollection {
@@ -74,7 +74,11 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	/// Insert a set of blocks into collection.
-	pub fn insert(&mut self, start: NumberFor<B>, blocks: Vec<message::BlockData<B>>, who: NodeIndex) {
+	pub fn insert(&mut self,
+		start: NumberFor<C::Block>,
+		blocks: Vec<message::BlockData<C>>,
+		who: NodeIndex
+	) {
 		if blocks.is_empty() {
 			return;
 		}
@@ -96,13 +100,19 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
-	pub fn needed_blocks(&mut self, who: NodeIndex, count: usize, peer_best: NumberFor<B>, common: NumberFor<B>) -> Option<Range<NumberFor<B>>> {
+	pub fn needed_blocks(
+		&mut self,
+		who: NodeIndex,
+		count: usize,
+		peer_best: NumberFor<C::Block>,
+		common: NumberFor<C::Block>
+	) -> Option<Range<NumberFor<C::Block>>> {
 		// First block number that we need to download
 		let first_different = common + As::sa(1);
 		let count = As::sa(count as u64);
 		let (mut range, downloading) = {
 			let mut downloading_iter = self.blocks.iter().peekable();
-			let mut prev: Option<(&NumberFor<B>, &BlockRangeState<B>)> = None;
+			let mut prev: Option<(&NumberFor<C::Block>, &BlockRangeState<C::Block>)> = None;
 			loop {
 				let next = downloading_iter.next();
 				break match &(prev, next) {
@@ -138,7 +148,7 @@ impl<B: BlockT> BlockCollection<B> {
 	}
 
 	/// Get a valid chain of blocks ordered in descending order and ready for importing into blockchain.
-	pub fn drain(&mut self, from: NumberFor<B>) -> Vec<BlockData<B>> {
+	pub fn drain(&mut self, from: NumberFor<C::Block>) -> Vec<BlockData<C>> {
 		let mut drained = Vec::new();
 		let mut ranges = Vec::new();
 		{
@@ -196,13 +206,14 @@ mod test {
 	use primitives::H256;
 
 	type Block = RawBlock<u64>;
+	struct ConsensusMessage(u64);
 
-	fn is_empty(bc: &BlockCollection<Block>) -> bool {
+	fn is_empty(bc: &BlockCollection<Block, ConsensusMessage>) -> bool {
 		bc.blocks.is_empty() &&
 		bc.peer_requests.is_empty()
 	}
 
-	fn generate_blocks(n: usize) -> Vec<message::BlockData<Block>> {
+	fn generate_blocks(n: usize) -> Vec<message::BlockData<Block, ConsensusMessage>> {
 		(0 .. n).map(|_| message::generic::BlockData {
 			hash: H256::random(),
 			header: None,

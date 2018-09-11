@@ -19,9 +19,10 @@
 use rstd::prelude::*;
 use codec::{Decode, Encode, Input, Output};
 use substrate_primitives::{AuthorityId, Signature};
+use primitives::traits;
 
 /// Type alias for extracting message type from block.
-pub type ActionFor<B> = Action<B, <B as ::traits::Block>::Hash>;
+pub type ActionFor<B> = Action<B, <B as traits::Block>::Hash>;
 
 /// Actions which can be taken during the BFT process.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
@@ -46,7 +47,7 @@ pub enum Action<Block, H> {
 }
 
 /// Type alias for extracting message type from block.
-pub type MessageFor<B> = Message<B, <B as ::traits::Block>::Hash>;
+pub type MessageFor<B> = Message<B, <B as traits::Block>::Hash>;
 
 /// Messages exchanged between participants in the BFT consensus.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]

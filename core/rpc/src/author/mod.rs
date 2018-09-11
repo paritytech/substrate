@@ -79,7 +79,7 @@ pub struct Author<B, E, P> where
 	P: PoolChainApi + Sync + Send + 'static,
 {
 	/// Substrate client
-	client: Arc<Client<B, E, <P as PoolChainApi>::Block>>,
+	client: Arc<Client<B, E, <P as PoolChainApi>::Chain>>,
 	/// Extrinsic pool
 	pool: Arc<Pool<P>>,
 	/// Subscriptions manager
@@ -90,7 +90,10 @@ impl<B, E, P> Author<B, E, P> where
 	P: PoolChainApi + Sync + Send + 'static,
 {
 	/// Create new instance of Authoring API.
-	pub fn new(client: Arc<Client<B, E, <P as PoolChainApi>::Block>>, pool: Arc<Pool<P>>, executor: TaskExecutor) -> Self {
+	pub fn new(client: Arc<Client<B, E, <P as PoolChainApi>::Chain>>,
+		pool: Arc<Pool<P>>,
+		executor: TaskExecutor
+	) -> Self {
 		Author {
 			client,
 			pool,
@@ -100,8 +103,8 @@ impl<B, E, P> Author<B, E, P> where
 }
 
 impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author<B, E, P> where
-	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+	B: client::backend::Backend<Blake2Hasher, RlpCodec, <P as PoolChainApi>::Chain> + Send + Sync + 'static,
+	E: client::CallExecutor<<<P as PoolChainApi>::Chain as traits::Chain>::Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
 	P::Error: 'static,
 {
@@ -112,7 +115,8 @@ impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author
 		self.submit_rich_extrinsic(dxt)
 	}
 
-	fn submit_rich_extrinsic(&self, xt: <<P as PoolChainApi>::Block as traits::Block>::Extrinsic) -> Result<ExHash<P>> {
+	fn submit_rich_extrinsic(&self,
+		xt: <<<P as PoolChainApi>::Chain as traits::Chain>::Block as traits::Block>::Extrinsic) -> Result<ExHash<P>> {
 		let best_block_hash = self.client.info()?.chain.best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
@@ -127,10 +131,14 @@ impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author
 		Ok(self.pool.all())
 	}
 
-	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>>>, xt: Bytes) {
+	fn watch_extrinsic(&self,
+		_metadata: Self::Metadata,
+		subscriber: pubsub::Subscriber<Status<ExHash<P>>>,
+		xt: Bytes
+	) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info()?.chain.best_hash;
-			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
+			let dxt = <<<P as PoolChainApi>::Chain as traits::Chain>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
 			self.pool
 				.submit_and_watch(&generic::BlockId::hash(best_block_hash), dxt)
 				.map_err(|e| e.into_pool_error()

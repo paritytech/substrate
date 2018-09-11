@@ -17,7 +17,7 @@ srml-support = { path = "../../srml/support" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-keyring = { path = "../../core/keyring" }
 srml-balances = { path = "../../srml/balances" }
-srml-consensus = { path = "../../srml/consensus" }
+srml-consensus-rhd = { path = "../../srml/consensus/rhd" }
 srml-contract = { path = "../../srml/contract" }
 srml-council = { path = "../../srml/council" }
 srml-democracy = { path = "../../srml/democracy" }
@@ -40,7 +40,7 @@ std = [
 	"sr-io/std",
 	"srml-support/std",
 	"srml-balances/std",
-	"srml-consensus/std",
+	"srml-consensus-rhd/std",
 	"srml-contract/std",
 	"srml-council/std",
 	"srml-democracy/std",

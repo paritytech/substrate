@@ -20,7 +20,8 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor, As};
+use runtime_primitives::traits::{Chain, Block as BlockT Header as HeaderT, Hash,
+	HashFor, NumberFor, As};
 use runtime_primitives::generic::BlockId;
 use network_libp2p::{NodeIndex, Severity};
 use codec::{Encode, Decode};
@@ -48,16 +49,16 @@ pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
 
 // Lock must always be taken in order declared here.
-pub struct Protocol<B: BlockT, S: Specialization<B>, H: ExHashT> {
+pub struct Protocol<C: Chain, S: Specialization<C>, H: ExHashT> {
 	config: ProtocolConfig,
-	on_demand: Option<Arc<OnDemandService<B>>>,
-	genesis_hash: B::Hash,
-	sync: Arc<RwLock<ChainSync<B>>>,
+	on_demand: Option<Arc<OnDemandService<C>>>,
+	genesis_hash: <C::Block as BlockT>::Hash,
+	sync: Arc<RwLock<ChainSync<C>>>,
 	specialization: RwLock<S>,
-	context_data: ContextData<B, H>,
+	context_data: ContextData<C::Block, H>,
 	// Connected peers pending Status message.
 	handshaking_peers: RwLock<HashMap<NodeIndex, time::Instant>>,
-	transaction_pool: Arc<TransactionPool<H, B>>,
+	transaction_pool: Arc<TransactionPool<H, C::Block>>,
 }
 /// Syncing status and statistics
 #[derive(Clone)]
@@ -106,28 +107,28 @@ pub struct PeerInfo<B: BlockT> {
 }
 
 /// Context for a network-specific handler.
-pub trait Context<B: BlockT> {
+pub trait Context<C: Chain> {
 	/// Get a reference to the client.
-	fn client(&self) -> &::chain::Client<B>;
+	fn client(&self) -> &::chain::Client<C>;
 
 	/// Point out that a peer has been malign or irresponsible or appeared lazy.
 	fn report_peer(&mut self, who: NodeIndex, reason: Severity);
 
 	/// Get peer info.
-	fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<B>>;
+	fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<C::Block>>;
 
 	/// Send a message to a peer.
-	fn send_message(&mut self, who: NodeIndex, data: ::message::Message<B>);
+	fn send_message(&mut self, who: NodeIndex, data: ::message::Message<C>);
 }
 
 /// Protocol context.
-pub(crate) struct ProtocolContext<'a, B: 'a + BlockT, H: 'a + ExHashT> {
+pub(crate) struct ProtocolContext<'a, C: 'a + Chain, H: 'a + ExHashT> {
 	io: &'a mut SyncIo,
-	context_data: &'a ContextData<B, H>,
+	context_data: &'a ContextData<C::Block, H>,
 }
 
-impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
-	pub(crate) fn new(context_data: &'a ContextData<B, H>, io: &'a mut SyncIo) -> Self {
+impl<'a, C: Chain + 'a, H: 'a + ExHashT> ProtocolContext<'a, C, H> {
+	pub(crate) fn new(context_data: &'a ContextData<C::Block, H>, io: &'a mut SyncIo) -> Self {
 		ProtocolContext {
 			io,
 			context_data,
@@ -135,7 +136,7 @@ impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	}
 
 	/// Send a message to a peer.
-	pub fn send_message(&mut self, who: NodeIndex, message: Message<B>) {
+	pub fn send_message(&mut self, who: NodeIndex, message: Message<C>) {
 		send_message(&self.context_data.peers, self.io, who, message)
 	}
 
@@ -145,7 +146,7 @@ impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	}
 
 	/// Get peer info.
-	pub fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<B>> {
+	pub fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<C::Block>> {
 		self.context_data.peers.read().get(&peer).map(|p| {
 			PeerInfo {
 				roles: p.roles,
@@ -157,8 +158,8 @@ impl<'a, B: BlockT + 'a, H: 'a + ExHashT> ProtocolContext<'a, B, H> {
 	}
 }
 
-impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, H> {
-	fn send_message(&mut self, who: NodeIndex, message: Message<B>) {
+impl<'a, C: Chain + 'a, H: ExHashT + 'a> Context<C> for ProtocolContext<'a, C, H> {
+	fn send_message(&mut self, who: NodeIndex, message: Message<C>) {
 		ProtocolContext::send_message(self, who, message);
 	}
 
@@ -166,30 +167,30 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 		ProtocolContext::report_peer(self, who, reason);
 	}
 
-	fn peer_info(&self, who: NodeIndex) -> Option<PeerInfo<B>> {
+	fn peer_info(&self, who: NodeIndex) -> Option<PeerInfo<C::Block>> {
 		ProtocolContext::peer_info(self, who)
 	}
 
-	fn client(&self) -> &Client<B> {
+	fn client(&self) -> &Client<C::Block> {
 		&*self.context_data.chain
 	}
 }
 
 /// Data necessary to create a context.
-pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
+pub(crate) struct ContextData<C: Chain, H: ExHashT> {
 	// All connected peers
-	peers: RwLock<HashMap<NodeIndex, Peer<B, H>>>,
-	chain: Arc<Client<B>>,
+	peers: RwLock<HashMap<NodeIndex, Peer<C::Block, H>>>,
+	chain: Arc<Client<C>>,
 }
 
-impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
+impl<C: Chain, S: Specialization<C>, H: ExHashT> Protocol<C, S, H> {
 	/// Create a new instance.
 	pub fn new(
 		config: ProtocolConfig,
-		chain: Arc<Client<B>>,
-		import_queue: Arc<ImportQueue<B>>,
-		on_demand: Option<Arc<OnDemandService<B>>>,
-		transaction_pool: Arc<TransactionPool<H, B>>,
+		chain: Arc<Client<C::Block>>,
+		import_queue: Arc<ImportQueue<C>>,
+		on_demand: Option<Arc<OnDemandService<C>>>,
+		transaction_pool: Arc<TransactionPool<H, C::Block>>,
 		specialization: S,
 	) -> error::Result<Self> {
 		let info = chain.info()?;
@@ -210,16 +211,16 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		Ok(protocol)
 	}
 
-	pub(crate) fn context_data(&self) -> &ContextData<B, H> {
+	pub(crate) fn context_data(&self) -> &ContextData<C::Block, H> {
 		&self.context_data
 	}
 
-	pub(crate) fn sync(&self) -> &Arc<RwLock<ChainSync<B>>> {
+	pub(crate) fn sync(&self) -> &Arc<RwLock<ChainSync<C::Block>>> {
 		&self.sync
 	}
 
 	/// Returns protocol status
-	pub fn status(&self) -> ProtocolStatus<B> {
+	pub fn status(&self) -> ProtocolStatus<C::Block> {
 		let sync = self.sync.read();
 		let peers = self.context_data.peers.read();
 		ProtocolStatus {
@@ -230,7 +231,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	pub fn handle_packet(&self, io: &mut SyncIo, who: NodeIndex, mut data: &[u8]) {
-		let message: Message<B> = match Decode::decode(&mut data) {
+		let message: Message<C::Block> = match Decode::decode(&mut data) {
 			Some(m) => m,
 			None => {
 				trace!(target: "sync", "Invalid packet from {}", who);
@@ -277,8 +278,8 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	pub fn send_message(&self, io: &mut SyncIo, who: NodeIndex, message: Message<B>) {
-		send_message::<B, H>(&self.context_data.peers, io, who, message)
+	pub fn send_message(&self, io: &mut SyncIo, who: NodeIndex, message: Message<C>) {
+		send_message::<C::Block, H>(&self.context_data.peers, io, who, message)
 	}
 
 	/// Called when a new peer is connected
@@ -310,7 +311,11 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	fn on_block_request(&self, io: &mut SyncIo, peer: NodeIndex, request: message::BlockRequest<B>) {
+	fn on_block_request(&self,
+		io: &mut SyncIo,
+		peer: NodeIndex,
+		request: message::BlockRequest<C::Block>
+	) {
 		trace!(target: "sync", "BlockRequest {} from {}: from {:?} to {:?} max {:?}", request.id, peer, request.from, request.to, request.max);
 		let mut blocks = Vec::new();
 		let mut id = match request.from {
@@ -356,7 +361,11 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.send_message(io, peer, GenericMessage::BlockResponse(response))
 	}
 
-	fn on_block_response(&self, io: &mut SyncIo, peer: NodeIndex, request: message::BlockRequest<B>, response: message::BlockResponse<B>) {
+	fn on_block_response(&self,
+		io: &mut SyncIo,
+		peer: NodeIndex,
+		request: message::BlockRequest<C::Block>,
+		response: message::BlockResponse<C>) {
 		// TODO: validate response
 		let blocks_range = match (
 				response.blocks.first().and_then(|b| b.header.as_ref().map(|h| h.number())),
@@ -400,7 +409,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	pub fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<B>> {
+	pub fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<C::Block>> {
 		self.context_data.peers.read().get(&peer).map(|p| {
 			PeerInfo {
 				roles: p.roles,
@@ -412,7 +421,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called by peer to report status
-	fn on_status_message(&self, io: &mut SyncIo, who: NodeIndex, status: message::Status<B>) {
+	fn on_status_message(&self, io: &mut SyncIo, who: NodeIndex, status: message::Status<C::Block>) {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
 		if io.is_expired() {
 			trace!(target: "sync", "Status packet from expired session {}:{}", who, io.peer_info(who));
@@ -458,7 +467,11 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	}
 
 	/// Called when peer sends us new extrinsics
-	fn on_extrinsics(&self, _io: &mut SyncIo, who: NodeIndex, extrinsics: message::Transactions<B::Extrinsic>) {
+	fn on_extrinsics(&self,
+		_io: &mut SyncIo,
+		who: NodeIndex,
+		extrinsics: message::Transactions<<C::Block as BlockT>::Extrinsic>
+	) {
 		// Accept extrinsics only when fully synced
 		if self.sync.read().status().state != SyncState::Idle {
 			trace!(target: "sync", "{} Ignoring extrinsics while syncing", who);
@@ -548,7 +561,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.abort();
 	}
 
-	pub fn on_block_announce(&self, io: &mut SyncIo, who: NodeIndex, announce: message::BlockAnnounce<B::Header>) {
+	pub fn on_block_announce(&self, io: &mut SyncIo, who: NodeIndex, announce: message::BlockAnnounce<<C::Block as BlockT>::Header>) {
 		let header = announce.header;
 		let hash = header.hash();
 		{
@@ -560,7 +573,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.sync.write().on_block_announce(&mut ProtocolContext::new(&self.context_data, io), who, hash, &header);
 	}
 
-	pub fn on_block_imported(&self, io: &mut SyncIo, hash: B::Hash, header: &B::Header) {
+	pub fn on_block_imported(&self, io: &mut SyncIo, hash: <C::Block as BlockT>::Hash, header: &<C::Block as BlockT>::Header) {
 		self.sync.write().update_chain_info(&header);
 		self.specialization.write().on_block_imported(
 			&mut ProtocolContext::new(&self.context_data, io),
@@ -586,7 +599,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
-	fn on_remote_call_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteCallRequest<B::Hash>) {
+	fn on_remote_call_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteCallRequest<<C::Block as BlockT>::Hash>) {
 		trace!(target: "sync", "Remote call request {} from {} ({} at {})", request.id, who, request.method, request.block);
 		let proof = match self.context_data.chain.execution_proof(&request.block, &request.method, &request.data) {
 			Ok((_, proof)) => proof,
@@ -607,7 +620,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.on_demand.as_ref().map(|s| s.on_remote_call_response(io, who, response));
 	}
 
-	fn on_remote_read_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteReadRequest<B::Hash>) {
+	fn on_remote_read_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteReadRequest<<C::Block as BlockT>::Hash>) {
 		trace!(target: "sync", "Remote read request {} from {} ({} at {})",
 			request.id, who, request.key.to_hex(), request.block);
 		let proof = match self.context_data.chain.read_proof(&request.block, &request.key) {
@@ -627,7 +640,11 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		self.on_demand.as_ref().map(|s| s.on_remote_read_response(io, who, response));
 	}
 
-	fn on_remote_header_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteHeaderRequest<NumberFor<B>>) {
+	fn on_remote_header_request(&self,
+		io: &mut SyncIo,
+		who: NodeIndex,
+		request: message::RemoteHeaderRequest<NumberFor<C::Block>>
+	) {
 		trace!(target: "sync", "Remote header proof request {} from {} ({})",
 			request.id, who, request.block);
 		let (header, proof) = match self.context_data.chain.header_proof(request.block) {
@@ -643,20 +660,24 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}));
 	}
 
- 	fn on_remote_header_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteHeaderResponse<B::Header>) {
+ 	fn on_remote_header_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteHeaderResponse<<C::Block as BlockT>::Header>) {
 		trace!(target: "sync", "Remote header proof response {} from {}", response.id, who);
 		self.on_demand.as_ref().map(|s| s.on_remote_header_response(io, who, response));
 	}
 
 	/// Execute a closure with access to a network context and specialization.
 	pub fn with_spec<F, U>(&self, io: &mut SyncIo, f: F) -> U
-		where F: FnOnce(&mut S, &mut Context<B>) -> U
+		where F: FnOnce(&mut S, &mut Context<C>) -> U
 	{
 		f(&mut* self.specialization.write(), &mut ProtocolContext::new(&self.context_data, io))
 	}
 }
 
-fn send_message<B: BlockT, H: ExHashT>(peers: &RwLock<HashMap<NodeIndex, Peer<B, H>>>, io: &mut SyncIo, who: NodeIndex, mut message: Message<B>) {
+fn send_message<C: Chain, H: ExHashT>(
+	peers: &RwLock<HashMap<NodeIndex, Peer<C::Block, H>>>,
+	io: &mut SyncIo,
+	who: NodeIndex,
+	mut message: Message<C>) {
 	match &mut message {
 		&mut GenericMessage::BlockRequest(ref mut r) => {
 			let mut peers = peers.write();
@@ -673,7 +694,7 @@ fn send_message<B: BlockT, H: ExHashT>(peers: &RwLock<HashMap<NodeIndex, Peer<B,
 }
 
 /// Hash a message.
-pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
+pub(crate) fn hash_message<C: Chain>(message: &Message<C>) -> <C::Block as BlockT>::Hash {
 	let data = message.encode();
 	HashFor::<B>::hash(&data)
 }

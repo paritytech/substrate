@@ -22,7 +22,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 
-use bft::{self, BftService};
+use rhd::{self, BftService};
 use client::{BlockchainEvents, ChainHead, BlockBody};
 use ed25519;
 use futures::prelude::*;
@@ -47,11 +47,11 @@ fn start_bft<F, C>(
 	header: Header,
 	bft_service: Arc<BftService<Block, F, C>>,
 ) where
-	F: bft::Environment<Block> + 'static,
-	C: bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
+	F: rhd::Environment<Block> + 'static,
+	C: rhd::BlockImport<Block> + rhd::Authorities<Block> + 'static,
 	F::Error: ::std::fmt::Debug,
-	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
-	<F as bft::Environment<Block>>::Error: ::std::fmt::Display
+	<F::Proposer as rhd::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
+	<F as rhd::Environment<Block>>::Error: ::std::fmt::Display
 {
 	let mut handle = LocalThreadHandle::current();
 	match bft_service.build_upon(&header) {
@@ -82,7 +82,7 @@ impl Service {
 		where
 			A: Api + Send + Sync + 'static,
 			C: BlockchainEvents<Block> + ChainHead<Block> + BlockBody<Block>,
-			C: bft::BlockImport<Block> + bft::Authorities<Block> + Send + Sync + 'static,
+			C: rhd::BlockImport<Block> + rhd::Authorities<Block> + Send + Sync + 'static,
 			N: Network + Send + 'static,
 	{
 		use parking_lot::RwLock;

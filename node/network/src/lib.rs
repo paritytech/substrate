@@ -20,7 +20,7 @@
 
 #![warn(unused_extern_crates)]
 
-extern crate substrate_bft as bft;
+extern crate substrate_consensus_rhd as bft;
 extern crate substrate_network;
 extern crate substrate_primitives;
 

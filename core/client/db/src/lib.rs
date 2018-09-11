@@ -40,6 +40,10 @@ extern crate parity_codec_derive;
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
+#[cfg(test)]
+#[macro_use]
+extern crate serde;
+
 pub mod light;
 
 mod cache;
@@ -55,10 +59,9 @@ use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
 use primitives::{H256, AuthorityId, Blake2Hasher, RlpCodec};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor,
-	NumberFor, Zero, Digest, DigestItem};
+use runtime_primitives::generic::{BlockId, Justification};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
+	Chain, As, Hash, HashFor, NumberFor, Zero, Digest, DigestItem};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
@@ -84,16 +87,21 @@ pub struct DatabaseSettings {
 }
 
 /// Create an instance of db-backed client.
-pub fn new_client<E, S, Block>(
+pub fn new_client<E, S, Ch>(
 	settings: DatabaseSettings,
 	executor: E,
 	genesis_storage: S,
 	execution_strategy: ExecutionStrategy,
-) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
-	where
-		Block: BlockT,
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-		S: BuildStorage,
+) -> Result<
+	client::Client<
+		Backend<Ch>,
+		client::LocalCallExecutor<Backend<Ch>, E, Ch>,
+		Ch
+	>, client::error::Error>
+where
+	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	S: BuildStorage,
+	Ch: Chain,
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
@@ -111,10 +119,10 @@ mod columns {
 	pub const CHANGES_TRIE: Option<u32> = Some(7);
 }
 
-struct PendingBlock<Block: BlockT> {
-	header: Block::Header,
-	justification: Option<Justification<Block::Hash>>,
-	body: Option<Vec<Block::Extrinsic>>,
+struct PendingBlock<Ch: Chain> {
+	header: <Ch::Block as BlockT>::Header,
+	justification: Option<Ch>,
+	body: Option<Vec<<Ch::Block as BlockT>::Extrinsic>>,
 	is_best: bool,
 }
 
@@ -130,21 +138,25 @@ impl<'a> state_db::MetaDb for StateMetaDb<'a> {
 }
 
 /// Block database
-pub struct BlockchainDb<Block: BlockT> {
+pub struct BlockchainDb<Ch: Chain> {
 	db: Arc<KeyValueDB>,
-	meta: RwLock<Meta<<Block::Header as HeaderT>::Number, Block::Hash>>,
+	meta: RwLock<Meta<<<Ch::Block as BlockT>::Header as HeaderT>::Number, <Ch::Block as BlockT>::Hash>>,
 }
 
-impl<Block: BlockT> BlockchainDb<Block> {
+impl<Ch: Chain> BlockchainDb<Ch> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
-		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
+		let meta = read_meta::<Ch::Block>(&*db, columns::HEADER)?;
 		Ok(BlockchainDb {
 			db,
 			meta: RwLock::new(meta)
 		})
 	}
 
-	fn update_meta(&self, hash: Block::Hash, number: <Block::Header as HeaderT>::Number, is_best: bool) {
+	fn update_meta(&self,
+		hash: <Ch::Block as BlockT>::Hash,
+		number: <<Ch::Block as BlockT>::Header as HeaderT>::Number,
+		is_best: bool
+	) {
 		if is_best {
 			let mut meta = self.meta.write();
 			if number == Zero::zero() {
@@ -156,10 +168,12 @@ impl<Block: BlockT> BlockchainDb<Block> {
 	}
 }
 
-impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
-	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>, client::error::Error> {
+impl<Ch: Chain> client::blockchain::HeaderBackend<Ch> for BlockchainDb<Ch> {
+	fn header(&self, id: BlockId<Ch::Block>)
+		-> Result<Option<<Ch::Block as BlockT>::Header>, client::error::Error>
+	{
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, id)? {
-			Some(header) => match Block::Header::decode(&mut &header[..]) {
+			Some(header) => match <Ch::Block as BlockT>::Header::decode(&mut &header[..]) {
 				Some(header) => Ok(Some(header)),
 				None => return Err(client::error::ErrorKind::Backend("Error decoding header".into()).into()),
 			}
@@ -167,7 +181,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		}
 	}
 
-	fn info(&self) -> Result<client::blockchain::Info<Block>, client::error::Error> {
+	fn info(&self) -> Result<client::blockchain::Info<Ch::Block>, client::error::Error> {
 		let meta = self.meta.read();
 		Ok(client::blockchain::Info {
 			best_hash: meta.best_hash,
@@ -176,7 +190,9 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		})
 	}
 
-	fn status(&self, id: BlockId<Block>) -> Result<client::blockchain::BlockStatus, client::error::Error> {
+	fn status(&self, id: BlockId<Ch::Block>)
+		-> Result<client::blockchain::BlockStatus, client::error::Error>
+	{
 		let exists = match id {
 			BlockId::Hash(_) => read_id(&*self.db, columns::BLOCK_INDEX, id)?.is_some(),
 			BlockId::Number(n) => n <= self.meta.read().best_number,
@@ -187,23 +203,29 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 		}
 	}
 
-	fn number(&self, hash: Block::Hash) -> Result<Option<<Block::Header as HeaderT>::Number>, client::error::Error> {
-		read_id::<Block>(&*self.db, columns::BLOCK_INDEX, BlockId::Hash(hash))
+	fn number(&self, hash: <Ch::Block as BlockT>::Hash)
+		-> Result<Option<<<Ch::Block as BlockT>::Header as HeaderT>::Number>, client::error::Error>
+	{
+		read_id::<Ch::Block>(&*self.db, columns::BLOCK_INDEX, BlockId::Hash(hash))
 			.and_then(|key| match key {
 				Some(key) => Ok(Some(db_key_to_number(&key)?)),
 				None => Ok(None),
 			})
 	}
 
-	fn hash(&self, number: <Block::Header as HeaderT>::Number) -> Result<Option<Block::Hash>, client::error::Error> {
-		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
-			x.map(|raw| HashFor::<Block>::hash(&raw[..])).map(Into::into)
+	fn hash(&self, number: <<Ch::Block as BlockT>::Header as HeaderT>::Number)
+		-> Result<Option<<Ch::Block as BlockT>::Hash>, client::error::Error>
+	{
+		read_db::<Ch::Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
+			x.map(|raw| HashFor::<Ch::Block>::hash(&raw[..])).map(Into::into)
 		)
 	}
 }
 
-impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
-	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<Block::Extrinsic>>, client::error::Error> {
+impl<Ch: Chain> client::blockchain::Backend<Ch> for BlockchainDb<Ch> {
+	fn body(&self, id: BlockId<Ch::Block>)
+		-> Result<Option<Vec<<Ch::Block as BlockT>::Extrinsic>>, client::error::Error>
+	{
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::BODY, id)? {
 			Some(body) => match Decode::decode(&mut &body[..]) {
 				Some(body) => Ok(Some(body)),
@@ -213,7 +235,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		}
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, client::error::Error> {
+	fn justification(&self, id: BlockId<Ch::Block>) -> Result<Option<Ch>, client::error::Error> {
 		match read_db(&*self.db, columns::BLOCK_INDEX, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Some(justification) => Ok(Some(justification)),
@@ -223,30 +245,29 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		}
 	}
 
-	fn cache(&self) -> Option<&client::blockchain::Cache<Block>> {
+	fn cache(&self) -> Option<&client::blockchain::Cache<Ch::Block>> {
 		None
 	}
 }
 
 /// Database transaction
-pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
+pub struct BlockImportOperation<Ch: Chain, H: Hasher> {
 	old_state: DbState,
-	updates: MemoryDB<H>,
 	changes_trie_updates: MemoryDB<H>,
-	pending_block: Option<PendingBlock<Block>>,
+	pending_block: Option<PendingBlock<Ch>>,
 }
 
-impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher, RlpCodec>
-for BlockImportOperation<Block, Blake2Hasher>
-where Block: BlockT,
-{
+impl<Ch> client::backend::BlockImportOperation<Blake2Hasher, RlpCodec, Ch>
+for BlockImportOperation<Ch, Blake2Hasher> where Ch: Chain {
 	type State = DbState;
 
 	fn state(&self) -> Result<Option<&Self::State>, client::error::Error> {
 		Ok(Some(&self.old_state))
 	}
 
-	fn set_block_data(&mut self, header: Block::Header, body: Option<Vec<Block::Extrinsic>>, justification: Option<Justification<Block::Hash>>, is_best: bool) -> Result<(), client::error::Error> {
+	fn set_block_data(&mut self, header: <Ch::Block as BlockT>::Header, body: Option<Vec<<Ch::Block as BlockT>::Extrinsic>>,
+			justification: Option<Ch::Consensus::Signature>, is_best: bool)
+	-> Result<(), client::error::Error> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
 			header,
@@ -346,16 +367,18 @@ impl<Block: BlockT> state_machine::ChangesTrieStorage<Blake2Hasher> for DbChange
 
 /// Disk backend. Keeps data in a key-value store. In archive mode, trie nodes are kept from all blocks.
 /// Otherwise, trie nodes are kept only from the most recent block.
-pub struct Backend<Block: BlockT> {
-	storage: Arc<StorageDb<Block>>,
-	tries_change_storage: DbChangesTrieStorage<Block>,
-	blockchain: BlockchainDb<Block>,
+pub struct Backend<Ch: Chain> {
+	storage: Arc<StorageDb<Ch::Block>>,
+	tries_change_storage: DbChangesTrieStorage<Ch>,
+	blockchain: BlockchainDb<Ch>,
 	finalization_window: u64,
 }
 
-impl<Block: BlockT> Backend<Block> {
+impl<Ch: Chain> Backend<Ch> {
 	/// Create a new instance of database backend.
-	pub fn new(config: DatabaseSettings, finalization_window: u64) -> Result<Self, client::error::Error> {
+	pub fn new(config: DatabaseSettings, finalization_window: u64)
+		-> Result<Self, client::error::Error>
+	{
 		let db = open_database(&config, "full")?;
 
 		Backend::from_kvdb(db as Arc<_>, config.pruning, finalization_window)
@@ -370,10 +393,12 @@ impl<Block: BlockT> Backend<Block> {
 		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(keep_blocks), 0).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, finalization_window: u64) -> Result<Self, client::error::Error> {
+	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, finalization_window: u64)
+		-> Result<Self, client::error::Error>
+	{
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
-		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
+		let state_db: StateDb<<Ch::Block as BlockT>::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
 		let storage_db = StorageDb {
 			db: db.clone(),
 			state_db,
@@ -413,13 +438,18 @@ fn apply_changes_trie_commit(transaction: &mut DBTransaction, mut commit: Memory
 	}
 }
 
-impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<Block> where Block: BlockT {
-	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
-	type Blockchain = BlockchainDb<Block>;
+impl<Ch> client::backend::Backend<Blake2Hasher, RlpCodec, Ch> for Backend<Ch>
+where
+	Ch: Chain,
+{
+	type BlockImportOperation = BlockImportOperation<Ch, Blake2Hasher>;
+	type Blockchain = BlockchainDb<Ch>;
 	type State = DbState;
 	type ChangesTrieStorage = DbChangesTrieStorage<Block>;
 
-	fn begin_operation(&self, block: BlockId<Block>) -> Result<Self::BlockImportOperation, client::error::Error> {
+	fn begin_operation(&self, block: BlockId<Ch::Block>)
+		-> Result<Self::BlockImportOperation, client::error::Error>
+	{
 		let state = self.state_at(block)?;
 		Ok(BlockImportOperation {
 			pending_block: None,
@@ -486,13 +516,14 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 		Ok(())
 	}
 
+
 	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
 		Some(&self.tries_change_storage)
 	}
 
-	fn revert(&self, n: NumberFor<Block>) -> Result<NumberFor<Block>, client::error::Error> {
+	fn revert(&self, n: NumberFor<Ch::Block>) -> Result<NumberFor<Ch::Block>, client::error::Error> {
 		use client::blockchain::HeaderBackend;
-		let mut best = self.blockchain.info()?.best_number;
+		let mut best : u64 = self.blockchain.info()?.best_number;
 		for c in 0 .. n.as_() {
 			if best == As::sa(0) {
 				return Ok(As::sa(c))
@@ -520,11 +551,11 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 		Ok(n)
 	}
 
-	fn blockchain(&self) -> &BlockchainDb<Block> {
+	fn blockchain(&self) -> &BlockchainDb<Ch> {
 		&self.blockchain
 	}
 
-	fn state_at(&self, block: BlockId<Block>) -> Result<Self::State, client::error::Error> {
+	fn state_at(&self, block: BlockId<Ch::Block>) -> Result<Self::State, client::error::Error> {
 		use client::blockchain::HeaderBackend as BcHeaderBackend;
 
 		// special case for genesis initialization
@@ -548,8 +579,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 	}
 }
 
-impl<Block> client::backend::LocalBackend<Block, Blake2Hasher, RlpCodec> for Backend<Block>
-where Block: BlockT {}
+impl<Ch> client::backend::LocalBackend<Blake2Hasher, RlpCodec, Ch> for Backend<Ch>
+where Ch: Chain {}
 
 #[cfg(test)]
 mod tests {
@@ -558,14 +589,14 @@ mod tests {
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
-	use runtime_primitives::testing::{Header, Block as RawBlock};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieStorage};
+	use runtime_primitives::testing::{Header, TestChain, Block as RawBlock};
 
 	type Block = RawBlock<u64>;
 
 	#[test]
 	fn block_hash_inserted_correctly() {
-		let db = Backend::<Block>::new_test(1);
+		let db = Backend::<TestChain>::new_test(1);
 		for i in 0..10 {
 			assert!(db.blockchain().hash(i).unwrap().is_none());
 
@@ -604,7 +635,7 @@ mod tests {
 
 	#[test]
 	fn set_state_data() {
-		let db = Backend::<Block>::new_test(2);
+		let db = Backend::<TestChain>::new_test(2);
 		{
 			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
 			let mut header = Header {
@@ -683,7 +714,7 @@ mod tests {
 	#[test]
 	fn delete_only_when_negative_rc() {
 		let key;
-		let backend = Backend::<Block>::new_test(0);
+		let backend = Backend::<TestChain>::new_test(0);
 
 		let hash = {
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default())).unwrap();

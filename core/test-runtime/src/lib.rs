@@ -58,7 +58,7 @@ use codec::{Encode, Decode};
 use runtime_primitives::traits::{BlindCheckable, BlakeTwo256};
 use runtime_primitives::Ed25519Signature;
 use runtime_version::RuntimeVersion;
-pub use primitives::hash::H256;
+pub use primitives::{hash::H256, AuthorityId};
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -118,8 +118,56 @@ pub type DigestItem = runtime_primitives::generic::DigestItem<H256, u64>;
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 /// A test block.
 pub type Block = runtime_primitives::generic::Block<Header, Extrinsic>;
+
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub enum ConsensusMessage {
+	Propose(BlockNumber),
+	Ack(BlockNumber)
+}
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub struct ConsensusSignature(pub Hash, pub Vec<AuthorityId>);
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub struct Consensus;
+
+impl runtime_primitives::traits::Consensus for Consensus {
+
+	type Block = Block;
+	type Message = ConsensusMessage;
+	type Signature = ConsensusSignature;
+
+	fn confirm(_block: Self::Block, _signature: Self::Signature, _authorities: &[AuthorityId]
+	) -> Result<(), &'static str> {
+		Err("No match")
+	}
+
+}
 /// A test block's header.
 pub type Header = runtime_primitives::generic::Header<BlockNumber, BlakeTwo256, DigestItem>;
+
+
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
+#[cfg_attr(feature = "std", serde(deny_unknown_fields))]
+pub struct Chain;
+
+impl runtime_primitives::traits::Chain for Chain {
+	type Block = Block;
+	type Consensus = Consensus;
+}
 
 /// Run whatever tests we have.
 pub fn run_tests(mut input: &[u8]) -> Vec<u8> {

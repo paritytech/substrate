@@ -16,7 +16,7 @@ sr-std = { path = "../../core/sr-std", default_features = false }
 sr-io = { path = "../../core/sr-io", default_features = false }
 sr-primitives = { path = "../../core/sr-primitives", default_features = false }
 srml-support = { path = "../support", default_features = false }
-srml-consensus = { path = "../consensus", default_features = false }
+srml-consensus-rhd = { path = "../consensus/rhd", default_features = false }
 srml-system = { path = "../system", default_features = false }
 srml-timestamp = { path = "../timestamp", default_features = false }
 
@@ -34,7 +34,7 @@ std = [
 	"sr-io/std",
 	"srml-support/std",
 	"sr-primitives/std",
-	"srml-consensus/std",
+	"srml-consensus-rhd/std",
 	"srml-system/std",
 	"srml-timestamp/std"
 ]

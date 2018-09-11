@@ -38,21 +38,28 @@ use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 use specialization::Specialization;
 
 pub struct DummySpecialization;
+struct ConsensusMessage;
 
-impl Specialization<Block> for DummySpecialization {
+impl Specialization<Block, ConsensusMessage> for DummySpecialization {
 	fn status(&self) -> Vec<u8> { vec![] }
 
-	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: ::message::Status<Block>) {
+	fn on_connect(
+		&mut self,
+		_ctx: &mut Context<Block, ConsensusMessage>,
+		_peer_id: NodeIndex,
+		_status: ::message::Status<Block>
+	) { }
+
+	fn on_disconnect(&mut self, _ctx: &mut Context<Block, ConsensusMessage>, _peer_id: NodeIndex) {
 
 	}
 
-	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex) {
-
-	}
-
-	fn on_message(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _message: ::message::Message<Block>) {
-
-	}
+	fn on_message(
+		&mut self,
+	 	_ctx: &mut Context<Block, ConsensusMessage>,
+	 	_peer_id: NodeIndex,
+	 	_message: ::message::Message<Block, ConsensusMessage>
+	 ) { }
 }
 
 pub struct TestIo<'p> {
@@ -116,7 +123,7 @@ pub struct TestPacket {
 
 pub struct Peer {
 	client: Arc<client::Client<test_client::Backend, test_client::Executor, Block>>,
-	pub sync: Protocol<Block, DummySpecialization, Hash>,
+	pub sync: Protocol<Block, DummySpecialization, Hash, ConsensusMessage>,
 	pub queue: RwLock<VecDeque<TestPacket>>,
 }
 

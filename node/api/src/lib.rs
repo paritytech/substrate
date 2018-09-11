@@ -31,7 +31,8 @@ use client::backend::Backend;
 use client::block_builder::BlockBuilder as ClientBlockBuilder;
 use client::{Client, CallExecutor};
 use primitives::{
-	AccountId, Block, BlockId, BlockNumber, Hash, Index, InherentData, SessionKey, Timestamp, UncheckedExtrinsic
+	AccountId, Block, BlockId, BlockNUmber, Hash, Index, InherentData,
+	SessionKey, Timestamp, UncheckedExtrinsic, Justification
 };
 use sr_primitives::{transaction_validity::TransactionValidity, traits::{CurrentHeight, BlockNumberToHash}};
 use substrate_primitives::{Blake2Hasher, RlpCodec};
@@ -87,9 +88,9 @@ pub trait Api: CurrentHeight<BlockNumber=BlockNumber> + BlockNumberToHash<BlockN
 	fn inherent_extrinsics(&self, at: &BlockId, inherent_data: InherentData) -> Result<Vec<UncheckedExtrinsic>>;
 }
 
-impl<B, E> BlockBuilder for ClientBlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>
+impl<B, E> BlockBuilder for ClientBlockBuilder<B, E, Block, Blake2Hasher, RlpCodec, Justification>
 where
-	B: Backend<Block, Blake2Hasher, RlpCodec>,
+	B: Backend<Block, Blake2Hasher, RlpCodec, Justification>,
 	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
 {
 	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
@@ -102,12 +103,12 @@ where
 	}
 }
 
-impl<B, E> Api for Client<B, E, Block>
+impl<B, E> Api for Client<B, E, Block, Justification>
 where
-	B: Backend<Block, Blake2Hasher, RlpCodec>,
+	B: Backend<Block, Blake2Hasher, RlpCodec, Justification>,
 	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
 {
-	type BlockBuilder = ClientBlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>;
+	type BlockBuilder = ClientBlockBuilder<B, E, Block, Blake2Hasher, RlpCodec, Justification>;
 
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
 		Ok(self.authorities_at(at)?)

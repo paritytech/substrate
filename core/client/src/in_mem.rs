@@ -24,9 +24,8 @@ use backend;
 use light;
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
-	NumberFor, As, Digest, DigestItem};
-use runtime_primitives::bft::Justification;
+use runtime_primitives::traits::{Block as BlockT, Chain, Header as HeaderT,
+	Consensus as ConsensusT, Zero, NumberFor, As, Digest, DigestItem};
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::InMemoryChangesTrieStorage;
@@ -35,46 +34,54 @@ use hashdb::Hasher;
 use heapsize::HeapSizeOf;
 use memorydb::MemoryDB;
 
-struct PendingBlock<B: BlockT> {
-	block: StoredBlock<B>,
+struct PendingBlock<Ch: Chain> {
+	block: StoredBlock<Ch>,
 	is_best: bool,
 }
 
 #[derive(PartialEq, Eq, Clone)]
-enum StoredBlock<B: BlockT> {
-	Header(B::Header, Option<Justification<B::Hash>>),
-	Full(B, Option<Justification<B::Hash>>),
+enum StoredBlock<Ch: Chain> {
+	Header(<Ch::Block as BlockT>::Header, Option<<Ch::Consensus as ConsensusT>::Signature>),
+	Full(Ch::Block, Option<<Ch::Consensus as ConsensusT>::Signature>),
 }
 
-impl<B: BlockT> StoredBlock<B> {
-	fn new(header: B::Header, body: Option<Vec<B::Extrinsic>>, just: Option<Justification<B::Hash>>) -> Self {
+impl<Ch: Chain> StoredBlock<Ch> {
+	fn new(
+		header: <Ch::Block as BlockT>::Header,
+		body: Option<Vec<<Ch::Block as BlockT>::Extrinsic>>,
+		just: Option<<Ch::Consensus as ConsensusT>::Signature>
+	) -> Self {
 		match body {
-			Some(body) => StoredBlock::Full(B::new(header, body), just),
+			Some(body) => StoredBlock::Full(<Ch::Block as BlockT>::new(header, body), just),
 			None => StoredBlock::Header(header, just),
 		}
 	}
 
-	fn header(&self) -> &B::Header {
+	fn header(&self) -> &<Ch::Block as BlockT>::Header {
 		match *self {
 			StoredBlock::Header(ref h, _) => h,
 			StoredBlock::Full(ref b, _) => b.header(),
 		}
 	}
 
-	fn justification(&self) -> Option<&Justification<B::Hash>> {
+	fn justification(&self) -> Option<&<Ch::Consensus as ConsensusT>::Signature> {
 		match *self {
 			StoredBlock::Header(_, ref j) | StoredBlock::Full(_, ref j) => j.as_ref()
 		}
 	}
 
-	fn extrinsics(&self) -> Option<&[B::Extrinsic]> {
+	fn extrinsics(&self) -> Option<&[<Ch::Block as BlockT>::Extrinsic]> {
 		match *self {
 			StoredBlock::Header(_, _) => None,
 			StoredBlock::Full(ref b, _) => Some(b.extrinsics())
 		}
 	}
 
-	fn into_inner(self) -> (B::Header, Option<Vec<B::Extrinsic>>, Option<Justification<B::Hash>>) {
+	fn into_inner(self) -> (
+		<Ch::Block as BlockT>::Header,
+		Option<Vec<<Ch::Block as BlockT>::Extrinsic>>,
+		Option<<Ch::Consensus as ConsensusT>::Signature>
+	) {
 		match self {
 			StoredBlock::Header(header, just) => (header, None, just),
 			StoredBlock::Full(block, just) => {
@@ -86,27 +93,27 @@ impl<B: BlockT> StoredBlock<B> {
 }
 
 #[derive(Clone)]
-struct BlockchainStorage<Block: BlockT> {
-	blocks: HashMap<Block::Hash, StoredBlock<Block>>,
-	hashes: HashMap<NumberFor<Block>, Block::Hash>,
-	best_hash: Block::Hash,
-	best_number: NumberFor<Block>,
-	genesis_hash: Block::Hash,
-	cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
+struct BlockchainStorage<Ch: Chain> {
+	blocks: HashMap<<Ch::Block as BlockT>::Hash, StoredBlock<Ch>>,
+	hashes: HashMap<<NumberFor<Ch::Block>, <Ch::Block as BlockT>::Hash>,
+	best_hash: <Ch::Block as BlockT>::Hash,
+	best_number: <<Ch::Block as BlockT>::Header as HeaderT>::Number,
+	genesis_hash: <Ch::Block as BlockT>::Hash,
+	cht_roots: HashMap<NumberFor<Ch::Block>, <Ch::Block as BlockT>::Hash>>,
 }
 
 /// In-memory blockchain. Supports concurrent reads.
-pub struct Blockchain<Block: BlockT> {
-	storage: Arc<RwLock<BlockchainStorage<Block>>>,
-	cache: Cache<Block>,
+pub struct Blockchain<Ch: Chain> {
+	storage: Arc<RwLock<BlockchainStorage<Ch>>>,
+	cache: Cache<Ch>,
 }
 
-struct Cache<Block: BlockT> {
-	storage: Arc<RwLock<BlockchainStorage<Block>>>,
-	authorities_at: RwLock<HashMap<Block::Hash, Option<Vec<AuthorityId>>>>,
+struct Cache<Ch: Chain> {
+	storage: Arc<RwLock<BlockchainStorage<Ch>>>,
+	authorities_at: RwLock<HashMap<<Ch::Block as BlockT>::Hash, Option<Vec<AuthorityId>>>>,
 }
 
-impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
+impl<Ch: Chain> Clone for Blockchain<Ch> {
 	fn clone(&self) -> Self {
 		let storage = Arc::new(RwLock::new(self.storage.read().clone()));
 		Blockchain {
@@ -119,9 +126,9 @@ impl<Block: BlockT + Clone> Clone for Blockchain<Block> {
 	}
 }
 
-impl<Block: BlockT> Blockchain<Block> {
+impl<Ch: Chain> Blockchain<Ch> {
 	/// Get header hash of given block.
-	pub fn id(&self, id: BlockId<Block>) -> Option<Block::Hash> {
+	pub fn id(&self, id: BlockId<Ch::Block>) -> Option<<Ch::Block as BlockT>::Hash> {
 		match id {
 			BlockId::Hash(h) => Some(h),
 			BlockId::Number(n) => self.storage.read().hashes.get(&n).cloned(),
@@ -129,7 +136,7 @@ impl<Block: BlockT> Blockchain<Block> {
 	}
 
 	/// Create new in-memory blockchain storage.
-	pub fn new() -> Blockchain<Block> {
+	pub fn new() -> Blockchain<Ch> {
 		let storage = Arc::new(RwLock::new(
 			BlockchainStorage {
 				blocks: HashMap::new(),
@@ -151,10 +158,10 @@ impl<Block: BlockT> Blockchain<Block> {
 	/// Insert a block header and associated data.
 	pub fn insert(
 		&self,
-		hash: Block::Hash,
-		header: <Block as BlockT>::Header,
-		justification: Option<Justification<Block::Hash>>,
-		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
+		hash: <Ch::Block as BlockT>::Hash,
+		header: <Ch::Block as BlockT>::Header,
+		justification: Option<<Ch::Consensus as ConsensusT>::Signature>,
+		body: Option<Vec<<Ch::Block as BlockT>::Extrinsic>>,
 		is_new_best: bool
 	) {
 		let number = header.number().clone();
@@ -186,19 +193,19 @@ impl<Block: BlockT> Blockchain<Block> {
 	}
 
 	/// Insert CHT root.
-	pub fn insert_cht_root(&self, block: NumberFor<Block>, cht_root: Block::Hash) {
+	pub fn insert_cht_root(&self, block: NumberFor<Ch::Block>, cht_root: <Ch::Block as BlockT>::Hash) {
 		self.storage.write().cht_roots.insert(block, cht_root);
 	}
 }
 
-impl<Block: BlockT> blockchain::HeaderBackend<Block> for Blockchain<Block> {
-	fn header(&self, id: BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
+impl<Ch: Chain> blockchain::HeaderBackend<Ch> for Blockchain<Ch> {
+	fn header(&self, id: BlockId<Ch::Block>) -> error::Result<Option<<Ch::Block as BlockT>::Header>> {
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash).map(|b| b.header().clone())
 		}))
 	}
 
-	fn info(&self) -> error::Result<blockchain::Info<Block>> {
+	fn info(&self) -> error::Result<blockchain::Info<Ch::Block>> {
 		let storage = self.storage.read();
 		Ok(blockchain::Info {
 			best_hash: storage.best_hash,
@@ -207,50 +214,50 @@ impl<Block: BlockT> blockchain::HeaderBackend<Block> for Blockchain<Block> {
 		})
 	}
 
-	fn status(&self, id: BlockId<Block>) -> error::Result<BlockStatus> {
+	fn status(&self, id: BlockId<Ch::Block>) -> error::Result<BlockStatus> {
 		match self.id(id).map_or(false, |hash| self.storage.read().blocks.contains_key(&hash)) {
 			true => Ok(BlockStatus::InChain),
 			false => Ok(BlockStatus::Unknown),
 		}
 	}
 
-	fn number(&self, hash: Block::Hash) -> error::Result<Option<NumberFor<Block>>> {
+	fn number(&self, hash: <Ch::Block as BlockT>::Hash) -> error::Result<Option<NumberFor<Ch::Block>>> {
 		Ok(self.storage.read().blocks.get(&hash).map(|b| *b.header().number()))
 	}
 
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
+	fn hash(&self, number: <<Ch::Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<<Ch::Block as BlockT>::Hash>> {
 		Ok(self.id(BlockId::Number(number)))
 	}
 }
 
 
-impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
-	fn body(&self, id: BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
+impl<Ch: Chain> blockchain::Backend<Ch> for Blockchain<Ch> {
+	fn body(&self, id: BlockId<Ch::Block>) -> error::Result<Option<Vec<<Ch::Block as BlockT>::Extrinsic>>> {
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash)
 				.and_then(|b| b.extrinsics().map(|x| x.to_vec()))
 		}))
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
+	fn justification(&self, id: BlockId<Ch::Block>) -> error::Result<Option<<Ch::Consensus as ConsensusT>::Signature>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
 			b.justification().map(|x| x.clone()))
 		))
 	}
 
-	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
+	fn cache(&self) -> Option<&blockchain::Cache<Ch::Block>> {
 		Some(&self.cache)
 	}
 }
 
-impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
+impl<Ch: Chain> light::blockchain::Storage<Ch> for Blockchain<Ch>
 	where
-		Block::Hash: From<[u8; 32]>,
+		<Ch::Block as BlockT>::Hash: From<[u8; 32]>,
 {
 	fn import_header(
 		&self,
 		is_new_best: bool,
-		header: Block::Header,
+		header: <Ch::Block as BlockT>::Header,
 		authorities: Option<Vec<AuthorityId>>
 	) -> error::Result<()> {
 		let hash = header.hash();
@@ -262,31 +269,31 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 		Ok(())
 	}
 
-	fn cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
+	fn cht_root(&self, _cht_size: u64, block: NumberFor<Ch::Block>) -> error::Result<<Ch::Block as BlockT>::Hash> {
 		self.storage.read().cht_roots.get(&block).cloned()
 			.ok_or_else(|| error::ErrorKind::Backend(format!("CHT for block {} not exists", block)).into())
 	}
 
-	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
+	fn cache(&self) -> Option<&blockchain::Cache<Ch::Block>> {
 		Some(&self.cache)
 	}
 }
 
 /// In-memory operation.
-pub struct BlockImportOperation<Block: BlockT, H: Hasher, C: NodeCodec<H>> {
-	pending_block: Option<PendingBlock<Block>>,
+pub struct BlockImportOperation<H: Hasher, C: NodeCodec<H>, Ch: Chain> {
+	pending_block: Option<PendingBlock<Ch>>,
 	pending_authorities: Option<Vec<AuthorityId>>,
 	old_state: InMemory<H, C>,
 	new_state: Option<InMemory<H, C>>,
 	changes_trie_update: Option<MemoryDB<H>>,
 }
 
-impl<Block, H, C> backend::BlockImportOperation<Block, H, C> for BlockImportOperation<Block, H, C>
+impl<H, C, Ch> backend::BlockImportOperation<H, C, Ch> for BlockImportOperation<H, C, Ch>
 where
-	Block: BlockT,
 	H: Hasher,
 	C: NodeCodec<H>,
 	H::Out: HeapSizeOf,
+	Ch: Chain,
 {
 	type State = InMemory<H, C>;
 
@@ -296,9 +303,9 @@ where
 
 	fn set_block_data(
 		&mut self,
-		header: <Block as BlockT>::Header,
-		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
-		justification: Option<Justification<Block::Hash>>,
+		header: <Ch::Block as BlockT>::Header,
+		body: Option<Vec<<Ch::Block as BlockT>::Extrinsic>>,
+		justification: Option<<Ch::Consensus as ConsensusT>::Signature>,
 		is_new_best: bool
 	) -> error::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
@@ -330,27 +337,27 @@ where
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
-pub struct Backend<Block, H, C>
+pub struct Backend<H, C, Ch>
 where
-	Block: BlockT,
 	H: Hasher,
 	C: NodeCodec<H>,
 	H::Out: HeapSizeOf + From<Block::Hash>,
+	Ch: Chain
 {
-	states: RwLock<HashMap<Block::Hash, InMemory<H, C>>>,
+	states: RwLock<HashMap<<Ch::Block as BlockT>::Hash, InMemory<H, C>>>,
 	changes_trie_storage: InMemoryChangesTrieStorage<H>,
-	blockchain: Blockchain<Block>,
+	blockchain: Blockchain<Ch>,
 }
 
-impl<Block, H, C> Backend<Block, H, C>
+impl<H, C, Ch> Backend<H, C, Ch>
 where
-	Block: BlockT,
 	H: Hasher,
 	C: NodeCodec<H>,
 	H::Out: HeapSizeOf + From<Block::Hash>,
+	Ch: Chain
 {
 	/// Create a new instance of in-mem backend.
-	pub fn new() -> Backend<Block, H, C> {
+	pub fn new() -> Backend<H, C, Ch> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
 			changes_trie_storage: InMemoryChangesTrieStorage::new(),
@@ -359,19 +366,19 @@ where
 	}
 }
 
-impl<Block, H, C> backend::Backend<Block, H, C> for Backend<Block, H, C>
+impl<H, C, Ch> backend::Backend<H, C, Ch> for Backend<H, C, Ch>
 where
-	Block: BlockT,
 	H: Hasher,
 	H::Out: HeapSizeOf + From<Block::Hash>,
 	C: NodeCodec<H> + Send + Sync,
+	Ch: Chain
 {
-	type BlockImportOperation = BlockImportOperation<Block, H, C>;
-	type Blockchain = Blockchain<Block>;
+	type BlockImportOperation = BlockImportOperation<H, C, Ch>;
+	type Blockchain = Blockchain<Ch>;
 	type State = InMemory<H, C>;
 	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
 
-	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
+	fn begin_operation(&self, block: BlockId<Ch::Block>) -> error::Result<Self::BlockImportOperation> {
 		let state = match block {
 			BlockId::Hash(ref h) if h.clone() == Default::default() => Self::State::default(),
 			_ => self.state_at(block)?,
@@ -422,34 +429,34 @@ where
 		Some(&self.changes_trie_storage)
 	}
 
-	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State> {
+	fn state_at(&self, block: BlockId<Ch::Block>) -> error::Result<Self::State> {
 		match self.blockchain.id(block).and_then(|id| self.states.read().get(&id).cloned()) {
 			Some(state) => Ok(state),
 			None => Err(error::ErrorKind::UnknownBlock(format!("{}", block)).into()),
 		}
 	}
 
-	fn revert(&self, _n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
+	fn revert(&self, _n: NumberFor<Ch::Block>) -> error::Result<NumberFor<Ch::Block>> {
 		Ok(As::sa(0))
 	}
 }
 
-impl<Block, H, C> backend::LocalBackend<Block, H, C> for Backend<Block, H, C>
+impl<H, C, Ch> backend::LocalBackend<H, C, Ch> for Backend<H, C, Ch>
 where
-	Block: BlockT,
 	H: Hasher,
 	H::Out: HeapSizeOf + From<Block::Hash>,
 	C: NodeCodec<H> + Send + Sync,
+	Ch: Chain
 {}
 
-impl<Block: BlockT> Cache<Block> {
-	fn insert(&self, at: Block::Hash, authorities: Option<Vec<AuthorityId>>) {
+impl<Ch: Chain> Cache<Ch> {
+	fn insert(&self, at: <Ch::Block as BlockT>::Hash, authorities: Option<Vec<AuthorityId>>) {
 		self.authorities_at.write().insert(at, authorities);
 	}
 }
 
-impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
-	fn authorities_at(&self, block: BlockId<Block>) -> Option<Vec<AuthorityId>> {
+impl<Ch: Chain> blockchain::Cache<Ch::Block> for Cache<Ch> {
+	fn authorities_at(&self, block: BlockId<Ch::Block>) -> Option<Vec<AuthorityId>> {
 		let hash = match block {
 			BlockId::Hash(hash) => hash,
 			BlockId::Number(number) => self.storage.read().hashes.get(&number).cloned()?,
@@ -460,9 +467,9 @@ impl<Block: BlockT> blockchain::Cache<Block> for Cache<Block> {
 }
 
 /// Insert authorities entry into in-memory blockchain cache. Extracted as a separate function to use it in tests.
-pub fn cache_authorities_at<Block: BlockT>(
-	blockchain: &Blockchain<Block>,
-	at: Block::Hash,
+pub fn cache_authorities_at<Ch: Chain>(
+	blockchain: &Blockchain<Ch>,
+	at: <Ch::Block as BlockT>::Hash,
 	authorities: Option<Vec<AuthorityId>>
 ) {
 	blockchain.cache.insert(at, authorities);

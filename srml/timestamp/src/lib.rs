@@ -50,7 +50,7 @@ extern crate serde_derive;
 extern crate substrate_primitives;
 extern crate sr_primitives as runtime_primitives;
 extern crate srml_system as system;
-extern crate srml_consensus as consensus;
+extern crate srml_consensus_rhd as consensus;
 extern crate parity_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};

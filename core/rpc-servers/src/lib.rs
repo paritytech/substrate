@@ -33,7 +33,8 @@ extern crate sr_primitives;
 extern crate log;
 
 use std::io;
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::traits::{Block as BlockT, NumberFor, generic::SignedBlock};
+use serde::{Serialize, de::DeserializeOwned};
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
@@ -41,7 +42,7 @@ pub type HttpServer = http::Server;
 pub type WsServer = ws::Server;
 
 /// Construct rpc `IoHandler`
-pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
+pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y, M>(
 	state: S,
 	chain: C,
 	author: A,
@@ -51,9 +52,17 @@ pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
 	ExHash: Send + Sync + 'static + sr_primitives::Serialize + sr_primitives::DeserializeOwned,
 	PendingExtrinsics: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic, Metadata=Metadata>,
+	C: apis::chain::ChainApi<
+		Block::Hash,
+		Block::Header,
+		NumberFor<Block>,
+		Block::Extrinsic,
+		SignedBlock<Block, M>,
+		Metadata=Metadata
+	>,
 	A: apis::author::AuthorApi<ExHash, Block::Extrinsic, PendingExtrinsics, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
+	M: Send + Sync + Serialize + DeserializeOwned + 'static,
 {
 	let mut io = pubsub::PubSubHandler::default();
 	io.extend_with(state.to_delegate());

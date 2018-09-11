@@ -19,7 +19,7 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-extern crate substrate_bft as bft;
+extern crate substrate_consensus_rhd as bft;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate sr_io as runtime_io;

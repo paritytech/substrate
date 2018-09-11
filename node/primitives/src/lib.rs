@@ -71,13 +71,18 @@ pub type Signature = runtime_primitives::Ed25519Signature;
 
 /// A timestamp: seconds since the unix epoch.
 pub type Timestamp = u64;
-
 /// Header type.
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, generic::DigestItem<Hash, SessionKey>>;
 /// Block type.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// Block ID.
 pub type BlockId = generic::BlockId<Block>;
+
+// /// Rhododendron driven Justifications
+// pub type Justification = rhd::Justification<Block>;
+
+// /// Block signed with Justification
+// pub type SignedBlock = generic::SignedBlock<Block, rhd::JustificationNetworkMessage<Hash>>;
 
 /// Opaque, encoded, unchecked extrinsic.
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]

@@ -14,7 +14,7 @@ sr-io = { path = "../../core/sr-io", default_features = false }
 sr-primitives = { path = "../../core/sr-primitives", default_features = false }
 srml-support = { path = "../support", default_features = false }
 srml-system = { path = "../system", default_features = false }
-srml-consensus = { path = "../consensus", default_features = false }
+srml-consensus-rhd = { path = "../consensus/rhd", default_features = false }
 
 [dev-dependencies]
 sr-io = { path = "../../core/sr-io", default_features = true }
@@ -26,7 +26,7 @@ std = [
 	"sr-io/std",
 	"srml-support/std",
 	"sr-primitives/std",
-	"srml-consensus/std",
+	"srml-consensus-rhd/std",
 	"serde/std",
 	"serde_derive",
 	"parity-codec/std",
