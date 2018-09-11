@@ -1,0 +1,207 @@
+// Copyright 2017 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+use super::*;
+use jsonrpc_macros::pubsub;
+use client::BlockOrigin;
+use test_client::{self, TestClient};
+use test_client::runtime::{Block, Header};
+
+#[test]
+fn should_return_header() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+
+	let client = Chain {
+		client: Arc::new(test_client::new()),
+		subscriptions: Subscriptions::new(remote),
+	};
+
+	assert_matches!(
+		client.header(Some(client.client.genesis_hash()).into()),
+		Ok(Some(ref x)) if x == &Header {
+			parent_hash: 0.into(),
+			number: 0,
+			state_root: x.state_root.clone(),
+			extrinsics_root: "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0".into(),
+			digest: Default::default(),
+		}
+	);
+
+	assert_matches!(
+		client.header(None.into()),
+		Ok(Some(ref x)) if x == &Header {
+			parent_hash: 0.into(),
+			number: 0,
+			state_root: x.state_root.clone(),
+			extrinsics_root: "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0".into(),
+			digest: Default::default(),
+		}
+	);
+
+	assert_matches!(
+		client.header(Some(5.into()).into()),
+		Ok(None)
+	);
+}
+
+#[test]
+fn should_return_a_block() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+
+	let api = Chain {
+		client: Arc::new(test_client::new()),
+		subscriptions: Subscriptions::new(remote),
+	};
+
+	let block = api.client.new_block().unwrap().bake().unwrap();
+	let block_hash = block.hash();
+	api.client.justify_and_import(BlockOrigin::Own, block).unwrap();
+
+
+	// Genesis block is not justified, so we can't query it?
+	assert_matches!(
+		api.block(Some(api.client.genesis_hash()).into()),
+		Ok(None)
+	);
+
+	assert_matches!(
+		api.block(Some(block_hash).into()),
+		Ok(Some(ref x)) if x.block == Block {
+			header: Header {
+				parent_hash: api.client.genesis_hash(),
+				number: 1,
+				state_root: x.block.header.state_root.clone(),
+				extrinsics_root: "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0".into(),
+				digest: Default::default(),
+			},
+			extrinsics: vec![],
+		}
+	);
+
+	assert_matches!(
+		api.block(None.into()),
+		Ok(Some(ref x)) if x.block == Block {
+			header: Header {
+				parent_hash: api.client.genesis_hash(),
+				number: 1,
+				state_root: x.block.header.state_root.clone(),
+				extrinsics_root: "45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0".into(),
+				digest: Default::default(),
+			},
+			extrinsics: vec![],
+		}
+	);
+
+	assert_matches!(
+		api.block(Some(5.into()).into()),
+		Ok(None)
+	);
+}
+
+#[test]
+fn should_return_block_hash() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+
+	let client = Chain {
+		client: Arc::new(test_client::new()),
+		subscriptions: Subscriptions::new(remote),
+	};
+
+	assert_matches!(
+		client.block_hash(None.into()),
+		Ok(Some(ref x)) if x == &client.client.genesis_hash()
+	);
+
+
+	assert_matches!(
+		client.block_hash(Some(0u64).into()),
+		Ok(Some(ref x)) if x == &client.client.genesis_hash()
+	);
+
+	assert_matches!(
+		client.block_hash(Some(1u64).into()),
+		Ok(None)
+	);
+
+	let block = client.client.new_block().unwrap().bake().unwrap();
+	client.client.justify_and_import(BlockOrigin::Own, block.clone()).unwrap();
+
+	assert_matches!(
+		client.block_hash(Some(0u64).into()),
+		Ok(Some(ref x)) if x == &client.client.genesis_hash()
+	);
+	assert_matches!(
+		client.block_hash(Some(1u64).into()),
+		Ok(Some(ref x)) if x == &block.hash()
+	);
+
+}
+
+#[test]
+fn should_notify_about_latest_block() {
+	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+	let (subscriber, id, transport) = pubsub::Subscriber::new_test("test");
+
+	{
+		let api = Chain {
+			client: Arc::new(test_client::new()),
+			subscriptions: Subscriptions::new(remote),
+		};
+
+		api.subscribe_new_head(Default::default(), subscriber);
+
+		// assert id assigned
+		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(0))));
+
+		let builder = api.client.new_block().unwrap();
+		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+	}
+
+	// assert initial head sent.
+	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	assert!(notification.is_some());
+	// assert notification sent to transport
+	let (notification, next) = core.block_on(next.into_future()).unwrap();
+	assert!(notification.is_some());
+	// no more notifications on this channel
+	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+}
+
+#[test]
+fn should_return_runtime_version() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+
+	let client = Chain {
+		client: Arc::new(test_client::new()),
+		subscriptions: Subscriptions::new(remote),
+	};
+
+	assert_matches!(
+		client.runtime_version(None.into()),
+		Ok(ref ver) if ver == &RuntimeVersion {
+			spec_name: "test".into(),
+			impl_name: "parity-test".into(),
+			authoring_version: 1,
+			spec_version: 1,
+			impl_version: 1,
+		}
+	);
+}

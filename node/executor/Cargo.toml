@@ -1,0 +1,28 @@
+[package]
+name = "node-executor"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate node implementation in Rust."
+
+[dependencies]
+hex-literal = "0.1"
+triehash = "0.2"
+substrate-codec = { path = "../../core/codec" }
+substrate-runtime-io = { path = "../../core/runtime-io" }
+substrate-runtime-support = { path = "../../runtime/support" }
+substrate-state-machine = { path = "../../core/state-machine" }
+substrate-executor = { path = "../../core/executor" }
+substrate-primitives = { path = "../../core/primitives" }
+node-primitives = { path = "../primitives" }
+node-runtime = { path = "../runtime" }
+
+[dev-dependencies]
+substrate-keyring = { path = "../../core/keyring" }
+substrate-runtime-primitives = { path = "../../runtime/primitives" }
+substrate-runtime-balances = { path = "../../runtime/balances" }
+substrate-runtime-session = { path = "../../runtime/session" }
+substrate-runtime-staking = { path = "../../runtime/staking" }
+substrate-runtime-system = { path = "../../runtime/system" }
+substrate-runtime-consensus = { path = "../../runtime/consensus" }
+substrate-runtime-timestamp = { path = "../../runtime/timestamp" }
+substrate-runtime-treasury = { path = "../../runtime/treasury" }

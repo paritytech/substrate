@@ -1,0 +1,61 @@
+[package]
+name = "node-runtime"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+rustc-hex = "1.0"
+hex-literal = "0.1.0"
+log = { version = "0.3", optional = true }
+serde = { version = "1.0", default_features = false }
+serde_derive = { version = "1.0", optional = true }
+safe-mix = { version = "1.0", default_features = false}
+substrate-codec = { path = "../../core/codec" }
+substrate-codec-derive = { path = "../../core/codec/derive" }
+substrate-runtime-std = { path = "../../core/runtime-std" }
+substrate-runtime-io = { path = "../../core/runtime-io" }
+substrate-primitives = { path = "../../core/primitives" }
+substrate-keyring = { path = "../../core/keyring" }
+substrate-runtime-support = { path = "../../runtime/support" }
+substrate-runtime-balances = { path = "../../runtime/balances" }
+substrate-runtime-consensus = { path = "../../runtime/consensus" }
+substrate-runtime-contract = { path = "../../runtime/contract" }
+substrate-runtime-council = { path = "../../runtime/council" }
+substrate-runtime-democracy = { path = "../../runtime/democracy" }
+substrate-runtime-executive = { path = "../../runtime/executive" }
+substrate-runtime-primitives = { path = "../../runtime/primitives" }
+substrate-runtime-session = { path = "../../runtime/session" }
+substrate-runtime-staking = { path = "../../runtime/staking" }
+substrate-runtime-system = { path = "../../runtime/system" }
+substrate-runtime-timestamp = { path = "../../runtime/timestamp" }
+substrate-runtime-treasury = { path = "../../runtime/treasury" }
+substrate-runtime-version = { path = "../../runtime/version" }
+node-primitives = { path = "../primitives" }
+
+[features]
+default = ["std"]
+std = [
+	"substrate-codec/std",
+	"substrate-primitives/std",
+	"substrate-runtime-std/std",
+	"substrate-runtime-io/std",
+	"substrate-runtime-support/std",
+	"substrate-runtime-balances/std",
+	"substrate-runtime-consensus/std",
+	"substrate-runtime-contract/std",
+	"substrate-runtime-council/std",
+	"substrate-runtime-democracy/std",
+	"substrate-runtime-executive/std",
+	"substrate-runtime-primitives/std",
+	"substrate-runtime-session/std",
+	"substrate-runtime-staking/std",
+	"substrate-runtime-system/std",
+	"substrate-runtime-timestamp/std",
+	"substrate-runtime-treasury/std",
+	"substrate-runtime-version/std",
+	"node-primitives/std",
+	"serde_derive",
+	"serde/std",
+	"log",
+	"safe-mix/std"
+]
