@@ -1,12 +1,24 @@
-# pwasm-libc
+
+= Pwasm-libc
 
 Parity WASM contracts standard library libc bindings
 
-[Documentation](https://paritytech.github.io/pwasm-std/pwasm_libc/)
+https://paritytech.github.io/pwasm-std/pwasm_libc/[Documentation]
 
-# License
+== License
 
 `pwasm-libc` is primarily distributed under the terms of both the MIT
 license and the Apache License (Version 2.0), at your choice.
 
 See LICENSE-APACHE, and LICENSE-MIT for details.
+
+.Summary
+[source, toml]
+----
+include::Cargo.toml[lines=2..5]
+----
+
+.Description
+----
+include::src/lib.rs[tag=description]
+----
