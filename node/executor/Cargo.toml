@@ -18,7 +18,7 @@ node-runtime = { path = "../runtime" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../core/keyring" }
-substrate-runtime-primitives = { path = "../../core/runtime/primitives" }
+substrate-runtime-primitives = { path = "../../core/runtime-primitives" }
 substrate-runtime-balances = { path = "../../core/runtime/balances" }
 substrate-runtime-session = { path = "../../core/runtime/session" }
 substrate-runtime-staking = { path = "../../core/runtime/staking" }

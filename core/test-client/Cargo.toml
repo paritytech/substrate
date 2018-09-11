@@ -13,6 +13,6 @@ substrate-keyring = { path = "../../core/keyring" }
 substrate-primitives = { path = "../primitives" }
 substrate-runtime-support = { path = "../runtime/support" }
 substrate-test-runtime = { path = "../test-runtime" }
-substrate-runtime-primitives = { path = "../runtime/primitives" }
+substrate-runtime-primitives = { path = "../runtime-primitives" }
 hashdb = "0.2.1"
 

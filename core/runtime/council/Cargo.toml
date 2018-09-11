@@ -16,7 +16,7 @@ substrate-primitives = { path = "../../primitives", default_features = false }
 substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-io = { path = "../../runtime-io", default_features = false }
 substrate-runtime-support = { path = "../../runtime/support", default_features = false }
-substrate-runtime-primitives = { path = "../primitives", default_features = false }
+substrate-runtime-primitives = { path = "../../runtime-primitives", default_features = false }
 substrate-runtime-consensus = { path = "../consensus", default_features = false }
 substrate-runtime-balances = { path = "../balances", default_features = false }
 substrate-runtime-democracy = { path = "../democracy", default_features = false }

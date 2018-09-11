@@ -21,7 +21,7 @@ substrate-runtime-contract = { path = "../../../core/runtime/contract", default-
 substrate-runtime-council = { path = "../../../core/runtime/council", default-features = false }
 substrate-runtime-democracy = { path = "../../../core/runtime/democracy", default-features = false }
 substrate-runtime-executive = { path = "../../../core/runtime/executive", default-features = false }
-substrate-runtime-primitives = { path = "../../../core/runtime/primitives", default-features = false }
+substrate-runtime-primitives = { path = "../../../core/runtime-primitives", default-features = false }
 substrate-runtime-session = { path = "../../../core/runtime/session", default-features = false }
 substrate-runtime-staking = { path = "../../../core/runtime/staking", default-features = false }
 substrate-runtime-system = { path = "../../../core/runtime/system", default-features = false }

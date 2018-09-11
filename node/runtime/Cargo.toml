@@ -23,7 +23,7 @@ substrate-runtime-contract = { path = "../../core/runtime/contract" }
 substrate-runtime-council = { path = "../../core/runtime/council" }
 substrate-runtime-democracy = { path = "../../core/runtime/democracy" }
 substrate-runtime-executive = { path = "../../core/runtime/executive" }
-substrate-runtime-primitives = { path = "../../core/runtime/primitives" }
+substrate-runtime-primitives = { path = "../../core/runtime-primitives" }
 substrate-runtime-session = { path = "../../core/runtime/session" }
 substrate-runtime-staking = { path = "../../core/runtime/staking" }
 substrate-runtime-system = { path = "../../core/runtime/system" }

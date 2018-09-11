@@ -10,7 +10,7 @@ parity-codec = { path = "../../codec", default_features = false }
 parity-codec-derive = { path = "../../codec/derive", default_features = false }
 substrate-primitives = { path = "../../core/primitives", default_features = false }
 substrate-runtime-std = { path = "../../core/runtime-std", default_features = false }
-substrate-runtime-primitives = { path = "../../core/runtime/primitives", default_features = false }
+substrate-runtime-primitives = { path = "../../core/runtime-primitives", default_features = false }
 
 [dev-dependencies]
 substrate-serializer = { path = "../../core/serializer" }

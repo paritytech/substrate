@@ -27,7 +27,7 @@ members = [
 	"core/runtime/democracy",
 	"core/runtime/example",
 	"core/runtime/executive",
-	"core/runtime/primitives",
+	"core/runtime-primitives",
 	"core/runtime/session",
 	"core/runtime/staking",
 	"core/runtime/system",

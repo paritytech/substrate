@@ -20,7 +20,7 @@ parity-codec = { path = "../../codec" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-runtime-support = { path = "../../core/runtime/support" }
 substrate-client = { path = "../../core/client" }
-substrate-runtime-primitives = { path = "../../core/runtime/primitives" }
+substrate-runtime-primitives = { path = "../../core/runtime-primitives" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../core/keyring" }

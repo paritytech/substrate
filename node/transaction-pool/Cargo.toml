@@ -15,4 +15,4 @@ parity-codec = { path = "../../codec" }
 substrate-keyring = { path = "../../core/keyring" }
 substrate-extrinsic-pool = { path = "../../core/extrinsic-pool" }
 substrate-primitives = { path = "../../core/primitives" }
-substrate-runtime-primitives = { path = "../../core/runtime/primitives" }
+substrate-runtime-primitives = { path = "../../core/runtime-primitives" }

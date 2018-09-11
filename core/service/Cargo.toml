@@ -18,7 +18,7 @@ serde_derive = "1.0"
 target_info = "0.1"
 substrate-keystore = { path = "../../core/keystore" }
 substrate-runtime-io = { path = "../../core/runtime-io" }
-substrate-runtime-primitives = { path = "../../core/runtime/primitives" }
+substrate-runtime-primitives = { path = "../../core/runtime-primitives" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }

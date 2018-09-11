@@ -11,7 +11,7 @@ futures = "0.1"
 log = "0.3"
 parking_lot = "0.4"
 transaction-pool = "1.13.2"
-substrate-runtime-primitives = { path = "../../core/runtime/primitives" }
+substrate-runtime-primitives = { path = "../../core/runtime-primitives" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../../core/test-client" }
