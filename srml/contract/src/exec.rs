@@ -107,7 +107,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		caller: T::AccountId,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		ctor: &[u8],
+		init_code: &[u8],
 		data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
 		if self.depth == <MaxDepth<T>>::get() as usize {
@@ -119,7 +119,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base create fee");
 		}
 
-		let dest = T::DetermineContractAddress::contract_address_for(ctor, data, &self.self_account);
+		let dest = T::DetermineContractAddress::contract_address_for(init_code, data, &self.self_account);
 		if <CodeOf<T>>::exists(&dest) {
 			// TODO: Is it enough?
 			return Err("contract already exists");
@@ -147,7 +147,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 
 			let mut contract_code = Vec::new();
 			vm::execute(
-				ctor,
+				init_code,
 				data,
 				&mut contract_code,
 				&mut CallContext {

@@ -163,7 +163,7 @@ decl_module! {
 			origin,
 			value: T::Balance,
 			gas_limit: T::Gas,
-			ctor: Vec<u8>,
+			init_code: Vec<u8>,
 			data: Vec<u8>
 		) -> Result;
 	}

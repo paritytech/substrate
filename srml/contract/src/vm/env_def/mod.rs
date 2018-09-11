@@ -176,8 +176,30 @@ define_env!(init_env, <E: Ext>,
 		}
 	},
 
-	// TODO: doc
-	ext_call(ctx, callee_ptr: u32, callee_len: u32, gas: u64, value_ptr: u32, value_len: u32, input_data_ptr: u32, input_data_len: u32) -> u32 => {
+	// Make a call to another contract.
+	//
+	// Returns 0 on the successful execution and puts the result data returned
+	// by the callee into the scratch buffer. Otherwise, returns 1 and doesn't modify the return buffer.
+	//
+	// - callee_ptr: a pointer to the address of the callee contract.
+	//   Should be decodable as an `T::AccountId`. Traps otherwise.
+	// - callee_len: length of the address buffer.
+	// - gas: how much gas to devote to the execution.
+	// - value_ptr: a pointer to the buffer with value, how much value to send.
+	//   Should be decodable as a `T::Balance`. Traps otherwise.
+	// - value_len: length of the value buffer.
+	// - input_data_ptr: a pointer to a buffer to be used as input data to the callee.
+	// - input_data_len: length of the input data buffer.
+	ext_call(
+		ctx,
+		callee_ptr: u32,
+		callee_len: u32,
+		gas: u64,
+		value_ptr: u32,
+		value_len: u32,
+		input_data_ptr: u32,
+		input_data_len: u32
+	) -> u32 => {
 		let mut callee = Vec::new();
 		callee.resize(callee_len as usize, 0);
 		ctx.memory().get(callee_ptr, &mut callee)?;
@@ -219,10 +241,27 @@ define_env!(init_env, <E: Ext>,
 		}
 	},
 
-	// TODO: doc
+	// Create a contract with code returned by the specified initializer code.
+	//
+	// This function creates an account and executes initializer code. After the execution,
+	// the returned buffer is saved as the code of the created account.
+	//
+	// Returns 0 on the successful contract creation and puts the address
+	// of the created contract into the scratch buffer.
+	// Otherwise, returns 1 and leaves the scratch buffer unmodified.
+	//
+	// - init_code_ptr: a pointer to the buffer that contains the initializer code.
+	// - init_code_len: length of the initializer code buffer.
+	// - gas: how much gas to devote to the execution of the initializer code.
+	// - value_ptr: a pointer to the buffer with value, how much value to send.
+	//   Should be decodable as a `T::Balance`. Traps otherwise.
+	// - value_len: length of the value buffer.
+	// - input_data_ptr: a pointer to a buffer to be used as input data to the initializer code.
+	// - input_data_len: length of the input data buffer.
 	ext_create(
-		ctx, code_ptr: u32,
-		code_len: u32,
+		ctx,
+		init_code_ptr: u32,
+		init_code_len: u32,
 		gas: u64,
 		value_ptr: u32,
 		value_len: u32,
@@ -235,9 +274,9 @@ define_env!(init_env, <E: Ext>,
 		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
 			.ok_or_else(|| sandbox::HostError)?;
 
-		let mut code = Vec::new();
-		code.resize(code_len as usize, 0u8);
-		ctx.memory().get(code_ptr, &mut code)?;
+		let mut init_code = Vec::new();
+		init_code.resize(init_code_len as usize, 0u8);
+		ctx.memory().get(init_code_ptr, &mut init_code)?;
 
 		let mut input_data = Vec::new();
 		input_data.resize(input_data_len as usize, 0u8);
@@ -251,7 +290,7 @@ define_env!(init_env, <E: Ext>,
 		let ext = &mut ctx.ext;
 		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
 			match nested_meter {
-				Some(nested_meter) => ext.create(&code, value, nested_meter, &input_data),
+				Some(nested_meter) => ext.create(&init_code, value, nested_meter, &input_data),
 				// there is not enough gas to allocate for the nested call.
 				None => Err(()),
 			}

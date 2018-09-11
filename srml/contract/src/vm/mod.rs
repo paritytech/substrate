@@ -116,7 +116,6 @@ pub enum Error {
 /// In this runtime traps used not only for signaling about errors but also
 /// to just terminate quickly in some cases.
 enum SpecialTrap {
-	// TODO: Can we pass wrapped memory instance instead of copying?
 	/// Signals that trap was generated in response to call `ext_return` host function.
 	Return,
 }
