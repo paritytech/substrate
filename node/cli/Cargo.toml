@@ -8,5 +8,5 @@ description = "Substrate node implementation in Rust."
 log = "0.3"
 tokio = "0.1.7"
 exit-future = "0.1"
-substrate-cli = { path = "../../substrate/cli" }
+substrate-cli = { path = "../../core/cli" }
 node-service = { path = "../service" }

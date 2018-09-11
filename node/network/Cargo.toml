@@ -8,9 +8,9 @@ description = "Substrate node networking protocol"
 node-api = { path = "../api" }
 node-consensus = { path = "../consensus" }
 node-primitives = { path = "../primitives" }
-substrate-bft = { path = "../../substrate/bft" }
-substrate-network = { path = "../../substrate/network" }
-substrate-primitives = { path = "../../substrate/primitives" }
+substrate-bft = { path = "../../core/bft" }
+substrate-network = { path = "../../core/network" }
+substrate-primitives = { path = "../../core/primitives" }
 futures = "0.1"
 tokio = "0.1.7"
 log = "0.4"

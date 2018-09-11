@@ -630,9 +630,9 @@ fn listener_handle<'a, C>(
 			sender.send(
 				IdentifyInfo {
 					public_key: shared.network_state.local_public_key().clone(),
-					protocol_version: concat!("substrate/",
+					protocol_version: concat!("core/",
 						env!("CARGO_PKG_VERSION")).to_owned(),		// TODO: ?
-					agent_version: concat!("substrate/",
+					agent_version: concat!("core/",
 						env!("CARGO_PKG_VERSION")).to_owned(),
 					listen_addrs: shared.listened_addrs.read().clone(),
 					protocols: Vec::new(),		// TODO: protocols_to_report,
@@ -771,7 +771,7 @@ fn build_kademlia_response(
 }
 
 /// Handles a newly-opened connection to a remote with a custom protocol
-/// (eg. `/substrate/dot/0`).
+/// (eg. `/core/dot/0`).
 /// Returns a future that corresponds to when the handling is finished.
 fn handle_custom_connection(
 	shared: Arc<Shared>,

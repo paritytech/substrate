@@ -9,7 +9,7 @@ substrate-bft = { path = "../bft" }
 substrate-client = { path = "../client" }
 substrate-codec = { path = "../codec" }
 substrate-executor = { path = "../executor" }
-substrate-keyring = { path = "../../substrate/keyring" }
+substrate-keyring = { path = "../../core/keyring" }
 substrate-primitives = { path = "../primitives" }
 substrate-runtime-support = { path = "../runtime-support" }
 substrate-test-runtime = { path = "../test-runtime" }

@@ -72,7 +72,7 @@ impl<T> RegisteredProtocol<T> {
 	/// passed inside the `RegisteredProtocolOutput`.
 	pub fn new(custom_data: T, protocol: ProtocolId, versions: &[(u8, u8)])
 		-> Self {
-		let mut proto_name = Bytes::from_static(b"/substrate/");
+		let mut proto_name = Bytes::from_static(b"/core/");
 		proto_name.extend_from_slice(&protocol);
 		proto_name.extend_from_slice(b"/");
 

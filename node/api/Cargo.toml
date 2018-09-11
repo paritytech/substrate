@@ -6,8 +6,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 node-runtime = { path = "../runtime" }
 node-primitives = { path = "../primitives" }
-substrate-client = { path = "../../substrate/client" }
-substrate-primitives = { path = "../../substrate/primitives" }
+substrate-client = { path = "../../core/client" }
+substrate-primitives = { path = "../../core/primitives" }
 
 [dev-dependencies]
-substrate-keyring = { path = "../../substrate/keyring" }
+substrate-keyring = { path = "../../core/keyring" }

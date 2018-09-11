@@ -18,9 +18,9 @@ node-executor = { path = "../executor" }
 node-consensus = { path = "../consensus" }
 node-network = { path = "../network" }
 node-transaction-pool = { path = "../transaction-pool" }
-substrate-runtime-io = { path = "../../substrate/runtime-io" }
-substrate-primitives = { path = "../../substrate/primitives" }
-substrate-network = { path = "../../substrate/network" }
-substrate-client = { path = "../../substrate/client" }
-substrate-service = { path = "../../substrate/service" }
-substrate-telemetry = { path = "../../substrate/telemetry" }
+substrate-runtime-io = { path = "../../core/runtime-io" }
+substrate-primitives = { path = "../../core/primitives" }
+substrate-network = { path = "../../core/network" }
+substrate-client = { path = "../../core/client" }
+substrate-service = { path = "../../core/service" }
+substrate-telemetry = { path = "../../core/telemetry" }
