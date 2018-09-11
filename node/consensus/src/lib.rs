@@ -25,7 +25,6 @@ extern crate node_primitives;
 extern crate substrate_bft as bft;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
-extern crate substrate_runtime_support as runtime_support;
 extern crate substrate_runtime_primitives as runtime_primitives;
 extern crate substrate_client as client;
 
