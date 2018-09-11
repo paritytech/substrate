@@ -64,13 +64,75 @@ macro_rules! decl_module {
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty {$(
+		for enum $call_type:ident where origin: $origin_type:ty {
+			$($t:tt)*
+		}
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type
+			[]
+			$($t)*
+		);
+	};
+
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		fn $fn_name:ident(origin $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type
+			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(origin $( , $param_name : $param )* ) -> $result; ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		fn $fn_name:ident($( $param_name:ident : $param:ty),* ) -> $result:ty ;
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type
+			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(root $( , $param_name : $param )* ) -> $result; ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty
+		[ $($t:tt)* ]
+	) => {
+		decl_module!(@imp
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type {
+				$($t)*
+			}
+		);
+	};
+
+	(@imp
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty {
+		$(
 			$(#[doc = $doc_attr:tt])*
-			fn $fn_name:ident(origin
-				$(
-					, $param_name:ident : $param:ty
-				)*
-			) -> $result:ty;
+			fn $fn_name:ident($from:ident $( , $param_name:ident : $param:ty)*) -> $result:ty;
 		)*}
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
