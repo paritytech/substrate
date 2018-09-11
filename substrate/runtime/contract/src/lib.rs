@@ -103,8 +103,9 @@ use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
 use rstd::prelude::*;
+use rstd::marker::PhantomData;
 use codec::Codec;
-use runtime_primitives::traits::{As, SimpleArithmetic, OnFinalise};
+use runtime_primitives::traits::{Hash, As, SimpleArithmetic, OnFinalise};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
 use system::ensure_signed;
@@ -119,6 +120,31 @@ pub trait Trait: balances::Trait {
 
 pub trait ContractAddressFor<AccountId: Sized> {
 	fn contract_address_for(code: &[u8], data: &[u8], origin: &AccountId) -> AccountId;
+}
+
+/// Simple contract address determintator.
+///
+/// Address calculated from the code (of the constructor), input data to the constructor
+/// and account id which requested the account creation.
+///
+/// Formula: `blake2_256(blake2_256(code) + blake2_256(data) + origin)`
+pub struct SimpleAddressDeterminator<T: Trait>(PhantomData<T>);
+
+impl<T: Trait> ContractAddressFor<T::AccountId> for SimpleAddressDeterminator<T>
+where
+	T::AccountId: From<T::Hash> + AsRef<[u8]>
+{
+	fn contract_address_for(code: &[u8], data: &[u8], origin: &T::AccountId) -> T::AccountId {
+		let code_hash = T::Hashing::hash(code);
+		let data_hash = T::Hashing::hash(data);
+
+		let mut buf = Vec::new();
+		buf.extend_from_slice(code_hash.as_ref());
+		buf.extend_from_slice(data_hash.as_ref());
+		buf.extend_from_slice(origin.as_ref());
+
+		T::Hashing::hash(&buf[..]).into()
+	}
 }
 
 decl_module! {
