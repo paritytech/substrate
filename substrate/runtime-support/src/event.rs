@@ -24,7 +24,7 @@ macro_rules! impl_event {
 			for $module:ident<$trait_instance:ident: $trait_name:ident> {
 			$(
 				$(#[doc = $doc_attr:tt])*
-				$event:ident( $( $param:ident ),* ),
+				$event:ident( $( $param:path ),* ),
 			)*
 		}
 	) => {
@@ -103,7 +103,7 @@ macro_rules! impl_event {
 macro_rules! __impl_event_json_metadata {
 	(
 		$prefix_str:expr;
-		$event:ident( $first_param:ident $(, $param:ident )* );
+		$event:ident( $first_param:path $(, $param:path )* );
 		$event_doc:expr;
 		$( $rest:tt )*
 	) => {
