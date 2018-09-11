@@ -17,8 +17,10 @@
 #![warn(unused_extern_crates)]
 #![warn(missing_docs)]
 
+// tag::description[]
 //! Substrate-specific P2P networking: synchronizing blocks, propagating BFT messages.
 //! Allows attachment of an optional subprotocol for chain-specific requests.
+// end::description[]
 
 extern crate ethcore_io as core_io;
 extern crate linked_hash_map;

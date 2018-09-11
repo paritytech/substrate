@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Safe global references to stack variables.
 //!
 //! Set up a global reference with environmental! macro giving it a name and type.
@@ -39,6 +40,7 @@
 //!   stuff();	// safe! doesn't do anything.
 //! }
 //! ```
+// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(const_fn))]
