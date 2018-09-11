@@ -18,6 +18,7 @@
 //! Keystore (and session key management) for ed25519 based chains like Polkadot.
 // end::description[]
 
+extern crate substrate_primitives;
 extern crate parity_crypto as crypto;
 extern crate subtle;
 extern crate ed25519;
@@ -40,7 +41,7 @@ use std::path::PathBuf;
 use std::fs::{self, File};
 use std::io::{self, Write};
 
-use crypto::Keccak256;
+use substrate_primitives::hashing::blake2_256;
 use ed25519::{Pair, Public, PKCS_LEN};
 
 pub use crypto::KEY_ITERATIONS;
@@ -96,8 +97,8 @@ impl EncryptedKey {
 		crypto::aes::encrypt_128_ctr(&derived_left_bits, &iv, plain, &mut *ciphertext)
 			.expect("input lengths of key and iv are both 16; qed");
 
-		// KECCAK(DK[16..31] ++ <ciphertext>), where DK[16..31] - derived_right_bits
-		let mac = crypto::derive_mac(&derived_right_bits, &*ciphertext).keccak256();
+		// Blake2_256(DK[16..31] ++ <ciphertext>), where DK[16..31] - derived_right_bits
+		let mac = blake2_256(&crypto::derive_mac(&derived_right_bits, &*ciphertext));
 
 		EncryptedKey {
 			salt,
@@ -112,7 +113,7 @@ impl EncryptedKey {
 		let (derived_left_bits, derived_right_bits) =
 			crypto::derive_key_iterations(password.as_bytes(), &self.salt, self.iterations);
 
-		let mac = crypto::derive_mac(&derived_right_bits, &self.ciphertext).keccak256();
+		let mac = blake2_256(&crypto::derive_mac(&derived_right_bits, &self.ciphertext));
 
 		if subtle::slices_equal(&mac[..], &self.mac[..]) != 1 {
 			return Err(ErrorKind::InvalidPassword.into());

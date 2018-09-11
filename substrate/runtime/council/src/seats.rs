@@ -628,7 +628,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities<KeccakHasher> {
+	fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = new_test_ext(false);
 		with_externalities(&mut t, || {
 			<Candidates<Test>>::put(vec![0, 0, 1]);

@@ -55,7 +55,7 @@ use hashdb::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
-use primitives::{H256, AuthorityId, KeccakHasher, RlpCodec};
+use primitives::{H256, AuthorityId, Blake2Hasher, RlpCodec};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, NumberFor, Zero};
@@ -71,7 +71,7 @@ pub use state_db::PruningMode;
 const FINALIZATION_WINDOW: u64 = 32;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend<KeccakHasher, RlpCodec>;
+pub type DbState = state_machine::TrieBackend<Blake2Hasher, RlpCodec>;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -92,7 +92,7 @@ pub fn new_client<E, S, Block>(
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
-		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
+		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
@@ -234,8 +234,8 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
 }
 
-impl<Block> client::backend::BlockImportOperation<Block, KeccakHasher, RlpCodec>
-for BlockImportOperation<Block, KeccakHasher>
+impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher, RlpCodec>
+for BlockImportOperation<Block, Blake2Hasher>
 where Block: BlockT,
 {
 	type State = DbState;
@@ -259,7 +259,7 @@ where Block: BlockT,
 		// currently authorities are not cached on full nodes
 	}
 
-	fn update_storage(&mut self, update: MemoryDB<KeccakHasher>) -> Result<(), client::error::Error> {
+	fn update_storage(&mut self, update: MemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
 		self.updates = update;
 		Ok(())
 	}
@@ -277,7 +277,7 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, H256>,
 }
 
-impl<Block: BlockT> state_machine::Storage<KeccakHasher> for StorageDb<Block> {
+impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
 		self.state_db.get(&key.0.into(), self).map(|r| r.map(|v| DBValue::from_slice(&v)))
 			.map_err(|e| format!("Database backend error: {:?}", e))
@@ -351,8 +351,8 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<Block> where Block: BlockT {
-	type BlockImportOperation = BlockImportOperation<Block, KeccakHasher>;
+impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<Block> where Block: BlockT {
+	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
 
@@ -476,7 +476,7 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 	}
 }
 
-impl<Block> client::backend::LocalBackend<Block, KeccakHasher, RlpCodec> for Backend<Block>
+impl<Block> client::backend::LocalBackend<Block, Blake2Hasher, RlpCodec> for Backend<Block>
 where Block: BlockT {}
 
 #[cfg(test)]

@@ -374,7 +374,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, KeccakHasher};
+	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256};
 	use primitives::testing::{Digest, Header};
@@ -416,7 +416,7 @@ mod tests {
 		type Event = ();
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],

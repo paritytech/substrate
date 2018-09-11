@@ -280,11 +280,11 @@ impl<H: Hasher> TrieBackendStorage<H> {
 pub mod tests {
 	use super::*;
 	use std::collections::HashSet;
-	use primitives::{KeccakHasher, RlpCodec, H256};
+	use primitives::{Blake2Hasher, RlpCodec, H256};
 
-	fn test_db() -> (MemoryDB<KeccakHasher>, H256) {
+	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<KeccakHasher>::new();
+		let mut mdb = MemoryDB::<Blake2Hasher>::new();
 		{
 			let mut trie = TrieDBMut::<_, RlpCodec>::new(&mut mdb, &mut root);
 			trie.insert(b"key", b"value").expect("insert failed");
@@ -298,7 +298,7 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<KeccakHasher, RlpCodec> {
+	pub(crate) fn test_trie() -> TrieBackend<Blake2Hasher, RlpCodec> {
 		let (mdb, root) = test_db();
 		TrieBackend::with_memorydb(mdb, root)
 	}
@@ -320,7 +320,7 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		let db = TrieBackend::<KeccakHasher, RlpCodec>::with_memorydb(
+		let db = TrieBackend::<Blake2Hasher, RlpCodec>::with_memorydb(
 			MemoryDB::new(),
 			Default::default()
 		);

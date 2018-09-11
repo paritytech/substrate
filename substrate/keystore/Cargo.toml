@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
+substrate-primitives = { path = "../primitives" }
 parity-crypto = { version = "0.1", default_features = false }
 ed25519 = { path = "../ed25519" }
 error-chain = "0.12"

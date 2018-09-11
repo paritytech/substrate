@@ -33,7 +33,7 @@ use primitives::{
 	AccountId, Block, BlockId, Hash, Index, InherentData,
 	SessionKey, Timestamp, UncheckedExtrinsic,
 };
-use substrate_primitives::{KeccakHasher, RlpCodec};
+use substrate_primitives::{Blake2Hasher, RlpCodec};
 
 /// Build new blocks.
 pub trait BlockBuilder {
@@ -81,10 +81,10 @@ pub trait Api {
 	fn inherent_extrinsics(&self, at: &BlockId, inherent_data: InherentData) -> Result<Vec<UncheckedExtrinsic>>;
 }
 
-impl<B, E> BlockBuilder for ClientBlockBuilder<B, E, Block, KeccakHasher, RlpCodec>
+impl<B, E> BlockBuilder for ClientBlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>
 where
-	B: Backend<Block, KeccakHasher, RlpCodec>,
-	E: CallExecutor<Block, KeccakHasher, RlpCodec>+ Clone,
+	B: Backend<Block, Blake2Hasher, RlpCodec>,
+	E: CallExecutor<Block, Blake2Hasher, RlpCodec>+ Clone,
 {
 	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
 		self.push(extrinsic).map_err(Into::into)
@@ -98,10 +98,10 @@ where
 
 impl<B, E> Api for Client<B, E, Block>
 where
-	B: Backend<Block, KeccakHasher, RlpCodec>,
-	E: CallExecutor<Block, KeccakHasher, RlpCodec> + Clone,
+	B: Backend<Block, Blake2Hasher, RlpCodec>,
+	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
 {
-	type BlockBuilder = ClientBlockBuilder<B, E, Block, KeccakHasher, RlpCodec>;
+	type BlockBuilder = ClientBlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>;
 
 	fn session_keys(&self, at: &BlockId) -> Result<Vec<SessionKey>> {
 		Ok(self.authorities_at(at)?)
