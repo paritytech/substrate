@@ -2,7 +2,7 @@
 name = "demo-cli"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
-description = "Substrate Demo node implementation in Rust."
+description = "Substrate node implementation in Rust."
 
 [dependencies]
 log = "0.3"
