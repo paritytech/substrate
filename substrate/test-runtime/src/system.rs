@@ -201,7 +201,7 @@ mod tests {
 			// state_root: hex!("0c22599e15fb5e052c84f79a2aab179ba6bb238218fd86bdd4a74ebcc87adfcd").into(),
 			// Keccak
 			state_root: hex!("97dfcd1f8cbf8845fcb544f89332f1a94c1137f7d1b199ef0b0a6ed217015c3e").into(),
-			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
+			extrinsics_root: hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into(),
 			digest: Digest { logs: vec![], },
 		};
 
