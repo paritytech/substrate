@@ -145,7 +145,6 @@ Then build the code:
 [source, shell]
 ----
 ./scripts/build.sh  		# Builds the WebAssembly binaries
-./scripts/build-demos.sh  	# Builds the WebAssembly binaries
 cargo build 				# Builds all native code
 ----
 
