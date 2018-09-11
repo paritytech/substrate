@@ -3,64 +3,62 @@
 
 :leveloffset: +3
 
-include::../../substrate/bft/README.adoc[]
+include::../bft/README.adoc[]
 
-include::../../substrate/cli/README.adoc[]
+include::../cli/README.adoc[]
 
-include::../../substrate/client/README.adoc[]
+include::../client/README.adoc[]
 
-include::../../substrate/codec/README.adoc[]
+include::../codec/README.adoc[]
 
-include::../../substrate/ed25519/README.adoc[]
+include::../environmental/README.adoc[]
 
-include::../../substrate/environmental/README.adoc[]
+include::../executor/README.adoc[]
 
-include::../../substrate/executor/README.adoc[]
+include::../extrinsic-pool/README.adoc[]
 
-include::../../substrate/extrinsic-pool/README.adoc[]
+include::../keyring/README.adoc[]
 
-include::../../substrate/keyring/README.adoc[]
+include::../keystore/README.adoc[]
 
-include::../../substrate/keystore/README.adoc[]
+include::../misbehavior-check/README.adoc[]
 
-include::../../substrate/misbehavior-check/README.adoc[]
+include::../network/README.adoc[]
 
-include::../../substrate/network/README.adoc[]
+include::../network-libp2p/README.adoc[]
 
-include::../../substrate/network-libp2p/README.adoc[]
+include::../primitives/README.adoc[]
 
-include::../../substrate/primitives/README.adoc[]
+include::../pwasm-alloc/README.adoc[]
 
-include::../../substrate/pwasm-alloc/README.adoc[]
+include::../pwasm-libc/README.adoc[]
 
-include::../../substrate/pwasm-libc/README.adoc[]
+include::../rpc/README.adoc[]
 
-include::../../substrate/rpc/README.adoc[]
+include::../rpc-servers/README.adoc[]
 
-include::../../substrate/rpc-servers/README.adoc[]
+include::../runtime/README.adoc[]
 
-include::../../substrate/runtime/README.adoc[]
+include::../runtime-io/README.adoc[]
 
-include::../../substrate/runtime-io/README.adoc[]
+include::../runtime-sandbox/README.adoc[]
 
-include::../../substrate/runtime-sandbox/README.adoc[]
+include::../runtime-std/README.adoc[]
 
-include::../../substrate/runtime-std/README.adoc[]
+include::../runtime-support/README.adoc[]
 
-include::../../substrate/runtime-support/README.adoc[]
+include::../serializer/README.adoc[]
 
-include::../../substrate/serializer/README.adoc[]
+include::../service/README.adoc[]
 
-include::../../substrate/service/README.adoc[]
+include::../state-db/README.adoc[]
 
-include::../../substrate/state-db/README.adoc[]
+include::../state-machine/README.adoc[]
 
-include::../../substrate/state-machine/README.adoc[]
+include::../telemetry/README.adoc[]
 
-include::../../substrate/telemetry/README.adoc[]
+include::../test-client/README.adoc[]
 
-include::../../substrate/test-client/README.adoc[]
-
-include::../../substrate/test-runtime/README.adoc[]
+include::../test-runtime/README.adoc[]
 
 :leveloffset: -3

@@ -22,7 +22,6 @@ extern crate substrate_primitives as primitives;
 
 extern crate substrate_state_machine;
 extern crate triehash;
-extern crate ed25519;
 extern crate hashdb;
 extern crate rlp;
 
