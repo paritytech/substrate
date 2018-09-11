@@ -303,10 +303,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					// Blake
-					// state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
-					// Keccak
-					state_root: hex!("14a253cb1c5f38beeec8bee962a941b2ba0773b7593564fbe62b9c3a46784df5").into(),
+					state_root: hex!("02532989c613369596025dfcfc821339fc9861987003924913a5a1382f87034a").into(),
 					extrinsics_root: hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into(),
 					digest: Digest { logs: vec![], },
 				},

@@ -28,7 +28,7 @@ use Blake2Hasher;
 /// Concrete implementation of a `NodeCodec` with Rlp encoding, generic over the `Hasher`
 pub struct RlpNodeCodec<H: Hasher> {mark: PhantomData<H>}
 
-/// Convenience type for a Keccak/Rlp flavoured NodeCodec
+/// Convenience type for a Blake2_256/Rlp flavoured NodeCodec
 pub type RlpCodec = RlpNodeCodec<Blake2Hasher>;
 
 impl NodeCodec<Blake2Hasher> for RlpCodec {

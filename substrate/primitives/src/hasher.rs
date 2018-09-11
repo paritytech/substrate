@@ -20,7 +20,6 @@ use hashdb::Hasher;
 use plain_hasher::PlainHasher;
 use hash::H256;
 
-// Use this when switching to Blake2 after PoC-3
 pub mod blake2 {
 	use super::{Hasher, PlainHasher, H256};
 	#[cfg(feature = "std")]

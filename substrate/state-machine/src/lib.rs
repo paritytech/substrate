@@ -568,10 +568,7 @@ mod tests {
 			],
 		};
 		let mut ext = Ext::new(&mut overlay, &backend);
-		// Blake
-		// const ROOT: [u8; 32] = hex!("6ca394ff9b13d6690a51dea30b1b5c43108e52944d30b9095227c49bae03ff8b");
-		// Keccak
-		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+		const ROOT: [u8; 32] = hex!("6ca394ff9b13d6690a51dea30b1b5c43108e52944d30b9095227c49bae03ff8b");
 		assert_eq!(ext.storage_root(), H256(ROOT));
 	}
 

@@ -95,7 +95,7 @@ impl EncryptedKey {
 		crypto::aes::encrypt_128_ctr(&derived_left_bits, &iv, plain, &mut *ciphertext)
 			.expect("input lengths of key and iv are both 16; qed");
 
-		// KECCAK(DK[16..31] ++ <ciphertext>), where DK[16..31] - derived_right_bits
+		// Blake2_256(DK[16..31] ++ <ciphertext>), where DK[16..31] - derived_right_bits
 		let mac = blake2_256(&crypto::derive_mac(&derived_right_bits, &*ciphertext));
 
 		EncryptedKey {
