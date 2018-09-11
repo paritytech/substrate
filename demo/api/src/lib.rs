@@ -108,19 +108,19 @@ where
 	}
 
 	fn validators(&self, at: &BlockId) -> Result<Vec<AccountId>> {
-		self.call_api(at, "validators", &())
+		self.call_api_at(at, "validators", &())
 	}
 
 	fn random_seed(&self, at: &BlockId) -> Result<Hash> {
-		self.call_api(at, "random_seed", &())
+		self.call_api_at(at, "random_seed", &())
 	}
 
 	fn timestamp(&self, at: &BlockId) -> Result<Timestamp> {
-		self.call_api(at, "timestamp", &())
+		self.call_api_at(at, "timestamp", &())
 	}
 
 	fn evaluate_block(&self, at: &BlockId, block: Block) -> Result<bool> {
-		let res: Result<()> = self.call_api(at, "execute_block", &block);
+		let res: Result<()> = self.call_api_at(at, "execute_block", &block);
 		match res {
 			Ok(()) => Ok(true),
 			Err(err) => match err.kind() {
@@ -131,11 +131,11 @@ where
 	}
 
 	fn index(&self, at: &BlockId, account: AccountId) -> Result<Index> {
-		self.call_api(at, "account_nonce", &account)
+		self.call_api_at(at, "account_nonce", &account)
 	}
 
 	fn lookup(&self, at: &BlockId, address: Address) -> Result<Option<AccountId>> {
-		self.call_api(at, "lookup_address", &address)
+		self.call_api_at(at, "lookup_address", &address)
 	}
 
 	fn build_block(&self, at: &BlockId, inherent_data: InherentData) -> Result<Self::BlockBuilder> {
@@ -149,7 +149,7 @@ where
 
 	fn inherent_extrinsics(&self, at: &BlockId, inherent_data: InherentData) -> Result<Vec<UncheckedExtrinsic>> {
 		let runtime_version = self.runtime_version_at(at)?;
-		self.call_api(at, "inherent_extrinsics", &(inherent_data, runtime_version.spec_version))
+		self.call_api_at(at, "inherent_extrinsics", &(inherent_data, runtime_version.spec_version))
 	}
 }
 
