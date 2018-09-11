@@ -297,7 +297,7 @@ mod tests {
 		}
 
 		impl_event!(
-			pub enum Event for Module<T: Trait> {
+			pub enum Event {
 				SystemEvent,
 			}
 		);
@@ -313,8 +313,7 @@ mod tests {
 
 		impl_event!(
 			pub enum Event<T> with RawEvent<Balance>
-			where <T as Trait>::Balance
-				for Module<T: Trait> {
+			where <T as Trait>::Balance {
 				/// Hi, I am a comment.
 				TestEvent(Balance),
 			}
@@ -341,8 +340,7 @@ mod tests {
 
 		impl_event!(
 			pub enum Event<T> with RawEvent<Balance>
-			where <T as Trait>::Balance
-				for ModuleWithStorage<T: Trait> {
+			where <T as Trait>::Balance {
 				TestEvent(Balance),
 			}
 		);

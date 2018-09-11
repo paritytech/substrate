@@ -50,8 +50,7 @@ pub enum Origin {
 /// Event for this module.
 impl_event!(
 	pub enum Event<T> with RawEvent<Hash, AccountId>
-		where <T as system::Trait>::Hash, <T as system::Trait>::AccountId
-		for Module<T: Trait> {
+		where <T as system::Trait>::Hash, <T as system::Trait>::AccountId {
 		/// A motion (given hash) has been proposed (by given account) with a threshold (given u32).
 		Proposed(AccountId, ProposalIndex, Hash, u32),
 		/// A motion (given hash) has been voted on by given account, leaving

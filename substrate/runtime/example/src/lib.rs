@@ -122,8 +122,7 @@ decl_module! {
 /// interesting and otherwise difficult to detect.
 impl_event!(
 	pub enum Event<T> with RawEvent<B>
-		where <T as balances::Trait>::Balance
-		for Module<T: Trait> {
+		where <T as balances::Trait>::Balance {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(B),

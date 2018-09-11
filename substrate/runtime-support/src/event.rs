@@ -20,8 +20,7 @@ macro_rules! impl_event {
 	(
 		$(#[$attr:meta])*
 		pub enum Event<$( $evt_generic_param:ident )*> with RawEvent<$( $generic_param:ident ),*>
-			where $( <$generic:ident as $trait:path>::$trait_type:ident),*
-			for $module:ident<$trait_instance:ident: $trait_name:ident> {
+			where $( <$generic:ident as $trait:path>::$trait_type:ident),* {
 			$(
 				$(#[doc = $doc_attr:tt])*
 				$event:ident( $( $param:path ),* ),
@@ -60,7 +59,7 @@ macro_rules! impl_event {
 	};
 	(
 		$(#[$attr:meta])*
-		pub enum Event for $module:ident<$trait_instance:ident: $trait_name:ident> {
+		pub enum Event {
 			$(
 				$(#[doc = $doc_attr:tt])*
 				$event:ident,
@@ -207,7 +206,7 @@ mod tests {
 		}
 
 		impl_event!(
-			pub enum Event for Module<T: Trait> {
+			pub enum Event {
 				SystemEvent,
 			}
 		);
@@ -225,8 +224,7 @@ mod tests {
 
 		impl_event!(
 			pub enum Event<T> with RawEvent<Balance>
-				where <T as Trait>::Balance
-				for Module<T: Trait> {
+				where <T as Trait>::Balance {
 				/// Hi, I am a comment.
 				TestEvent(Balance),
 			}
@@ -245,8 +243,7 @@ mod tests {
 
 		impl_event!(
 			pub enum Event<T> with RawEvent<Balance>
-				where <T as Trait>::Balance
-				for Module<T: Trait> {
+				where <T as Trait>::Balance {
 				TestEvent(Balance),
 			}
 		);

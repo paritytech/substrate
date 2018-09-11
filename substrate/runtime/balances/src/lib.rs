@@ -136,8 +136,7 @@ decl_module! {
 
 impl_event!(
 	pub enum Event<T> with RawEvent<AccountId, AccountIndex, Balance>
-		where <T as system::Trait>::AccountId, <T as Trait>::AccountIndex, <T as Trait>::Balance
-		for Module<T: Trait> {
+		where <T as system::Trait>::AccountId, <T as Trait>::AccountIndex, <T as Trait>::Balance {
 		/// A new account was created.
 		NewAccount(AccountId, AccountIndex, NewAccountOutcome),
 		/// An account was reaped.

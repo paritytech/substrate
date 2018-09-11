@@ -157,8 +157,7 @@ decl_storage! {
 impl_event!(
 	/// An event in this module.
 	pub enum Event<T> with RawEvent<AccountId>
-		where <T as system::Trait>::AccountId
-		for Module<T: Trait> {
+		where <T as system::Trait>::AccountId {
 		/// reaped voter, reaper
 		VoterReaped(AccountId, AccountId),
 		/// slashed reaper

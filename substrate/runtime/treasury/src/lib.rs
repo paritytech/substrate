@@ -137,8 +137,7 @@ decl_storage! {
 /// An event in this module.
 impl_event!(
 	pub enum Event<T> with RawEvent<Balance, AccountId>
-		where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId
-		for Module<T: Trait> {
+		where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId {
 		/// New proposal.
 		Proposed(ProposalIndex),
 		/// We have ended a spend period and will now allocate funds.

@@ -112,7 +112,7 @@ pub struct EventRecord<E: Parameter + Member> {
 
 /// Event for the system module.
 impl_event!(
-	pub enum Event for Module<T: Trait> {
+	pub enum Event {
 		/// An extrinsic completed successfully.
 		ExtrinsicSuccess,
 		/// An extrinsic failed.
