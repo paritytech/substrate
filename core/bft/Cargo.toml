@@ -7,7 +7,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 futures = "0.1.17"
 parity-codec = { path = "../../codec" }
 substrate-primitives = { path = "../primitives" }
-substrate-runtime-support = { path = "../runtime/support" }
 substrate-runtime-primitives = { path = "../runtime-primitives" }
 substrate-runtime-version = { path = "../runtime-version" }
 tokio = "0.1.7"
