@@ -29,9 +29,9 @@ include::../../core/network-libp2p/README.adoc[]
 
 include::../../core/primitives/README.adoc[]
 
-include::../../core/pwasm-alloc/README.adoc[]
+include::../../pwasm-alloc/README.adoc[]
 
-include::../../core/pwasm-libc/README.adoc[]
+include::../../pwasm-libc/README.adoc[]
 
 include::../../core/rpc/README.adoc[]
 

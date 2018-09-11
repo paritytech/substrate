@@ -55,8 +55,8 @@ members = [
 exclude = [
 	"node/runtime/wasm",
 	"core/executor/wasm",
-	"core/pwasm-alloc",
-	"core/pwasm-libc",
+	"pwasm-alloc",
+	"pwasm-libc",
 	"core/test-runtime/wasm",
 ]
 

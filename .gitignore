@@ -5,10 +5,10 @@
 polkadot/runtime/wasm/target/
 core/executor/wasm/target/
 core/test-runtime/wasm/target/
-core/pwasm-alloc/target/
-core/pwasm-libc/target/
-core/pwasm-alloc/Cargo.lock
-core/pwasm-libc/Cargo.lock
+pwasm-alloc/target/
+pwasm-libc/target/
+pwasm-alloc/Cargo.lock
+pwasm-libc/Cargo.lock
 node/runtime/wasm/target/
 **/._*
 .vscode
