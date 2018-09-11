@@ -29,7 +29,7 @@ substrate-runtime-staking = { path = "../../core/runtime/staking" }
 substrate-runtime-system = { path = "../../core/runtime/system" }
 substrate-runtime-timestamp = { path = "../../core/runtime/timestamp" }
 substrate-runtime-treasury = { path = "../../core/runtime/treasury" }
-substrate-runtime-version = { path = "../../core/runtime/version" }
+substrate-runtime-version = { path = "../../core/runtime-version" }
 node-primitives = { path = "../primitives" }
 
 [features]
