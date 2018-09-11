@@ -229,7 +229,7 @@ mod tests {
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
-				early_era_slash: 0,
+				offline_slash: 0,
 				session_reward: 0,
 				offline_slash_grace: 0,
 			}),
@@ -262,7 +262,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("b7d85f23689ae4ae7951eda80e817dffb1c0925e77f5c0de8c94b265df80b9cf").into(),
+			hex!("efdd1840ae46b687fc59fc730892d412a0fb051ef120f9e6dfcf1c416d0fc2cb").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -282,7 +282,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("a17d6006e9bb4292b8ebea3b14995672a88caff2c99eeef1d84aeb234e5a0534").into(),
+			hex!("e360ad4a43929e521fd41cdabf8d772eb39f9cbf71fe95bada685e24bd3bbbbb").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -307,7 +307,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("27555b6e51bfdb689457fc076a54153a4f5188f47a17607da75e180d844db527").into(),
+			hex!("989ebec4920fe4a99edcd3766eee35a31de92dff20427920ae68d15471afba9a").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,

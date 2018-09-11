@@ -45,7 +45,7 @@ use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use runtime_primitives::{Permill, traits::{OnFinalise, Zero, EnsureOrigin}};
-use balances::OnMinted;
+use balances::OnDilution;
 use system::{ensure_signed, ensure_root};
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -278,9 +278,15 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnMinted<T::Balance> for Module<T> {
-	fn on_minted(b: T::Balance) {
-		<Pot<T>>::put(Self::pot() + b);
+impl<T: Trait> OnDilution<T::Balance> for Module<T> {
+	fn on_dilution(minted: T::Balance, portion: T::Balance) {
+		// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
+		// pre dilution and post-dilution.
+		if !minted.is_zero() && !portion.is_zero() {
+			let total_issuance = <balances::Module<T>>::total_issuance();
+			let funding = (total_issuance - portion) / portion * minted;
+			<Pot<T>>::mutate(|x| *x += funding);
+		}
 	}
 }
 
@@ -377,7 +383,7 @@ mod tests {
 	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
-			balances: vec![(0, 100), (1, 10), (2, 1)],
+			balances: vec![(0, 100), (1, 99), (2, 1)],
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
 			transfer_fee: 0,
@@ -410,7 +416,7 @@ mod tests {
 	fn minting_works() {
 		with_externalities(&mut new_test_ext(), || {
 			// Check that accumulate works when we have Some value in Dummy already.
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 			assert_eq!(Treasury::pot(), 100);
 		});
 	}
@@ -443,7 +449,7 @@ mod tests {
 	#[test]
 	fn accepted_spend_proposal_ignored_outside_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -457,7 +463,7 @@ mod tests {
 	#[test]
 	fn unused_pot_should_diminish() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Treasury::pot(), 50);
@@ -467,7 +473,7 @@ mod tests {
 	#[test]
 	fn rejected_spend_proposal_ignored_on_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -481,7 +487,7 @@ mod tests {
 	#[test]
 	fn reject_already_rejected_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -506,7 +512,7 @@ mod tests {
 	#[test]
 	fn accept_already_rejected_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -517,7 +523,7 @@ mod tests {
 	#[test]
 	fn accepted_spend_proposal_enacted_on_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -531,7 +537,7 @@ mod tests {
 	#[test]
 	fn pot_underflow_should_not_diminish() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -539,7 +545,7 @@ mod tests {
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Treasury::pot(), 100);
 
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 			<Treasury as OnFinalise<u64>>::on_finalise(4);
 			assert_eq!(Balances::free_balance(&3), 150);
 			assert_eq!(Treasury::pot(), 25);

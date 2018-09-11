@@ -305,9 +305,9 @@ impl<T: Trait> Module<T> {
 		// tally up votes for any expiring referenda.
 		for (index, _, proposal, vote_threshold) in Self::maturing_referendums_at(now) {
 			let (approve, against) = Self::tally(index);
-			let total_stake = <balances::Module<T>>::total_stake();
+			let total_issuance = <balances::Module<T>>::total_issuance();
 			Self::clear_referendum(index);
-			if vote_threshold.approved(approve, against, total_stake) {
+			if vote_threshold.approved(approve, against, total_issuance) {
 				Self::deposit_event(RawEvent::Passed(index));
 				let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
 				Self::deposit_event(RawEvent::Executed(index, ok));
@@ -454,7 +454,7 @@ mod tests {
 			assert_eq!(Democracy::minimum_deposit(), 1);
 			assert_eq!(Democracy::referendum_count(), 0);
 			assert_eq!(Balances::free_balance(&42), 0);
-			assert_eq!(Balances::total_stake(), 210);
+			assert_eq!(Balances::total_issuance(), 210);
 		});
 	}
 
@@ -670,7 +670,7 @@ mod tests {
 	fn passing_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Balances::free_balance(&42), 0);
-			assert_eq!(Balances::total_stake(), 210);
+			assert_eq!(Balances::total_issuance(), 210);
 
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
