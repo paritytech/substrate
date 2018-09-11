@@ -24,7 +24,7 @@ use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
 use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
-use primitives::KeccakHasher;
+use primitives::Blake2Hasher;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
@@ -69,7 +69,7 @@ pub fn execute_block(block: Block) {
 	// check transaction trie root represents the transactions.
 	let txs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let txs_root = enumerated_trie_root::<KeccakHasher>(&txs).into();
+	let txs_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
 	info_expect_equal_hash(&txs_root, &header.extrinsics_root);
 	assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
 
@@ -96,7 +96,7 @@ pub fn finalise_block() -> Header {
 	let extrinsic_index = ExtrinsicIndex::take();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
-	let extrinsics_root = enumerated_trie_root::<KeccakHasher>(&txs).into();
+	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
 
 	let number = <Number>::take();
 	let parent_hash = <ParentHash>::take();
@@ -172,9 +172,9 @@ mod tests {
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
 	use ::{Header, Digest, Extrinsic, Transfer};
-	use primitives::KeccakHasher;
+	use primitives::Blake2Hasher;
 
-	fn new_test_ext() -> TestExternalities<KeccakHasher> {
+	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),

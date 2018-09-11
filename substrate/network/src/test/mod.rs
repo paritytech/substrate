@@ -26,7 +26,7 @@ use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
 use protocol::{Context, Protocol};
-use primitives::{KeccakHasher, RlpCodec};
+use primitives::{Blake2Hasher, RlpCodec};
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{NodeIndex, SessionInfo, Severity};
@@ -174,7 +174,7 @@ impl Peer {
 	}
 
 	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) 
-	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, KeccakHasher, RlpCodec>) 
+	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher, RlpCodec>) 
 	{
 		for _ in 0 .. count {
 			let mut builder = self.client.new_block().unwrap();

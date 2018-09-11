@@ -51,7 +51,7 @@ use primitives::bft::MisbehaviorReport;
 use system::{ensure_signed, ensure_inherent, ensure_root};
 
 #[cfg(any(feature = "std", test))]
-use substrate_primitives::KeccakHasher;
+use substrate_primitives::Blake2Hasher;
 #[cfg(any(feature = "std", test))]
 use std::collections::HashMap;
 
@@ -257,7 +257,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
 		use codec::{Encode, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
-		let mut r: runtime_io::TestExternalities<KeccakHasher> = self.authorities.into_iter().enumerate().map(|(i, v)|
+		let mut r: runtime_io::TestExternalities<Blake2Hasher> = self.authorities.into_iter().enumerate().map(|(i, v)|
 			((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode())
 		).collect();
 		r.insert(AUTHORITY_COUNT.to_vec(), auth_count.encode());

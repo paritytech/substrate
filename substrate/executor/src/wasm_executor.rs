@@ -30,10 +30,9 @@ use wasm_utils::UserError;
 use primitives::{blake2_256, twox_128, twox_256};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
-use primitives::KeccakHasher;
+use primitives::Blake2Hasher;
 use triehash::ordered_trie_root;
 use sandbox;
-use tiny_keccak::keccak256;
 
 
 struct Heap {
@@ -75,7 +74,7 @@ macro_rules! debug_trace {
 	( $( $x:tt )* ) => ()
 }
 
-struct FunctionExecutor<'e, E: Externalities<KeccakHasher> + 'e> {
+struct FunctionExecutor<'e, E: Externalities<Blake2Hasher> + 'e> {
 	sandbox_store: sandbox::Store,
 	heap: Heap,
 	memory: MemoryRef,
@@ -84,7 +83,7 @@ struct FunctionExecutor<'e, E: Externalities<KeccakHasher> + 'e> {
 	hash_lookup: HashMap<Vec<u8>, Vec<u8>>,
 }
 
-impl<'e, E: Externalities<KeccakHasher>> FunctionExecutor<'e, E> {
+impl<'e, E: Externalities<Blake2Hasher>> FunctionExecutor<'e, E> {
 	fn new(m: MemoryRef, heap_pages: usize, t: Option<TableRef>, e: &'e mut E) -> Result<Self> {
 		Ok(FunctionExecutor {
 			sandbox_store: sandbox::Store::new(),
@@ -97,7 +96,7 @@ impl<'e, E: Externalities<KeccakHasher>> FunctionExecutor<'e, E> {
 	}
 }
 
-impl<'e, E: Externalities<KeccakHasher>> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
+impl<'e, E: Externalities<Blake2Hasher>> sandbox::SandboxCapabilities for FunctionExecutor<'e, E> {
 	fn store(&self) -> &sandbox::Store {
 		&self.sandbox_store
 	}
@@ -293,7 +292,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(result, r.as_ref()).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
 		Ok(())
 	},
-	ext_keccak_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
+	ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8) => {
 		let values = (0..lens_len)
 			.map(|i| this.memory.read_primitive(lens_data + i * 4))
 			.collect::<::std::result::Result<Vec<u32>, UserError>>()?
@@ -301,11 +300,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			.scan(0u32, |acc, v| { let o = *acc; *acc += v; Some((o, v)) })
 			.map(|(offset, len)|
 				this.memory.get(values_data + offset, len as usize)
-					.map_err(|_| UserError("Invalid attempt to get memory in ext_keccak_enumerated_trie_root"))
+					.map_err(|_| UserError("Invalid attempt to get memory in ext_blake2_256_enumerated_trie_root"))
 			)
 			.collect::<::std::result::Result<Vec<_>, UserError>>()?;
-		let r = ordered_trie_root::<KeccakHasher, _, _>(values.into_iter());
-		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_keccak_enumerated_trie_root"))?;
+		let r = ordered_trie_root::<Blake2Hasher, _, _>(values.into_iter());
+		this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_blake2_256_enumerated_trie_root"))?;
 		Ok(())
 	},
 	ext_chain_id() -> u64 => {
@@ -353,15 +352,6 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_blake2_256"))?;
 		Ok(())
 	},
-	ext_keccak256(data: *const u8, len: u32, out: *mut u8) => {
-		let result = if len == 0 {
-			keccak256(&[0u8; 0])
-		} else {
-			keccak256(&this.memory.get(data, len as usize).map_err(|_| UserError("Invalid attempt to get data in ext_keccak256"))?)
-		};
-		this.memory.set(out, &result).map_err(|_| UserError("Invalid attempt to set result in ext_keccak256"))?;
-		Ok(())
-	},
 	ext_ed25519_verify(msg_data: *const u8, msg_len: u32, sig_data: *const u8, pubkey_data: *const u8) -> u32 => {
 		let mut sig = [0u8; 64];
 		this.memory.get_into(sig_data, &mut sig[..]).map_err(|_| UserError("Invalid attempt to get signature in ext_ed25519_verify"))?;
@@ -396,25 +386,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.sandbox_store.instance_teardown(instance_idx)?;
 		Ok(())
 	},
-	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, state: usize) -> u32 => {
-		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
-		let export = this.memory.get(export_ptr, export_len as usize)
-			.map_err(|_| UserError("Sandbox error"))
-			.and_then(|b|
-				String::from_utf8(b)
-					.map_err(|_| UserError("Sandbox error"))
-			)?;
-
-		let instance = this.sandbox_store.instance(instance_idx)?;
-		let result = instance.invoke(&export, &[], this, state);
-		match result {
-			Ok(None) => Ok(sandbox_primitives::ERR_OK),
-			Ok(_) => unimplemented!(),
-			Err(_) => Ok(sandbox_primitives::ERR_EXECUTION),
-		}
-	},
-	// TODO: Remove the old 'ext_sandbox_invoke' and rename this to it.
-	ext_sandbox_invoke_poc2(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
+	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
 		use codec::{Decode, Encode};
 
 		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
@@ -490,7 +462,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.sandbox_store.memory_teardown(memory_idx)?;
 		Ok(())
 	},
-	=> <'e, E: Externalities<KeccakHasher> + 'e>
+	=> <'e, E: Externalities<Blake2Hasher> + 'e>
 );
 
 /// Wasm rust executor for contracts.
@@ -509,7 +481,7 @@ impl WasmExecutor {
 
 	/// Call a given method in the given code.
 	/// This should be used for tests only.
-	pub fn call<E: Externalities<KeccakHasher>>(
+	pub fn call<E: Externalities<Blake2Hasher>>(
 		&self,
 		ext: &mut E,
 		heap_pages: usize,
@@ -522,7 +494,7 @@ impl WasmExecutor {
 	}
 
 	/// Call a given method in the given wasm-module runtime.
-	pub fn call_in_wasm_module<E: Externalities<KeccakHasher>>(
+	pub fn call_in_wasm_module<E: Externalities<Blake2Hasher>>(
 		&self,
 		ext: &mut E,
 		heap_pages: usize,
@@ -740,7 +712,7 @@ mod tests {
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
-			ordered_trie_root::<KeccakHasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
+			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
 		);
 	}
 

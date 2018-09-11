@@ -31,7 +31,7 @@ pub extern crate substrate_codec as codec;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256};
 
-pub use primitives::KeccakHasher;
+pub use primitives::Blake2Hasher;
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
@@ -42,7 +42,7 @@ use rlp::Encodable;
 
 // TODO: use the real error, not NoError.
 
-environmental!(ext: trait Externalities<KeccakHasher>);
+environmental!(ext: trait Externalities<Blake2Hasher>);
 
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
@@ -145,7 +145,7 @@ pub fn ed25519_verify<P: AsRef<[u8]>>(sig: &[u8; 64], msg: &[u8], pubkey: P) -> 
 /// Execute the given closure with global function available whose functionality routes into the
 /// externalities `ext`. Forwards the value that the closure returns.
 // NOTE: need a concrete hasher here due to limitations of the `environmental!` macro, otherwise a type param would have been fine I think.
-pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<KeccakHasher>, f: F) -> R {
+pub fn with_externalities<R, F: FnOnce() -> R>(ext: &mut Externalities<Blake2Hasher>, f: F) -> R {
 	ext::using(ext, f)
 }
 
@@ -211,7 +211,7 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::<KeccakHasher>::new();
+		let mut t = TestExternalities::<Blake2Hasher>::new();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -232,7 +232,7 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t: TestExternalities<KeccakHasher> = map![
+		let mut t: TestExternalities<Blake2Hasher> = map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		];
 
@@ -248,7 +248,7 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t: TestExternalities<KeccakHasher> = map![
+		let mut t: TestExternalities<Blake2Hasher> = map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),

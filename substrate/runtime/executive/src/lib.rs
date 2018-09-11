@@ -217,7 +217,7 @@ mod tests {
 	use super::*;
 	use balances::Call;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, KeccakHasher};
+	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, Lookup};
 	use primitives::testing::{Digest, Header, Block};
@@ -290,7 +290,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap());
 		t.into()

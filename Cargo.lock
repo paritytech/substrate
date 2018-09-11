@@ -2574,7 +2574,6 @@ dependencies = [
  "substrate-runtime-version 0.1.0",
  "substrate-serializer 0.1.0",
  "substrate-state-machine 0.1.0",
- "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "triehash 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2619,6 +2618,7 @@ dependencies = [
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives 0.1.0",
  "subtle 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempdir 0.3.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2710,7 +2710,6 @@ dependencies = [
  "substrate-codec-derive 0.1.0",
  "substrate-runtime-std 0.1.0",
  "substrate-serializer 0.1.0",
- "tiny-keccak 1.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",

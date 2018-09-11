@@ -213,7 +213,7 @@ pub fn decode_cht_value<Hash: From<H256>>(value: &[u8]) -> Option<Hash> {
 
 #[cfg(test)]
 mod tests {
-	use primitives::{KeccakHasher, RlpCodec};
+	use primitives::{Blake2Hasher, RlpCodec};
 	use test_client::runtime::Header;
 	use super::*;
 
@@ -257,18 +257,18 @@ mod tests {
 
 	#[test]
 	fn compute_root_works() {
-		assert!(compute_root::<Header, KeccakHasher, _>(SIZE, 42, vec![Some(1.into()); SIZE as usize]).is_some());
+		assert!(compute_root::<Header, Blake2Hasher, _>(SIZE, 42, vec![Some(1.into()); SIZE as usize]).is_some());
 	}
 
 	#[test]
 	fn build_proof_fails_when_querying_wrong_block() {
-		assert!(build_proof::<Header, KeccakHasher, RlpCodec, _>(
+		assert!(build_proof::<Header, Blake2Hasher, RlpCodec, _>(
 			SIZE, 0, (SIZE * 1000) as u64, vec![Some(1.into()); SIZE as usize]).is_none());
 	}
 
 	#[test]
 	fn build_proof_works() {
-		assert!(build_proof::<Header, KeccakHasher, RlpCodec, _>(
+		assert!(build_proof::<Header, Blake2Hasher, RlpCodec, _>(
 			SIZE, 0, (SIZE / 2) as u64, vec![Some(1.into()); SIZE as usize]).is_some());
 	}
 }

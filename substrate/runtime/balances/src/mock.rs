@@ -20,7 +20,7 @@
 
 use primitives::BuildStorage;
 use primitives::testing::{Digest, Header};
-use substrate_primitives::{H256, KeccakHasher};
+use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, system};
 
@@ -50,7 +50,7 @@ impl Trait for Runtime {
 	type Event = ();
 }
 
-pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternalities<KeccakHasher> {
+pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 	let balance_factor = if ext_deposit > 0 {
 		256

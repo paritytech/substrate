@@ -51,7 +51,7 @@ mod tests {
 	use keyring::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap};
 	use state_machine::{CodeExecutor, TestExternalities};
-	use primitives::{twox_128, KeccakHasher};
+	use primitives::{twox_128, Blake2Hasher};
 	use demo_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::Header as HeaderT;
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
@@ -117,7 +117,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
-		let mut t: TestExternalities<KeccakHasher> = map![
+		let mut t: TestExternalities<Blake2Hasher> = map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
@@ -137,7 +137,7 @@ mod tests {
 
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-		let mut t: TestExternalities<KeccakHasher> = map![
+		let mut t: TestExternalities<Blake2Hasher> = map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
@@ -157,7 +157,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
-		let mut t: TestExternalities<KeccakHasher> = map![
+		let mut t: TestExternalities<Blake2Hasher> = map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
@@ -181,7 +181,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
-		let mut t: TestExternalities<KeccakHasher> = map![
+		let mut t: TestExternalities<Blake2Hasher> = map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
@@ -203,7 +203,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> TestExternalities<KeccakHasher> {
+	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		use keyring::Keyring::*;
 		let three = [3u8; 32].into();
 		GenesisConfig {
@@ -244,7 +244,7 @@ mod tests {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
-		let extrinsics_root = ordered_trie_root::<KeccakHasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
+		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
 
 		let header = Header {
 			parent_hash,
@@ -262,7 +262,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("efdd1840ae46b687fc59fc730892d412a0fb051ef120f9e6dfcf1c416d0fc2cb").into(),
+			hex!("c2fcc528c92b3c958b0e0914f26e05f151903ed43c87f29b20f9c8f0450d7484").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -282,7 +282,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("e360ad4a43929e521fd41cdabf8d772eb39f9cbf71fe95bada685e24bd3bbbbb").into(),
+			hex!("62e5879f10338fa6136161c60ae0ffc35936f7b8c3fdb38095ddd0e044309762").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -307,7 +307,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("989ebec4920fe4a99edcd3766eee35a31de92dff20427920ae68d15471afba9a").into(),
+			hex!("789b19bc7beaa83ae70412f65ad0ac02435fd79e0226ba3394865a052e56fbd8").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -478,7 +478,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let mut t: TestExternalities<KeccakHasher> = map![
+		let mut t: TestExternalities<Blake2Hasher> = map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
@@ -499,7 +499,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let mut t: TestExternalities<KeccakHasher> = map![
+		let mut t: TestExternalities<Blake2Hasher> = map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],

@@ -25,17 +25,17 @@ use patricia_trie::{NibbleSlice, NodeCodec, node::Node, ChildReference};
 use hash::H256;
 // When switching to Blake2, use this instead:
 // use BlakeHasher;
-use KeccakHasher;
+use Blake2Hasher;
 
 /// Concrete implementation of a `NodeCodec` with Rlp encoding, generic over the `Hasher`
 pub struct RlpNodeCodec<H: Hasher> {mark: PhantomData<H>}
 
 /// Convenience type for a Keccak/Rlp flavoured NodeCodec
-pub type RlpCodec = RlpNodeCodec<KeccakHasher>;
+pub type RlpCodec = RlpNodeCodec<Blake2Hasher>;
 // When switching to Blake2, use this instead:
 // pub type RlpCodec = RlpNodeCodec<BlakeHasher>;
 
-impl NodeCodec<KeccakHasher> for RlpCodec {
+impl NodeCodec<Blake2Hasher> for RlpCodec {
 	type Error = DecoderError;
 	// When switching to Blake2, use this null node
 	// 	const HASHED_NULL_NODE : H256 = H256( [0x45, 0xb0, 0xcf, 0xc2, 0x20, 0xce, 0xec, 0x5b, 0x7c, 0x1c, 0x62, 0xc4, 0xd4, 0x19, 0x3d, 0x38, 0xe4, 0xeb, 0xa4, 0x8e, 0x88, 0x15, 0x72, 0x9c, 0xe7, 0x5f, 0x9c, 0xa, 0xb0, 0xe4, 0xc1, 0xc0] );
@@ -66,9 +66,9 @@ impl NodeCodec<KeccakHasher> for RlpCodec {
 			_ => Err(DecoderError::Custom("Rlp is not valid."))
 		}
 	}
-	fn try_decode_hash(data: &[u8]) -> Option<<KeccakHasher as Hasher>::Out> {
+	fn try_decode_hash(data: &[u8]) -> Option<<Blake2Hasher as Hasher>::Out> {
 		let r = Rlp::new(data);
-		if r.is_data() && r.size() == KeccakHasher::LENGTH {
+		if r.is_data() && r.size() == Blake2Hasher::LENGTH {
 			Some(r.as_val().expect("Hash is the correct size; qed"))
 		} else {
 			None
@@ -90,7 +90,7 @@ impl NodeCodec<KeccakHasher> for RlpCodec {
 		stream.drain()
 	}
 
-	fn ext_node(partial: &[u8], child_ref: ChildReference<<KeccakHasher as Hasher>::Out>) -> ElasticArray1024<u8> {
+	fn ext_node(partial: &[u8], child_ref: ChildReference<<Blake2Hasher as Hasher>::Out>) -> ElasticArray1024<u8> {
 		let mut stream = RlpStream::new_list(2);
 		stream.append(&partial);
 		match child_ref {
@@ -104,7 +104,7 @@ impl NodeCodec<KeccakHasher> for RlpCodec {
 	}
 
 	fn branch_node<I>(children: I, value: Option<ElasticArray128<u8>>) -> ElasticArray1024<u8>
-	where I: IntoIterator<Item=Option<ChildReference<<KeccakHasher as Hasher>::Out>>>
+	where I: IntoIterator<Item=Option<ChildReference<<Blake2Hasher as Hasher>::Out>>>
 	{
 		let mut stream = RlpStream::new_list(17);
 		for child_ref in children {

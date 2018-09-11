@@ -104,11 +104,11 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + En
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{KeccakHasher, H256};
+	use primitives::{Blake2Hasher, H256};
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext = TestExternalities::<KeccakHasher>::new();
+		let mut ext = TestExternalities::<Blake2Hasher>::new();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
