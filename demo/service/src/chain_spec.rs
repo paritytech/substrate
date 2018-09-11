@@ -19,7 +19,8 @@
 use ed25519;
 use primitives::AuthorityId;
 use demo_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig, Permill};
+	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
+	ContractConfig, Permill};
 use service::ChainSpec;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -97,6 +98,14 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			proposal_bond_minimum: 1_000_000,
 			spend_period: 12 * 60 * 24,
 			burn: Permill::from_percent(50),
+		}),
+		contract: Some(ContractConfig {
+			contract_fee: 21,
+			call_base_fee: 135,
+			create_base_fee: 175,
+			gas_price: 1,
+			max_depth: 1024,
+			block_gas_limit: 10_000_000,
 		}),
 	}
 }
@@ -182,6 +191,14 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			proposal_bond_minimum: 1_000_000,
 			spend_period: 12 * 60 * 24,
 			burn: Permill::from_percent(50),
+		}),
+		contract: Some(ContractConfig {
+			contract_fee: 21,
+			call_base_fee: 135,
+			create_base_fee: 175,
+			gas_price: 1,
+			max_depth: 1024,
+			block_gas_limit: 10_000_000,
 		}),
 	}
 }

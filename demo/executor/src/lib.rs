@@ -237,6 +237,7 @@ mod tests {
 			council: Some(Default::default()),
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
+			contract: Some(Default::default()),
 		}.build_storage().unwrap().into()
 	}
 
@@ -262,7 +263,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("c2fcc528c92b3c958b0e0914f26e05f151903ed43c87f29b20f9c8f0450d7484").into(),
+			hex!("1f058f699ad3187bcf7e9ed8e44464d7a5added0cd912d2679b9dab2e7a04053").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -282,7 +283,7 @@ mod tests {
 		construct_block(
 			2,
 			block1().1,
-			hex!("62e5879f10338fa6136161c60ae0ffc35936f7b8c3fdb38095ddd0e044309762").into(),
+			hex!("29fa1d0aa83662c571315af54b106c73823a31f759793803bf8929960b67b138").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -307,7 +308,7 @@ mod tests {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("789b19bc7beaa83ae70412f65ad0ac02435fd79e0226ba3394865a052e56fbd8").into(),
+			hex!("fe0e07c7b054fe186387461d455d536860e9c71d6979fd9dbf755e96ce070d04").into(),
 			vec![
 				CheckedExtrinsic {
 					signed: None,

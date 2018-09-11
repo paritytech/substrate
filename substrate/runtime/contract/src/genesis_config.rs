@@ -21,6 +21,7 @@
 use {Trait, ContractFee, CallBaseFee, CreateBaseFee, GasPrice, MaxDepth, BlockGasLimit};
 
 use runtime_primitives;
+use runtime_primitives::traits::As;
 use runtime_io::{self, twox_128};
 use runtime_support::StorageValue;
 use codec::Encode;
@@ -37,6 +38,19 @@ pub struct GenesisConfig<T: Trait> {
 	pub gas_price: T::Balance,
 	pub max_depth: u32,
 	pub block_gas_limit: T::Gas,
+}
+
+impl<T: Trait> Default for GenesisConfig<T> {
+	fn default() -> Self {
+		GenesisConfig {
+			contract_fee: T::Balance::sa(21),
+			call_base_fee: T::Gas::sa(135),
+			create_base_fee: T::Gas::sa(175),
+			gas_price: T::Balance::sa(1),
+			max_depth: 100,
+			block_gas_limit: T::Gas::sa(1_000_000),
+		}
+	}
 }
 
 impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T> {
