@@ -37,7 +37,6 @@ extern crate num_traits;
 extern crate integer_sqrt;
 extern crate substrate_runtime_std as rstd;
 extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_runtime_support as runtime_support;
 extern crate parity_codec as codec;
 extern crate substrate_primitives;
 

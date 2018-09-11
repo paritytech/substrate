@@ -435,9 +435,10 @@ impl<T: BlindCheckable, Context> Checkable<Context> for T {
 pub trait Applyable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
+	type Call: Member;
 	fn index(&self) -> &Self::Index;
 	fn sender(&self) -> Option<&Self::AccountId>;
-	fn apply(self) -> Result<(), &'static str>;
+	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
 }
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are

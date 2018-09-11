@@ -52,6 +52,7 @@ use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
 	MakePayment, Hash};
+use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
 use primitives::{ApplyOutcome, ApplyError};
@@ -87,7 +88,9 @@ impl<
 	Finalisation: OnFinalise<System::BlockNumber>,
 > Executive<System, Block, Lookup, Payment, Finalisation> where
 	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Codec,
-	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>
+	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	<<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked as Applyable>::Call: Dispatchable,
+	<<<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
@@ -191,8 +194,8 @@ impl<
 		}
 
 		// decode parameters and dispatch
-		let r = xt.apply();
-
+		let (f, s) = xt.deconstruct();
+		let r = f.dispatch(s.into());
 		<system::Module<System>>::note_applied_extrinsic(&r);
 
 		r.map(|_| internal::ApplyOutcome::Success).or_else(|e| Ok(internal::ApplyOutcome::Fail(e)))

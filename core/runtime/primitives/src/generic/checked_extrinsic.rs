@@ -17,7 +17,6 @@
 //! Generic implementation of an extrinsic that has passed the verification
 //! stage.
 
-use runtime_support::Dispatchable;
 use traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 
 /// Definition of something that the external world might want to say; its
@@ -39,11 +38,11 @@ impl<AccountId, Index, Call> traits::Applyable
 where
 	AccountId: Member + MaybeDisplay,
 	Index: Member + MaybeDisplay + SimpleArithmetic,
-	Call: Member + Dispatchable,
-	<Call as Dispatchable>::Origin: From<Option<AccountId>> 
+	Call: Member 
 {
 	type Index = Index;
 	type AccountId = AccountId;
+	type Call = Call;
 
 	fn index(&self) -> &Self::Index {
 		&self.index
@@ -53,7 +52,7 @@ where
 		self.signed.as_ref()
 	}
 
-	fn apply(self) -> Result<(), &'static str> {
-		self.function.dispatch(self.signed.into())
+	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
+		(self.function, self.signed)
 	}
 }
