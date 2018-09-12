@@ -568,3 +568,42 @@ pub fn cache_authorities_at<Block: BlockT>(
 ) {
 	blockchain.cache.insert(at, authorities);
 }
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+	use primitives::{KeccakHasher, RlpCodec};
+	use test_client;
+	use test_client::TestClient;
+	use runtime_primitives::traits::Block as BlockT;
+	use state_machine::ExecutionStrategy;
+	use test_client::backend::Backend as ClientBackendT;
+	use test_client::client::BlockOrigin;
+	use test_client::blockchain::Backend as BlockChainBackendT;
+
+	type TestBackend = test_client::client::in_mem::Backend<test_client::runtime::Block, KeccakHasher, RlpCodec>;
+
+	#[test]
+	fn test_leaves() {
+		// block tree:
+		// G -> A1 -> A2
+
+		let backend = TestBackend::new();
+		let backend = Arc::new(backend);
+		let client = test_client::new_with_backend(backend.clone()).unwrap();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![a1.hash()]);
+
+		// A1 -> A2
+		let a2 = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+		assert_eq!(
+			client.backend().blockchain().leaves().unwrap(),
+			vec![a2.hash()]);
+	}
+}
