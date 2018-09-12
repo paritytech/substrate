@@ -20,9 +20,13 @@
 //! it should be removed entirely to an external module for shimming on to the
 //! codec-encoded metadata.
 
+#![cfg_attr(not(feature = "std"), no_std)]
+
 extern crate parity_codec as codec;
 
-use codec::{Encode, Decode, Input, Output};
+use codec::{Encode, Output};
+#[cfg(feature = "std")]
+use codec::{Decode, Input};
 
 /// The metadata of a runtime encoded as JSON.
 #[derive(Eq)]
