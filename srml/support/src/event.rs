@@ -20,10 +20,10 @@
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate substrate_runtime_support;
-/// extern crate substrate_codec as codec;
+/// extern crate srml_support;
+/// extern crate parity_codec as codec;
 /// #[macro_use]
-/// extern crate substrate_codec_derive;
+/// extern crate parity_codec_derive;
 /// #[macro_use]
 /// extern crate serde_derive;
 ///
@@ -40,10 +40,10 @@
 ///
 /// ```rust
 /// #[macro_use]
-/// extern crate substrate_runtime_support;
-/// extern crate substrate_codec as codec;
+/// extern crate srml_support;
+/// extern crate parity_codec as codec;
 /// #[macro_use]
-/// extern crate substrate_codec_derive;
+/// extern crate parity_codec_derive;
 /// #[macro_use]
 /// extern crate serde_derive;
 ///
