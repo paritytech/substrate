@@ -45,6 +45,9 @@ pub use client::backend;
 pub use executor::NativeExecutor;
 
 use primitives::{Blake2Hasher, RlpCodec};
+use runtime_primitives::StorageMap;
+use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+use keyring::Keyring;
 
 mod local_executor {
 	#![allow(missing_docs)]
@@ -74,8 +77,23 @@ pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
 /// This is useful for testing backend implementations.
 pub fn new_with_backend<B>(backend: Arc<B>) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block>
 	where
-		B: backend::LocalBackend<runtime::Block, KeccakHasher, RlpCodec>,
+		B: backend::LocalBackend<runtime::Block, Blake2Hasher, RlpCodec>,
 {
 	let executor = NativeExecutor::new();
 	client::new_with_backend(backend, executor, genesis_storage()).unwrap()
+}
+
+fn genesis_config() -> GenesisConfig {
+	GenesisConfig::new_simple(vec![
+		Keyring::Alice.to_raw_public().into(),
+		Keyring::Bob.to_raw_public().into(),
+		Keyring::Charlie.to_raw_public().into(),
+	], 1000)
+}
+
+fn genesis_storage() -> StorageMap {
+		let mut storage = genesis_config().genesis_map();
+		let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
+		storage.extend(additional_storage_with_genesis(&block));
+		storage
 }
