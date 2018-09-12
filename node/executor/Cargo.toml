@@ -18,11 +18,11 @@ node-runtime = { path = "../runtime" }
 [dev-dependencies]
 substrate-keyring = { path = "../../core/keyring" }
 sr-primitives = { path = "../../core/sr-primitives" }
-substrate-runtime-support = { path = "../../core/runtime/support" }
-substrate-runtime-balances = { path = "../../core/runtime/balances" }
-substrate-runtime-session = { path = "../../core/runtime/session" }
-substrate-runtime-staking = { path = "../../core/runtime/staking" }
-substrate-runtime-system = { path = "../../core/runtime/system" }
-substrate-runtime-consensus = { path = "../../core/runtime/consensus" }
-substrate-runtime-timestamp = { path = "../../core/runtime/timestamp" }
-substrate-runtime-treasury = { path = "../../core/runtime/treasury" }
+substrate-runtime-support = { path = "../../core/srml/support" }
+substrate-runtime-balances = { path = "../../core/srml/balances" }
+substrate-runtime-session = { path = "../../core/srml/session" }
+substrate-runtime-staking = { path = "../../core/srml/staking" }
+substrate-runtime-system = { path = "../../core/srml/system" }
+substrate-runtime-consensus = { path = "../../core/srml/consensus" }
+substrate-runtime-timestamp = { path = "../../core/srml/timestamp" }
+substrate-runtime-treasury = { path = "../../core/srml/treasury" }

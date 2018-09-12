@@ -1,5 +1,5 @@
 [package]
-name = "substrate-runtime-consensus"
+name = "substrate-runtime-treasury"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
@@ -7,26 +7,28 @@ authors = ["Parity Technologies <admin@parity.io>"]
 hex-literal = "0.1.0"
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
+sr-std = { path = "../../sr-std", default_features = false }
+sr-io = { path = "../../sr-io", default_features = false }
+substrate-runtime-support = { path = "../../srml/support", default_features = false }
+sr-primitives = { path = "../../sr-primitives", default_features = false }
 parity-codec = { path = "../../../codec", default_features = false }
 parity-codec-derive = { path = "../../../codec/derive", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
-sr-std = { path = "../../sr-std", default_features = false }
-sr-io = { path = "../../sr-io", default_features = false }
-substrate-runtime-support = { path = "../../runtime/support", default_features = false }
-sr-primitives = { path = "../../sr-primitives", default_features = false }
 substrate-runtime-system = { path = "../system", default_features = false }
+substrate-runtime-balances = { path = "../balances", default_features = false }
 
 [features]
 default = ["std"]
 std = [
+	"sr-std/std",
+	"sr-io/std",
+	"substrate-runtime-support/std",
+	"sr-primitives/std",
+	"substrate-runtime-balances/std",
 	"serde/std",
 	"serde_derive",
 	"parity-codec/std",
 	"parity-codec-derive/std",
 	"substrate-primitives/std",
-	"sr-std/std",
-	"sr-io/std",
-	"substrate-runtime-support/std",
-	"sr-primitives/std",
 	"substrate-runtime-system/std",
 ]

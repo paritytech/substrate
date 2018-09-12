@@ -37,7 +37,7 @@ include::../../core/rpc/README.adoc[]
 
 include::../../core/rpc-servers/README.adoc[]
 
-include::../../core/runtime/README.adoc[]
+include::../../core/srml/README.adoc[]
 
 include::../../core/sr-io/README.adoc[]
 
@@ -59,6 +59,6 @@ include::../../core/telemetry/README.adoc[]
 
 include::../../core/test-client/README.adoc[]
 
-include::../../core/test-runtime/README.adoc[]
+include::../../core/test-srml/README.adoc[]
 
 :leveloffset: -3

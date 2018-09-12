@@ -12,8 +12,8 @@ sr-primitives = { path = "../../sr-primitives", default_features = false }
 sr-io = { path = "../../sr-io", default_features = false }
 sr-std = { path = "../../sr-std", default_features = false }
 sr-sandbox = { path = "../../sr-sandbox", default_features = false }
-substrate-runtime-support = { path = "../../runtime/support", default_features = false }
-substrate-runtime-system = { path = "../../runtime/system", default_features = false }
+substrate-runtime-support = { path = "../../srml/support", default_features = false }
+substrate-runtime-system = { path = "../../srml/system", default_features = false }
 substrate-runtime-balances = { path = "../balances", default_features = false }
 parity-wasm = { version = "0.31", default_features = false }
 pwasm-utils = { version = "0.3", default_features = false }
