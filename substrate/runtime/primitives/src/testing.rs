@@ -45,16 +45,6 @@ impl traits::Digest for Digest {
 	}
 }
 
-/*impl traits::DigestItem for () {
-	type Hash = H256;
-	type AuthorityId = ();
-}
-
-impl traits::DigestItem for u64 {
-	type Hash = H256;
-	type AuthorityId = ();
-}*/
-
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
