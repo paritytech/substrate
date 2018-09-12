@@ -45,7 +45,6 @@ pub use client::backend;
 pub use executor::NativeExecutor;
 
 use primitives::{Blake2Hasher, RlpCodec};
-use runtime_primitives::traits::Block as BlockT;
 
 mod local_executor {
 	#![allow(missing_docs)]

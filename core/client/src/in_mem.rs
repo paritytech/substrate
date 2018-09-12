@@ -576,7 +576,6 @@ mod tests {
 	use test_client;
 	use test_client::TestClient;
 	use runtime_primitives::traits::Block as BlockT;
-	use state_machine::ExecutionStrategy;
 	use test_client::backend::Backend as ClientBackendT;
 	use test_client::client::BlockOrigin;
 	use test_client::blockchain::Backend as BlockChainBackendT;
