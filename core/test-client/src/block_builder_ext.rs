@@ -21,16 +21,19 @@ use client;
 use keyring;
 use runtime;
 
-use {Backend, Executor};
 use primitives::{Blake2Hasher, RlpCodec};
 
 /// Extension trait for test block builder.
-pub trait BlockBuilderExt {
+pub trait BlockBuilderExt<B, E> {
 	/// Add transfer extrinsic to the block.
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 }
 
-impl BlockBuilderExt for client::block_builder::BlockBuilder<Backend, Executor, runtime::Block, Blake2Hasher, RlpCodec> {
+impl<B, E> BlockBuilderExt<B, E> for client::block_builder::BlockBuilder<B, E, runtime::Block, Blake2Hasher, RlpCodec>
+    where
+        B: client::backend::Backend<runtime::Block, Blake2Hasher, RlpCodec>,
+        E: client::CallExecutor<runtime::Block, Blake2Hasher, RlpCodec> + Clone,
+{
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(sign_tx(transfer))
 	}
