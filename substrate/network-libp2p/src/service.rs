@@ -464,6 +464,7 @@ fn init_thread(
 		match shared.network_state.add_bootstrap_peer(bootnode) {
 			Ok((who, addr)) => {
 				trace!(target: "sub-libp2p", "Dialing bootnode {:?} through {}", who, addr);
+				shared.kad_system.update_kbuckets(who.clone());
 				for proto in shared.protocols.0.clone().into_iter() {
 					open_peer_custom_proto(
 						shared.clone(),
@@ -509,7 +510,7 @@ fn init_thread(
 		}
 	}
 
-	let outgoing_connections = Interval::new(Instant::now(), Duration::from_secs(5))
+	let outgoing_connections = Interval::new(Instant::now(), Duration::from_secs(1))
 		.map_err(|err| IoError::new(IoErrorKind::Other, err))
 		.for_each({
 			let shared = shared.clone();
@@ -690,8 +691,6 @@ fn handle_kademlia_connection(
 	let node_id2 = node_id.clone();
 	let future = future::loop_fn(kademlia_stream, move |kademlia_stream| {
 		let shared = shared.clone();
-		let node_id = node_id.clone();
-
 		let next = kademlia_stream
 			.into_future()
 			.map_err(|(err, _)| err);
@@ -702,7 +701,6 @@ fn handle_kademlia_connection(
 				IoError::new(IoErrorKind::Other, err)
 			)
 			.and_then(move |(req, rest)| {
-				shared.kad_system.update_kbuckets(node_id);
 				match req {
 					Some(KadIncomingRequest::FindNode { searched, responder }) => {
 						let resp = build_kademlia_response(&shared, &searched);
@@ -1126,6 +1124,16 @@ fn open_peer_custom_proto<T, To, St, C>(
 				}
 			});
 
+		let with_disconnect = with_peer_check
+			.map_err({
+				let shared = shared.clone();
+				move |err| {
+					// If we fail to reach the dot protocol, drop the peer altogether.
+					shared.network_state.drop_peer(expected_node_index);
+					err
+				}
+			});
+
 		trace!(target: "sub-libp2p",
 			"Opening connection to {:?} through {} with proto {:?}",
 			expected_peer_id,
@@ -1133,7 +1141,7 @@ fn open_peer_custom_proto<T, To, St, C>(
 			proto_id
 		);
 
-		let _ = unique_connec.dial(swarm_controller, &addr, with_peer_check);
+		let _ = unique_connec.dial(swarm_controller, &addr, with_disconnect);
 
 	} else {
 		let trans = with_timeout.map(|(_, out), _| out);
@@ -1365,7 +1373,6 @@ fn periodic_updates<Tp, Tid, St, C>(
 						let elapsed = ping_start_time.elapsed();
 						trace!(target: "sub-libp2p", "Pong from #{:?} in {:?}", who, elapsed);
 						shared.network_state.report_ping_duration(node_index, elapsed);
-						shared.kad_system.update_kbuckets(who);
 						Ok(())
 					}
 				}
