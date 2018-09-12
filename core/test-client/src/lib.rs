@@ -33,14 +33,19 @@ pub extern crate substrate_client as client;
 pub extern crate substrate_keyring as keyring;
 pub extern crate substrate_test_runtime as runtime;
 
-mod client_ext;
+pub mod client_ext;
 mod block_builder_ext;
+
+use std::sync::Arc;
 
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
 pub use client::blockchain;
+pub use client::backend;
+pub use executor::NativeExecutor;
 
 use primitives::{Blake2Hasher, RlpCodec};
+use runtime_primitives::traits::Block as BlockT;
 
 mod local_executor {
 	#![allow(missing_docs)]
@@ -64,4 +69,14 @@ pub type Executor = client::LocalCallExecutor<
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
 	TestClient::new_for_tests()
+}
+
+/// Creates new client instance used for tests with an explicitely provided backend.
+/// This is useful for testing backend implementations.
+pub fn new_with_backend<B>(backend: Arc<B>) -> client::error::Result<client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block>>
+	where
+		B: backend::LocalBackend<runtime::Block, KeccakHasher, RlpCodec>,
+{
+	let executor = NativeExecutor::new();
+	client::new_with_backend(backend, executor, client_ext::genesis_storage())
 }

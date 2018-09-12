@@ -103,7 +103,7 @@ fn genesis_config() -> GenesisConfig {
 	], 1000)
 }
 
-fn genesis_storage() -> StorageMap {
+pub fn genesis_storage() -> StorageMap {
 		let mut storage = genesis_config().genesis_map();
 		let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
 		storage.extend(additional_storage_with_genesis(&block));
