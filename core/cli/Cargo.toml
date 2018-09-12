@@ -1,0 +1,35 @@
+[package]
+name = "substrate-cli"
+version = "0.3.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate CLI interface."
+build = "build.rs"
+
+[dependencies]
+clap = { version = "~2.32", features = ["yaml"] }
+backtrace = "0.3"
+env_logger = "0.4"
+error-chain = "0.12"
+log = "0.3"
+atty = "0.2"
+regex = "1"
+time = "0.1"
+slog = "^2"
+ansi_term = "0.10"
+lazy_static = "1.0"
+app_dirs = "1.2"
+tokio = "0.1.7"
+futures = "0.1.17"
+fdlimit = "0.1"
+exit-future = "0.1"
+sysinfo = "0.5.7"
+substrate-client = { path = "../../core/client" }
+substrate-network = { path = "../../core/network" }
+substrate-network-libp2p = { path = "../../core/network-libp2p" }
+sr-primitives = { path = "../../core/sr-primitives" }
+substrate-service = { path = "../../core/service" }
+substrate-telemetry = { path = "../../core/telemetry" }
+names = "0.11.0"
+
+[build-dependencies]
+clap = "~2.32"

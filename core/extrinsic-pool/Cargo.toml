@@ -1,0 +1,19 @@
+[package]
+name = "substrate-extrinsic-pool"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+serde = "1.0"
+serde_derive = "1.0"
+error-chain = "0.12"
+futures = "0.1"
+log = "0.3"
+parking_lot = "0.4"
+transaction-pool = "1.13.2"
+sr-primitives = { path = "../../core/sr-primitives" }
+
+[dev-dependencies]
+substrate-test-client = { path = "../../core/test-client" }
+substrate-keyring = { path = "../../core/keyring" }
+parity-codec = { path = "../../codec" }

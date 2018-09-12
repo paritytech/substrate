@@ -1,0 +1,35 @@
+[package]
+name = "srml-timestamp"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+hex-literal = "0.1.0"
+serde = { version = "1.0", default_features = false }
+serde_derive = { version = "1.0", optional = true }
+parity-codec = { path = "../../codec", default_features = false }
+substrate-primitives = { path = "../../core/primitives", default_features = false }
+sr-std = { path = "../../core/sr-std", default_features = false }
+sr-io = { path = "../../core/sr-io", default_features = false }
+sr-primitives = { path = "../../core/sr-primitives", default_features = false }
+srml-support = { path = "../support", default_features = false }
+srml-system = { path = "../system", default_features = false }
+srml-consensus = { path = "../consensus", default_features = false }
+
+[dev-dependencies]
+sr-io = { path = "../../core/sr-io", default_features = true }
+
+[features]
+default = ["std"]
+std = [
+	"sr-std/std",
+	"sr-io/std",
+	"srml-support/std",
+	"sr-primitives/std",
+	"srml-consensus/std",
+	"serde/std",
+	"serde_derive",
+	"parity-codec/std",
+	"substrate-primitives/std",
+	"srml-system/std",
+]

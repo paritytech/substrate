@@ -1,0 +1,12 @@
+name: substrate-node
+author: "Parity Team <admin@parity.io>"
+about: Substrate Node Rust Implementation
+args:
+  - log:
+      short: l
+      value_name: LOG_PATTERN
+      help: Sets a custom logging
+      takes_value: true
+subcommands:
+  - validator:
+      about: Run validator node

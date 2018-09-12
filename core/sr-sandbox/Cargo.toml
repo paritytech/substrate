@@ -1,0 +1,31 @@
+[package]
+name = "sr-sandbox"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+build = "build.rs"
+
+[build-dependencies]
+rustc_version = "0.2"
+
+[dependencies]
+wasmi = { version = "0.4", optional = true }
+substrate-primitives = { path = "../primitives", default_features = false }
+sr-std = { path = "../sr-std", default_features = false }
+sr-io = { path = "../sr-io", default_features = false }
+parity-codec = { path = "../../codec", default_features = false }
+
+[dev-dependencies]
+wabt = "0.4"
+assert_matches = "1.1"
+
+[features]
+default = ["std"]
+std = [
+	"wasmi",
+	"substrate-primitives/std",
+	"sr-std/std",
+	"parity-codec/std",
+	"sr-io/std",
+]
+nightly = []
+strict = []

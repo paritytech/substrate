@@ -1,0 +1,63 @@
+[package]
+name = "node-runtime"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
+safe-mix = { version = "1.0", default_features = false}
+parity-codec-derive = { path = "../../../codec/derive" }
+parity-codec = { path = "../../../codec", default-features = false }
+substrate-primitives = { path = "../../../core/primitives", default-features = false }
+sr-std = { path = "../../../core/sr-std", default-features = false }
+sr-io = { path = "../../../core/sr-io", default-features = false }
+srml-support = { path = "../../../srml/support", default-features = false }
+srml-balances = { path = "../../../srml/balances", default-features = false }
+srml-consensus = { path = "../../../srml/consensus", default-features = false }
+srml-contract = { path = "../../../srml/contract", default-features = false }
+srml-council = { path = "../../../srml/council", default-features = false }
+srml-democracy = { path = "../../../srml/democracy", default-features = false }
+srml-executive = { path = "../../../srml/executive", default-features = false }
+sr-primitives = { path = "../../../core/sr-primitives", default-features = false }
+srml-session = { path = "../../../srml/session", default-features = false }
+srml-staking = { path = "../../../srml/staking", default-features = false }
+srml-system = { path = "../../../srml/system", default-features = false }
+srml-timestamp = { path = "../../../srml/timestamp", default-features = false }
+srml-treasury = { path = "../../../srml/treasury", default-features = false }
+sr-version = { path = "../../../core/sr-version", default-features = false }
+node-primitives = { path = "../../primitives", default-features = false }
+
+[features]
+default = []
+std = [
+	"safe-mix/std",
+	"parity-codec/std",
+	"substrate-primitives/std",
+	"sr-std/std",
+	"sr-io/std",
+	"srml-support/std",
+	"srml-balances/std",
+	"srml-consensus/std",
+	"srml-contract/std",
+	"srml-council/std",
+	"srml-democracy/std",
+	"srml-executive/std",
+	"sr-primitives/std",
+	"srml-session/std",
+	"srml-staking/std",
+	"srml-system/std",
+	"srml-timestamp/std",
+	"srml-treasury/std",
+	"sr-version/std",
+	"node-primitives/std",
+]
+
+[profile.release]
+panic = "abort"
+lto = true
+
+[workspace]
+members = []

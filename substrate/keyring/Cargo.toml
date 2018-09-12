@@ -1,9 +1,0 @@
-[package]
-name = "substrate-keyring"
-version = "0.1.0"
-authors = ["Parity Technologies <admin@parity.io>"]
-
-[dependencies]
-ed25519 = { path = "../ed25519" }
-hex-literal = { version = "0.1.0" }
-lazy_static = { version = "1.0" }
