@@ -24,3 +24,6 @@ substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }
 substrate-service = { path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
+
+[dev-dependencies]
+substrate-service-test = { path = "../../core/service/test" }

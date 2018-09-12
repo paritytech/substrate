@@ -30,6 +30,8 @@ extern crate substrate_network as network;
 extern crate substrate_client as client;
 extern crate substrate_service as service;
 extern crate tokio;
+#[cfg(test)]
+extern crate substrate_service_test as service_test;
 
 #[macro_use]
 extern crate log;
@@ -50,7 +52,7 @@ use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
 use primitives::{Blake2Hasher};
 
-pub use service::{Roles, PruningMode, TransactionPoolOptions,
+pub use service::{Roles, PruningMode, TransactionPoolOptions, ServiceFactory,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 pub use client::ExecutionStrategy;
 
@@ -101,6 +103,8 @@ impl service::ServiceFactory for Factory {
 	type LightTransactionPoolApi = transaction_pool::ChainApi<service::LightClient<Self>>;
 	type Genesis = GenesisConfig;
 	type Configuration = CustomConfiguration;
+	type FullService = Service<service::FullComponents<Self>>;
+	type LightService = Service<service::LightComponents<Self>>;
 
 	const NETWORK_PROTOCOL_ID: network::ProtocolId = ::node_network::PROTOCOL_ID;
 
@@ -121,80 +125,54 @@ impl service::ServiceFactory for Factory {
 	{
 		Ok(DemoProtocol::new())
 	}
+
+	fn new_light(config: Configuration, executor: TaskExecutor)
+		-> Result<Service<LightComponents<Factory>>, Error>
+	{
+		let service = service::Service::<LightComponents<Factory>>::new(config, executor.clone())?;
+		Ok(Service {
+			inner: service,
+			_consensus: None,
+		})
+	}
+
+	fn new_full(config: Configuration, executor: TaskExecutor)
+		-> Result<Service<FullComponents<Factory>>, Error>
+	{
+		let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
+		let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
+		// Spin consensus service if configured
+		let consensus = if is_validator {
+			// Load the first available key
+			let key = service.keystore().load(&service.keystore().contents()?[0], "")?;
+			info!("Using authority key {}", key.public());
+
+			let client = service.client();
+
+			let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
+			Some(consensus::Service::new(
+					client.clone(),
+					client.clone(),
+					consensus_net,
+					service.transaction_pool(),
+					executor,
+					key,
+					))
+		} else {
+			None
+		};
+
+		Ok(Service {
+			inner: service,
+			_consensus: consensus,
+		})
+	}
 }
 
 /// Demo service.
 pub struct Service<C: Components> {
 	inner: service::Service<C>,
-	client: Arc<ComponentClient<C>>,
-	network: Arc<NetworkService>,
-	api: Arc<<C as Components>::Api>,
 	_consensus: Option<consensus::Service>,
-}
-
-impl <C: Components> Service<C> {
-	pub fn client(&self) -> Arc<ComponentClient<C>> {
-		self.client.clone()
-	}
-
-	pub fn network(&self) -> Arc<NetworkService> {
-		self.network.clone()
-	}
-
-	pub fn api(&self) -> Arc<<C as Components>::Api> {
-		self.api.clone()
-	}
-}
-
-/// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration, executor: TaskExecutor)
-	-> Result<Service<LightComponents<Factory>>, Error>
-{
-	let service = service::Service::<LightComponents<Factory>>::new(config, executor.clone())?;
-	let api = service.client();
-	Ok(Service {
-		client: service.client(),
-		network: service.network(),
-		api: api,
-		inner: service,
-		_consensus: None,
-	})
-}
-
-/// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration, executor: TaskExecutor)
-	-> Result<Service<FullComponents<Factory>>, Error>
-{
-	let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
-	let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
-	// Spin consensus service if configured
-	let consensus = if is_validator {
-		// Load the first available key
-		let key = service.keystore().load(&service.keystore().contents()?[0], "")?;
-		info!("Using authority key {}", key.public());
-
-		let client = service.client();
-
-		let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
-		Some(consensus::Service::new(
-			client.clone(),
-			client.clone(),
-			consensus_net,
-			service.transaction_pool(),
-			executor,
-			key,
-		))
-	} else {
-		None
-	};
-
-	Ok(Service {
-		client: service.client(),
-		network: service.network(),
-		api: service.client(),
-		inner: service,
-		_consensus: consensus,
-	})
 }
 
 /// Creates bare client without any networking.
@@ -209,5 +187,17 @@ impl<C: Components> ::std::ops::Deref for Service<C> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.inner
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use service_test;
+	use super::Factory;
+	use chain_spec;
+
+	#[test]
+	fn test_connectivity() {
+		service_test::connectivity_test::<Factory>(chain_spec::local_testnet_config());
 	}
 }

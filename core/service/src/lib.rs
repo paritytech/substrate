@@ -25,6 +25,7 @@ extern crate futures;
 extern crate exit_future;
 extern crate serde;
 extern crate serde_json;
+extern crate parking_lot;
 extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
@@ -61,6 +62,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::collections::HashMap;
 use futures::prelude::*;
+use parking_lot::Mutex;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
@@ -93,7 +95,7 @@ pub struct Service<Components: components::Components> {
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	_rpc_http: Option<rpc::HttpServer>,
-	_rpc_ws: Option<rpc::WsServer>,
+	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not Sync, but the service needs tp be.
 	_telemetry: Option<tel::Telemetry>,
 }
 
@@ -267,7 +269,7 @@ impl<Components> Service<Components>
 			keystore: keystore,
 			exit,
 			_rpc_http: rpc_http,
-			_rpc_ws: rpc_ws,
+			_rpc_ws: rpc_ws.map(Mutex::new),
 			_telemetry: telemetry,
 		})
 	}

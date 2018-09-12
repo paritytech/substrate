@@ -28,6 +28,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
 
 /// Service configuration.
+#[derive(Clone)]
 pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Implementation name
 	pub impl_name: &'static str,
@@ -53,8 +54,6 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub chain_spec: ChainSpec<G>,
 	/// Custom configuration.
 	pub custom: C,
-	/// Telemetry server URL, optional - only `Some` if telemetry reporting is enabled
-	pub telemetry: Option<String>,
 	/// Node name.
 	pub name: String,
 	/// Execution strategy.
@@ -83,7 +82,6 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			database_path: Default::default(),
 			keys: Default::default(),
 			custom: Default::default(),
-			telemetry: Default::default(),
 			pruning: PruningMode::default(),
 			execution_strategy: ExecutionStrategy::Both,
 			rpc_http: None,

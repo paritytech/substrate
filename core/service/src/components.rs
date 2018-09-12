@@ -19,11 +19,13 @@
 use std::fmt;
 use std::sync::Arc;
 use std::marker::PhantomData;
+use std::ops::Deref;
 use serde::{Serialize, de::DeserializeOwned};
+use tokio::runtime::TaskExecutor;
 use chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client};
-use error;
+use {error, Service};
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
@@ -113,7 +115,7 @@ pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// A collection of types and methods to build a service on top of the substrate service.
-pub trait ServiceFactory: 'static {
+pub trait ServiceFactory: 'static + Sized {
 	/// Block type.
 	type Block: BlockT;
 	/// Extrinsic hash type.
@@ -123,13 +125,17 @@ pub trait ServiceFactory: 'static {
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool backend type for the full client.
-	type FullTransactionPoolApi: transaction_pool::ChainApi<Hash=Self::ExtrinsicHash, Block=Self::Block> + Send + 'static;
+	type FullTransactionPoolApi: transaction_pool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + Send + 'static;
 	/// Extrinsic pool backend type for the light client.
-	type LightTransactionPoolApi: transaction_pool::ChainApi<Hash=Self::ExtrinsicHash, Block=Self::Block> + 'static;
+	type LightTransactionPoolApi: transaction_pool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + 'static;
 	/// Genesis configuration for the runtime.
 	type Genesis: RuntimeGenesis;
 	/// Other configuration for service members.
 	type Configuration: Default;
+	/// Extended full service type.
+	type FullService: Deref<Target = Service<FullComponents<Self>>> + Send + Sync + 'static;
+	/// Extended light service type.
+	type LightService: Deref<Target = Service<LightComponents<Self>>> + Send + Sync + 'static;
 
 	/// Network protocol id.
 	const NETWORK_PROTOCOL_ID: network::ProtocolId;
@@ -145,6 +151,13 @@ pub trait ServiceFactory: 'static {
 	/// Build network protocol.
 	fn build_network_protocol(config: &FactoryFullConfiguration<Self>)
 		-> Result<Self::NetworkProtocol, error::Error>;
+
+	/// Build full service.
+	fn new_full(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
+		-> Result<Self::FullService, error::Error>;
+	/// Build light service.
+	fn new_light(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
+		-> Result<Self::LightService, error::Error>;
 }
 
 /// A collection of types and function to generalise over full / light client type.
@@ -156,7 +169,10 @@ pub trait Components: 'static {
 	/// Client executor.
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync;
 	/// Extrinsic pool type.
-	type TransactionPoolApi: 'static + transaction_pool::ChainApi<Hash=<Self::Factory as ServiceFactory>::ExtrinsicHash, Block=FactoryBlock<Self::Factory>>;
+	type TransactionPoolApi: 'static + transaction_pool::ChainApi<
+		Hash = <Self::Factory as ServiceFactory>::ExtrinsicHash,
+		Block = FactoryBlock<Self::Factory>
+	>;
 
 	/// Create client.
 	fn build_client(

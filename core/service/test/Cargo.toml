@@ -1,0 +1,13 @@
+[package]
+name = "substrate-service-test"
+version = "0.3.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+tempdir = "0.3"
+tokio = "0.1.7"
+futures = "0.1"
+env_logger = "0.4"
+substrate-service = { path = "../../../core/service" }
+substrate-network = { path = "../../../core/network" }
+substrate-primitives = { path = "../../../core/primitives" }
