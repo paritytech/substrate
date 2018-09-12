@@ -199,21 +199,16 @@ impl<
 	}
 
 	fn final_checks(header: &System::Header) {
-		// check digest
-		assert!(header.digest() == &<system::Module<System>>::digest());
-
 		// remove temporaries.
-		<system::Module<System>>::finalise();
+		let new_header = <system::Module<System>>::finalise();
+
+		// check digest
+		assert!(header.digest() == new_header.digest());
 
 		// check storage root.
 		let storage_root = System::Hashing::storage_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == &storage_root, "Storage root must match that calculated.");
-
-		// check storage changes root
-		let storage_changes_root = System::Hashing::storage_changes_root();
-		header.changes_root().check_equal(&storage_changes_root.as_ref());
-		assert!(header.changes_root() == storage_changes_root.as_ref(), "Storage change root must match that calculated.");
 	}
 }
 
@@ -225,7 +220,7 @@ mod tests {
 	use substrate_primitives::{H256, KeccakHasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, Lookup};
-	use primitives::testing::{Digest, Header, Block};
+	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use system;
 
 	struct NullLookup;
@@ -261,6 +256,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = MetaEvent;
+		type Log = DigestItem;
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
@@ -288,7 +284,7 @@ mod tests {
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69));
 		let mut t = runtime_io::TestExternalities::<KeccakHasher, RlpCodec>::new(t);
 		with_externalities(&mut t, || {
-			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), None,
+			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(),
 				[69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt).unwrap();
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 32);
@@ -310,7 +306,6 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: hex!("14a253cb1c5f38beeec8bee962a941b2ba0773b7593564fbe62b9c3a46784df5").into(),
-					changes_root: None,
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -328,7 +323,6 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: [0u8; 32].into(),
-					changes_root: Some([0u8; 32].into()),
 					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -346,7 +340,6 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: hex!("14a253cb1c5f38beeec8bee962a941b2ba0773b7593564fbe62b9c3a46784df5").into(),
-					changes_root: None,
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},
@@ -360,7 +353,7 @@ mod tests {
 		let mut t = new_test_ext();
 		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33.into(), 69));
 		with_externalities(&mut t, || {
-			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), None, [69u8; 32].into(), Digest::default()));
+			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());
 			assert_eq!(<system::Module<Runtime>>::extrinsic_index(), Some(0));
 		});

@@ -73,7 +73,6 @@ where
 			number,
 			Default::default(),
 			Default::default(),
-			Default::default(),
 			parent_hash,
 			Default::default()
 		);

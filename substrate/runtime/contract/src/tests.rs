@@ -16,7 +16,7 @@
 
 use double_map::StorageDoubleMap;
 use runtime_io::with_externalities;
-use runtime_primitives::testing::{Digest, H256, Header};
+use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
 use runtime_primitives::traits::{BlakeTwo256};
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
@@ -43,6 +43,7 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Header = Header;
 	type Event = ();
+	type Log = DigestItem;
 }
 impl balances::Trait for Test {
 	type Balance = u64;

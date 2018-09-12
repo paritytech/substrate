@@ -56,7 +56,8 @@ use parking_lot::RwLock;
 use primitives::{H256, AuthorityId, KeccakHasher, RlpCodec};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor, NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor,
+	NumberFor, Zero, Digest, DigestItem};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
@@ -330,7 +331,9 @@ impl<Block: BlockT> state_machine::ChangesTrieStorage<KeccakHasher> for DbChange
 					.map(Some),
 				None => Ok(None)
 			})?
-			.and_then(|header| header.changes_root().clone()
+			.and_then(|header| header.digest().logs().iter()
+				.find(|log| log.as_changes_trie_root().is_some())
+				.and_then(DigestItem::as_changes_trie_root)
 				.map(|root| H256::from_slice(root.as_ref()))))
 	}
 
@@ -581,7 +584,6 @@ mod tests {
 						db.blockchain.hash(i - 1).unwrap().unwrap()
 					},
 					state_root: Default::default(),
-					changes_root: Default::default(),
 					digest: Default::default(),
 					extrinsics_root: Default::default(),
 				};
@@ -608,7 +610,6 @@ mod tests {
 				number: 0,
 				parent_hash: Default::default(),
 				state_root: Default::default(),
-				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};
@@ -648,7 +649,6 @@ mod tests {
 				number: 1,
 				parent_hash: Default::default(),
 				state_root: Default::default(),
-				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};
@@ -690,7 +690,6 @@ mod tests {
 				number: 0,
 				parent_hash: Default::default(),
 				state_root: Default::default(),
-				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};
@@ -726,7 +725,6 @@ mod tests {
 				number: 1,
 				parent_hash: hash,
 				state_root: Default::default(),
-				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};
@@ -761,7 +759,6 @@ mod tests {
 				number: 2,
 				parent_hash: hash,
 				state_root: Default::default(),
-				changes_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),
 			};
@@ -809,13 +806,20 @@ mod tests {
 		};
 
 		let insert_header = |number: u64, parent_hash: H256, changes: Vec<(Vec<u8>, Vec<u8>)>| {
+			use runtime_primitives::generic::DigestItem;
+			use runtime_primitives::testing::Digest;
+
 			let (changes_root, changes_trie_update) = prepare_changes(changes);
+			let digest = Digest {
+				logs: vec![
+					DigestItem::ChangesTrieRoot(changes_root),
+				],
+			};
 			let header = Header {
 				number,
 				parent_hash,
 				state_root: Default::default(),
-				changes_root: Some(changes_root),
-				digest: Default::default(),
+				digest,
 				extrinsics_root: Default::default(),
 			};
 			let header_hash = header.hash();

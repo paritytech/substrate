@@ -46,7 +46,7 @@ use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member, DigestItem};
+use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member};
 use primitives::bft::MisbehaviorReport;
 use system::{ensure_signed, ensure_inherent, ensure_root};
 
@@ -83,22 +83,24 @@ pub enum RawLog<SessionKey> {
 	AuthoritiesChange(Vec<SessionKey>),
 }
 
-impl<SessionKey: Member> DigestItem for RawLog<SessionKey> {
-	type AuthorityId = SessionKey;
-
+impl<SessionKey: Member> RawLog<SessionKey> {
 	/// Try to cast the log entry as AuthoritiesChange log entry.
-	fn as_authorities_change(&self) -> Option<&[SessionKey]> {
+	pub fn as_authorities_change(&self) -> Option<&[SessionKey]> {
 		match *self {
-			RawLog::AuthoritiesChange(ref item) => Some(&item),
+			RawLog::AuthoritiesChange(ref item) => Some(item),
 		}
 	}
 }
 
 // Implementation for tests outside of this crate.
-impl<N> From<RawLog<N>> for u64 {
-	fn from(log: RawLog<N>) -> u64 {
+#[cfg(any(feature = "std", test))]
+impl<N> From<RawLog<N>> for primitives::testing::DigestItem {
+	fn from(log: RawLog<N>) -> primitives::testing::DigestItem {
 		match log {
-			RawLog::AuthoritiesChange(_) => 1,
+			RawLog::AuthoritiesChange(authorities) =>
+				primitives::generic::DigestItem::AuthoritiesChange
+					::<substrate_primitives::H256, u64>(authorities.into_iter()
+						.enumerate().map(|(i, _)| i as u64).collect()),
 		}
 	}
 }

@@ -264,7 +264,6 @@ pub(crate) mod tests {
 			number: number.into(),
 			parent_hash: *parent,
 			state_root: Default::default(),
-			changes_root: Default::default(),
 			digest: Default::default(),
 			extrinsics_root: Default::default(),
 		};

@@ -45,7 +45,7 @@ extern crate safe_mix;
 use rstd::prelude::*;
 use substrate_primitives::ChangesTrieConfiguration;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay, EnsureOrigin, As};
+	Hash, Member, MaybeDisplay, EnsureOrigin, As, Digest as _Digest};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -72,7 +72,7 @@ pub trait Trait: Eq + Clone {
 	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
 	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Parameter + Member + Default + traits::Digest;
+	type Digest: Parameter + Member + Default + traits::Digest<Hash = Self::Hash>;
 	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
@@ -80,6 +80,7 @@ pub trait Trait: Eq + Clone {
 		Digest = Self::Digest
 	>;
 	type Event: Parameter + Member + From<Event>;
+	type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
 }
 
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
@@ -145,6 +146,39 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 
 /// Exposed trait-generic origin type.
 pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
+
+pub type Log<T> = RawLog<
+	<T as Trait>::Hash,
+>;
+
+/// A logs in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<Hash> {
+	/// Changes trie has been computed for this block. Contains the root of
+	/// changes trie.
+	ChangesTrieRoot(Hash),
+}
+
+impl<Hash: Member> RawLog<Hash> {
+	/// Try to cast the log entry as ChangesTrieRoot log entry.
+	pub fn as_changes_trie_root(&self) -> Option<&Hash> {
+		match *self {
+			RawLog::ChangesTrieRoot(ref item) => Some(item),
+		}
+	}
+}
+
+// Implementation for tests outside of this crate.
+#[cfg(any(feature = "std", test))]
+impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestItem {
+	fn from(log: RawLog<substrate_primitives::H256>) -> primitives::testing::DigestItem {
+		match log {
+			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot
+				::<substrate_primitives::H256, u64>(root),
+		}
+	}
+}
 
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
@@ -234,15 +268,23 @@ impl<T: Trait> Module<T> {
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
-		let digest = <Digest<T>>::take();
+		let mut digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
 		let storage_changes_root = T::Hashing::storage_changes_root();
 
+		// we can't compute changes trie root earlier && put it to the Digest
+		// because it will include all currently existing temporaries
+		if let Some(storage_changes_root) = storage_changes_root {
+			let item = RawLog::ChangesTrieRoot(storage_changes_root);
+			let item = <T as Trait>::Log::from(item).into();
+			digest.push(item);
+		}
+
 		// <Events<T>> stays to be inspected by the client.
 
 		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root,
-			storage_changes_root, parent_hash, digest)
+			parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
@@ -394,7 +436,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use primitives::BuildStorage;
 	use primitives::traits::BlakeTwo256;
-	use primitives::testing::{Digest, Header};
+	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin!{
 		pub enum Origin for Test where system = super {}
@@ -412,6 +454,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = u16;
+		type Log = DigestItem;
 	}
 
 	impl From<Event> for u16 {

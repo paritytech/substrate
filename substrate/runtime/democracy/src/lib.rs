@@ -381,7 +381,7 @@ mod tests {
 	use substrate_primitives::{H256, KeccakHasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256};
-	use primitives::testing::{Digest, Header};
+	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -407,6 +407,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = ();
+		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

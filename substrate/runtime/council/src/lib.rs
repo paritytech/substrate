@@ -130,7 +130,7 @@ mod tests {
 	pub use substrate_primitives::H256;
 	pub use primitives::BuildStorage;
 	pub use primitives::traits::{BlakeTwo256};
-	pub use primitives::testing::{Digest, Header};
+	pub use primitives::testing::{Digest, DigestItem, Header};
 	pub use substrate_primitives::{KeccakHasher, RlpCodec};
 	pub use {seats, motions, voting};
 
@@ -166,6 +166,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = Event;
+		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;

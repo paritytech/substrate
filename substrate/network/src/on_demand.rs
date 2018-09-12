@@ -489,7 +489,6 @@ pub mod tests {
 			parent_hash: Default::default(),
 			number: 0,
 			state_root: Default::default(),
-			changes_root: Default::default(),
 			extrinsics_root: Default::default(),
 			digest: Default::default(),
 		}
@@ -718,7 +717,7 @@ pub mod tests {
 		});
 		let thread = ::std::thread::spawn(move || {
 			let result = response.wait().unwrap();
-			assert_eq!(result.hash(), "8fb61bc76677dcaeadc208c7db5fcd3091deb356156740b95072f6bf408e205c".into());
+			assert_eq!(result.hash(), "80729accb7bb10ff9c637a10e8bb59f21c52571aa7b46544c5885ca89ed190f4".into());
 		});
 
 		on_demand.on_remote_header_response(&mut network, 0, message::RemoteHeaderResponse {
@@ -727,7 +726,6 @@ pub mod tests {
 				parent_hash: Default::default(),
 				number: 1,
 				state_root: Default::default(),
-				changes_root: Default::default(),
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			}),

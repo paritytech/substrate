@@ -21,16 +21,20 @@ use std::fmt::Debug;
 use codec::Codec;
 use runtime_support::Dispatchable;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
+use generic::DigestItem as GenDigestItem;
 
 pub use substrate_primitives::H256;
 
+pub type DigestItem = GenDigestItem<H256, u64>;
+
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 pub struct Digest {
-	pub logs: Vec<u64>,
+	pub logs: Vec<DigestItem>,
 }
 
 impl traits::Digest for Digest {
-	type Item = u64;
+	type Hash = H256;
+	type Item = DigestItem;
 
 	fn logs(&self) -> &[Self::Item] {
 		&self.logs
@@ -41,13 +45,15 @@ impl traits::Digest for Digest {
 	}
 }
 
-impl traits::DigestItem for () {
+/*impl traits::DigestItem for () {
+	type Hash = H256;
 	type AuthorityId = ();
 }
 
 impl traits::DigestItem for u64 {
+	type Hash = H256;
 	type AuthorityId = ();
-}
+}*/
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 #[serde(rename_all = "camelCase")]
@@ -56,7 +62,6 @@ pub struct Header {
 	pub parent_hash: H256,
 	pub number: u64,
 	pub state_root: H256,
-	pub changes_root: Option<H256>,
 	pub extrinsics_root: H256,
 	pub digest: Digest,
 }
@@ -76,9 +81,6 @@ impl traits::Header for Header {
 	fn state_root(&self) -> &Self::Hash { &self.state_root }
 	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
 
-	fn changes_root(&self) -> Option<&Self::Hash> { self.changes_root.as_ref() }
-	fn set_changes_root(&mut self, root: Option<Self::Hash>) { self.changes_root = root }
-
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
@@ -89,7 +91,6 @@ impl traits::Header for Header {
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
-		changes_root: Option<Self::Hash>,
 		parent_hash: Self::Hash,
 		digest: Self::Digest
 	) -> Self {
@@ -97,7 +98,6 @@ impl traits::Header for Header {
 			number,
 			extrinsics_root: extrinsics_root,
 			state_root,
-			changes_root,
 			parent_hash,
 			digest
 		}

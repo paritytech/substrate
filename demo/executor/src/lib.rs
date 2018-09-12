@@ -53,13 +53,14 @@ mod tests {
 	use state_machine::{CodeExecutor, Externalities, TestExternalities};
 	use primitives::{twox_128, KeccakHasher, RlpCodec, ChangesTrieConfiguration};
 	use demo_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::Header as HeaderT;
+	use runtime_primitives::generic;
+	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
 	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
 	use {balances, staking, session, system, consensus, timestamp, treasury};
 	use system::{EventRecord, Phase};
 	use demo_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
-		SystemConfig, Event};
+		SystemConfig, Event, Log};
 	use ed25519::{Public, Pair};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/demo_runtime.wasm");
@@ -109,7 +110,7 @@ mod tests {
 	}
 
 	fn from_block_number(n: u64) -> Header {
-		Header::new(n, Default::default(), Default::default(), Default::default(), [69; 32].into(), Default::default())
+		Header::new(n, Default::default(), Default::default(), [69; 32].into(), Default::default())
 	}
 
 	fn executor() -> ::substrate_executor::NativeExecutor<Executor> {
@@ -253,13 +254,17 @@ mod tests {
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 		let extrinsics_root = ordered_trie_root::<KeccakHasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
 
+		let mut digest = generic::Digest::<Log>::default();
+		if let Some(changes_root) = changes_root {
+			digest.push(Log::from(system::RawLog::ChangesTrieRoot::<Hash>(changes_root)));
+		}
+
 		let header = Header {
 			parent_hash,
 			number,
 			state_root,
-			changes_root,
 			extrinsics_root,
-			digest: Default::default(),
+			digest,
 		};
 		let hash = header.blake2_256();
 
@@ -299,7 +304,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("8dc14809168c9f52efaae5dae54c231789c59adf8bf5624a8d1f74eb724afbe8").into(),
+			hex!("a17d6006e9bb4292b8ebea3b14995672a88caff2c99eeef1d84aeb234e5a0534").into(),
 			None,
 			vec![
 				CheckedExtrinsic {

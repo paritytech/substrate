@@ -32,7 +32,6 @@ pub fn construct_genesis_block<
 			Zero::zero(),
 			extrinsics_root,
 			state_root,
-			Default::default(), // TODO: isn't correct
 			Default::default(),
 			Default::default()
 		),
@@ -65,7 +64,6 @@ mod tests {
 		number: BlockNumber,
 		parent_hash: Hash,
 		state_root: Hash,
-		changes_root: Option<Hash>,
 		txs: Vec<Transfer>
 	) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
@@ -84,7 +82,6 @@ mod tests {
 			parent_hash,
 			number,
 			state_root,
-			changes_root,
 			extrinsics_root,
 			digest: Digest { logs: vec![], },
 		};
@@ -134,7 +131,6 @@ mod tests {
 			1,
 			genesis_hash,
 			hex!("25e5b37074063ab75c889326246640729b40d0c86932edc527bc80db0e04fe5c").into(),
-			None,
 			vec![Transfer {
 				from: Keyring::One.to_raw_public().into(),
 				to: Keyring::Two.to_raw_public().into(),

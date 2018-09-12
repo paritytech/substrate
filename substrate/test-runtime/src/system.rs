@@ -20,10 +20,11 @@
 use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root};
 use runtime_support::storage::{self, StorageValue, StorageMap};
-use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
+use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
+use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
 use codec::{KeyedVec, Encode};
-use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
+use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header, Digest};
 use primitives::KeccakHasher;
 
 const NONCE_OF: &[u8] = b"nonce:";
@@ -103,13 +104,17 @@ pub fn finalise_block() -> Header {
 	let storage_root = BlakeTwo256::storage_root();
 	let storage_changes_root = BlakeTwo256::storage_changes_root();
 
+	let mut digest = Digest::default();
+	if let Some(storage_changes_root) = storage_changes_root {
+		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root));
+	}
+
 	Header {
 		number,
 		extrinsics_root,
 		state_root: storage_root,
-		changes_root: storage_changes_root,
 		parent_hash,
-		digest: Default::default(),
+		digest: digest,
 	}
 }
 
@@ -203,7 +208,6 @@ mod tests {
 			// state_root: hex!("0c22599e15fb5e052c84f79a2aab179ba6bb238218fd86bdd4a74ebcc87adfcd").into(),
 			// Keccak
 			state_root: hex!("97dfcd1f8cbf8845fcb544f89332f1a94c1137f7d1b199ef0b0a6ed217015c3e").into(),
-			changes_root: None,
 			extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
 			digest: Digest { logs: vec![], },
 		};
@@ -235,7 +239,6 @@ mod tests {
 				// state_root: hex!("0425393fd07e2a806cfd7e990ee91dc92fe6bba34eab2bf45d5be7d67e24d467").into(),
 				// Keccak
 				state_root: hex!("0dd8210adaf581464cc68555814a787ed491f8c608d0a0dbbf2208a6d44190b1").into(),
-				changes_root: None,
 				extrinsics_root: hex!("951508f2cc0071500a74765ab0fb2f280fdcdd329d5f989dda675010adee99d6").into(),
 				digest: Digest { logs: vec![], },
 			},
@@ -264,7 +267,6 @@ mod tests {
 				// state_root: hex!("e32dd1d84d9133ca48078d2d83f2b0db19f9d47229ba98bf5ced0e9f86fac2c7").into(),
 				// Keccak
 				state_root: hex!("c93f2fd494c386fa32ee76b6198a7ccf5db12c02c3a79755fd2d4646ec2bf8d7").into(),
-				changes_root: None,
 				extrinsics_root: hex!("3563642676d7e042c894eedc579ba2d6eeedf9a6c66d9d557599effc9f674372").into(),
 				digest: Digest { logs: vec![], },
 			},

@@ -181,7 +181,6 @@ mod tests {
 				state_root: remote_block_storage_root.into(),
 				parent_hash: Default::default(),
 				number: 0,
-				changes_root: Default::default(),
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			},

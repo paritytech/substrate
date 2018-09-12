@@ -366,6 +366,7 @@ macro_rules! impl_outer_log {
 
 #[cfg(test)]
 mod tests {
+	use substrate_primitives::hash::H256;
 	use codec::{Encode, Decode, Input};
 
 	pub trait RuntimeT {
@@ -400,7 +401,7 @@ mod tests {
 
 		// TODO try to avoid redundant brackets: a(AuthoritiesChange), b
 		impl_outer_log! {
-			pub enum Log(InternalLog: DigestItem<u64>) for Runtime {
+			pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
 				a(AuthoritiesChange), b()
 			}
 		}
@@ -418,16 +419,16 @@ mod tests {
 		assert_eq!(auth_change, decoded_auth_change);
 
 		// interpret regular item using `generic::DigestItem`
-		let generic_b1: generic::DigestItem<u64> = Decode::decode(&mut &encoded_b1[..]).unwrap();
+		let generic_b1: generic::DigestItem<H256, u64> = Decode::decode(&mut &encoded_b1[..]).unwrap();
 		match generic_b1 {
 			generic::DigestItem::Other(_) => (),
 			_ => panic!("unexpected generic_b1: {:?}", generic_b1),
 		}
 
 		// interpret system item using `generic::DigestItem`
-		let generic_auth_change: generic::DigestItem<u64> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
+		let generic_auth_change: generic::DigestItem<H256, u64> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
 		match generic_auth_change {
-			generic::DigestItem::AuthoritiesChange(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
+			generic::DigestItem::AuthoritiesChange::<H256, u64>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
 			_ => panic!("unexpected generic_auth_change: {:?}", generic_auth_change),
 		}
 	}

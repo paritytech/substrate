@@ -36,8 +36,6 @@ pub struct Header<Number, Hash: HashT, DigestItem> {
 	pub number: Number,
 	/// The state trie merkle root
 	pub state_root: <Hash as HashT>::Output,
-	/// The change trie merkle root
-	pub changes_root: Option<<Hash as HashT>::Output>,
 	/// The merkle root of the extrinsics.
 	pub extrinsics_root: <Hash as HashT>::Output,
 	/// A chain-specific digest of data useful for light clients or referencing auxiliary data.
@@ -55,7 +53,6 @@ struct DeserializeHeader<N, H, D> {
 	parent_hash: H,
 	number: N,
 	state_root: H,
-	changes_root: Option<H>,
 	extrinsics_root: H,
 	digest: Digest<D>,
 }
@@ -67,7 +64,6 @@ impl<N, D, Hash: HashT> From<DeserializeHeader<N, Hash::Output, D>> for Header<N
 			parent_hash: other.parent_hash,
 			number: other.number,
 			state_root: other.state_root,
-			changes_root: other.changes_root,
 			extrinsics_root: other.extrinsics_root,
 			digest: other.digest,
 		}
@@ -97,7 +93,6 @@ impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 			parent_hash: Decode::decode(input)?,
 			number: Decode::decode(input)?,
 			state_root: Decode::decode(input)?,
-			changes_root: Decode::decode(input)?,
 			extrinsics_root: Decode::decode(input)?,
 			digest: Decode::decode(input)?,
 		})
@@ -114,7 +109,6 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 		dest.push(&self.parent_hash);
 		dest.push(&self.number);
 		dest.push(&self.state_root);
-		dest.push(&self.changes_root);
 		dest.push(&self.extrinsics_root);
 		dest.push(&self.digest);
 	}
@@ -123,7 +117,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
 	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
-	DigestItem: DigestItemT + Codec,
+	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	type Number = Number;
@@ -140,9 +134,6 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	fn state_root(&self) -> &Self::Hash { &self.state_root }
 	fn set_state_root(&mut self, root: Self::Hash) { self.state_root = root }
 
-	fn changes_root(&self) -> Option<&Self::Hash> { self.changes_root.as_ref() }
-	fn set_changes_root(&mut self, root: Option<Self::Hash>) { self.changes_root = root }
-
 	fn parent_hash(&self) -> &Self::Hash { &self.parent_hash }
 	fn set_parent_hash(&mut self, hash: Self::Hash) { self.parent_hash = hash }
 
@@ -153,7 +144,6 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
-		changes_root: Option<Self::Hash>,
 		parent_hash: Self::Hash,
 		digest: Self::Digest
 	) -> Self {
@@ -161,7 +151,6 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 			number,
 			extrinsics_root,
 			state_root,
-			changes_root,
 			parent_hash,
 			digest
 		}

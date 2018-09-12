@@ -24,7 +24,8 @@ use backend;
 use light;
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
+	NumberFor, As, Digest, DigestItem};
 use runtime_primitives::bft::Justification;
 use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
@@ -394,9 +395,14 @@ where
 			let parent_hash = *header.parent_hash();
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
-			if let Some(changes_trie_root) = header.changes_root() {
+			let changes_trie_root = header.digest().logs().iter()
+				.find(|log| log.as_changes_trie_root().is_some())
+				.and_then(DigestItem::as_changes_trie_root)
+				.cloned();
+			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
-					self.changes_trie_storage.insert(header.number().as_(), changes_trie_root.clone().into(), changes_trie_update);
+					let changes_trie_root: H::Out = changes_trie_root.into();
+					self.changes_trie_storage.insert(header.number().as_(), changes_trie_root, changes_trie_update);
 				}
 			}
 			self.blockchain.insert(hash, header, justification, body, pending_block.is_best);

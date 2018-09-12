@@ -20,7 +20,7 @@
 
 use primitives::BuildStorage;
 use primitives::traits::{Identity};
-use primitives::testing::{Digest, Header};
+use primitives::testing::{Digest, DigestItem, Header};
 use substrate_primitives::{H256, KeccakHasher, RlpCodec};
 use runtime_io;
 use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balances};
@@ -34,7 +34,7 @@ impl_outer_origin!{
 pub struct Test;
 impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
-	type Log = u64;
+	type Log = DigestItem;
 	type SessionKey = u64;
 	type OnOfflineValidator = ();
 }
@@ -48,6 +48,7 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Header = Header;
 	type Event = ();
+	type Log = DigestItem;
 }
 impl balances::Trait for Test {
 	type Balance = u64;

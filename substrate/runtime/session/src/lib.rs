@@ -289,7 +289,7 @@ mod tests {
 	use substrate_primitives::{H256, KeccakHasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{Identity, BlakeTwo256};
-	use primitives::testing::{Digest, Header};
+	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
@@ -299,7 +299,7 @@ mod tests {
 	pub struct Test;
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
-		type Log = u64;
+		type Log = DigestItem;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
 	}
@@ -313,6 +313,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = ();
+		type Log = DigestItem;
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;

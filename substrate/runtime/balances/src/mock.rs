@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::testing::{Digest, Header};
+use primitives::testing::{Digest, DigestItem, Header};
 use substrate_primitives::{H256, KeccakHasher, RlpCodec};
 use runtime_io;
 use {GenesisConfig, Module, Trait, system};
@@ -41,6 +41,7 @@ impl system::Trait for Runtime {
 	type AccountId = u64;
 	type Header = Header;
 	type Event = ();
+	type Log = DigestItem;
 }
 impl Trait for Runtime {
 	type Balance = u64;

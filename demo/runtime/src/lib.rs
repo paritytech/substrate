@@ -105,6 +105,7 @@ impl system::Trait for Runtime {
 	type AccountId = AccountId;
 	type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 	type Event = Event;
+	type Log = Log;
 }
 
 /// System module for this concrete runtime.
@@ -247,8 +248,9 @@ impl_outer_event! {
 }
 
 impl_outer_log! {
-	pub enum Log(InternalLog: DigestItem<SessionKey>) for Runtime {
-		consensus(AuthoritiesChange)
+	pub enum Log(InternalLog: DigestItem<Hash, SessionKey>) for Runtime {
+		consensus(AuthoritiesChange),
+		system(ChangesTrieRoot)
 	}
 }
 
@@ -319,11 +321,20 @@ impl_json_metadata!(
 );
 
 impl DigestItem for Log {
+	type Hash = Hash;
 	type AuthorityId = SessionKey;
 
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
 		match self.0 {
 			InternalLog::consensus(ref item) => item.as_authorities_change(),
+			_ => None,
+		}
+	}
+
+	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
+		match self.0 {
+			InternalLog::system(ref item) => item.as_changes_trie_root(),
+			_ => None,
 		}
 	}
 }

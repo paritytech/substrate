@@ -307,28 +307,6 @@ impl CheckEqual for substrate_primitives::H256 {
 	}
 }
 
-impl<'a, T> CheckEqual for Option<&'a T> where T: CheckEqual {
-	#[cfg(feature = "std")]
-	fn check_equal(&self, other: &Self) {
-		match (self, other) {
-			(Some(this), Some(other)) => this.check_equal(other),
-			(None, None) => (),
-			(Some(_), None) => println!("CheckEqual: given=Some, expected=None"),
-			(None, Some(_)) => println!("CheckEqual: given=None, expected=Some"),
-		}
-	}
-
-	#[cfg(not(feature = "std"))]
-	fn check_equal(&self, other: &Self) {
-		match (self, other) {
-			(Some(this), Some(other)) => this.check_equal(other),
-			(None, None) => (),
-			(Some(_), None) => runtime_io::print("CheckEqual: given=Some, expected=None"),
-			(None, Some(_)) => runtime_io::print("CheckEqual: given=None, expected=Some"),
-		}
-	}
-}
-
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebugButNotDeserialize: Serialize + Debug {}
 #[cfg(feature = "std")]
@@ -371,13 +349,12 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Digest;
+	type Digest: Digest<Hash = Self::Hash>;
 
 	fn new(
 		number: Self::Number,
 		extrinsics_root: Self::Hash,
 		state_root: Self::Hash,
-		changes_root: Option<Self::Hash>,
 		parent_hash: Self::Hash,
 		digest: Self::Digest
 	) -> Self;
@@ -390,9 +367,6 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 
 	fn state_root(&self) -> &Self::Hash;
 	fn set_state_root(&mut self, Self::Hash);
-
-	fn changes_root(&self) -> Option<&Self::Hash>;
-	fn set_changes_root(&mut self, Option<Self::Hash>);
 
 	fn parent_hash(&self) -> &Self::Hash;
 	fn set_parent_hash(&mut self, Self::Hash);
@@ -475,8 +449,12 @@ pub trait Applyable: Sized + Send + Sync {
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
 pub trait Digest: Member + Default {
-	type Item: DigestItem;
+	type Hash: Member;
+	type Item: DigestItem<Hash = Self::Hash>;
+
+	/// Get reference to all digest items.
 	fn logs(&self) -> &[Self::Item];
+	/// Push new digest item.
 	fn push(&mut self, item: Self::Item);
 }
 
@@ -485,10 +463,16 @@ pub trait Digest: Member + Default {
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Member {
-	type AuthorityId;
+	type Hash: Member;
+	type AuthorityId: Member;
 
- 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
+	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+		None
+	}
+
+	/// Returns Some if the entry is the `ChangesTrieRoot` entry.
+	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 		None
 	}
 }

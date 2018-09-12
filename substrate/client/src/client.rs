@@ -355,7 +355,6 @@ impl<B, E, Block> Client<B, E, Block> where
 				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))? + As::sa(1),
 			Default::default(),
 			Default::default(),
-			Default::default(),
 			self.block_hash_from_id(&parent)?
 				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
 			Default::default()
