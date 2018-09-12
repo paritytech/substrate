@@ -67,15 +67,15 @@ pub type Executor = client::LocalCallExecutor<
 
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
-	TestClient::new_for_tests()
+	new_with_backend(Arc::new(Backend::new()))
 }
 
 /// Creates new client instance used for tests with an explicitely provided backend.
 /// This is useful for testing backend implementations.
-pub fn new_with_backend<B>(backend: Arc<B>) -> client::error::Result<client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block>>
+pub fn new_with_backend<B>(backend: Arc<B>) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block>
 	where
 		B: backend::LocalBackend<runtime::Block, KeccakHasher, RlpCodec>,
 {
 	let executor = NativeExecutor::new();
-	client::new_with_backend(backend, executor, client_ext::genesis_storage())
+	client::new_with_backend(backend, executor, genesis_storage()).unwrap()
 }

@@ -595,7 +595,7 @@ mod tests {
 		//      A1 -> D2
 
 		let backend = Arc::new(TestBackend::new());
-		let client = test_client::new_with_backend(backend.clone()).unwrap();
+		let client = test_client::new_with_backend(backend.clone());
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
