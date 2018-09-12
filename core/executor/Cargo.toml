@@ -1,0 +1,32 @@
+[package]
+name = "substrate-executor"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+error-chain = "0.12"
+parity-codec = { path = "../../codec" }
+sr-io = { path = "../sr-io" }
+substrate-primitives = { path = "../primitives" }
+substrate-serializer = { path = "../serializer" }
+substrate-state-machine = { path = "../state-machine"  }
+sr-version = { path = "../sr-version" }
+serde = "1.0"
+serde_derive = "1.0"
+wasmi = "0.4"
+byteorder = "1.1"
+triehash = "0.2"
+twox-hash = "1.1.0"
+lazy_static = "1.0"
+parking_lot = "*"
+log = "0.3"
+hashdb = "0.2.1"
+
+[dev-dependencies]
+assert_matches = "1.1"
+wabt = "0.4"
+hex-literal = "0.1.0"
+
+[features]
+default = []
+wasm-extern-trace = []

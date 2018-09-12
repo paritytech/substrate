@@ -1,0 +1,19 @@
+[package]
+name = "runtime-test"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+sr-io = { path = "../../sr-io", version = "0.1", default_features = false }
+sr-sandbox = { path = "../../sr-sandbox", version = "0.1", default_features = false }
+substrate-primitives = { path = "../../primitives", default_features = false }
+
+[profile.release]
+panic = "abort"
+lto = true
+
+[workspace]
+members = []

@@ -1,0 +1,28 @@
+[package]
+name = "node-executor"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate node implementation in Rust."
+
+[dependencies]
+hex-literal = "0.1"
+triehash = "0.2"
+parity-codec = { path = "../../codec" }
+sr-io = { path = "../../core/sr-io" }
+substrate-state-machine = { path = "../../core/state-machine" }
+substrate-executor = { path = "../../core/executor" }
+substrate-primitives = { path = "../../core/primitives" }
+node-primitives = { path = "../primitives" }
+node-runtime = { path = "../runtime" }
+
+[dev-dependencies]
+substrate-keyring = { path = "../../core/keyring" }
+sr-primitives = { path = "../../core/sr-primitives" }
+srml-support = { path = "../../srml/support" }
+srml-balances = { path = "../../srml/balances" }
+srml-session = { path = "../../srml/session" }
+srml-staking = { path = "../../srml/staking" }
+srml-system = { path = "../../srml/system" }
+srml-consensus = { path = "../../srml/consensus" }
+srml-timestamp = { path = "../../srml/timestamp" }
+srml-treasury = { path = "../../srml/treasury" }

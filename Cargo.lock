@@ -403,189 +403,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "demo-api"
-version = "0.1.0"
-dependencies = [
- "demo-primitives 0.1.0",
- "demo-runtime 0.1.0",
- "substrate-client 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
-]
-
-[[package]]
-name = "demo-cli"
-version = "0.1.0"
-dependencies = [
- "demo-service 0.1.0",
- "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-cli 0.3.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "demo-consensus"
-version = "0.1.0"
-dependencies = [
- "demo-api 0.1.0",
- "demo-primitives 0.1.0",
- "demo-runtime 0.1.0",
- "demo-transaction-pool 0.1.0",
- "ed25519 0.1.0",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-bft 0.1.0",
- "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "demo-executor"
-version = "0.1.0"
-dependencies = [
- "demo-primitives 0.1.0",
- "demo-runtime 0.1.0",
- "ed25519 0.1.0",
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-executor 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-session 0.1.0",
- "substrate-runtime-staking 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
- "substrate-runtime-treasury 0.1.0",
- "substrate-state-machine 0.1.0",
- "triehash 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "demo-network"
-version = "0.1.0"
-dependencies = [
- "demo-api 0.1.0",
- "demo-consensus 0.1.0",
- "demo-primitives 0.1.0",
- "ed25519 0.1.0",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-bft 0.1.0",
- "substrate-network 0.1.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "demo-primitives"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-serializer 0.1.0",
-]
-
-[[package]]
-name = "demo-runtime"
-version = "0.1.0"
-dependencies = [
- "demo-primitives 0.1.0",
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-contract 0.1.0",
- "substrate-runtime-council 0.1.0",
- "substrate-runtime-democracy 0.1.0",
- "substrate-runtime-executive 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-session 0.1.0",
- "substrate-runtime-staking 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
- "substrate-runtime-treasury 0.1.0",
- "substrate-runtime-version 0.1.0",
-]
-
-[[package]]
-name = "demo-service"
-version = "0.1.0"
-dependencies = [
- "demo-api 0.1.0",
- "demo-consensus 0.1.0",
- "demo-executor 0.1.0",
- "demo-network 0.1.0",
- "demo-primitives 0.1.0",
- "demo-runtime 0.1.0",
- "demo-transaction-pool 0.1.0",
- "ed25519 0.1.0",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-client 0.1.0",
- "substrate-network 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-service 0.3.0",
- "substrate-telemetry 0.3.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "demo-transaction-pool"
-version = "0.1.0"
-dependencies = [
- "demo-api 0.1.0",
- "demo-primitives 0.1.0",
- "demo-runtime 0.1.0",
- "ed25519 0.1.0",
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-extrinsic-pool 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
-]
-
-[[package]]
 name = "difference"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -607,18 +424,6 @@ dependencies = [
 name = "dtoa"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-
-[[package]]
-name = "ed25519"
-version = "0.1.0"
-dependencies = [
- "base58 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-primitives 0.1.0",
- "untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
 
 [[package]]
 name = "edit-distance"
@@ -1694,6 +1499,184 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-api"
+version = "0.1.0"
+dependencies = [
+ "node-primitives 0.1.0",
+ "node-runtime 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "node-cli"
+version = "0.1.0"
+dependencies = [
+ "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-service 0.1.0",
+ "substrate-cli 0.3.0",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "node-consensus"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-api 0.1.0",
+ "node-primitives 0.1.0",
+ "node-runtime 0.1.0",
+ "node-transaction-pool 0.1.0",
+ "parity-codec 0.1.0",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "substrate-bft 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "node-executor"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-primitives 0.1.0",
+ "node-runtime 0.1.0",
+ "parity-codec 0.1.0",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-session 0.1.0",
+ "srml-staking 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "srml-timestamp 0.1.0",
+ "srml-treasury 0.1.0",
+ "substrate-executor 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-state-machine 0.1.0",
+ "triehash 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "node-network"
+version = "0.1.0"
+dependencies = [
+ "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-api 0.1.0",
+ "node-consensus 0.1.0",
+ "node-primitives 0.1.0",
+ "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-bft 0.1.0",
+ "substrate-network 0.1.0",
+ "substrate-primitives 0.1.0",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "node-primitives"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "pretty_assertions 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-serializer 0.1.0",
+]
+
+[[package]]
+name = "node-runtime"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-primitives 0.1.0",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "sr-version 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-contract 0.1.0",
+ "srml-council 0.1.0",
+ "srml-democracy 0.1.0",
+ "srml-executive 0.1.0",
+ "srml-session 0.1.0",
+ "srml-staking 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "srml-timestamp 0.1.0",
+ "srml-treasury 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "node-service"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-api 0.1.0",
+ "node-consensus 0.1.0",
+ "node-executor 0.1.0",
+ "node-network 0.1.0",
+ "node-primitives 0.1.0",
+ "node-runtime 0.1.0",
+ "node-transaction-pool 0.1.0",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-network 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-service 0.3.0",
+ "substrate-telemetry 0.3.0",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "node-transaction-pool"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-api 0.1.0",
+ "node-primitives 0.1.0",
+ "node-runtime 0.1.0",
+ "parity-codec 0.1.0",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-extrinsic-pool 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "nodrop"
 version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1763,6 +1746,23 @@ dependencies = [
 name = "parity-bytes"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "parity-codec"
+version = "0.1.0"
+dependencies = [
+ "arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "parity-codec-derive"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 0.1.0",
+ "proc-macro2 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "parity-crypto"
@@ -2400,6 +2400,322 @@ dependencies = [
 ]
 
 [[package]]
+name = "sr-io"
+version = "0.1.0"
+dependencies = [
+ "environmental 0.1.0",
+ "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "rlp 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 0.1.0",
+ "substrate-primitives 0.1.0",
+ "substrate-state-machine 0.1.0",
+ "triehash 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "sr-primitives"
+version = "0.1.0"
+dependencies = [
+ "integer-sqrt 0.1.0 (git+https://github.com/paritytech/integer-sqrt-rs.git)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-std 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "sr-sandbox"
+version = "0.1.0"
+dependencies = [
+ "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-std 0.1.0",
+ "substrate-primitives 0.1.0",
+ "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "sr-std"
+version = "0.1.0"
+dependencies = [
+ "pwasm-alloc 0.1.0",
+ "pwasm-libc 0.1.0",
+ "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "sr-version"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 0.1.0",
+]
+
+[[package]]
+name = "srml-balances"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-consensus"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-contract"
+version = "0.1.0"
+dependencies = [
+ "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-wasm 0.31.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "pwasm-utils 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-sandbox 0.1.0",
+ "sr-std 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-primitives 0.1.0",
+ "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "srml-council"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "integer-sqrt 0.1.0 (git+https://github.com/paritytech/integer-sqrt-rs.git)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-democracy 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-democracy"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-example"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-executive"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-session"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "srml-timestamp 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-staking"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-sandbox 0.1.0",
+ "sr-std 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-session 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "srml-timestamp 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-support"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-std 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-system"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-support 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-timestamp"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "srml-treasury"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2418,7 +2734,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "subkey"
 version = "0.1.0"
 dependencies = [
- "ed25519 0.1.0",
  "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 0.1.0",
 ]
@@ -2428,9 +2743,9 @@ name = "substrate"
 version = "0.1.0"
 dependencies = [
  "ctrlc 3.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "demo-cli 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-cli 0.1.0",
  "vergen 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2438,19 +2753,17 @@ dependencies = [
 name = "substrate-bft"
 version = "0.1.0"
 dependencies = [
- "ed25519 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-version 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-version 0.1.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2473,10 +2786,10 @@ dependencies = [
  "names 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "regex 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
  "substrate-network 0.1.0",
  "substrate-network-libp2p 0.1.0",
- "substrate-runtime-primitives 0.1.0",
  "substrate-service 0.3.0",
  "substrate-telemetry 0.3.0",
  "sysinfo 0.5.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2488,7 +2801,6 @@ dependencies = [
 name = "substrate-client"
 version = "0.1.0"
 dependencies = [
- "ed25519 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2496,18 +2808,18 @@ dependencies = [
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
  "substrate-bft 0.1.0",
- "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
+ "substrate-metadata 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-telemetry 0.3.0",
  "substrate-test-client 0.1.0",
@@ -2524,33 +2836,15 @@ dependencies = [
  "kvdb-rocksdb 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "memorydb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
  "substrate-state-db 0.1.0",
  "substrate-state-machine 0.1.0",
-]
-
-[[package]]
-name = "substrate-codec"
-version = "0.1.0"
-dependencies = [
- "arrayvec 0.4.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "substrate-codec-derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "quote 0.6.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "syn 0.14.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2559,19 +2853,18 @@ version = "0.1.0"
 dependencies = [
  "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "ed25519 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
  "parking_lot 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
+ "sr-io 0.1.0",
+ "sr-version 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-version 0.1.0",
  "substrate-serializer 0.1.0",
  "substrate-state-machine 0.1.0",
  "triehash 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2587,12 +2880,12 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
+ "sr-primitives 0.1.0",
  "substrate-keyring 0.1.0",
- "substrate-runtime-primitives 0.1.0",
  "substrate-test-client 0.1.0",
  "transaction-pool 1.13.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2601,16 +2894,15 @@ dependencies = [
 name = "substrate-keyring"
 version = "0.1.0"
 dependencies = [
- "ed25519 0.1.0",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "substrate-primitives 0.1.0",
 ]
 
 [[package]]
 name = "substrate-keystore"
 version = "0.1.0"
 dependencies = [
- "ed25519 0.1.0",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-crypto 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2624,16 +2916,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-metadata"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 0.1.0",
+]
+
+[[package]]
 name = "substrate-misbehavior-check"
 version = "0.1.0"
 dependencies = [
+ "parity-codec 0.1.0",
  "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
  "substrate-bft 0.1.0",
- "substrate-codec 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
 ]
 
 [[package]]
@@ -2641,22 +2940,21 @@ name = "substrate-network"
 version = "0.1.0"
 dependencies = [
  "bitflags 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "ed25519 0.1.0",
  "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ethcore-io 1.12.0 (git+https://github.com/paritytech/parity.git)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-network-libp2p 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
  "substrate-test-client 0.1.0",
 ]
 
@@ -2692,6 +2990,7 @@ dependencies = [
 name = "substrate-primitives"
 version = "0.1.0"
 dependencies = [
+ "base58 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "blake2-rfc 0.2.18 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2699,19 +2998,22 @@ dependencies = [
  "fixed-hash 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
  "patricia-trie 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "plain_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "pretty_assertions 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-runtime-std 0.1.0",
+ "sr-std 0.1.0",
  "substrate-serializer 0.1.0",
  "twox-hash 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2725,16 +3027,16 @@ dependencies = [
  "jsonrpc-macros 8.0.1 (git+https://github.com/paritytech/jsonrpc.git)",
  "jsonrpc-pubsub 8.0.1 (git+https://github.com/paritytech/jsonrpc.git)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "sr-version 0.1.0",
  "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-extrinsic-pool 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-version 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-test-client 0.1.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2750,327 +3052,8 @@ dependencies = [
  "jsonrpc-ws-server 8.0.0 (git+https://github.com/paritytech/jsonrpc.git)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
  "substrate-rpc 0.1.0",
- "substrate-runtime-primitives 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-balances"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-consensus"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-contract"
-version = "0.1.0"
-dependencies = [
- "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-wasm 0.31.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "pwasm-utils 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-sandbox 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
- "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "substrate-runtime-council"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "integer-sqrt 0.1.0 (git+https://github.com/paritytech/integer-sqrt-rs.git)",
- "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-democracy 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-democracy"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-example"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-executive"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-io"
-version = "0.1.0"
-dependencies = [
- "ed25519 0.1.0",
- "environmental 0.1.0",
- "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "rlp 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-state-machine 0.1.0",
- "triehash 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "substrate-runtime-primitives"
-version = "0.1.0"
-dependencies = [
- "integer-sqrt 0.1.0 (git+https://github.com/paritytech/integer-sqrt-rs.git)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "num-traits 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-sandbox"
-version = "0.1.0"
-dependencies = [
- "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-std 0.1.0",
- "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "substrate-runtime-session"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-staking"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-sandbox 0.1.0",
- "substrate-runtime-session 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-std"
-version = "0.1.0"
-dependencies = [
- "pwasm-alloc 0.1.0",
- "pwasm-libc 0.1.0",
- "rustc_version 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "substrate-runtime-support"
-version = "0.1.0"
-dependencies = [
- "ed25519 0.1.0",
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-std 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-system"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "safe-mix 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-timestamp"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-treasury"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-version"
-version = "0.1.0"
-dependencies = [
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
 ]
 
 [[package]]
@@ -3090,14 +3073,16 @@ dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
  "substrate-client-db 0.1.0",
- "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-extrinsic-pool 0.1.0",
  "substrate-keystore 0.1.0",
@@ -3105,8 +3090,6 @@ dependencies = [
  "substrate-primitives 0.1.0",
  "substrate-rpc 0.1.0",
  "substrate-rpc-servers 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
  "substrate-telemetry 0.3.0",
  "target_info 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3118,9 +3101,9 @@ version = "0.1.0"
 dependencies = [
  "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
  "parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3134,10 +3117,10 @@ dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "memorydb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "patricia-trie 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
  "substrate-primitives 0.1.0",
  "triehash 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3161,15 +3144,15 @@ name = "substrate-test-client"
 version = "0.1.0"
 dependencies = [
  "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
  "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "srml-support 0.1.0",
  "substrate-bft 0.1.0",
  "substrate-client 0.1.0",
- "substrate-codec 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
  "substrate-test-runtime 0.1.0",
 ]
 
@@ -3177,20 +3160,19 @@ dependencies = [
 name = "substrate-test-runtime"
 version = "0.1.0"
 dependencies = [
- "ed25519 0.1.0",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "parity-codec-derive 0.1.0",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-codec 0.1.0",
- "substrate-codec-derive 0.1.0",
+ "sr-io 0.1.0",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "sr-version 0.1.0",
+ "srml-support 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-version 0.1.0",
 ]
 
 [[package]]

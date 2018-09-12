@@ -1,0 +1,43 @@
+[package]
+name = "srml-council"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+hex-literal = "0.1.0"
+integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
+serde = { version = "1.0", default_features = false }
+serde_derive = { version = "1.0", optional = true }
+safe-mix = { version = "1.0", default_features = false}
+parity-codec = { path = "../../codec", default_features = false }
+parity-codec-derive = { path = "../../codec/derive", default_features = false }
+substrate-keyring = { path = "../../core/keyring", optional = true }
+substrate-primitives = { path = "../../core/primitives", default_features = false }
+sr-std = { path = "../../core/sr-std", default_features = false }
+sr-io = { path = "../../core/sr-io", default_features = false }
+sr-primitives = { path = "../../core/sr-primitives", default_features = false }
+srml-support = { path = "../support", default_features = false }
+srml-consensus = { path = "../consensus", default_features = false }
+srml-balances = { path = "../balances", default_features = false }
+srml-democracy = { path = "../democracy", default_features = false }
+srml-system = { path = "../system", default_features = false }
+
+[features]
+default = ["std"]
+std = [
+	"serde/std",
+	"serde_derive",
+	"safe-mix/std",
+	"substrate-keyring",
+	"parity-codec/std",
+	"parity-codec-derive/std",
+	"substrate-primitives/std",
+	"sr-std/std",
+	"sr-io/std",
+	"srml-support/std",
+	"sr-primitives/std",
+	"srml-consensus/std",
+	"srml-balances/std",
+	"srml-democracy/std",
+	"srml-system/std",
+]

@@ -1,0 +1,27 @@
+[package]
+name = "substrate-rpc"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+error-chain = "0.12"
+jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
+jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
+jsonrpc-pubsub = { git="https://github.com/paritytech/jsonrpc.git" }
+log = "0.3"
+parking_lot = "0.4"
+parity-codec = { path = "../../codec" }
+substrate-client = { path = "../client" }
+substrate-executor = { path = "../executor" }
+substrate-extrinsic-pool = { path = "../extrinsic-pool" }
+substrate-primitives = { path = "../primitives" }
+sr-primitives = { path = "../sr-primitives" }
+sr-version = { path = "../sr-version" }
+substrate-state-machine = { path = "../state-machine" }
+tokio = "0.1.7"
+serde_json = "1.0"
+
+[dev-dependencies]
+assert_matches = "1.1"
+substrate-test-client = { path = "../test-client" }
+rustc-hex = "2.0"
