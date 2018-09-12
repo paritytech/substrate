@@ -14,55 +14,100 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-/// Implement an `Event`/`RawEvent` for a module.
+/// Implement the `Event` for a module.
+///
+/// # Simple Event Example:
+///
+/// ```rust
+/// #[macro_use]
+/// extern crate srml_support;
+/// extern crate parity_codec as codec;
+/// #[macro_use]
+/// extern crate parity_codec_derive;
+/// #[macro_use]
+/// extern crate serde_derive;
+///
+/// decl_event!(
+///	   pub enum Event {
+///       Success,
+///       Failure(String),
+///    }
+/// );
+///# fn main() {}
+/// ```
+///
+/// # Generic Event Example:
+///
+/// ```rust
+/// #[macro_use]
+/// extern crate srml_support;
+/// extern crate parity_codec as codec;
+/// #[macro_use]
+/// extern crate parity_codec_derive;
+/// #[macro_use]
+/// extern crate serde_derive;
+///
+/// trait Trait {
+///     type Balance;
+///     type Token;
+/// }
+///
+/// mod event1 {
+///     // Event that specifies the generic parameter explicitly (`Balance`).
+///     decl_event!(
+///	       pub enum Event<T> where Balance = <T as super::Trait>::Balance {
+///           Message(Balance),
+///        }
+///     );
+/// }
+///
+/// mod event2 {
+///     // Event that uses the generic parameter `Balance`.
+///     // If no name for the generic parameter is speciefied explicitly,
+///     // the name will be taken from the type name of the trait.
+///     decl_event!(
+///	       pub enum Event<T> where <T as super::Trait>::Balance {
+///           Message(Balance),
+///        }
+///     );
+/// }
+///
+/// mod event3 {
+///     // And we even support declaring multiple generic parameters!
+///     decl_event!(
+///	       pub enum Event<T> where <T as super::Trait>::Balance, <T as super::Trait>::Token {
+///           Message(Balance, Token),
+///        }
+///     );
+/// }
+///# fn main() {}
+/// ```
+///
+/// The syntax for generic events requires the `where`.
 #[macro_export]
 macro_rules! decl_event {
 	(
 		$(#[$attr:meta])*
-		pub enum Event<$( $evt_generic_param:ident )*> with RawEvent<$( $generic_param:ident ),*>
-			where $( <$generic:ident as $trait:path>::$trait_type:ident),* {
+		pub enum Event<$evt_generic_param:ident> where
+			$( $( $generic_rename:ident = )* <$generic:ident as $trait:path>::$trait_type:ident ),*
+		{
 			$(
-				$(#[doc = $doc_attr:tt])*
-				$event:ident( $( $param:path ),* ),
+				$events:tt
 			)*
 		}
 	) => {
-		pub type Event<$( $evt_generic_param )*> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
-		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-		$(#[$attr])*
-		pub enum RawEvent<$( $generic_param ),*> {
-			$(
-				$( #[doc = $doc_attr] )*
-				$event($( $param ),*),
-			)*
-		}
-		impl<$( $generic_param ),*> From<RawEvent<$( $generic_param ),*>> for () {
-			fn from(_: RawEvent<$( $generic_param ),*>) -> () { () }
-		}
-		impl<$( $generic_param ),*> RawEvent<$( $generic_param ),*> {
-			#[allow(dead_code)]
-			pub fn event_json_metadata() -> &'static str {
-				concat!(
-					"{",
-					__impl_event_json_metadata!("";
-						$(
-							$event ( $( $param ),* );
-							__function_doc_to_json!(""; $($doc_attr)*);
-						)*
-					),
-					" }"
-				)
-			}
-		}
+		__decl_generic_event!(
+			$( #[ $attr ] )*;
+			$evt_generic_param;
+			$( $( $generic_rename = )* <$generic as $trait>::$trait_type ),*;
+			Events { $( $events )* };
+		);
 	};
 	(
 		$(#[$attr:meta])*
 		pub enum Event {
 			$(
-				$(#[doc = $doc_attr:tt])*
-				$event:ident,
+				$events:tt
 			)*
 		}
 	) => {
@@ -72,8 +117,7 @@ macro_rules! decl_event {
 		$(#[$attr])*
 		pub enum Event {
 			$(
-				$( #[doc = $doc_attr] )*
-				$event,
+				$events
 			)*
 		}
 		impl From<Event> for () {
@@ -82,16 +126,7 @@ macro_rules! decl_event {
 		impl Event {
 			#[allow(dead_code)]
 			pub fn event_json_metadata() -> &'static str {
-				concat!(
-					"{",
-					__impl_event_json_metadata!("";
-						$(
-							$event;
-							__function_doc_to_json!(""; $($doc_attr)*);
-						)*
-					),
-					" }"
-				)
+				concat!("{", __events_to_json!(""; $( $events )* ), " }")
 			}
 		}
 	}
@@ -99,29 +134,131 @@ macro_rules! decl_event {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __impl_event_json_metadata {
+macro_rules! __decl_generic_event {
+	(
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		$generic_rename:ident = <$generic:ident as $trait:path>::$trait_type:ident
+			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
+		Events { $( $events:tt )* };
+	) => {
+		__decl_generic_event!(
+			$( #[ $attr ] )*;
+			$event_generic_param;
+			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
+			Events { $( $events )* };
+			$generic_rename;
+			<$generic as $trait>::$trait_type;
+		);
+	};
+	(
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		$generic_rename:ident = <$generic:ident as $trait:path>::$trait_type:ident
+			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
+		Events { $( $events:tt )* };
+		$( $parsed_generic_params:ident ),*;
+		$( <$parsed_generic:ident as $parsed_trait:path>::$parsed_trait_type:ident ),*;
+	) => {
+		__decl_generic_event!(
+			$( #[ $attr ] )*;
+			$event_generic_param;
+			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
+			Events { $( $events )* };
+			$( $parsed_generic_params ),*, $generic_rename;
+			$( <$parsed_generic as $parsed_trait>::$parsed_trait_type ),*, <$generic as $trait>::$trait_type;
+		);
+	};
+	(
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		<$generic:ident as $trait:path>::$trait_type:ident
+			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
+		Events { $( $events:tt )* };
+	) => {
+		__decl_generic_event!(
+			$( #[ $attr ] )*;
+			$event_generic_param;
+			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
+			Events { $( $events )* };
+			$trait_type;
+			<$generic as $trait>::$trait_type;
+		);
+	};
+	(
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		<$generic:ident as $trait:path>::$trait_type:ident
+			$(, $( $rest_gen_rename:ident = )* <$rest_gen:ident as $rest_trait:path>::$rest_trait_type:ident )*;
+		Events { $( $events:tt )* };
+		$( $parsed_generic_params:ident ),*;
+		$( <$parsed_generic:ident as $parsed_trait:path>::$parsed_trait_type:ident ),*;
+	) => {
+		__decl_generic_event!(
+			$( #[ $attr ] )*;
+			$event_generic_param;
+			$( $( $rest_gen_rename = )* <$rest_gen as $rest_trait>::$rest_trait_type ),*;
+			Events { $( $events )* };
+			$( $parsed_generic_params ),*, $trait_type;
+			$( <$parsed_generic as $parsed_trait>::$parsed_trait_type ),*, <$generic as $trait>::$trait_type;
+		);
+	};
+	(
+		$(#[$attr:meta])*;
+		$event_generic_param:ident;
+		;
+		Events { $( $events:tt )* };
+		$( $generic_param:ident ),*;
+		$( <$generic:ident as $trait:path>::$trait_type:ident ),*;
+	) => {
+		pub type Event<$event_generic_param> = RawEvent<$( <$generic as $trait>::$trait_type ),*>;
+		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
+		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		$(#[$attr])*
+		pub enum RawEvent<$( $generic_param ),*> {
+			$(
+				$events
+			)*
+		}
+		impl<$( $generic_param ),*> From<RawEvent<$( $generic_param ),*>> for () {
+			fn from(_: RawEvent<$( $generic_param ),*>) -> () { () }
+		}
+		impl<$( $generic_param ),*> RawEvent<$( $generic_param ),*> {
+			#[allow(dead_code)]
+			pub fn event_json_metadata() -> &'static str {
+				concat!("{", __events_to_json!(""; $( $events )* ), " }")
+			}
+		}
+	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __events_to_json {
 	(
 		$prefix_str:expr;
-		$event:ident( $first_param:path $(, $param:path )* );
-		$event_doc:expr;
+		$( #[doc = $doc_attr:tt] )*
+		$event:ident( $first_param:path $(, $param:path )* ),
 		$( $rest:tt )*
 	) => {
 		concat!($prefix_str, " ", "\"", stringify!($event), r#"": { "params": [ ""#,
 				stringify!($first_param), "\""
 				$(, concat!(", \"", stringify!($param), "\"") )*, r#" ], "description": ["#,
-				$event_doc, " ] }",
-				__impl_event_json_metadata!(","; $( $rest )*)
+				__function_doc_to_json!(""; $( $doc_attr )*), " ] }",
+				__events_to_json!(","; $( $rest )*)
 		)
 	};
 	(
 		$prefix_str:expr;
-		$event:ident;
-		$event_doc:expr;
+		$( #[doc = $doc_attr:tt] )*
+		$event:ident,
 		$( $rest:tt )*
 	) => {
 		concat!($prefix_str, " ", "\"", stringify!($event),
-				r#"": { "params": null, "description": ["#, $event_doc, " ] }",
-				__impl_event_json_metadata!(","; $( $rest )*)
+				r#"": { "params": null, "description": ["#,
+				__function_doc_to_json!(""; $( $doc_attr )*), " ] }",
+				__events_to_json!(","; $( $rest )*)
 		)
 	};
 	(
@@ -223,11 +360,13 @@ mod tests {
 		}
 
 		decl_event!(
-			pub enum Event<T> with RawEvent<Balance>
-				where <T as Trait>::Balance
+			/// Event without renaming the generic parameter `Balance` and `Origin`.
+			pub enum Event<T> where <T as Trait>::Balance, <T as Trait>::Origin
 			{
 				/// Hi, I am a comment.
-				TestEvent(Balance),
+				TestEvent(Balance, Origin),
+				/// Dog
+				EventWithoutParams,
 			}
 		);
 	}
@@ -243,10 +382,13 @@ mod tests {
 		}
 
 		decl_event!(
-			pub enum Event<T> with RawEvent<Balance>
-				where <T as Trait>::Balance
+			/// Event with renamed generic parameter
+			pub enum Event<T> where
+				BalanceRenamed = <T as Trait>::Balance,
+				OriginRenamed = <T as Trait>::Origin
 			{
-				TestEvent(Balance),
+				TestEvent(BalanceRenamed),
+				TestOrigin(OriginRenamed),
 			}
 		);
 	}
@@ -277,8 +419,22 @@ mod tests {
 	const EXPECTED_METADATA: (&str, &[(&str, &str)]) = (
 		"TestEvent", &[
 			("system", r#"{ "SystemEvent": { "params": null, "description": [ ] } }"#),
-			("event_module", r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ " Hi, I am a comment." ] } }"#),
-			("event_module2", r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ ] } }"#),
+			("event_module",
+				concat!(
+					"{",
+					r#" "TestEvent": { "params": [ "Balance", "Origin" ], "description": [ " Hi, I am a comment." ] },"#,
+					r#" "EventWithoutParams": { "params": null, "description": [ " Dog" ] }"#,
+					" }"
+				)
+			),
+			("event_module2",
+				concat!(
+					"{",
+					r#" "TestEvent": { "params": [ "BalanceRenamed" ], "description": [ ] },"#,
+					r#" "TestOrigin": { "params": [ "OriginRenamed" ], "description": [ ] }"#,
+					" }"
+				)
+			),
 		]
 	);
 
