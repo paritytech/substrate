@@ -21,3 +21,5 @@ substrate-state-db = { path = "../../../core/state-db" }
 
 [dev-dependencies]
 kvdb-memorydb = "0.1"
+substrate-keyring = { path = "../../keyring" }
+substrate-test-client = { path = "../../test-client" }
