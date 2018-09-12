@@ -54,7 +54,7 @@ use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, OnFinalise,
 	As, Lookup};
 use balances::{address::Address, OnDilution};
-use system::{ensure_root, ensure_signed};
+use system::ensure_signed;
 
 mod mock;
 
@@ -110,11 +110,11 @@ decl_module! {
 		fn unnominate(origin, target_index: u32) -> Result;
 		fn register_preferences(origin, intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result;
 
-		fn set_sessions_per_era(origin, new: T::BlockNumber) -> Result;
-		fn set_bonding_duration(origin, new: T::BlockNumber) -> Result;
-		fn set_validator_count(origin, new: u32) -> Result;
-		fn force_new_era(origin, apply_rewards: bool) -> Result;
-		fn set_offline_slash_grace(origin, new: u32) -> Result;
+		fn set_sessions_per_era(new: T::BlockNumber) -> Result;
+		fn set_bonding_duration(new: T::BlockNumber) -> Result;
+		fn set_validator_count(new: u32) -> Result;
+		fn force_new_era(apply_rewards: bool) -> Result;
+		fn set_offline_slash_grace(new: u32) -> Result;
 	}
 }
 
@@ -325,30 +325,26 @@ impl<T: Trait> Module<T> {
 	// PRIV DISPATCH
 
 	/// Set the number of sessions in an era.
-	fn set_sessions_per_era(origin: T::Origin, new: T::BlockNumber) -> Result {
-		ensure_root(origin)?;
+	fn set_sessions_per_era(new: T::BlockNumber) -> Result {
 		<NextSessionsPerEra<T>>::put(&new);
 		Ok(())
 	}
 
 	/// The length of the bonding duration in eras.
-	fn set_bonding_duration(origin: T::Origin, new: T::BlockNumber) -> Result {
-		ensure_root(origin)?;
+	fn set_bonding_duration(new: T::BlockNumber) -> Result {
 		<BondingDuration<T>>::put(&new);
 		Ok(())
 	}
 
 	/// The length of a staking era in sessions.
-	fn set_validator_count(origin: T::Origin, new: u32) -> Result {
-		ensure_root(origin)?;
+	fn set_validator_count(new: u32) -> Result {
 		<ValidatorCount<T>>::put(&new);
 		Ok(())
 	}
 
 	/// Force there to be a new era. This also forces a new session immediately after.
 	/// `apply_rewards` should be true for validators to get the session reward.
-	fn force_new_era(origin: T::Origin, apply_rewards: bool) -> Result {
-		ensure_root(origin)?;
+	fn force_new_era(apply_rewards: bool) -> Result {
 		Self::apply_force_new_era(apply_rewards)
 	}
 
@@ -360,8 +356,7 @@ impl<T: Trait> Module<T> {
 
 
 	/// Set the offline slash grace period.
-	fn set_offline_slash_grace(origin: T::Origin, new: u32) -> Result {
-		ensure_root(origin)?;
+	fn set_offline_slash_grace(new: u32) -> Result {
 		<OfflineSlashGrace<T>>::put(&new);
 		Ok(())
 	}

@@ -24,7 +24,7 @@ use srml_support::dispatch::Result;
 use srml_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
 use super::{Trait as CouncilTrait, Module as Council};
-use system::{ensure_signed, ensure_root};
+use system::ensure_signed;
 
 pub trait Trait: CouncilTrait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -36,8 +36,8 @@ decl_module! {
 		fn vote(origin, proposal: T::Hash, approve: bool) -> Result;
 		fn veto(origin, proposal_hash: T::Hash) -> Result;
 
-		fn set_cooloff_period(origin, blocks: T::BlockNumber) -> Result;
-		fn set_voting_period(origin, blocks: T::BlockNumber) -> Result;
+		fn set_cooloff_period(blocks: T::BlockNumber) -> Result;
+		fn set_voting_period(blocks: T::BlockNumber) -> Result;
 	}
 }
 
@@ -155,14 +155,12 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn set_cooloff_period(origin: T::Origin, blocks: T::BlockNumber) -> Result {
-		ensure_root(origin)?;
+	fn set_cooloff_period(blocks: T::BlockNumber) -> Result {
 		<CooloffPeriod<T>>::put(blocks);
 		Ok(())
 	}
 
-	fn set_voting_period(origin: T::Origin, blocks: T::BlockNumber) -> Result {
-		ensure_root(origin)?;
+	fn set_voting_period(blocks: T::BlockNumber) -> Result {
 		<VotingPeriod<T>>::put(blocks);
 		Ok(())
 	}

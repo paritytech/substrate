@@ -48,7 +48,7 @@ use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
 	As, Lookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
-use system::{ensure_signed, ensure_root};
+use system::ensure_signed;
 
 mod mock;
 
@@ -131,7 +131,7 @@ pub trait Trait: system::Trait {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
-		fn set_balance(origin, who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
+		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
 	}
 }
 
@@ -313,8 +313,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the balances of a given account.
-	fn set_balance(origin: T::Origin, who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
-		ensure_root(origin)?;
+	fn set_balance(who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
 		let who = Self::lookup(who)?;
 		Self::set_free_balance(&who, free);
 		Self::set_reserved_balance(&who, reserved);
