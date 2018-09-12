@@ -270,7 +270,79 @@ macro_rules! __events_to_json {
 
 #[macro_export]
 macro_rules! impl_outer_event {
-	($(#[$attr:meta])* pub enum $name:ident for $runtime:ident { $( $module:ident ),* }) => {
+	(
+		$(#[$attr:meta])*
+		pub enum $name:ident for $runtime:ident {
+			$module:ident<T>,
+			$( $rest:tt $( <$t:ident> )*, )*
+		}
+	) => {
+		impl_outer_event!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			Modules { $( $rest $(<$t>)*, )* };
+			$module::Event<$runtime>,;
+		);
+	};
+	(
+		$(#[$attr:meta])*
+		pub enum $name:ident for $runtime:ident {
+			$module:ident,
+			$( $rest:tt $( <$t:ident> )*, )*
+		}
+	) => {
+		impl_outer_event!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			Modules { $( $rest $(<$t>)*, )* };
+			$module::Event,;
+		);
+	};
+	(
+		$(#[$attr:meta])*;
+		$name:ident;
+		$runtime:ident;
+		Modules {
+			$module:ident<T>,
+			$( $rest:tt $( <$t:ident> )*, )*
+		};
+		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
+	) => {
+		impl_outer_event!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			Modules { $( $rest $(<$t>)*, )* };
+			$( $module_name::Event $( <$generic_param> )*, )* $module::Event<$runtime>,;
+		);
+	};
+	(
+		$(#[$attr:meta])*;
+		$name:ident;
+		$runtime:ident;
+		Modules {
+			$module:ident,
+			$( $rest:tt, )*
+		};
+		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
+	) => {
+		impl_outer_event!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			Modules { $( $rest, )* };
+			$( $module_name::Event $( <$generic_param> )*, )* $module::Event,;
+		);
+	};
+	(
+		$(#[$attr:meta])*;
+		$name:ident;
+		$runtime:ident;
+		Modules {};
+		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
+	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -279,7 +351,7 @@ macro_rules! impl_outer_event {
 		pub enum $name {
 			system(system::Event),
 			$(
-				$module($module::Event<$runtime>),
+				$module_name( $module_name::Event $( <$generic_param> )* ),
 			)*
 		}
 		impl From<system::Event> for $name {
@@ -288,13 +360,17 @@ macro_rules! impl_outer_event {
 			}
 		}
 		$(
-			impl From<$module::Event<$runtime>> for $name {
-				fn from(x: $module::Event<$runtime>) -> Self {
-					$name::$module(x)
+			impl From<$module_name::Event $( <$generic_param> )*> for $name {
+				fn from(x: $module_name::Event $( <$generic_param> )*) -> Self {
+					$name::$module_name(x)
 				}
 			}
 		)*
-		__impl_outer_event_json_metadata!($runtime; $name; $( $module )*);
+		__impl_outer_event_json_metadata!(
+			$runtime;
+			$name;
+			$( $module_name::Event $( <$generic_param> )*, )*;
+		);
 	}
 }
 
@@ -304,7 +380,7 @@ macro_rules! __impl_outer_event_json_metadata {
 	(
 		$runtime:ident;
 		$event_name:ident;
-		$( $module:ident )*
+		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
 	) => {
 		impl $runtime {
 			#[allow(dead_code)]
@@ -313,8 +389,8 @@ macro_rules! __impl_outer_event_json_metadata {
 					("system", system::Event::event_json_metadata)
 					$(
 						, (
-							stringify!($module),
-							$module::Event::<$runtime>::event_json_metadata
+							stringify!($module_name),
+							$module_name::Event $( ::<$generic_param> )*::event_json_metadata
 						)
 					)*
 				];
@@ -393,12 +469,22 @@ mod tests {
 		);
 	}
 
+	mod event_module3 {
+		decl_event!(
+			pub enum Event {
+				HiEvent,
+			}
+		);
+	}
+
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
 	pub struct TestRuntime;
 
 	impl_outer_event! {
 		pub enum TestEvent for TestRuntime {
-			event_module, event_module2
+			event_module<T>,
+			event_module2<T>,
+			event_module3,
 		}
 	}
 
@@ -434,6 +520,13 @@ mod tests {
 					r#" "TestOrigin": { "params": [ "OriginRenamed" ], "description": [ ] }"#,
 					" }"
 				)
+			),
+			("event_module3",
+			 concat!(
+				 "{",
+				 r#" "HiEvent": { "params": null, "description": [ ] }"#,
+				 " }"
+			 )
 			),
 		]
 	);
