@@ -7,8 +7,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-substrate-runtime-std = { path = "../../runtime-std", default_features = false }
-substrate-runtime-io = { path = "../../runtime-io", default_features = false }
+sr-std = { path = "../../sr-std", default_features = false }
+sr-io = { path = "../../sr-io", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 parity-codec = { path = "../../../codec", default_features = false }
 substrate-metadata = { path = "../../metadata", default_features = false }
@@ -25,9 +25,9 @@ std = [
 	"serde/std",
 	"serde_derive",
 	"substrate-primitives/std",
-	"substrate-runtime-io/std",
+	"sr-io/std",
 	"parity-codec/std",
-	"substrate-runtime-std/std",
+	"sr-std/std",
 	"substrate-metadata/std",
 ]
 nightly = []

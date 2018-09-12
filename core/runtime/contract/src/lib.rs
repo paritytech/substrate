@@ -63,11 +63,11 @@ extern crate parity_wasm;
 extern crate pwasm_utils;
 
 extern crate parity_codec as codec;
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_runtime_sandbox as sandbox;
+extern crate sr_io as runtime_io;
+extern crate sr_sandbox as sandbox;
 
 #[macro_use]
-extern crate substrate_runtime_std as rstd;
+extern crate sr_std as rstd;
 
 extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_system as system;
@@ -75,7 +75,7 @@ extern crate substrate_runtime_system as system;
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
 
-extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate sr_primitives as runtime_primitives;
 extern crate substrate_primitives;
 
 #[cfg(test)]

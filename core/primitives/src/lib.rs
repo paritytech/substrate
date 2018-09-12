@@ -69,7 +69,7 @@ extern crate patricia_trie;
 #[cfg(feature = "std")]
 extern crate elastic_array;
 
-extern crate substrate_runtime_std as rstd;
+extern crate sr_std as rstd;
 
 #[cfg(test)]
 extern crate substrate_serializer;

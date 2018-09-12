@@ -19,13 +19,13 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[macro_use]
-extern crate substrate_runtime_io as runtime_io;
+extern crate sr_io as runtime_io;
 
 #[macro_use]
 extern crate substrate_runtime_support;
 
 #[macro_use]
-extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate sr_primitives as runtime_primitives;
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -41,7 +41,7 @@ extern crate substrate_primitives;
 extern crate parity_codec_derive;
 
 #[cfg_attr(not(feature = "std"), macro_use)]
-extern crate substrate_runtime_std as rstd;
+extern crate sr_std as rstd;
 extern crate substrate_runtime_balances as balances;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_contract as contract;
@@ -54,7 +54,7 @@ extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;
 extern crate substrate_runtime_treasury as treasury;
 #[macro_use]
-extern crate substrate_runtime_version as version;
+extern crate sr_version as version;
 extern crate node_primitives;
 
 #[cfg(feature = "std")]

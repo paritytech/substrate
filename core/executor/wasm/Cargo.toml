@@ -7,8 +7,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-substrate-runtime-io = { path = "../../runtime-io", version = "0.1", default_features = false }
-substrate-runtime-sandbox = { path = "../../runtime-sandbox", version = "0.1", default_features = false }
+sr-io = { path = "../../sr-io", version = "0.1", default_features = false }
+sr-sandbox = { path = "../../sr-sandbox", version = "0.1", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 
 [profile.release]

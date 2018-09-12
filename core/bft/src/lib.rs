@@ -38,8 +38,8 @@ pub mod error;
 
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
-extern crate substrate_runtime_primitives as runtime_primitives;
-extern crate substrate_runtime_version as runtime_version;
+extern crate sr_primitives as runtime_primitives;
+extern crate sr_version as runtime_version;
 extern crate tokio;
 extern crate parking_lot;
 extern crate rhododendron;

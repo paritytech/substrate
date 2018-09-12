@@ -173,29 +173,29 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize)
 			.map_err(|_| UserError("Invalid attempt to copy_nonoverlapping in ext_memcpy"))?;
-		debug_trace!(target: "runtime-io", "memcpy {} from {}, {} bytes", dest, src, count);
+		debug_trace!(target: "sr-io", "memcpy {} from {}, {} bytes", dest, src, count);
 		Ok(dest)
 	},
 	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
 		this.memory.copy(src as usize, dest as usize, count as usize)
 			.map_err(|_| UserError("Invalid attempt to copy in ext_memmove"))?;
-		debug_trace!(target: "runtime-io", "memmove {} from {}, {} bytes", dest, src, count);
+		debug_trace!(target: "sr-io", "memmove {} from {}, {} bytes", dest, src, count);
 		Ok(dest)
 	},
 	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
-		debug_trace!(target: "runtime-io", "memset {} with {}, {} bytes", dest, val, count);
+		debug_trace!(target: "sr-io", "memset {} with {}, {} bytes", dest, val, count);
 		this.memory.clear(dest as usize, val as u8, count as usize)
 			.map_err(|_| UserError("Invalid attempt to clear in ext_memset"))?;
 		Ok(dest)
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
 		let r = this.heap.allocate(size);
-		debug_trace!(target: "runtime-io", "malloc {} bytes at {}", size, r);
+		debug_trace!(target: "sr-io", "malloc {} bytes at {}", size, r);
 		Ok(r)
 	},
 	ext_free(addr: *mut u8) => {
 		this.heap.deallocate(addr);
-		debug_trace!(target: "runtime-io", "free {}", addr);
+		debug_trace!(target: "sr-io", "free {}", addr);
 		Ok(())
 	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
@@ -389,7 +389,7 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_sandbox_invoke(instance_idx: u32, export_ptr: *const u8, export_len: usize, args_ptr: *const u8, args_len: usize, return_val_ptr: *const u8, return_val_len: usize, state: usize) -> u32 => {
 		use codec::{Decode, Encode};
 
-		trace!(target: "runtime-sandbox", "invoke, instance_idx={}", instance_idx);
+		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
 			.map_err(|_| UserError("Sandbox error"))
 			.and_then(|b|

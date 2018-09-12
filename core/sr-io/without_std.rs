@@ -19,7 +19,7 @@ extern crate substrate_primitives as primitives;
 extern crate hashdb;
 
 #[doc(hidden)]
-pub extern crate substrate_runtime_std as rstd;
+pub extern crate sr_std as rstd;
 
 #[doc(hidden)]
 pub extern crate parity_codec as codec;

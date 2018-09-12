@@ -35,8 +35,8 @@ extern crate parity_codec_derive;
 
 extern crate num_traits;
 extern crate integer_sqrt;
-extern crate substrate_runtime_std as rstd;
-extern crate substrate_runtime_io as runtime_io;
+extern crate sr_std as rstd;
+extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
 extern crate substrate_primitives;
 

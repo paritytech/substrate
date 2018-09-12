@@ -19,7 +19,7 @@ substrate-bft = { path = "../../core/bft" }
 parity-codec = { path = "../../codec" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-client = { path = "../../core/client" }
-substrate-runtime-primitives = { path = "../../core/runtime-primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../core/keyring" }

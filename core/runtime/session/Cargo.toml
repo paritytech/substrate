@@ -12,10 +12,10 @@ substrate-keyring = { path = "../../keyring", optional = true }
 parity-codec = { path = "../../../codec", default_features = false }
 parity-codec-derive = { path = "../../../codec/derive", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
-substrate-runtime-std = { path = "../../runtime-std", default_features = false }
-substrate-runtime-io = { path = "../../runtime-io", default_features = false }
+sr-std = { path = "../../sr-std", default_features = false }
+sr-io = { path = "../../sr-io", default_features = false }
 substrate-runtime-support = { path = "../../runtime/support", default_features = false }
-substrate-runtime-primitives = { path = "../../runtime-primitives", default_features = false }
+sr-primitives = { path = "../../sr-primitives", default_features = false }
 substrate-runtime-consensus = { path = "../consensus", default_features = false }
 substrate-runtime-system = { path = "../system", default_features = false }
 substrate-runtime-timestamp = { path = "../timestamp", default_features = false }
@@ -30,10 +30,10 @@ std = [
 	"parity-codec/std",
 	"parity-codec-derive/std",
 	"substrate-primitives/std",
-	"substrate-runtime-std/std",
-	"substrate-runtime-io/std",
+	"sr-std/std",
+	"sr-io/std",
 	"substrate-runtime-support/std",
-	"substrate-runtime-primitives/std",
+	"sr-primitives/std",
 	"substrate-runtime-consensus/std",
 	"substrate-runtime-system/std",
 	"substrate-runtime-timestamp/std"

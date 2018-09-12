@@ -18,7 +18,7 @@ extern crate substrate_client as client;
 extern crate parity_codec as codec;
 extern crate substrate_extrinsic_pool as extrinsic_pool;
 extern crate substrate_primitives;
-extern crate substrate_runtime_primitives;
+extern crate sr_primitives;
 extern crate node_runtime as runtime;
 extern crate node_primitives as primitives;
 extern crate node_api;
@@ -46,7 +46,7 @@ use extrinsic_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, Extrinsi
 use node_api::Api;
 use primitives::{AccountId, BlockId, Block, Hash, Index};
 use runtime::{Address, UncheckedExtrinsic, RawAddress};
-use substrate_runtime_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256};
+use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256};
 
 pub use extrinsic_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};

@@ -27,7 +27,7 @@ extern crate linked_hash_map;
 extern crate parking_lot;
 extern crate substrate_primitives as primitives;
 extern crate substrate_client as client;
-extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate sr_primitives as runtime_primitives;
 extern crate substrate_network_libp2p as network_libp2p;
 extern crate parity_codec as codec;
 extern crate futures;

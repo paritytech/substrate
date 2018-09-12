@@ -26,7 +26,7 @@ extern crate memorydb;
 extern crate parking_lot;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
-extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate sr_primitives as runtime_primitives;
 extern crate parity_codec as codec;
 extern crate substrate_executor as executor;
 extern crate substrate_state_db as state_db;

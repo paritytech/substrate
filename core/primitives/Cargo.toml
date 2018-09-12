@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 crunchy = "0.1"
-substrate-runtime-std = { path = "../runtime-std", default_features = false }
+sr-std = { path = "../sr-std", default_features = false }
 parity-codec = { path = "../../codec", default_features = false }
 parity-codec-derive = { path = "../../codec/derive", default_features = false }
 elastic-array = {version = "0.10", optional = true }
@@ -41,7 +41,7 @@ std = [
 	"fixed-hash/heapsizeof",
 	"fixed-hash/libc",
 	"parity-codec/std",
-	"substrate-runtime-std/std",
+	"sr-std/std",
 	"serde/std",
 	"rustc-hex/std",
 	"twox-hash",

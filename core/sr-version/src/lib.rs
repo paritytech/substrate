@@ -27,7 +27,7 @@ extern crate serde_derive;
 
 #[allow(unused_imports)]
 #[macro_use]
-extern crate substrate_runtime_std as rstd;
+extern crate sr_std as rstd;
 
 #[macro_use]
 extern crate parity_codec_derive;

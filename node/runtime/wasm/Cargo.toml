@@ -12,8 +12,8 @@ safe-mix = { version = "1.0", default_features = false}
 parity-codec-derive = { path = "../../../codec/derive" }
 parity-codec = { path = "../../../codec", default-features = false }
 substrate-primitives = { path = "../../../core/primitives", default-features = false }
-substrate-runtime-std = { path = "../../../core/runtime-std", default-features = false }
-substrate-runtime-io = { path = "../../../core/runtime-io", default-features = false }
+sr-std = { path = "../../../core/sr-std", default-features = false }
+sr-io = { path = "../../../core/sr-io", default-features = false }
 substrate-runtime-support = { path = "../../../core/runtime/support", default-features = false }
 substrate-runtime-balances = { path = "../../../core/runtime/balances", default-features = false }
 substrate-runtime-consensus = { path = "../../../core/runtime/consensus", default-features = false }
@@ -21,13 +21,13 @@ substrate-runtime-contract = { path = "../../../core/runtime/contract", default-
 substrate-runtime-council = { path = "../../../core/runtime/council", default-features = false }
 substrate-runtime-democracy = { path = "../../../core/runtime/democracy", default-features = false }
 substrate-runtime-executive = { path = "../../../core/runtime/executive", default-features = false }
-substrate-runtime-primitives = { path = "../../../core/runtime-primitives", default-features = false }
+sr-primitives = { path = "../../../core/sr-primitives", default-features = false }
 substrate-runtime-session = { path = "../../../core/runtime/session", default-features = false }
 substrate-runtime-staking = { path = "../../../core/runtime/staking", default-features = false }
 substrate-runtime-system = { path = "../../../core/runtime/system", default-features = false }
 substrate-runtime-timestamp = { path = "../../../core/runtime/timestamp", default-features = false }
 substrate-runtime-treasury = { path = "../../../core/runtime/treasury", default-features = false }
-substrate-runtime-version = { path = "../../../core/runtime-version", default-features = false }
+sr-version = { path = "../../../core/sr-version", default-features = false }
 node-primitives = { path = "../../primitives", default-features = false }
 
 [features]
@@ -36,8 +36,8 @@ std = [
 	"safe-mix/std",
 	"parity-codec/std",
 	"substrate-primitives/std",
-	"substrate-runtime-std/std",
-	"substrate-runtime-io/std",
+	"sr-std/std",
+	"sr-io/std",
 	"substrate-runtime-support/std",
 	"substrate-runtime-balances/std",
 	"substrate-runtime-consensus/std",
@@ -45,13 +45,13 @@ std = [
 	"substrate-runtime-council/std",
 	"substrate-runtime-democracy/std",
 	"substrate-runtime-executive/std",
-	"substrate-runtime-primitives/std",
+	"sr-primitives/std",
 	"substrate-runtime-session/std",
 	"substrate-runtime-staking/std",
 	"substrate-runtime-system/std",
 	"substrate-runtime-timestamp/std",
 	"substrate-runtime-treasury/std",
-	"substrate-runtime-version/std",
+	"sr-version/std",
 	"node-primitives/std",
 ]
 

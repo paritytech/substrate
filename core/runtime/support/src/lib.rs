@@ -27,8 +27,8 @@ extern crate alloc;
 #[cfg(feature = "std")]
 extern crate serde;
 
-extern crate substrate_runtime_std as rstd;
-extern crate substrate_runtime_io as runtime_io;
+extern crate sr_std as rstd;
+extern crate sr_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_metadata;
 

@@ -8,12 +8,12 @@ log = { version = "0.3", optional = true }
 hex-literal = { version = "0.1.0", optional = true }
 parity-codec = { path = "../../../codec", default-features = false }
 parity-codec-derive = { path = "../../../codec/derive", default-features = false }
-substrate-runtime-std = { path = "../../runtime-std", default-features = false }
-substrate-runtime-io = { path = "../../runtime-io", default-features = false }
+sr-std = { path = "../../sr-std", default-features = false }
+sr-io = { path = "../../sr-io", default-features = false }
 substrate-runtime-support = { path = "../../runtime/support", default-features = false }
-substrate-runtime-version = { path = "../../runtime-version", default-features = false }
+sr-version = { path = "../../sr-version", default-features = false }
 substrate-primitives = { path = "../../primitives", default-features = false }
-substrate-runtime-primitives = { path = "../../runtime-primitives", default-features = false }
+sr-primitives = { path = "../../sr-primitives", default-features = false }
 
 [features]
 default = []
@@ -21,12 +21,12 @@ std = [
 	"log",
 	"hex-literal",
 	"parity-codec/std",
-	"substrate-runtime-std/std",
-	"substrate-runtime-io/std",
+	"sr-std/std",
+	"sr-io/std",
 	"substrate-runtime-support/std",
-	"substrate-runtime-version/std",
+	"sr-version/std",
 	"substrate-primitives/std",
-	"substrate-runtime-primitives/std"
+	"sr-primitives/std"
 ]
 
 [lib]

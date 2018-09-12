@@ -11,7 +11,7 @@ kvdb-rocksdb = "0.1.3"
 hashdb = "0.2.1"
 memorydb = "0.2.1"
 substrate-primitives = { path = "../../../core/primitives" }
-substrate-runtime-primitives = { path = "../../../core/runtime-primitives" }
+sr-primitives = { path = "../../../core/sr-primitives" }
 substrate-client = { path = "../../../core/client" }
 substrate-state-machine = { path = "../../../core/state-machine" }
 parity-codec = { path = "../../../codec" }

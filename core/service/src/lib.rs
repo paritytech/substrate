@@ -27,7 +27,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
-extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate sr_primitives as runtime_primitives;
 extern crate substrate_network as network;
 extern crate substrate_executor;
 extern crate substrate_client as client;

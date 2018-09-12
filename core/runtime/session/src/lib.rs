@@ -33,7 +33,7 @@ extern crate substrate_keyring as keyring;
 extern crate substrate_primitives;
 
 #[cfg_attr(feature = "std", macro_use)]
-extern crate substrate_runtime_std as rstd;
+extern crate sr_std as rstd;
 
 #[macro_use]
 extern crate substrate_runtime_support as runtime_support;
@@ -41,9 +41,9 @@ extern crate substrate_runtime_support as runtime_support;
 #[macro_use]
 extern crate parity_codec_derive;
 
-extern crate substrate_runtime_io as runtime_io;
+extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
-extern crate substrate_runtime_primitives as primitives;
+extern crate sr_primitives as primitives;
 extern crate substrate_runtime_consensus as consensus;
 extern crate substrate_runtime_system as system;
 extern crate substrate_runtime_timestamp as timestamp;

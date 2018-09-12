@@ -22,8 +22,8 @@
 
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate sr_io as runtime_io;
+extern crate sr_primitives as runtime_primitives;
 
 #[cfg(test)]
 extern crate substrate_bft;

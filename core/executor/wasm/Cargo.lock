@@ -87,9 +87,9 @@ dependencies = [
 name = "runtime-test"
 version = "0.1.0"
 dependencies = [
+ "sr-io 0.1.0",
+ "sr-sandbox 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-sandbox 0.1.0",
 ]
 
 [[package]]
@@ -124,6 +124,37 @@ version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "sr-io"
+version = "0.1.0"
+dependencies = [
+ "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-std 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "sr-sandbox"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 0.1.0",
+ "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-std 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "sr-std"
+version = "0.1.0"
+dependencies = [
+ "pwasm-alloc 0.1.0",
+ "pwasm-libc 0.1.0",
+ "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "substrate-primitives"
 version = "0.1.0"
 dependencies = [
@@ -136,39 +167,8 @@ dependencies = [
  "plain_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-runtime-std 0.1.0",
+ "sr-std 0.1.0",
  "uint 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "substrate-runtime-io"
-version = "0.1.0"
-dependencies = [
- "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 0.1.0",
- "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-primitives 0.1.0",
- "substrate-runtime-std 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-sandbox"
-version = "0.1.0"
-dependencies = [
- "parity-codec 0.1.0",
- "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "substrate-primitives 0.1.0",
- "substrate-runtime-io 0.1.0",
- "substrate-runtime-std 0.1.0",
-]
-
-[[package]]
-name = "substrate-runtime-std"
-version = "0.1.0"
-dependencies = [
- "pwasm-alloc 0.1.0",
- "pwasm-libc 0.1.0",
- "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

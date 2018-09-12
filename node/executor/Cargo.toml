@@ -8,7 +8,7 @@ description = "Substrate node implementation in Rust."
 hex-literal = "0.1"
 triehash = "0.2"
 parity-codec = { path = "../../codec" }
-substrate-runtime-io = { path = "../../core/runtime-io" }
+sr-io = { path = "../../core/sr-io" }
 substrate-state-machine = { path = "../../core/state-machine" }
 substrate-executor = { path = "../../core/executor" }
 substrate-primitives = { path = "../../core/primitives" }
@@ -17,7 +17,7 @@ node-runtime = { path = "../runtime" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../core/keyring" }
-substrate-runtime-primitives = { path = "../../core/runtime-primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
 substrate-runtime-support = { path = "../../core/runtime/support" }
 substrate-runtime-balances = { path = "../../core/runtime/balances" }
 substrate-runtime-session = { path = "../../core/runtime/session" }

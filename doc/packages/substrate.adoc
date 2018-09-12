@@ -39,11 +39,11 @@ include::../../core/rpc-servers/README.adoc[]
 
 include::../../core/runtime/README.adoc[]
 
-include::../../core/runtime-io/README.adoc[]
+include::../../core/sr-io/README.adoc[]
 
-include::../../core/runtime-sandbox/README.adoc[]
+include::../../core/sr-sandbox/README.adoc[]
 
-include::../../core/runtime-std/README.adoc[]
+include::../../core/sr-std/README.adoc[]
 
 include::../../core/runtime-support/README.adoc[]
 

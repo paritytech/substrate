@@ -7,8 +7,8 @@ extern crate alloc;
 use alloc::vec::Vec;
 
 #[macro_use]
-extern crate substrate_runtime_io as runtime_io;
-extern crate substrate_runtime_sandbox as sandbox;
+extern crate sr_io as runtime_io;
+extern crate sr_sandbox as sandbox;
 extern crate substrate_primitives;
 
 use runtime_io::{

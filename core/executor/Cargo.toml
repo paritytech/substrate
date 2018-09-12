@@ -6,11 +6,11 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 error-chain = "0.12"
 parity-codec = { path = "../../codec" }
-substrate-runtime-io = { path = "../runtime-io" }
+sr-io = { path = "../sr-io" }
 substrate-primitives = { path = "../primitives" }
 substrate-serializer = { path = "../serializer" }
 substrate-state-machine = { path = "../state-machine"  }
-substrate-runtime-version = { path = "../runtime-version" }
+sr-version = { path = "../sr-version" }
 serde = "1.0"
 serde_derive = "1.0"
 wasmi = "0.4"

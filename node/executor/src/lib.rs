@@ -21,13 +21,13 @@ extern crate node_runtime;
 #[macro_use] extern crate substrate_executor;
 extern crate parity_codec as codec;
 extern crate substrate_state_machine as state_machine;
-extern crate substrate_runtime_io as runtime_io;
+extern crate sr_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate node_primitives;
 extern crate triehash;
 
 #[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate substrate_runtime_primitives as runtime_primitives;
+#[cfg(test)] extern crate sr_primitives as runtime_primitives;
 #[cfg(test)] extern crate substrate_runtime_support as runtime_support;
 #[cfg(test)] extern crate substrate_runtime_balances as balances;
 #[cfg(test)] extern crate substrate_runtime_session as session;

@@ -31,11 +31,11 @@
 #![recursion_limit="128"]
 
 extern crate parity_codec as codec;
-extern crate substrate_runtime_io as runtime_io;
+extern crate sr_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_serializer as serializer;
 extern crate substrate_state_machine as state_machine;
-extern crate substrate_runtime_version as runtime_version;
+extern crate sr_version as runtime_version;
 
 extern crate serde;
 extern crate wasmi;

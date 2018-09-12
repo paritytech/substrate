@@ -22,11 +22,11 @@
 
 // Assert macros used in tests.
 #[cfg_attr(feature = "std", macro_use)]
-extern crate substrate_runtime_std;
+extern crate sr_std;
 
 // Needed for tests (`with_externalities`).
 #[cfg(test)]
-extern crate substrate_runtime_io as runtime_io;
+extern crate sr_io as runtime_io;
 
 // Needed for the set of mock primitives used in our tests.
 #[cfg(test)]
@@ -49,7 +49,7 @@ extern crate parity_codec as codec;
 extern crate substrate_runtime_support as runtime_support;
 
 // Needed for various traits. In our case, `OnFinalise`.
-extern crate substrate_runtime_primitives as runtime_primitives;
+extern crate sr_primitives as runtime_primitives;
 // `system` module provides us with all sorts of useful stuff and macros
 // depend on it being around.
 extern crate substrate_runtime_system as system;
