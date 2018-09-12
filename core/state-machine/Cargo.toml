@@ -1,0 +1,21 @@
+[package]
+name = "substrate-state-machine"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+description = "Substrate State Machine"
+
+[dependencies]
+byteorder = "1.1"
+hex-literal = "0.1.0"
+log = "0.3"
+parking_lot = "0.4"
+heapsize = "0.4"
+hashdb = "0.2.1"
+memorydb = "0.2.1"
+patricia-trie = "0.2.1"
+triehash = "0.2"
+rlp = "0.2.4"
+
+substrate-primitives = { path = "../primitives", version = "0.1.0" }
+parity-codec = { path = "../../codec", default_features = false }
+

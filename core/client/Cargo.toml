@@ -1,0 +1,31 @@
+[package]
+name = "substrate-client"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+error-chain = "0.12"
+fnv = "1.0"
+log = "0.3"
+parking_lot = "0.4"
+triehash = "0.2"
+hex-literal = "0.1"
+futures = "0.1.17"
+slog = "^2"
+heapsize = "0.4"
+substrate-bft = { path = "../bft" }
+parity-codec = { path = "../../codec" }
+substrate-executor = { path = "../executor" }
+substrate-primitives = { path = "../primitives" }
+sr-io = { path = "../sr-io" }
+substrate-metadata = { path = "../metadata" }
+sr-primitives = { path = "../sr-primitives" }
+substrate-state-machine = { path = "../state-machine" }
+substrate-keyring = { path = "../../core/keyring" }
+substrate-telemetry = { path = "../telemetry" }
+hashdb = "0.2.1"
+patricia-trie = "0.2.1"
+rlp = "0.2.4"
+
+[dev-dependencies]
+substrate-test-client = { path = "../test-client" }

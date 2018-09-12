@@ -50,7 +50,6 @@ test:rust:stable:                  &test
     - ./scripts/init.sh
     - export PATH="${CI_PROJECT_DIR}/cargo/bin/:$PATH"
     - ./scripts/build.sh
-    - ./scripts/build-demos.sh
     - time cargo test --all --release
   tags:
     - rust-stable 
@@ -74,7 +73,6 @@ build:linux:ubuntu:amd64:          &build
     - ./scripts/init.sh
     - export PATH="${CI_PROJECT_DIR}/cargo/bin/:$PATH"
     - ./scripts/build.sh 
-    - ./scripts/build-demos.sh 
     - cargo build --release
   <<:                              *collect_artifacts
   tags:

@@ -1,0 +1,32 @@
+[package]
+name = "sr-io"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+build = "build.rs"
+
+[build-dependencies]
+rustc_version = "0.2"
+
+[dependencies]
+sr-std = { path = "../sr-std", default_features = false }
+environmental = { path = "../../environmental", optional = true }
+substrate-state-machine = { path = "../state-machine", optional = true }
+substrate-primitives = { path = "../primitives", default_features = false }
+parity-codec = { path = "../../codec", default_features = false }
+triehash = { version = "0.2", optional = true }
+hashdb = { version = "0.2", default_features = false }
+rlp = { version = "0.2", optional = true, default_features = false }
+
+[features]
+default = ["std"]
+std = [
+	"environmental",
+	"substrate-state-machine",
+	"triehash",
+	"substrate-primitives/std",
+	"parity-codec/std",
+	"sr-std/std",
+	"rlp"
+]
+nightly = []
+strict = []

@@ -1,0 +1,33 @@
+[package]
+name = "srml-executive"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+hex-literal = "0.1.0"
+serde = { version = "1.0", default_features = false }
+serde_derive = { version = "1.0", optional = true }
+parity-codec = { path = "../../codec", default_features = false }
+sr-std = { path = "../../core/sr-std", default_features = false }
+sr-io = { path = "../../core/sr-io", default_features = false }
+sr-primitives = { path = "../../core/sr-primitives", default_features = false }
+srml-support = { path = "../support", default_features = false }
+srml-system = { path = "../system", default_features = false }
+
+[dev-dependencies]
+parity-codec-derive = { path = "../../codec/derive" }
+substrate-primitives = { path = "../../core/primitives" }
+srml-balances = { path = "../balances" }
+
+[features]
+default = ["std"]
+std = [
+	"sr-std/std",
+	"srml-support/std",
+	"serde/std",
+	"serde_derive",
+	"parity-codec/std",
+	"sr-primitives/std",
+	"sr-io/std",
+	"srml-system/std",
+]

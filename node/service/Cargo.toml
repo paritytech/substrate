@@ -1,0 +1,26 @@
+[package]
+name = "node-service"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+parking_lot = "0.4"
+error-chain = "0.12"
+lazy_static = "1.0"
+log = "0.3"
+slog = "^2"
+tokio = "0.1.7"
+hex-literal = "0.1"
+node-api = { path = "../api" }
+node-primitives = { path = "../primitives" }
+node-runtime = { path = "../runtime" }
+node-executor = { path = "../executor" }
+node-consensus = { path = "../consensus" }
+node-network = { path = "../network" }
+node-transaction-pool = { path = "../transaction-pool" }
+sr-io = { path = "../../core/sr-io" }
+substrate-primitives = { path = "../../core/primitives" }
+substrate-network = { path = "../../core/network" }
+substrate-client = { path = "../../core/client" }
+substrate-service = { path = "../../core/service" }
+substrate-telemetry = { path = "../../core/telemetry" }

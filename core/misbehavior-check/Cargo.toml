@@ -1,0 +1,19 @@
+[package]
+name = "substrate-misbehavior-check"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+parity-codec = { path = "../../codec", default-features = false }
+substrate-primitives = { path = "../primitives", default-features = false }
+sr-primitives = { path = "../sr-primitives", default-features = false }
+sr-io = { path = "../sr-io", default-features = false }
+
+[dev-dependencies]
+substrate-bft = { path = "../bft" }
+rhododendron = "0.3"
+substrate-keyring = { path = "../keyring" }
+
+[features]
+default = ["std"]
+std = ["parity-codec/std", "substrate-primitives/std", "sr-primitives/std", "sr-io/std"]

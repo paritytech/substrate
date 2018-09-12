@@ -1,0 +1,29 @@
+[package]
+description = "Polkadot network protocol"
+name = "substrate-network"
+version = "0.1.0"
+license = "GPL-3.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[lib]
+
+[dependencies]
+log = "0.3"
+parking_lot = "0.4"
+error-chain = "0.12"
+bitflags = "1.0"
+futures = "0.1.17"
+linked-hash-map = "0.5"
+rustc-hex = "1.0"
+ethcore-io = { git = "https://github.com/paritytech/parity.git" }
+substrate-primitives = { path = "../../core/primitives" }
+substrate-client = { path = "../../core/client" }
+sr-primitives = { path = "../../core/sr-primitives" }
+parity-codec = { path = "../../codec" }
+parity-codec-derive = { path = "../../codec/derive" }
+substrate-network-libp2p = { path = "../../core/network-libp2p" }
+
+[dev-dependencies]
+env_logger = "0.4"
+substrate-keyring = { path = "../../core/keyring" }
+substrate-test-client = { path = "../../core/test-client" }
