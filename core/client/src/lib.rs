@@ -61,6 +61,7 @@ pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
 pub use client::{
 	new_with_backend,
+	new_in_mem,
 	BlockBody, BlockStatus, BlockOrigin, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	Client, ClientInfo, ChainHead,
 	ImportResult, JustifiedHeader,

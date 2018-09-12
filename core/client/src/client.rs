@@ -37,7 +37,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {cht, error, block_builder, bft, genesis};
+use {cht, error, in_mem, block_builder, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -177,6 +177,20 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>, Vec<AuthorityId>) {
 		(self.header, self.justification, self.authorities)
 	}
+}
+
+/// Create an instance of in-memory client.
+pub fn new_in_mem<E, Block, S>(
+	code_executor: E,
+	build_genesis_storage: S,
+) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher, RlpCodec>, E>, Block>>
+	where
+		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+		S: BuildStorage,
+		Block: BlockT,
+		H256: From<Block::Hash>,
+{
+	new_with_backend(Arc::new(in_mem::Backend::new()), code_executor, build_genesis_storage)
 }
 
 /// Create a client with the explicitely provided backend.
