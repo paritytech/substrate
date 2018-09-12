@@ -1065,10 +1065,11 @@ mod tests {
 
 	#[test]
 	fn best_containing_with_multiple_forks() {
+		// block tree:
 		// G -> A1 -> A2 -> A3 -> A4 -> A5
-		//		A1 -> B2 -> B3 -> B4
-		//			  B2 -> C3
-		//		A1 -> D2
+		//      A1 -> B2 -> B3 -> B4
+		//	          B2 -> C3
+		//	    A1 -> D2
 		let client = test_client::new();
 
 		// G -> A1
