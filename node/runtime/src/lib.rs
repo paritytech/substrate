@@ -215,15 +215,15 @@ pub type Contract = contract::Module<Runtime>;
 impl_outer_event! {
 	pub enum Event for Runtime {
 		//consensus,
-		balances,
+		balances<T>,
 		//timetstamp,
-		session,
-		staking,
-		democracy,
-		council,
-		council_voting,
-		council_motions,
-		treasury
+		session<T>,
+		staking<T>,
+		democracy<T>,
+		council<T>,
+		council_voting<T>,
+		council_motions<T>,
+		treasury<T>,
 	}
 }
 
