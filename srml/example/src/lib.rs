@@ -121,9 +121,7 @@ decl_module! {
 /// circumstances that have happened that users, Dapps and/or chain explorers would find
 /// interesting and otherwise difficult to detect.
 decl_event!(
-	pub enum Event<T> with RawEvent<B>
-		where <T as balances::Trait>::Balance
-	{
+	pub enum Event<T> where B = <T as balances::Trait>::Balance {
 		// Just a normal `enum`, here's a dummy event to ensure it compiles.
 		/// Dummy event, just here so there's a generic type that's used.
 		Dummy(B),
