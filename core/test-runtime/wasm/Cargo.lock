@@ -557,6 +557,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-support"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 0.1.0",
+ "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-io 0.1.0",
+ "sr-std 0.1.0",
+ "substrate-metadata 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "stable_deref_trait"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -597,20 +611,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "srml-support"
-version = "0.1.0"
-dependencies = [
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 0.1.0",
- "serde 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.64 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-io 0.1.0",
- "sr-std 0.1.0",
- "substrate-metadata 0.1.0",
- "substrate-primitives 0.1.0",
-]
-
-[[package]]
 name = "substrate-state-machine"
 version = "0.1.0"
 dependencies = [
@@ -640,8 +640,8 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "sr-version 0.1.0",
- "substrate-primitives 0.1.0",
  "srml-support 0.1.0",
+ "substrate-primitives 0.1.0",
 ]
 
 [[package]]

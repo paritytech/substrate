@@ -37,7 +37,7 @@ include::../../core/rpc/README.adoc[]
 
 include::../../core/rpc-servers/README.adoc[]
 
-include::../../core/srml/README.adoc[]
+include::../../srml/README.adoc[]
 
 include::../../core/sr-io/README.adoc[]
 
