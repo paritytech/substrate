@@ -48,7 +48,7 @@ use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member, DigestItem};
 use primitives::bft::MisbehaviorReport;
-use system::{ensure_signed, ensure_inherent, ensure_root};
+use system::{ensure_signed, ensure_inherent};
 
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::Blake2Hasher;
@@ -132,8 +132,8 @@ decl_module! {
 		fn report_misbehavior(origin, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
 		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result;
 		fn remark(origin, remark: Vec<u8>) -> Result;
-		fn set_code(origin, new: Vec<u8>) -> Result;
-		fn set_storage(origin, items: Vec<KeyValue>) -> Result;
+		fn set_code(new: Vec<u8>) -> Result;
+		fn set_storage(items: Vec<KeyValue>) -> Result;
 	}
 }
 
@@ -144,15 +144,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the new code.
-	fn set_code(origin: T::Origin, new: Vec<u8>) -> Result {
-		ensure_root(origin)?;
+	fn set_code(new: Vec<u8>) -> Result {
 		storage::unhashed::put_raw(CODE, &new);
 		Ok(())
 	}
 
 	/// Set some items of storage.
-	fn set_storage(origin: T::Origin, items: Vec<KeyValue>) -> Result {
-		ensure_root(origin)?;
+	fn set_storage(items: Vec<KeyValue>) -> Result {
 		for i in &items {
 			storage::unhashed::put_raw(&i.0, &i.1);
 		}

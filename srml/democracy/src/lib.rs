@@ -46,7 +46,7 @@ use rstd::result;
 use primitives::traits::{Zero, OnFinalise, As, MaybeSerializeDebug};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use srml_support::dispatch::Result;
-use system::{ensure_signed, ensure_root};
+use system::ensure_signed;
 
 #[cfg(any(feature = "std", test))]
 use std::collections::HashMap;
@@ -71,8 +71,8 @@ decl_module! {
 		fn second(origin, proposal: PropIndex) -> Result;
 		fn vote(origin, ref_index: ReferendumIndex, approve_proposal: bool) -> Result;
 
-		fn start_referendum(origin, proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result;
-		fn cancel_referendum(origin, ref_index: ReferendumIndex) -> Result;
+		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result;
+		fn cancel_referendum(ref_index: ReferendumIndex) -> Result;
 	}
 }
 
@@ -215,8 +215,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Start a referendum.
-	fn start_referendum(origin: T::Origin, proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
-		ensure_root(origin)?;
+	fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
 		Self::inject_referendum(
 			<system::Module<T>>::block_number() + Self::voting_period(),
 			*proposal,
@@ -225,8 +224,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Remove a referendum.
-	fn cancel_referendum(origin: T::Origin, ref_index: ReferendumIndex) -> Result {
-		ensure_root(origin)?;
+	fn cancel_referendum(ref_index: ReferendumIndex) -> Result {
 		Self::clear_referendum(ref_index);
 		Ok(())
 	}
@@ -598,7 +596,7 @@ mod tests {
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
 			assert_ok!(Democracy::vote(Origin::signed(1), r, true));
-			assert_ok!(Democracy::cancel_referendum(Origin::ROOT, r));
+			assert_ok!(Democracy::cancel_referendum(r));
 
 			assert_eq!(Democracy::end_block(System::block_number()), Ok(()));
 

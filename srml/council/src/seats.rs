@@ -22,7 +22,7 @@ use runtime_io::print;
 use srml_support::{StorageValue, StorageMap, dispatch::Result};
 use democracy;
 use balances::{self, address::Address};
-use system::{self, ensure_signed, ensure_root};
+use system::{self, ensure_signed};
 
 // no polynomial attacks:
 //
@@ -92,10 +92,10 @@ decl_module! {
 		fn submit_candidacy(origin, slot: u32) -> Result;
 		fn present_winner(origin, candidate: Address<T::AccountId, T::AccountIndex>, total: T::Balance, index: VoteIndex) -> Result;
 
-		fn set_desired_seats(origin, count: u32) -> Result;
-		fn remove_member(origin, who: Address<T::AccountId, T::AccountIndex>) -> Result;
-		fn set_presentation_duration(origin, count: T::BlockNumber) -> Result;
-		fn set_term_duration(origin, count: T::BlockNumber) -> Result;
+		fn set_desired_seats(count: u32) -> Result;
+		fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result;
+		fn set_presentation_duration(count: T::BlockNumber) -> Result;
+		fn set_term_duration(count: T::BlockNumber) -> Result;
 	}
 }
 
@@ -406,8 +406,7 @@ impl<T: Trait> Module<T> {
 	/// Set the desired member count; if lower than the current count, then seats will not be up
 	/// election when they expire. If more, then a new vote will be started if one is not already
 	/// in progress.
-	fn set_desired_seats(origin: T::Origin, count: u32) -> Result {
-		ensure_root(origin)?;
+	fn set_desired_seats(count: u32) -> Result {
 		<DesiredSeats<T>>::put(count);
 		Ok(())
 	}
@@ -415,8 +414,7 @@ impl<T: Trait> Module<T> {
 	/// Remove a particular member. A tally will happen instantly (if not already in a presentation
 	/// period) to fill the seat if removal means that the desired members are not met.
 	/// This is effective immediately.
-	fn remove_member(origin: T::Origin, who: Address<T::AccountId, T::AccountIndex>) -> Result {
-		ensure_root(origin)?;
+	fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result {
 		let who = <balances::Module<T>>::lookup(who)?;
 		let new_council: Vec<(T::AccountId, T::BlockNumber)> = Self::active_council()
 			.into_iter()
@@ -428,16 +426,14 @@ impl<T: Trait> Module<T> {
 
 	/// Set the presentation duration. If there is currently a vote being presented for, will
 	/// invoke `finalise_vote`.
-	fn set_presentation_duration(origin: T::Origin, count: T::BlockNumber) -> Result {
-		ensure_root(origin)?;
+	fn set_presentation_duration(count: T::BlockNumber) -> Result {
 		<PresentationDuration<T>>::put(count);
 		Ok(())
 	}
 
 	/// Set the presentation duration. If there is current a vote being presented for, will
 	/// invoke `finalise_vote`.
-	fn set_term_duration(origin: T::Origin, count: T::BlockNumber) -> Result {
-		ensure_root(origin)?;
+	fn set_term_duration(count: T::BlockNumber) -> Result {
 		<TermDuration<T>>::put(count);
 		Ok(())
 	}
@@ -1073,7 +1069,7 @@ mod tests {
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(8);
-			assert_ok!(Council::set_desired_seats(Origin::ROOT, 3));
+			assert_ok!(Council::set_desired_seats(3));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);
@@ -1326,7 +1322,7 @@ mod tests {
 
 			System::set_block_number(8);
 			assert_ok!(Council::set_approvals(Origin::signed(6), vec![false, false, true, false], 1));
-			assert_ok!(Council::set_desired_seats(Origin::ROOT, 3));
+			assert_ok!(Council::set_desired_seats(3));
 			assert_ok!(Council::end_block(System::block_number()));
 
 			System::set_block_number(10);

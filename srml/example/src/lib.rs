@@ -60,7 +60,7 @@ extern crate srml_balances as balances;
 
 use runtime_primitives::traits::OnFinalise;
 use runtime_support::{StorageValue, dispatch::Result};
-use system::{ensure_signed, ensure_root};
+use system::ensure_signed;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -113,7 +113,7 @@ decl_module! {
 		fn accumulate_foo(origin, increase_by: T::Balance) -> Result;
 
 		/// A privileged call; in this case it resets our dummy value to something new.
-		fn set_dummy(origin, new_dummy: T::Balance) -> Result;
+		fn set_dummy(new_dummy: T::Balance) -> Result;
 	}
 }
 
@@ -264,10 +264,7 @@ impl<T: Trait> Module<T> {
 	// calls to be executed - we don't need to care why. Because it's privileged, we can
 	// assume it's a one-off operation and substantial processing/storage/memory can be used
 	// without worrying about gameability or attack scenarios.
-	fn set_dummy(origin: T::Origin, new_value: T::Balance) -> Result {
-		// This is a privileged call, so we ensure that the origin is "Root".
-		ensure_root(origin)?;
-
+	fn set_dummy(new_value: T::Balance) -> Result {
 		// Put the new value into storage.
 		<Dummy<T>>::put(new_value);
 

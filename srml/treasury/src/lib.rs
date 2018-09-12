@@ -46,7 +46,7 @@ use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use runtime_primitives::{Permill, traits::{OnFinalise, Zero, EnsureOrigin}};
 use balances::OnDilution;
-use system::{ensure_signed, ensure_root};
+use system::ensure_signed;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -77,10 +77,10 @@ decl_module! {
 		fn propose_spend(origin, value: T::Balance, beneficiary: T::AccountId) -> Result;
 
 		// Set the balance of funds available to spend.
-		fn set_pot(origin, new_pot: T::Balance) -> Result;
+		fn set_pot(new_pot: T::Balance) -> Result;
 
 		// (Re-)configure this module.
-		fn configure(origin, proposal_bond: Permill, proposal_bond_minimum: T::Balance, spend_period: T::BlockNumber, burn: Permill) -> Result;
+		fn configure(proposal_bond: Permill, proposal_bond_minimum: T::Balance, spend_period: T::BlockNumber, burn: Permill) -> Result;
 
 		// Reject a proposed spend. The original deposit will be slashed.
 		fn reject_proposal(origin, roposal_id: ProposalIndex) -> Result;
@@ -197,8 +197,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn set_pot(origin: T::Origin, new_pot: T::Balance) -> Result {
-		ensure_root(origin)?;
+	fn set_pot(new_pot: T::Balance) -> Result {
 		// Put the new value into storage.
 		<Pot<T>>::put(new_pot);
 
@@ -207,13 +206,11 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn configure(
-		origin: T::Origin,
 		proposal_bond: Permill,
 		proposal_bond_minimum: T::Balance,
 		spend_period: T::BlockNumber,
 		burn: Permill
 	) -> Result {
-		ensure_root(origin)?;
 		<ProposalBond<T>>::put(proposal_bond);
 		<ProposalBondMinimum<T>>::put(proposal_bond_minimum);
 		<SpendPeriod<T>>::put(spend_period);
