@@ -306,10 +306,9 @@ macro_rules! decl_module {
 				d.dispatch(origin)
 			}
 		}
-
 		__dispatch_impl_json_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
-			{$( $(#[doc = $doc_attr])* fn $fn_name(origin $(, $param_name : $param )*) -> $result; )*}
+			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*) -> $result; )*}
 		}
 	}
 }
@@ -480,12 +479,11 @@ macro_rules! __dispatch_impl_json_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __call_to_json {
-	// WITH AUX
 	(
 		$call_type:ident $origin_type:ty
 			{$(
 				$(#[doc = $doc_attr:tt])*
-				fn $fn_name:ident(origin
+				fn $fn_name:ident($from:ident
 					$(
 						, $param_name:ident : $param:ty
 					)*
@@ -496,7 +494,7 @@ macro_rules! __call_to_json {
 			r#"{ "name": ""#, stringify!($call_type),
 			r#"", "functions": {"#,
 			__functions_to_json!(""; 0; $origin_type; $(
-				fn $fn_name(origin $(, $param_name: $param )* ) -> $result;
+				fn $fn_name($from $(, $param_name: $param )* ) -> $result;
 				__function_doc_to_json!(""; $($doc_attr)*);
 			)*), " } }"
 		)
@@ -507,12 +505,15 @@ macro_rules! __call_to_json {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __functions_to_json {
-	// WITHOUT AUX
+	// ROOT
 	(
 		$prefix_str:tt;
 		$fn_id:expr;
-		fn $fn_name:ident(
-			$($param_name:ident : $param:ty),*
+		$origin_type:ty;
+		fn $fn_name:ident(root
+			$(
+				, $param_name:ident : $param:ty
+			)*
 		) -> $result:ty;
 		$fn_doc:expr;
 		$($rest:tt)*
@@ -520,14 +521,14 @@ macro_rules! __functions_to_json {
 			concat!($prefix_str, " ",
 				__function_to_json!(
 					fn $fn_name(
-						$($param_name : $param),*
+						$( $param_name : $param ),*
 					) -> $result;
 					$fn_doc;
 					$fn_id;
-				), __functions_to_json!(","; $fn_id + 1; $($rest)*)
+				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
 			)
 	};
-	// WITH AUX
+	// NON ROOT
 	(
 		$prefix_str:tt;
 		$fn_id:expr;
@@ -580,6 +581,18 @@ macro_rules! __function_to_json {
 				$(
 					concat!(r#", { "name": ""#, stringify!($param_name), r#"", "type": ""#, stringify!($param), r#"" }"# ),
 				)*
+				r#" ], "description": ["#, $fn_doc, " ] }"
+			)
+	};
+	(
+		fn $fn_name:ident() -> $result:ty;
+		$fn_doc:tt;
+		$fn_id:expr;
+	) => {
+			concat!(
+				r#"""#, stringify!($fn_id), r#"""#,
+				r#": { "name": ""#, stringify!($fn_name),
+				r#"", "params": [ "#,
 				r#" ], "description": ["#, $fn_doc, " ] }"
 			)
 	};
@@ -661,7 +674,7 @@ mod tests {
 				r#" ], "description": [ ] }, "#,
 
 				r#""0 + 1 + 1 + 1 + 1": { "name": "aux_4", "params": [ "#,
-					r#"{ "name": "data", "type": "i32" }, "#,
+					r#"{ "name": "data", "type": "i32" }"#,
 				r#" ], "description": [ ] }"#,
 			r#" } }"#,
 		r#" }"#,
