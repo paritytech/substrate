@@ -32,7 +32,7 @@ extern crate serde;
 extern crate serde_derive;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate srml_support as runtime_support;
 #[macro_use]
 extern crate parity_codec_derive;
 #[macro_use]

@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, As, Lookup, OnFinalise};
 use runtime_io::print;
-use substrate_runtime_support::{StorageValue, StorageMap, dispatch::Result};
+use srml_support::{StorageValue, StorageMap, dispatch::Result};
 use democracy;
 use balances::{self, address::Address};
 use system::{self, ensure_signed, ensure_root};

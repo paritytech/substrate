@@ -26,7 +26,7 @@ extern crate serde;
 extern crate serde_derive;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate srml_support as runtime_support;
 
 #[cfg_attr(feature = "std", macro_use)]
 extern crate sr_std as rstd;
@@ -38,7 +38,7 @@ extern crate parity_codec as codec;
 extern crate substrate_primitives;
 extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
-extern crate substrate_runtime_system as system;
+extern crate srml_system as system;
 
 use rstd::prelude::*;
 use rstd::{cmp, result};

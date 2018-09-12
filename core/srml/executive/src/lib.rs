@@ -29,13 +29,13 @@ extern crate serde_derive;
 extern crate parity_codec_derive;
 
 #[cfg_attr(test, macro_use)]
-extern crate substrate_runtime_support as runtime_support;
+extern crate srml_support as runtime_support;
 
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
 extern crate sr_primitives as primitives;
-extern crate substrate_runtime_system as system;
+extern crate srml_system as system;
 
 #[cfg(test)]
 #[macro_use]
@@ -45,7 +45,7 @@ extern crate hex_literal;
 extern crate substrate_primitives;
 
 #[cfg(test)]
-extern crate substrate_runtime_balances as balances;
+extern crate srml_balances as balances;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;

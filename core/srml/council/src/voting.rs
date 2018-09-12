@@ -20,8 +20,8 @@ use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use primitives::traits::{OnFinalise, Hash};
 use runtime_io::print;
-use substrate_runtime_support::dispatch::Result;
-use substrate_runtime_support::{StorageValue, StorageMap, IsSubType};
+use srml_support::dispatch::Result;
+use srml_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::{ensure_signed, ensure_root};
@@ -244,7 +244,7 @@ mod tests {
 	use super::*;
 	use ::tests::*;
 	use ::tests::{Call, Origin};
-	use substrate_runtime_support::Hashable;
+	use srml_support::Hashable;
 	use democracy::VoteThreshold;
 
 	#[test]

@@ -274,18 +274,18 @@ dependencies = [
  "sr-std 0.1.0",
  "sr-version 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-contract 0.1.0",
- "substrate-runtime-council 0.1.0",
- "substrate-runtime-democracy 0.1.0",
- "substrate-runtime-executive 0.1.0",
- "substrate-runtime-session 0.1.0",
- "substrate-runtime-staking 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
- "substrate-runtime-treasury 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-contract 0.1.0",
+ "srml-council 0.1.0",
+ "srml-democracy 0.1.0",
+ "srml-executive 0.1.0",
+ "srml-session 0.1.0",
+ "srml-staking 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "srml-timestamp 0.1.0",
+ "srml-treasury 0.1.0",
 ]
 
 [[package]]
@@ -677,7 +677,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-runtime-balances"
+name = "srml-balances"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -691,12 +691,12 @@ dependencies = [
  "sr-std 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-consensus"
+name = "srml-consensus"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -708,12 +708,12 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-contract"
+name = "srml-contract"
 version = "0.1.0"
 dependencies = [
  "parity-codec 0.1.0",
@@ -726,13 +726,13 @@ dependencies = [
  "sr-sandbox 0.1.0",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-council"
+name = "srml-council"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -747,15 +747,15 @@ dependencies = [
  "sr-std 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-democracy 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-democracy 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-democracy"
+name = "srml-democracy"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -768,14 +768,14 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-executive"
+name = "srml-executive"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -785,12 +785,12 @@ dependencies = [
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-session"
+name = "srml-session"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -804,14 +804,14 @@ dependencies = [
  "sr-std 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "srml-timestamp 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-staking"
+name = "srml-staking"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -826,16 +826,16 @@ dependencies = [
  "sr-std 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-session 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
- "substrate-runtime-timestamp 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-session 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
+ "srml-timestamp 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-support"
+name = "srml-support"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -849,7 +849,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-runtime-system"
+name = "srml-system"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -862,11 +862,11 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
+ "srml-support 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-timestamp"
+name = "srml-timestamp"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -877,13 +877,13 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-consensus 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
+ "srml-consensus 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
 ]
 
 [[package]]
-name = "substrate-runtime-treasury"
+name = "srml-treasury"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -895,9 +895,9 @@ dependencies = [
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-balances 0.1.0",
- "substrate-runtime-support 0.1.0",
- "substrate-runtime-system 0.1.0",
+ "srml-balances 0.1.0",
+ "srml-support 0.1.0",
+ "srml-system 0.1.0",
 ]
 
 [[package]]

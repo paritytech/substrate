@@ -36,11 +36,11 @@ extern crate substrate_primitives;
 #[cfg(feature = "std")] extern crate substrate_keyring as keyring;
 #[macro_use] extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
-#[macro_use] extern crate substrate_runtime_support;
+#[macro_use] extern crate srml_support;
 extern crate sr_primitives as primitives;
-extern crate substrate_runtime_balances as balances;
-extern crate substrate_runtime_democracy as democracy;
-extern crate substrate_runtime_system as system;
+extern crate srml_balances as balances;
+extern crate srml_democracy as democracy;
+extern crate srml_system as system;
 
 #[cfg(feature = "std")]
 use rstd::prelude::*;
@@ -49,7 +49,7 @@ use std::collections::HashMap;
 #[cfg(feature = "std")]
 use primitives::traits::As;
 #[cfg(feature = "std")]
-use substrate_runtime_support::StorageValue;
+use srml_support::StorageValue;
 
 pub mod voting;
 pub mod motions;

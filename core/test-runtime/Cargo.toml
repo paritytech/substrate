@@ -13,7 +13,7 @@ parity-codec = { path = "../../codec", default-features = false }
 parity-codec-derive = { path = "../../codec/derive", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
 sr-io = { path = "../sr-io", default-features = false }
-substrate-runtime-support = { path = "../srml/support", default-features = false }
+srml-support = { path = "../srml/support", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
 sr-version = { path = "../sr-version", default-features = false }
@@ -29,7 +29,7 @@ std = [
 	"parity-codec/std",
 	"sr-std/std",
 	"sr-io/std",
-	"substrate-runtime-support/std",
+	"srml-support/std",
 	"substrate-primitives/std",
 	"sr-primitives/std",
 	"sr-version/std"

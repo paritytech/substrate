@@ -28,7 +28,7 @@ extern crate serde;
 extern crate serde_derive;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate srml_support as runtime_support;
 
 #[cfg_attr(feature = "std", macro_use)]
 extern crate sr_std as rstd;
@@ -40,12 +40,12 @@ extern crate parity_codec as codec;
 extern crate substrate_primitives;
 extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
-extern crate substrate_runtime_balances as balances;
-extern crate substrate_runtime_consensus as consensus;
+extern crate srml_balances as balances;
+extern crate srml_consensus as consensus;
 extern crate sr_sandbox as sandbox;
-extern crate substrate_runtime_session as session;
-extern crate substrate_runtime_system as system;
-extern crate substrate_runtime_timestamp as timestamp;
+extern crate srml_session as session;
+extern crate srml_system as system;
+extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
 use runtime_support::{Parameter, StorageValue, StorageMap};

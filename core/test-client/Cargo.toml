@@ -11,7 +11,7 @@ parity-codec = { path = "../../codec" }
 substrate-executor = { path = "../executor" }
 substrate-keyring = { path = "../../core/keyring" }
 substrate-primitives = { path = "../primitives" }
-substrate-runtime-support = { path = "../srml/support" }
+srml-support = { path = "../srml/support" }
 substrate-test-runtime = { path = "../test-runtime" }
 sr-primitives = { path = "../sr-primitives" }
 hashdb = "0.2.1"

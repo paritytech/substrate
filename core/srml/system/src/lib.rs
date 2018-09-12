@@ -26,7 +26,7 @@ extern crate substrate_primitives;
 extern crate sr_std as rstd;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate srml_support as runtime_support;
 
 #[cfg(feature = "std")]
 extern crate serde;

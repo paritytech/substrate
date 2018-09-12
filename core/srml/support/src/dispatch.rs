@@ -78,7 +78,7 @@ macro_rules! decl_module {
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		// TODO: switching based on std feature is because of an issue in
 		// serde-derive for when we attempt to derive `Deserialize` on these types,
-		// in a situation where we've imported `substrate_runtime_support` as another name.
+		// in a situation where we've imported `srml_support` as another name.
 		#[cfg(feature = "std")]
 		pub struct $mod_type<$trait_instance: $trait_name>(::std::marker::PhantomData<$trait_instance>);
 

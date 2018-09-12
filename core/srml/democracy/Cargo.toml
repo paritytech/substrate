@@ -1,5 +1,5 @@
 [package]
-name = "substrate-runtime-democracy"
+name = "srml-democracy"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
@@ -13,11 +13,11 @@ parity-codec-derive = { path = "../../../codec/derive", default_features = false
 substrate-primitives = { path = "../../primitives", default_features = false }
 sr-std = { path = "../../sr-std", default_features = false }
 sr-io = { path = "../../sr-io", default_features = false }
-substrate-runtime-support = { path = "../../srml/support", default_features = false }
+srml-support = { path = "../support", default_features = false }
 sr-primitives = { path = "../../sr-primitives", default_features = false }
-substrate-runtime-balances = { path = "../balances", default_features = false }
-substrate-runtime-consensus = { path = "../consensus", default_features = false }
-substrate-runtime-system = { path = "../system", default_features = false }
+srml-balances = { path = "../balances", default_features = false }
+srml-consensus = { path = "../consensus", default_features = false }
+srml-system = { path = "../system", default_features = false }
 
 [features]
 default = ["std"]
@@ -29,9 +29,9 @@ std = [
 	"substrate-primitives/std",
 	"sr-std/std",
 	"sr-io/std",
-	"substrate-runtime-support/std",
+	"srml-support/std",
 	"sr-primitives/std",
-	"substrate-runtime-consensus/std",
-	"substrate-runtime-balances/std",
-	"substrate-runtime-system/std",
+	"srml-consensus/std",
+	"srml-balances/std",
+	"srml-system/std",
 ]

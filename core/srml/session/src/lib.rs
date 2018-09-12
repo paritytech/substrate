@@ -36,7 +36,7 @@ extern crate substrate_primitives;
 extern crate sr_std as rstd;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate srml_support as runtime_support;
 
 #[macro_use]
 extern crate parity_codec_derive;
@@ -44,9 +44,9 @@ extern crate parity_codec_derive;
 extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
 extern crate sr_primitives as primitives;
-extern crate substrate_runtime_consensus as consensus;
-extern crate substrate_runtime_system as system;
-extern crate substrate_runtime_timestamp as timestamp;
+extern crate srml_consensus as consensus;
+extern crate srml_system as system;
+extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
 use primitives::traits::{Zero, One, OnFinalise, Convert, As};

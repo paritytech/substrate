@@ -28,14 +28,14 @@ extern crate triehash;
 
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate sr_primitives as runtime_primitives;
-#[cfg(test)] extern crate substrate_runtime_support as runtime_support;
-#[cfg(test)] extern crate substrate_runtime_balances as balances;
-#[cfg(test)] extern crate substrate_runtime_session as session;
-#[cfg(test)] extern crate substrate_runtime_staking as staking;
-#[cfg(test)] extern crate substrate_runtime_system as system;
-#[cfg(test)] extern crate substrate_runtime_consensus as consensus;
-#[cfg(test)] extern crate substrate_runtime_timestamp as timestamp;
-#[cfg(test)] extern crate substrate_runtime_treasury as treasury;
+#[cfg(test)] extern crate srml_support as runtime_support;
+#[cfg(test)] extern crate srml_balances as balances;
+#[cfg(test)] extern crate srml_session as session;
+#[cfg(test)] extern crate srml_staking as staking;
+#[cfg(test)] extern crate srml_system as system;
+#[cfg(test)] extern crate srml_consensus as consensus;
+#[cfg(test)] extern crate srml_timestamp as timestamp;
+#[cfg(test)] extern crate srml_treasury as treasury;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 
 pub use substrate_executor::NativeExecutor;

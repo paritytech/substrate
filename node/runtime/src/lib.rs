@@ -22,7 +22,7 @@
 extern crate sr_io as runtime_io;
 
 #[macro_use]
-extern crate substrate_runtime_support;
+extern crate srml_support;
 
 #[macro_use]
 extern crate sr_primitives as runtime_primitives;
@@ -42,17 +42,17 @@ extern crate parity_codec_derive;
 
 #[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
-extern crate substrate_runtime_balances as balances;
-extern crate substrate_runtime_consensus as consensus;
-extern crate substrate_runtime_contract as contract;
-extern crate substrate_runtime_council as council;
-extern crate substrate_runtime_democracy as democracy;
-extern crate substrate_runtime_executive as executive;
-extern crate substrate_runtime_session as session;
-extern crate substrate_runtime_staking as staking;
-extern crate substrate_runtime_system as system;
-extern crate substrate_runtime_timestamp as timestamp;
-extern crate substrate_runtime_treasury as treasury;
+extern crate srml_balances as balances;
+extern crate srml_consensus as consensus;
+extern crate srml_contract as contract;
+extern crate srml_council as council;
+extern crate srml_democracy as democracy;
+extern crate srml_executive as executive;
+extern crate srml_session as session;
+extern crate srml_staking as staking;
+extern crate srml_system as system;
+extern crate srml_timestamp as timestamp;
+extern crate srml_treasury as treasury;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;

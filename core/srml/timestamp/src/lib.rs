@@ -37,7 +37,7 @@
 extern crate sr_std as rstd;
 
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate srml_support as runtime_support;
 
 #[cfg(any(feature = "std", test))]
 extern crate sr_io as runtime_io;
@@ -49,8 +49,8 @@ extern crate serde_derive;
 #[cfg(test)]
 extern crate substrate_primitives;
 extern crate sr_primitives as runtime_primitives;
-extern crate substrate_runtime_system as system;
-extern crate substrate_runtime_consensus as consensus;
+extern crate srml_system as system;
+extern crate srml_consensus as consensus;
 extern crate parity_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};

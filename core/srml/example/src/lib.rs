@@ -46,17 +46,17 @@ extern crate parity_codec as codec;
 
 // Needed for type-safe access to storage DB.
 #[macro_use]
-extern crate substrate_runtime_support as runtime_support;
+extern crate srml_support as runtime_support;
 
 // Needed for various traits. In our case, `OnFinalise`.
 extern crate sr_primitives as runtime_primitives;
 // `system` module provides us with all sorts of useful stuff and macros
 // depend on it being around.
-extern crate substrate_runtime_system as system;
+extern crate srml_system as system;
 // `balances` module is needed for our little example. It's not required in
 // general (though if you want your module to be able to work with tokens, then you
 // might find it useful).
-extern crate substrate_runtime_balances as balances;
+extern crate srml_balances as balances;
 
 use runtime_primitives::traits::OnFinalise;
 use runtime_support::{StorageValue, dispatch::Result};

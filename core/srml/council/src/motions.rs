@@ -20,8 +20,8 @@ use rstd::prelude::*;
 use rstd::result;
 use substrate_primitives::u32_trait::Value as U32;
 use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug, OnFinalise};
-use substrate_runtime_support::dispatch::{Result, Dispatchable, Parameter};
-use substrate_runtime_support::{StorageValue, StorageMap};
+use srml_support::dispatch::{Result, Dispatchable, Parameter};
+use srml_support::{StorageValue, StorageMap};
 use super::{Trait as CouncilTrait, Module as Council};
 use system::{self, ensure_signed};
 
@@ -221,7 +221,7 @@ mod tests {
 	use super::RawEvent;
 	use ::tests::*;
 	use ::tests::{Call, Origin, Event as OuterEvent};
-	use substrate_runtime_support::Hashable;
+	use srml_support::Hashable;
 	use system::{EventRecord, Phase};
 
 	#[test]

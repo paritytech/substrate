@@ -33,19 +33,19 @@ extern crate parity_codec_derive;
 #[macro_use]
 extern crate sr_std as rstd;
 #[macro_use]
-extern crate substrate_runtime_support;
+extern crate srml_support;
 
 extern crate parity_codec as codec;
 extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
-extern crate substrate_runtime_balances as balances;
-extern crate substrate_runtime_system as system;
+extern crate srml_balances as balances;
+extern crate srml_system as system;
 
 use rstd::prelude::*;
 use rstd::result;
 use primitives::traits::{Zero, OnFinalise, As, MaybeSerializeDebug};
-use substrate_runtime_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
-use substrate_runtime_support::dispatch::Result;
+use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
+use srml_support::dispatch::Result;
 use system::{ensure_signed, ensure_root};
 
 #[cfg(any(feature = "std", test))]

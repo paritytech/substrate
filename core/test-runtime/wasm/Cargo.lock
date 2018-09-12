@@ -597,7 +597,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-runtime-support"
+name = "srml-support"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -641,7 +641,7 @@ dependencies = [
  "sr-std 0.1.0",
  "sr-version 0.1.0",
  "substrate-primitives 0.1.0",
- "substrate-runtime-support 0.1.0",
+ "srml-support 0.1.0",
 ]
 
 [[package]]
