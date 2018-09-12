@@ -110,10 +110,7 @@ decl_storage! {
 
 decl_event!(
 	/// An event in this module.
-	pub enum Event<T> where
-		Balance = <T as balances::Trait>::Balance,
-		AccountId = <T as system::Trait>::AccountId
-	{
+	pub enum Event<T> where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId {
 		Tabled(PropIndex, Balance, Vec<AccountId>),
 		Started(ReferendumIndex, VoteThreshold),
 		Passed(ReferendumIndex),

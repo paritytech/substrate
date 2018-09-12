@@ -137,9 +137,9 @@ decl_module! {
 
 decl_event!(
 	pub enum Event<T> where
-		AccountId = <T as system::Trait>::AccountId,
-		AccountIndex = <T as Trait>::AccountIndex,
-		Balance = <T as Trait>::Balance
+		<T as system::Trait>::AccountId,
+		<T as Trait>::AccountIndex,
+		<T as Trait>::Balance
 	{
 		/// A new account was created.
 		NewAccount(AccountId, AccountIndex, NewAccountOutcome),

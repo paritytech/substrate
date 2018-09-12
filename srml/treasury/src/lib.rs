@@ -136,10 +136,7 @@ decl_storage! {
 
 /// An event in this module.
 decl_event!(
-	pub enum Event<T> where
-		Balance = <T as balances::Trait>::Balance,
-		AccountId = <T as system::Trait>::AccountId
-	{
+	pub enum Event<T> where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId {
 		/// New proposal.
 		Proposed(ProposalIndex),
 		/// We have ended a spend period and will now allocate funds.
