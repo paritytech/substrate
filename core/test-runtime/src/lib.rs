@@ -142,7 +142,7 @@ pub mod api {
 		version => |()| super::version(),
 		json_metadata => |()| {
 			let mut vec = ::runtime_support::metadata::Vec::new();
-			vec.push(::runtime_support::metadata::JSONMetadata::Events {
+			vec.push(::runtime_support::metadata::JsonMetadata::Events {
 				name: "Test", events: &[ ("event", super::test_event_json) ]
 			});
 			vec

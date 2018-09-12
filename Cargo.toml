@@ -10,6 +10,7 @@ members = [
 	"core/executor",
 	"core/extrinsic-pool",
 	"core/keyring",
+	"core/metadata",
 	"core/misbehavior-check",
 	"core/network",
 	"core/primitives",

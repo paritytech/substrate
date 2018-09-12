@@ -11,6 +11,7 @@ substrate-runtime-std = { path = "../../runtime-std", default_features = false }
 substrate-runtime-io = { path = "../../runtime-io", default_features = false }
 substrate-primitives = { path = "../../primitives", default_features = false }
 parity-codec = { path = "../../../codec", default_features = false }
+substrate-metadata = { path = "../../metadata", default_features = false }
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
@@ -27,6 +28,7 @@ std = [
 	"substrate-runtime-io/std",
 	"parity-codec/std",
 	"substrate-runtime-std/std",
+	"substrate-metadata/std",
 ]
 nightly = []
 strict = []

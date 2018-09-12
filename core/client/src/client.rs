@@ -23,7 +23,7 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
-use runtime_support::metadata::JSONMetadataDecodable;
+use substrate_metadata::JsonMetadataDecodable;
 use primitives::{Blake2Hasher, RlpCodec};
 use primitives::storage::{StorageKey, StorageData};
 use codec::{Encode, Decode};
@@ -255,7 +255,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// Returns the runtime metadata as JSON.
 	pub fn json_metadata(&self, id: &BlockId<Block>) -> error::Result<String> {
 		self.executor.call(id, "json_metadata",&[])
-			.and_then(|r| Vec::<JSONMetadataDecodable>::decode(&mut &r.return_data[..])
+			.and_then(|r| Vec::<JsonMetadataDecodable>::decode(&mut &r.return_data[..])
 					  .ok_or("JSON Metadata decoding failed".into()))
 			.and_then(|metadata| {
 				let mut json = metadata.into_iter().enumerate().fold(String::from("{"),
