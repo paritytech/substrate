@@ -56,7 +56,7 @@ impl_stubs!(
 		[ed25519_verify(&sig, &msg[..], &pubkey) as u8].to_vec()
 	},
 	test_enumerated_trie_root NO_DECODE => |_| {
-		enumerated_trie_root::<substrate_primitives::KeccakHasher>(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).to_vec()
+		enumerated_trie_root::<substrate_primitives::Blake2Hasher>(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).to_vec()
 	},
 	test_sandbox NO_DECODE => |code: &[u8]| {
 		let ok = execute_sandboxed(code, &[]).is_ok();

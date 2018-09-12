@@ -14,8 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Substrate service. Starts a thread that spins the network, the client and the extrinsic pool.
 //! Manages communication between them.
+// end::description[]
 
 #![warn(unused_extern_crates)]
 

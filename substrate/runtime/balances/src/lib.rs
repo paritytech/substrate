@@ -67,12 +67,6 @@ const RECLAIM_INDEX_MAGIC: usize = 0x69;
 
 pub type Address<T> = RawAddress<<T as system::Trait>::AccountId, <T as Trait>::AccountIndex>;
 
-pub type Event<T> = RawEvent<
-	<T as system::Trait>::AccountId,
-	<T as Trait>::AccountIndex,
-	<T as Trait>::Balance,
->;
-
 /// The account with the given id was killed.
 pub trait OnFreeBalanceZero<AccountId> {
 	/// The account was the given id was killed.
@@ -93,14 +87,15 @@ impl<
 	}
 }
 
-/// Trait for a hook to get called when some balance has been minted.
-pub trait OnMinted<Balance> {
-	/// Some balance `b` was minted.
-	fn on_minted(b: Balance);
+/// Trait for a hook to get called when some balance has been minted, causing dilution.
+pub trait OnDilution<Balance> {
+	/// Some `portion` of the total balance just "grew" by `minted`. `portion` is the pre-growth
+	/// amount (it doesn't take account of the recent growth).
+	fn on_dilution(minted: Balance, portion: Balance);
 }
 
-impl<Balance> OnMinted<Balance> for () {
-	fn on_minted(_b: Balance) {}
+impl<Balance> OnDilution<Balance> for () {
+	fn on_dilution(_minted: Balance, _portion: Balance) {}
 }
 
 /// Determinator for whether a given account is able to transfer balance.
@@ -129,7 +124,7 @@ pub trait Trait: system::Trait {
 	/// A function that returns true iff a given account can transfer its funds to another account.
 	type EnsureAccountLiquid: EnsureAccountLiquid<Self::AccountId>;
 
-	/// The overarching event type. 
+	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -140,26 +135,22 @@ decl_module! {
 	}
 }
 
-/// An event in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<AccountId, AccountIndex, Balance> {
-	/// A new account was created.
-	NewAccount(AccountId, AccountIndex, NewAccountOutcome),
-	/// An account was reaped.
-	ReapedAccount(AccountId),
-	/// Transfer succeeded (from, to, value, fees).
-	Transfer(AccountId, AccountId, Balance, Balance),
-}
-
-impl<A, I, B> From<RawEvent<A, I, B>> for () {
-	fn from(_: RawEvent<A, I, B>) -> () { () }
-}
+decl_event!(
+	pub enum Event<T> with RawEvent<AccountId, AccountIndex, Balance>
+		where <T as system::Trait>::AccountId, <T as Trait>::AccountIndex, <T as Trait>::Balance {
+		/// A new account was created.
+		NewAccount(AccountId, AccountIndex, NewAccountOutcome),
+		/// An account was reaped.
+		ReapedAccount(AccountId),
+		/// Transfer succeeded (from, to, value, fees).
+		Transfer(AccountId, AccountId, Balance, Balance),
+	}
+);
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
 		/// The total amount of stake on the system.
-		pub TotalIssuance get(total_stake): required T::Balance;
+		pub TotalIssuance get(total_issuance): required T::Balance;
 		/// The minimum amount allowed to keep an account open.
 		pub ExistentialDeposit get(existential_deposit): required T::Balance;
 		/// The amount credited to a destination's account whose index was reclaimed.
@@ -312,7 +303,7 @@ impl<T: Trait> Module<T> {
 		};
 
 		if transactor != dest {
-			Self::set_free_balance(&transactor, new_from_balance);			
+			Self::set_free_balance(&transactor, new_from_balance);
 			Self::decrease_total_stake_by(fee);
 			Self::set_free_balance_creating(&dest, new_to_balance);
 			Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
@@ -399,7 +390,7 @@ impl<T: Trait> Module<T> {
 				};
 				Self::set_free_balance(who, credit);
 				Self::increase_total_stake_by(credit - balance);
-			} else {	
+			} else {
 				Self::set_free_balance(who, balance);
 			}
 
@@ -627,13 +618,13 @@ impl<T: Trait> Module<T> {
 
 	/// Increase TotalIssuance by Value.
 	pub fn increase_total_stake_by(value: T::Balance) {
-		if let Some(v) = <Module<T>>::total_stake().checked_add(&value) {
+		if let Some(v) = <Module<T>>::total_issuance().checked_add(&value) {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
 	/// Decrease TotalIssuance by Value.
 	pub fn decrease_total_stake_by(value: T::Balance) {
-		if let Some(v) = <Module<T>>::total_stake().checked_sub(&value) {
+		if let Some(v) = <Module<T>>::total_issuance().checked_sub(&value) {
 			<TotalIssuance<T>>::put(v);
 		}
 	}

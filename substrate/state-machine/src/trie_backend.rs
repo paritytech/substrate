@@ -132,12 +132,12 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for Tri
 #[cfg(test)]
 pub mod tests {
 	use std::collections::HashSet;
-	use primitives::{KeccakHasher, RlpCodec, H256};
+	use primitives::{Blake2Hasher, RlpCodec, H256};
 	use super::*;
 
-	fn test_db() -> (MemoryDB<KeccakHasher>, H256) {
+	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<KeccakHasher>::new();
+		let mut mdb = MemoryDB::<Blake2Hasher>::new();
 		{
 			let mut trie = TrieDBMut::<_, RlpCodec>::new(&mut mdb, &mut root);
 			trie.insert(b"key", b"value").expect("insert failed");
@@ -151,7 +151,7 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<MemoryDB<KeccakHasher>, KeccakHasher, RlpCodec> {
+	pub(crate) fn test_trie() -> TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher, RlpCodec> {
 		let (mdb, root) = test_db();
 		TrieBackend::new(mdb, root)
 	}
@@ -173,7 +173,7 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<MemoryDB<KeccakHasher>, KeccakHasher, RlpCodec>::new(
+		assert!(TrieBackend::<MemoryDB<Blake2Hasher>, Blake2Hasher, RlpCodec>::new(
 			MemoryDB::new(),
 			Default::default(),
 		).pairs().is_empty());

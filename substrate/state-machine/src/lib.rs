@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Substrate state machine implementation.
+// end::description[]
 
 #![warn(missing_docs)]
 
@@ -434,7 +436,7 @@ mod tests {
 	use super::backend::InMemory;
 	use super::ext::Ext;
 	use super::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
-	use primitives::{KeccakHasher, RlpCodec};
+	use primitives::{Blake2Hasher, RlpCodec};
 
 	struct DummyCodeExecutor {
 		native_available: bool,
@@ -526,7 +528,7 @@ mod tests {
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check proof locally
-		let local_result = execution_proof_check::<KeccakHasher, RlpCodec, _>(remote_root, remote_proof,
+		let local_result = execution_proof_check::<Blake2Hasher, RlpCodec, _>(remote_root, remote_proof,
 			&mut Default::default(), &executor, "test", &[]).unwrap();
 
 		// check that both results are correct
@@ -542,7 +544,7 @@ mod tests {
 			b"abc".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"3".to_vec()
 		];
-		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial).try_into_trie_backend().unwrap();
+		let backend = InMemory::<Blake2Hasher, RlpCodec>::from(initial).try_into_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
 				b"aba".to_vec() => Some(b"1312".to_vec()).into(),
@@ -583,8 +585,8 @@ mod tests {
 		let remote_root = remote_backend.storage_root(::std::iter::empty()).0;
 		let remote_proof = prove_read(remote_backend, b"value2").unwrap().1;
  		// check proof locally
-		let local_result1 = read_proof_check::<KeccakHasher, RlpCodec>(remote_root, remote_proof.clone(), b"value2").unwrap();
-		let local_result2 = read_proof_check::<KeccakHasher, RlpCodec>(remote_root, remote_proof.clone(), &[0xff]).is_ok();
+		let local_result1 = read_proof_check::<Blake2Hasher, RlpCodec>(remote_root, remote_proof.clone(), b"value2").unwrap();
+		let local_result2 = read_proof_check::<Blake2Hasher, RlpCodec>(remote_root, remote_proof.clone(), &[0xff]).is_ok();
  		// check that results are correct
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);

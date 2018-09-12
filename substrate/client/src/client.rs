@@ -24,11 +24,11 @@ use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Blo
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
 use runtime_support::metadata::JSONMetadataDecodable;
-use primitives::{KeccakHasher, RlpCodec, H256};
+use primitives::{Blake2Hasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
 use codec::{Encode, Decode};
 use state_machine::{
-	Ext, OverlayedChanges, Backend as StateBackend, CodeExecutor,
+	Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, prove_read
 };
 
@@ -37,7 +37,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {cht, error, in_mem, block_builder, runtime_io, bft, genesis};
+use {cht, error, in_mem, block_builder, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -165,9 +165,9 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 pub fn new_in_mem<E, Block, S>(
 	executor: E,
 	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block, KeccakHasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, KeccakHasher, RlpCodec>, E>, Block>>
+) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher, RlpCodec>, E>, Block>>
 	where
-		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
+		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT,
 		H256: From<Block::Hash>,
@@ -178,8 +178,8 @@ pub fn new_in_mem<E, Block, S>(
 }
 
 impl<B, E, Block> Client<B, E, Block> where
-	B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
+	E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
 	Block: BlockT,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
@@ -304,50 +304,35 @@ impl<B, E, Block> Client<B, E, Block> where
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
 		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)).unwrap_or_default());
-		let proof = cht::build_proof::<Block::Header, KeccakHasher, RlpCodec, _>(cht_size, cht_num, block_num, headers)
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, RlpCodec, _>(cht_size, cht_num, block_num, headers)
 			.ok_or_else(proof_error)?;
 		Ok((header, proof))
 	}
 
-	/// Set up the native execution environment to call into a native runtime code.
-	pub fn using_environment<F: FnOnce() -> T, T>(
-		&self, f: F
-	) -> error::Result<T> {
-		self.using_environment_at(&BlockId::Number(self.info()?.chain.best_number), &mut Default::default(), f)
-	}
-
-	/// Set up the native execution environment to call into a native runtime code.
-	pub fn using_environment_at<F: FnOnce() -> T, T>(
-		&self,
-		id: &BlockId<Block>,
-		overlay: &mut OverlayedChanges,
-		f: F
-	) -> error::Result<T> {
-		Ok(runtime_io::with_externalities(
-			&mut Ext::new(overlay, &self.state_at(id)?,
-				self.backend.changes_trie_storage()),
-			f))
-	}
-
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, KeccakHasher, RlpCodec>>
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>>
 	where E: Clone
 	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, KeccakHasher, RlpCodec>>
+	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>>
 	where E: Clone
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
+	/// Set up the native execution environment to call into a native runtime code.
+	pub fn call_api<A, R>(&self, function: &'static str, args: &A) -> error::Result<R>
+		where A: Encode, R: Decode
+	{
+		self.call_api_at(&BlockId::Number(self.info()?.chain.best_number), function, args)
+	}
+
 	/// Call a runtime function at given block.
-	pub fn call_api<A, R>(&self, at: &BlockId<Block>, function: &'static str, args: &A) -> error::Result<R>
-	where
-	A: Encode,
-	R: Decode,
+	pub fn call_api_at<A, R>(&self, at: &BlockId<Block>, function: &'static str, args: &A) -> error::Result<R>
+		where A: Encode, R: Decode
 	{
 		let parent = at;
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
@@ -602,8 +587,8 @@ impl<B, E, Block> Client<B, E, Block> where
 
 impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-		E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+		B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
+		E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
 		Block: BlockT,
 {
 	fn import_block(
@@ -625,8 +610,8 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 
 impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-		E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+		B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
+		E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
 		Block: BlockT,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
@@ -648,7 +633,7 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 where
-	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+	E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
 	Block: BlockT,
 {
 	/// Get block import event stream.
@@ -666,8 +651,8 @@ where
 
 impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 where
-	B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-	E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
+	E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
 	Block: BlockT,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
@@ -677,8 +662,8 @@ where
 
 impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block, KeccakHasher, RlpCodec>,
-		E: CallExecutor<Block, KeccakHasher, RlpCodec>,
+		B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
+		E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
 		Block: BlockT,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
@@ -693,15 +678,15 @@ mod tests {
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
-	use test_client::{runtime as test_runtime, BlockBuilderExt};
+	use test_client::BlockBuilderExt;
 	use test_client::runtime::Transfer;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = test_client::new();
 
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 1000);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 0);
+		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Alice.to_raw_public()).unwrap(), 1000);
+		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Ferdie.to_raw_public()).unwrap(), 0);
 	}
 
 	#[test]
@@ -744,8 +729,8 @@ mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Alice.to_raw_public().into())).unwrap(), 958);
-		assert_eq!(client.using_environment(|| test_runtime::system::balance_of(Keyring::Ferdie.to_raw_public().into())).unwrap(), 42);
+		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Alice.to_raw_public()).unwrap(), 958);
+		assert_eq!(client.call_api::<_, u64>("balance_of", &Keyring::Ferdie.to_raw_public()).unwrap(), 42);
 	}
 
 	#[test]
@@ -809,6 +794,9 @@ mod tests {
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		assert_eq!(client.json_metadata(&BlockId::Number(1)).unwrap(), r#"{ "events": "events" }"#);
+		assert_eq!(
+			client.json_metadata(&BlockId::Number(1)).unwrap(),
+			r#"{ "events": { "name": "Test", "events": { "event": hallo } } }"#
+		);
 	}
 }

@@ -70,8 +70,6 @@ pub trait Trait: timestamp::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-pub type Event<T> = RawEvent<<T as system::Trait>::BlockNumber>;
-
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn set_key(origin, key: T::SessionKey) -> Result;
@@ -82,17 +80,15 @@ decl_module! {
 }
 
 /// An event in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<BlockNumber> {
-	/// New session has happened. Note that the argument is the session index, not the block number
-	/// as the type might suggest.
-	NewSession(BlockNumber),
-}
-
-impl<N> From<RawEvent<N>> for () {
-	fn from(_: RawEvent<N>) -> () { () }
-}
+decl_event!(
+	pub enum Event<T> with RawEvent<BlockNumber>
+		where <T as system::Trait>::BlockNumber
+	{
+		/// New session has happened. Note that the argument is the session index, not the block
+		/// number as the type might suggest.
+		NewSession(BlockNumber),
+	}
+);
 
 decl_storage! {
 	trait Store for Module<T: Trait> as Session {
@@ -286,7 +282,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, KeccakHasher, RlpCodec};
+	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{Identity, BlakeTwo256};
 	use primitives::testing::{Digest, DigestItem, Header};
@@ -329,7 +325,7 @@ mod tests {
 	type Consensus = consensus::Module<Test>;
 	type Session = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],

@@ -26,7 +26,7 @@ use hashdb::Hasher;
 use rlp::Encodable;
 use memorydb::MemoryDB;
 use codec::Decode;
-use primitives::{KeccakHasher, RlpCodec};
+use primitives::{Blake2Hasher, RlpCodec};
 
 use backend;
 use error;
@@ -116,10 +116,10 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 	}
 }
 
-impl<B, E, Block> CallExecutor<Block, KeccakHasher, RlpCodec> for LocalCallExecutor<B, E>
+impl<B, E, Block> CallExecutor<Block, Blake2Hasher, RlpCodec> for LocalCallExecutor<B, E>
 where
-	B: backend::LocalBackend<Block, KeccakHasher, RlpCodec>,
-	E: CodeExecutor<KeccakHasher> + RuntimeInfo,
+	B: backend::LocalBackend<Block, Blake2Hasher, RlpCodec>,
+	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 	Block: BlockT,
 {
 	type Error = E::Error;
@@ -159,7 +159,7 @@ where
 	}
 
 	fn call_at_state<
-		S: state_machine::Backend<KeccakHasher, RlpCodec>,
+		S: state_machine::Backend<Blake2Hasher, RlpCodec>,
 		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
 	>(&self,
 		state: &S,
@@ -167,7 +167,7 @@ where
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
-	) -> error::Result<(Vec<u8>, S::Transaction, Option<MemoryDB<KeccakHasher>>)> {
+	) -> error::Result<(Vec<u8>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
 		state_machine::execute_using_consensus_failure_handler(
 			state,
 			self.backend.changes_trie_storage(),
@@ -179,7 +179,7 @@ where
 		).map_err(Into::into)
 	}
 
-	fn prove_at_state<S: state_machine::Backend<KeccakHasher, RlpCodec>>(&self,
+	fn prove_at_state<S: state_machine::Backend<Blake2Hasher, RlpCodec>>(&self,
 		state: S,
 		changes: &mut OverlayedChanges,
 		method: &str,

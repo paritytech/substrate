@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! This crate provides means of instantiation and execution of wasm modules.
 //!
 //! It works even when the user of this library is itself executes
@@ -34,6 +35,7 @@
 //! - implementing smart-contract runtimes which uses wasm for contract code
 //! - executing wasm substrate runtime inside of a wasm parachain
 //! - etc
+// end::description[]
 
 #![warn(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]

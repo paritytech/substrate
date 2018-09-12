@@ -764,12 +764,6 @@ macro_rules! __decl_storage_item {
 #[doc(hidden)]
 macro_rules! __decl_store_items {
 	// simple values
-	($(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
-		__decl_store_item!($name); __decl_store_items!($($t)*);
-	};
-	($(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
-		__decl_store_item!($name); __decl_store_items!($($t)*);
-	};
 	($(#[$doc:meta])* $name:ident : default $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
@@ -782,13 +776,13 @@ macro_rules! __decl_store_items {
 	($(#[$doc:meta])* pub $name:ident : required $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
+	($(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
+		__decl_store_item!($name); __decl_store_items!($($t)*);
+	};
+	($(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
+		__decl_store_item!($name); __decl_store_items!($($t)*);
+	};
 
-	($(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__decl_store_item!($name); __decl_store_items!($($t)*);
-	};
-	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__decl_store_item!($name); __decl_store_items!($($t)*);
-	};
 	($(#[$doc:meta])* $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
@@ -801,14 +795,14 @@ macro_rules! __decl_store_items {
 	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : required $ty:ty; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
+	($(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		__decl_store_item!($name); __decl_store_items!($($t)*);
+	};
+	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		__decl_store_item!($name); __decl_store_items!($($t)*);
+	};
 
 	// maps
-	($(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_store_item!($name); __decl_store_items!($($t)*);
-	};
-	($(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_store_item!($name); __decl_store_items!($($t)*);
-	};
 	($(#[$doc:meta])* $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
@@ -821,13 +815,13 @@ macro_rules! __decl_store_items {
 	($(#[$doc:meta])* pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
+	($(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_store_item!($name); __decl_store_items!($($t)*);
+	};
+	($(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_store_item!($name); __decl_store_items!($($t)*);
+	};
 
-	($(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_store_item!($name); __decl_store_items!($($t)*);
-	};
-	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__decl_store_item!($name); __decl_store_items!($($t)*);
-	};
 	($(#[$doc:meta])* $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
@@ -838,6 +832,12 @@ macro_rules! __decl_store_items {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
 	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_store_item!($name); __decl_store_items!($($t)*);
+	};
+	($(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__decl_store_item!($name); __decl_store_items!($($t)*);
+	};
+	($(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__decl_store_item!($name); __decl_store_items!($($t)*);
 	};
 
@@ -855,12 +855,6 @@ macro_rules! __decl_store_item {
 #[doc(hidden)]
 macro_rules! __impl_store_fns {
 	// simple values
-	($traitinstance:ident $(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
-		__impl_store_fns!($traitinstance $($t)*);
-	};
-	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
-		__impl_store_fns!($traitinstance $($t)*);
-	};
 	($traitinstance:ident $(#[$doc:meta])* $name:ident : default $ty:ty; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
@@ -873,15 +867,13 @@ macro_rules! __impl_store_fns {
 	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : required $ty:ty; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
+		__impl_store_fns!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
+		__impl_store_fns!($traitinstance $($t)*);
+	};
 
-	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) $ty);
-		__impl_store_fns!($traitinstance $($t)*);
-	};
-	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) $ty);
-		__impl_store_fns!($traitinstance $($t)*);
-	};
 	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) $ty);
 		__impl_store_fns!($traitinstance $($t)*);
@@ -898,14 +890,16 @@ macro_rules! __impl_store_fns {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) $ty);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) $ty);
+		__impl_store_fns!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) $ty);
+		__impl_store_fns!($traitinstance $($t)*);
+	};
 
 	// maps
-	($traitinstance:ident $(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__impl_store_fns!($traitinstance $($t)*);
-	};
-	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__impl_store_fns!($traitinstance $($t)*);
-	};
 	($traitinstance:ident $(#[$doc:meta])* $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
@@ -918,15 +912,13 @@ macro_rules! __impl_store_fns {
 	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fns!($traitinstance $($t)*);
 	};
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__impl_store_fns!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__impl_store_fns!($traitinstance $($t)*);
+	};
 
-	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) map [$kty => $ty]);
-		__impl_store_fns!($traitinstance $($t)*);
-	};
-	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) map [$kty => $ty]);
-		__impl_store_fns!($traitinstance $($t)*);
-	};
 	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) map [$kty => $ty]);
 		__impl_store_fns!($traitinstance $($t)*);
@@ -941,6 +933,14 @@ macro_rules! __impl_store_fns {
 	};
 	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_fn!($traitinstance $name $getfn ($ty) map [$kty => $ty]);
+		__impl_store_fns!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) map [$kty => $ty]);
+		__impl_store_fns!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__impl_store_fn!($traitinstance $name $getfn (Option<$ty>) map [$kty => $ty]);
 		__impl_store_fns!($traitinstance $($t)*);
 	};
 
@@ -967,14 +967,6 @@ macro_rules! __impl_store_fn {
 #[doc(hidden)]
 macro_rules! __impl_store_items {
 	// simple values
-	($traitinstance:ident $(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
-		__impl_store_item!($name $traitinstance);
-		__impl_store_items!($traitinstance $($t)*);
-	};
-	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
-		__impl_store_item!($name $traitinstance);
-		__impl_store_items!($traitinstance $($t)*);
-	};
 	($traitinstance:ident $(#[$doc:meta])* $name:ident : default $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
@@ -991,15 +983,15 @@ macro_rules! __impl_store_items {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : $ty:ty; $($t:tt)*) => {
+		__impl_store_item!($name $traitinstance);
+		__impl_store_items!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : $ty:ty; $($t:tt)*) => {
+		__impl_store_item!($name $traitinstance);
+		__impl_store_items!($traitinstance $($t)*);
+	};
 
-	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__impl_store_item!($name $traitinstance);
-		__impl_store_items!($traitinstance $($t)*);
-	};
-	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
-		__impl_store_item!($name $traitinstance);
-		__impl_store_items!($traitinstance $($t)*);
-	};
 	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default $ty:ty; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
@@ -1016,16 +1008,16 @@ macro_rules! __impl_store_items {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		__impl_store_item!($name $traitinstance);
+		__impl_store_items!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : $ty:ty; $($t:tt)*) => {
+		__impl_store_item!($name $traitinstance);
+		__impl_store_items!($traitinstance $($t)*);
+	};
 
 	// maps
-	($traitinstance:ident $(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__impl_store_item!($name $traitinstance);
-		__impl_store_items!($traitinstance $($t)*);
-	};
-	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__impl_store_item!($name $traitinstance);
-		__impl_store_items!($traitinstance $($t)*);
-	};
 	($traitinstance:ident $(#[$doc:meta])* $name:ident : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
@@ -1042,15 +1034,15 @@ macro_rules! __impl_store_items {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
+	($traitinstance:ident $(#[$doc:meta])* $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__impl_store_item!($name $traitinstance);
+		__impl_store_items!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__impl_store_item!($name $traitinstance);
+		__impl_store_items!($traitinstance $($t)*);
+	};
 
-	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__impl_store_item!($name $traitinstance);
-		__impl_store_items!($traitinstance $($t)*);
-	};
-	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
-		__impl_store_item!($name $traitinstance);
-		__impl_store_items!($traitinstance $($t)*);
-	};
 	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : default map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
@@ -1064,6 +1056,14 @@ macro_rules! __impl_store_items {
 		__impl_store_items!($traitinstance $($t)*);
 	};
 	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : required map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__impl_store_item!($name $traitinstance);
+		__impl_store_items!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
+		__impl_store_item!($name $traitinstance);
+		__impl_store_items!($traitinstance $($t)*);
+	};
+	($traitinstance:ident $(#[$doc:meta])* pub $name:ident get($getfn:ident) : map [$kty:ty => $ty:ty]; $($t:tt)*) => {
 		__impl_store_item!($name $traitinstance);
 		__impl_store_items!($traitinstance $($t)*);
 	};
@@ -1095,6 +1095,62 @@ macro_rules! __impl_store_json_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __store_functions_to_json {
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident :
+			default $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident :
+			default $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident :
+			required $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident :
+			required $ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
 	// simple values
 	(
 		$prefix_str:tt;
@@ -1124,95 +1180,11 @@ macro_rules! __store_functions_to_json {
 			__store_functions_to_json!(","; $($t)*)
 		)
 	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		$name:ident :
-			default $ty:ty; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident :
-			default $ty:ty; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		$name:ident :
-			required $ty:ty; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident :
-			required $ty:ty; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
 
 	(
 		$prefix_str:tt;
 		$(#[doc = $doc_attr:tt])*
 		$name:ident get($getfn:ident) :
-			$ty:ty; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident get($getfn:ident) :
-			$ty:ty; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		$name:ident get($getfn:ident) :
 			default $ty:ty; $($t:tt)*
 	) => {
 		concat!(
@@ -1261,6 +1233,34 @@ macro_rules! __store_functions_to_json {
 			__store_function_to_json!($prefix_str,
 				__function_doc_to_json!(""; $($doc_attr)*),
 				$name, __store_type_to_json!($ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident get($getfn:ident) :
+			$ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident get($getfn:ident) :
+			$ty:ty; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($ty)
 			),
 			__store_functions_to_json!(","; $($t)*)
 		)
@@ -1271,34 +1271,6 @@ macro_rules! __store_functions_to_json {
 		$prefix_str:tt;
 		$(#[doc = $doc_attr:tt])*
 		$name:ident :
-			map [$kty:ty => $ty:ty]; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident :
-			map [$kty:ty => $ty:ty]; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		$name:ident :
 			default map [$kty:ty => $ty:ty]; $($t:tt)*
 	) => {
 		concat!(
@@ -1347,11 +1319,93 @@ macro_rules! __store_functions_to_json {
 			__store_function_to_json!($prefix_str,
 				__function_doc_to_json!(""; $($doc_attr)*),
 				$name, __store_type_to_json!($kty, $ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		$name:ident :
+			map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty)
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident :
+			map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty)
 			),
 			__store_functions_to_json!(","; $($t)*)
 		)
 	};
 
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])* $name:ident get($getfn:ident) :
+			default map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident get($getfn:ident) :
+			default map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), default
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])* $name:ident get($getfn:ident) :
+			required map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
+	(
+		$prefix_str:tt;
+		$(#[doc = $doc_attr:tt])*
+		pub $name:ident get($getfn:ident) :
+			required map [$kty:ty => $ty:ty]; $($t:tt)*
+	) => {
+		concat!(
+			__store_function_to_json!($prefix_str,
+				__function_doc_to_json!(""; $($doc_attr)*),
+				$name, __store_type_to_json!($kty, $ty), required
+			),
+			__store_functions_to_json!(","; $($t)*)
+		)
+	};
 	(
 		$prefix_str:tt;
 		$(#[doc = $doc_attr:tt])*
@@ -1376,60 +1430,6 @@ macro_rules! __store_functions_to_json {
 			__store_function_to_json!($prefix_str,
 				__function_doc_to_json!(""; $($doc_attr)*),
 				$name, __store_type_to_json!($kty, $ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])* $name:ident get($getfn:ident) :
-			default map [$kty:ty => $ty:ty]; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident get($getfn:ident) :
-			default map [$kty:ty => $ty:ty]; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])* $name:ident get($getfn:ident) :
-			required map [$kty:ty => $ty:ty]; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
-		)
-	};
-	(
-		$prefix_str:tt;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident get($getfn:ident) :
-			required map [$kty:ty => $ty:ty]; $($t:tt)*
-	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), required
 			),
 			__store_functions_to_json!(","; $($t)*)
 		)
@@ -1625,5 +1625,35 @@ mod tests {
 		assert_eq!(EXPECTED_METADATA, metadata);
 		let _: serde::de::IgnoredAny =
 			serde_json::from_str(metadata).expect("Is valid json syntax");
+	}
+}
+
+#[cfg(test)]
+// Do not complain about unused `dispatch` and `dispatch_aux`.
+#[allow(dead_code)]
+mod test2 {
+	pub trait Trait {
+		 type Origin;
+	}
+
+	decl_module! {
+		pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	}
+
+	type PairOf<T> = (T, T);
+
+	decl_storage! {
+		trait Store for Module<T: Trait> as TestStorage {
+			SingleDef : default u32;
+			PairDef : default PairOf<u32>;
+			Single : u32;
+			Pair : (u32, u32);
+		}
+	}
+
+	struct TraitImpl {}
+
+	impl Trait for TraitImpl {
+		type Origin = u32;
 	}
 }

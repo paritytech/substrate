@@ -145,13 +145,13 @@ fn prepare_digest_input<'a, S, H, C>(
 
 #[cfg(test)]
 mod test {
-	use primitives::{KeccakHasher, RlpCodec};
+	use primitives::{Blake2Hasher, RlpCodec};
 	use backend::InMemory;
 	use changes_trie::storage::InMemoryStorage;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 
-	fn prepare_for_build(block: u64) -> (InMemory<KeccakHasher, RlpCodec>, InMemoryStorage<KeccakHasher>, OverlayedChanges) {
+	fn prepare_for_build(block: u64) -> (InMemory<Blake2Hasher, RlpCodec>, InMemoryStorage<Blake2Hasher>, OverlayedChanges) {
 		let backend: InMemory<_, _> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),

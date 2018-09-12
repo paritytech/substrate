@@ -2,7 +2,9 @@
 #![cfg_attr(feature = "strict", deny(warnings))]
 #![no_std]
 
+// tag::description[]
 //! libc externs crate
+// end::description[]
 
 extern "C" {
 	fn ext_memcpy(dest: *mut u8, src: *const u8, n: usize) -> *mut u8;

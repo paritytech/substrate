@@ -20,7 +20,7 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
 use runtime_primitives::traits::{BlakeTwo256};
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
-use substrate_primitives::{KeccakHasher, RlpCodec};
+use substrate_primitives::{Blake2Hasher, RlpCodec};
 use wabt;
 use {
 	runtime_io, balances, system, CodeOf, ContractAddressFor,
@@ -94,7 +94,7 @@ impl ExtBuilder {
 		self.block_gas_limit = block_gas_limit;
 		self
 	}
-	fn build(self) -> runtime_io::TestExternalities<KeccakHasher, RlpCodec> {
+	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Test>::default()
 			.build_storage()
 			.unwrap();

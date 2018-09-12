@@ -217,7 +217,7 @@ mod tests {
 	use super::*;
 	use balances::Call;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, KeccakHasher, RlpCodec};
+	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, Lookup};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
@@ -282,7 +282,7 @@ mod tests {
 			reclaim_rebate: 0,
 		}.build_storage().unwrap());
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69));
-		let mut t = runtime_io::TestExternalities::<KeccakHasher, RlpCodec>::new(t);
+		let mut t = runtime_io::TestExternalities::<Blake2Hasher, RlpCodec>::new(t);
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(),
 				[69u8; 32].into(), Digest::default()));
@@ -292,7 +292,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap());
 		t.into()
@@ -305,8 +305,8 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("14a253cb1c5f38beeec8bee962a941b2ba0773b7593564fbe62b9c3a46784df5").into(),
-					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
+					state_root: hex!("d1d3da2b1efb1a6ef740b8cdef52e4cf3c6dade6f8a360969fd7ef0034c53b54").into(),
+					extrinsics_root: hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into(),
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],
@@ -323,7 +323,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: [0u8; 32].into(),
-					extrinsics_root: hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into(),
+					extrinsics_root: hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into(),
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],
@@ -339,7 +339,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("14a253cb1c5f38beeec8bee962a941b2ba0773b7593564fbe62b9c3a46784df5").into(),
+					state_root: hex!("d1d3da2b1efb1a6ef740b8cdef52e4cf3c6dade6f8a360969fd7ef0034c53b54").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

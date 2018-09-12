@@ -238,16 +238,16 @@ where
 
 #[cfg(test)]
 mod tests {
-	use primitives::{KeccakHasher, RlpCodec};
+	use primitives::{Blake2Hasher, RlpCodec};
 	use backend::InMemory;
 	use changes_trie::{Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as InMemoryChangesTrieStorage};
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 
-	type TestBackend = InMemory<KeccakHasher, RlpCodec>;
-	type TestChangesTrieStorage = InMemoryChangesTrieStorage<KeccakHasher>;
-	type TestExt<'a> = Ext<'a, KeccakHasher, RlpCodec, TestBackend, TestChangesTrieStorage>;
+	type TestBackend = InMemory<Blake2Hasher, RlpCodec>;
+	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher>;
+	type TestExt<'a> = Ext<'a, Blake2Hasher, RlpCodec, TestBackend, TestChangesTrieStorage>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
@@ -292,7 +292,7 @@ mod tests {
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
 		assert_eq!(ext.storage_changes_root(),
-			Some(hex!("39c072f9c91d3adda925f84a197d67ab0fef16c12fe0587d72d25da177332bba").into()));
+			Some(hex!("64e405edcf37c1757c15fbfdc6484e6ac96b1fc35e516b4e779b3802725bed60").into()));
 	}
 
 	#[test]
@@ -303,6 +303,6 @@ mod tests {
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
 		assert_eq!(ext.storage_changes_root(),
-			Some(hex!("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421").into()));
+			Some(hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into()));
 	}
 }

@@ -27,7 +27,7 @@ use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use runtime_version::RuntimeVersion;
 use tokio::runtime::TaskExecutor;
-use primitives::{KeccakHasher, RlpCodec};
+use primitives::{Blake2Hasher, RlpCodec};
 
 use subscriptions::Subscriptions;
 
@@ -92,8 +92,8 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 
 impl<B, E, Block> Chain<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
 {
 	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
 		Ok(match hash.into() {
@@ -105,8 +105,8 @@ impl<B, E, Block> Chain<B, E, Block> where
 
 impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic> for Chain<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, KeccakHasher, RlpCodec> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+	E: client::CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 

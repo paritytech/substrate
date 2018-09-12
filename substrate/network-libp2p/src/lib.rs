@@ -14,6 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
+//! TODO: Missing doc
+// end::description[]
+
 #![recursion_limit="128"]
 #![type_length_limit = "268435456"]
 

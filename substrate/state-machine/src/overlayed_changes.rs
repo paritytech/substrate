@@ -182,7 +182,7 @@ impl From<Option<Vec<u8>>> for OverlayedValue {
 
 #[cfg(test)]
 mod tests {
-	use primitives::{KeccakHasher, RlpCodec, H256};
+	use primitives::{Blake2Hasher, RlpCodec, H256};
 	use backend::InMemory;
 	use changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
 	use ext::Ext;
@@ -225,7 +225,7 @@ mod tests {
 			(b"dogglesworth".to_vec(), b"catXXX".to_vec()),
 			(b"doug".to_vec(), b"notadog".to_vec()),
 		].into_iter().collect();
-		let backend = InMemory::<KeccakHasher, RlpCodec>::from(initial);
+		let backend = InMemory::<Blake2Hasher, RlpCodec>::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: vec![
 				(b"dog".to_vec(), Some(b"puppy".to_vec()).into()),
@@ -241,7 +241,7 @@ mod tests {
 
 		let changes_trie_storage = InMemoryChangesTrieStorage::new();
 		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
-		const ROOT: [u8; 32] = hex!("8aad789dff2f538bca5d8ea56e8abe10f4c7ba3a5dea95fea4cd6e7c3a1168d3");
+		const ROOT: [u8; 32] = hex!("6ca394ff9b13d6690a51dea30b1b5c43108e52944d30b9095227c49bae03ff8b");
 		assert_eq!(ext.storage_root(), H256(ROOT));
 	}
 

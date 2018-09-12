@@ -56,7 +56,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
-		let total_stake: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
+		let total_issuance: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
 		let mut r: primitives::StorageMap = map![
 			Self::hash(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
@@ -66,7 +66,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			Self::hash(<CreationFee<T>>::key()).to_vec() => self.creation_fee.encode(),
 			Self::hash(<ExistentialDeposit<T>>::key()).to_vec() => self.existential_deposit.encode(),
 			Self::hash(<ReclaimRebate<T>>::key()).to_vec() => self.reclaim_rebate.encode(),
-			Self::hash(<TotalIssuance<T>>::key()).to_vec() => total_stake.encode()
+			Self::hash(<TotalIssuance<T>>::key()).to_vec() => total_issuance.encode()
 		];
 
 		let ids: Vec<_> = self.balances.iter().map(|x| x.0.clone()).collect();

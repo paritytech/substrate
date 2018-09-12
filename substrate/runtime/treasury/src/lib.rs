@@ -45,13 +45,13 @@ use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use runtime_primitives::{Permill, traits::{OnFinalise, Zero, EnsureOrigin}};
-use balances::OnMinted;
+use balances::OnDilution;
 use system::{ensure_signed, ensure_root};
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
 /// should be added to our implied traits list.
-/// 
+///
 /// `system::Trait` should always be included in our implied traits.
 pub trait Trait: balances::Trait {
 	/// Origin from which approvals must come.
@@ -60,7 +60,7 @@ pub trait Trait: balances::Trait {
 	/// Origin from which rejections must come.
 	type RejectOrigin: EnsureOrigin<Self::Origin>;
 
-	/// The overarching event type. 
+	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
@@ -108,7 +108,7 @@ decl_storage! {
 		/// Proportion of funds that should be bonded in order to place a proposal. An accepted
 		/// proposal gets these back. A rejected proposal doesn't.
 		ProposalBond get(proposal_bond): required Permill;
-		
+
 		/// Minimum amount of funds that should be placed ina deposit for making a proposal.
 		ProposalBondMinimum get(proposal_bond_minimum): required T::Balance;
 
@@ -134,31 +134,23 @@ decl_storage! {
 	}
 }
 
-/// Exported Event type that's generic over the configuration trait.
-pub type Event<T> = RawEvent<
-	<T as balances::Trait>::Balance,
-	<T as system::Trait>::AccountId,
->;
-
 /// An event in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<Balance, AccountId> {
-	/// New proposal.
-	Proposed(ProposalIndex),
-	/// We have ended a spend period and will now allocate funds.
-	Spending(Balance),
-	/// Some funds have been allocated.
-	Awarded(ProposalIndex, Balance, AccountId),
-	/// Some of our funds have been burnt.
-	Burnt(Balance),
-	/// Spending has finished; this is the amount that rolls over until next spend.
-	Rollover(Balance),
-}
-
-impl<B, A> From<RawEvent<B, A>> for () {
-	fn from(_: RawEvent<B, A>) -> () { () }
-}
+decl_event!(
+	pub enum Event<T> with RawEvent<Balance, AccountId>
+		where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId
+	{
+		/// New proposal.
+		Proposed(ProposalIndex),
+		/// We have ended a spend period and will now allocate funds.
+		Spending(Balance),
+		/// Some funds have been allocated.
+		Awarded(ProposalIndex, Balance, AccountId),
+		/// Some of our funds have been burnt.
+		Burnt(Balance),
+		/// Spending has finished; this is the amount that rolls over until next spend.
+		Rollover(Balance),
+	}
+);
 
 impl<T: Trait> Module<T> {
 	/// Deposit one of this module's events.
@@ -188,7 +180,7 @@ impl<T: Trait> Module<T> {
 		T::RejectOrigin::ensure_origin(origin)?;
 
 		let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
-		
+
 		let value = proposal.bond;
 		let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
 
@@ -215,7 +207,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn configure(
-		origin: T::Origin, 
+		origin: T::Origin,
 		proposal_bond: Permill,
 		proposal_bond_minimum: T::Balance,
 		spend_period: T::BlockNumber,
@@ -260,7 +252,7 @@ impl<T: Trait> Module<T> {
 					true
 				}
 			} else {
-				false	
+				false
 			}
 		}).collect();
 		<Approvals<T>>::put(remaining_approvals);
@@ -278,9 +270,15 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnMinted<T::Balance> for Module<T> {
-	fn on_minted(b: T::Balance) {
-		<Pot<T>>::put(Self::pot() + b);
+impl<T: Trait> OnDilution<T::Balance> for Module<T> {
+	fn on_dilution(minted: T::Balance, portion: T::Balance) {
+		// Mint extra funds for the treasury to keep the ratio of portion to total_issuance equal
+		// pre dilution and post-dilution.
+		if !minted.is_zero() && !portion.is_zero() {
+			let total_issuance = <balances::Module<T>>::total_issuance();
+			let funding = (total_issuance - portion) / portion * minted;
+			<Pot<T>>::mutate(|x| *x += funding);
+		}
 	}
 }
 
@@ -337,7 +335,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, KeccakHasher, RlpCodec};
+	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256};
 	use runtime_primitives::testing::{Digest, DigestItem, Header};
@@ -375,10 +373,10 @@ mod tests {
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
-			balances: vec![(0, 100), (1, 10), (2, 1)],
+			balances: vec![(0, 100), (1, 99), (2, 1)],
 			transaction_base_fee: 0,
 			transaction_byte_fee: 0,
 			transfer_fee: 0,
@@ -411,7 +409,7 @@ mod tests {
 	fn minting_works() {
 		with_externalities(&mut new_test_ext(), || {
 			// Check that accumulate works when we have Some value in Dummy already.
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 			assert_eq!(Treasury::pot(), 100);
 		});
 	}
@@ -444,7 +442,7 @@ mod tests {
 	#[test]
 	fn accepted_spend_proposal_ignored_outside_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -458,7 +456,7 @@ mod tests {
 	#[test]
 	fn unused_pot_should_diminish() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Treasury::pot(), 50);
@@ -468,7 +466,7 @@ mod tests {
 	#[test]
 	fn rejected_spend_proposal_ignored_on_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -482,7 +480,7 @@ mod tests {
 	#[test]
 	fn reject_already_rejected_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -507,7 +505,7 @@ mod tests {
 	#[test]
 	fn accept_already_rejected_spend_proposal_fails() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
@@ -518,7 +516,7 @@ mod tests {
 	#[test]
 	fn accepted_spend_proposal_enacted_on_spend_period() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -532,7 +530,7 @@ mod tests {
 	#[test]
 	fn pot_underflow_should_not_diminish() {
 		with_externalities(&mut new_test_ext(), || {
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 
 			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
@@ -540,7 +538,7 @@ mod tests {
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
 			assert_eq!(Treasury::pot(), 100);
 
-			Treasury::on_minted(100);
+			Treasury::on_dilution(100, 100);
 			<Treasury as OnFinalise<u64>>::on_finalise(4);
 			assert_eq!(Balances::free_balance(&3), 150);
 			assert_eq!(Treasury::pot(), 25);

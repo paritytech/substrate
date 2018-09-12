@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Client testing utilities.
+// end::description[]
 
 #![warn(missing_docs)]
 
@@ -37,7 +39,7 @@ mod block_builder_ext;
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
 
-use primitives::{KeccakHasher, RlpCodec};
+use primitives::{Blake2Hasher, RlpCodec};
 
 mod local_executor {
 	#![allow(missing_docs)]
@@ -50,7 +52,7 @@ mod local_executor {
 pub use local_executor::LocalExecutor;
 
 /// Test client database backend.
-pub type Backend = client::in_mem::Backend<runtime::Block, KeccakHasher, RlpCodec>;
+pub type Backend = client::in_mem::Backend<runtime::Block, Blake2Hasher, RlpCodec>;
 
 /// Test client executor.
 pub type Executor = client::LocalCallExecutor<

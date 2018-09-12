@@ -20,69 +20,34 @@ use hashdb::Hasher;
 use plain_hasher::PlainHasher;
 use hash::H256;
 
-// Use this when switching to Blake2 after PoC-3
-// pub mod blake {
-// 	use super::{Hasher, PlainHasher, H256};
-// 	#[cfg(feature = "std")]
-// 	use hashing::blake2_256;
-
-// 	#[cfg(not(feature = "std"))]
-// 	extern "C" {
-// 		fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
-// 	}
-// 	#[cfg(not(feature = "std"))]
-// 	fn blake2_256(data: &[u8]) -> [u8; 32] {
-// 		let mut result: [u8; 32] = Default::default();
-// 		unsafe {
-// 			ext_blake2_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
-// 		}
-// 		result
-// 	}
-
-// 	/// Concrete implementation of Hasher using Blake2b 256-bit hashes
-// 	#[derive(Debug)]
-// 	pub struct BlakeHasher;
-
-// 	impl Hasher for BlakeHasher {
-// 		type Out = H256;
-// 		type StdHasher = PlainHasher;
-// 		const LENGTH:usize = 32;
-// 		fn hash(x: &[u8]) -> Self::Out {
-// 			blake2_256(x).into()
-// 		}
-// 	}
-// }
-
-pub mod keccak {
+pub mod blake2 {
 	use super::{Hasher, PlainHasher, H256};
-
 	#[cfg(feature = "std")]
-	use tiny_keccak::keccak256;
+	use hashing::blake2_256;
 
 	#[cfg(not(feature = "std"))]
 	extern "C" {
-		fn ext_keccak256(data: *const u8, len: u32, out: *mut u8);
+		fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
 	}
-
 	#[cfg(not(feature = "std"))]
-	fn keccak256(data: &[u8]) -> [u8; 32] {
+	fn blake2_256(data: &[u8]) -> [u8; 32] {
 		let mut result: [u8; 32] = Default::default();
 		unsafe {
-			ext_keccak256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
+			ext_blake2_256(data.as_ptr(), data.len() as u32, result.as_mut_ptr());
 		}
 		result
 	}
 
-	/// Concrete implementation of Hasher using Keccak 256-bit hashes
+	/// Concrete implementation of Hasher using Blake2b 256-bit hashes
 	#[derive(Debug)]
-	pub struct KeccakHasher;
+	pub struct Blake2Hasher;
 
-	impl Hasher for KeccakHasher {
+	impl Hasher for Blake2Hasher {
 		type Out = H256;
 		type StdHasher = PlainHasher;
-		const LENGTH : usize = 32;
+		const LENGTH:usize = 32;
 		fn hash(x: &[u8]) -> Self::Out {
-			keccak256(x).into()
+			blake2_256(x).into()
 		}
 	}
 }

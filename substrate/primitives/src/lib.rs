@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Shareable Polkadot types.
+// end::description[]
 
 #![warn(missing_docs)]
 
@@ -43,9 +45,6 @@ extern crate twox_hash;
 
 #[cfg(feature = "std")]
 extern crate blake2_rfc;
-// Switch back to Blake after PoC-3 is out
-#[cfg(feature = "std")]
-extern crate tiny_keccak;
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -114,7 +113,7 @@ pub use changes_trie::ChangesTrieConfiguration;
 
 // Switch back to Blake after PoC-3 is out
 // pub use self::hasher::blake::BlakeHasher;
-pub use self::hasher::keccak::KeccakHasher;
+pub use self::hasher::blake2::Blake2Hasher;
 
 #[cfg(feature = "std")]
 pub use self::rlp_codec::RlpCodec;

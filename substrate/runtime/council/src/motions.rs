@@ -39,7 +39,7 @@ pub trait Trait: CouncilTrait + MaybeSerializeDebug {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
-/// Origin for the council module. 
+/// Origin for the council module.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Origin {
@@ -47,29 +47,24 @@ pub enum Origin {
 	Members(u32),
 }
 
-/// Outwardly visible event.
-pub type Event<T> = RawEvent<<T as system::Trait>::Hash, <T as system::Trait>::AccountId>;
-
 /// Event for this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<Hash, AccountId> {
-	/// A motion (given hash) has been proposed (by given account) with a threshold (given u32).
-	Proposed(AccountId, ProposalIndex, Hash, u32),
-	/// A motion (given hash) has been voted on by given account, leaving
-	/// a tally (yes votes and no votes given as u32s respectively).
-	Voted(AccountId, Hash, bool, u32, u32),
-	/// A motion was approved by the required threshold.
-	Approved(Hash),
-	/// A motion was not approved by the required threshold.
-	Disapproved(Hash),
-	/// A motion was executed; `bool` is true if returned without error.
-	Executed(Hash, bool),
-}
-
-impl<H, A> From<RawEvent<H, A>> for () {
-	fn from(_: RawEvent<H, A>) -> () { () }
-}
+decl_event!(
+	pub enum Event<T> with RawEvent<Hash, AccountId>
+		where <T as system::Trait>::Hash, <T as system::Trait>::AccountId
+	{
+		/// A motion (given hash) has been proposed (by given account) with a threshold (given u32).
+		Proposed(AccountId, ProposalIndex, Hash, u32),
+		/// A motion (given hash) has been voted on by given account, leaving
+		/// a tally (yes votes and no votes given as u32s respectively).
+		Voted(AccountId, Hash, bool, u32, u32),
+		/// A motion was approved by the required threshold.
+		Approved(Hash),
+		/// A motion was not approved by the required threshold.
+		Disapproved(Hash),
+		/// A motion was executed; `bool` is true if returned without error.
+		Executed(Hash, bool),
+	}
+);
 
 decl_module! {
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "<T as Trait>::Proposal: ::serde::de::DeserializeOwned")))]

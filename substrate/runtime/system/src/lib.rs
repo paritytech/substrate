@@ -53,7 +53,7 @@ use safe_mix::TripletMix;
 use codec::Encode;
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::{twox_128, TestExternalities, KeccakHasher, RlpCodec};
+use runtime_io::{twox_128, TestExternalities, Blake2Hasher, RlpCodec};
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -109,21 +109,17 @@ pub struct EventRecord<E: Parameter + Member> {
 	pub event: E,
 }
 
-/// Event for the system module. 
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub enum Event {
-	/// An extrinsic completed successfully.
-	ExtrinsicSuccess,
-	/// An extrinsic failed.
-	ExtrinsicFailed,
-}
+/// Event for the system module.
+decl_event!(
+	pub enum Event {
+		/// An extrinsic completed successfully.
+		ExtrinsicSuccess,
+		/// An extrinsic failed.
+		ExtrinsicFailed,
+	}
+);
 
-impl From<Event> for () {
-	fn from(_: Event) -> () { () }
-}
-
-/// Origin for the system module. 
+/// Origin for the system module.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum RawOrigin<AccountId> {
@@ -316,7 +312,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn externalities() -> TestExternalities<KeccakHasher, RlpCodec> {
+	pub fn externalities() -> TestExternalities<Blake2Hasher, RlpCodec> {
 		TestExternalities::new(map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
@@ -459,7 +455,7 @@ mod tests {
 
 	impl From<Event> for u16 {
 		fn from(e: Event) -> u16 {
-			match e { 
+			match e {
 				Event::ExtrinsicSuccess => 100,
 				Event::ExtrinsicFailed => 101,
 			}
@@ -468,7 +464,7 @@ mod tests {
 
 	type System = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		GenesisConfig::<Test>::default().build_storage().unwrap().into()
 	}
 

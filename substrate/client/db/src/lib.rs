@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Client backend that uses RocksDB database as storage.
+// end::description[]
 
 extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
@@ -53,7 +55,7 @@ use hashdb::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
-use primitives::{H256, AuthorityId, KeccakHasher, RlpCodec};
+use primitives::{H256, AuthorityId, Blake2Hasher, RlpCodec};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, HashFor,
@@ -70,7 +72,7 @@ pub use state_db::PruningMode;
 const FINALIZATION_WINDOW: u64 = 32;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<KeccakHasher>>, KeccakHasher, RlpCodec>;
+pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher, RlpCodec>;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -91,7 +93,7 @@ pub fn new_client<E, S, Block>(
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
-		E: CodeExecutor<KeccakHasher> + RuntimeInfo,
+		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
@@ -235,8 +237,8 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
 }
 
-impl<Block> client::backend::BlockImportOperation<Block, KeccakHasher, RlpCodec>
-for BlockImportOperation<Block, KeccakHasher>
+impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher, RlpCodec>
+for BlockImportOperation<Block, Blake2Hasher>
 where Block: BlockT,
 {
 	type State = DbState;
@@ -260,7 +262,7 @@ where Block: BlockT,
 		// currently authorities are not cached on full nodes
 	}
 
-	fn update_storage(&mut self, update: MemoryDB<KeccakHasher>) -> Result<(), client::error::Error> {
+	fn update_storage(&mut self, update: MemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
 		self.updates = update;
 		Ok(())
 	}
@@ -272,7 +274,7 @@ where Block: BlockT,
 		Ok(())
 	}
 
-	fn update_changes_trie(&mut self, update: MemoryDB<KeccakHasher>) -> Result<(), client::error::Error> {
+	fn update_changes_trie(&mut self, update: MemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
 		self.changes_trie_updates = update;
 		Ok(())
 	}
@@ -283,7 +285,7 @@ struct StorageDb<Block: BlockT> {
 	pub state_db: StateDb<Block::Hash, H256>,
 }
 
-impl<Block: BlockT> state_machine::Storage<KeccakHasher> for StorageDb<Block> {
+impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
 		self.state_db.get(&key.0.into(), self).map(|r| r.map(|v| DBValue::from_slice(&v)))
 			.map_err(|e| format!("Database backend error: {:?}", e))
@@ -304,13 +306,13 @@ struct DbGenesisStorage(pub H256);
 impl DbGenesisStorage {
 	pub fn new() -> Self {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<KeccakHasher>::new();
-		state_machine::TrieDBMut::<KeccakHasher, RlpCodec>::new(&mut mdb, &mut root);
+		let mut mdb = MemoryDB::<Blake2Hasher>::new();
+		state_machine::TrieDBMut::<Blake2Hasher, RlpCodec>::new(&mut mdb, &mut root);
 		DbGenesisStorage(root)
 	}
 }
 
-impl state_machine::Storage<KeccakHasher> for DbGenesisStorage {
+impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
 	fn get(&self, _key: &H256) -> Result<Option<DBValue>, String> {
 		Ok(None)
 	}
@@ -321,7 +323,7 @@ pub struct DbChangesTrieStorage<Block: BlockT> {
 	_phantom: ::std::marker::PhantomData<Block>,
 }
 
-impl<Block: BlockT> state_machine::ChangesTrieStorage<KeccakHasher> for DbChangesTrieStorage<Block> {
+impl<Block: BlockT> state_machine::ChangesTrieStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
 	fn root(&self, block: u64) -> Result<Option<H256>, String> {
 		Ok(read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(As::sa(block)))
 			.map_err(|err| format!("{}", err))
@@ -406,14 +408,14 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-fn apply_changes_trie_commit(transaction: &mut DBTransaction, mut commit: MemoryDB<KeccakHasher>) {
+fn apply_changes_trie_commit(transaction: &mut DBTransaction, mut commit: MemoryDB<Blake2Hasher>) {
 	for (key, (val, _)) in commit.drain() {
 		transaction.put(columns::CHANGES_TRIE, &key[..], &val);
 	}
 }
 
-impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<Block> where Block: BlockT {
-	type BlockImportOperation = BlockImportOperation<Block, KeccakHasher>;
+impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<Block> where Block: BlockT {
+	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
 	type ChangesTrieStorage = DbChangesTrieStorage<Block>;
@@ -547,7 +549,7 @@ impl<Block> client::backend::Backend<Block, KeccakHasher, RlpCodec> for Backend<
 	}
 }
 
-impl<Block> client::backend::LocalBackend<Block, KeccakHasher, RlpCodec> for Backend<Block>
+impl<Block> client::backend::LocalBackend<Block, Blake2Hasher, RlpCodec> for Backend<Block>
 where Block: BlockT {}
 
 #[cfg(test)]
@@ -791,9 +793,9 @@ mod tests {
 
 		let prepare_changes = |changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let mut changes_root = H256::default();
-			let mut changes_trie_update = MemoryDB::<KeccakHasher>::new();
+			let mut changes_trie_update = MemoryDB::<Blake2Hasher>::new();
 			{
-				let mut trie = TrieDBMut::<KeccakHasher, RlpCodec>::new(
+				let mut trie = TrieDBMut::<Blake2Hasher, RlpCodec>::new(
 					&mut changes_trie_update,
 					&mut changes_root
 				);

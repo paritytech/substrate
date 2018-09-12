@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! The Substrate runtime. This can be compiled with #[no_std], ready for Wasm.
+// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -132,19 +134,26 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	[stxs.len() as u8].encode()
 }
 
+fn test_event_json() -> &'static str {
+	"hallo"
+}
+
 pub mod api {
 	use system;
 	impl_stubs!(
 		version => |()| super::version(),
 		json_metadata => |()| {
 			let mut vec = ::runtime_support::metadata::Vec::new();
-			vec.push(::runtime_support::metadata::JSONMetadata::Events { events: r#""events""# });
+			vec.push(::runtime_support::metadata::JSONMetadata::Events {
+				name: "Test", events: &[ ("event", super::test_event_json) ]
+			});
 			vec
 		},
 		authorities => |()| system::authorities(),
 		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),
 		apply_extrinsic => |utx| system::execute_transaction(utx),
-		finalise_block => |()| system::finalise_block()
+		finalise_block => |()| system::finalise_block(),
+		balance_of => |a| system::balance_of(a)
 	);
 }

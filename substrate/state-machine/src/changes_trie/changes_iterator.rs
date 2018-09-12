@@ -353,12 +353,12 @@ fn lower_bound_max_digest(
 
 #[cfg(test)]
 mod tests {
-	use primitives::{KeccakHasher, RlpCodec};
+	use primitives::{Blake2Hasher, RlpCodec};
 	use changes_trie::input::InputPair;
 	use changes_trie::storage::InMemoryStorage;
 	use super::*;
 
-	fn prepare_for_drilldown() -> (Configuration, InMemoryStorage<KeccakHasher>) {
+	fn prepare_for_drilldown() -> (Configuration, InMemoryStorage<Blake2Hasher>) {
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
 		let backend = InMemoryStorage::with_inputs::<RlpCodec>(vec![
 			// digest: 1..4 => [(3, 0)]
@@ -400,7 +400,7 @@ mod tests {
 	#[test]
 	fn drilldown_iterator_works() {
 		let (config, storage) = prepare_for_drilldown();
-		let drilldown_result = key_changes::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
+		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
 			&config, &storage, 0, 100, 1000, &[42]);
 
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
@@ -411,16 +411,16 @@ mod tests {
 		let (config, storage) = prepare_for_drilldown();
 		storage.clear_storage();
 
-		assert!(key_changes::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
+		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
 			&config, &storage, 0, 100, 1000, &[42]).is_err());
 	}
 
 	#[test]
 	fn drilldown_iterator_fails_when_range_is_invalid() {
 		let (config, storage) = prepare_for_drilldown();
-		assert!(key_changes::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
+		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
 			&config, &storage, 0, 100, 50, &[42]).is_err());
-		assert!(key_changes::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
+		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
 			&config, &storage, 20, 10, 100, &[42]).is_err());
 	}
 
@@ -431,7 +431,7 @@ mod tests {
 
 		// create drilldown iterator that records all trie nodes during drilldown
 		let (remote_config, remote_storage) = prepare_for_drilldown();
-		let remote_proof = key_changes_proof::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
+		let remote_proof = key_changes_proof::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
 			&remote_config, &remote_storage,
 			0, 100, 1000, &[42]).unwrap();
 
@@ -440,7 +440,7 @@ mod tests {
 		// create drilldown iterator that works the same, but only depends on trie
 		let (local_config, local_storage) = prepare_for_drilldown();
 		local_storage.clear_storage();
-		let local_result = key_changes_proof_check::<InMemoryStorage<KeccakHasher>, KeccakHasher, RlpCodec>(
+		let local_result = key_changes_proof_check::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
 			&local_config, &local_storage, remote_proof,
 			0, 100, 1000, &[42]);
 

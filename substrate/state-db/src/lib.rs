@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! State database maintenance. Handles finalization and pruning in the database. The input to
 //! this module is a `ChangeSet` which is basically a list of key-value pairs (trie nodes) that
 //! were added or deleted during block execution.
@@ -29,6 +30,7 @@
 //! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each finalization until pruning
 //! constraints are satisfied.
 //!
+// end::description[]
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate substrate_codec_derive;

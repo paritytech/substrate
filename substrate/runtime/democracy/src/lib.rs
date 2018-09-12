@@ -105,26 +105,19 @@ decl_storage! {
 	}
 }
 
-/// An event in this module.
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-#[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawEvent<Balance, AccountId> {
-	Tabled(PropIndex, Balance, Vec<AccountId>),
-	Started(ReferendumIndex, VoteThreshold),
-	Passed(ReferendumIndex),
-	NotPassed(ReferendumIndex),
-	Cancelled(ReferendumIndex),
-	Executed(ReferendumIndex, bool),
-}
-
-impl<B, A> From<RawEvent<B, A>> for () {
-	fn from(_: RawEvent<B, A>) -> () { () }
-}
-
-pub type Event<T> = RawEvent<
-	<T as balances::Trait>::Balance,
-	<T as system::Trait>::AccountId,
->;
+decl_event!(
+	/// An event in this module.
+	pub enum Event<T> with RawEvent<Balance, AccountId>
+		where <T as balances::Trait>::Balance, <T as system::Trait>::AccountId
+	{
+		Tabled(PropIndex, Balance, Vec<AccountId>),
+		Started(ReferendumIndex, VoteThreshold),
+		Passed(ReferendumIndex),
+		NotPassed(ReferendumIndex),
+		Cancelled(ReferendumIndex),
+		Executed(ReferendumIndex, bool),
+	}
+);
 
 impl<T: Trait> Module<T> {
 
@@ -302,9 +295,9 @@ impl<T: Trait> Module<T> {
 		// tally up votes for any expiring referenda.
 		for (index, _, proposal, vote_threshold) in Self::maturing_referendums_at(now) {
 			let (approve, against) = Self::tally(index);
-			let total_stake = <balances::Module<T>>::total_stake();
+			let total_issuance = <balances::Module<T>>::total_issuance();
 			Self::clear_referendum(index);
-			if vote_threshold.approved(approve, against, total_stake) {
+			if vote_threshold.approved(approve, against, total_issuance) {
 				Self::deposit_event(RawEvent::Passed(index));
 				let ok = proposal.dispatch(system::RawOrigin::Root.into()).is_ok();
 				Self::deposit_event(RawEvent::Executed(index, ok));
@@ -378,7 +371,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, KeccakHasher, RlpCodec};
+	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256};
 	use primitives::testing::{Digest, DigestItem, Header};
@@ -421,7 +414,7 @@ mod tests {
 		type Event = ();
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<KeccakHasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
@@ -452,7 +445,7 @@ mod tests {
 			assert_eq!(Democracy::minimum_deposit(), 1);
 			assert_eq!(Democracy::referendum_count(), 0);
 			assert_eq!(Balances::free_balance(&42), 0);
-			assert_eq!(Balances::total_stake(), 210);
+			assert_eq!(Balances::total_issuance(), 210);
 		});
 	}
 
@@ -668,7 +661,7 @@ mod tests {
 	fn passing_low_turnout_voting_should_work() {
 		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Balances::free_balance(&42), 0);
-			assert_eq!(Balances::total_stake(), 210);
+			assert_eq!(Balances::total_issuance(), 210);
 
 			System::set_block_number(1);
 			let r = Democracy::inject_referendum(1, set_balance_proposal(2), VoteThreshold::SuperMajorityApprove).unwrap();
