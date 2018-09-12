@@ -16,6 +16,7 @@
 
 //! Client extension for tests.
 
+use std::sync::Arc;
 use client::{self, Client};
 use keyring::Keyring;
 use runtime_primitives::{generic::BlockId, StorageMap};
@@ -42,7 +43,7 @@ pub trait TestClient {
 
 impl TestClient for Client<Backend, Executor, runtime::Block> {
 	fn new_for_tests() -> Self {
-		client::new_in_mem(NativeExecutor::new(), genesis_storage()).unwrap()
+		client::new_with_backend(Arc::new(Backend::new()), NativeExecutor::new(), genesis_storage()).unwrap()
 	}
 
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {

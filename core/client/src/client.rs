@@ -179,20 +179,22 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 	}
 }
 
-/// Create an instance of in-memory client.
-pub fn new_in_mem<E, Block, S>(
-	executor: E,
-	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher, RlpCodec>, E>, Block>>
+/// Create a client with the explicitely provided backend.
+/// This is useful for testing backend implementations.
+pub fn new_with_backend<B, E, Block, S>(
+	backend: Arc<B>,
+	code_executor: E,
+	build_genesis_storage: S,
+) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block>>
 	where
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT,
 		H256: From<Block::Hash>,
+		B: backend::LocalBackend<Block, KeccakHasher, RlpCodec>
 {
-	let backend = Arc::new(in_mem::Backend::new());
-	let executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
+	let call_executor = LocalCallExecutor::new(backend.clone(), code_executor);
+	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible)
 }
 
 impl<B, E, Block> Client<B, E, Block> where

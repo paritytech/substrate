@@ -60,7 +60,7 @@ mod notifications;
 pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
 pub use client::{
-	new_in_mem,
+	new_with_backend,
 	BlockBody, BlockStatus, BlockOrigin, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	Client, ClientInfo, ChainHead,
 	ImportResult, JustifiedHeader,
