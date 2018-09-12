@@ -200,7 +200,8 @@ mod tests {
 
 	impl_outer_event! {
 		pub enum TestEvent for TestRuntime {
-			event_module, event_module2
+			event_module<T>,
+			event_module2<T>,
 		}
 	}
 

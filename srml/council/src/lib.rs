@@ -144,7 +144,7 @@ mod tests {
 
 	impl_outer_event! {
 		pub enum Event for Test {
-			balances, democracy, seats, voting, motions
+			balances<T>, democracy<T>, seats<T>, voting<T>, motions<T>,
 		}
 	}
 
