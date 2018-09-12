@@ -587,22 +587,21 @@ mod tests {
 		// block tree:
 		// G -> A1 -> A2
 
-		let backend = TestBackend::new();
-		let backend = Arc::new(backend);
+		let backend = Arc::new(TestBackend::new());
 		let client = test_client::new_with_backend(backend.clone()).unwrap();
 
 		// G -> A1
 		let a1 = client.new_block().unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
 		assert_eq!(
-			client.backend().blockchain().leaves().unwrap(),
+			backend.blockchain().leaves().unwrap(),
 			vec![a1.hash()]);
 
 		// A1 -> A2
 		let a2 = client.new_block().unwrap().bake().unwrap();
 		client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
 		assert_eq!(
-			client.backend().blockchain().leaves().unwrap(),
+			backend.blockchain().leaves().unwrap(),
 			vec![a2.hash()]);
 	}
 }
