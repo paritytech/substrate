@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 # To run this script, you need to install the 'toml' python package and install the 'graphviz' package:
 # pip install toml
 # sudo apt-get install graphviz
