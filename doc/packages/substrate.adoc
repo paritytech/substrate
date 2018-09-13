@@ -31,8 +31,6 @@ include::../../core/primitives/README.adoc[]
 
 include::../../pwasm-alloc/README.adoc[]
 
-include::../../pwasm-libc/README.adoc[]
-
 include::../../core/rpc/README.adoc[]
 
 include::../../core/rpc-servers/README.adoc[]
