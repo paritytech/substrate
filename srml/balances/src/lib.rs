@@ -298,7 +298,6 @@ impl<T: Trait> Module<T> {
 		}
 		T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
 
-		let to_balance = Self::free_balance(&dest);
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
 		let new_to_balance = match to_balance.checked_add(&value) {
