@@ -73,5 +73,28 @@ pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternali
 	t.into()
 }
 
+pub fn new_test_ext2(ext_deposit: u64, monied: bool) -> runtime_io::TestExternalities<Blake2Hasher> {
+	let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
+	let balance_factor = if ext_deposit > 0 {
+		256
+	} else {
+		1
+	};
+	t.extend(GenesisConfig::<Runtime>{
+		balances: if monied {
+			vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
+		} else {
+			vec![(10, balance_factor), (20, balance_factor)]
+		},
+		transaction_base_fee: 0,
+		transaction_byte_fee: 0,
+		existential_deposit: ext_deposit,
+		transfer_fee: 10,  // transfer_fee not zero
+		creation_fee: 50, // creation_fee not zero
+		reclaim_rebate: 0,
+	}.build_storage().unwrap());
+	t.into()
+}
+
 pub type System = system::Module<Runtime>;
 pub type Balances = Module<Runtime>;
