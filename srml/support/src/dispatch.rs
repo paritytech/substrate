@@ -617,7 +617,7 @@ macro_rules! __functions_to_json {
 			concat!($prefix_str, " ",
 				__function_to_json!(
 					fn $fn_name(
-						$who: $origin_type          // TODO: fix this.
+						$who: T::AccountId          // TODO: fix this.
 						$( , $param_name : $param )*
 					) -> $result;
 					$fn_doc;
@@ -760,7 +760,17 @@ mod tests {
 
 				r#""0 + 1 + 1 + 1 + 1": { "name": "aux_4", "params": [ "#,
 					r#"{ "name": "data", "type": "i32" }"#,
+				r#" ], "description": [ ] }, "#,
+
+				r#""0 + 1 + 1 + 1 + 1 + 1": { "name": "aux_5", "params": [ "#,
+					r#"{ "name": "who", "type": "T::AccountId" }"#,
+				r#" ], "description": [ ] }, "#,
+
+				r#""0 + 1 + 1 + 1 + 1 + 1 + 1": { "name": "aux_6", "params": [ "#,
+					r#"{ "name": "who", "type": "T::AccountId" }, "#,
+					r#"{ "name": "data", "type": "i32" }"#,
 				r#" ], "description": [ ] }"#,
+
 			r#" } }"#,
 		r#" }"#,
 	);
@@ -804,9 +814,9 @@ mod tests {
 
 	#[test]
 	fn module_json_metadata() {
-//		let metadata = Module::<TraitImpl>::json_metadata();
-//		assert_eq!(EXPECTED_METADATA, metadata);
-//		let _: serde::de::IgnoredAny =
-//			serde_json::from_str(metadata).expect("Is valid json syntax");
+		let metadata = Module::<TraitImpl>::json_metadata();
+		assert_eq!(EXPECTED_METADATA, metadata);
+		let _: serde::de::IgnoredAny =
+			serde_json::from_str(metadata).expect("Is valid json syntax");
 	}
 }
