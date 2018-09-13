@@ -572,7 +572,7 @@ pub fn cache_authorities_at<Block: BlockT>(
 #[cfg(test)]
 mod tests {
 	use std::sync::Arc;
-	use primitives::{KeccakHasher, RlpCodec};
+	use primitives::{Blake2Hasher, RlpCodec};
 	use test_client;
 	use test_client::TestClient;
 	use runtime_primitives::traits::Block as BlockT;
@@ -584,7 +584,7 @@ mod tests {
 	use runtime_primitives::generic::BlockId;
 	use keyring::Keyring;
 
-	type TestBackend = test_client::client::in_mem::Backend<test_client::runtime::Block, KeccakHasher, RlpCodec>;
+	type TestBackend = test_client::client::in_mem::Backend<test_client::runtime::Block, Blake2Hasher, RlpCodec>;
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {
