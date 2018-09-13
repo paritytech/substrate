@@ -255,7 +255,7 @@ impl<T: Trait> Module<T> {
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
-			let burn = Self::burn().times(budget_remaining);
+			let burn = Self::burn().times(budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
