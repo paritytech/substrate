@@ -515,7 +515,7 @@ macro_rules! __dispatch_impl_json_metadata {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn json_metadata() -> &'static str {
 				concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "call": "#,
-					__call_to_json!($($rest)*), " }")
+					__call_to_json!($trait_instance $($rest)*), " }")
 			}
 		}
 	}
@@ -526,6 +526,7 @@ macro_rules! __dispatch_impl_json_metadata {
 #[doc(hidden)]
 macro_rules! __call_to_json {
 	(
+		$trait_instance:ident
 		$call_type:ident $origin_type:ty
 			{$(
 				$(#[doc = $doc_attr:tt])*
@@ -539,7 +540,7 @@ macro_rules! __call_to_json {
 		concat!(
 			r#"{ "name": ""#, stringify!($call_type),
 			r#"", "functions": {"#,
-			__functions_to_json!(""; 0; $origin_type; $(
+			__functions_to_json!(""; 0; $origin_type; $trait_instance; $(
 				fn $fn_name(($top_origin $sub_origin $origin_param) $(, $param_name: $param )* ) -> $result;
 				__function_doc_to_json!(""; $($doc_attr)*);
 			)*), " } }"
@@ -556,6 +557,7 @@ macro_rules! __functions_to_json {
 		$prefix_str:tt;
 		$fn_id:expr;
 		$origin_type:ty;
+		$trait_instance:ident;
 		fn $fn_name:ident(
 			(root root root)
 			$(
@@ -572,7 +574,7 @@ macro_rules! __functions_to_json {
 					) -> $result;
 					$fn_doc;
 					$fn_id;
-				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
+				), __functions_to_json!(","; $fn_id + 1; $origin_type; $trait_instance; $($rest)*)
 			)
 	};
 	// ORIGIN
@@ -580,6 +582,7 @@ macro_rules! __functions_to_json {
 		$prefix_str:tt;
 		$fn_id:expr;
 		$origin_type:ty;
+		$trait_instance:ident;
 		fn $fn_name:ident(
 			(origin origin origin)
 			$(
@@ -597,7 +600,7 @@ macro_rules! __functions_to_json {
 					) -> $result;
 					$fn_doc;
 					$fn_id;
-				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
+				), __functions_to_json!(","; $fn_id + 1; $origin_type; $trait_instance; $($rest)*)
 			)
 	};
 	// system signed who
@@ -605,6 +608,7 @@ macro_rules! __functions_to_json {
 		$prefix_str:tt;
 		$fn_id:expr;
 		$origin_type:ty;
+		$trait_instance:ident;
 		fn $fn_name:ident(
 			(system signed $who:ident)
 			$(
@@ -617,12 +621,12 @@ macro_rules! __functions_to_json {
 			concat!($prefix_str, " ",
 				__function_to_json!(
 					fn $fn_name(
-						$who: T::AccountId          // TODO: fix this.
+						$who: $trait_instance::AccountId
 						$( , $param_name : $param )*
 					) -> $result;
 					$fn_doc;
 					$fn_id;
-				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
+				), __functions_to_json!(","; $fn_id + 1; $origin_type; $trait_instance; $($rest)*)
 			)
 	};
 	// BASE CASE
