@@ -31,6 +31,19 @@ macro_rules! impl_outer_origin {
 	};
 	(
 		$(#[$attr:meta])*
+		pub enum $name:ident for $runtime:ident where system = $system:ident {}
+	) => {
+		impl_outer_origin!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			$system;
+			Modules { };
+			;
+		);
+	};
+	(
+		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident where system = $system:ident {
 			$module:ident,
 			$( $rest_module:ident $( <$rest_generic:ident> )* ),* $(,)*
@@ -239,5 +252,9 @@ mod tests {
 			origin_with_generic<T>,
 			origin_without_generic,
 		}
+	);
+
+	impl_outer_origin!(
+		pub enum OriginEmpty for TestRuntime where system = system {}
 	);
 }
