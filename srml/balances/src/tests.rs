@@ -60,9 +60,7 @@ fn default_indexing_on_new_accounts_should_work2() {
 		assert_ok!(Balances::transfer(Some(1).into(), 5.into(), 10));
 		assert_eq!(Balances::lookup_index(4), Some(5));
 
-		assert_eq!(Balances::free_balance(&1),
-				   256 * 10 - 10 - 50 // 10 is value, 50 is creation_free
-		);
+		assert_eq!(Balances::free_balance(&1), 256 * 10 - 10 - 50); // 10 is value, 50 is creation_free
 	});
 }
 
@@ -73,9 +71,7 @@ fn default_indexing_on_new_accounts_should_not_work2() {
 		// account 1 has 256 * 10 = 2560, account 5 is not exist, ext_deposit is 10, value is 9, not satisfies for ext_deposit
 		assert_noop!(Balances::transfer(Some(1).into(), 5.into(), 9), "value too low to create account");
 		assert_eq!(Balances::lookup_index(4), None); // account 5 should not exist
-		assert_eq!(Balances::free_balance(&1),
-				   256 * 10
-		);
+		assert_eq!(Balances::free_balance(&1), 256 * 10);
 	});
 }
 
@@ -131,7 +127,7 @@ fn reclaim_indexing_on_new_accounts_should_work2() {
 
 		assert_ok!(Balances::transfer(Some(2).into(), 5.into(), 256 * 20 - 50));	// account 2 becomes zombie freeing index 1 for reclaim) 50 is creation fee
 		assert_eq!(Balances::total_balance(&2), 0);
-//
+
 		assert_ok!(Balances::transfer(Some(5).into(), 6.into(), 256 * 1 + 0x69));	// account 6 takes index 1.
 		assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
 		assert_eq!(Balances::lookup_index(1), Some(6));
