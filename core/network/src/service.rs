@@ -22,7 +22,6 @@ use futures::sync::{oneshot, mpsc};
 use network_libp2p::{NetworkProtocolHandler, NetworkContext, NodeIndex, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
 use network_libp2p::{NetworkService};
-use core_io::{TimerToken};
 use io::NetSyncIo;
 use protocol::{Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
 use config::{ProtocolConfig};
@@ -38,6 +37,8 @@ use runtime_primitives::traits::{Block as BlockT};
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 /// Type that represents bft messages stream.
 pub type BftMessageStream<B> = mpsc::UnboundedReceiver<LocalizedBftMessage<B>>;
+
+type TimerToken = usize;
 
 const TICK_TOKEN: TimerToken = 0;
 const TICK_TIMEOUT: Duration = Duration::from_millis(1000);

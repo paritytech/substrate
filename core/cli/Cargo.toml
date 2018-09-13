@@ -27,6 +27,7 @@ substrate-client = { path = "../../core/client" }
 substrate-network = { path = "../../core/network" }
 substrate-network-libp2p = { path = "../../core/network-libp2p" }
 sr-primitives = { path = "../../core/sr-primitives" }
+substrate-primitives = { path = "../../core/primitives" }
 substrate-service = { path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
 names = "0.11.0"

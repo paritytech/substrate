@@ -11,9 +11,7 @@ bytes = "0.4"
 error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
-libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "304e9c72c88bc97824f2734dc19d1b5f4556d346", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
-ethcore-io = { git = "https://github.com/paritytech/parity.git" }
-ethkey = { git = "https://github.com/paritytech/parity.git" }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "5980a4538ef6fc8af450893acb01290eaed136de", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
 ethereum-types = "0.3"
 parking_lot = "0.5"
 libc = "0.2"
@@ -30,5 +28,3 @@ unsigned-varint = { version = "0.2.1", features = ["codec"] }
 [dev-dependencies]
 assert_matches = "1.2"
 parity-bytes = "0.1"
-ethcore-io = { git = "https://github.com/paritytech/parity.git" }
-ethcore-logger = { git = "https://github.com/paritytech/parity.git" }
