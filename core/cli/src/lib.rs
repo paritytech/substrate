@@ -39,6 +39,7 @@ extern crate substrate_network as network;
 extern crate substrate_network_libp2p as network_libp2p;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_service as service;
+extern crate substrate_primitives as primitives;
 #[macro_use]
 extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 #[macro_use]
@@ -64,6 +65,7 @@ use service::{
 	FactoryGenesis, PruningMode, ChainSpec,
 };
 use network::NonReservedPeerMode;
+use primitives::H256;
 
 use std::io::{Write, Read, stdin, stdout};
 use std::iter;
@@ -71,6 +73,7 @@ use std::fs;
 use std::fs::File;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use names::{Generator, Name};
 use regex::Regex;
 
@@ -311,8 +314,8 @@ where
 		config.network.public_addresses = Vec::new();
 
 		config.network.client_version = config.client_id();
-		config.network.use_secret = match matches.value_of("node-key").map(|s| s.parse()) {
-			Some(Ok(secret)) => Some(secret),
+		config.network.use_secret = match matches.value_of("node-key").map(H256::from_str) {
+			Some(Ok(secret)) => Some(secret.into()),
 			Some(Err(err)) => return Err(format!("Error parsing node key: {}", err).into()),
 			None => None,
 		};

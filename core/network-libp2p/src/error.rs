@@ -16,8 +16,6 @@
 
 use std::{io, net, fmt};
 use libc::{ENFILE, EMFILE};
-use io::IoError;
-use ethkey;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum DisconnectReason
@@ -82,10 +80,6 @@ impl fmt::Display for DisconnectReason {
 }
 
 error_chain! {
-	foreign_links {
-		SocketIo(IoError) #[doc = "Socket IO error."];
-	}
-
 	errors {
 		#[doc = "Error concerning the network address parsing subsystem."]
 		AddressParse {
@@ -171,17 +165,6 @@ impl From<io::Error> for Error {
 	}
 }
 
-impl From<ethkey::Error> for Error {
-	fn from(_err: ethkey::Error) -> Self {
-		ErrorKind::Auth.into()
-	}
-}
-
-impl From<ethkey::crypto::Error> for Error {
-	fn from(_err: ethkey::crypto::Error) -> Self {
-		ErrorKind::Auth.into()
-	}
-}
 
 impl From<net::AddrParseError> for Error {
 	fn from(_err: net::AddrParseError) -> Self { ErrorKind::AddressParse.into() }
