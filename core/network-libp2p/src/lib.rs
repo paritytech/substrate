@@ -27,7 +27,6 @@ extern crate futures;
 extern crate tokio;
 extern crate tokio_io;
 extern crate tokio_timer;
-extern crate ethkey;
 extern crate libc;
 extern crate libp2p;
 extern crate rand;
@@ -38,7 +37,6 @@ extern crate serde_json;
 extern crate bytes;
 extern crate unsigned_varint;
 
-extern crate ethcore_io as io;
 extern crate ethereum_types;
 
 #[macro_use]
@@ -49,10 +47,11 @@ extern crate log;
 extern crate assert_matches;
 
 pub use connection_filter::{ConnectionFilter, ConnectionDirection};
-pub use io::TimerToken;
 pub use error::{Error, ErrorKind, DisconnectReason};
 pub use libp2p::{Multiaddr, multiaddr::AddrComponent};
 pub use traits::*;
+
+pub type TimerToken = usize;
 
 mod connection_filter;
 mod custom_proto;

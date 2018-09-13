@@ -22,7 +22,6 @@
 //! Allows attachment of an optional subprotocol for chain-specific requests.
 // end::description[]
 
-extern crate ethcore_io as core_io;
 extern crate linked_hash_map;
 extern crate parking_lot;
 extern crate substrate_primitives as primitives;
