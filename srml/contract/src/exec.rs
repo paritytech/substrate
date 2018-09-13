@@ -172,6 +172,18 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 	}
 }
 
+/// Transfer some funds from `transactor` to `dest`.
+///
+/// All balance changes are performed in the `overlay`.
+///
+/// This function also handles charging the fee. The fee depends
+/// on whether the transfer happening because of contract creation
+/// (transfering endowment), specified by `contract_create` flag,
+/// or because of a transfer via `call`.
+///
+/// Note, that the fee is denominated in `T::Balance` units, but
+/// charged in `T::Gas` from the provided `gas_meter`. This means
+/// that the actual amount charged might differ.
 fn transfer<T: Trait>(
 	gas_meter: &mut GasMeter<T>,
 	contract_create: bool,
@@ -180,7 +192,7 @@ fn transfer<T: Trait>(
 	value: T::Balance,
 	overlay: &mut OverlayAccountDb<T>,
 ) -> Result<(), &'static str> {
-	let would_create = overlay.get_balance(transactor).is_zero();
+	let would_create = overlay.get_balance(dest).is_zero();
 
 	let fee: T::Balance = if contract_create {
 		<Module<T>>::contract_fee()

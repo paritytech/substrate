@@ -70,6 +70,8 @@ struct ExtBuilder {
 	existential_deposit: u64,
 	gas_price: u64,
 	block_gas_limit: u64,
+	transfer_fee: u64,
+	creation_fee: u64,
 }
 impl Default for ExtBuilder {
 	fn default() -> Self {
@@ -77,6 +79,8 @@ impl Default for ExtBuilder {
 			existential_deposit: 0,
 			gas_price: 2,
 			block_gas_limit: 100_000_000,
+			transfer_fee: 0,
+			creation_fee: 0,
 		}
 	}
 }
@@ -93,6 +97,14 @@ impl ExtBuilder {
 		self.block_gas_limit = block_gas_limit;
 		self
 	}
+	fn transfer_fee(mut self, transfer_fee: u64) -> Self {
+		self.transfer_fee = transfer_fee;
+		self
+	}
+	fn creation_fee(mut self, creation_fee: u64) -> Self {
+		self.creation_fee = creation_fee;
+		self
+	}
 	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default()
 			.build_storage()
@@ -103,8 +115,8 @@ impl ExtBuilder {
 				transaction_base_fee: 0,
 				transaction_byte_fee: 0,
 				existential_deposit: self.existential_deposit,
-				transfer_fee: 0,
-				creation_fee: 0,
+				transfer_fee: self.transfer_fee,
+				creation_fee: self.creation_fee,
 				reclaim_rebate: 0,
 			}.build_storage()
 			.unwrap(),
@@ -191,6 +203,85 @@ fn contract_transfer() {
 		assert_eq!(
 			Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
 			CONTRACT_SHOULD_TRANSFER_VALUE,
+		);
+	});
+}
+
+#[test]
+fn contract_transfer_takes_creation_fee() {
+	const CONTRACT_SHOULD_TRANSFER_VALUE: u64 = 6;
+	const CONTRACT_SHOULD_TRANSFER_TO: u64 = 9;
+
+	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+	with_externalities(&mut ExtBuilder::default().creation_fee(105).build(), || {
+		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&1, 11);
+		Balances::increase_total_stake_by(11);
+
+		assert_ok!(Contract::call(Origin::signed(0), 1, 3, 100_000, Vec::new()));
+
+		assert_eq!(
+			Balances::free_balance(&0),
+			// 3 - value sent with the transaction
+			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 135 - base gas fee for call (by transaction)
+			// 2 * 135 - base gas fee for call (by the contract)
+			// 104 - (rounded) fee per creation (by the contract)
+			100_000_000 - 3 - (2 * 10) - (2 * 135) - (2 * 135) - 104,
+		);
+		assert_eq!(
+			Balances::free_balance(&1),
+			11 + 3 - CONTRACT_SHOULD_TRANSFER_VALUE,
+		);
+		assert_eq!(
+			Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
+			CONTRACT_SHOULD_TRANSFER_VALUE,
+		);
+	});
+}
+
+#[test]
+fn contract_transfer_takes_transfer_fee() {
+	const CONTRACT_SHOULD_TRANSFER_VALUE: u64 = 6;
+	const CONTRACT_SHOULD_TRANSFER_TO: u64 = 9;
+
+	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+	with_externalities(&mut ExtBuilder::default().creation_fee(105).transfer_fee(45).build(), || {
+		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+		Balances::set_free_balance(&1, 11);
+		Balances::increase_total_stake_by(11);
+
+		// Create destination account here so we can check that transfer fee
+		// is charged (and creation fee is not).
+		Balances::set_free_balance(&CONTRACT_SHOULD_TRANSFER_TO, 25);
+
+		assert_ok!(Contract::call(Origin::signed(0), 1, 3, 100_000, Vec::new()));
+
+		assert_eq!(
+			Balances::free_balance(&0),
+			// 3 - value sent with the transaction
+			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 135 - base gas fee for call (by transaction)
+			// 44 - (rounded from 45) fee per transfer (by transaction)
+			// 2 * 135 - base gas fee for call (by the contract)
+			// 44 - (rounded from 45) fee per transfer (by the contract)
+			100_000_000 - 3 - (2 * 10) - (2 * 135) - 44 - (2 * 135) - 44,
+		);
+		assert_eq!(
+			Balances::free_balance(&1),
+			11 + 3 - CONTRACT_SHOULD_TRANSFER_VALUE,
+		);
+		assert_eq!(
+			Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
+			25 + CONTRACT_SHOULD_TRANSFER_VALUE,
 		);
 	});
 }
