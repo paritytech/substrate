@@ -352,10 +352,10 @@ macro_rules! decl_module {
 				d.dispatch(origin)
 			}
 		}
-//		__dispatch_impl_json_metadata! {
-//			$mod_type $trait_instance $trait_name $call_type $origin_type
-//			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*) -> $result; )*}
-//		}
+		__dispatch_impl_json_metadata! {
+			$mod_type $trait_instance $trait_name $call_type $origin_type
+			{$( $(#[doc = $doc_attr])* fn $fn_name(($top_origin $sub_origin $origin_param) $(, $param_name : $param )*) -> $result; )*}
+		}
 	}
 }
 
@@ -529,7 +529,7 @@ macro_rules! __call_to_json {
 		$call_type:ident $origin_type:ty
 			{$(
 				$(#[doc = $doc_attr:tt])*
-				fn $fn_name:ident($from:ident
+				fn $fn_name:ident(($top_origin:ident $sub_origin:ident $origin_param:ident)
 					$(
 						, $param_name:ident : $param:ty
 					)*
@@ -540,7 +540,7 @@ macro_rules! __call_to_json {
 			r#"{ "name": ""#, stringify!($call_type),
 			r#"", "functions": {"#,
 			__functions_to_json!(""; 0; $origin_type; $(
-				fn $fn_name($from $(, $param_name: $param )* ) -> $result;
+				fn $fn_name(($top_origin $sub_origin $origin_param) $(, $param_name: $param )* ) -> $result;
 				__function_doc_to_json!(""; $($doc_attr)*);
 			)*), " } }"
 		)
@@ -556,7 +556,8 @@ macro_rules! __functions_to_json {
 		$prefix_str:tt;
 		$fn_id:expr;
 		$origin_type:ty;
-		fn $fn_name:ident(root
+		fn $fn_name:ident(
+			(root root root)
 			$(
 				, $param_name:ident : $param:ty
 			)*
@@ -574,12 +575,13 @@ macro_rules! __functions_to_json {
 				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
 			)
 	};
-	// NON ROOT
+	// ORIGIN
 	(
 		$prefix_str:tt;
 		$fn_id:expr;
 		$origin_type:ty;
-		fn $fn_name:ident(origin
+		fn $fn_name:ident(
+			(origin origin origin)
 			$(
 				, $param_name:ident : $param:ty
 			)*
@@ -592,6 +594,31 @@ macro_rules! __functions_to_json {
 					fn $fn_name(
 						origin: $origin_type
 						$(, $param_name : $param)*
+					) -> $result;
+					$fn_doc;
+					$fn_id;
+				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
+			)
+	};
+	// system signed who
+	(
+		$prefix_str:tt;
+		$fn_id:expr;
+		$origin_type:ty;
+		fn $fn_name:ident(
+			(system signed $who:ident)
+			$(
+				, $param_name:ident : $param:ty
+			)*
+		) -> $result:ty;
+		$fn_doc:expr;
+		$($rest:tt)*
+	) => {
+			concat!($prefix_str, " ",
+				__function_to_json!(
+					fn $fn_name(
+						$who: $origin_type          // TODO: fix this.
+						$( , $param_name : $param )*
 					) -> $result;
 					$fn_doc;
 					$fn_id;
