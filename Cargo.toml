@@ -57,7 +57,6 @@ exclude = [
 	"node/runtime/wasm",
 	"core/executor/wasm",
 	"pwasm-alloc",
-	"pwasm-libc",
 	"core/test-runtime/wasm",
 ]
 

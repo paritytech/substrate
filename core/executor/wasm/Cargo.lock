@@ -64,18 +64,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pwasm-alloc"
-version = "0.1.0"
-dependencies = [
- "pwasm-libc 0.1.0",
- "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "pwasm-libc"
-version = "0.1.0"
-
-[[package]]
 name = "quote"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -149,8 +137,6 @@ dependencies = [
 name = "sr-std"
 version = "0.1.0"
 dependencies = [
- "pwasm-alloc 0.1.0",
- "pwasm-libc 0.1.0",
  "rustc_version 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
