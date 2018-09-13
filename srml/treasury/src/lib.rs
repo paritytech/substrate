@@ -46,7 +46,6 @@ use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use runtime_primitives::{Permill, traits::{OnFinalise, Zero, EnsureOrigin}};
 use balances::OnDilution;
-use system::ensure_signed;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -74,7 +73,7 @@ decl_module! {
 		// Put forward a suggestion for spending. A deposit proportional to the value
 		// is reserved and slashed if the proposal is rejected. It is returned once the
 		// proposal is awarded.
-		fn propose_spend(origin, value: T::Balance, beneficiary: T::AccountId) -> Result;
+		fn propose_spend(SystemOrigin(Signed(proposer)), value: T::Balance, beneficiary: T::AccountId) -> Result;
 
 		// Set the balance of funds available to spend.
 		fn set_pot(new_pot: T::Balance) -> Result;
@@ -158,9 +157,7 @@ impl<T: Trait> Module<T> {
 
 	// Implement Calls and add public immutables and private mutables.
 
-	fn propose_spend(origin: T::Origin, value: T::Balance, beneficiary: T::AccountId) -> Result {
-		let proposer = ensure_signed(origin)?;
-
+	fn propose_spend(proposer: T::AccountId, value: T::Balance, beneficiary: T::AccountId) -> Result {
 		let bond = Self::calculate_bond(value);
 		<balances::Module<T>>::reserve(&proposer, bond)
 			.map_err(|_| "Proposer's balance too low")?;
