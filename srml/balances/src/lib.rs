@@ -284,7 +284,8 @@ impl<T: Trait> Module<T> {
 
 		let dest = Self::lookup(dest)?;
 		let from_balance = Self::free_balance(&transactor);
-		let would_create = from_balance.is_zero();
+		let to_balance = Self::free_balance(&dest);
+		let would_create = to_balance.is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
 		let liability = value + fee;
 
@@ -297,7 +298,6 @@ impl<T: Trait> Module<T> {
 		}
 		T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
 
-		let to_balance = Self::free_balance(&dest);
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
 		let new_to_balance = match to_balance.checked_add(&value) {
