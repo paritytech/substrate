@@ -284,7 +284,8 @@ impl<T: Trait> Module<T> {
 
 		let dest = Self::lookup(dest)?;
 		let from_balance = Self::free_balance(&transactor);
-		let would_create = from_balance.is_zero();
+		let to_balance = Self::free_balance(&dest);
+		let would_create = to_balance.is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
 		let liability = value + fee;
 
