@@ -7,7 +7,7 @@ description = "Substrate node implementation in Rust."
 [dependencies]
 hex-literal = "0.1"
 triehash = "0.2"
-parity-codec = { path = "../../codec" }
+parity-codec = { version = "~1.0" }
 sr-io = { path = "../../core/sr-io" }
 substrate-state-machine = { path = "../../core/state-machine" }
 substrate-executor = { path = "../../core/executor" }

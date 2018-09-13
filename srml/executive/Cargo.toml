@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 hex-literal = "0.1.0"
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-parity-codec = { path = "../../codec", default_features = false }
+parity-codec = { version = "~1.0", default_features = false }
 sr-std = { path = "../../core/sr-std", default_features = false }
 sr-io = { path = "../../core/sr-io", default_features = false }
 sr-primitives = { path = "../../core/sr-primitives", default_features = false }
@@ -15,7 +15,7 @@ srml-support = { path = "../support", default_features = false }
 srml-system = { path = "../system", default_features = false }
 
 [dev-dependencies]
-parity-codec-derive = { path = "../../codec/derive" }
+parity-codec-derive = { version = "~1.0" }
 substrate-primitives = { path = "../../core/primitives" }
 srml-balances = { path = "../balances" }
 

@@ -23,7 +23,7 @@ substrate-primitives = { path = "../../core/primitives" }
 substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }
 substrate-client-db = { path = "../../core/client/db" }
-parity-codec = { path = "../../codec" }
+parity-codec = { version = "~1.0" }
 substrate-executor = { path = "../../core/executor" }
 substrate-extrinsic-pool = { path = "../../core/extrinsic-pool" }
 substrate-rpc = { path = "../../core/rpc" }

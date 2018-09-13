@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-parity-codec = { path = "../../codec", default_features = false }
+parity-codec = { version = "~1.0", default_features = false }
 
 [features]
 default = ["std"]

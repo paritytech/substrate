@@ -9,10 +9,10 @@ rustc_version = "0.2"
 
 [dependencies]
 sr-std = { path = "../sr-std", default_features = false }
-environmental = { path = "../../environmental", optional = true }
+environmental = { version = "~1.0", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 substrate-primitives = { path = "../primitives", default_features = false }
-parity-codec = { path = "../../codec", default_features = false }
+parity-codec = { version = "~1.0", default_features = false }
 triehash = { version = "0.2", optional = true }
 hashdb = { version = "0.2", default_features = false }
 rlp = { version = "0.2", optional = true, default_features = false }
