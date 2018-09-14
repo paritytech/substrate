@@ -24,13 +24,13 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(test)]
 #[macro_use]
 extern crate parity_codec_derive;
 
 #[cfg_attr(test, macro_use)]
 extern crate srml_support as runtime_support;
 
+#[macro_use]
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
@@ -51,7 +51,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	MakePayment, Hash};
+	MakePayment, Hash, As};
 use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -69,6 +69,19 @@ mod internal {
 		Success,
 		Fail(&'static str),
 	}
+}
+
+/// Priority for a transaction. Additive. Higher is better.
+pub type TransactionPriority = u64;
+/// Tag for a transaction. No two transactions with the same tag should be placed on-chain.
+pub type TransactionTag = Vec<u8>;
+
+/// Information on a transaction's validity and, if valid, on how it relates to other transactions.
+#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+pub enum TransactionValidity {
+	Invalid,
+	Valid(TransactionPriority, Vec<TransactionTag>, Vec<TransactionTag>),
+	Unknown,
 }
 
 pub struct Executive<
@@ -212,6 +225,43 @@ impl<
 		let storage_root = System::Hashing::storage_root();
 		header.state_root().check_equal(&storage_root);
 		assert!(header.state_root() == &storage_root, "Storage root must match that calculated.");
+	}
+
+	/// Check a given transaction for validity. This doesn't execute any
+	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
+	/// 
+	/// Changed made to the storage should be discarded.
+	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
+		let encoded_len = uxt.encode().len();
+		
+		// TODO: should be TransactionValidity::Unknown when it doesn't know the lookup.
+		let xt = if let Ok(xt) = uxt.check_with(Lookup::lookup) { xt } else { return TransactionValidity::Invalid };
+
+		if let Some(sender) = xt.sender() {
+			// pay any fees.
+			if Payment::make_payment(sender, encoded_len).is_err() {
+				return TransactionValidity::Invalid
+			}
+
+			// check index
+			let mut expected_index = <system::Module<System>>::account_nonce(sender);
+			if xt.index() < &expected_index {
+				return TransactionValidity::Invalid
+			}
+			if *xt.index() > expected_index + As::sa(256) {
+				return TransactionValidity::Unknown
+			}
+
+			let mut deps = Vec::new();
+			while expected_index < *xt.index() {
+				deps.push((sender, expected_index).encode());
+				expected_index = expected_index + One::one();
+			}
+			
+			TransactionValidity::Valid(0u64, deps, vec![(sender, *xt.index()).encode()])
+		} else {
+			return TransactionValidity::Invalid
+		}
 	}
 }
 
