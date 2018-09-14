@@ -50,7 +50,7 @@ test:rust:stable:                  &test
     - ./scripts/init.sh
     - export PATH="${CI_PROJECT_DIR}/cargo/bin/:$PATH"
     - ./scripts/build.sh
-    - time cargo test --all --release
+    - time cargo test --all --release --locked
   tags:
     - rust-stable 
 
