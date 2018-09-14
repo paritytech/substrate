@@ -71,7 +71,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 };
 
 fn version() -> RuntimeVersion {
-	VERSION.clone()
+	VERSION
 }
 
 /// Calls in transactions.

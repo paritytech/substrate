@@ -86,7 +86,8 @@ const NOTE_OFFLINE_POSITION: u32 = 1;
 /// Runtime type used to collate and parameterize the various modules.
 pub struct Runtime;
 
-const NODEAUTH: ApiId = *b"nodeauth";
+const INHERENT: ApiId = *b"inherent";
+const VALIDATX: ApiId = *b"validatx";
 
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -95,7 +96,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
-	apis: apis_vec!([(NODEAUTH, 1)]),
+	apis: apis_vec!([(INHERENT, 1), (VALIDATX, 1)]),
 };
 
 impl system::Trait for Runtime {
@@ -339,7 +340,7 @@ pub mod api {
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),
 		finalise_block => |()| super::Executive::finalise_block(),
-		inherent_extrinsics => |(inherent, spec_version)| super::inherent_extrinsics(inherent, spec_version),
+		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
 		validator_count => |()| super::Session::validator_count(),
 		validators => |()| super::Session::validators(),
 		timestamp => |()| super::Timestamp::get(),
@@ -351,7 +352,7 @@ pub mod api {
 }
 
 /// Produces the list of inherent extrinsics.
-fn inherent_extrinsics(data: InherentData, _spec_version: u32) -> Vec<UncheckedExtrinsic> {
+fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
 	let make_inherent = |function| UncheckedExtrinsic {
 		signature: Default::default(),
 		function,

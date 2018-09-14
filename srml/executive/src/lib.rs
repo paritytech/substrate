@@ -24,13 +24,14 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 
+#[cfg(test)]
 #[macro_use]
 extern crate parity_codec_derive;
 
 #[cfg_attr(test, macro_use)]
 extern crate srml_support as runtime_support;
 
-#[macro_use]
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
@@ -55,7 +56,7 @@ use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqu
 use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
-use primitives::{ApplyOutcome, ApplyError};
+use primitives::{ApplyOutcome, ApplyError, transaction_validity::TransactionValidity};
 
 mod internal {
 	pub enum ApplyError {
@@ -69,19 +70,6 @@ mod internal {
 		Success,
 		Fail(&'static str),
 	}
-}
-
-/// Priority for a transaction. Additive. Higher is better.
-pub type TransactionPriority = u64;
-/// Tag for a transaction. No two transactions with the same tag should be placed on-chain.
-pub type TransactionTag = Vec<u8>;
-
-/// Information on a transaction's validity and, if valid, on how it relates to other transactions.
-#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-pub enum TransactionValidity {
-	Invalid,
-	Valid(TransactionPriority, Vec<TransactionTag>, Vec<TransactionTag>),
-	Unknown,
 }
 
 pub struct Executive<
@@ -234,8 +222,15 @@ impl<
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.encode().len();
 		
-		// TODO: should be TransactionValidity::Unknown when it doesn't know the lookup.
-		let xt = if let Ok(xt) = uxt.check_with(Lookup::lookup) { xt } else { return TransactionValidity::Invalid };
+		let xt = match uxt.check_with(Lookup::lookup) {
+			// Checks out. Carry on.
+			Ok(xt) => xt,
+			// An unknown account index implies that the transaction may yet become valid.
+			Err("invalid account index") => return TransactionValidity::Unknown,
+			// Technically a bad signature could also imply an out-of-date account index, but
+			// that's more of an edge case.
+			Err(_) => return TransactionValidity::Invalid,
+		};
 
 		if let Some(sender) = xt.sender() {
 			// pay any fees.
@@ -258,7 +253,7 @@ impl<
 				expected_index = expected_index + One::one();
 			}
 			
-			TransactionValidity::Valid(0u64, deps, vec![(sender, *xt.index()).encode()])
+			TransactionValidity::Valid(encoded_len as u64, deps, vec![(sender, *xt.index()).encode()])
 		} else {
 			return TransactionValidity::Invalid
 		}
