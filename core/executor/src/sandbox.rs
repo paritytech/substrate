@@ -335,11 +335,20 @@ impl SandboxInstance {
 	}
 }
 
+
+pub enum InstantiationError {
+	EnvironmentDefintionCorrupted,
+	Decoding,
+	Instantiation,
+	StartTrapped,
+}
+
 fn decode_environment_definition(
 	raw_env_def: &[u8],
 	memories: &[Option<MemoryRef>],
-) -> Result<(Imports, GuestToSupervisorFunctionMapping), UserError> {
-	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..]).ok_or_else(|| UserError("Sandbox error"))?;
+) -> Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
+	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..])
+		.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?;
 
 	let mut func_map = HashMap::new();
 	let mut memories_map = HashMap::new();
@@ -359,8 +368,8 @@ fn decode_environment_definition(
 				let memory_ref = memories
 					.get(memory_idx as usize)
 					.cloned()
-					.ok_or_else(|| UserError("Sandbox error"))?
-					.ok_or_else(|| UserError("Sandbox error"))?;
+					.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?
+					.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?;
 				memories_map.insert((module, field), memory_ref);
 			}
 		}
@@ -374,6 +383,7 @@ fn decode_environment_definition(
 		guest_to_supervisor_mapping,
 	))
 }
+
 
 /// Instantiate a guest module and return it's index in the store.
 ///
@@ -395,12 +405,12 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 	wasm: &[u8],
 	raw_env_def: &[u8],
 	state: u32,
-) -> Result<u32, UserError> {
+) -> Result<u32, InstantiationError> {
 	let (imports, guest_to_supervisor_mapping) =
 		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
 
-	let module = Module::from_buffer(wasm).map_err(|_| UserError("Sandbox error"))?;
-	let instance = ModuleInstance::new(&module, &imports).map_err(|_| UserError("Sandbox error"))?;
+	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::Decoding)?;
+	let instance = ModuleInstance::new(&module, &imports).map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
@@ -418,7 +428,7 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 		|guest_externals| {
 			instance
 				.run_start(guest_externals)
-				.map_err(|_| UserError("Sandbox error"))
+				.map_err(|_| InstantiationError::StartTrapped)
 		},
 	)?;
 
