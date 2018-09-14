@@ -10,7 +10,7 @@ log = { version = "0.3", optional = true }
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default_features = false}
-parity-codec = { version = "~1.0" }
+parity-codec = { version = "1.1" }
 parity-codec-derive = { version = "~1.0" }
 sr-std = { path = "../../core/sr-std" }
 sr-io = { path = "../../core/sr-io" }

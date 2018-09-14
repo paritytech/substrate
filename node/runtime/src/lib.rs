@@ -93,6 +93,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
+	apis: apis_vec!([(ver_str!("node-authoring"), 1)]),
 };
 
 impl system::Trait for Runtime {

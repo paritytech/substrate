@@ -43,6 +43,11 @@ pub type VersionString = ::std::borrow::Cow<'static, str>;
 pub type VersionString = &'static str;
 
 #[cfg(feature = "std")]
+pub type ApisVec = ::std::borrow::Cow<'static, [(VersionString, u32)]>;
+#[cfg(not(feature = "std"))]
+pub type ApisVec = &'static [(VersionString, u32)];
+
+#[cfg(feature = "std")]
 #[macro_export]
 macro_rules! ver_str {
 	( $y:expr ) => {{ ::std::borrow::Cow::Borrowed($y) }}
@@ -52,6 +57,11 @@ macro_rules! ver_str {
 #[macro_export]
 macro_rules! ver_str {
 	( $y:expr ) => {{ $y }}
+}
+
+#[macro_export]
+macro_rules! apis_vec {
+	( $y:expr ) => { ver_str!(&$y[..]) }
 }
 
 /// Runtime version.
@@ -90,20 +100,9 @@ pub struct RuntimeVersion {
 	/// Non-consensus-breaking optimisations are about the only changes that could be made which
 	/// would result in only the `impl_version` changing.
 	pub impl_version: u32,
-}
 
-// TODO: remove this after PoC-2
-#[cfg(feature = "std")]
-impl Default for RuntimeVersion {
-	fn default() -> RuntimeVersion {
-		RuntimeVersion {
-			spec_name: ver_str!("polkadot"),
-			impl_name: ver_str!("parity-polkadot"),
-			authoring_version: 0,
-			spec_version: 0,
-			impl_version: 0,
-		}
-	}
+	/// List of supported API "features" along with their versions.
+	pub apis: ApisVec,
 }
 
 #[cfg(feature = "std")]
@@ -126,5 +125,10 @@ impl RuntimeVersion {
 	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
 		self.authoring_version == other.authoring_version &&
 		self.spec_name == other.spec_name
+	}
+
+	/// Check if this version supports a particular API.
+	pub fn has_api(&self, api: VersionString, version: u32) -> bool {
+		self.apis.iter().any(|&(ref s, v)| &api == s && version == v)
 	}
 }
