@@ -20,10 +20,9 @@ use std::iter;
 use std::net::Ipv4Addr;
 use std::str;
 use std::time::Duration;
-use io::TimerToken;
+use TimerToken;
 use libp2p::{multiaddr::AddrComponent, Multiaddr};
 use error::Error;
-use ethkey::Secret;
 use ethereum_types::H512;
 
 /// Protocol handler level packet id
@@ -36,6 +35,9 @@ pub type NodeId = H512;
 
 /// Local (temporary) peer session ID.
 pub type NodeIndex = usize;
+
+/// secio secret key;
+pub type Secret = [u8; 32];
 
 /// Shared session information
 #[derive(Debug, Clone)]
@@ -148,7 +150,7 @@ impl NetworkConfiguration {
 			max_peers: 50,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
-			client_version: "Parity-network".into(),
+			client_version: "Parity-network".into(),		// TODO: meh
 		}
 	}
 

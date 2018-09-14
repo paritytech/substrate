@@ -233,6 +233,12 @@ where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
 pub struct RegisteredProtocols<T>(pub Vec<RegisteredProtocol<T>>);
 
 impl<T> RegisteredProtocols<T> {
+	/// Returns the number of protocols.
+	#[inline]
+	pub fn len(&self) -> usize {
+		self.0.len()
+	}
+
 	/// Finds a protocol in the list by its id.
 	pub fn find_protocol(&self, protocol: ProtocolId)
 		-> Option<&RegisteredProtocol<T>> {
