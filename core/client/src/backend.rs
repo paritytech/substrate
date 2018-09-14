@@ -43,8 +43,11 @@ where
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
 		justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool
+		is_new_best: bool,
 	) -> error::Result<()>;
+
+	/// Set the block as finalized.
+	fn set_finalized(&mut self, finalized: bool);
 
 	/// Append authorities set to the transaction. This is a set of parent block (set which
 	/// has been used to check justification of this block).
@@ -81,6 +84,8 @@ where
 	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation>;
 	/// Commit block insertion.
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
+	/// Finalize block with given Id. This should also implicitly finalize all ancestors.
+	fn finalize_block(&self, block: BlockId<Block>) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns state backend with post-state of given block.

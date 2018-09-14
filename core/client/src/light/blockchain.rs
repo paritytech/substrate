@@ -33,13 +33,17 @@ use light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
-	/// Store new header.
+	/// Store new header. Should refuse to revert any finalized blocks.
 	fn import_header(
 		&self,
 		is_new_best: bool,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>
+		authorities: Option<Vec<AuthorityId>>,
+		finalized: bool,
 	) -> ClientResult<()>;
+
+	/// Mark historic header as finalized.
+	fn finalize_header(&self, block: BlockId<Block>) -> ClientResult<()>;
 
 	/// Get CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
 	fn cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;

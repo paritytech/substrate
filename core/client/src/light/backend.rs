@@ -48,6 +48,7 @@ pub struct ImportOperation<Block: BlockT, S, F> {
 	is_new_best: bool,
 	header: Option<Block::Header>,
 	authorities: Option<Vec<AuthorityId>>,
+	finalized: bool,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -87,13 +88,23 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 			is_new_best: false,
 			header: None,
 			authorities: None,
+			finalized: false,
 			_phantom: Default::default(),
 		})
 	}
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
-		self.blockchain.storage().import_header(operation.is_new_best, header, operation.authorities)
+		self.blockchain.storage().import_header(
+			operation.is_new_best,
+			header,
+			operation.authorities,
+			operation.finalized
+		)
+	}
+
+	fn finalize_block(&self, block: BlockId<Block>) -> ClientResult<()> {
+		self.blockchain.storage().finalize_header(block)
 	}
 
 	fn blockchain(&self) -> &Blockchain<S, F> {
@@ -153,6 +164,10 @@ where
 		self.is_new_best = is_new_best;
 		self.header = Some(header);
 		Ok(())
+	}
+
+	fn set_finalized(&mut self, finalized: bool) {
+		self.finalized = finalized;
 	}
 
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {

@@ -26,7 +26,7 @@ use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, NumberFor, As};
 use runtime_primitives::bft::Justification;
-use blockchain::{self, BlockStatus};
+use blockchain::{self, BlockStatus, HeaderBackend};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
@@ -88,6 +88,7 @@ struct BlockchainStorage<Block: BlockT> {
 	hashes: HashMap<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
 	best_hash: Block::Hash,
 	best_number: <<Block as BlockT>::Header as HeaderT>::Number,
+	finalized_hash: Block::Hash,
 	genesis_hash: Block::Hash,
 	cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 }
@@ -133,6 +134,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				hashes: HashMap::new(),
 				best_hash: Default::default(),
 				best_number: Zero::zero(),
+				finalized_hash: Default::default(),
 				genesis_hash: Default::default(),
 				cht_roots: HashMap::new(),
 			}));
@@ -152,7 +154,8 @@ impl<Block: BlockT> Blockchain<Block> {
 		header: <Block as BlockT>::Header,
 		justification: Option<Justification<Block::Hash>>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
-		is_new_best: bool
+		is_new_best: bool,
+		finalized: bool,
 	) {
 		let number = header.number().clone();
 		let mut storage = self.storage.write();
@@ -164,6 +167,9 @@ impl<Block: BlockT> Blockchain<Block> {
 		}
 		if number == Zero::zero() {
 			storage.genesis_hash = hash;
+		}
+		if finalized {
+			storage.finalized_hash = hash;
 		}
 	}
 
@@ -186,9 +192,19 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn insert_cht_root(&self, block: NumberFor<Block>, cht_root: Block::Hash) {
 		self.storage.write().cht_roots.insert(block, cht_root);
 	}
+
+	fn finalize_header(&self, id: BlockId<Block>) -> error::Result<()> {
+		let hash = match self.header(id)? {
+			Some(h) => h.hash(),
+			None => return Err(error::ErrorKind::UnknownBlock(format!("{}", id)).into()),
+		};
+
+		self.storage.write().finalized_hash = hash;
+		Ok(())
+	}
 }
 
-impl<Block: BlockT> blockchain::HeaderBackend<Block> for Blockchain<Block> {
+impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash).map(|b| b.header().clone())
@@ -248,15 +264,21 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 		&self,
 		is_new_best: bool,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>
+		authorities: Option<Vec<AuthorityId>>,
+		finalized: bool,
 	) -> error::Result<()> {
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		self.insert(hash, header, None, None, is_new_best);
+		self.insert(hash, header, None, None, is_new_best, finalized);
 		if is_new_best {
 			self.cache.insert(parent_hash, authorities);
 		}
+
 		Ok(())
+	}
+
+	fn finalize_header(&self, id: BlockId<Block>) -> error::Result<()> {
+		Blockchain::finalize_header(self, id)
 	}
 
 	fn cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
@@ -275,6 +297,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher, C: NodeCodec<H>> {
 	pending_authorities: Option<Vec<AuthorityId>>,
 	old_state: InMemory<H, C>,
 	new_state: Option<InMemory<H, C>>,
+	finalized: bool,
 }
 
 impl<Block, H, C> backend::BlockImportOperation<Block, H, C> for BlockImportOperation<Block, H, C>
@@ -303,6 +326,10 @@ where
 			is_best: is_new_best,
 		});
 		Ok(())
+	}
+
+	fn set_finalized(&mut self, finalized: bool) {
+		self.finalized = finalized;
 	}
 
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
@@ -368,6 +395,7 @@ where
 			pending_authorities: None,
 			old_state: state,
 			new_state: None,
+			finalized: false,
 		})
 	}
 
@@ -379,13 +407,17 @@ where
 			let parent_hash = *header.parent_hash();
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
-			self.blockchain.insert(hash, header, justification, body, pending_block.is_best);
+			self.blockchain.insert(hash, header, justification, body, pending_block.is_best, operation.finalized);
 			// dumb implementation - store value for each block
 			if pending_block.is_best {
 				self.blockchain.cache.insert(parent_hash, operation.pending_authorities);
 			}
 		}
 		Ok(())
+	}
+
+	fn finalize_block(&self, block: BlockId<Block>) -> error::Result<()> {
+		self.blockchain.finalize_header(block)
 	}
 
 	fn blockchain(&self) -> &Self::Blockchain {
