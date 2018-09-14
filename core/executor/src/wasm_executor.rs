@@ -16,7 +16,6 @@
 
 //! Rust implementation of Substrate contracts.
 
-use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use wasmi::{
@@ -160,33 +159,6 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_print_num(number: u64) => {
 		println!("{}", number);
 		Ok(())
-	},
-	ext_memcmp(s1: *const u8, s2: *const u8, n: usize) -> i32 => {
-		let sl1 = this.memory.get(s1, n as usize).map_err(|_| UserError("Invalid attempt to read from memory in first arg of ext_memcmp"))?;
-		let sl2 = this.memory.get(s2, n as usize).map_err(|_| UserError("Invalid attempt to read from memory in second arg of ext_memcmp"))?;
-		Ok(match sl1.cmp(&sl2) {
-			Ordering::Greater => 1,
-			Ordering::Less => -1,
-			Ordering::Equal => 0,
-		})
-	},
-	ext_memcpy(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
-		this.memory.copy_nonoverlapping(src as usize, dest as usize, count as usize)
-			.map_err(|_| UserError("Invalid attempt to copy_nonoverlapping in ext_memcpy"))?;
-		debug_trace!(target: "sr-io", "memcpy {} from {}, {} bytes", dest, src, count);
-		Ok(dest)
-	},
-	ext_memmove(dest: *mut u8, src: *const u8, count: usize) -> *mut u8 => {
-		this.memory.copy(src as usize, dest as usize, count as usize)
-			.map_err(|_| UserError("Invalid attempt to copy in ext_memmove"))?;
-		debug_trace!(target: "sr-io", "memmove {} from {}, {} bytes", dest, src, count);
-		Ok(dest)
-	},
-	ext_memset(dest: *mut u8, val: u32, count: usize) -> *mut u8 => {
-		debug_trace!(target: "sr-io", "memset {} with {}, {} bytes", dest, val, count);
-		this.memory.clear(dest as usize, val as u8, count as usize)
-			.map_err(|_| UserError("Invalid attempt to clear in ext_memset"))?;
-		Ok(dest)
 	},
 	ext_malloc(size: usize) -> *mut u8 => {
 		let r = this.heap.allocate(size);

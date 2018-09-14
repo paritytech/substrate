@@ -1,8 +1,5 @@
 [workspace]
 members = [
-	"codec",
-	"codec/derive",
-	"environmental",
 	"core/bft",
 	"core/cli",
 	"core/client",
@@ -57,7 +54,6 @@ exclude = [
 	"node/runtime/wasm",
 	"core/executor/wasm",
 	"pwasm-alloc",
-	"pwasm-libc",
 	"core/test-runtime/wasm",
 ]
 

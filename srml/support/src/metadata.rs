@@ -151,8 +151,7 @@ mod tests {
 		}
 
 		decl_event!(
-			pub enum Event<T> with RawEvent<Balance>
-				where <T as Trait>::Balance
+			pub enum Event<T> where <T as Trait>::Balance
 			{
 				/// Hi, I am a comment.
 				TestEvent(Balance),
@@ -179,8 +178,7 @@ mod tests {
 		}
 
 		decl_event!(
-			pub enum Event<T> with RawEvent<Balance>
-				where <T as Trait>::Balance
+			pub enum Event<T> where <T as Trait>::Balance
 			{
 				TestEvent(Balance),
 			}
@@ -202,7 +200,8 @@ mod tests {
 
 	impl_outer_event! {
 		pub enum TestEvent for TestRuntime {
-			event_module, event_module2
+			event_module<T>,
+			event_module2<T>,
 		}
 	}
 

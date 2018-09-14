@@ -20,7 +20,7 @@
 
 use super::*;
 use runtime_io::with_externalities;
-use mock::{Balances, System, Runtime, new_test_ext};
+use mock::{Balances, System, Runtime, new_test_ext, new_test_ext2};
 
 #[test]
 fn reward_should_work() {
@@ -53,6 +53,29 @@ fn default_indexing_on_new_accounts_should_work() {
 }
 
 #[test]
+fn default_indexing_on_new_accounts_should_work2() {
+	with_externalities(&mut new_test_ext2(10, true), || {
+		assert_eq!(Balances::lookup_index(4), None);
+		// account 1 has 256 * 10 = 2560, account 5 is not exist, ext_deposit is 10, value is 10
+		assert_ok!(Balances::transfer(Some(1).into(), 5.into(), 10));
+		assert_eq!(Balances::lookup_index(4), Some(5));
+
+		assert_eq!(Balances::free_balance(&1), 256 * 10 - 10 - 50); // 10 is value, 50 is creation_free
+	});
+}
+
+#[test]
+fn default_indexing_on_new_accounts_should_not_work2() {
+	with_externalities(&mut new_test_ext2(10, true), || {
+		assert_eq!(Balances::lookup_index(4), None);
+		// account 1 has 256 * 10 = 2560, account 5 is not exist, ext_deposit is 10, value is 9, not satisfies for ext_deposit
+		assert_noop!(Balances::transfer(Some(1).into(), 5.into(), 9), "value too low to create account");
+		assert_eq!(Balances::lookup_index(4), None); // account 5 should not exist
+		assert_eq!(Balances::free_balance(&1), 256 * 10);
+	});
+}
+
+#[test]
 fn dust_account_removal_should_work() {
 	with_externalities(&mut new_test_ext(256 * 10, true), || {
 		System::inc_account_nonce(&2);
@@ -62,6 +85,19 @@ fn dust_account_removal_should_work() {
 		assert_ok!(Balances::transfer(Some(2).into(), 5.into(), 256 * 10 + 1));	// index 1 (account 2) becomes zombie
 		assert_eq!(Balances::total_balance(&2), 0);
 		assert_eq!(Balances::total_balance(&5), 256 * 10 + 1);
+		assert_eq!(System::account_nonce(&2), 0);
+	});
+}
+
+#[test]
+fn dust_account_removal_should_work2() {
+	with_externalities(&mut new_test_ext2(256 * 10, true), || {
+		System::inc_account_nonce(&2);
+		assert_eq!(System::account_nonce(&2), 1);
+		assert_eq!(Balances::total_balance(&2), 256 * 20);
+		assert_ok!(Balances::transfer(Some(2).into(), 5.into(), 256 * 10));	// index 1 (account 2) becomes zombie for 256*10 + 50(fee) < 256 * 10 (ext_deposit)
+		assert_eq!(Balances::total_balance(&2), 0);
+		assert_eq!(Balances::total_balance(&5), 256 * 10);
 		assert_eq!(System::account_nonce(&2), 0);
 	});
 }
@@ -83,8 +119,52 @@ fn reclaim_indexing_on_new_accounts_should_work() {
 }
 
 #[test]
+fn reclaim_indexing_on_new_accounts_should_work2() {
+	with_externalities(&mut new_test_ext2(256 * 1, true), || {
+		assert_eq!(Balances::lookup_index(1), Some(2));
+		assert_eq!(Balances::lookup_index(4), None);
+		assert_eq!(Balances::total_balance(&2), 256 * 20);
+
+		assert_ok!(Balances::transfer(Some(2).into(), 5.into(), 256 * 20 - 50));	// account 2 becomes zombie freeing index 1 for reclaim) 50 is creation fee
+		assert_eq!(Balances::total_balance(&2), 0);
+
+		assert_ok!(Balances::transfer(Some(5).into(), 6.into(), 256 * 1 + 0x69));	// account 6 takes index 1.
+		assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
+		assert_eq!(Balances::lookup_index(1), Some(6));
+	});
+}
+
+#[test]
 fn reserved_balance_should_prevent_reclaim_count() {
 	with_externalities(&mut new_test_ext(256 * 1, true), || {
+		System::inc_account_nonce(&2);
+		assert_eq!(Balances::lookup_index(1), Some(2));
+		assert_eq!(Balances::lookup_index(4), None);
+		assert_eq!(Balances::total_balance(&2), 256 * 20);
+
+		assert_ok!(Balances::reserve(&2, 256 * 19 + 1));					// account 2 becomes mostly reserved
+		assert_eq!(Balances::free_balance(&2), 0);						// "free" account deleted."
+		assert_eq!(Balances::total_balance(&2), 256 * 19 + 1);			// reserve still exists.
+		assert_eq!(System::account_nonce(&2), 1);
+
+		assert_ok!(Balances::transfer(Some(4).into(), 5.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 for account 5.
+		assert_eq!(Balances::total_balance(&5), 256 * 1 + 0x69);
+		assert_eq!(Balances::lookup_index(1), Some(2));					// but fails.
+		assert_eq!(System::account_nonce(&2), 1);
+
+		assert_eq!(Balances::slash(&2, 256 * 18 + 2), None);				// account 2 gets slashed
+		assert_eq!(Balances::total_balance(&2), 0);						// "free" account deleted."
+		assert_eq!(System::account_nonce(&2), 0);
+
+		assert_ok!(Balances::transfer(Some(4).into(), 6.into(), 256 * 1 + 0x69));	// account 4 tries to take index 1 again for account 6.
+		assert_eq!(Balances::total_balance(&6), 256 * 1 + 0x69);
+		assert_eq!(Balances::lookup_index(1), Some(6));					// and succeeds.
+	});
+}
+
+#[test]
+fn reserved_balance_should_prevent_reclaim_count2() {
+	with_externalities(&mut new_test_ext2(256 * 1, true), || {
 		System::inc_account_nonce(&2);
 		assert_eq!(Balances::lookup_index(1), Some(2));
 		assert_eq!(Balances::lookup_index(4), None);

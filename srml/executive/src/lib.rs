@@ -242,7 +242,7 @@ mod tests {
 
 	impl_outer_event!{
 		pub enum MetaEvent for Runtime {
-			balances
+			balances<T>,
 		}
 	}
 

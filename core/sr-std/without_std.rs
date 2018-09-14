@@ -16,10 +16,33 @@
 
 #[cfg(feature = "nightly")]
 extern crate alloc;
-#[cfg(feature = "nightly")]
-extern crate pwasm_libc;
-#[cfg(feature = "nightly")]
-extern crate pwasm_alloc;
+
+extern "C" {
+	fn ext_malloc(size: usize) -> *mut u8;
+	fn ext_free(ptr: *mut u8);
+}
+
+/// Wasm allocator
+pub struct WasmAllocator;
+
+#[global_allocator]
+static ALLOCATOR: WasmAllocator = WasmAllocator;
+
+mod __impl {
+	use core::alloc::{GlobalAlloc, Layout};
+
+	use super::WasmAllocator;
+
+	unsafe impl GlobalAlloc for WasmAllocator {
+		unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+			super::ext_malloc(layout.size()) as *mut u8
+		}
+
+		unsafe fn dealloc(&self, ptr: *mut u8, _layout: Layout) {
+			super::ext_free(ptr as *mut u8)
+		}
+	}
+}
 
 pub use alloc::boxed;
 pub use alloc::rc;

@@ -48,7 +48,7 @@ use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
 	As, Lookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
-use system::{ensure_signed, ensure_root};
+use system::ensure_signed;
 
 mod mock;
 
@@ -131,13 +131,16 @@ pub trait Trait: system::Trait {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
-		fn set_balance(origin, who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
+		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
 	}
 }
 
 decl_event!(
-	pub enum Event<T> with RawEvent<AccountId, AccountIndex, Balance>
-		where <T as system::Trait>::AccountId, <T as Trait>::AccountIndex, <T as Trait>::Balance {
+	pub enum Event<T> where
+		<T as system::Trait>::AccountId,
+		<T as Trait>::AccountIndex,
+		<T as Trait>::Balance
+	{
 		/// A new account was created.
 		NewAccount(AccountId, AccountIndex, NewAccountOutcome),
 		/// An account was reaped.
@@ -281,7 +284,8 @@ impl<T: Trait> Module<T> {
 
 		let dest = Self::lookup(dest)?;
 		let from_balance = Self::free_balance(&transactor);
-		let would_create = from_balance.is_zero();
+		let to_balance = Self::free_balance(&dest);
+		let would_create = to_balance.is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
 		let liability = value + fee;
 
@@ -294,7 +298,6 @@ impl<T: Trait> Module<T> {
 		}
 		T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
 
-		let to_balance = Self::free_balance(&dest);
 		// NOTE: total stake being stored in the same type means that this could never overflow
 		// but better to be safe than sorry.
 		let new_to_balance = match to_balance.checked_add(&value) {
@@ -313,8 +316,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the balances of a given account.
-	fn set_balance(origin: T::Origin, who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
-		ensure_root(origin)?;
+	fn set_balance(who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
 		let who = Self::lookup(who)?;
 		Self::set_free_balance(&who, free);
 		Self::set_reserved_balance(&who, reserved);

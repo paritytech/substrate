@@ -1,5 +1,0 @@
-= Safe-mix
-
-Means of mixing a series of hashes to create a single secure hash.
-
-Described in http://www.cs.huji.ac.il/~nati/PAPERS/coll_coin_fl.pdf

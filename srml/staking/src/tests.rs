@@ -75,7 +75,7 @@ fn note_offline_grace_should_work() {
 	with_externalities(&mut new_test_ext(0, 3, 3, 0, true, 10), || {
 		Balances::set_free_balance(&10, 70);
 		Balances::set_free_balance(&20, 70);
-		assert_ok!(Staking::set_offline_slash_grace(Origin::ROOT, 1));
+		assert_ok!(Staking::set_offline_slash_grace(1));
 		assert_eq!(Staking::offline_slash_grace(), 1);
 
 		assert_eq!(Staking::slash_count(&10), 0);
@@ -236,7 +236,7 @@ fn staking_should_work() {
 		assert_eq!(Staking::validator_count(), 2);
 		assert_eq!(Session::validators(), vec![10, 20]);
 		
-		assert_ok!(Staking::set_bonding_duration(Origin::ROOT, 2));
+		assert_ok!(Staking::set_bonding_duration(2));
 		assert_eq!(Staking::bonding_duration(), 2);
 
 		// Block 1: Add three validators. No obvious change.
@@ -440,7 +440,7 @@ fn staking_eras_work() {
 
 		// Block 3: Schedule an era length change; no visible changes.
 		System::set_block_number(3);
-		assert_ok!(Staking::set_sessions_per_era(Origin::ROOT, 3));
+		assert_ok!(Staking::set_sessions_per_era(3));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::current_index(), 3);
 		assert_eq!(Staking::sessions_per_era(), 2);

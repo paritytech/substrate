@@ -7,10 +7,6 @@ build = "build.rs"
 [build-dependencies]
 rustc_version = "0.2"
 
-[dependencies]
-pwasm-alloc = { path = "../../pwasm-alloc" }
-pwasm-libc = { path = "../../pwasm-libc" }
-
 [features]
 default = ["std"]
 std = []

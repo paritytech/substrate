@@ -123,6 +123,7 @@ mod tests {
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
@@ -143,6 +144,7 @@ mod tests {
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
@@ -163,6 +165,7 @@ mod tests {
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
@@ -187,6 +190,7 @@ mod tests {
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
@@ -507,6 +511,7 @@ mod tests {
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
@@ -528,6 +533,7 @@ mod tests {
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]

@@ -64,13 +64,106 @@ macro_rules! decl_module {
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty {$(
+		for enum $call_type:ident where origin: $origin_type:ty {
+			$($t:tt)*
+		}
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type where system = system
+			[]
+			$($t)*
+		);
+	};
+	(
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
+			$($t:tt)*
+		}
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type where system = $system
+			[]
+			$($t)*
+		);
+	};
+
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		fn $fn_name:ident(origin $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type where system = $system
+			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(origin $( , $param_name : $param )* ) -> $result; ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		fn $fn_name:ident($( $param_name:ident : $param:ty),* ) -> $result:ty ;
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type where system = $system
+			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(root $( , $param_name : $param )* ) -> $result; ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		[ $($t:tt)* ]
+	) => {
+		decl_module!(@imp
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type where system = $system {
+				$($t)*
+			}
+		);
+	};
+
+	(@call
+		origin
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
+	) => {
+		<$mod_type<$trait_instance>>::$fn_name( $origin $(, $param_name )* )
+	};
+	(@call
+		root
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
+	) => {
+		{
+			$system::ensure_root($origin)?;
+			<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* )
+		}
+	};
+
+	(@imp
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
+		$(
 			$(#[doc = $doc_attr:tt])*
-			fn $fn_name:ident(origin
-				$(
-					, $param_name:ident : $param:ty
-				)*
-			) -> $result:ty;
+			fn $fn_name:ident($from:ident $( , $param_name:ident : $param:ty)*) -> $result:ty;
 		)*}
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -194,8 +287,9 @@ macro_rules! decl_module {
 			fn dispatch(self, _origin: Self::Origin) -> $crate::dispatch::Result {
 				match self {
 					$(
-						$call_type::$fn_name( $( $param_name ),* ) =>
-							<$mod_type<$trait_instance>>::$fn_name( _origin $(, $param_name )* ),
+						$call_type::$fn_name( $( $param_name ),* ) => {
+							decl_module!(@call $from $mod_type $trait_instance $fn_name _origin $system [ $( $param_name ),* ])
+						},
 					)*
 					_ => { panic!("__PhantomItem should never be used.") },
 				}
@@ -212,10 +306,9 @@ macro_rules! decl_module {
 				d.dispatch(origin)
 			}
 		}
-
 		__dispatch_impl_json_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
-			{$( $(#[doc = $doc_attr])* fn $fn_name(origin $(, $param_name : $param )*) -> $result; )*}
+			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*) -> $result; )*}
 		}
 	}
 }
@@ -386,12 +479,11 @@ macro_rules! __dispatch_impl_json_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __call_to_json {
-	// WITH AUX
 	(
 		$call_type:ident $origin_type:ty
 			{$(
 				$(#[doc = $doc_attr:tt])*
-				fn $fn_name:ident(origin
+				fn $fn_name:ident($from:ident
 					$(
 						, $param_name:ident : $param:ty
 					)*
@@ -402,7 +494,7 @@ macro_rules! __call_to_json {
 			r#"{ "name": ""#, stringify!($call_type),
 			r#"", "functions": {"#,
 			__functions_to_json!(""; 0; $origin_type; $(
-				fn $fn_name(origin $(, $param_name: $param )* ) -> $result;
+				fn $fn_name($from $(, $param_name: $param )* ) -> $result;
 				__function_doc_to_json!(""; $($doc_attr)*);
 			)*), " } }"
 		)
@@ -413,12 +505,15 @@ macro_rules! __call_to_json {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __functions_to_json {
-	// WITHOUT AUX
+	// ROOT
 	(
 		$prefix_str:tt;
 		$fn_id:expr;
-		fn $fn_name:ident(
-			$($param_name:ident : $param:ty),*
+		$origin_type:ty;
+		fn $fn_name:ident(root
+			$(
+				, $param_name:ident : $param:ty
+			)*
 		) -> $result:ty;
 		$fn_doc:expr;
 		$($rest:tt)*
@@ -426,14 +521,14 @@ macro_rules! __functions_to_json {
 			concat!($prefix_str, " ",
 				__function_to_json!(
 					fn $fn_name(
-						$($param_name : $param),*
+						$( $param_name : $param ),*
 					) -> $result;
 					$fn_doc;
 					$fn_id;
-				), __functions_to_json!(","; $fn_id + 1; $($rest)*)
+				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
 			)
 	};
-	// WITH AUX
+	// NON ROOT
 	(
 		$prefix_str:tt;
 		$fn_id:expr;
@@ -489,6 +584,18 @@ macro_rules! __function_to_json {
 				r#" ], "description": ["#, $fn_doc, " ] }"
 			)
 	};
+	(
+		fn $fn_name:ident() -> $result:ty;
+		$fn_doc:tt;
+		$fn_id:expr;
+	) => {
+			concat!(
+				r#"""#, stringify!($fn_id), r#"""#,
+				r#": { "name": ""#, stringify!($fn_name),
+				r#"", "params": [ "#,
+				r#" ], "description": ["#, $fn_doc, " ] }"
+			)
+	};
 }
 
 /// Convert a function documentation attribute into its JSON representation.
@@ -526,12 +633,22 @@ mod tests {
 		type Origin;
 	}
 
+	pub mod system {
+		use super::Result;
+
+		pub fn ensure_root<R>(_: R) -> Result {
+			Ok(())
+		}
+	}
+
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			/// Hi, this is a comment.
 			fn aux_0(origin) -> Result;
 			fn aux_1(origin, data: i32) -> Result;
 			fn aux_2(origin, data: i32, data2: String) -> Result;
+			fn aux_3() -> Result;
+			fn aux_4(data: i32) -> Result;
 		}
 	}
 
@@ -541,14 +658,23 @@ mod tests {
 				r#""0": { "name": "aux_0", "params": [ "#,
 					r#"{ "name": "origin", "type": "T::Origin" }"#,
 				r#" ], "description": [ " Hi, this is a comment." ] }, "#,
+
 				r#""0 + 1": { "name": "aux_1", "params": [ "#,
 					r#"{ "name": "origin", "type": "T::Origin" }, "#,
 					r#"{ "name": "data", "type": "i32" }"#,
 				r#" ], "description": [ ] }, "#,
+
 				r#""0 + 1 + 1": { "name": "aux_2", "params": [ "#,
 					r#"{ "name": "origin", "type": "T::Origin" }, "#,
 					r#"{ "name": "data", "type": "i32" }, "#,
 					r#"{ "name": "data2", "type": "String" }"#,
+				r#" ], "description": [ ] }, "#,
+
+				r#""0 + 1 + 1 + 1": { "name": "aux_3", "params": [ "#,
+				r#" ], "description": [ ] }, "#,
+
+				r#""0 + 1 + 1 + 1 + 1": { "name": "aux_4", "params": [ "#,
+					r#"{ "name": "data", "type": "i32" }"#,
 				r#" ], "description": [ ] }"#,
 			r#" } }"#,
 		r#" }"#,
@@ -564,6 +690,14 @@ mod tests {
 		}
 
 		fn aux_2(_: T::Origin, _: i32, _: String) -> Result {
+			unreachable!()
+		}
+
+		fn aux_3() -> Result {
+			unreachable!()
+		}
+
+		fn aux_4(_: i32) -> Result {
 			unreachable!()
 		}
 	}

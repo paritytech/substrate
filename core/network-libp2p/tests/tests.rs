@@ -16,10 +16,7 @@
 
 extern crate parking_lot;
 extern crate parity_bytes;
-extern crate ethcore_io as io;
-extern crate ethcore_logger;
 extern crate substrate_network_libp2p;
-extern crate ethkey;
 
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 use std::sync::Arc;
@@ -28,8 +25,7 @@ use std::time::*;
 use parking_lot::Mutex;
 use parity_bytes::Bytes;
 use substrate_network_libp2p::*;
-use ethkey::{Random, Generator};
-use io::TimerToken;
+use TimerToken;
 
 pub struct TestProtocol {
 	drop_session: bool,
@@ -102,9 +98,7 @@ fn net_service() {
 #[test]
 #[ignore]		// TODO: how is this test even supposed to work?
 fn net_disconnect() {
-	let key1 = Random.generate().unwrap();
 	let mut config1 = NetworkConfiguration::new_local();
-	config1.use_secret = Some(key1.secret().clone());
 	config1.boot_nodes = vec![ ];
 	let handler1 = Arc::new(TestProtocol::new(false));
 	let service1 = NetworkService::new(config1, vec![(handler1.clone(), *b"tst", &[(42u8, 1), (43u8, 1)])]).unwrap();
