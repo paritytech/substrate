@@ -42,10 +42,15 @@ pub type VersionString = ::std::borrow::Cow<'static, str>;
 #[cfg(not(feature = "std"))]
 pub type VersionString = &'static str;
 
+/// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
 
+/// A vector of pairs of `ApiId` and a `u32` for version. For `"std"` builds, this
+/// is a `Cow`.
 #[cfg(feature = "std")]
 pub type ApisVec = ::std::borrow::Cow<'static, [(ApiId, u32)]>;
+/// A vector of pairs of `ApiId` and a `u32` for version. For `"no-std"` builds, this
+/// is just a reference.
 #[cfg(not(feature = "std"))]
 pub type ApisVec = &'static [(ApiId, u32)];
 
@@ -61,6 +66,7 @@ macro_rules! ver_str {
 	( $y:expr ) => {{ $y }}
 }
 
+/// Create a vector of Api declarations.
 #[macro_export]
 macro_rules! apis_vec {
 	( $y:expr ) => { ver_str!(& $y) }
