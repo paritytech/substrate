@@ -66,7 +66,7 @@ use codec::{Encode, Decode, Input};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
-use version::RuntimeVersion;
+use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
 
 #[cfg(any(feature = "std", test))]
@@ -86,6 +86,8 @@ const NOTE_OFFLINE_POSITION: u32 = 1;
 /// Runtime type used to collate and parameterize the various modules.
 pub struct Runtime;
 
+const NODEAUTH: ApiId = *b"nodeauth";
+
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("node"),
@@ -93,7 +95,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
-	apis: apis_vec!([(ver_str!("node-authoring"), 1)]),
+	apis: apis_vec!([(NODEAUTH, 1)]),
 };
 
 impl system::Trait for Runtime {

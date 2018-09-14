@@ -42,10 +42,12 @@ pub type VersionString = ::std::borrow::Cow<'static, str>;
 #[cfg(not(feature = "std"))]
 pub type VersionString = &'static str;
 
+pub type ApiId = [u8; 8];
+
 #[cfg(feature = "std")]
-pub type ApisVec = ::std::borrow::Cow<'static, [(VersionString, u32)]>;
+pub type ApisVec = ::std::borrow::Cow<'static, [(ApiId, u32)]>;
 #[cfg(not(feature = "std"))]
-pub type ApisVec = &'static [(VersionString, u32)];
+pub type ApisVec = &'static [(ApiId, u32)];
 
 #[cfg(feature = "std")]
 #[macro_export]
@@ -61,7 +63,7 @@ macro_rules! ver_str {
 
 #[macro_export]
 macro_rules! apis_vec {
-	( $y:expr ) => { ver_str!(&$y[..]) }
+	( $y:expr ) => { ver_str!(& $y) }
 }
 
 /// Runtime version.
@@ -128,7 +130,7 @@ impl RuntimeVersion {
 	}
 
 	/// Check if this version supports a particular API.
-	pub fn has_api(&self, api: VersionString, version: u32) -> bool {
+	pub fn has_api(&self, api: ApiId, version: u32) -> bool {
 		self.apis.iter().any(|&(ref s, v)| &api == s && version == v)
 	}
 }
