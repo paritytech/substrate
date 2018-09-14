@@ -218,7 +218,7 @@ impl<
 	/// Check a given transaction for validity. This doesn't execute any
 	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
 	/// 
-	/// Changed made to the storage should be discarded.
+	/// Changes made to the storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.encode().len();
 		
