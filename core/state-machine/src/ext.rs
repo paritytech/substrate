@@ -18,7 +18,7 @@
 
 use std::{error, fmt, cmp::Ord};
 use backend::Backend;
-use changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root, Configuration as ChangesTrieConfig};
+use changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root};
 use {Externalities, OverlayedChanges};
 use hashdb::Hasher;
 use memorydb::MemoryDB;
@@ -65,16 +65,22 @@ where
 	B: 'a + Backend<H, C>,
 	T: 'a + ChangesTrieStorage<H>,
 {
-	// The overlayed changes to write to.
+	/// The overlayed changes to write to.
 	overlay: &'a mut OverlayedChanges,
-	// The storage backend to read from.
+	/// The storage backend to read from.
 	backend: &'a B,
-	// The storage transaction necessary to commit to the backend.
+	/// The storage transaction necessary to commit to the backend. Is cached when
+	/// `storage_root` is called and the cache is cleared on every subsequent change.
 	storage_transaction: Option<(B::Transaction, H::Out)>,
-	// Changes trie storage to read from.
+	/// Changes trie storage to read from.
 	changes_trie_storage: Option<&'a T>,
-	// The changes trie transaction necessary to commit to the changes trie backend.
-	changes_trie_transaction: Option<Option<(MemoryDB<H>, H::Out)>>,
+	/// The changes trie transaction necessary to commit to the changes trie backend.
+	/// Set to Some when `storage_changes_root` is called. Could be replaced later
+	/// by calling `storage_changes_root` again => never used as cache.
+	/// This differs from `storage_transaction` behavior, because the moment when
+	/// `storage_changes_root` is called matters + we need to remember additional
+	/// data at this moment (block number).
+	changes_trie_transaction: Option<(u64, MemoryDB<H>, H::Out)>,
 }
 
 impl<'a, H, C, B, T> Ext<'a, H, C, B, T>
@@ -99,14 +105,12 @@ where
 	/// Get the transaction necessary to update the backend.
 	pub fn transaction(mut self) -> (B::Transaction, Option<MemoryDB<H>>) {
 		let _ = self.storage_root();
-		let _ = self.storage_changes_root();
 
 		let (storage_transaction, changes_trie_transaction) = (
 			self.storage_transaction
 				.expect("storage_transaction always set after calling storage root; qed"),
 			self.changes_trie_transaction
-				.expect("changes_trie_transaction always set after calling storage changes root; qed")
-				.map(|(tx, _)| tx),
+				.map(|(_, tx, _)| tx),
 		);
 
 		(
@@ -120,7 +124,6 @@ where
 	/// Called when there are changes that likely will invalidate the storage root.
 	fn mark_dirty(&mut self) {
 		self.storage_transaction = None;
-		self.changes_trie_transaction = None;
 	}
 }
 
@@ -154,17 +157,6 @@ where
 	T: 'a + ChangesTrieStorage<H>,
 	H::Out: Ord + Encodable + HeapSizeOf,
 {
-	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u32) {
-		self.overlay.set_changes_trie_config(block, ChangesTrieConfig {
-			digest_interval,
-			digest_levels,
-		});
-	}
-
-	fn bind_to_extrinsic(&mut self, extrinsic_index: u32) {
-		self.overlay.set_extrinsic_index(extrinsic_index);
-	}
-
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
@@ -208,15 +200,12 @@ where
 		root
 	}
 
-	fn storage_changes_root(&mut self) -> Option<H::Out> {
-		if let Some(ref changes_trie_transaction) = self.changes_trie_transaction {
-			return changes_trie_transaction.as_ref().map(|t| t.1.clone());
-		}
-
+	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> {
 		let root_and_tx = compute_changes_trie_root::<_, T, H, C>(
 			self.backend,
 			self.changes_trie_storage.clone(),
-			self.overlay
+			self.overlay,
+			block,
 		);
 		let root_and_tx = root_and_tx.map(|(root, changes)| {
 			let mut calculated_root = Default::default();
@@ -228,16 +217,17 @@ where
 				}
 			}
 
-			(mdb, root)
+			(block, mdb, root)
 		});
-		let root = root_and_tx.as_ref().map(|(_, root)| root.clone());
-		self.changes_trie_transaction = Some(root_and_tx);
+		let root = root_and_tx.as_ref().map(|(_, _, root)| root.clone());
+		self.changes_trie_transaction = root_and_tx;
 		root
 	}
 }
 
 #[cfg(test)]
 mod tests {
+	use codec::Encode;
 	use primitives::{Blake2Hasher, RlpCodec};
 	use backend::InMemory;
 	use changes_trie::{Configuration as ChangesTrieConfiguration,
@@ -252,18 +242,20 @@ mod tests {
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
 			prospective: vec![
+				(b":extrinsic_index".to_vec(), OverlayedValue {
+					value: Some(3u32.encode()),
+					extrinsics: Some(vec![1].into_iter().collect())
+				}),
 				(vec![1], OverlayedValue {
 					value: Some(vec![100].into_iter().collect()),
 					extrinsics: Some(vec![1].into_iter().collect())
-				})
+				}),
 			].into_iter().collect(),
 			committed: Default::default(),
 			changes_trie_config: Some(ChangesTrieConfiguration {
 				digest_interval: 0,
 				digest_levels: 0,
 			}),
-			block: Some(100),
-			extrinsic: Some(3),
 		}
 	}
 
@@ -272,7 +264,7 @@ mod tests {
 		let mut overlay = prepare_overlay_with_changes();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, None);
-		assert_eq!(ext.storage_changes_root(), None);
+		assert_eq!(ext.storage_changes_root(100), None);
 	}
 
 	#[test]
@@ -282,7 +274,7 @@ mod tests {
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
-		assert_eq!(ext.storage_changes_root(), None);
+		assert_eq!(ext.storage_changes_root(100), None);
 	}
 
 	#[test]
@@ -291,8 +283,8 @@ mod tests {
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
-		assert_eq!(ext.storage_changes_root(),
-			Some(hex!("64e405edcf37c1757c15fbfdc6484e6ac96b1fc35e516b4e779b3802725bed60").into()));
+		assert_eq!(ext.storage_changes_root(100),
+			Some(hex!("b2ecc5ca20de9f8a2d82482fcaa0fdfcca2fb76bf3d89860edf422bd15d075ec").into()));
 	}
 
 	#[test]
@@ -302,7 +294,7 @@ mod tests {
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
-		assert_eq!(ext.storage_changes_root(),
-			Some(hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into()));
+		assert_eq!(ext.storage_changes_root(100),
+			Some(hex!("8c12eccf80c166aefc23af540649979581cb404d95af25b0ed38dc6949ba2453").into()));
 	}
 }

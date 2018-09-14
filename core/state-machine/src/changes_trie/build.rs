@@ -38,6 +38,7 @@ pub fn prepare_input<'a, B, S, H, C>(
 	backend: &B,
 	storage: Option<&'a S>,
 	changes: &OverlayedChanges,
+	block: u64,
 ) -> Result<Option<Vec<InputPair>>, String>
 	where
 		B: Backend<H, C>,
@@ -47,8 +48,8 @@ pub fn prepare_input<'a, B, S, H, C>(
 		H::Out: HeapSizeOf,
 		C: NodeCodec<H>,
 {
-	let (storage, config, block) = match (storage, changes.changes_trie_config.as_ref(), changes.block) {
-		(Some(storage), Some(config), Some(block)) => (storage, config, block),
+	let (storage, config) = match (storage, changes.changes_trie_config.as_ref()) {
+		(Some(storage), Some(config)) => (storage, config),
 		_ => return Ok(None),
 	};
 
@@ -145,13 +146,14 @@ fn prepare_digest_input<'a, S, H, C>(
 
 #[cfg(test)]
 mod test {
+	use codec::Encode;
 	use primitives::{Blake2Hasher, RlpCodec};
 	use backend::InMemory;
 	use changes_trie::storage::InMemoryStorage;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 
-	fn prepare_for_build(block: u64) -> (InMemory<Blake2Hasher, RlpCodec>, InMemoryStorage<Blake2Hasher>, OverlayedChanges) {
+	fn prepare_for_build() -> (InMemory<Blake2Hasher, RlpCodec>, InMemoryStorage<Blake2Hasher>, OverlayedChanges) {
 		let backend: InMemory<_, _> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
@@ -206,6 +208,10 @@ mod test {
 				}),
 			].into_iter().collect(),
 			committed: vec![
+				(b":extrinsic_index".to_vec(), OverlayedValue {
+					value: Some(3u32.encode()),
+					extrinsics: None,
+				}),
 				(vec![100], OverlayedValue {
 					value: Some(vec![202]),
 					extrinsics: Some(vec![3].into_iter().collect())
@@ -216,8 +222,6 @@ mod test {
 				}),
 			].into_iter().collect(),
 			changes_trie_config: Some(Configuration { digest_interval: 4, digest_levels: 2 }),
-			block: Some(block),
-			extrinsic: Some(3),
 		};
 
 		(backend, storage, changes)
@@ -225,8 +229,8 @@ mod test {
 
 	#[test]
 	fn build_changes_trie_nodes_on_non_digest_block() {
-		let (backend, storage, changes) = prepare_for_build(5);
-		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes).unwrap();
+		let (backend, storage, changes) = prepare_for_build();
+		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes, 5).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),
@@ -236,8 +240,8 @@ mod test {
 
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l1() {
-		let (backend, storage, changes) = prepare_for_build(4);
-		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes).unwrap();
+		let (backend, storage, changes) = prepare_for_build();
+		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes, 4).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
@@ -252,8 +256,8 @@ mod test {
 
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l2() {
-		let (backend, storage, changes) = prepare_for_build(16);
-		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes).unwrap();
+		let (backend, storage, changes) = prepare_for_build();
+		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes, 16).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![101] }, vec![1]),
@@ -269,7 +273,7 @@ mod test {
 
 	#[test]
 	fn build_changes_trie_nodes_ignores_temporary_storage_values() {
-		let (backend, storage, mut changes) = prepare_for_build(4);
+		let (backend, storage, mut changes) = prepare_for_build();
 
 		// 110: missing from backend, set to None in overlay
 		changes.prospective.insert(vec![110], OverlayedValue {
@@ -277,7 +281,7 @@ mod test {
 			extrinsics: Some(vec![1].into_iter().collect())
 		});
 
-		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes).unwrap();
+		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes, 4).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),

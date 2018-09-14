@@ -43,10 +43,9 @@ extern crate sr_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
-use substrate_primitives::ChangesTrieConfiguration;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay, EnsureOrigin, As, Digest as _Digest};
-use runtime_support::{StorageValue, StorageMap, Parameter};
+	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As};
+use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
 #[cfg(any(feature = "std", test))]
@@ -54,6 +53,14 @@ use codec::Encode;
 
 #[cfg(any(feature = "std", test))]
 use runtime_io::{twox_128, TestExternalities, Blake2Hasher, RlpCodec};
+
+#[cfg(any(feature = "std", test))]
+use substrate_primitives::ChangesTrieConfiguration;
+
+/// Current extrinsic index (u32) is stored under this key.
+pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
+/// Changes trie configuration is stored under this key.
+pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -183,10 +190,8 @@ decl_storage! {
 
 		ExtrinsicCount: u32;
 		pub BlockHash get(block_hash): required map [ T::BlockNumber => T::Hash ];
-		pub ExtrinsicIndex get(extrinsic_index): u32;
 		ExtrinsicData get(extrinsic_data): required map [ u32 => Vec<u8> ];
 		RandomSeed get(random_seed): required T::Hash;
-		ChangesTrieConfig: ChangesTrieConfiguration;
 		/// The current block number being processed. Set by `execute_block`.
 		Number get(block_number): required T::BlockNumber;
 		ParentHash get(parent_hash): required T::Hash;
@@ -237,24 +242,26 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
+	/// Gets the index of extrinsic that is currenty executing.
+	pub fn extrinsic_index() -> Option<u32> {
+		storage::unhashed::get(EXTRINSIC_INDEX)
+	}
+
+	/// Sets the index of extrinsic that is currenty executing.
+	pub fn set_extrinsic_index(extrinsic_index: u32) {
+		storage::unhashed::put(EXTRINSIC_INDEX, &extrinsic_index)
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
+		storage::unhashed::put(EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<RandomSeed<T>>::put(Self::calculate_random());
-		<ExtrinsicIndex<T>>::put(0u32);
 		<Events<T>>::kill();
-
-		if let Some(changes_trie_config) = <ChangesTrieConfig<T>>::get() {
-			runtime_io::set_changes_trie_config(
-				number.as_(),
-				changes_trie_config.digest_interval,
-				changes_trie_config.digest_levels);
-			runtime_io::bind_to_extrinsic(0u32);
-		}
 	}
 
 	/// Remove temporary "environment" entries in storage.
@@ -267,7 +274,7 @@ impl<T: Trait> Module<T> {
 		let mut digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
-		let storage_changes_root = T::Hashing::storage_changes_root();
+		let storage_changes_root = T::Hashing::storage_changes_root(number.as_());
 
 		// we can't compute changes trie root earlier && put it to the Digest
 		// because it will include all currently existing temporaries
@@ -292,7 +299,8 @@ impl<T: Trait> Module<T> {
 
 	/// Deposits an event onto this block's event record.
 	pub fn deposit_event(event: T::Event) {
-		let phase = <ExtrinsicIndex<T>>::get().map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let extrinsic_index = Self::extrinsic_index();
+		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
 		let mut events = Self::events();
 		events.push(EventRecord { phase, event });
 		<Events<T>>::put(events);
@@ -350,7 +358,7 @@ impl<T: Trait> Module<T> {
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
 	/// ensure `derive_extrinsics` is also called before block-building is completed.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
-		<ExtrinsicData<T>>::insert(<ExtrinsicIndex<T>>::get().unwrap_or_default(), encoded_xt);
+		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
@@ -360,16 +368,15 @@ impl<T: Trait> Module<T> {
 			Err(_) => Event::ExtrinsicFailed,
 		}.into());
 
-		let extrinsic_index = <ExtrinsicIndex<T>>::get().unwrap_or_default();
-		runtime_io::bind_to_extrinsic(extrinsic_index + 1u32);
-		<ExtrinsicIndex<T>>::put(extrinsic_index + 1u32);
+		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
+		storage::unhashed::put(EXTRINSIC_INDEX, &next_extrinsic_index);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
-		<ExtrinsicCount<T>>::put(<ExtrinsicIndex<T>>::get().unwrap_or_default());
-		<ExtrinsicIndex<T>>::kill();
+		let extrinsic_index: u32 = storage::unhashed::take(EXTRINSIC_INDEX).unwrap_or_default();
+		<ExtrinsicCount<T>>::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsics data and save the extrinsics trie root.
@@ -411,13 +418,14 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 			Self::hash(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			Self::hash(<Number<T>>::key()).to_vec() => 1u64.encode(),
 			Self::hash(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
-			Self::hash(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
-			Self::hash(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
+			Self::hash(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode()
 		];
+
+		storage.insert(EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
 		if let Some(changes_trie_config) = self.changes_trie_config {
 			storage.insert(
-				Self::hash(<ChangesTrieConfig<T>>::key()).to_vec(),
+				CHANGES_TRIE_CONFIG.to_vec(),
 				changes_trie_config.encode());
 		}
 

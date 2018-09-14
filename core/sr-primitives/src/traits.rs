@@ -246,7 +246,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 	fn storage_root() -> Self::Output;
 
 	/// Acquire the global storage changes root.
-	fn storage_changes_root() -> Option<Self::Output>;
+	fn storage_changes_root(block: u64) -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -278,8 +278,8 @@ impl Hash for BlakeTwo256 {
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
 	}
-	fn storage_changes_root() -> Option<Self::Output> {
-		runtime_io::storage_changes_root().map(Into::into)
+	fn storage_changes_root(block: u64) -> Option<Self::Output> {
+		runtime_io::storage_changes_root(block).map(Into::into)
 	}
 }
 

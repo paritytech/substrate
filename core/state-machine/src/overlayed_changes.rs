@@ -17,7 +17,8 @@
 //! The overlayed changes to state.
 
 use std::collections::{HashMap, HashSet};
-use changes_trie::Configuration as ChangesTrieConfig;
+use codec::Decode;
+use changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
 
 /// The overlayed changes to state to be queried on top of the backend.
 ///
@@ -32,12 +33,6 @@ pub struct OverlayedChanges {
 	/// Changes trie configuration. None by default, but could be installed by the
 	/// runtime if it supports change tries.
 	pub(crate) changes_trie_config: Option<ChangesTrieConfig>,
-	/// The number of currently executing block. None by default, but could be installed by the
-	/// runtime if it supports change tries.
-	pub(crate) block: Option<u64>,
-	/// The index of currrently executing extrinsic. None by default, but could be installed by the
-	/// runtime if it supports change tries.
-	pub(crate) extrinsic: Option<u32>,
 }
 
 /// The storage value, used inside OverlayedChanges.
@@ -54,21 +49,18 @@ pub struct OverlayedValue {
 impl OverlayedChanges {
 	/// Sets the changes trie configuration.
 	///
-	/// Panics if configuration has already been set and new configuration
-	/// or block number differs from previously set.
-	pub(crate) fn set_changes_trie_config(&mut self, block: u64, config: ChangesTrieConfig) {
-		assert!(self.block.map(|old_block| old_block == block).unwrap_or(true));
-		assert!(self.changes_trie_config.as_ref().map(|old_config| *old_config == config).unwrap_or(true));
-
-		self.block = Some(block);
-		self.changes_trie_config = Some(config);
-	}
-
-	/// Sets the index extrinsic that is currently executing.
-	pub(crate) fn set_extrinsic_index(&mut self, index: u32) {
-		if self.changes_trie_config.is_some() {
-			self.extrinsic = Some(index);
+	/// Returns false if configuration has been set already and we now trying
+	/// to install different configuration. This isn't supported now.
+	pub(crate) fn set_changes_trie_config(&mut self, config: ChangesTrieConfig) -> bool {
+		if let Some(ref old_config) = self.changes_trie_config {
+			// we do not support changes trie configuration' change now
+			if *old_config != config {
+				return false;
+			}
 		}
+
+		self.changes_trie_config = Some(config);
+		true
 	}
 
 	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
@@ -84,10 +76,11 @@ impl OverlayedChanges {
 	///
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
+		let extrinsic_index = self.extrinsic_index();
 		let entry = self.prospective.entry(key).or_default();
 		entry.value = val;
 
-		if let Some(extrinsic) = self.extrinsic {
+		if let Some(extrinsic) = extrinsic_index {
 			let mut extrinsics = entry.extrinsics.take().unwrap_or_default();
 			extrinsics.insert(extrinsic);
 			entry.extrinsics = Some(extrinsics);
@@ -101,13 +94,15 @@ impl OverlayedChanges {
 	///
 	/// [`discard_prospective`]: #method.discard_prospective
 	pub(crate) fn clear_prefix(&mut self, prefix: &[u8]) {
+		let extrinsic_index = self.extrinsic_index();
+
 		// Iterate over all prospective and mark all keys that share
 		// the given prefix as removed (None).
 		for (key, entry) in self.prospective.iter_mut() {
 			if key.starts_with(prefix) {
 				entry.value = None;
 
-				if let Some(extrinsic) = self.extrinsic {
+				if let Some(extrinsic) = extrinsic_index {
 					let mut extrinsics = entry.extrinsics.take().unwrap_or_default();
 					extrinsics.insert(extrinsic);
 					entry.extrinsics = Some(extrinsics);
@@ -122,7 +117,7 @@ impl OverlayedChanges {
 				let entry = self.prospective.entry(key.clone()).or_default();
 				entry.value = None;
 
-				if let Some(extrinsic) = self.extrinsic {
+				if let Some(extrinsic) = extrinsic_index {
 					let mut extrinsics = entry.extrinsics.take().unwrap_or_default();
 					extrinsics.insert(extrinsic);
 					entry.extrinsics = Some(extrinsics);
@@ -171,6 +166,32 @@ impl OverlayedChanges {
 		assert!(self.prospective.is_empty());
 		self.committed.into_iter().map(|(k, v)| (k, v.value))
 	}
+
+	/// Inserts storage entry responsible for current extrinsic index.
+	#[cfg(test)]
+	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
+		use codec::Encode;
+		self.prospective.insert(b":extrinsic_index".to_vec(), OverlayedValue {
+			value: Some(extrinsic_index.encode()),
+			extrinsics: None,
+		});
+	}
+
+	/// Returns current extrinsic index to use in changes trie construction.
+	/// None is returned if it is not set or changes trie config is not set.
+	/// Persistent value (from the backend) can be ignored because runtime must
+	/// set this index before first and unset after last extrinsic is executied.
+	/// Changes that are made outside of extrinsics, are marked with
+	/// `NO_EXTRINSIC_INDEX` index.
+	fn extrinsic_index(&self) -> Option<u32> {
+		match self.changes_trie_config.is_some() {
+			true => Some(
+				self.storage(b":extrinsic_index")
+					.and_then(|idx| idx.and_then(|idx| Decode::decode(&mut &*idx)))
+					.unwrap_or(NO_EXTRINSIC_INDEX)),
+			false => None,
+		}
+	}
 }
 
 #[cfg(test)]
@@ -188,6 +209,12 @@ mod tests {
 	use ext::Ext;
 	use {Externalities};
 	use super::*;
+
+	fn strip_extrinsic_index(map: &HashMap<Vec<u8>, OverlayedValue>) -> HashMap<Vec<u8>, OverlayedValue> {
+		let mut clone = map.clone();
+		clone.remove(&b":extrinsic_index".to_vec());
+		clone
+	}
 
 	#[test]
 	fn overlayed_storage_works() {
@@ -249,9 +276,9 @@ mod tests {
 	fn changes_trie_configuration_is_saved() {
 		let mut overlay = OverlayedChanges::default();
 		assert!(overlay.changes_trie_config.is_none());
-		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
 			digest_interval: 4, digest_levels: 1,
-		});
+		}), true);
 		assert!(overlay.changes_trie_config.is_some());
 	}
 
@@ -259,16 +286,16 @@ mod tests {
 	fn changes_trie_configuration_is_saved_twice() {
 		let mut overlay = OverlayedChanges::default();
 		assert!(overlay.changes_trie_config.is_none());
-		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
 			digest_interval: 4, digest_levels: 1,
-		});
+		}), true);
 		overlay.set_extrinsic_index(0);
 		overlay.set_storage(vec![1], Some(vec![2]));
-		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
 			digest_interval: 4, digest_levels: 1,
-		});
+		}), true);
 		assert_eq!(
-			overlay.prospective,
+			strip_extrinsic_index(&overlay.prospective),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![2]), extrinsics: Some(vec![0].into_iter().collect()) }),
 			].into_iter().collect(),
@@ -276,35 +303,24 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic]
 	fn panics_when_trying_to_save_different_changes_trie_configuration() {
 		let mut overlay = OverlayedChanges::default();
-		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
 			digest_interval: 4, digest_levels: 1,
-		});
-		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+		}), true);
+		assert_eq!(overlay.set_changes_trie_config(ChangesTrieConfig {
 			digest_interval: 2, digest_levels: 1,
-		});
-	}
-
-	#[test]
-	#[should_panic]
-	fn panics_when_trying_to_save_changes_trie_configuration_of_different_block() {
-		let mut overlay = OverlayedChanges::default();
-		overlay.set_changes_trie_config(1, ChangesTrieConfig {
-			digest_interval: 4, digest_levels: 1,
-		});
-		overlay.set_changes_trie_config(2, ChangesTrieConfig {
-			digest_interval: 4, digest_levels: 1,
-		});
+		}), false);
 	}
 
 	#[test]
 	fn extrinsic_changes_are_collected() {
 		let mut overlay = OverlayedChanges::default();
-		overlay.set_changes_trie_config(1, ChangesTrieConfig {
+		overlay.set_changes_trie_config(ChangesTrieConfig {
 			digest_interval: 4, digest_levels: 1,
 		});
+
+		overlay.set_storage(vec![100], Some(vec![101]));
 
 		overlay.set_extrinsic_index(0);
 		overlay.set_storage(vec![1], Some(vec![2]));
@@ -315,10 +331,11 @@ mod tests {
 		overlay.set_extrinsic_index(2);
 		overlay.set_storage(vec![1], Some(vec![6]));
 
-		assert_eq!(overlay.prospective,
+		assert_eq!(strip_extrinsic_index(&overlay.prospective),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![6]), extrinsics: Some(vec![0, 2].into_iter().collect()) }),
 				(vec![3], OverlayedValue { value: Some(vec![4]), extrinsics: Some(vec![1].into_iter().collect()) }),
+				(vec![100], OverlayedValue { value: Some(vec![101]), extrinsics: Some(vec![NO_EXTRINSIC_INDEX].into_iter().collect()) }),
 			].into_iter().collect());
 
 		overlay.commit_prospective();
@@ -329,13 +346,14 @@ mod tests {
 		overlay.set_extrinsic_index(4);
 		overlay.set_storage(vec![1], Some(vec![8]));
 
-		assert_eq!(overlay.committed,
+		assert_eq!(strip_extrinsic_index(&overlay.committed),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![6]), extrinsics: Some(vec![0, 2].into_iter().collect()) }),
 				(vec![3], OverlayedValue { value: Some(vec![4]), extrinsics: Some(vec![1].into_iter().collect()) }),
+				(vec![100], OverlayedValue { value: Some(vec![101]), extrinsics: Some(vec![NO_EXTRINSIC_INDEX].into_iter().collect()) }),
 			].into_iter().collect());
 
-		assert_eq!(overlay.prospective,
+		assert_eq!(strip_extrinsic_index(&overlay.prospective),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![8]), extrinsics: Some(vec![4].into_iter().collect()) }),
 				(vec![3], OverlayedValue { value: Some(vec![7]), extrinsics: Some(vec![3].into_iter().collect()) }),
@@ -343,10 +361,11 @@ mod tests {
 
 		overlay.commit_prospective();
 
-		assert_eq!(overlay.committed,
+		assert_eq!(strip_extrinsic_index(&overlay.committed),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![8]), extrinsics: Some(vec![0, 2, 4].into_iter().collect()) }),
 				(vec![3], OverlayedValue { value: Some(vec![7]), extrinsics: Some(vec![1, 3].into_iter().collect()) }),
+				(vec![100], OverlayedValue { value: Some(vec![101]), extrinsics: Some(vec![NO_EXTRINSIC_INDEX].into_iter().collect()) }),
 			].into_iter().collect());
 
 		assert_eq!(overlay.prospective,

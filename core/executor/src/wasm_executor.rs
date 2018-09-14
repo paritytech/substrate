@@ -198,17 +198,6 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		debug_trace!(target: "sr-io", "free {}", addr);
 		Ok(())
 	},
-	ext_set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u32) => {
-		debug_trace!(target: "runtime-io", "ext_set_changes_trie_config {} {} {}",
-			block, digest_interval, digest_levels);
-		this.ext.set_changes_trie_config(block, digest_interval, digest_levels);
-		Ok(())
-	},
-	ext_bind_to_extrinsic(extrinsic_index: u32) => {
-		debug_trace!(target: "runtime-io", "bind_to_extrinsic {}", extrinsic_index);
-		this.ext.bind_to_extrinsic(extrinsic_index);
-		Ok(())
-	},
 	ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32) => {
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_storage"))?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_storage"))?;
@@ -303,8 +292,8 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		this.memory.set(result, r.as_ref()).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_root"))?;
 		Ok(())
 	},
-	ext_storage_changes_root(result: *mut u8) -> u32 => {
-		let r = this.ext.storage_changes_root();
+	ext_storage_changes_root(block: u64, result: *mut u8) -> u32 => {
+		let r = this.ext.storage_changes_root(block);
 		if let Some(ref r) = r {
 			this.memory.set(result, &r[..]).map_err(|_| UserError("Invalid attempt to set memory in ext_storage_changes_root"))?;
 		}

@@ -24,7 +24,7 @@ use patricia_trie::NodeCodec;
 use rlp::Encodable;
 use triehash::trie_root;
 use backend::InMemory;
-use changes_trie::{compute_changes_trie_root, Configuration as ChangesTrieConfig, InMemoryStorage as ChangesTrieInMemoryStorage};
+use changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage};
 use super::{Externalities, OverlayedChanges};
 
 /// Simple HashMap-based Externalities impl.
@@ -38,10 +38,16 @@ pub struct TestExternalities<H: Hasher, C: NodeCodec<H>> where H::Out: HeapSizeO
 impl<H: Hasher, C: NodeCodec<H>> TestExternalities<H, C> where H::Out: HeapSizeOf {
 	/// Create a new instance of `TestExternalities`
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
+		let mut overlay = OverlayedChanges::default();
+		super::set_changes_trie_config(
+			&mut overlay,
+			inner.get(&b":changes_trie".to_vec()).cloned())
+			.expect("changes trie configuration is correct in test env; qed");
+
 		TestExternalities {
 			inner,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
-			changes: Default::default(),
+			changes: overlay,
 			_codec: Default::default(),
 		}
 	}
@@ -96,17 +102,6 @@ impl<H: Hasher, C: NodeCodec<H>> From< HashMap<Vec<u8>, Vec<u8>> > for TestExter
 }
 
 impl<H: Hasher, C: NodeCodec<H>> Externalities<H> for TestExternalities<H, C> where H::Out: Ord + Encodable + HeapSizeOf {
-	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u32) {
-		self.changes.set_changes_trie_config(block, ChangesTrieConfig {
-			digest_interval,
-			digest_levels,
-		});
-	}
-
-	fn bind_to_extrinsic(&mut self, extrinsic_index: u32) {
-		self.changes.set_extrinsic_index(extrinsic_index);
-	}
-
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.inner.get(key).map(|x| x.to_vec())
 	}
@@ -130,9 +125,13 @@ impl<H: Hasher, C: NodeCodec<H>> Externalities<H> for TestExternalities<H, C> wh
 		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 
-	fn storage_changes_root(&mut self) -> Option<H::Out> {
-		compute_changes_trie_root::<_, _, H, C>(&InMemory::default(), Some(&self.changes_trie_storage), &self.changes)
-			.map(|(root, _)| root.clone())
+	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> {
+		compute_changes_trie_root::<_, _, H, C>(
+			&InMemory::default(),
+			Some(&self.changes_trie_storage),
+			&self.changes,
+			block,
+		).map(|(root, _)| root.clone())
 	}
 }
 

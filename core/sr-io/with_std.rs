@@ -43,21 +43,6 @@ use rlp::Encodable;
 
 environmental!(ext: trait Externalities<Blake2Hasher>);
 
-/// Sets changes trie configuration parameters, announcing that this runtime is
-/// configured to gather and store changes tries.
-pub fn set_changes_trie_config(block: u64, digest_interval: u64, digest_levels: u32) {
-	ext::with(|ext|
-		ext.set_changes_trie_config(block, digest_interval, digest_levels)
-	);
-}
-
-/// Bind all future storage changes to extrinsic with given index.
-pub fn bind_to_extrinsic(extrinsic_index: u32) {
-	ext::with(|ext|
-		ext.bind_to_extrinsic(extrinsic_index)
-	);
-}
-
 /// Get `key` from storage and return a `Vec`, empty if there's a problem.
 pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 	ext::with(|ext| ext.storage(key).map(|s| s.to_vec()))
@@ -120,9 +105,9 @@ pub fn storage_root() -> H256 {
 }
 
 /// "Commit" all existing operations and get the resultant storage change root.
-pub fn storage_changes_root() -> Option<H256> {
+pub fn storage_changes_root(block: u64) -> Option<H256> {
 	ext::with(|ext|
-		ext.storage_changes_root()
+		ext.storage_changes_root(block)
 	).unwrap_or(None)
 }
 

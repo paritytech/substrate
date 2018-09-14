@@ -79,6 +79,8 @@ impl Error for ExecutionError {}
 /// and as a transition away from the pre-existing framework.
 #[derive(Debug, Eq, PartialEq)]
 pub enum ExecutionError {
+	/// Backend error.
+	Backend(String),
 	/// The entry `:code` doesn't exist in storage so there's no way we can execute anything.
 	CodeEntryDoesNotExist,
 	/// Backend is incompatible with execution proof generation process.
@@ -93,15 +95,6 @@ impl fmt::Display for ExecutionError {
 
 /// Externalities: pinned to specific active address.
 pub trait Externalities<H: Hasher> {
-	/// Sets changes trie configuration parameters. Runtime announces that this it is
-	/// configured to gather and store changes tries by calling this method and bind_to_extrinsic
-	/// afterwards.
-	fn set_changes_trie_config(&mut self, block: u64, digest_interval: u64, digest_levels: u32);
-
-	/// Start binding storage changes to the extrinsic number they're changes in.
-	/// This is used later by storage_changes_root to compose changes trie.
-	fn bind_to_extrinsic(&mut self, extrinsic_index: u32);
-
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
@@ -132,8 +125,8 @@ pub trait Externalities<H: Hasher> {
 	/// Get the trie root of the current storage map.
 	fn storage_root(&mut self) -> H::Out where H::Out: Ord + Encodable;
 
-	/// Get the change trie root of the current storage overlay.
-	fn storage_changes_root(&mut self) -> Option<H::Out> where H::Out: Ord + Encodable;
+	/// Get the change trie root of the current storage overlay at given block.
+	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> where H::Out: Ord + Encodable;
 }
 
 /// Code execution engine.
@@ -267,12 +260,20 @@ where
 	let strategy: ExecutionStrategy = (&manager).into();
 
 	// make a copy.
-	let code = ext::Ext::new(overlay, backend, changes_trie_storage).storage(b":code")
+	let code = try_read_overlay_value(overlay, backend, b":code")?
 		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 		.to_vec();
 
-	let heap_pages = ext::Ext::new(overlay, backend, changes_trie_storage).storage(b":heappages")
+	let heap_pages = try_read_overlay_value(overlay, backend, b":heappages")?
 		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
+
+	// read changes trie configuration. The reason why we're doing it here instead of the
+	// `OverlayedChanges` constructor is that we need proofs for this read as a part of
+	// proof-of-execution on light clients. And the proof is recorded by the backend which
+	// is created after OverlayedChanges
+
+	let changes_trie_config = try_read_overlay_value(overlay, backend, b":changes_trie")?;
+	set_changes_trie_config(overlay, changes_trie_config)?;
 
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
@@ -427,6 +428,38 @@ where
 {
 	let backend = proving_backend::create_proof_check_backend::<H, C>(root, proof)?;
 	backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
+}
+
+/// Sets overlayed changes' changes trie configuration. Returns error if configuration
+/// differs from previous OR config decode has failed.
+pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>) -> Result<(), Box<Error>> {
+	let config = match config {
+		Some(v) => Some(changes_trie::Configuration::decode(&mut &v[..])
+			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<Error>)?),
+		None => None,
+	};
+	if let Some(config) = config {
+		if !overlay.set_changes_trie_config(config) {
+			return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
+		}
+	}
+
+	Ok(())
+}
+
+/// Reads storage value from overlay or from the backend.
+fn try_read_overlay_value<H, C, B>(overlay: &OverlayedChanges, backend: &B, key: &[u8])
+	-> Result<Option<Vec<u8>>, Box<Error>>
+where
+	H: Hasher,
+	C: NodeCodec<H>,
+	B: Backend<H, C>,
+{
+	match overlay.storage(key).map(|x| x.map(|x| x.to_vec())) {
+		Some(value) => Ok(value),
+		None => backend.storage(key)
+			.map_err(|err| Box::new(ExecutionError::Backend(format!("{}", err))) as Box<Error>),
+	}
 }
 
 #[cfg(test)]

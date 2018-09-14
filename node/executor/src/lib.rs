@@ -275,12 +275,12 @@ mod tests {
 			1,
 			[69u8; 32].into(),
 			if support_changes_trie {
-				hex!("1f1ac30058a5f4094ad1b5875705ddaaa63c5ac373b8852dcec958caeae0e213").into()
+				hex!("1755be7303767b4d3855694b4f0ebd9d64b7011124d0ec1ad3e17c2a0d65e245").into()
 			} else {
 				hex!("1f058f699ad3187bcf7e9ed8e44464d7a5added0cd912d2679b9dab2e7a04053").into()
 			},
 			if support_changes_trie {
-				Some(hex!("7d78159beca309c42a7c52040e8886503c48570e3bc9421d90533bf13b674018").into())
+				Some(hex!("d7ff76d7fbb9b613e8d140da6f1d561b4928785d4e4818ed959bd1bd35abc7e8").into())
 			} else {
 				None
 			},
@@ -551,7 +551,7 @@ mod tests {
 		let mut t = new_test_ext(true);
 		Executor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(true).0, true).0.unwrap();
 
-		assert!(t.storage_changes_root().is_some());
+		assert!(t.storage_changes_root(1).is_some());
 	}
 
 	#[test]
@@ -559,6 +559,6 @@ mod tests {
 		let mut t = new_test_ext(true);
 		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(true).0).unwrap();
 
-		assert!(t.storage_changes_root().is_some());
+		assert!(t.storage_changes_root(1).is_some());
 	}
 }

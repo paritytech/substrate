@@ -51,6 +51,9 @@ use changes_trie::build::prepare_input;
 use overlayed_changes::OverlayedChanges;
 use trie_backend_essence::TrieBackendStorage;
 
+/// Changes that are made outside of extrinsics are marked with this index;
+pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
+
 /// Changes trie storage. Provides access to trie roots and trie nodes.
 pub trait Storage<H: Hasher>: Send + Sync {
 	/// Get changes trie root for given block.
@@ -68,13 +71,14 @@ pub type Configuration = primitives::ChangesTrieConfiguration;
 pub fn compute_changes_trie_root<'a, B: Backend<H, C>, S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	backend: &B,
 	storage: Option<&'a S>,
-	changes: &OverlayedChanges
+	changes: &OverlayedChanges,
+	block: u64,
 ) -> Option<(H::Out, Vec<(Vec<u8>, Vec<u8>)>)>
 	where
 		&'a S: TrieBackendStorage<H>,
 		H::Out: Ord + Encodable + HeapSizeOf,
 {
-	let input_pairs = prepare_input::<B, S, H, C>(backend, storage, changes)
+	let input_pairs = prepare_input::<B, S, H, C>(backend, storage, changes, block)
 		.expect("storage is not allowed to fail within runtime")?;
 	let transaction = input_pairs.into_iter()
 		.map(Into::into)

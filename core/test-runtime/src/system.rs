@@ -102,7 +102,7 @@ pub fn finalise_block() -> Header {
 	let number = <Number>::take();
 	let parent_hash = <ParentHash>::take();
 	let storage_root = BlakeTwo256::storage_root();
-	let storage_changes_root = BlakeTwo256::storage_changes_root();
+	let storage_changes_root = BlakeTwo256::storage_changes_root(number);
 
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root {
