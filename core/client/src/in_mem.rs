@@ -251,6 +251,10 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		))
 	}
 
+	fn last_finalized(&self) -> error::Result<Block::Hash> {
+		Ok(self.storage.read().finalized_hash.clone())
+	}
+
 	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
 		Some(&self.cache)
 	}
@@ -275,6 +279,10 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 		}
 
 		Ok(())
+	}
+
+	fn last_finalized(&self) -> error::Result<Block::Hash> {
+		Ok(self.storage.read().finalized_hash.clone())
 	}
 
 	fn finalize_header(&self, id: BlockId<Block>) -> error::Result<()> {

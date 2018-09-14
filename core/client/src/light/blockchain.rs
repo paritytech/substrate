@@ -45,6 +45,9 @@ pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
 	/// Mark historic header as finalized.
 	fn finalize_header(&self, block: BlockId<Block>) -> ClientResult<()>;
 
+	/// Get last finalized header.
+	fn last_finalized(&self) -> ClientResult<Block::Hash>;
+
 	/// Get CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
 	fn cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;
 
@@ -138,6 +141,10 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 
 	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification<Block::Hash>>> {
 		Ok(None)
+	}
+
+	fn last_finalized(&self) -> ClientResult<Block::Hash> {
+		self.storage.last_finalized()
 	}
 
 	fn cache(&self) -> Option<&BlockchainCache<Block>> {
