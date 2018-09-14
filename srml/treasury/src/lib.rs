@@ -109,7 +109,7 @@ decl_storage! {
 		/// proposal gets these back. A rejected proposal doesn't.
 		ProposalBond get(proposal_bond): required Permill;
 
-		/// Minimum amount of funds that should be placed ina deposit for making a proposal.
+		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
 		ProposalBondMinimum get(proposal_bond_minimum): required T::Balance;
 
 		/// Period between successive spends.
@@ -227,34 +227,35 @@ impl<T: Trait> Module<T> {
 		Self::deposit_event(RawEvent::Spending(budget_remaining));
 
 		let mut missed_any = false;
-		let remaining_approvals: Vec<_> = <Approvals<T>>::get().into_iter().filter(|&index| {
-			// Should always be true, but shouldn't panic if false or we're screwed.
-			if let Some(p) = Self::proposals(index) {
-				if p.value <= budget_remaining {
-					budget_remaining -= p.value;
-					<Proposals<T>>::remove(index);
+		<Approvals<T>>::mutate(|v| {
+			v.retain(|&index| {
+				// Should always be true, but shouldn't panic if false or we're screwed.
+				if let Some(p) = Self::proposals(index) {
+					if p.value <= budget_remaining {
+						budget_remaining -= p.value;
+						<Proposals<T>>::remove(index);
 
-					// return their deposit.
-					let _ = <balances::Module<T>>::unreserve(&p.proposer, p.bond);
+						// return their deposit.
+						let _ = <balances::Module<T>>::unreserve(&p.proposer, p.bond);
 
-					// provide the allocation.
-					<balances::Module<T>>::increase_free_balance_creating(&p.beneficiary, p.value);
+						// provide the allocation.
+						<balances::Module<T>>::increase_free_balance_creating(&p.beneficiary, p.value);
 
-					Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
-					false
+						Self::deposit_event(RawEvent::Awarded(index, p.value, p.beneficiary));
+						false
+					} else {
+						missed_any = true;
+						true
+					}
 				} else {
-					missed_any = true;
-					true
+					false
 				}
-			} else {
-				false
-			}
-		}).collect();
-		<Approvals<T>>::put(remaining_approvals);
+			});
+		});
 
 		if !missed_any {
 			// burn some proportion of the remaining budget if we run a surplus.
-			let burn = Self::burn().times(budget_remaining);
+			let burn = Self::burn().times(budget_remaining).min(budget_remaining);
 			budget_remaining -= burn;
 			Self::deposit_event(RawEvent::Burnt(burn))
 		}
