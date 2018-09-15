@@ -32,7 +32,7 @@ variables:
     when:                          on_success
     expire_in:                     1 mos
     paths:
-    - target/release/polkadot 
+    - target/release/polkadot
 
 .determine_version: &determine_version |
   export VERSION=$(grep -m 1 "version =" Cargo.toml | awk '{print $3}' | tr -d '"' | tr -d "\n")
@@ -50,9 +50,9 @@ test:rust:stable:                  &test
     - ./scripts/init.sh
     - export PATH="${CI_PROJECT_DIR}/cargo/bin/:$PATH"
     - ./scripts/build.sh
-    - time cargo test --all --release
+    - time cargo test --all --release --locked
   tags:
-    - rust-stable 
+    - rust-stable
 
 .optional_test:                    &optional_test
   <<:                              *test
@@ -72,7 +72,7 @@ build:linux:ubuntu:amd64:          &build
   script:
     - ./scripts/init.sh
     - export PATH="${CI_PROJECT_DIR}/cargo/bin/:$PATH"
-    - ./scripts/build.sh 
+    - ./scripts/build.sh
     - cargo build --release
   <<:                              *collect_artifacts
   tags:
