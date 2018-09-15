@@ -505,7 +505,7 @@ fn top_level_create() {
 		));
 
 		// 11 - value sent with the transaction
-		// (3 * 129) - gas spent by the ctor
+		// (3 * 129) - gas spent by the init_code.
 		// (3 * 175) - base gas fee for create (175) (top level) multipled by gas price (3)
 		// ((21 / 3) * 3) - price for contract creation
 		assert_eq!(
