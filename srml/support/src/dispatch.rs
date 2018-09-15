@@ -71,7 +71,7 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = system
+			for enum $call_type where origin: $origin_type where system = system where council = council
 			[]
 			$($t)*
 		);
@@ -79,24 +79,23 @@ macro_rules! decl_module {
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident where council = $council:ident {
 			$($t:tt)*
 		}
 	) => {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type where system = $system where council = $council
 			[]
 			$($t)*
 		);
 	};
 
-	// fn $fn_name(origin, $param_name: $param)
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident where council = $council:ident
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn $fn_name:ident(origin $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
@@ -105,51 +104,32 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type where system = $system where council = $council
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name((origin origin origin) $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
 		);
 	};
-	// fn $fn_name(SystemOrigin(Signed(who)), $param_name: $param)
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident where council = $council:ident
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		fn $fn_name:ident(SystemOrigin(Signed($who:ident)) $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
+		fn $fn_name:ident($top_origin:ident($sub_origin:ident($origin_param:ident)) $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
 		$($rest:tt)*
 	) => {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
-			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name((system signed $who) $( , $param_name : $param )* ) -> $result; ]
-			$($rest)*
-		);
-	};
-	// fn $fn_name(CouncilOrigin(Members(n)), $param_name: $param)
-	(@normalize
-		$(#[$attr:meta])*
-		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
-		[ $($t:tt)* ]
-		$(#[doc = $doc_attr:tt])*
-		fn $fn_name:ident(CouncilOrigin(Members($n:ident)) $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
-		$($rest:tt)*
-	) => {
-		decl_module!(@normalize
-			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
-			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name((council members $n) $( , $param_name : $param )* ) -> $result; ]
+			for enum $call_type where origin: $origin_type where system = $system where council = $council
+			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(($top_origin $sub_origin $origin_param) $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
 		);
 	};
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident where council = $council:ident
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn $fn_name:ident($( $param_name:ident : $param:ty),* ) -> $result:ty ;
@@ -158,7 +138,7 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type where system = $system where council = $council
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name((root root root) $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
 		);
@@ -166,13 +146,13 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident where council = $council:ident
 		[ $($t:tt)* ]
 	) => {
 		decl_module!(@imp
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system {
+			for enum $call_type where origin: $origin_type where system = $system where council = $council {
 				$($t)*
 			}
 		);
@@ -180,13 +160,13 @@ macro_rules! decl_module {
 
 	(@call
 		(origin origin origin)
-		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident $council:ident [ $( $param_name:ident),* ]
 	) => {
 		<$mod_type<$trait_instance>>::$fn_name( $origin $(, $param_name )* )
 	};
 	(@call
 		(root root root)
-		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident $council:ident [ $( $param_name:ident),* ]
 	) => {
 		{
 			$system::ensure_root($origin)?;
@@ -194,19 +174,28 @@ macro_rules! decl_module {
 		}
 	};
 	(@call
-		(system signed $who:ident)
-		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
+		(SystemOrigin Signed $who:ident)
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident $council:ident [ $( $param_name:ident),* ]
 	) => {
 		{
 			let $who = $system::ensure_signed($origin)?;
 			<$mod_type<$trait_instance>>::$fn_name( $who $(, $param_name )* )
 		}
 	};
+	(@call
+		(CouncilOrigin Members $n:ident)
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident $council:ident [ $( $param_name:ident),* ]
+	) => {
+		{
+			$council::ensure_council_members($n::VALUE)?;
+			<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* )
+		}
+	};
 
 	(@imp
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident where council = $council:ident {
 		$(
 			$(#[doc = $doc_attr:tt])*
 			fn $fn_name:ident(($top_origin:ident $sub_origin:ident $origin_param:ident) $( , $param_name:ident : $param:ty)*) -> $result:ty;
@@ -334,7 +323,7 @@ macro_rules! decl_module {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
-							decl_module!(@call ($top_origin $sub_origin $origin_param) $mod_type $trait_instance $fn_name _origin $system [ $( $param_name ),* ])
+							decl_module!(@call ($top_origin $sub_origin $origin_param) $mod_type $trait_instance $fn_name _origin $system $council [ $( $param_name ),* ])
 						},
 					)*
 					_ => { panic!("__PhantomItem should never be used.") },
@@ -603,14 +592,14 @@ macro_rules! __functions_to_json {
 				), __functions_to_json!(","; $fn_id + 1; $origin_type; $trait_instance; $($rest)*)
 			)
 	};
-	// system signed who
+	// system signed $who
 	(
 		$prefix_str:tt;
 		$fn_id:expr;
 		$origin_type:ty;
 		$trait_instance:ident;
 		fn $fn_name:ident(
-			(system signed $who:ident)
+			(SystemOrigin Signed $who:ident)
 			$(
 				, $param_name:ident : $param:ty
 			)*
@@ -623,6 +612,31 @@ macro_rules! __functions_to_json {
 					fn $fn_name(
 						$who: $trait_instance::AccountId
 						$( , $param_name : $param )*
+					) -> $result;
+					$fn_doc;
+					$fn_id;
+				), __functions_to_json!(","; $fn_id + 1; $origin_type; $trait_instance; $($rest)*)
+			)
+	};
+	// council members $n
+	(
+		$prefix_str:tt;
+		$fn_id:expr;
+		$origin_type:ty;
+		$trait_instance:ident;
+		fn $fn_name:ident(
+			(CouncilOrigin Members $n:ident)
+			$(
+				, $param_name:ident : $param:ty
+			)*
+		) -> $result:ty;
+		$fn_doc:expr;
+		$($rest:tt)*
+	) => {
+			concat!($prefix_str, " ",
+				__function_to_json!(
+					fn $fn_name(
+						$( $param_name : $param ),*
 					) -> $result;
 					$fn_doc;
 					$fn_id;
@@ -705,6 +719,7 @@ mod tests {
 	use super::*;
 	use serde;
 	use serde_json;
+	use primitives::u32_trait::{_2, Value};
 
 	pub trait Trait {
 		type Origin;
@@ -724,6 +739,14 @@ mod tests {
 		}
 	}
 
+	pub mod council {
+		use super::Result;
+
+		pub fn ensure_council_members<N>(_: N) -> Result {
+			Ok(())
+		}
+	}
+
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			/// Hi, this is a comment.
@@ -734,10 +757,8 @@ mod tests {
 			fn aux_4(data: i32) -> Result;
 			fn aux_5(SystemOrigin(Signed(who))) -> Result;
 			fn aux_6(SystemOrigin(Signed(who)), data: i32) -> Result;
-//			fn aux_7(CouncilOrigin(Members(n))) -> Result;
-//			fn aux_8(CouncilOrigin(Members(n)), data: i32) -> Result;
-//			fn aux_9(CouncilOrigin(Members(n)) if n > 2) -> Result;
-//			fn aux_10(CouncilOrigin(Members(n)) if n > 2, data: i32) -> Result;
+			fn aux_7(CouncilOrigin(Members(_2))) -> Result;
+			fn aux_8(CouncilOrigin(Members(_2)), data: i32) -> Result;
 		}
 	}
 
@@ -773,6 +794,13 @@ mod tests {
 				r#""0 + 1 + 1 + 1 + 1 + 1 + 1": { "name": "aux_6", "params": [ "#,
 					r#"{ "name": "who", "type": "T::AccountId" }, "#,
 					r#"{ "name": "data", "type": "i32" }"#,
+				r#" ], "description": [ ] }, "#,
+
+				r#""0 + 1 + 1 + 1 + 1 + 1 + 1 + 1": { "name": "aux_7", "params": [ "#,
+				r#" ], "description": [ ] }, "#,
+
+				r#""0 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1": { "name": "aux_8", "params": [ "#,
+					r#"{ "name": "data", "type": "i32" }"#,
 				r#" ], "description": [ ] }"#,
 
 			r#" } }"#,
@@ -805,6 +833,14 @@ mod tests {
 		}
 
 		fn aux_6(_: &T::AccountId, _: i32) -> Result {
+			unreachable!()
+		}
+
+		fn aux_7() -> Result {
+			unreachable!()
+		}
+
+		fn aux_8(_: i32) -> Result {
 			unreachable!()
 		}
 	}
