@@ -268,8 +268,8 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_noop!(CouncilMotions::vote(Origin::signed(42), hash.clone(), 0, true), "voter not on council");
+			assert_ok!(CouncilMotions::propose(1, 3, Box::new(proposal.clone())));
+			assert_noop!(CouncilMotions::vote(42, hash.clone(), 0, true), "voter not on council");
 		});
 	}
 
@@ -279,8 +279,8 @@ mod tests {
 			System::set_block_number(3);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_noop!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 1, true), "mismatched index");
+			assert_ok!(CouncilMotions::propose(1, 3, Box::new(proposal.clone())));
+			assert_noop!(CouncilMotions::vote(2, hash.clone(), 1, true), "mismatched index");
 		});
 	}
 
@@ -290,12 +290,12 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::propose(1, 2, Box::new(proposal.clone())));
 			assert_eq!(CouncilMotions::voting(&hash), Some((0, 2, vec![1], Vec::<u64>::new())));
-			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, true), "duplicate vote ignored");
-			assert_ok!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, false));
+			assert_noop!(CouncilMotions::vote(1, hash.clone(), 0, true), "duplicate vote ignored");
+			assert_ok!(CouncilMotions::vote(1, hash.clone(), 0, false));
 			assert_eq!(CouncilMotions::voting(&hash), Some((0, 2, Vec::<u64>::new(), vec![1])));
-			assert_noop!(CouncilMotions::vote(Origin::signed(1), hash.clone(), 0, false), "duplicate vote ignored");
+			assert_noop!(CouncilMotions::vote(1, hash.clone(), 0, false), "duplicate vote ignored");
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
@@ -316,8 +316,8 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
-			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0, false));
+			assert_ok!(CouncilMotions::propose(1, 3, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::vote(2, hash.clone(), 0, false));
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
@@ -342,8 +342,8 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash: H256 = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 2, Box::new(proposal.clone())));
-			assert_ok!(CouncilMotions::vote(Origin::signed(2), hash.clone(), 0, true));
+			assert_ok!(CouncilMotions::propose(1, 2, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::vote(2, hash.clone(), 0, true));
 
 			assert_eq!(System::events(), vec![
 				EventRecord {
