@@ -23,7 +23,7 @@ use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug, OnFinalise};
 use srml_support::dispatch::{Result, Dispatchable, Parameter};
 use srml_support::{StorageValue, StorageMap};
 use super::{Trait as CouncilTrait, Module as Council};
-use system::{self, ensure_signed};
+use system;
 
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
@@ -67,8 +67,8 @@ decl_event!(
 decl_module! {
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "<T as Trait>::Proposal: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
-		fn propose(origin, threshold: u32, proposal: Box<<T as Trait>::Proposal>) -> Result;
-		fn vote(origin, proposal: T::Hash, index: ProposalIndex, approve: bool) -> Result;
+		fn propose(SystemOrigin(Signed(who)), threshold: u32, proposal: Box<<T as Trait>::Proposal>) -> Result;
+		fn vote(SystemOrigin(Signed(who)), proposal: T::Hash, index: ProposalIndex, approve: bool) -> Result;
 	}
 }
 
@@ -98,8 +98,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	// Dispatch
-	fn propose(origin: <T as system::Trait>::Origin, threshold: u32, proposal: Box<<T as Trait>::Proposal>) -> Result {
-		let who = ensure_signed(origin)?;
+	fn propose(who: T::AccountId, threshold: u32, proposal: Box<<T as Trait>::Proposal>) -> Result {
 
 		ensure!(Self::is_councillor(&who), "proposer not on council");
 
@@ -122,8 +121,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn vote(origin: <T as system::Trait>::Origin, proposal: T::Hash, index: ProposalIndex, approve: bool) -> Result {
-		let who = ensure_signed(origin)?;
+	fn vote(who: T::AccountId, proposal: T::Hash, index: ProposalIndex, approve: bool) -> Result {
 
 		ensure!(Self::is_councillor(&who), "voter not on council");
 
@@ -241,7 +239,7 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
-			assert_ok!(CouncilMotions::propose(Origin::signed(1), 3, Box::new(proposal.clone())));
+			assert_ok!(CouncilMotions::propose(1, 3, Box::new(proposal.clone())));
 			assert_eq!(CouncilMotions::proposals(), vec![hash]);
 			assert_eq!(CouncilMotions::proposal_of(&hash), Some(proposal));
 			assert_eq!(CouncilMotions::voting(&hash), Some((0, 3, vec![1], Vec::<u64>::new())));
@@ -260,7 +258,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_noop!(CouncilMotions::propose(Origin::signed(42), 3, Box::new(proposal.clone())), "proposer not on council");
+			assert_noop!(CouncilMotions::propose(42, 3, Box::new(proposal.clone())), "proposer not on council");
 		});
 	}
 
