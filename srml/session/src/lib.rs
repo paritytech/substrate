@@ -52,7 +52,6 @@ use rstd::prelude::*;
 use primitives::traits::{Zero, One, OnFinalise, Convert, As};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
-use system::ensure_signed;
 
 #[cfg(any(feature = "std", test))]
 use std::collections::HashMap;
@@ -75,7 +74,7 @@ pub trait Trait: timestamp::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn set_key(origin, key: T::SessionKey) -> Result;
+		fn set_key(SystemOrigin(Signed(who)), key: T::SessionKey) -> Result;
 
 		fn set_length(new: T::BlockNumber) -> Result;
 		fn force_new_session(apply_rewards: bool) -> Result;
@@ -134,8 +133,7 @@ impl<T: Trait> Module<T> {
 
 	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
 	/// session.
-	fn set_key(origin: T::Origin, key: T::SessionKey) -> Result {
-		let who = ensure_signed(origin)?;
+	fn set_key(who: T::AccountId, key: T::SessionKey) -> Result {
 		// set new value for next session
 		<NextKeyFor<T>>::insert(who, key);
 		Ok(())
@@ -448,7 +446,7 @@ mod tests {
 
 			// Block 3: Set new key for validator 2; no visible change.
 			System::set_block_number(3);
-			assert_ok!(Session::set_key(Origin::signed(2), 5));
+			assert_ok!(Session::set_key(2, 5));
 			assert_eq!(Consensus::authorities(), vec![1, 2, 3]);
 
 			Session::check_rotate_session(3);
