@@ -48,7 +48,6 @@ use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
 	As, Lookup, Member, CheckedAdd, CheckedSub};
 use address::Address as RawAddress;
-use system::ensure_signed;
 
 mod mock;
 
@@ -130,7 +129,7 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
+		fn transfer(SystemOrigin(Signed(who)), dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
 		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
 	}
 }
@@ -279,8 +278,7 @@ impl<T: Trait> Module<T> {
 	// PUBLIC DISPATCH
 
 	/// Transfer some liquid free balance to another staker.
-	pub fn transfer(origin: T::Origin, dest: Address<T>, value: T::Balance) -> Result {
-		let transactor = ensure_signed(origin)?;
+	pub fn transfer(transactor: T::AccountId, dest: Address<T>, value: T::Balance) -> Result {
 
 		let dest = Self::lookup(dest)?;
 		let from_balance = Self::free_balance(&transactor);
