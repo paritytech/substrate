@@ -46,7 +46,6 @@ use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use runtime_primitives::{Permill, traits::{OnFinalise, Zero, EnsureOrigin}};
 use balances::OnDilution;
-use system::ensure_signed;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -74,7 +73,7 @@ decl_module! {
 		// Put forward a suggestion for spending. A deposit proportional to the value
 		// is reserved and slashed if the proposal is rejected. It is returned once the
 		// proposal is awarded.
-		fn propose_spend(origin, value: T::Balance, beneficiary: T::AccountId) -> Result;
+		fn propose_spend(SystemOrigin(Signed(proposer)), value: T::Balance, beneficiary: T::AccountId) -> Result;
 
 		// Set the balance of funds available to spend.
 		fn set_pot(new_pot: T::Balance) -> Result;
@@ -158,8 +157,7 @@ impl<T: Trait> Module<T> {
 
 	// Implement Calls and add public immutables and private mutables.
 
-	fn propose_spend(origin: T::Origin, value: T::Balance, beneficiary: T::AccountId) -> Result {
-		let proposer = ensure_signed(origin)?;
+	fn propose_spend(proposer: T::AccountId, value: T::Balance, beneficiary: T::AccountId) -> Result {
 
 		let bond = Self::calculate_bond(value);
 		<balances::Module<T>>::reserve(&proposer, bond)
@@ -412,7 +410,7 @@ mod tests {
 	#[test]
 	fn spend_proposal_takes_min_deposit() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 1, 3));
+			assert_ok!(Treasury::propose_spend(0, 1, 3));
 			assert_eq!(Balances::free_balance(&0), 99);
 			assert_eq!(Balances::reserved_balance(&0), 1);
 		});
@@ -421,7 +419,7 @@ mod tests {
 	#[test]
 	fn spend_proposal_takes_proportional_deposit() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+			assert_ok!(Treasury::propose_spend(0, 100, 3));
 			assert_eq!(Balances::free_balance(&0), 95);
 			assert_eq!(Balances::reserved_balance(&0), 5);
 		});
@@ -430,7 +428,7 @@ mod tests {
 	#[test]
 	fn spend_proposal_fails_when_proposer_poor() {
 		with_externalities(&mut new_test_ext(), || {
-			assert_noop!(Treasury::propose_spend(Origin::signed(2), 100, 3), "Proposer's balance too low");
+			assert_noop!(Treasury::propose_spend(2, 100, 3), "Proposer's balance too low");
 		});
 	}
 
@@ -439,7 +437,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+			assert_ok!(Treasury::propose_spend(0, 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(1);
@@ -463,7 +461,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+			assert_ok!(Treasury::propose_spend(0, 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
@@ -477,7 +475,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+			assert_ok!(Treasury::propose_spend(0, 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
 			assert_noop!(Treasury::reject_proposal(Origin::ROOT, 0), "No proposal at that index");
 		});
@@ -502,7 +500,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+			assert_ok!(Treasury::propose_spend(0, 100, 3));
 			assert_ok!(Treasury::reject_proposal(Origin::ROOT, 0));
 			assert_noop!(Treasury::approve_proposal(Origin::ROOT, 0), "No proposal at that index");
 		});
@@ -513,7 +511,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 100, 3));
+			assert_ok!(Treasury::propose_spend(0, 100, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
@@ -527,7 +525,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			Treasury::on_dilution(100, 100);
 
-			assert_ok!(Treasury::propose_spend(Origin::signed(0), 150, 3));
+			assert_ok!(Treasury::propose_spend(0, 150, 3));
 			assert_ok!(Treasury::approve_proposal(Origin::ROOT, 0));
 
 			<Treasury as OnFinalise<u64>>::on_finalise(2);
