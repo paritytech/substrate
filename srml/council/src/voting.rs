@@ -24,7 +24,6 @@ use srml_support::dispatch::Result;
 use srml_support::{StorageValue, StorageMap, IsSubType};
 use {system, democracy};
 use super::{Trait as CouncilTrait, Module as Council};
-use system::ensure_signed;
 
 pub trait Trait: CouncilTrait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -32,9 +31,9 @@ pub trait Trait: CouncilTrait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn propose(origin, proposal: Box<T::Proposal>) -> Result;
-		fn vote(origin, proposal: T::Hash, approve: bool) -> Result;
-		fn veto(origin, proposal_hash: T::Hash) -> Result;
+		fn propose(SystemOrigin(Signed(who)), proposal: Box<T::Proposal>) -> Result;
+		fn vote(SystemOrigin(Signed(who)), proposal: T::Hash, approve: bool) -> Result;
+		fn veto(SystemOrigin(Signed(who)), proposal_hash: T::Hash) -> Result;
 
 		fn set_cooloff_period(blocks: T::BlockNumber) -> Result;
 		fn set_voting_period(blocks: T::BlockNumber) -> Result;
@@ -95,8 +94,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	// Dispatch
-	fn propose(origin: T::Origin, proposal: Box<T::Proposal>) -> Result {
-		let who = ensure_signed(origin)?;
+	fn propose(who: T::AccountId, proposal: Box<T::Proposal>) -> Result {
 
 		let expiry = <system::Module<T>>::block_number() + Self::voting_period();
 		ensure!(Self::will_still_be_councillor_at(&who, expiry), "proposer would not be on council");
@@ -118,8 +116,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn vote(origin: T::Origin, proposal: T::Hash, approve: bool) -> Result {
-		let who = ensure_signed(origin)?;
+	fn vote(who: T::AccountId, proposal: T::Hash, approve: bool) -> Result {
 
 		ensure!(Self::is_councillor(&who), "only councillors may vote on council proposals");
 
@@ -130,8 +127,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn veto(origin: T::Origin, proposal_hash: T::Hash) -> Result {
-		let who = ensure_signed(origin)?;
+	fn veto(who: T::AccountId, proposal_hash: T::Hash) -> Result {
 
 		ensure!(Self::is_councillor(&who), "only councillors may veto council proposals");
 		ensure!(<ProposalVoters<T>>::exists(&proposal_hash), "proposal must exist to be vetoed");
@@ -239,7 +235,7 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 mod tests {
 	use super::*;
 	use ::tests::*;
-	use ::tests::{Call, Origin};
+	use ::tests::Call;
 	use srml_support::Hashable;
 	use democracy::VoteThreshold;
 
@@ -281,9 +277,9 @@ mod tests {
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256().into();
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(cancellation)));
-			assert_ok!(CouncilVoting::vote(Origin::signed(2), hash, true));
-			assert_ok!(CouncilVoting::vote(Origin::signed(3), hash, true));
+			assert_ok!(CouncilVoting::propose(1, Box::new(cancellation)));
+			assert_ok!(CouncilVoting::vote(2, hash, true));
+			assert_ok!(CouncilVoting::vote(3, hash, true));
 			assert_eq!(CouncilVoting::proposals(), vec![(2, hash)]);
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 
@@ -303,9 +299,9 @@ mod tests {
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256().into();
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(cancellation)));
-			assert_ok!(CouncilVoting::vote(Origin::signed(2), hash, true));
-			assert_ok!(CouncilVoting::vote(Origin::signed(3), hash, false));
+			assert_ok!(CouncilVoting::propose(1, Box::new(cancellation)));
+			assert_ok!(CouncilVoting::vote(2, hash, true));
+			assert_ok!(CouncilVoting::vote(3, hash, false));
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 
 			System::set_block_number(2);
@@ -323,8 +319,8 @@ mod tests {
 
 			let cancellation = cancel_referendum_proposal(0);
 			let hash = cancellation.blake2_256().into();
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(cancellation)));
-			assert_ok!(CouncilVoting::vote(Origin::signed(2), hash, true));
+			assert_ok!(CouncilVoting::propose(1, Box::new(cancellation)));
+			assert_ok!(CouncilVoting::vote(2, hash, true));
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 
 			System::set_block_number(2);
@@ -339,8 +335,8 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_ok!(CouncilVoting::veto(Origin::signed(2), hash));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::veto(2, hash));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
 			assert_eq!(Democracy::active_referendums().len(), 0);
 		});
@@ -352,12 +348,12 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_ok!(CouncilVoting::veto(Origin::signed(2), hash));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::veto(2, hash));
 
 			System::set_block_number(3);
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_noop!(CouncilVoting::veto(Origin::signed(2), hash), "a councillor may not veto a proposal twice");
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_noop!(CouncilVoting::veto(2, hash), "a councillor may not veto a proposal twice");
 		});
 	}
 
@@ -367,11 +363,11 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_ok!(CouncilVoting::veto(Origin::signed(2), hash));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::veto(2, hash));
 
 			System::set_block_number(2);
-			assert_noop!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())), "proposal is vetoed");
+			assert_noop!(CouncilVoting::propose(1, Box::new(proposal.clone())), "proposal is vetoed");
 		});
 	}
 
@@ -381,13 +377,13 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_ok!(CouncilVoting::veto(Origin::signed(2), hash));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::veto(2, hash));
 
 			System::set_block_number(3);
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_ok!(CouncilVoting::vote(Origin::signed(2), hash, false));
-			assert_ok!(CouncilVoting::vote(Origin::signed(3), hash, true));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::vote(2, hash, false));
+			assert_ok!(CouncilVoting::vote(3, hash, true));
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 
 			System::set_block_number(4);
@@ -403,12 +399,12 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_ok!(CouncilVoting::veto(Origin::signed(2), hash));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::veto(2, hash));
 
 			System::set_block_number(3);
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_ok!(CouncilVoting::veto(Origin::signed(3), hash));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::veto(3, hash));
 			assert_eq!(CouncilVoting::proposals().len(), 0);
 			assert_eq!(Democracy::active_referendums().len(), 0);
 		});
@@ -420,7 +416,7 @@ mod tests {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
 			let hash = proposal.blake2_256().into();
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
 			assert_eq!(CouncilVoting::proposals().len(), 1);
 			assert_eq!(CouncilVoting::proposal_voters(&hash), vec![1]);
 			assert_eq!(CouncilVoting::vote_of((hash, 1)), Some(true));
@@ -433,7 +429,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
 			assert_eq!(CouncilVoting::tally(&proposal.blake2_256().into()), (1, 0, 2));
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 
@@ -449,9 +445,9 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_ok!(CouncilVoting::vote(Origin::signed(2), proposal.blake2_256().into(), true));
-			assert_ok!(CouncilVoting::vote(Origin::signed(3), proposal.blake2_256().into(), true));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::vote(2, proposal.blake2_256().into(), true));
+			assert_ok!(CouncilVoting::vote(3, proposal.blake2_256().into(), true));
 			assert_eq!(CouncilVoting::tally(&proposal.blake2_256().into()), (3, 0, 0));
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 
@@ -467,9 +463,9 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_ok!(CouncilVoting::vote(Origin::signed(2), proposal.blake2_256().into(), true));
-			assert_ok!(CouncilVoting::vote(Origin::signed(3), proposal.blake2_256().into(), false));
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_ok!(CouncilVoting::vote(2, proposal.blake2_256().into(), true));
+			assert_ok!(CouncilVoting::vote(3, proposal.blake2_256().into(), false));
 			assert_eq!(CouncilVoting::tally(&proposal.blake2_256().into()), (2, 1, 0));
 			assert_ok!(CouncilVoting::end_block(System::block_number()));
 
@@ -485,7 +481,7 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_noop!(CouncilVoting::propose(Origin::signed(4), Box::new(proposal)), "proposer would not be on council");
+			assert_noop!(CouncilVoting::propose(4, Box::new(proposal)), "proposer would not be on council");
 		});
 	}
 
@@ -494,8 +490,8 @@ mod tests {
 		with_externalities(&mut new_test_ext(true), || {
 			System::set_block_number(1);
 			let proposal = set_balance_proposal(42);
-			assert_ok!(CouncilVoting::propose(Origin::signed(1), Box::new(proposal.clone())));
-			assert_noop!(CouncilVoting::vote(Origin::signed(4), proposal.blake2_256().into(), true), "only councillors may vote on council proposals");
+			assert_ok!(CouncilVoting::propose(1, Box::new(proposal.clone())));
+			assert_noop!(CouncilVoting::vote(4, proposal.blake2_256().into(), true), "only councillors may vote on council proposals");
 		});
 	}
 }
