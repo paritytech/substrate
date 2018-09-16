@@ -48,7 +48,6 @@ use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member, DigestItem};
 use primitives::bft::MisbehaviorReport;
-use system::ensure_inherent;
 
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::Blake2Hasher;

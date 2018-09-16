@@ -216,7 +216,7 @@ mod tests {
 	use super::*;
 	use super::RawEvent;
 	use ::tests::*;
-	use ::tests::{Call, Origin, Event as OuterEvent};
+	use ::tests::{Call, Event as OuterEvent};
 	use srml_support::Hashable;
 	use system::{EventRecord, Phase};
 
