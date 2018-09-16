@@ -56,7 +56,6 @@ extern crate parity_codec as codec;
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_primitives::traits::{OnFinalise, SimpleArithmetic, As, Zero};
-use system::ensure_inherent;
 
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The position of the required timestamp-set extrinsic.
@@ -68,7 +67,7 @@ pub trait Trait: consensus::Trait + system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn set(origin, now: T::Moment) -> Result;
+		fn set(SystemOrigin(Inherent), now: T::Moment) -> Result;
 	}
 }
 
@@ -102,8 +101,7 @@ impl<T: Trait> Module<T> {
 	/// if this call hasn't been invoked by that time.
 	///
 	/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-	fn set(origin: T::Origin, now: T::Moment) -> Result {
-		ensure_inherent(origin)?;
+	fn set(now: T::Moment) -> Result {
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
 			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
