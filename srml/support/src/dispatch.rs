@@ -132,6 +132,23 @@ macro_rules! decl_module {
 		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident where council = $council:ident
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
+		fn $fn_name:ident($top_origin:ident($sub_origin:ident) $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type where system = $system where council = $council
+			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(($top_origin $sub_origin $sub_origin) $( , $param_name : $param )* ) -> $result; ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident where council = $council:ident
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
 		fn $fn_name:ident($( $param_name:ident : $param:ty),* ) -> $result:ty ;
 		$($rest:tt)*
 	) => {
@@ -180,6 +197,15 @@ macro_rules! decl_module {
 		{
 			let $who = $system::ensure_signed($origin)?;
 			<$mod_type<$trait_instance>>::$fn_name( $who $(, $param_name )* )
+		}
+	};
+	(@call
+		(SystemOrigin Inherent Inherent)
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident $council:ident [ $( $param_name:ident),* ]
+	) => {
+		{
+			$system::ensure_inherent($origin)?;
+			<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* )
 		}
 	};
 	(@call
@@ -618,6 +644,31 @@ macro_rules! __functions_to_json {
 				), __functions_to_json!(","; $fn_id + 1; $origin_type; $trait_instance; $($rest)*)
 			)
 	};
+	// system inherent inherent
+	(
+		$prefix_str:tt;
+		$fn_id:expr;
+		$origin_type:ty;
+		$trait_instance:ident;
+		fn $fn_name:ident(
+			(SystemOrigin Inherent Inherent)
+			$(
+				, $param_name:ident : $param:ty
+			)*
+		) -> $result:ty;
+		$fn_doc:expr;
+		$($rest:tt)*
+	) => {
+			concat!($prefix_str, " ",
+				__function_to_json!(
+					fn $fn_name(
+						$( $param_name : $param ),*
+					) -> $result;
+					$fn_doc;
+					$fn_id;
+				), __functions_to_json!(","; $fn_id + 1; $origin_type; $trait_instance; $($rest)*)
+			)
+	};
 	// council members $n
 	(
 		$prefix_str:tt;
@@ -734,6 +785,10 @@ mod tests {
 			Ok(())
 		}
 
+		pub fn ensure_inherent<R>(_: R) -> Result {
+			Ok(())
+		}
+
 		pub fn ensure_signed<AccountId, O>(_: O) -> result::Result<AccountId, &'static str> {
 			Err("unreachable")
 		}
@@ -757,8 +812,10 @@ mod tests {
 			fn aux_4(data: i32) -> Result;
 			fn aux_5(SystemOrigin(Signed(who))) -> Result;
 			fn aux_6(SystemOrigin(Signed(who)), data: i32) -> Result;
-			fn aux_7(CouncilOrigin(Members(_2))) -> Result;
-			fn aux_8(CouncilOrigin(Members(_2)), data: i32) -> Result;
+			fn aux_7(SystemOrigin(Inherent)) -> Result;
+			fn aux_8(SystemOrigin(Inherent), data: i32) -> Result;
+			fn aux_9(CouncilOrigin(Members(_2))) -> Result;
+			fn aux_10(CouncilOrigin(Members(_2)), data: i32) -> Result;
 		}
 	}
 
@@ -801,6 +858,13 @@ mod tests {
 
 				r#""0 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1": { "name": "aux_8", "params": [ "#,
 					r#"{ "name": "data", "type": "i32" }"#,
+				r#" ], "description": [ ] }, "#,
+
+				r#""0 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1": { "name": "aux_9", "params": [ "#,
+				r#" ], "description": [ ] }, "#,
+
+				r#""0 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1 + 1": { "name": "aux_10", "params": [ "#,
+					r#"{ "name": "data", "type": "i32" }"#,
 				r#" ], "description": [ ] }"#,
 
 			r#" } }"#,
@@ -841,6 +905,14 @@ mod tests {
 		}
 
 		fn aux_8(_: i32) -> Result {
+			unreachable!()
+		}
+
+		fn aux_9() -> Result {
+			unreachable!()
+		}
+
+		fn aux_10(_: i32) -> Result {
 			unreachable!()
 		}
 	}
