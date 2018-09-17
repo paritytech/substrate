@@ -202,6 +202,7 @@ fn should_return_runtime_version() {
 			authoring_version: 1,
 			spec_version: 1,
 			impl_version: 1,
+			apis: (&[][..]).into()
 		}
 	);
 }
