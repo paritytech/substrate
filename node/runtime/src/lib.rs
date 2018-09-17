@@ -68,7 +68,7 @@ use codec::{Encode, Decode, Input};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
-use version::RuntimeVersion;
+use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
 
 #[cfg(any(feature = "std", test))]
@@ -82,6 +82,9 @@ pub use checked_block::CheckedBlock;
 const TIMESTAMP_SET_POSITION: u32 = 0;
 const NOTE_OFFLINE_POSITION: u32 = 1;
 
+const INHERENT: ApiId = *b"inherent";
+const VALIDATX: ApiId = *b"validatx";
+
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("node"),
@@ -89,6 +92,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
+	apis: apis_vec!([(INHERENT, 1), (VALIDATX, 1)]),
 };
 
 impl system::Trait for Runtime {
@@ -225,18 +229,19 @@ pub mod api {
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
 		execute_block => |block| super::Executive::execute_block(block),
 		finalise_block => |()| super::Executive::finalise_block(),
-		inherent_extrinsics => |(inherent, spec_version)| super::inherent_extrinsics(inherent, spec_version),
+		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
 		validator_count => |()| super::Session::validator_count(),
 		validators => |()| super::Session::validators(),
 		timestamp => |()| super::Timestamp::get(),
 		random_seed => |()| super::System::random_seed(),
 		account_nonce => |account| super::System::account_nonce(&account),
-		lookup_address => |address| super::Balances::lookup_address(address)
+		lookup_address => |address| super::Balances::lookup_address(address),
+		validate_transaction => |tx| super::Executive::validate_transaction(tx)
 	);
 }
 
 /// Produces the list of inherent extrinsics.
-fn inherent_extrinsics(data: InherentData, _spec_version: u32) -> Vec<UncheckedExtrinsic> {
+fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
 	let make_inherent = |function| UncheckedExtrinsic {
 		signature: Default::default(),
 		function,
