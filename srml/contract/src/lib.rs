@@ -163,7 +163,7 @@ decl_module! {
 			origin,
 			value: T::Balance,
 			gas_limit: T::Gas,
-			ctor: Vec<u8>,
+			init_code: Vec<u8>,
 			data: Vec<u8>
 		) -> Result;
 	}
@@ -227,7 +227,9 @@ impl<T: Trait> Module<T> {
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 		};
-		let result = ctx.call(origin.clone(), dest, value, &mut gas_meter, &data);
+
+		let mut output_data = Vec::new();
+		let result = ctx.call(origin.clone(), dest, value, &mut gas_meter, &data, &mut output_data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
