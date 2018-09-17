@@ -16,7 +16,7 @@ node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 node-transaction-pool = { path = "../transaction-pool" }
 substrate-bft = { path = "../../core/bft" }
-parity-codec = { version = "~1.0" }
+parity-codec = { version = "1.1" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-client = { path = "../../core/client" }
 sr-primitives = { path = "../../core/sr-primitives" }

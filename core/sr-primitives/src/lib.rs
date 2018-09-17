@@ -58,6 +58,7 @@ pub mod testing;
 pub mod traits;
 pub mod generic;
 pub mod bft;
+pub mod transaction_validity;
 
 use traits::{Verify, Lazy};
 
