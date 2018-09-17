@@ -454,6 +454,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
 			let number = pending_block.header.number().clone();
+
 			transaction.put(columns::HEADER, hash.as_ref(), &pending_block.header.encode());
 			if let Some(body) = pending_block.body {
 				transaction.put(columns::BODY, hash.as_ref(), &body.encode());
@@ -463,12 +464,37 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 			}
 
 			if pending_block.is_best || operation.finalized {
-				transaction.put(
-					columns::HASH_LOOKUP,
-					&::utils::number_to_lookup_key(number.clone()),
-					hash.as_ref(),
-				);
-				// TODO: reorgs
+				let meta = self.blockchain.meta.read();
+				let tree_route = ::utils::tree_route::<Block>(
+					&*self.blockchain.db,
+					columns::HEADER,
+					meta.best_hash,
+					hash
+				)?;
+
+				// update block number to hash lookup entries.
+				for retracted in tree_route.retracted() {
+					if retracted.hash == meta.finalized_hash {
+						// TODO: can we recover here?
+						warn!("Safety failure: reverting finalized block {:?}",
+							(&retracted.number, &retracted.hash));
+					}
+
+					transaction.delete(
+						columns::HASH_LOOKUP,
+						&::utils::number_to_lookup_key(retracted.number)
+					);
+				}
+
+				for enacted in tree_route.enacted() {
+					let hash: &Block::Hash = &enacted.hash;
+					transaction.put(
+						columns::HASH_LOOKUP,
+						&::utils::number_to_lookup_key(enacted.number),
+						hash.as_ref(),
+					)
+				}
+
 				transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
 			}
 

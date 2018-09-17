@@ -203,6 +203,14 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<
 	})
 }
 
+/// An entry in a tree route.
+pub struct RouteEntry<Block: BlockT> {
+	/// The number of the block.
+	pub number: <Block::Header as HeaderT>::Number,
+	/// The hash of the block.
+	pub hash: Block::Hash,
+}
+
 /// A tree-route from one block to another in the chain.
 ///
 /// All blocks prior to the pivot in the deque is the reverse-order unique ancestry
@@ -226,26 +234,26 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<
 /// C -> E1 -> E2
 /// ```
 pub struct TreeRoute<Block: BlockT> {
-	route: Vec<Block::Hash>,
+	route: Vec<RouteEntry<Block>>,
 	pivot: usize,
 }
 
 impl<Block: BlockT> TreeRoute<Block> {
 	/// Get an iterator of all retracted blocks in reverse order (towards common ancestor)
-	pub fn retracted(&self) -> impl Iterator<Item=&Block::Hash> {
+	pub fn retracted(&self) -> impl Iterator<Item=&RouteEntry<Block>> {
 		self.route.iter().take(self.pivot)
 	}
 
 	/// Get the common ancestor block. This might be one of the two blocks of the
 	/// route.
-	pub fn common_block(&self) -> &Block::Hash {
+	pub fn common_block(&self) -> &RouteEntry<Block> {
 		self.route.get(self.pivot).expect("tree-routes are computed between blocks; \
 			which are included in the route; \
 			thus it is never empty; qed")
 	}
 
 	/// Get an iterator of enacted blocks (descendents of the common ancestor)
-	pub fn enacted(&self) -> impl Iterator<Item=&Block::Hash> {
+	pub fn enacted(&self) -> impl Iterator<Item=&RouteEntry<Block>> {
 		self.route.iter().skip(self.pivot + 1)
 	}
 }
@@ -277,28 +285,44 @@ pub fn tree_route<Block: BlockT>(
 	let mut to_branch = Vec::new();
 
 	while to.number() > from.number() {
-		to_branch.push(to.hash());
+		to_branch.push(RouteEntry {
+			number: to.number().clone(),
+			hash: to.hash(),
+		});
+
 		to = load_header(to.parent_hash())?;
 	}
 
 	while from.number() > to.number() {
-		from_branch.push(from.hash());
+		from_branch.push(RouteEntry {
+			number: from.number().clone(),
+			hash: from.hash(),
+		});
 		from = load_header(from.parent_hash())?;
 	}
 
 	// numbers are equal now. walk backwards until the block is the same
 
 	while to != from {
-		to_branch.push(to.hash());
+		to_branch.push(RouteEntry {
+			number: to.number().clone(),
+			hash: to.hash(),
+		});
 		to = load_header(to.parent_hash())?;
 
-		from_branch.push(from.hash());
+		from_branch.push(RouteEntry {
+			number: from.number().clone(),
+			hash: from.hash(),
+		});
 		from = load_header(from.parent_hash())?;
 	}
 
 	// add the pivot block. and append the reversed to-branch (note that it's reverse order originalls)
 	let pivot = from_branch.len();
-	from_branch.push(to.hash());
+	from_branch.push(RouteEntry {
+		number: to.number().clone(),
+		hash: to.hash(),
+	});
 	from_branch.extend(to_branch.into_iter().rev());
 
 	Ok(TreeRoute {
