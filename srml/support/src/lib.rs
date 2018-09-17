@@ -32,6 +32,8 @@ extern crate sr_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate substrate_metadata;
 
+extern crate mashup;
+
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
@@ -65,6 +67,8 @@ mod event;
 pub mod metadata;
 #[macro_use]
 mod origin;
+#[macro_use]
+mod runtime;
 
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
@@ -122,3 +126,6 @@ macro_rules! assert_ok {
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum Void {}
+
+#[doc(hidden)]
+pub use mashup::*;
