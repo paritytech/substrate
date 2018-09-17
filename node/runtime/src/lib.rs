@@ -17,6 +17,8 @@
 //! The Substrate runtime. This can be compiled with ``#[no_std]`, ready for Wasm.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+// `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
+#![recursion_limit="256"]
 
 #[macro_use]
 extern crate sr_io as runtime_io;
@@ -80,12 +82,6 @@ pub use checked_block::CheckedBlock;
 const TIMESTAMP_SET_POSITION: u32 = 0;
 const NOTE_OFFLINE_POSITION: u32 = 1;
 
-// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-#[derive(Clone, Copy, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-/// Runtime type used to collate and parameterize the various modules.
-pub struct Runtime;
-
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("node"),
@@ -107,9 +103,6 @@ impl system::Trait for Runtime {
 	type Event = Event;
 }
 
-/// System module for this concrete runtime.
-pub type System = system::Module<Runtime>;
-
 impl balances::Trait for Runtime {
 	type Balance = Balance;
 	type AccountIndex = AccountIndex;
@@ -118,9 +111,6 @@ impl balances::Trait for Runtime {
 	type Event = Event;
 }
 
-/// Staking module for this concrete runtime.
-pub type Balances = balances::Module<Runtime>;
-
 impl consensus::Trait for Runtime {
 	const NOTE_OFFLINE_POSITION: u32 = NOTE_OFFLINE_POSITION;
 	type Log = Log;
@@ -128,16 +118,10 @@ impl consensus::Trait for Runtime {
 	type OnOfflineValidator = Staking;
 }
 
-/// Consensus module for this concrete runtime.
-pub type Consensus = consensus::Module<Runtime>;
-
 impl timestamp::Trait for Runtime {
 	const TIMESTAMP_SET_POSITION: u32 = TIMESTAMP_SET_POSITION;
 	type Moment = u64;
 }
-
-/// Timestamp module for this concrete runtime.
-pub type Timestamp = timestamp::Module<Runtime>;
 
 /// Session key conversion.
 pub struct SessionKeyConversion;
@@ -153,38 +137,23 @@ impl session::Trait for Runtime {
 	type Event = Event;
 }
 
-/// Session module for this concrete runtime.
-pub type Session = session::Module<Runtime>;
-
 impl staking::Trait for Runtime {
 	type OnRewardMinted = Treasury;
 	type Event = Event;
 }
-
-/// Staking module for this concrete runtime.
-pub type Staking = staking::Module<Runtime>;
 
 impl democracy::Trait for Runtime {
 	type Proposal = Call;
 	type Event = Event;
 }
 
-/// Democracy module for this concrete runtime.
-pub type Democracy = democracy::Module<Runtime>;
-
 impl council::Trait for Runtime {
 	type Event = Event;
 }
 
-/// Council module for this concrete runtime.
-pub type Council = council::Module<Runtime>;
-
 impl council::voting::Trait for Runtime {
 	type Event = Event;
 }
-
-/// Council voting module for this concrete runtime.
-pub type CouncilVoting = council::voting::Module<Runtime>;
 
 impl council::motions::Trait for Runtime {
 	type Origin = Origin;
@@ -192,113 +161,16 @@ impl council::motions::Trait for Runtime {
 	type Event = Event;
 }
 
-/// Council motions module for this concrete runtime.
-pub type CouncilMotions = council_motions::Module<Runtime>;
-
 impl treasury::Trait for Runtime {
 	type ApproveOrigin = council_motions::EnsureMembers<_4>;
 	type RejectOrigin = council_motions::EnsureMembers<_2>;
 	type Event = Event;
 }
 
-/// Treasury module for this concrete runtime.
-pub type Treasury = treasury::Module<Runtime>;
-
 impl contract::Trait for Runtime {
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
 }
-
-/// Contract module for this concrete runtime.
-pub type Contract = contract::Module<Runtime>;
-
-impl_outer_event! {
-	pub enum Event for Runtime {
-		//consensus,
-		balances<T>,
-		//timetstamp,
-		session<T>,
-		staking<T>,
-		democracy<T>,
-		council<T>,
-		council_voting<T>,
-		council_motions<T>,
-		treasury<T>,
-	}
-}
-
-impl_outer_log! {
-	pub enum Log(InternalLog: DigestItem<SessionKey>) for Runtime {
-		consensus(AuthoritiesChange)
-	}
-}
-
-impl_outer_origin! {
-	pub enum Origin for Runtime {
-		council_motions
-	}
-}
-
-impl_outer_dispatch! {
-	pub enum Call where origin: Origin {
-		Consensus,
-		Balances,
-		Timestamp,
-		Session,
-		Staking,
-		Democracy,
-		Council,
-		CouncilVoting,
-		CouncilMotions,
-		Treasury,
-		Contract,
-	}
-}
-
-impl_outer_config! {
-	pub struct GenesisConfig for Runtime {
-		SystemConfig => system,
-		ConsensusConfig => consensus,
-		ContractConfig => contract,
-		BalancesConfig => balances,
-		TimestampConfig => timestamp,
-		SessionConfig => session,
-		StakingConfig => staking,
-		DemocracyConfig => democracy,
-		CouncilConfig => council,
-		TreasuryConfig => treasury,
-	}
-}
-
-type AllModules = (
-	Consensus,
-	Balances,
-	Timestamp,
-	Session,
-	Staking,
-	Democracy,
-	Council,
-	CouncilVoting,
-	CouncilMotions,
-	Treasury,
-	Contract,
-);
-
-impl_json_metadata!(
-	for Runtime with modules
-		system::Module with Storage,
-		consensus::Module with Storage,
-		balances::Module with Storage,
-		timestamp::Module with Storage,
-		session::Module with Storage,
-		staking::Module with Storage,
-		democracy::Module with Storage,
-		council::Module with Storage,
-		council_voting::Module with Storage,
-		council_motions::Module with Storage,
-		treasury::Module with Storage,
-		contract::Module with Storage,
-);
 
 impl DigestItem for Log {
 	type AuthorityId = SessionKey;
@@ -309,6 +181,23 @@ impl DigestItem for Log {
 		}
 	}
 }
+
+construct_runtime!(
+	pub enum Runtime with Log(InternalLog: DigestItem<SessionKey>) {
+		System: system,
+		Consensus: consensus::{Module, Call, Storage, Config, Log(AuthoritiesChange)},
+		Balances: balances,
+		Timestamp: timestamp::{Module, Call, Storage, Config},
+		Session: session,
+		Staking: staking,
+		Democracy: democracy,
+		Council: council,
+		CouncilVoting: council_voting::{Module, Call, Storage, Event<T>},
+		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
+		Treasury: treasury,
+		Contract: contract::{Module, Call, Config},
+	}
+);
 
 /// The address format for describing accounts.
 pub use balances::address::Address as RawAddress;
