@@ -14,6 +14,36 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+/// Construct a runtime, with the given name and the given modules.
+///
+/// # Example:
+///
+/// ```nocompile
+/// construct_runtime!(
+///     pub enum Runtime with Log(interalIdent: DigestItem<SessionKey>) {
+///         System: system,
+///         Test: test::{default, Log(Test)},
+///         Test2: test_with_long_module::{Module},
+///     }
+/// )
+/// ```
+///
+/// The module `System: system` will expand to `System: system::{Module, Call, Storage, Event<T>, Config}`.
+/// The identifier `System` is the name of the module and the lower case identifier `system` is the
+/// name of the rust module for this module.
+/// The module `Test: test::{default, Log(Test)}` will expand to
+/// `Test: test::{Module, Call, Storage, Event<T>, Config, Log(Test)}`.
+/// The module `Test2: test_with_long_module::{Module}` will expand to
+/// `Test2: test_with_long_module::{Module}`.
+///
+/// We provide support for the following types in a module:
+/// - `Module`
+/// - `Call`
+/// - `Storage`
+/// - `Event` or `Event<T>` (if the event is generic)
+/// - `Origin` or `Origin<T>` (if the origin is generic)
+/// - `Config`
+/// - `Log( $(IDENT),* )`
 #[macro_export]
 macro_rules! construct_runtime {
 	(
