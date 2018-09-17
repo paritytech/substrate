@@ -251,7 +251,13 @@ mod tests {
 		}.build_storage().unwrap())
 	}
 
-	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, changes_root: Option<Hash>, extrinsics: Vec<CheckedExtrinsic>) -> (Vec<u8>, Hash) {
+	fn construct_block(
+		number: BlockNumber,
+		parent_hash: Hash,
+		state_root: Hash,
+		changes_root: Option<Hash>,
+		extrinsics: Vec<CheckedExtrinsic>
+	) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();

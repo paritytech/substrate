@@ -247,11 +247,6 @@ impl<T: Trait> Module<T> {
 		storage::unhashed::get(EXTRINSIC_INDEX)
 	}
 
-	/// Sets the index of extrinsic that is currenty executing.
-	pub fn set_extrinsic_index(extrinsic_index: u32) {
-		storage::unhashed::put(EXTRINSIC_INDEX, &extrinsic_index)
-	}
-
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
@@ -334,6 +329,12 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn set_block_number(n: T::BlockNumber) {
 		<Number<T>>::put(n);
+	}
+
+	/// Sets the index of extrinsic that is currenty executing.
+	#[cfg(any(feature = "std", test))]
+	pub fn set_extrinsic_index(extrinsic_index: u32) {
+		storage::unhashed::put(EXTRINSIC_INDEX, &extrinsic_index)
 	}
 
 	/// Set the parent hash number to something in particular. Can be used as an alternative to
