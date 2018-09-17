@@ -27,7 +27,7 @@ use client;
 use codec::Decode;
 use hashdb::DBValue;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hash, Zero};
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Zero};
 use DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.

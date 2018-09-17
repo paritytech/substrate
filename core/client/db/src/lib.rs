@@ -57,7 +57,7 @@ use parking_lot::RwLock;
 use primitives::{H256, AuthorityId, Blake2Hasher, RlpCodec};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, Hash, NumberFor, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;

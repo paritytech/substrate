@@ -32,13 +32,13 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor,
 	Zero, One, As, NumberFor};
 use cache::DbCache;
-use utils::{meta_keys, Meta, db_err, number_to_db_key, db_key_to_number, open_database,
+use utils::{meta_keys, Meta, db_err, number_to_lookup_key, open_database,
 	read_db, read_id, read_meta};
 use DatabaseSettings;
 
 pub(crate) mod columns {
 	pub const META: Option<u32> = ::utils::COLUMN_META;
-	pub const BLOCK_INDEX: Option<u32> = Some(1);
+	pub const HASH_LOOKUP: Option<u32> = Some(1);
 	pub const HEADER: Option<u32> = Some(2);
 	pub const AUTHORITIES: Option<u32> = Some(3);
 	pub const CHT: Option<u32> = Some(4);
@@ -121,10 +121,10 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		Block: BlockT,
 {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
-		match read_db(&*self.db, columns::BLOCK_INDEX, columns::HEADER, id)? {
+		match read_db(&*self.db, columns::HASH_LOOKUP, columns::HEADER, id)? {
 			Some(header) => match Block::Header::decode(&mut &header[..]) {
 				Some(header) => Ok(Some(header)),
-				None => return Err(ClientErrorKind::Backend("Error decoding header".into()).into()),
+				None => return Err(client::error::ErrorKind::Backend("Error decoding header".into()).into()),
 			}
 			None => Ok(None),
 		}
@@ -132,7 +132,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 
 	fn info(&self) -> ClientResult<BlockchainInfo<Block>> {
 		let meta = self.meta.read();
-		Ok(BlockchainInfo {
+		Ok(client::blockchain::Info {
 			best_hash: meta.best_hash,
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
@@ -141,27 +141,101 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 
 	fn status(&self, id: BlockId<Block>) -> ClientResult<BlockStatus> {
 		let exists = match id {
-			BlockId::Hash(_) => read_id(&*self.db, columns::BLOCK_INDEX, id)?.is_some(),
+			BlockId::Hash(_) => read_db(
+				&*self.db,
+				columns::HASH_LOOKUP,
+				columns::HEADER,
+				id
+			)?.is_some(),
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
-			true => Ok(BlockStatus::InChain),
-			false => Ok(BlockStatus::Unknown),
+			true => Ok(client::blockchain::BlockStatus::InChain),
+			false => Ok(client::blockchain::BlockStatus::Unknown),
 		}
 	}
 
 	fn number(&self, hash: Block::Hash) -> ClientResult<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
-		read_id::<Block>(&*self.db, columns::BLOCK_INDEX, BlockId::Hash(hash))
-			.and_then(|key| match key {
-				Some(key) => Ok(Some(db_key_to_number(&key)?)),
-				None => Ok(None),
-			})
+		self.header(BlockId::Hash(hash)).and_then(|key| match key {
+			Some(hdr) => Ok(Some(hdr.number().clone())),
+			None => Ok(None),
+		})
 	}
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
-		read_db::<Block>(&*self.db, columns::BLOCK_INDEX, columns::HEADER, BlockId::Number(number)).map(|x|
-			x.map(|raw| HashFor::<Block>::hash(&raw[..])).map(Into::into)
-		)
+		read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(number))
+	}
+}
+
+impl<Block> LightStorage<Block> {
+	// note that a block is finalized. ensure that best chain contains the finalized
+	// block number first.
+	fn note_finalized(&self, transaction: &mut DBTransaction, header: &Block::Header, hash: Block::Hash) -> ClientResult<()> {
+		const NOTEWORTHY_FINALIZATION_GAP: u64 = 32;
+
+		// TODO: ensure this doesn't conflict with old finalized block.
+		let meta = self.meta.read();
+		let f_num = header.number().clone();
+		let number_u64: u64 = f_num.as_().into();
+		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
+
+		let (last_finalized_hash, last_finalized_number)
+			= (meta.finalized_hash.clone(), meta.finalized_number);
+
+		let finalized_gap = f_num - last_finalized_number;
+
+		if finalized_gap.as_() >= NOTEWORTHY_FINALIZATION_GAP {
+			info!(target: "db", "Finalizing large run of blocks from {:?} to {:?}",
+				(&last_finalized_hash, last_finalized_number), (&f_hash, f_num));
+		} else {
+			debug!(target: "db", "Finalizing blocks from {:?} to {:?}",
+				(&last_finalized_hash, last_finalized_number), (&f_hash, f_num));
+		}
+
+		// build new CHT if required
+		let mut build_cht = |header| {
+			if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
+				let new_cht_start: NumberFor<Block> = cht::start_number(cht::SIZE, new_cht_number);
+				let new_cht_root: Option<Block::Hash> = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+					cht::SIZE, new_cht_number, (new_cht_start.as_()..)
+					.map(|num| self.hash(As::sa(num)).unwrap_or_default())
+				);
+
+				if let Some(new_cht_root) = new_cht_root {
+					transaction.put(columns::CHT, &number_to_lookup_key(new_cht_start), new_cht_root.as_ref());
+
+					let mut prune_block = new_cht_start;
+					let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
+					trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
+
+					while prune_block <= new_cht_end {
+						let id = read_id(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
+						if let Some(hash) = id {
+							let lookup_key = number_to_lookup_key(prune_block);
+							transaction.delete(columns::HASH_LOOKUP, &lookup_key);
+							transaction.delete(columns::HEADER, hash.as_ref());
+						}
+						prune_block += <<Block as BlockT>::Header as HeaderT>::Number::one();
+					}
+				}
+			}
+
+			Ok(())
+		}
+
+		// attempt to build CHT for all newly finalized blocks.
+		for num in (last_finalized_number..f_num).map(|x| x + One::one()) {
+			if num == f_num {
+				build_cht(header)?;
+			} else {
+				let old_header= self.header(BlockId::Number(num))?
+					.expect("finalizing block {} implies existence of block {}", f_num, num);
+
+				build_cht(&old_header)?;
+			}
+		}
+
+		Ok(())
 	}
 }
 
@@ -181,13 +255,12 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		let hash = header.hash();
 		let number = *header.number();
-		let key = number_to_db_key(number);
 
-		transaction.put(columns::HEADER, &key, &header.encode());
-		transaction.put(columns::BLOCK_INDEX, hash.as_ref(), &key);
+		transaction.put(columns::HEADER, hash.as_ref(), &header.encode());
+		transaction.put(columns::HASH_LOOKUP, &number_to_lookup_key(number), hash.as_ref());
 
-		let best_authorities = if is_new_best {
-			transaction.put(columns::META, meta_keys::BEST_BLOCK, &key);
+		let best_authorities = if is_new_best || finalized {
+			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
 
 			// cache authorities for previous block
 			let number: u64 = number.as_();
@@ -206,25 +279,8 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			None
 		};
 
-		// build new CHT if required
-		if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
-			let new_cht_start: NumberFor<Block> = cht::start_number(cht::SIZE, new_cht_number);
-			let new_cht_root: Option<Block::Hash> = cht::compute_root::<Block::Header, Blake2Hasher, _>(
-				cht::SIZE, new_cht_number, (new_cht_start.as_()..)
-				.map(|num| self.hash(As::sa(num)).unwrap_or_default()));
-
-			if let Some(new_cht_root) = new_cht_root {
-				transaction.put(columns::CHT, &number_to_db_key(new_cht_start), new_cht_root.as_ref());
-
-				let mut prune_block = new_cht_start;
-				let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
-				trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
-
-				while prune_block <= new_cht_end {
-					transaction.delete(columns::HEADER, &number_to_db_key(prune_block));
- 					prune_block += <<Block as BlockT>::Header as HeaderT>::Number::one();
-				}
-			}
+		if finalized {
+			self.note_finalized(&mut transaction, &header, hash)?;
 		}
 
 		debug!("Light DB Commit {:?} ({})", hash, number);
@@ -242,7 +298,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
 		let cht_start = cht::start_number(cht_size, cht_number);
-		self.db.get(columns::CHT, &number_to_db_key(cht_start)).map_err(db_err)?
+		self.db.get(columns::CHT, &number_to_lookup_key(cht_start)).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
 			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
 	}
@@ -334,11 +390,11 @@ pub(crate) mod tests {
 
 		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
 		assert_eq!(db.db.iter(columns::HEADER).count(), 1);
-		assert_eq!(db.db.iter(columns::BLOCK_INDEX).count(), 1);
+		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), 1);
 
 		let _ = insert_block(&db, &genesis_hash, 1, None);
 		assert_eq!(db.db.iter(columns::HEADER).count(), 2);
-		assert_eq!(db.db.iter(columns::BLOCK_INDEX).count(), 2);
+		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), 2);
 	}
 
 	#[test]
