@@ -207,11 +207,12 @@ impl<Block: BlockT> Blockchain<Block> {
 			return;
 		}
 
-		// either first block or inserted at end which means parent wasn't in leaf list
-		if maybe_insertion_position.is_none() {
-			return;
-		}
-		let insertion_position = maybe_insertion_position.expect("early return right above. q.e.d.");
+		// inserted at end of leaf list which means parent wasn't in leaf list
+		// and no need to remove parent
+		let insertion_position = match maybe_insertion_position {
+			None => return,
+			Some(x) => x
+		};
 
 		let parent_header = storage.blocks.get(&parent_hash).expect("parent hash must reference block in storage. q.e.d.").header().clone();
 
