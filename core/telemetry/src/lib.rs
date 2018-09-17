@@ -97,17 +97,17 @@ impl<'a> ws::Handler for Connection<'a> {
 	}
 
     fn on_close(&mut self, code: ws::CloseCode, reason: &str) {
-		trace!(target: "telemetry", "Connection closing due to ({:?}) {}", code, reason);
-
 		*self.out_sync.lock() = None;
+
+		trace!(target: "telemetry", "Connection closing due to ({:?}) {}", code, reason);
     }
 
 	fn on_error(&mut self, _: ws::Error) {
+		*self.out_sync.lock() = None;
+
 		// Sleep to ensure that reconnecting isn't spamming logs.
 		// This happens in it's own thread so it won't block anything.
 		thread::sleep(time::Duration::from_millis(1000));
-
-		*self.out_sync.lock() = None;
 	}
 }
 
