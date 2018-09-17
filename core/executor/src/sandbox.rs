@@ -342,7 +342,7 @@ pub enum InstantiationError {
 	EnvironmentDefintionCorrupted,
 	/// Provided module isn't recognized as a valid webassembly binary.
 	ModuleDecoding,
-	/// Module is well-formed webassembly binary but could not be instantiated. This could
+	/// Module is a well-formed webassembly binary but could not be instantiated. This could
 	/// happen because, e.g. the module imports entries not provided by the environment.
 	Instantiation,
 	/// Module is well-formed, instantiated and linked, but while executing the start function
