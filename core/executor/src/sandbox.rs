@@ -689,4 +689,85 @@ mod tests {
 			vec![1],
 		);
 	}
+
+	#[test]
+	fn unlinkable_module() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(import "env" "non-existent" (func))
+
+			(func (export "call")
+			)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			vec![1],
+		);
+	}
+
+	#[test]
+	fn corrupted_module() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		// Corrupted wasm file
+		let code = &[0, 0, 0, 0, 1, 0, 0, 0];
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", code).unwrap(),
+			vec![1],
+		);
+	}
+
+	#[test]
+	fn start_fn_ok() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(func (export "call")
+			)
+
+			(func $start
+			)
+
+			(start $start)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			vec![0],
+		);
+	}
+
+	#[test]
+	fn start_fn_traps() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(func (export "call")
+			)
+
+			(func $start
+				unreachable
+			)
+
+			(start $start)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			vec![2],
+		);
+	}
 }
