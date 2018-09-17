@@ -14,12 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Telemetry utils.
 //!
 //! `telemetry` macro be used from whereever in the Substrate codebase
 //! in order to send real-time logging information to the telemetry
 //! server (if there is one). We use the async drain adapter of `slog`
 //! so that the logging thread doesn't get held up at all.
+// end::description[]
 
 extern crate parking_lot;
 extern crate ws;
@@ -101,7 +103,8 @@ impl<'a> ws::Handler for Connection<'a> {
     }
 
 	fn on_error(&mut self, _: ws::Error) {
-		// Sleep to ensure that reconnecting isn't spamming logs
+		// Sleep to ensure that reconnecting isn't spamming logs.
+		// This happens in it's own thread so it won't block anything.
 		thread::sleep(time::Duration::from_millis(1000));
 
 		*self.out_sync.lock() = None;
@@ -153,15 +156,12 @@ impl io::Write for TelemetryWriter {
 		if self.buffer.is_empty() {
 			return Ok(());
 		}
-
 		if let Ok(s) = ::std::str::from_utf8(&self.buffer[..]) {
 			let mut out = self.out.lock();
 
 			let error = if let Some(ref mut o) = *out {
 				let r = o.send(s);
 				trace!(target: "telemetry", "Sent to telemetry: {} -> {:?}", s, r);
-
-				drop(o);
 
 				r.is_err()
 			} else {
@@ -173,7 +173,6 @@ impl io::Write for TelemetryWriter {
 				*out = None;
 			}
 		}
-
 		self.buffer.clear();
 		Ok(())
 	}
