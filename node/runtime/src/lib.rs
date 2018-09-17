@@ -194,7 +194,7 @@ construct_runtime!(
 		CouncilVoting: council_voting::{Module, Call, Storage, Event<T>},
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		Treasury: treasury,
-		Contract: contract::{Module, Call, Log},
+		Contract: contract::{Module, Call, Config},
 	}
 );
 
