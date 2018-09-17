@@ -746,7 +746,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// the operation is performed as if there are no blocks greater `max_block_number`
 	/// ignoring all blocks with numbers greater
 	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
-	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<<<Block as BlockT>::Header as HeaderT>::Number>) -> error::Result<Option<Block::Hash>> {
+	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>) -> error::Result<Option<Block::Hash>> {
 		let target_header = {
 			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
 				Some(x) => x,
