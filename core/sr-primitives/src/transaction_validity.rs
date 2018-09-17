@@ -21,6 +21,10 @@ use rstd::prelude::*;
 /// Priority for a transaction. Additive. Higher is better.
 pub type TransactionPriority = u64;
 
+/// Minimum number of blocks a transaction will remain valid for.
+/// `TransactionLongevity::max_value()` means "forever".
+pub type TransactionLongevity = u64;
+
 /// Tag for a transaction. No two transactions with the same tag should be placed on-chain.
 pub type TransactionTag = Vec<u8>;
 
@@ -28,6 +32,6 @@ pub type TransactionTag = Vec<u8>;
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
 pub enum TransactionValidity {
 	Invalid,
-	Valid(TransactionPriority, Vec<TransactionTag>, Vec<TransactionTag>),
+	Valid(TransactionPriority, Vec<TransactionTag>, Vec<TransactionTag>, TransactionLongevity),
 	Unknown,
 }

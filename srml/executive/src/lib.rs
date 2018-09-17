@@ -56,7 +56,8 @@ use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqu
 use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
-use primitives::{ApplyOutcome, ApplyError, transaction_validity::TransactionValidity};
+use primitives::{ApplyOutcome, ApplyError};
+use primitives::transaction_validity::{TransactionValidity, TransactionPriority, TransactionLongevity};
 
 mod internal {
 	pub enum ApplyError {
@@ -253,7 +254,7 @@ impl<
 				expected_index = expected_index + One::one();
 			}
 			
-			TransactionValidity::Valid(encoded_len as u64, deps, vec![(sender, *xt.index()).encode()])
+			TransactionValidity::Valid(encoded_len as TransactionPriority, deps, vec![(sender, *xt.index()).encode()], TransactionLongevity::max_value())
 		} else {
 			return TransactionValidity::Invalid
 		}
