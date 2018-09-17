@@ -332,8 +332,12 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 
 		// If we're the dialer, we have to decide which upgrade we want.
 		let purpose = if self.queued_dial_upgrades.is_empty() {
-			error!(target: "sub-libp2p", "Logic error: opened an outgoing substream \
-				with no purpose");
+			// Since we sometimes remove elements from `queued_dial_upgrades` before they succeed
+			// but after the outbound substream has started opening, it is possible that the queue
+			// is empty when we receive a substream. This is not an error.
+			// Example: we want to open a Kademlia substream, we start opening one, but in the
+			// meanwhile the remote opens a Kademlia substream. When we receive the new substream,
+			// we don't need it anymore.
 			return;
 		} else {
 			self.queued_dial_upgrades.remove(0)
