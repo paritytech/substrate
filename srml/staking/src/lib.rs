@@ -48,6 +48,7 @@ extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
+use rstd::cmp;
 use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
@@ -484,9 +485,10 @@ impl<T: Trait> Module<T> {
 
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
+		let desired_validator_count = <ValidatorCount<T>>::get() as usize;
 		<StakeRange<T>>::put(
 			if !intentions.is_empty() {
-				let n = <ValidatorCount<T>>::get() as usize;
+				let n = cmp::min(desired_validator_count, intentions.len());
 				(intentions[0].0, intentions[n - 1].0)
 			} else {
 				(Zero::zero(), Zero::zero())
@@ -494,7 +496,7 @@ impl<T: Trait> Module<T> {
 		);
 		let vals = &intentions.into_iter()
 			.map(|(_, v)| v)
-			.take(<ValidatorCount<T>>::get() as usize)
+			.take(desired_validator_count)
 			.collect::<Vec<_>>();
 		for v in <session::Module<T>>::validators().iter() {
 			<CurrentNominatorsFor<T>>::remove(v);
