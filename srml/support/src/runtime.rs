@@ -982,9 +982,9 @@ macro_rules! __decl_outer_config {
 	) => {
 		mashup! {
 			$(
-                substrate_generate_config_name["config-name" $parsed_name] = $parsed_name Config;
+				substrate_generate_config_name["config-name" $parsed_name] = $parsed_name Config;
 			)*
-        }
+		}
 
 		substrate_generate_config_name! {
 			impl_outer_config!(
