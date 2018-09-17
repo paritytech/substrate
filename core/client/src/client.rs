@@ -477,6 +477,8 @@ impl<B, E, Block> Client<B, E, Block> where
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}
+		// TODO: [rob] non-instant finality.
+		transaction.set_finalized(true);
 		self.backend.commit_operation(transaction)?;
 
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {

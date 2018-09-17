@@ -197,7 +197,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	/// Select a top-level root and canonicalized it. Discards all sibling subtrees and the root.
 	/// Returns a set of changes that need to be added to the DB.
 	pub fn canonicalize(&mut self, hash: &BlockHash) -> CommitSet<Key> {
-		trace!(target: "state-db", "Finalizing {:?}", hash);
+		trace!(target: "state-db", "Canonicalizing {:?}", hash);
 		let level = self.levels.pop_front().expect("no blocks to canonicalize");
 		let index = level.iter().position(|overlay| overlay.hash == *hash)
 			.expect("attempting to canonicalize unknown block");

@@ -27,7 +27,7 @@ use client;
 use codec::Decode;
 use hashdb::DBValue;
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hash, HashFor, Zero};
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, Hash, Zero};
 use DatabaseSettings;
 
 /// Number of columns in the db. Must be the same for both full && light dbs.
@@ -42,8 +42,12 @@ pub mod meta_keys {
 	pub const TYPE: &[u8; 4] = b"type";
 	/// Best block key.
 	pub const BEST_BLOCK: &[u8; 4] = b"best";
+	/// Last finalized block key.
+	pub const FINALIZED_BLOCK: &[u8; 5] = b"final";
 	/// Best authorities block key.
 	pub const BEST_AUTHORITIES: &[u8; 4] = b"auth";
+	/// Genesis block hash.
+	pub const GENESIS_HASH: &[u8; 3] = b"gen";
 }
 
 /// Database metadata.
@@ -52,15 +56,19 @@ pub struct Meta<N, H> {
 	pub best_hash: H,
 	/// Number of the best known block.
 	pub best_number: N,
+	/// Hash of the best finalized block.
+	pub finalized_hash: H,
+	/// Number of the best finalized block.
+	pub finalized_number: N,
 	/// Hash of the genesis block.
 	pub genesis_hash: H,
 }
 
-/// Type of block key in the database (LE block number).
-pub type BlockKey = [u8; 4];
+/// A block lookup key: used for canonical lookup from block number to hash
+pub type BlockLookupKey = [u8; 4];
 
-/// Convert block number into key (LE representation).
-pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u64> {
+/// Convert block number into lookup key (LE representation).
+pub fn number_to_lookup_key<N>(n: N) -> BlockLookupKey where N: As<u64> {
 	let n: u64 = n.as_();
 	assert!(n & 0xffffffff00000000 == 0);
 
@@ -72,8 +80,8 @@ pub fn number_to_db_key<N>(n: N) -> BlockKey where N: As<u64> {
 	]
 }
 
-/// Convert block key into block number.
-pub fn db_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u64> {
+/// Convert block lookup key into block number.
+pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u64> {
 	match key.len() {
 		4 => Ok((key[0] as u64) << 24
 			| (key[1] as u64) << 16
@@ -114,19 +122,24 @@ pub fn open_database(config: &DatabaseSettings, db_type: &str) -> client::error:
 	Ok(Arc::new(db))
 }
 
-/// Convert block id to block key, reading number from db if required.
-pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block>) -> Result<Option<BlockKey>, client::error::Error>
+/// Convert block id to block key, looking up canonical hash by number from DB as necessary.
+pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block>) -> Result<Option<Block::Hash>, client::error::Error>
 	where
 		Block: BlockT,
 {
 	match id {
-		BlockId::Hash(h) => db.get(col_index, h.as_ref())
-			.map(|v| v.map(|v| {
-				let mut key: [u8; 4] = [0; 4];
-				key.copy_from_slice(&v);
-				key
-			})).map_err(db_err),
-		BlockId::Number(n) => Ok(Some(number_to_db_key(n))),
+		BlockId::Hash(h) => Ok(Some(h)),
+		BlockId::Number(n) => db.get(col_index, &number_to_lookup_key(n)).map(|v|
+			v.map(|v| {
+				let mut h = <Block::Hash>::default();
+				{
+					let h = h.as_mut();
+					let len = ::std::cmp::min(v.len(), h.len());
+					h.as_mut().copy_from_slice(&v[..len]);
+				}
+				h
+			})
+		).map_err(db_err),
 	}
 }
 
@@ -136,39 +149,56 @@ pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>,
 		Block: BlockT,
 {
 	read_id(db, col_index, id).and_then(|key| match key {
-		Some(key) => db.get(col, &key).map_err(db_err),
+		Some(key) => db.get(col, key.as_ref()).map_err(db_err),
 		None => Ok(None),
 	})
 }
 
 /// Read meta from the database.
-pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>, client::error::Error>
+pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<
+	Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
+	client::error::Error,
+>
 	where
 		Block: BlockT,
 {
-	let genesis_number = <<Block as BlockT>::Header as HeaderT>::Number::zero();
-	let (best_hash, best_number) = if let Some(Some(header)) = db.get(COLUMN_META, meta_keys::BEST_BLOCK).and_then(|id|
-		match id {
-			Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]))),
-			None => Ok(None),
-		}).map_err(db_err)?
-	{
-		let hash = header.hash();
-		debug!("DB Opened blockchain db, best {:?} ({})", hash, header.number());
-		(hash, *header.number())
-	} else {
-		(Default::default(), genesis_number)
+	let genesis_hash: Block::Hash = match db.get(COLUMN_META, meta_keys::GENESIS_HASH).map_err(db_err)? {
+		Some(h) => match Decode::decode(&mut &h[..]) {
+			Some(h) => h,
+			None => return Err(client::error::ErrorKind::Backend("Error decoding genesis hash".into()).into()),
+		},
+		None => return Ok(Meta {
+			best_hash: Default::default(),
+			best_number: Zero::zero(),
+			finalized_hash: Default::default(),
+			finalized_number: Zero::zero(),
+			genesis_hash: Default::default(),
+		}),
 	};
 
-	let genesis_hash = db.get(col_header, &number_to_db_key(genesis_number))
-		.map_err(db_err)?
-		.map(|raw| HashFor::<Block>::hash(&raw[..]))
-		.unwrap_or_default()
-		.into();
+	let load_meta_block = |desc, key| -> Result<_, client::error::Error> {
+		if let Some(Some(header)) = db.get(COLUMN_META, key).and_then(|id|
+			match id {
+				Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]))),
+				None => Ok(None),
+			}).map_err(db_err)?
+		{
+			let hash = header.hash();
+			debug!("DB Opened blockchain db, fetched {} = {:?} ({})", desc, hash, header.number());
+			Ok((hash, *header.number()))
+		} else {
+			Ok((genesis_hash.clone(), Zero::zero()))
+		}
+	};
+
+	let (best_hash, best_number) = load_meta_block("best", meta_keys::BEST_BLOCK)?;
+	let (finalized_hash, finalized_number) = load_meta_block("final", meta_keys::FINALIZED_BLOCK)?;
 
 	Ok(Meta {
 		best_hash,
 		best_number,
+		finalized_hash,
+		finalized_number,
 		genesis_hash,
 	})
 }

@@ -170,7 +170,13 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		Block: BlockT,
 		Block::Hash: From<H256>,
 {
-	fn import_header(&self, is_new_best: bool, header: Block::Header, authorities: Option<Vec<AuthorityId>>) -> ClientResult<()> {
+	fn import_header(
+		&self,
+		is_new_best: bool,
+		header: Block::Header,
+		authorities: Option<Vec<AuthorityId>>,
+		finalized: bool,
+	) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();
 
 		let hash = header.hash();
