@@ -335,11 +335,18 @@ impl SandboxInstance {
 	}
 }
 
-
+/// Error occured during instantiation of a sandboxed module.
 pub enum InstantiationError {
+	/// Something wrong with the environment definition. It either can't
+	/// be decoded, have a reference to a non-existent or torn down memory instance.
 	EnvironmentDefintionCorrupted,
-	Decoding,
+	/// Provided module isn't recognized as a valid webassembly binary.
+	ModuleDecoding,
+	/// Module is well-formed webassembly binary but could not be instantiated. This could
+	/// happen because, e.g. the module imports entries not provided by the environment.
 	Instantiation,
+	/// Module is well-formed, instantiated and linked, but while executing the start function
+	/// a trap was generated.
 	StartTrapped,
 }
 
@@ -384,7 +391,6 @@ fn decode_environment_definition(
 	))
 }
 
-
 /// Instantiate a guest module and return it's index in the store.
 ///
 /// The guest module's code is specified in `wasm`. Environment that will be available to
@@ -409,7 +415,7 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 	let (imports, guest_to_supervisor_mapping) =
 		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
 
-	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::Decoding)?;
+	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
 	let instance = ModuleInstance::new(&module, &imports).map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
@@ -432,10 +438,10 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 		},
 	)?;
 
+	// At last, register the instance.
 	let instance_idx = supervisor_externals
 		.store_mut()
 		.register_sandbox_instance(sandbox_instance);
-
 	Ok(instance_idx)
 }
 
