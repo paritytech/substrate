@@ -48,9 +48,6 @@ use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType}
 use srml_support::dispatch::Result;
 use system::ensure_signed;
 
-#[cfg(any(feature = "std", test))]
-use std::collections::HashMap;
-
 mod vote_threshold;
 pub use vote_threshold::{Approved, VoteThreshold};
 
@@ -352,7 +349,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
+	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
 		use codec::Encode;
 
 		Ok(map![
@@ -370,10 +367,10 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{BlakeTwo256};
-	use primitives::testing::{Digest, Header};
+	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -399,6 +396,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = ();
+		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
@@ -412,7 +410,7 @@ mod tests {
 		type Event = ();
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
@@ -428,7 +426,7 @@ mod tests {
 			voting_period: 1,
 			minimum_deposit: 1,
 		}.build_storage().unwrap());
-		t.into()
+		runtime_io::TestExternalities::new(t)
 	}
 
 	type System = system::Module<Test>;

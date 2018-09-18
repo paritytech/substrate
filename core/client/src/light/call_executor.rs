@@ -17,6 +17,7 @@
 //! Light client call exector. Executes methods on remote full nodes, fetching
 //! execution proof and checking it locally.
 
+use std::marker::PhantomData;
 use std::sync::Arc;
 use futures::{IntoFuture, Future};
 
@@ -36,7 +37,7 @@ use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
 use codec::Decode;
 use heapsize::HeapSizeOf;
-use std::marker::PhantomData;
+use memorydb::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
@@ -108,7 +109,7 @@ where
 		_method: &str,
 		_call_data: &[u8],
 		_m: ExecutionManager<FF>
-	) -> ClientResult<(Vec<u8>, S::Transaction)> {
+	) -> ClientResult<(Vec<u8>, S::Transaction, Option<MemoryDB<H>>)> {
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
@@ -143,7 +144,7 @@ pub fn check_execution_proof<Header, E, H, C>(
 	let local_state_root = request.header.state_root();
 
 	let mut changes = OverlayedChanges::default();
-	let (local_result, _) = execution_proof_check::<H, C, _>(
+	let local_result = execution_proof_check::<H, C, _>(
 		H256::from_slice(local_state_root.as_ref()).into(),
 		remote_proof,
 		&mut changes,

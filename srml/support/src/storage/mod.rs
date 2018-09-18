@@ -543,11 +543,11 @@ pub mod unhashed {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use runtime_io::{twox_128, TestExternalities, with_externalities};
+	use runtime_io::{twox_128, TestExternalities, RlpCodec, with_externalities};
 
 	#[test]
 	fn integers_can_be_stored() {
-		let mut t = TestExternalities::new();
+		let mut t = TestExternalities::<_, RlpCodec>::default();
 		with_externalities(&mut t, || {
 			let x = 69u32;
 			put(b":test", &x);
@@ -564,7 +564,7 @@ mod tests {
 
 	#[test]
 	fn bools_can_be_stored() {
-		let mut t = TestExternalities::new();
+		let mut t = TestExternalities::<_, RlpCodec>::default();
 		with_externalities(&mut t, || {
 			let x = true;
 			put(b":test", &x);
@@ -582,7 +582,7 @@ mod tests {
 
 	#[test]
 	fn vecs_can_be_retrieved() {
-		let mut t = TestExternalities::new();
+		let mut t = TestExternalities::<_, RlpCodec>::default();
 		with_externalities(&mut t, || {
 			runtime_io::set_storage(&twox_128(b":test"), b"\x0b\0\0\0Hello world");
 			let x = b"Hello world".to_vec();
@@ -594,7 +594,7 @@ mod tests {
 
 	#[test]
 	fn vecs_can_be_stored() {
-		let mut t = TestExternalities::new();
+		let mut t = TestExternalities::<_, RlpCodec>::default();
 		let x = b"Hello world".to_vec();
 
 		with_externalities(&mut t, || {

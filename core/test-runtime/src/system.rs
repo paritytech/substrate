@@ -20,10 +20,11 @@
 use rstd::prelude::*;
 use runtime_io::{storage_root, enumerated_trie_root};
 use runtime_support::storage::{self, StorageValue, StorageMap};
-use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
+use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
+use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
 use codec::{KeyedVec, Encode};
-use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header};
+use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header, Digest};
 use primitives::Blake2Hasher;
 
 const NONCE_OF: &[u8] = b"nonce:";
@@ -101,13 +102,19 @@ pub fn finalise_block() -> Header {
 	let number = <Number>::take();
 	let parent_hash = <ParentHash>::take();
 	let storage_root = BlakeTwo256::storage_root();
+	let storage_changes_root = BlakeTwo256::storage_changes_root(number);
+
+	let mut digest = Digest::default();
+	if let Some(storage_changes_root) = storage_changes_root {
+		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root));
+	}
 
 	Header {
 		number,
 		extrinsics_root,
 		state_root: storage_root,
 		parent_hash,
-		digest: Default::default(),
+		digest: digest,
 	}
 }
 
@@ -172,17 +179,17 @@ mod tests {
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
 	use ::{Header, Digest, Extrinsic, Transfer};
-	use primitives::Blake2Hasher;
+	use primitives::{Blake2Hasher, RlpCodec};
 
-	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
-		map![
+	fn new_test_ext() -> TestExternalities<Blake2Hasher, RlpCodec> {
+		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),
 			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
 			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
 			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
 			twox_128(&Keyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
-		]
+		])
 	}
 
 	fn construct_signed_tx(tx: Transfer) -> Extrinsic {

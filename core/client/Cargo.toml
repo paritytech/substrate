@@ -26,6 +26,7 @@ substrate-telemetry = { path = "../telemetry" }
 hashdb = "0.2.1"
 patricia-trie = "0.2.1"
 rlp = "0.2.4"
+memorydb = "0.2.1"
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }

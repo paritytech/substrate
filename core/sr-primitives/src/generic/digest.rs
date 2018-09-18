@@ -36,6 +36,7 @@ impl<Item> Default for Digest<Item> {
 impl<Item> traits::Digest for Digest<Item> where
 	Item: DigestItemT + Codec
 {
+	type Hash = Item::Hash;
 	type Item = Item;
 
 	fn logs(&self) -> &[Self::Item] {
@@ -51,10 +52,14 @@ impl<Item> traits::Digest for Digest<Item> where
 /// provide opaque access to other items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-pub enum DigestItem<AuthorityId> {
+pub enum DigestItem<Hash, AuthorityId> {
 	/// System digest item announcing that authorities set has been changed
 	/// in the block. Contains the new set of authorities.
 	AuthoritiesChange(Vec<AuthorityId>),
+	/// System digest item that contains the root of changes trie at given
+	/// block. It is created for every block iff runtime supports changes
+	/// trie creation.
+	ChangesTrieRoot(Hash),
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(Vec<u8>),
 }
@@ -63,9 +68,11 @@ pub enum DigestItem<AuthorityId> {
 /// final runtime implementations for encoding/decoding its log items.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum DigestItemRef<'a, AuthorityId: 'a> {
+pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a> {
 	/// Reference to `DigestItem::AuthoritiesChange`.
 	AuthoritiesChange(&'a [AuthorityId]),
+	/// Reference to `DigestItem::ChangesTrieRoot`.
+	ChangesTrieRoot(&'a Hash),
 	/// Reference to `DigestItem::Other`.
 	Other(&'a Vec<u8>),
 }
@@ -79,9 +86,10 @@ pub enum DigestItemRef<'a, AuthorityId: 'a> {
 enum DigestItemType {
 	Other = 0,
 	AuthoritiesChange,
+	ChangesTrieRoot,
 }
 
-impl<AuthorityId> DigestItem<AuthorityId> {
+impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 	/// Returns Some if `self` is a `DigestItem::Other`.
 	pub fn as_other(&self) -> Option<&Vec<u8>> {
 		match *self {
@@ -91,15 +99,17 @@ impl<AuthorityId> DigestItem<AuthorityId> {
 	}
 
 	/// Returns a 'referencing view' for this digest item.
-	fn dref<'a>(&'a self) -> DigestItemRef<'a, AuthorityId> {
+	fn dref<'a>(&'a self) -> DigestItemRef<'a, Hash, AuthorityId> {
 		match *self {
 			DigestItem::AuthoritiesChange(ref v) => DigestItemRef::AuthoritiesChange(v),
+			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
 			DigestItem::Other(ref v) => DigestItemRef::Other(v),
 		}
 	}
 }
 
-impl<AuthorityId: Member> traits::DigestItem for DigestItem<AuthorityId> {
+impl<Hash: Member, AuthorityId: Member> traits::DigestItem for DigestItem<Hash, AuthorityId> {
+	type Hash = Hash;
 	type AuthorityId = AuthorityId;
 
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
@@ -108,19 +118,29 @@ impl<AuthorityId: Member> traits::DigestItem for DigestItem<AuthorityId> {
 			_ => None,
 		}
 	}
+
+	fn as_changes_trie_root(&self) -> Option<&Hash> {
+		match *self {
+			DigestItem::ChangesTrieRoot(ref changes_trie_root) => Some(changes_trie_root),
+			_ => None,
+		}
+	}
 }
 
-impl<AuthorityId: Encode> Encode for DigestItem<AuthorityId> {
+impl<Hash: Encode, AuthorityId: Encode> Encode for DigestItem<Hash, AuthorityId> {
 	fn encode(&self) -> Vec<u8> {
 		self.dref().encode()
 	}
 }
 
-impl<AuthorityId: Decode> Decode for DigestItem<AuthorityId> {
+impl<Hash: Decode, AuthorityId: Decode> Decode for DigestItem<Hash, AuthorityId> {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		let item_type: DigestItemType = Decode::decode(input)?;
 		match item_type {
 			DigestItemType::AuthoritiesChange => Some(DigestItem::AuthoritiesChange(
+				Decode::decode(input)?,
+			)),
+			DigestItemType::ChangesTrieRoot => Some(DigestItem::ChangesTrieRoot(
 				Decode::decode(input)?,
 			)),
 			DigestItemType::Other => Some(DigestItem::Other(
@@ -130,7 +150,7 @@ impl<AuthorityId: Decode> Decode for DigestItem<AuthorityId> {
 	}
 }
 
-impl<'a, AuthorityId: Encode> Encode for DigestItemRef<'a, AuthorityId> {
+impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, AuthorityId> {
 	fn encode(&self) -> Vec<u8> {
 		let mut v = Vec::new();
 
@@ -138,6 +158,10 @@ impl<'a, AuthorityId: Encode> Encode for DigestItemRef<'a, AuthorityId> {
 			DigestItemRef::AuthoritiesChange(authorities) => {
 				DigestItemType::AuthoritiesChange.encode_to(&mut v);
 				authorities.encode_to(&mut v);
+			},
+			DigestItemRef::ChangesTrieRoot(changes_trie_root) => {
+				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
+				changes_trie_root.encode_to(&mut v);
 			},
 			DigestItemRef::Other(val) => {
 				DigestItemType::Other.encode_to(&mut v);

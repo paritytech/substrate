@@ -20,11 +20,11 @@ use std::{error, fmt};
 use std::cmp::Ord;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use std::sync::Arc;
-
 use hashdb::Hasher;
+use memorydb::MemoryDB;
 use rlp::Encodable;
-use trie_backend::{TryIntoTrieBackend, TrieBackend};
+use trie_backend::TrieBackend;
+use trie_backend_essence::TrieBackendStorage;
 use patricia_trie::{TrieDBMut, TrieMut, NodeCodec};
 use heapsize::HeapSizeOf;
 
@@ -32,12 +32,15 @@ use heapsize::HeapSizeOf;
 /// to it.
 ///
 /// The clone operation (if implemented) should be cheap.
-pub trait Backend<H: Hasher, C: NodeCodec<H>>: TryIntoTrieBackend<H, C> {
+pub trait Backend<H: Hasher, C: NodeCodec<H>> {
 	/// An error type when fetching data is not possible.
 	type Error: super::Error;
 
-	/// Changes to be applied if committing
+	/// Storage changes to be applied if committing
 	type Transaction;
+
+	/// Type of trie backend storage.
+	type TrieBackendStorage: TrieBackendStorage<H>;
 
 	/// Get keyed storage associated with specific address, or None if there is nothing associated.
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error>;
@@ -60,6 +63,9 @@ pub trait Backend<H: Hasher, C: NodeCodec<H>>: TryIntoTrieBackend<H, C> {
 
 	/// Get all key/value pairs into a Vec.
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)>;
+
+	/// Try convert into trie backend.
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>>;
 }
 
 /// Error impossible.
@@ -81,7 +87,7 @@ impl error::Error for Void {
 /// tests.
 #[derive(Eq)]
 pub struct InMemory<H, C> {
-	inner: Arc<HashMap<Vec<u8>, Vec<u8>>>,
+	inner: HashMap<Vec<u8>, Vec<u8>>,
 	_hasher: PhantomData<H>,
 	_codec: PhantomData<C>,
 }
@@ -89,7 +95,7 @@ pub struct InMemory<H, C> {
 impl<H, C> Default for InMemory<H, C> {
 	fn default() -> Self {
 		InMemory {
-			inner: Arc::new(Default::default()),
+			inner: Default::default(),
 			_hasher: PhantomData,
 			_codec: PhantomData,
 		}
@@ -111,9 +117,17 @@ impl<H, C> PartialEq for InMemory<H, C> {
 }
 
 impl<H: Hasher, C: NodeCodec<H>> InMemory<H, C> where H::Out: HeapSizeOf {
+	/// Try convert into trie backend.
+	pub fn try_into_trie_backend(self) -> Option<TrieBackend<MemoryDB<H>, H, C>> {
+		let mut mdb = MemoryDB::default();
+		let root = insert_into_memory_db::<H, C, _>(&mut mdb, self.inner.into_iter())?;
+
+		Some(TrieBackend::new(mdb, root))
+	}
+
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H, C>>::Transaction) -> Self {
-		let mut inner: HashMap<_, _> = (&*self.inner).clone();
+		let mut inner: HashMap<_, _> = self.inner.clone();
 		for (key, val) in changes {
 			match val {
 				Some(v) => { inner.insert(key, v); },
@@ -128,7 +142,7 @@ impl<H: Hasher, C: NodeCodec<H>> InMemory<H, C> where H::Out: HeapSizeOf {
 impl<H, C> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H, C> {
 	fn from(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		InMemory {
-			inner: Arc::new(inner), _hasher: PhantomData, _codec: PhantomData
+			inner: inner, _hasher: PhantomData, _codec: PhantomData
 		}
 	}
 }
@@ -138,6 +152,7 @@ impl super::Error for Void {}
 impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> where H::Out: HeapSizeOf {
 	type Error = Void;
 	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
+	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
 		Ok(self.inner.get(key).map(Clone::clone))
@@ -171,23 +186,32 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> where H::Out: 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		self.inner.iter().map(|(k, v)| (k.clone(), v.clone())).collect()
 	}
+
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
+		let mut mdb = MemoryDB::new();
+		let root = insert_into_memory_db::<H, C, _>(&mut mdb, self.inner.clone().into_iter())?;
+		Some(TrieBackend::new(mdb, root))
+	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for InMemory<H, C> where H::Out: HeapSizeOf {
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
-		use memorydb::MemoryDB;
-		let mut root = <H as Hasher>::Out::default();
-		let mut mdb = MemoryDB::new();
-		{
-			let mut trie = TrieDBMut::<H, C>::new(&mut mdb, &mut root);
-			for (key, value) in self.inner.iter() {
-				if let Err(e) = trie.insert(&key, &value) {
-					warn!(target: "trie", "Failed to write to trie: {}", e);
-					return None;
-				}
+/// Insert input pairs into memory db.
+pub(crate) fn insert_into_memory_db<H, C, I>(mdb: &mut MemoryDB<H>, input: I) -> Option<H::Out>
+	where
+		H: Hasher,
+		H::Out: HeapSizeOf,
+		C: NodeCodec<H>,
+		I: Iterator<Item=(Vec<u8>, Vec<u8>)>,
+{
+	let mut root = <H as Hasher>::Out::default();
+	{
+		let mut trie = TrieDBMut::<H, C>::new(mdb, &mut root);
+		for (key, value) in input {
+			if let Err(e) = trie.insert(&key, &value) {
+				warn!(target: "trie", "Failed to write to trie: {}", e);
+				return None;
 			}
 		}
-
-		Some(TrieBackend::with_memorydb(mdb, root))
 	}
+
+	Some(root)
 }

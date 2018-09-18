@@ -54,9 +54,6 @@ use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use system::ensure_signed;
 
-#[cfg(any(feature = "std", test))]
-use std::collections::HashMap;
-
 /// A session has changed.
 pub trait OnSessionChange<T> {
 	/// Session has changed.
@@ -265,8 +262,7 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
-
+	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
 		use codec::Encode;
 		use primitives::traits::As;
 		Ok(map![
@@ -282,10 +278,10 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{Identity, BlakeTwo256};
-	use primitives::testing::{Digest, Header};
+	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin!{
 		pub enum Origin for Test {}
@@ -295,7 +291,7 @@ mod tests {
 	pub struct Test;
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
-		type Log = u64;
+		type Log = DigestItem;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
 	}
@@ -309,6 +305,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = ();
+		type Log = DigestItem;
 	}
 	impl timestamp::Trait for Test {
 		const TIMESTAMP_SET_POSITION: u32 = 0;
@@ -324,7 +321,7 @@ mod tests {
 	type Consensus = consensus::Module<Test>;
 	type Session = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
@@ -337,7 +334,7 @@ mod tests {
 			session_length: 2,
 			validators: vec![1, 2, 3],
 		}.build_storage().unwrap());
-		t.into()
+		runtime_io::TestExternalities::new(t)
 	}
 
 	#[test]

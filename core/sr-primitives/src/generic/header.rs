@@ -117,7 +117,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
 	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
-	DigestItem: DigestItemT + Codec,
+	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
  {
 	type Number = Number;
@@ -148,7 +148,11 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 		digest: Self::Digest
 	) -> Self {
 		Header {
-			number, extrinsics_root: extrinsics_root, state_root, parent_hash, digest
+			number,
+			extrinsics_root,
+			state_root,
+			parent_hash,
+			digest
 		}
 	}
 }

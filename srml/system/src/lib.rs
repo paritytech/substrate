@@ -19,7 +19,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(any(feature = "std", test))]
 extern crate substrate_primitives;
 
 #[cfg_attr(any(feature = "std", test), macro_use)]
@@ -45,17 +44,23 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay, EnsureOrigin};
-use runtime_support::{StorageValue, StorageMap, Parameter};
+	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As};
+use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
-#[cfg(any(feature = "std", test))]
-use rstd::marker::PhantomData;
 #[cfg(any(feature = "std", test))]
 use codec::Encode;
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
+use runtime_io::{twox_128, TestExternalities, Blake2Hasher, RlpCodec};
+
+#[cfg(any(feature = "std", test))]
+use substrate_primitives::ChangesTrieConfiguration;
+
+/// Current extrinsic index (u32) is stored under this key.
+pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
+/// Changes trie configuration is stored under this key.
+pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -74,7 +79,7 @@ pub trait Trait: Eq + Clone {
 	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
 	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Parameter + Member + Default + traits::Digest;
+	type Digest: Parameter + Member + Default + traits::Digest<Hash = Self::Hash>;
 	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
@@ -82,6 +87,7 @@ pub trait Trait: Eq + Clone {
 		Digest = Self::Digest
 	>;
 	type Event: Parameter + Member + From<Event>;
+	type Log: From<Log<Self>> + Into<DigestItemOf<Self>>;
 }
 
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
@@ -144,6 +150,39 @@ impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
 /// Exposed trait-generic origin type.
 pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
 
+pub type Log<T> = RawLog<
+	<T as Trait>::Hash,
+>;
+
+/// A logs in this module.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<Hash> {
+	/// Changes trie has been computed for this block. Contains the root of
+	/// changes trie.
+	ChangesTrieRoot(Hash),
+}
+
+impl<Hash: Member> RawLog<Hash> {
+	/// Try to cast the log entry as ChangesTrieRoot log entry.
+	pub fn as_changes_trie_root(&self) -> Option<&Hash> {
+		match *self {
+			RawLog::ChangesTrieRoot(ref item) => Some(item),
+		}
+	}
+}
+
+// Implementation for tests outside of this crate.
+#[cfg(any(feature = "std", test))]
+impl From<RawLog<substrate_primitives::H256>> for primitives::testing::DigestItem {
+	fn from(log: RawLog<substrate_primitives::H256>) -> primitives::testing::DigestItem {
+		match log {
+			RawLog::ChangesTrieRoot(root) => primitives::generic::DigestItem::ChangesTrieRoot
+				::<substrate_primitives::H256, u64>(root),
+		}
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as System {
 
@@ -151,7 +190,6 @@ decl_storage! {
 
 		ExtrinsicCount: u32;
 		pub BlockHash get(block_hash): required map [ T::BlockNumber => T::Hash ];
-		pub ExtrinsicIndex get(extrinsic_index): u32;
 		ExtrinsicData get(extrinsic_data): required map [ u32 => Vec<u8> ];
 		RandomSeed get(random_seed): required T::Hash;
 		/// The current block number being processed. Set by `execute_block`.
@@ -204,15 +242,20 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 }
 
 impl<T: Trait> Module<T> {
+	/// Gets the index of extrinsic that is currenty executing.
+	pub fn extrinsic_index() -> Option<u32> {
+		storage::unhashed::get(EXTRINSIC_INDEX)
+	}
+
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
+		storage::unhashed::put(EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
 		<ExtrinsicsRoot<T>>::put(txs_root);
 		<RandomSeed<T>>::put(Self::calculate_random());
-		<ExtrinsicIndex<T>>::put(0u32);
 		<Events<T>>::kill();
 	}
 
@@ -223,13 +266,23 @@ impl<T: Trait> Module<T> {
 
 		let number = <Number<T>>::take();
 		let parent_hash = <ParentHash<T>>::take();
-		let digest = <Digest<T>>::take();
+		let mut digest = <Digest<T>>::take();
 		let extrinsics_root = <ExtrinsicsRoot<T>>::take();
 		let storage_root = T::Hashing::storage_root();
+		let storage_changes_root = T::Hashing::storage_changes_root(number.as_());
+
+		// we can't compute changes trie root earlier && put it to the Digest
+		// because it will include all currently existing temporaries
+		if let Some(storage_changes_root) = storage_changes_root {
+			let item = RawLog::ChangesTrieRoot(storage_changes_root);
+			let item = <T as Trait>::Log::from(item).into();
+			digest.push(item);
+		}
 
 		// <Events<T>> stays to be inspected by the client.
 
-		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root, parent_hash, digest)
+		<T::Header as traits::Header>::new(number, extrinsics_root, storage_root,
+			parent_hash, digest)
 	}
 
 	/// Deposits a log and ensures it matches the blocks log data.
@@ -241,7 +294,8 @@ impl<T: Trait> Module<T> {
 
 	/// Deposits an event onto this block's event record.
 	pub fn deposit_event(event: T::Event) {
-		let phase = <ExtrinsicIndex<T>>::get().map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+		let extrinsic_index = Self::extrinsic_index();
+		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
 		let mut events = Self::events();
 		events.push(EventRecord { phase, event });
 		<Events<T>>::put(events);
@@ -261,13 +315,13 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn externalities() -> TestExternalities<Blake2Hasher> {
-		map![
+	pub fn externalities() -> TestExternalities<Blake2Hasher, RlpCodec> {
+		TestExternalities::new(map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
 			twox_128(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<RandomSeed<T>>::key()).to_vec() => T::Hash::default().encode()
-		]
+		])
 	}
 
 	/// Set the block number to something in particular. Can be used as an alternative to
@@ -275,6 +329,12 @@ impl<T: Trait> Module<T> {
 	#[cfg(any(feature = "std", test))]
 	pub fn set_block_number(n: T::BlockNumber) {
 		<Number<T>>::put(n);
+	}
+
+	/// Sets the index of extrinsic that is currenty executing.
+	#[cfg(any(feature = "std", test))]
+	pub fn set_extrinsic_index(extrinsic_index: u32) {
+		storage::unhashed::put(EXTRINSIC_INDEX, &extrinsic_index)
 	}
 
 	/// Set the parent hash number to something in particular. Can be used as an alternative to
@@ -299,7 +359,7 @@ impl<T: Trait> Module<T> {
 	/// Note what the extrinsic data of the current extrinsic index is. If this is called, then
 	/// ensure `derive_extrinsics` is also called before block-building is completed.
 	pub fn note_extrinsic(encoded_xt: Vec<u8>) {
-		<ExtrinsicData<T>>::insert(<ExtrinsicIndex<T>>::get().unwrap_or_default(), encoded_xt);
+		<ExtrinsicData<T>>::insert(Self::extrinsic_index().unwrap_or_default(), encoded_xt);
 	}
 
 	/// To be called immediately after an extrinsic has been applied.
@@ -308,14 +368,16 @@ impl<T: Trait> Module<T> {
 			Ok(_) => Event::ExtrinsicSuccess,
 			Err(_) => Event::ExtrinsicFailed,
 		}.into());
-		<ExtrinsicIndex<T>>::put(<ExtrinsicIndex<T>>::get().unwrap_or_default() + 1u32);
+
+		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
+		storage::unhashed::put(EXTRINSIC_INDEX, &next_extrinsic_index);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
-		<ExtrinsicCount<T>>::put(<ExtrinsicIndex<T>>::get().unwrap_or_default());
-		<ExtrinsicIndex<T>>::kill();
+		let extrinsic_index: u32 = storage::unhashed::take(EXTRINSIC_INDEX).unwrap_or_default();
+		<ExtrinsicCount<T>>::put(extrinsic_index);
 	}
 
 	/// Remove all extrinsics data and save the extrinsics trie root.
@@ -330,12 +392,20 @@ impl<T: Trait> Module<T> {
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[serde(deny_unknown_fields)]
-pub struct GenesisConfig<T: Trait>(PhantomData<T>);
+pub struct GenesisConfig<T: Trait> {
+	/// Changes trie configuration.
+	pub changes_trie_config: Option<ChangesTrieConfiguration>,
+	/// Marker for 'storing' T.
+	pub _phantom: ::std::marker::PhantomData<T>,
+}
 
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> Default for GenesisConfig<T> {
 	fn default() -> Self {
-		GenesisConfig(PhantomData)
+		GenesisConfig {
+			changes_trie_config: Default::default(),
+			_phantom: Default::default(),
+		}
 	}
 }
 
@@ -345,13 +415,22 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 	fn build_storage(self) -> Result<primitives::StorageMap, String> {
 		use codec::Encode;
 
-		Ok(map![
+		let mut storage: primitives::StorageMap = map![
 			Self::hash(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),
 			Self::hash(<Number<T>>::key()).to_vec() => 1u64.encode(),
 			Self::hash(<ParentHash<T>>::key()).to_vec() => [69u8; 32].encode(),
-			Self::hash(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode(),
-			Self::hash(<ExtrinsicIndex<T>>::key()).to_vec() => [0u8; 4].encode()
-		])
+			Self::hash(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode()
+		];
+
+		storage.insert(EXTRINSIC_INDEX.to_vec(), 0u32.encode());
+
+		if let Some(changes_trie_config) = self.changes_trie_config {
+			storage.insert(
+				CHANGES_TRIE_CONFIG.to_vec(),
+				changes_trie_config.encode());
+		}
+
+		Ok(storage)
 	}
 }
 
@@ -362,7 +441,7 @@ mod tests {
 	use substrate_primitives::H256;
 	use primitives::BuildStorage;
 	use primitives::traits::BlakeTwo256;
-	use primitives::testing::{Digest, Header};
+	use primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin!{
 		pub enum Origin for Test where system = super {}
@@ -380,6 +459,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = u16;
+		type Log = DigestItem;
 	}
 
 	impl From<Event> for u16 {
@@ -393,9 +473,7 @@ mod tests {
 
 	type System = Module<Test>;
 
-
-
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		GenesisConfig::<Test>::default().build_storage().unwrap().into()
 	}
 

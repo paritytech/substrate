@@ -21,7 +21,7 @@ use substrate_primitives::{H256, H512};
 use super::{Digest, Header, DigestItem, UncheckedExtrinsic};
 
 type Block = super::Block<
-	Header<u64, ::traits::BlakeTwo256, DigestItem<u32>>,
+	Header<u64, ::traits::BlakeTwo256, DigestItem<H256, u32>>,
 	UncheckedExtrinsic<H256, u64, u64, ::Ed25519Signature>,
 >;
 
@@ -34,8 +34,8 @@ fn block_roundtrip_serialization() {
 			state_root: [1u8; 32].into(),
 			extrinsics_root: [2u8; 32].into(),
 			digest: Digest { logs: vec![
-				DigestItem::Other::<u32>(vec![1, 2, 3]),
-				DigestItem::Other::<u32>(vec![4, 5, 6]),
+				DigestItem::Other::<H256, u32>(vec![1, 2, 3]),
+				DigestItem::Other::<H256, u32>(vec![4, 5, 6]),
 			] },
 		},
 		extrinsics: vec![
@@ -70,7 +70,7 @@ fn block_roundtrip_serialization() {
 
 #[test]
 fn system_digest_item_encoding() {
-	let item = DigestItem::AuthoritiesChange::<u32>(vec![10, 20, 30]);
+	let item = DigestItem::AuthoritiesChange::<H256, u32>(vec![10, 20, 30]);
 	let encoded = item.encode();
 	assert_eq!(encoded, vec![
 		// type = DigestItemType::AuthoritiesChange
@@ -83,13 +83,13 @@ fn system_digest_item_encoding() {
 		30, 0, 0, 0,
 	]);
 
-	let decoded: DigestItem<u32> = Decode::decode(&mut &encoded[..]).unwrap();
+	let decoded: DigestItem<H256, u32> = Decode::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(item, decoded);
 }
 
 #[test]
 fn non_system_digest_item_encoding() {
-	let item = DigestItem::Other::<u32>(vec![10, 20, 30]);
+	let item = DigestItem::Other::<H256, u32>(vec![10, 20, 30]);
 	let encoded = item.encode();
 	assert_eq!(encoded, vec![
 		// type = DigestItemType::Other
@@ -100,6 +100,6 @@ fn non_system_digest_item_encoding() {
 		10, 20, 30,
 	]);
 
-	let decoded: DigestItem<u32> = Decode::decode(&mut &encoded[..]).unwrap();
+	let decoded: DigestItem<H256, u32> = Decode::decode(&mut &encoded[..]).unwrap();
 	assert_eq!(item, decoded);
 }
