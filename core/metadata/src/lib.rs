@@ -155,6 +155,44 @@ pub struct EventMetadata {
 	pub documentation: MaybeOwnedArray<&'static str, String>,
 }
 
+/// All the metadata about a storage.
+#[derive(Clone, PartialEq, Eq, Decode, Encode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct StorageMetadata {
+	pub prefix: Cow<'static, str>,
+	pub functions: MaybeOwnedArray<StorageFunctionMetadata>,
+}
+
+/// All the metadata about a storage function.
+#[derive(Clone, PartialEq, Eq, Decode, Encode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct StorageFunctionMetadata {
+	pub name: Cow<'static, str>,
+	pub modifier: StorageFunctionModifier,
+	pub ty: StorageFunctionType,
+	pub documentation: MaybeOwnedArray<&'static str, String>,
+}
+
+/// A storage function type.
+#[derive(Clone, PartialEq, Eq, Decode, Encode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum StorageFunctionType {
+	Plain(Cow<'static, str>),
+	Map {
+		key: Cow<'static, str>,
+		value: Cow<'static, str>,
+	}
+}
+
+/// A storage function modifier.
+#[derive(Clone, PartialEq, Eq, Decode, Encode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub enum StorageFunctionModifier {
+	None,
+	Default,
+	Required,
+}
+
 /// The metadata of a runtime.
 #[derive(Eq, Encode, Decode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
