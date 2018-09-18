@@ -50,6 +50,9 @@ use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member};
 use primitives::bft::MisbehaviorReport;
 use system::{ensure_signed, ensure_inherent};
 
+mod mock;
+mod tests;
+
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
 
@@ -94,13 +97,13 @@ impl<SessionKey: Member> RawLog<SessionKey> {
 
 // Implementation for tests outside of this crate.
 #[cfg(any(feature = "std", test))]
-impl<N> From<RawLog<N>> for primitives::testing::DigestItem {
+impl<N> From<RawLog<N>> for primitives::testing::DigestItem where N: Into<u64> {
 	fn from(log: RawLog<N>) -> primitives::testing::DigestItem {
 		match log {
 			RawLog::AuthoritiesChange(authorities) =>
 				primitives::generic::DigestItem::AuthoritiesChange
 					::<substrate_primitives::H256, u64>(authorities.into_iter()
-						.enumerate().map(|(i, _)| i as u64).collect()),
+						.map(Into::into).collect()),
 		}
 	}
 }
@@ -215,13 +218,21 @@ impl<T: Trait> Module<T> {
 		<OriginalAuthorities<T>>::put(current_authorities.unwrap_or_else(||
 			AuthorityStorageVec::<T::SessionKey>::items()));
 	}
+
+	/// Deposit one of this module's logs.
+	fn deposit_log(log: Log<T>) {
+		<system::Module<T>>::deposit_log(<T as Trait>::Log::from(log).into());
+	}
 }
 
 /// Finalization hook for the consensus module.
 impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	fn on_finalise(_n: T::BlockNumber) {
-		if let Some(_) = <OriginalAuthorities<T>>::take() {
-			// TODO: call Self::deposit_log
+		if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
+			let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
+			if current_authorities != original_authorities {
+				Self::deposit_log(RawLog::AuthoritiesChange(current_authorities));
+			}
 		}
 	}
 }
