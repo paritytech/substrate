@@ -27,7 +27,7 @@ pub fn digest_build_iterator(config: &Configuration, block: u64) -> DigestBuildI
 		return DigestBuildIterator::empty();
 	}
 
-	// digest is buievery digest_multiplier blocks
+	// digest is built every digest_multiplier blocks
 	let mut digest_interval = config.digest_interval;
 	if block % digest_interval != 0 {
 		return DigestBuildIterator::empty();

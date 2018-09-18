@@ -31,6 +31,7 @@ use proving_backend::ProvingBackendEssence;
 use trie_backend_essence::{TrieBackendEssence};
 
 /// Return changes of given key at given blocks range.
+/// `max` is the number of best known block.
 pub fn key_changes<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	config: &Configuration,
 	storage: &S,
@@ -56,6 +57,7 @@ pub fn key_changes<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 }
 
 /// Returns proof of changes of given key at given blocks range.
+/// `max` is the number of best known block.
 pub fn key_changes_proof<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	config: &Configuration,
 	storage: &S,
@@ -89,6 +91,7 @@ pub fn key_changes_proof<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 }
 
 /// Check key changes proog and return changes of the key at given blocks range.
+/// `max` is the number of best known block.
 pub fn key_changes_proof_check<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	config: &Configuration,
 	roots_storage: &S, // TODO: use RootsStorage is only used to gather root

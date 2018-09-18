@@ -51,6 +51,7 @@ impl OverlayedChanges {
 	///
 	/// Returns false if configuration has been set already and we now trying
 	/// to install different configuration. This isn't supported now.
+	#[must_use = "Result must be checked"]
 	pub(crate) fn set_changes_trie_config(&mut self, config: ChangesTrieConfig) -> bool {
 		if let Some(ref old_config) = self.changes_trie_config {
 			// we do not support changes trie configuration' change now
@@ -81,9 +82,8 @@ impl OverlayedChanges {
 		entry.value = val;
 
 		if let Some(extrinsic) = extrinsic_index {
-			let mut extrinsics = entry.extrinsics.take().unwrap_or_default();
-			extrinsics.insert(extrinsic);
-			entry.extrinsics = Some(extrinsics);
+			entry.extrinsics.get_or_insert_with(Default::default)
+				.insert(extrinsic);
 		}
 	}
 
@@ -103,9 +103,8 @@ impl OverlayedChanges {
 				entry.value = None;
 
 				if let Some(extrinsic) = extrinsic_index {
-					let mut extrinsics = entry.extrinsics.take().unwrap_or_default();
-					extrinsics.insert(extrinsic);
-					entry.extrinsics = Some(extrinsics);
+					entry.extrinsics.get_or_insert_with(Default::default)
+						.insert(extrinsic);
 				}
 			}
 		}
@@ -118,9 +117,8 @@ impl OverlayedChanges {
 				entry.value = None;
 
 				if let Some(extrinsic) = extrinsic_index {
-					let mut extrinsics = entry.extrinsics.take().unwrap_or_default();
-					extrinsics.insert(extrinsic);
-					entry.extrinsics = Some(extrinsics);
+					entry.extrinsics.get_or_insert_with(Default::default)
+						.insert(extrinsic);
 				}
 			}
 		}
@@ -141,9 +139,8 @@ impl OverlayedChanges {
 				entry.value = val.value;
 
 				if let Some(prospective_extrinsics) = val.extrinsics {
-					let mut extrinsics = entry.extrinsics.take().unwrap_or_default();
-					extrinsics.extend(prospective_extrinsics);
-					entry.extrinsics = Some(extrinsics);
+					entry.extrinsics.get_or_insert_with(Default::default)
+						.extend(prospective_extrinsics);
 				}
 			}
 		}
@@ -316,7 +313,7 @@ mod tests {
 	#[test]
 	fn extrinsic_changes_are_collected() {
 		let mut overlay = OverlayedChanges::default();
-		overlay.set_changes_trie_config(ChangesTrieConfig {
+		let _ = overlay.set_changes_trie_config(ChangesTrieConfig {
 			digest_interval: 4, digest_levels: 1,
 		});
 
