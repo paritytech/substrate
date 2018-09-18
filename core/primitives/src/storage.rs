@@ -42,3 +42,34 @@ pub struct StorageChangeSet<Hash> {
 	)>,
 }
 
+/// List of all well known keys and prefixes in storage.
+pub mod well_known_keys {
+
+	/// Wasm code of the runtime.
+	///
+	/// Stored as a raw byte vector. Required by substrate.
+	pub const CODE: &'static [u8] = b":code";
+
+	/// Number of wasm linear memory pages required for execution of the runtime.
+	///
+	/// The type of this value is encoded `u64`.
+	pub const HEAP_PAGES: &'static [u8] = b":heappages";
+
+	/// Number of authorities.
+	///
+	/// The type of this value is encoded `u32`. Required by substrate.
+	pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
+
+	/// Prefix under which authorities are storied.
+	///
+	/// The full key for N-th authority is generated as:
+	///
+	/// `(n as u32).to_keyed_vec(AUTHORITY_PREFIX)`.
+	pub const AUTHORITY_PREFIX: &'static [u8] = b":auth:";
+
+	/// Current extrinsic index (u32) is stored under this key.
+	pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
+
+	/// Changes trie configuration is stored under this key.
+	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
+}

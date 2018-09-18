@@ -26,6 +26,7 @@ use runtime_primitives::BuildStorage;
 use substrate_metadata::JsonMetadataDecodable;
 use primitives::{Blake2Hasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
+use primitives::storage::well_known_keys;
 use codec::{Encode, Decode};
 use state_machine::{
 	Backend as StateBackend, CodeExecutor,
@@ -228,7 +229,7 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		Ok(self.storage(id, &StorageKey(b":code".to_vec()))?
+		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect("None is returned if there's no value stored for the given key; ':code' key is always defined; qed").0)
 	}
 

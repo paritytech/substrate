@@ -188,6 +188,7 @@ pub mod tests {
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
 	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::storage::well_known_keys;
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
@@ -225,7 +226,7 @@ pub mod tests {
 
 		// 'fetch' read proof from remote node
 		let authorities_len = remote_client.authorities_at(&remote_block_id).unwrap().len();
-		let remote_read_proof = remote_client.read_proof(&remote_block_id, b":auth:len").unwrap();
+		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::AUTHORITY_COUNT).unwrap();
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
@@ -269,7 +270,7 @@ pub mod tests {
 		assert_eq!((&local_checker as &FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
-			key: b":auth:len".to_vec(),
+			key: well_known_keys::AUTHORITY_COUNT.to_vec(),
 			retry_count: None,
 		}, remote_read_proof).unwrap().unwrap()[0], authorities_len as u8);
 	}

@@ -26,11 +26,10 @@ use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
 use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header, Digest};
 use primitives::Blake2Hasher;
+use primitives::storage::well_known_keys;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
-const AUTHORITY_AT: &'static[u8] = b":auth:";
-const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 
 storage_items! {
 	ExtrinsicIndex: b"sys:xti" => required u32;
@@ -50,9 +49,12 @@ pub fn nonce_of(who: AccountId) -> u64 {
 
 /// Get authorities ar given block.
 pub fn authorities() -> Vec<::primitives::AuthorityId> {
-	let len: u32 = storage::unhashed::get(AUTHORITY_COUNT).expect("There are always authorities in test-runtime");
+	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
+		.expect("There are always authorities in test-runtime");
 	(0..len)
-		.map(|i| storage::unhashed::get(&i.to_keyed_vec(AUTHORITY_AT)).expect("Authority is properly encoded in test-runtime"))
+		.map(|i| storage::unhashed::get(&i.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX))
+			.expect("Authority is properly encoded in test-runtime")
+		)
 		.collect()
 }
 
@@ -180,14 +182,15 @@ mod tests {
 	use keyring::Keyring;
 	use ::{Header, Digest, Extrinsic, Transfer};
 	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::storage::well_known_keys;
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher, RlpCodec> {
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
-			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
-			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
-			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
+			twox_128(well_known_keys::AUTHORITY_COUNT).to_vec() => vec![].and(&3u32),
+			twox_128(&0u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
+			twox_128(&1u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
+			twox_128(&2u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
 			twox_128(&Keyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		])
 	}
