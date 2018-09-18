@@ -473,8 +473,8 @@ macro_rules! __dispatch_impl_metadata {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn metadata() -> $crate::dispatch::ModuleMetadata {
 				$crate::dispatch::ModuleMetadata {
-					name: stringify!($mod_type),
-					call: __call_to_json!($($rest)*),
+					name: $crate::dispatch::Cow::Borrowed(stringify!($mod_type)),
+					call: __call_to_metadata!($($rest)*),
 				}
 			}
 		}
@@ -484,7 +484,7 @@ macro_rules! __dispatch_impl_metadata {
 /// Convert the list of calls into their JSON representation, joined by ",".
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __call_to_json {
+macro_rules! __call_to_metadata {
 	(
 		$call_type:ident $origin_type:ty
 			{$(
@@ -497,7 +497,7 @@ macro_rules! __call_to_json {
 			)*}
 	) => {
 		$crate::dispatch::CallMetadata {
-			name: stringify!($call_type),
+			name: $crate::dispatch::Cow::Borrowed(stringify!($call_type)),
 			functions: __functions_to_metadata!(0; $origin_type;; $(
 				fn $fn_name($from $(, $param_name: $param )* ) -> $result;
 				$( $doc_attr ),*;
@@ -561,7 +561,7 @@ macro_rules! __functions_to_metadata{
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
 	) => {
-		$crate::dispatch::Cow::Borrowed(&[ $( $function_metadata ),* ])
+		$crate::dispatch::MaybeOwnedArray::Borrowed(&[ $( $function_metadata ),* ])
 	}
 }
 
@@ -578,16 +578,16 @@ macro_rules! __function_to_metadata {
 	) => {
 		$crate::dispatch::FunctionMetadata {
 			id: $fn_id,
-			name: stringify!($fn_name),
-			arguments: &[
+			name: $crate::dispatch::Cow::Borrowed(stringify!($fn_name)),
+			arguments: $crate::dispatch::MaybeOwnedArray::Borrowed(&[
 				$(
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::Cow::Borrowed(stringify!($param_name)),
 						ty: $crate::dispatch::Cow::Borrowed(stringify!($param)),
 					}
 				),*
-			],
-			documentation: $crate::dispatch::Cow::Borrowed(&[ $( $fn_doc ),* ]),
+			]),
+			documentation: $crate::dispatch::MaybeOwnedArray::Borrowed(&[ $( $fn_doc ),* ]),
 		}
 	};
 	(
@@ -598,8 +598,8 @@ macro_rules! __function_to_metadata {
 		$crate::dispatch::FunctionMetadata {
 			id: $fn_id,
 			name: $crate::dispatch::Cow::Borrowed(stringify!($fn_name)),
-			arguments: $crate::dispatch::Cow::Borrowed(&[]),
-			documentation: $crate::dispatch::Cow::Borrowed(&[ $( $fn_doc ),* ]),
+			arguments: $crate::dispatch::MaybeOwnedArray::Borrowed(&[]),
+			documentation: $crate::dispatch::MaybeOwnedArray::Borrowed(&[ $( $fn_doc ),* ]),
 		}
 	};
 }
