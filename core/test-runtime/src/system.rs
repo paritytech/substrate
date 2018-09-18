@@ -26,11 +26,10 @@ use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult};
 use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header, Digest};
 use primitives::Blake2Hasher;
+use primitives::storage::well_known_keys;
 
 const NONCE_OF: &[u8] = b"nonce:";
 const BALANCE_OF: &[u8] = b"balance:";
-const AUTHORITY_AT: &'static[u8] = b":auth:";
-const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 
 storage_items! {
 	ExtrinsicData: b"sys:xtd" => required map [ u32 => Vec<u8> ];
@@ -53,9 +52,12 @@ pub fn nonce_of(who: AccountId) -> u64 {
 
 /// Get authorities ar given block.
 pub fn authorities() -> Vec<::primitives::AuthorityId> {
-	let len: u32 = storage::unhashed::get(AUTHORITY_COUNT).expect("There are always authorities in test-runtime");
+	let len: u32 = storage::unhashed::get(well_known_keys::AUTHORITY_COUNT)
+		.expect("There are always authorities in test-runtime");
 	(0..len)
-		.map(|i| storage::unhashed::get(&i.to_keyed_vec(AUTHORITY_AT)).expect("Authority is properly encoded in test-runtime"))
+		.map(|i| storage::unhashed::get(&i.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX))
+			.expect("Authority is properly encoded in test-runtime")
+		)
 		.collect()
 }
 
@@ -63,7 +65,7 @@ pub fn initialise_block(header: Header) {
 	// populate environment.
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
-	storage::unhashed::put(b":extrinsic_index", &0u32);
+	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 }
 
 /// Actually execute all transitioning for `block`.
@@ -79,9 +81,9 @@ pub fn execute_block(block: Block) {
 
 	// execute transactions
 	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
-		storage::unhashed::put(b":extrinsic_index", &(i as u32));
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(i as u32));
 		execute_transaction_backend(e).map_err(|_| ()).expect("Extrinsic error");
-		storage::unhashed::kill(b":extrinsic_index");
+		storage::unhashed::kill(well_known_keys::EXTRINSIC_INDEX);
 	});
 
 	// check storage root.
@@ -92,7 +94,7 @@ pub fn execute_block(block: Block) {
 	// check digest
 	let mut digest = Digest::default();
 	if let Some(storage_changes_root) = storage_changes_root(header.number) {
-		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root));
+		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root.into()));
 	}
 	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }
@@ -100,16 +102,16 @@ pub fn execute_block(block: Block) {
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
-	let extrinsic_index: u32 = storage::unhashed::get(b":extrinsic_index").unwrap();
+	let extrinsic_index: u32 = storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let result = execute_transaction_backend(&utx);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
-	storage::unhashed::put(b":extrinsic_index", &(extrinsic_index + 1));
+	storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &(extrinsic_index + 1));
 	result
 }
 
 /// Finalise the block.
 pub fn finalise_block() -> Header {
-	let extrinsic_index: u32 = storage::unhashed::take(b":extrinsic_index").unwrap();
+	let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();
@@ -195,14 +197,15 @@ mod tests {
 	use keyring::Keyring;
 	use ::{Header, Digest, Extrinsic, Transfer};
 	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::storage::well_known_keys;
 
 	fn new_test_ext() -> TestExternalities<Blake2Hasher, RlpCodec> {
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
-			twox_128(b":auth:len").to_vec() => vec![].and(&3u32),
-			twox_128(&0u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
-			twox_128(&1u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
-			twox_128(&2u32.to_keyed_vec(b":auth:")).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
+			twox_128(well_known_keys::AUTHORITY_COUNT).to_vec() => vec![].and(&3u32),
+			twox_128(&0u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => Keyring::Alice.to_raw_public().to_vec(),
+			twox_128(&1u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => Keyring::Bob.to_raw_public().to_vec(),
+			twox_128(&2u32.to_keyed_vec(well_known_keys::AUTHORITY_PREFIX)).to_vec() => Keyring::Charlie.to_raw_public().to_vec(),
 			twox_128(&Keyring::Alice.to_raw_public().to_keyed_vec(b"balance:")).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0]
 		])
 	}

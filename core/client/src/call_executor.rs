@@ -27,6 +27,7 @@ use rlp::Encodable;
 use memorydb::MemoryDB;
 use codec::Decode;
 use primitives::{Blake2Hasher, RlpCodec};
+use primitives::storage::well_known_keys;
 
 use backend;
 use error;
@@ -144,11 +145,11 @@ where
 		let mut overlay = OverlayedChanges::default();
 		let state = self.backend.state_at(*id)?;
 		use state_machine::Backend;
-		let code = state.storage(b":code")
+		let code = state.storage(well_known_keys::CODE)
 			.map_err(|e| error::ErrorKind::Execution(Box::new(e)))?
 			.ok_or(error::ErrorKind::VersionInvalid)?
 			.to_vec();
-		let heap_pages = state.storage(b":heappages")
+		let heap_pages = state.storage(well_known_keys::HEAP_PAGES)
 			.map_err(|e| error::ErrorKind::Execution(Box::new(e)))?
 			.and_then(|v| u64::decode(&mut &v[..]))
 			.unwrap_or(8) as usize;

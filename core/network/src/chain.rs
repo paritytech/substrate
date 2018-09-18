@@ -56,7 +56,13 @@ pub trait Client<Block: BlockT>: Send + Sync {
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
 
 	/// Get key changes proof.
-	fn key_changes_proof(&self, first: Block::Hash, last: Block::Hash, max: Block::Hash, key: &[u8]) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error>;
+	fn key_changes_proof(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		max: Block::Hash,
+		key: &[u8]
+	) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error>;
 }
 
 impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
@@ -106,7 +112,13 @@ impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
 		(self as &SubstrateClient<B, E, Block>).execution_proof(&BlockId::Hash(block.clone()), method, data)
 	}
 
-	fn key_changes_proof(&self, first: Block::Hash, last: Block::Hash, max: Block::Hash, key: &[u8]) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error> {
+	fn key_changes_proof(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		max: Block::Hash,
+		key: &[u8]
+	) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error> {
 		(self as &SubstrateClient<B, E, Block>).key_changes_proof(first, last, max, key)
 	}
 }

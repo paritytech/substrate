@@ -277,6 +277,7 @@ pub mod tests {
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
 	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::storage::well_known_keys;
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
 	use super::*;
@@ -319,7 +320,7 @@ pub mod tests {
 
 		// 'fetch' read proof from remote node
 		let authorities_len = remote_client.authorities_at(&remote_block_id).unwrap().len();
-		let remote_read_proof = remote_client.read_proof(&remote_block_id, b":auth:len").unwrap();
+		let remote_read_proof = remote_client.read_proof(&remote_block_id, well_known_keys::AUTHORITY_COUNT).unwrap();
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
@@ -363,7 +364,7 @@ pub mod tests {
 		assert_eq!((&local_checker as &FetchChecker<Block>).check_read_proof(&RemoteReadRequest::<Header> {
 			block: remote_block_header.hash(),
 			header: remote_block_header,
-			key: b":auth:len".to_vec(),
+			key: well_known_keys::AUTHORITY_COUNT.to_vec(),
 			retry_count: None,
 		}, remote_read_proof).unwrap().unwrap()[0], authorities_len as u8);
 	}
@@ -403,7 +404,8 @@ pub mod tests {
 	#[test]
 	fn changes_proof_is_generated_and_checked() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
-		let local_checker = LightDataChecker::<_, Blake2Hasher, RlpCodec>::new(test_client::LocalExecutor::new());
+		let local_checker = LightDataChecker::<_, Blake2Hasher, RlpCodec>::new(
+			test_client::LocalExecutor::new());
 		let local_checker = &local_checker as &FetchChecker<Block>;
 		let max = remote_client.info().unwrap().chain.best_number;
 		let max_hash = remote_client.info().unwrap().chain.best_hash;
@@ -427,7 +429,8 @@ pub mod tests {
 				key: key,
 				retry_count: None,
 			};
-			let local_result = local_checker.check_changes_proof(&request, remote_max, remote_proof).unwrap();
+			let local_result = local_checker.check_changes_proof(
+				&request, remote_max, remote_proof).unwrap();
 
 			// ..and ensure that result is the same as on remote node
 			match local_result == expected_result {
@@ -443,7 +446,8 @@ pub mod tests {
 	#[test]
 	fn check_changes_proof_fails_if_proof_is_wrong() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
-		let local_checker = LightDataChecker::<_, Blake2Hasher, RlpCodec>::new(test_client::LocalExecutor::new());
+		let local_checker = LightDataChecker::<_, Blake2Hasher, RlpCodec>::new(
+			test_client::LocalExecutor::new());
 		let local_checker = &local_checker as &FetchChecker<Block>;
 		let max = remote_client.info().unwrap().chain.best_number;
 		let max_hash = remote_client.info().unwrap().chain.best_hash;
@@ -469,7 +473,7 @@ pub mod tests {
 		// check proof on local client using max from the future
 		assert!(local_checker.check_changes_proof(&request, remote_max + 1, remote_proof.clone()).is_err());
 
-		// check proof on local client using broken proof (only having roots)
+		// check proof on local client using broken proof
 		remote_proof = local_roots_range.into_iter().map(|v| v.to_vec()).collect();
 		assert!(local_checker.check_changes_proof(&request, remote_max, remote_proof).is_err());
 	}

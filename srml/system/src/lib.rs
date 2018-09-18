@@ -45,6 +45,7 @@ extern crate safe_mix;
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As};
+use substrate_primitives::storage::well_known_keys;
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -56,11 +57,6 @@ use runtime_io::{twox_128, TestExternalities, Blake2Hasher, RlpCodec};
 
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::ChangesTrieConfiguration;
-
-/// Current extrinsic index (u32) is stored under this key.
-pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
-/// Changes trie configuration is stored under this key.
-pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {
@@ -244,13 +240,13 @@ pub fn ensure_inherent<OuterOrigin, AccountId>(o: OuterOrigin) -> Result<(), &'s
 impl<T: Trait> Module<T> {
 	/// Gets the index of extrinsic that is currenty executing.
 	pub fn extrinsic_index() -> Option<u32> {
-		storage::unhashed::get(EXTRINSIC_INDEX)
+		storage::unhashed::get(well_known_keys::EXTRINSIC_INDEX)
 	}
 
 	/// Start the execution of a particular block.
 	pub fn initialise(number: &T::BlockNumber, parent_hash: &T::Hash, txs_root: &T::Hash) {
 		// populate environment.
-		storage::unhashed::put(EXTRINSIC_INDEX, &0u32);
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &0u32);
 		<Number<T>>::put(number);
 		<ParentHash<T>>::put(parent_hash);
 		<BlockHash<T>>::insert(*number - One::one(), parent_hash);
@@ -334,7 +330,7 @@ impl<T: Trait> Module<T> {
 	/// Sets the index of extrinsic that is currenty executing.
 	#[cfg(any(feature = "std", test))]
 	pub fn set_extrinsic_index(extrinsic_index: u32) {
-		storage::unhashed::put(EXTRINSIC_INDEX, &extrinsic_index)
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &extrinsic_index)
 	}
 
 	/// Set the parent hash number to something in particular. Can be used as an alternative to
@@ -370,13 +366,13 @@ impl<T: Trait> Module<T> {
 		}.into());
 
 		let next_extrinsic_index = Self::extrinsic_index().unwrap_or_default() + 1u32;
-		storage::unhashed::put(EXTRINSIC_INDEX, &next_extrinsic_index);
+		storage::unhashed::put(well_known_keys::EXTRINSIC_INDEX, &next_extrinsic_index);
 	}
 
 	/// To be called immediately after `note_applied_extrinsic` of the last extrinsic of the block
 	/// has been called.
 	pub fn note_finished_extrinsics() {
-		let extrinsic_index: u32 = storage::unhashed::take(EXTRINSIC_INDEX).unwrap_or_default();
+		let extrinsic_index: u32 = storage::unhashed::take(well_known_keys::EXTRINSIC_INDEX).unwrap_or_default();
 		<ExtrinsicCount<T>>::put(extrinsic_index);
 	}
 
@@ -422,11 +418,11 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 			Self::hash(<RandomSeed<T>>::key()).to_vec() => [0u8; 32].encode()
 		];
 
-		storage.insert(EXTRINSIC_INDEX.to_vec(), 0u32.encode());
+		storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
 
 		if let Some(changes_trie_config) = self.changes_trie_config {
 			storage.insert(
-				CHANGES_TRIE_CONFIG.to_vec(),
+				well_known_keys::CHANGES_TRIE_CONFIG.to_vec(),
 				changes_trie_config.encode());
 		}
 

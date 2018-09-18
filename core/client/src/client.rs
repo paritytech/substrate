@@ -26,6 +26,7 @@ use runtime_primitives::BuildStorage;
 use substrate_metadata::JsonMetadataDecodable;
 use primitives::{Blake2Hasher, RlpCodec, H256, ChangesTrieConfiguration};
 use primitives::storage::{StorageKey, StorageData};
+use primitives::storage::well_known_keys;
 use codec::{Encode, Decode};
 use state_machine::{
 	Backend as StateBackend, CodeExecutor,
@@ -203,7 +204,7 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		// changes trie configuration should never change => we can read it in advance
 		let changes_trie_config = backend.state_at(BlockId::Number(Zero::zero()))?
-			.storage(b":changes_trie")
+			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
 			.map_err(|e| error::Error::from_state(Box::new(e)))?
 			.and_then(|c| Decode::decode(&mut &*c));
 
@@ -238,7 +239,7 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get the code at a given block.
 	pub fn code_at(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		Ok(self.storage(id, &StorageKey(b":code".to_vec()))?
+		Ok(self.storage(id, &StorageKey(well_known_keys::CODE.to_vec()))?
 			.expect("None is returned if there's no value stored for the given key; ':code' key is always defined; qed").0)
 	}
 
@@ -803,33 +804,33 @@ pub(crate) mod tests {
 		}
 
 		// prepare test cases
-		let alice_key = twox_128(&runtime::system::balance_of_key(Keyring::Alice.to_raw_public().into())).to_vec();
-		let bob_key = twox_128(&runtime::system::balance_of_key(Keyring::Bob.to_raw_public().into())).to_vec();
-		let charlie_key = twox_128(&runtime::system::balance_of_key(Keyring::Charlie.to_raw_public().into())).to_vec();
-		let dave_key = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
-		let eve_key = twox_128(&runtime::system::balance_of_key(Keyring::Eve.to_raw_public().into())).to_vec();
-		let ferdie_key = twox_128(&runtime::system::balance_of_key(Keyring::Ferdie.to_raw_public().into())).to_vec();
+		let alice = twox_128(&runtime::system::balance_of_key(Keyring::Alice.to_raw_public().into())).to_vec();
+		let bob = twox_128(&runtime::system::balance_of_key(Keyring::Bob.to_raw_public().into())).to_vec();
+		let charlie = twox_128(&runtime::system::balance_of_key(Keyring::Charlie.to_raw_public().into())).to_vec();
+		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let eve = twox_128(&runtime::system::balance_of_key(Keyring::Eve.to_raw_public().into())).to_vec();
+		let ferdie = twox_128(&runtime::system::balance_of_key(Keyring::Ferdie.to_raw_public().into())).to_vec();
 		let test_cases = vec![
-			(1, 4, alice_key.clone(), vec![(4, 0), (1, 0)]),
-			(1, 3, alice_key.clone(), vec![(1, 0)]),
-			(2, 4, alice_key.clone(), vec![(4, 0)]),
-			(2, 3, alice_key.clone(), vec![]),
+			(1, 4, alice.clone(), vec![(4, 0), (1, 0)]),
+			(1, 3, alice.clone(), vec![(1, 0)]),
+			(2, 4, alice.clone(), vec![(4, 0)]),
+			(2, 3, alice.clone(), vec![]),
 
-			(1, 4, bob_key.clone(), vec![(1, 1)]),
-			(1, 1, bob_key.clone(), vec![(1, 1)]),
-			(2, 4, bob_key.clone(), vec![]),
+			(1, 4, bob.clone(), vec![(1, 1)]),
+			(1, 1, bob.clone(), vec![(1, 1)]),
+			(2, 4, bob.clone(), vec![]),
 
-			(1, 4, charlie_key.clone(), vec![(2, 0)]),
+			(1, 4, charlie.clone(), vec![(2, 0)]),
 
-			(1, 4, dave_key.clone(), vec![(4, 0), (1, 1), (1, 0)]),
-			(1, 1, dave_key.clone(), vec![(1, 1), (1, 0)]),
-			(3, 4, dave_key.clone(), vec![(4, 0)]),
+			(1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
+			(1, 1, dave.clone(), vec![(1, 1), (1, 0)]),
+			(3, 4, dave.clone(), vec![(4, 0)]),
 
-			(1, 4, eve_key.clone(), vec![(2, 0)]),
-			(1, 1, eve_key.clone(), vec![]),
-			(3, 4, eve_key.clone(), vec![]),
+			(1, 4, eve.clone(), vec![(2, 0)]),
+			(1, 1, eve.clone(), vec![]),
+			(3, 4, eve.clone(), vec![]),
 
-			(1, 4, ferdie_key.clone(), vec![]),
+			(1, 4, ferdie.clone(), vec![]),
 		];
 
 		(remote_client, local_roots, test_cases)
