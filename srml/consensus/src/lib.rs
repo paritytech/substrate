@@ -48,18 +48,14 @@ use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member};
 use primitives::bft::MisbehaviorReport;
+use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
-
-pub const AUTHORITY_AT: &'static [u8] = b":auth:";
-pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
 
 struct AuthorityStorageVec<S: codec::Codec + Default>(rstd::marker::PhantomData<S>);
 impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
 	type Item = S;
-	const PREFIX: &'static [u8] = AUTHORITY_AT;
+	const PREFIX: &'static [u8] = well_known_keys::AUTHORITY_PREFIX;
 }
-
-pub const CODE: &'static [u8] = b":code";
 
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
@@ -142,7 +138,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the new code.
 	fn set_code(new: Vec<u8>) -> Result {
-		storage::unhashed::put_raw(CODE, &new);
+		storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		Ok(())
 	}
 
@@ -175,7 +171,7 @@ impl<T: Trait> Module<T> {
 		for validator_index in offline_val_indices.into_iter() {
 			T::OnOfflineValidator::on_offline_validator(validator_index as usize);
 		}
-		
+
 		Ok(())
 	}
 
@@ -253,10 +249,10 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 		use codec::{Encode, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
 		let mut r: primitives::StorageMap = self.authorities.into_iter().enumerate().map(|(i, v)|
-			((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode())
+			((i as u32).to_keyed_vec(well_known_keys::AUTHORITY_PREFIX), v.encode())
 		).collect();
-		r.insert(AUTHORITY_COUNT.to_vec(), auth_count.encode());
-		r.insert(CODE.to_vec(), self.code);
+		r.insert(well_known_keys::AUTHORITY_COUNT.to_vec(), auth_count.encode());
+		r.insert(well_known_keys::CODE.to_vec(), self.code);
 		Ok(r.into())
 	}
 }

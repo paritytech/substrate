@@ -20,6 +20,7 @@ use std::collections::HashMap;
 use runtime_io::twox_128;
 use codec::{KeyedVec, Joiner};
 use primitives::AuthorityId;
+use primitives::storage::well_known_keys;
 use runtime_primitives::traits::Block;
 
 /// Configuration of a general Substrate test genesis block.
@@ -42,13 +43,13 @@ impl GenesisConfig {
 			.map(|&(account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
-				(b":code"[..].into(), wasm_runtime),
-				(b":heappages"[..].into(), vec![].and(&(16 as u64))),
-				(b":auth:len"[..].into(), vec![].and(&(self.authorities.len() as u32))),
+				(well_known_keys::CODE.into(), wasm_runtime),
+				(well_known_keys::HEAP_PAGES.into(), vec![].and(&(16 as u64))),
+				(well_known_keys::AUTHORITY_COUNT.into(), vec![].and(&(self.authorities.len() as u32))),
 			].into_iter())
 			.chain(self.authorities.iter()
 				.enumerate()
-				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].and(account)))
+				.map(|(i, account)| ((i as u32).to_keyed_vec(well_known_keys::AUTHORITY_PREFIX), vec![].and(account)))
 			)
 			.collect()
 	}
