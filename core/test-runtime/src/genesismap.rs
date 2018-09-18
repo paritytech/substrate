@@ -18,19 +18,28 @@
 
 use std::collections::HashMap;
 use runtime_io::twox_128;
-use codec::{KeyedVec, Joiner};
-use primitives::AuthorityId;
+use codec::{Encode, KeyedVec, Joiner};
+use primitives::{AuthorityId, ChangesTrieConfiguration};
 use runtime_primitives::traits::Block;
 
 /// Configuration of a general Substrate test genesis block.
 pub struct GenesisConfig {
+	pub changes_trie_config: Option<ChangesTrieConfiguration>,
 	pub authorities: Vec<AuthorityId>,
 	pub balances: Vec<(AuthorityId, u64)>,
 }
 
 impl GenesisConfig {
 	pub fn new_simple(authorities: Vec<AuthorityId>, balance: u64) -> Self {
+		Self::new(false, authorities, balance)
+	}
+
+	pub fn new(support_changes_trie: bool, authorities: Vec<AuthorityId>, balance: u64) -> Self {
 		GenesisConfig {
+			changes_trie_config: match support_changes_trie {
+				true => Some(super::changes_trie_config()),
+				false => None,
+			},
 			authorities: authorities.clone(),
 			balances: authorities.into_iter().map(|a| (a, balance)).collect(),
 		}
@@ -38,7 +47,7 @@ impl GenesisConfig {
 
 	pub fn genesis_map(&self) -> HashMap<Vec<u8>, Vec<u8>> {
 		let wasm_runtime = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm").to_vec();
-		self.balances.iter()
+		let mut map: HashMap<Vec<u8>, Vec<u8>> = self.balances.iter()
 			.map(|&(account, balance)| (account.to_keyed_vec(b"balance:"), vec![].and(&balance)))
 			.map(|(k, v)| (twox_128(&k[..])[..].to_vec(), v.to_vec()))
 			.chain(vec![
@@ -50,7 +59,11 @@ impl GenesisConfig {
 				.enumerate()
 				.map(|(i, account)| ((i as u32).to_keyed_vec(b":auth:"), vec![].and(account)))
 			)
-			.collect()
+			.collect();
+		if let Some(ref changes_trie_config) = self.changes_trie_config {
+			map.insert(b":changes_trie".to_vec(), changes_trie_config.encode());
+		}
+		map
 	}
 }
 

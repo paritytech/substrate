@@ -59,6 +59,7 @@ pub use testing::TestExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
 pub use changes_trie::{Storage as ChangesTrieStorage,
+	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
 	key_changes, key_changes_proof, key_changes_proof_check};
 pub use overlayed_changes::OverlayedChanges;

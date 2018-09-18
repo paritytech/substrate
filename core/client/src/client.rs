@@ -24,12 +24,13 @@ use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Blo
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
 use substrate_metadata::JsonMetadataDecodable;
-use primitives::{Blake2Hasher, RlpCodec, H256};
+use primitives::{Blake2Hasher, RlpCodec, H256, ChangesTrieConfiguration};
 use primitives::storage::{StorageKey, StorageData};
 use codec::{Encode, Decode};
 use state_machine::{
 	Backend as StateBackend, CodeExecutor,
-	ExecutionStrategy, ExecutionManager, prove_read
+	ExecutionStrategy, ExecutionManager, prove_read,
+	key_changes, key_changes_proof,
 };
 
 use backend::{self, BlockImportOperation};
@@ -51,6 +52,7 @@ pub struct Client<B, E, Block> where Block: BlockT {
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 	execution_strategy: ExecutionStrategy,
+	changes_trie_config: Option<ChangesTrieConfiguration>,
 }
 
 /// A source of blockchain evenets.
@@ -198,6 +200,13 @@ impl<B, E, Block> Client<B, E, Block> where
 			op.set_block_data(genesis_block.deconstruct().0, Some(vec![]), None, true)?;
 			backend.commit_operation(op)?;
 		}
+
+		// changes trie configuration should never change => we can read it in advance
+		let changes_trie_config = backend.state_at(BlockId::Number(Zero::zero()))?
+			.storage(b":changes_trie")
+			.map_err(|e| error::Error::from_state(Box::new(e)))?
+			.and_then(|c| Decode::decode(&mut &*c));
+
 		Ok(Client {
 			backend,
 			executor,
@@ -206,6 +215,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			import_lock: Default::default(),
 			importing_block: Default::default(),
 			execution_strategy,
+			changes_trie_config,
 		})
 	}
 
@@ -307,6 +317,65 @@ impl<B, E, Block> Client<B, E, Block> where
 		let proof = cht::build_proof::<Block::Header, Blake2Hasher, RlpCodec, _>(cht_size, cht_num, block_num, headers)
 			.ok_or_else(proof_error)?;
 		Ok((header, proof))
+	}
+
+	/// Get pairs of (block, extrinsic) where key has been changed at given blocks range.
+	/// Works only for runtimes that are supporting changes tries.
+	pub fn key_changes(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		key: &[u8]
+	) -> error::Result<Vec<(NumberFor<Block>, u32)>> {
+		let config = self.changes_trie_config.as_ref();
+		let storage = self.backend.changes_trie_storage();
+		let (config, storage) = match (config, storage) {
+			(Some(config), Some(storage)) => (config, storage),
+			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
+		};
+
+		key_changes::<_, Blake2Hasher, RlpCodec>(
+			config,
+			storage,
+			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
+			self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+			self.backend.blockchain().info()?.best_number.as_(),
+			key)
+		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
+		.map(|r| r.into_iter().map(|(b, e)| (As::sa(b), e)).collect())
+	}
+
+	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
+	/// `max` is the hash of the last block known to the requester - we can't use changes tries from descendants
+	/// of this block.
+	/// Works only for runtimes that are supporting changes tries.
+	pub fn key_changes_proof(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		max: Block::Hash,
+		key: &[u8]
+	) -> error::Result<(NumberFor<Block>, Vec<Vec<u8>>)> {
+		let config = self.changes_trie_config.as_ref();
+		let storage = self.backend.changes_trie_storage();
+		let (config, storage) = match (config, storage) {
+			(Some(config), Some(storage)) => (config, storage),
+			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
+		};
+
+		let max_number = ::std::cmp::min(
+			self.backend.blockchain().info()?.best_number,
+			self.require_block_number_from_id(&BlockId::Hash(max))?,
+		);
+		key_changes_proof::<_, Blake2Hasher, RlpCodec>(
+			config,
+			storage,
+			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
+			self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+			max_number.as_(),
+			key)
+		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
+		.map(|proof| (max_number, proof))
 	}
 
 	/// Create a new block, built on the head of the chain.
@@ -547,11 +616,17 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Convert an arbitrary block ID into a block hash.
-	pub fn block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+	pub fn block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<Option<NumberFor<Block>>> {
 		match *id {
 			BlockId::Hash(_) => Ok(self.header(id)?.map(|h| h.number().clone())),
 			BlockId::Number(n) => Ok(Some(n)),
 		}
+	}
+
+	/// Convert an arbitrary block ID into a block hash, returning error if the block is unknown.
+	fn require_block_number_from_id(&self, id: &BlockId<Block>) -> error::Result<NumberFor<Block>> {
+		self.block_number_from_id(id)
+			.and_then(|n| n.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", id)).into()))
 	}
 
 	/// Get block header by id.
@@ -672,14 +747,93 @@ impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
+	use std::collections::HashMap;
 	use super::*;
 	use keyring::Keyring;
+	use runtime_io::twox_128;
+	use runtime_primitives::traits::{Digest as DigestT, DigestItem as DigestItemT};
+	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
-	use test_client::runtime::Transfer;
+	use test_client::runtime::{self, Block, Transfer};
+
+	/// Returns tuple, consisting of:
+	/// 1) test client pre-filled with blocks changing balances;
+	/// 2) roots of changes tries for these blocks
+	/// 3) test cases in form (begin, end, key, vec![(block, extrinsic)]) that are required to pass
+	pub fn prepare_client_with_key_changes() -> (
+		test_client::client::Client<test_client::Backend, test_client::Executor, Block>,
+		Vec<H256>,
+		Vec<(u64, u64, Vec<u8>, Vec<(u64, u32)>)>,
+	) {
+		// prepare block structure
+		let blocks_transfers = vec![
+			vec![(Keyring::Alice, Keyring::Dave), (Keyring::Bob, Keyring::Dave)],
+			vec![(Keyring::Charlie, Keyring::Eve)],
+			vec![],
+			vec![(Keyring::Alice, Keyring::Dave)],
+		];
+
+		// prepare client ang import blocks
+		let mut local_roots = Vec::new();
+		let remote_client = test_client::new_with_changes_trie();
+		let mut nonces: HashMap<_, u64> = Default::default();
+		for (i, block_transfers) in blocks_transfers.into_iter().enumerate() {
+			let mut builder = remote_client.new_block().unwrap();
+			for (from, to) in block_transfers {
+				builder.push_transfer(Transfer {
+					from: from.to_raw_public().into(),
+					to: to.to_raw_public().into(),
+					amount: 1,
+					nonce: *nonces.entry(from).and_modify(|n| { *n = *n + 1 }).or_default(),
+				}).unwrap();
+			}
+			remote_client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+
+			let header = remote_client.header(&BlockId::Number(i as u64 + 1)).unwrap().unwrap();
+			let trie_root = header.digest().logs().iter()
+				.find(|l| l.as_changes_trie_root().is_some())
+				.and_then(DigestItem::as_changes_trie_root)
+				.map(|root| H256::from_slice(root.as_ref()))
+				.unwrap();
+			local_roots.push(trie_root);
+		}
+
+		// prepare test cases
+		let alice_key = twox_128(&runtime::system::balance_of_key(Keyring::Alice.to_raw_public().into())).to_vec();
+		let bob_key = twox_128(&runtime::system::balance_of_key(Keyring::Bob.to_raw_public().into())).to_vec();
+		let charlie_key = twox_128(&runtime::system::balance_of_key(Keyring::Charlie.to_raw_public().into())).to_vec();
+		let dave_key = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
+		let eve_key = twox_128(&runtime::system::balance_of_key(Keyring::Eve.to_raw_public().into())).to_vec();
+		let ferdie_key = twox_128(&runtime::system::balance_of_key(Keyring::Ferdie.to_raw_public().into())).to_vec();
+		let test_cases = vec![
+			(1, 4, alice_key.clone(), vec![(4, 0), (1, 0)]),
+			(1, 3, alice_key.clone(), vec![(1, 0)]),
+			(2, 4, alice_key.clone(), vec![(4, 0)]),
+			(2, 3, alice_key.clone(), vec![]),
+
+			(1, 4, bob_key.clone(), vec![(1, 1)]),
+			(1, 1, bob_key.clone(), vec![(1, 1)]),
+			(2, 4, bob_key.clone(), vec![]),
+
+			(1, 4, charlie_key.clone(), vec![(2, 0)]),
+
+			(1, 4, dave_key.clone(), vec![(4, 0), (1, 1), (1, 0)]),
+			(1, 1, dave_key.clone(), vec![(1, 1), (1, 0)]),
+			(3, 4, dave_key.clone(), vec![(4, 0)]),
+
+			(1, 4, eve_key.clone(), vec![(2, 0)]),
+			(1, 1, eve_key.clone(), vec![]),
+			(3, 4, eve_key.clone(), vec![]),
+
+			(1, 4, ferdie_key.clone(), vec![]),
+		];
+
+		(remote_client, local_roots, test_cases)
+	}
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
@@ -798,5 +952,21 @@ mod tests {
 			client.json_metadata(&BlockId::Number(1)).unwrap(),
 			r#"{ "events": { "name": "Test", "events": { "event": hallo } } }"#
 		);
+	}
+
+	#[test]
+	fn key_changes_works() {
+		let (client, _, test_cases) = prepare_client_with_key_changes();
+
+		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
+			let begin = client.block_hash(begin).unwrap().unwrap();
+			let end = client.block_hash(end).unwrap().unwrap();
+			let actual_result = client.key_changes(begin, end, &key).unwrap();
+			match actual_result == expected_result {
+				true => (),
+				false => panic!(format!("Failed test {}: actual = {:?}, expected = {:?}",
+					index, actual_result, expected_result)),
+			}
+		}
 	}
 }

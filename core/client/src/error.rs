@@ -123,6 +123,18 @@ error_chain! {
 			description("Error decoding call result")
 			display("Error decoding call result of {}", method)
 		}
+
+		/// Changes tries are not supported.
+		ChangesTriesNotSupported {
+			description("changes tries are not supported"),
+			display("Changes tries are not supported by the runtime"),
+		}
+
+		/// Key changes query has failed.
+		ChangesTrieAccessFailed(e: String) {
+			description("invalid changes proof"),
+			display("Failed to check changes proof: {}", e),
+		}
 	}
 }
 

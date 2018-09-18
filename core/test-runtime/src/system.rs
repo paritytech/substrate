@@ -18,7 +18,7 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, enumerated_trie_root};
+use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
 use runtime_primitives::generic;
@@ -33,15 +33,18 @@ const AUTHORITY_AT: &'static[u8] = b":auth:";
 const AUTHORITY_COUNT: &'static[u8] = b":auth:len";
 
 storage_items! {
-	ExtrinsicIndex: b"sys:xti" => required u32;
 	ExtrinsicData: b"sys:xtd" => required map [ u32 => Vec<u8> ];
 	// The current block number being processed. Set by `execute_block`.
 	Number: b"sys:num" => required BlockNumber;
 	ParentHash: b"sys:pha" => required Hash;
 }
 
+pub fn balance_of_key(who: AccountId) -> Vec<u8> {
+	who.to_keyed_vec(BALANCE_OF)
+}
+
 pub fn balance_of(who: AccountId) -> u64 {
-	storage::get_or(&who.to_keyed_vec(BALANCE_OF), 0)
+	storage::get_or(&balance_of_key(who), 0)
 }
 
 pub fn nonce_of(who: AccountId) -> u64 {
@@ -60,7 +63,7 @@ pub fn initialise_block(header: Header) {
 	// populate environment.
 	<Number>::put(&header.number);
 	<ParentHash>::put(&header.parent_hash);
-	<ExtrinsicIndex>::put(0);
+	storage::unhashed::put(b":extrinsic_index", &0u32);
 }
 
 /// Actually execute all transitioning for `block`.
@@ -75,26 +78,38 @@ pub fn execute_block(block: Block) {
 	assert!(txs_root == header.extrinsics_root, "Transaction trie root must be valid.");
 
 	// execute transactions
-	block.extrinsics.iter().for_each(|e| { execute_transaction_backend(e).map_err(|_| ()).expect("Extrinsic error"); });
+	block.extrinsics.iter().enumerate().for_each(|(i, e)| {
+		storage::unhashed::put(b":extrinsic_index", &(i as u32));
+		execute_transaction_backend(e).map_err(|_| ()).expect("Extrinsic error");
+		storage::unhashed::kill(b":extrinsic_index");
+	});
 
 	// check storage root.
 	let storage_root = storage_root().into();
 	info_expect_equal_hash(&storage_root, &header.state_root);
 	assert!(storage_root == header.state_root, "Storage root must match that calculated.");
+
+	// check digest
+	let mut digest = Digest::default();
+	if let Some(storage_changes_root) = storage_changes_root(header.number) {
+		digest.push(generic::DigestItem::ChangesTrieRoot::<Hash, u64>(storage_changes_root));
+	}
+	assert!(digest == header.digest, "Header digest items must match that calculated.");
 }
 
 /// Execute a transaction outside of the block execution function.
 /// This doesn't attempt to validate anything regarding the block.
 pub fn execute_transaction(utx: Extrinsic) -> ApplyResult {
-	let extrinsic_index = ExtrinsicIndex::get();
+	let extrinsic_index: u32 = storage::unhashed::get(b":extrinsic_index").unwrap();
+	let result = execute_transaction_backend(&utx);
 	ExtrinsicData::insert(extrinsic_index, utx.encode());
-	ExtrinsicIndex::put(extrinsic_index + 1);
-	execute_transaction_backend(&utx)
+	storage::unhashed::put(b":extrinsic_index", &(extrinsic_index + 1));
+	result
 }
 
 /// Finalise the block.
 pub fn finalise_block() -> Header {
-	let extrinsic_index = ExtrinsicIndex::take();
+	let extrinsic_index: u32 = storage::unhashed::take(b":extrinsic_index").unwrap();
 	let txs: Vec<_> = (0..extrinsic_index).map(ExtrinsicData::take).collect();
 	let txs = txs.iter().map(Vec::as_slice).collect::<Vec<_>>();
 	let extrinsics_root = enumerated_trie_root::<Blake2Hasher>(&txs).into();

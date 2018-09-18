@@ -28,7 +28,7 @@ use {Backend, Executor};
 /// Extension trait for a test client.
 pub trait TestClient {
 	/// Crates new client instance for tests.
-	fn new_for_tests() -> Self;
+	fn new_for_tests(support_changes_trie: bool) -> Self;
 
 	/// Justify and import block to the chain.
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()>;
@@ -38,8 +38,8 @@ pub trait TestClient {
 }
 
 impl TestClient for Client<Backend, Executor, runtime::Block> {
-	fn new_for_tests() -> Self {
-		client::new_in_mem(NativeExecutor::new(), genesis_storage()).unwrap()
+	fn new_for_tests(support_changes_trie: bool) -> Self {
+		client::new_in_mem(NativeExecutor::new(), genesis_storage(support_changes_trie)).unwrap()
 	}
 
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
@@ -87,16 +87,16 @@ fn fake_justify(header: &runtime::Header) -> bft::UncheckedJustification<runtime
 	)
 }
 
-fn genesis_config() -> GenesisConfig {
-	GenesisConfig::new_simple(vec![
+fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
+	GenesisConfig::new(support_changes_trie, vec![
 		Keyring::Alice.to_raw_public().into(),
 		Keyring::Bob.to_raw_public().into(),
 		Keyring::Charlie.to_raw_public().into(),
 	], 1000)
 }
 
-fn genesis_storage() -> StorageMap {
-		let mut storage = genesis_config().genesis_map();
+fn genesis_storage(support_changes_trie: bool) -> StorageMap {
+		let mut storage = genesis_config(support_changes_trie).genesis_map();
 		let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
 		storage.extend(additional_storage_with_genesis(&block));
 		storage

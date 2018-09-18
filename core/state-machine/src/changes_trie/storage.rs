@@ -21,7 +21,7 @@ use hashdb::{Hasher, HashDB, DBValue};
 use heapsize::HeapSizeOf;
 use memorydb::MemoryDB;
 use parking_lot::RwLock;
-use changes_trie::Storage;
+use changes_trie::{RootsStorage, Storage};
 use trie_backend_essence::TrieBackendStorage;
 
 #[cfg(test)]
@@ -95,11 +95,13 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 	}
 }
 
-impl<H: Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> RootsStorage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
 	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {
 		Ok(self.data.read().roots.get(&block).cloned())
 	}
+}
 
+impl<H: Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
 		Ok(HashDB::<H>::get(&self.data.read().mdb, key))
 	}

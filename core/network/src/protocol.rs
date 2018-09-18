@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor, As, Zero};
 use runtime_primitives::generic::BlockId;
 use network_libp2p::{NodeIndex, Severity};
 use codec::{Encode, Decode};
@@ -273,6 +273,8 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteReadResponse(response) => self.on_remote_read_response(io, who, response),
 			GenericMessage::RemoteHeaderRequest(request) => self.on_remote_header_request(io, who, request),
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(io, who, response),
+			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(io, who, request),
+			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(io, who, response),
 			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, other),
 		}
 	}
@@ -647,6 +649,29 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "Remote header proof response {} from {}", response.id, who);
 		self.on_demand.as_ref().map(|s| s.on_remote_header_response(io, who, response));
 	}
+
+	fn on_remote_changes_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteChangesRequest<B::Hash>) {
+		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
+			request.id, who, request.key.to_hex(), request.first, request.last);
+		let (max, proof) = match self.context_data.chain.key_changes_proof(request.first, request.last, request.max, &request.key) {
+			Ok((max, proof)) => (max, proof),
+			Err(error) => {
+				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
+					request.id, who, request.key.to_hex(), request.first, request.last, error);
+				(Zero::zero(), Default::default())
+			},
+		};
+ 		self.send_message(io, who, GenericMessage::RemoteChangesResponse(message::RemoteChangesResponse {
+			id: request.id, max, proof,
+		}));
+	}
+
+ 	fn on_remote_changes_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>>) {
+		trace!(target: "sync", "Remote changes proof response {} from {} (max={})",
+			response.id, who, response.max);
+		self.on_demand.as_ref().map(|s| s.on_remote_changes_response(io, who, response));
+	}
+
 
 	/// Execute a closure with access to a network context and specialization.
 	pub fn with_spec<F, U>(&self, io: &mut SyncIo, f: F) -> U

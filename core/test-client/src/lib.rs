@@ -62,5 +62,10 @@ pub type Executor = client::LocalCallExecutor<
 
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
-	TestClient::new_for_tests()
+	TestClient::new_for_tests(false)
+}
+
+/// Creates new test client instance that suports changes trie creation.
+pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Block> {
+	TestClient::new_for_tests(true)
 }
