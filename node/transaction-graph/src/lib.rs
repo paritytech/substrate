@@ -36,5 +36,8 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
+mod future;
 mod pool;
 mod ready;
+
+pub use self::pool::{Transaction, Pool};

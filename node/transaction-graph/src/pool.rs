@@ -15,7 +15,6 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	collections::{HashMap, HashSet},
 	fmt,
 	hash,
 };
@@ -28,6 +27,7 @@ use sr_primitives::transaction_validity::{
 };
 
 use ready::ReadyTransactions;
+use future::{FutureTransactions, WaitingTransaction};
 
 pub type BlockNumber = u64;
 
@@ -41,60 +41,6 @@ pub struct Transaction {
 	pub provides: Vec<Tag>,
 }
 
-#[derive(Debug)]
-pub struct WaitingTransaction<Hash> {
-	pub transaction: Transaction,
-	pub missing_tags: HashSet<Tag>,
-	pub hash: Hash,
-}
-
-impl<Hash> WaitingTransaction<Hash> {
-	pub fn new(transaction: Transaction, hash: Hash, provided: &HashMap<Tag, Hash>) -> Self {
-		let missing_tags = transaction.requires
-			.iter()
-			.filter(|tag| !provided.contains_key(&**tag))
-			.cloned()
-			.collect();
-
-		WaitingTransaction {
-			transaction,
-			missing_tags,
-			hash,
-		}
-	}
-
-	pub fn satisfy_tag(&mut self, tag: &Tag) {
-		self.missing_tags.remove(tag);
-	}
-
-	pub fn is_ready(&self) -> bool {
-		self.missing_tags.is_empty()
-	}
-}
-
-#[derive(Debug)]
-pub struct FutureTransactions<Hash: hash::Hash + Eq> {
-	/// tags that are not yet provided by any transaction and we await for them
-	wanted_tags: HashMap<Tag, Vec<Hash>>,
-	/// Transactions waiting for a particular other transaction
-	waiting: HashMap<Hash, WaitingTransaction<Hash>>,
-}
-
-impl<Hash: hash::Hash + Eq> Default for FutureTransactions<Hash> {
-	fn default() -> Self {
-		FutureTransactions {
-			wanted_tags: Default::default(),
-			waiting: Default::default(),
-		}
-	}
-}
-
-impl<Hash: hash::Hash + Eq> FutureTransactions<Hash> {
-	pub fn import(&mut self, tx: WaitingTransaction<Hash>) {
-		unimplemented!()
-	}
-}
-
 /// Transaction pool.
 ///
 /// Builds a dependency graph for all transactions in the pool and returns
@@ -102,7 +48,6 @@ impl<Hash: hash::Hash + Eq> FutureTransactions<Hash> {
 pub struct Pool<Hash: hash::Hash + Eq> {
 	future: FutureTransactions<Hash>,
 	ready: ReadyTransactions<Hash>,
-	insertion_id: u64,
 	hasher: Box<Fn(&UncheckedExtrinsic) -> Hash>,
 }
 
@@ -111,7 +56,6 @@ impl<Hash: hash::Hash + fmt::Debug + Eq> fmt::Debug for Pool<Hash> {
 		fmt.debug_struct("Pool")
 			.field("future", &self.future)
 			.field("ready", &self.ready)
-			.field("insertion_id", &self.insertion_id)
 			.finish()
 	}
 }
@@ -124,7 +68,6 @@ impl<Hash: hash::Hash + Ord + Eq + Clone> Pool<Hash> {
 		Pool {
 			future: Default::default(),
 			ready: Default::default(),
-			insertion_id: Default::default(),
 			hasher: Box::new(hasher),
 		}
 	}
@@ -132,20 +75,15 @@ impl<Hash: hash::Hash + Ord + Eq + Clone> Pool<Hash> {
 	pub fn import(
 		&mut self,
 		block_number: BlockNumber,
-		ex: UncheckedExtrinsic,
-		priority: Priority,
-		longevity: Longevity,
-		requires: Vec<Tag>,
-		provides: Vec<Tag>,
+		tx: Transaction,
 	) {
-		let hash = (self.hasher)(&ex);
-		let tx = Transaction { ex, priority, longevity, requires, provides };
+		let hash = (self.hasher)(&tx.ex);
+		// TODO [ToDr] check if transaction is already imported
 		let tx = WaitingTransaction::new(tx, hash, self.ready.provided_tags());
 
 		// Tags provided from ready queue satisfy all requirements, so just add to ready.
 		if tx.is_ready() {
-			self.insertion_id += 1;
-			self.ready.import(tx, self.insertion_id, block_number);
+			self.ready.import(tx, block_number);
 			// TODO [ToDr] Check what transactions from future are unlocked.
 		} else {
 			self.future.import(tx);
@@ -164,7 +102,7 @@ mod tests {
 	type Hash = u64;
 
 	fn pool() -> Pool<Hash> {
-		Pool::new(|ex| ex.0.len() as u64)
+		Pool::new(|ex| ex.0[0] as u64)
 	}
 
 	#[test]
@@ -173,16 +111,67 @@ mod tests {
 		let mut pool = pool();
 
 		// when
-		pool.import(
-			1,
-			UncheckedExtrinsic(vec![1u8]),
-			5u64,
-			64u64,
-			vec![],
-			vec![vec![1]],
-		);
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![1u8]),
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![],
+			provides: vec![vec![1]],
+		});
 
 		// then
 		assert_eq!(pool.ready().len(), 1);
+	}
+
+	#[test]
+	fn should_not_import_same_transaction_twice() {
+		// given
+		let mut pool = pool();
+
+		// when
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![1u8]),
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![],
+			provides: vec![vec![1]],
+		});
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![1u8]),
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![],
+			provides: vec![vec![1]],
+		});
+
+		// then
+		assert_eq!(pool.ready().len(), 1);
+	}
+
+
+	#[test]
+	fn should_import_transaction_to_future_and_promote_it_later() {
+		// given
+		let mut pool = pool();
+
+		// when
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![1u8]),
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![0]],
+			provides: vec![vec![1]],
+		});
+		assert_eq!(pool.ready().len(), 0);
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![2u8]),
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![],
+			provides: vec![vec![0]],
+		});
+
+		// then
+		assert_eq!(pool.ready().len(), 2);
 	}
 }
