@@ -55,7 +55,6 @@ use session::OnSessionChange;
 use primitives::traits::{Zero, One, Bounded, OnFinalise,
 	As, Lookup};
 use balances::{address::Address, OnDilution};
-use system::ensure_signed;
 
 mod mock;
 
@@ -105,11 +104,11 @@ pub trait Trait: balances::Trait + session::Trait {
 decl_module! {
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn stake(origin) -> Result;
-		fn unstake(origin, intentions_index: u32) -> Result;
-		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) -> Result;
-		fn unnominate(origin, target_index: u32) -> Result;
-		fn register_preferences(origin, intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result;
+		fn stake(SystemOrigin(Signed(who))) -> Result;
+		fn unstake(SystemOrigin(Signed(who)), intentions_index: u32) -> Result;
+		fn nominate(SystemOrigin(Signed(who)), target: Address<T::AccountId, T::AccountIndex>) -> Result;
+		fn unnominate(SystemOrigin(Signed(source)), target_index: u32) -> Result;
+		fn register_preferences(SystemOrigin(Signed(who)), intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result;
 
 		fn set_sessions_per_era(new: T::BlockNumber) -> Result;
 		fn set_bonding_duration(new: T::BlockNumber) -> Result;
@@ -229,8 +228,7 @@ impl<T: Trait> Module<T> {
 	/// Declare the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn stake(origin: T::Origin) -> Result {
-		let who = ensure_signed(origin)?;
+	fn stake(who: T::AccountId) -> Result {
 		ensure!(Self::nominating(&who).is_none(), "Cannot stake if already nominating.");
 		let mut intentions = <Intentions<T>>::get();
 		// can't be in the list twice.
@@ -245,8 +243,7 @@ impl<T: Trait> Module<T> {
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake(origin: T::Origin, intentions_index: u32) -> Result {
-		let who = ensure_signed(origin)?;
+	fn unstake(who: T::AccountId, intentions_index: u32) -> Result {
 		// unstake fails in degenerate case of having too few existing staked parties
 		if Self::intentions().len() <= Self::minimum_validator_count() {
 			return Err("cannot unstake when there are too few staked participants")
@@ -254,8 +251,7 @@ impl<T: Trait> Module<T> {
 		Self::apply_unstake(&who, intentions_index as usize)
 	}
 
-	fn nominate(origin: T::Origin, target: Address<T::AccountId, T::AccountIndex>) -> Result {
-		let who = ensure_signed(origin)?;
+	fn nominate(who: T::AccountId, target: Address<T::AccountId, T::AccountIndex>) -> Result {
 		let target = <balances::Module<T>>::lookup(target)?;
 
 		ensure!(Self::nominating(&who).is_none(), "Cannot nominate if already nominating.");
@@ -277,8 +273,7 @@ impl<T: Trait> Module<T> {
 
 	/// Will panic if called when source isn't currently nominating target.
 	/// Updates Nominating, NominatorsFor and NominationBalance.
-	fn unnominate(origin: T::Origin, target_index: u32) -> Result {
-		let source = ensure_signed(origin)?;
+	fn unnominate(source: T::AccountId, target_index: u32) -> Result {
 		let target_index = target_index as usize;
 
 		let target = <Nominating<T>>::get(&source).ok_or("Account must be nominating")?;
@@ -306,11 +301,10 @@ impl<T: Trait> Module<T> {
 	///
 	/// An error (no-op) if `Self::intentions()[intentions_index] != origin`.
 	fn register_preferences(
-		origin: T::Origin,
+		who: T::AccountId,
 		intentions_index: u32,
 		prefs: ValidatorPrefs<T::Balance>
 	) -> Result {
-		let who = ensure_signed(origin)?;
 
 		if Self::intentions().get(intentions_index as usize) != Some(&who) {
 			return Err("Invalid index")

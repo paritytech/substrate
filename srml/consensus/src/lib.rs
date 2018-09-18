@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Conensus module for runtime; manages the authority set ready for the native code.
+//! Consensus module for runtime; manages the authority set ready for the native code.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -48,7 +48,6 @@ use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member};
 use primitives::bft::MisbehaviorReport;
-use system::{ensure_signed, ensure_inherent};
 
 pub const AUTHORITY_AT: &'static [u8] = b":auth:";
 pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
@@ -126,9 +125,9 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn report_misbehavior(origin, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
-		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result;
-		fn remark(origin, remark: Vec<u8>) -> Result;
+		fn report_misbehavior(SystemOrigin(Signed(who)), report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
+		fn note_offline(SystemOrigin(Inherent), offline_val_indices: Vec<u32>) -> Result;
+		fn remark(SystemOrigin(Signed(who)), remark: Vec<u8>) -> Result;
 		fn set_code(new: Vec<u8>) -> Result;
 		fn set_storage(items: Vec<KeyValue>) -> Result;
 	}
@@ -155,8 +154,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(origin: T::Origin, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
-		ensure_signed(origin)?;
+	fn report_misbehavior(_who: T::AccountId, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
 		// TODO.
 		Ok(())
 	}
@@ -164,8 +162,7 @@ impl<T: Trait> Module<T> {
 	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
 	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
 	/// for the previous block.
-	fn note_offline(origin: T::Origin, offline_val_indices: Vec<u32>) -> Result {
-		ensure_inherent(origin)?;
+	fn note_offline(offline_val_indices: Vec<u32>) -> Result {
 		assert!(
 			<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
 			"note_offline extrinsic must be at position {} in the block",
@@ -180,8 +177,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Make some on-chain remark.
-	fn remark(origin: T::Origin, _remark: Vec<u8>) -> Result {
-		ensure_signed(origin)?;
+	fn remark(_who: T::AccountId, _remark: Vec<u8>) -> Result {
 		Ok(())
 	}
 

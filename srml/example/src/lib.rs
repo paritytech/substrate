@@ -60,7 +60,6 @@ extern crate srml_balances as balances;
 
 use runtime_primitives::traits::OnFinalise;
 use runtime_support::{StorageValue, dispatch::Result};
-use system::ensure_signed;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
 /// module is dependent on specific other modules, then their configuration traits
@@ -108,9 +107,9 @@ decl_module! {
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.
-		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result;
+		fn accumulate_dummy(SystemOrigin(Signed(sender)), increase_by: T::Balance) -> Result;
 
-		fn accumulate_foo(origin, increase_by: T::Balance) -> Result;
+		fn accumulate_foo(SystemOrigin(Signed(sender)), increase_by: T::Balance) -> Result;
 
 		/// A privileged call; in this case it resets our dummy value to something new.
 		fn set_dummy(new_dummy: T::Balance) -> Result;
@@ -217,9 +216,7 @@ impl<T: Trait> Module<T> {
 	// no progress.
 	//
 	// If you don't respect these rules, it is likely that your chain will be attackable.
-	fn accumulate_dummy(origin: T::Origin, increase_by: T::Balance) -> Result {
-		// This is a public call, so we ensure that the origin is some signed account.
-		let _sender = ensure_signed(origin)?;
+	fn accumulate_dummy(_sender: T::AccountId, increase_by: T::Balance) -> Result {
 
 		// Read the value of dummy from storage.
 		// let dummy = Self::dummy();
@@ -247,8 +244,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
-		let _sender = ensure_signed(origin)?;
+	fn accumulate_foo(_sender: T::AccountId, increase_by: T::Balance) -> Result {
 
 		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
 		<Foo<T>>::mutate(|foo| *foo = *foo + increase_by);
@@ -388,7 +384,7 @@ mod tests {
 			assert_eq!(Example::dummy(), Some(42));
 
 			// Check that accumulate works when we have Some value in Dummy already.
-			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 27));
+			assert_ok!(Example::accumulate_dummy(1, 27));
 			assert_eq!(Example::dummy(), Some(69));
 
 			// Check that finalising the block removes Dummy from storage.
@@ -396,7 +392,7 @@ mod tests {
 			assert_eq!(Example::dummy(), None);
 
 			// Check that accumulate works when we Dummy has None in it.
-			assert_ok!(Example::accumulate_dummy(Origin::signed(1), 42));
+			assert_ok!(Example::accumulate_dummy(1, 42));
 			assert_eq!(Example::dummy(), Some(42));
 		});
 	}
@@ -405,7 +401,7 @@ mod tests {
 	fn it_works_for_default_value() {
 		with_externalities(&mut new_test_ext(), || {
 			assert_eq!(Example::foo(), 24);
-			assert_ok!(Example::accumulate_foo(Origin::signed(1), 1));
+			assert_ok!(Example::accumulate_foo(1, 1));
 			assert_eq!(Example::foo(), 25);
 		});
 	}

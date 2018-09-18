@@ -108,7 +108,6 @@ use codec::Codec;
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic, OnFinalise};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
-use system::ensure_signed;
 
 pub trait Trait: balances::Trait {
 	/// Function type to get the contract address given the creator.
@@ -152,7 +151,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		// TODO: Change AccountId to staking::Address
 		fn call(
-			origin,
+			SystemOrigin(Signed(origin)),
 			dest: T::AccountId,
 			value: T::Balance,
 			gas_limit: T::Gas,
@@ -160,7 +159,7 @@ decl_module! {
 		) -> Result;
 
 		fn create(
-			origin,
+			SystemOrigin(Signed(origin)),
 			value: T::Balance,
 			gas_limit: T::Gas,
 			init_code: Vec<u8>,
@@ -208,13 +207,12 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 impl<T: Trait> Module<T> {
 	/// Make a call to a specified account, optionally transferring some balance.
 	fn call(
-		origin: <T as system::Trait>::Origin,
+		origin: T::AccountId,
 		dest: T::AccountId,
 		value: T::Balance,
 		gas_limit: T::Gas,
 		data: Vec<u8>,
 	) -> Result {
-		let origin = ensure_signed(origin)?;
 
 		// Pay for the gas upfront.
 		//
@@ -255,13 +253,12 @@ impl<T: Trait> Module<T> {
 	///   after the execution is saved as the `code` of the account. That code will be invoked
 	///   upon any message received by this account.
 	fn create(
-		origin: <T as system::Trait>::Origin,
+		origin: T::AccountId,
 		endowment: T::Balance,
 		gas_limit: T::Gas,
 		ctor_code: Vec<u8>,
 		data: Vec<u8>,
 	) -> Result {
-		let origin = ensure_signed(origin)?;
 
 		// Pay for the gas upfront.
 		//
