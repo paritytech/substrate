@@ -47,8 +47,8 @@ macro_rules! __runtime_modules_to_metadata {
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
-		$mod:ident::$module:ident
-		$(, $( $rest:tt )* )*
+		$mod:ident::$module:ident,
+		$( $rest:tt )*
 	) => {
 		__runtime_modules_to_metadata!(
 			$runtime;
@@ -59,14 +59,14 @@ macro_rules! __runtime_modules_to_metadata {
 				),
 				storage: None,
 			};
-			$( $( $rest )* )*
+			$( $rest )*
 		)
 	};
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
-		$mod:ident::$module:ident with Storage
-		$(, $( $rest:tt )* )*
+		$mod:ident::$module:ident with Storage,
+		$( $rest:tt )*
 	) => {
 		__runtime_modules_to_metadata!(
 			$runtime;
@@ -79,7 +79,7 @@ macro_rules! __runtime_modules_to_metadata {
 					$crate::metadata::FnEncode($mod::$module::<$runtime>::store_metadata)
 				)),
 			};
-			$( $( $rest )* )*
+			$( $rest )*
 		)
 	};
 	(
@@ -198,7 +198,7 @@ mod tests {
 	impl_runtime_metadata!(
 		for TestRuntime with modules
 			event_module::Module,
-			event_module2::ModuleWithStorage with Storage
+			event_module2::ModuleWithStorage with Storage,
 	);
 
 	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata {
@@ -299,8 +299,6 @@ mod tests {
 		let metadata_encoded = metadata.encode();
 		let metadata_decoded = RuntimeMetadata::decode(&mut &metadata_encoded[..]);
 
-		println!("{:?}", metadata);
-		println!("{:?}", metadata_decoded.as_ref().unwrap());
 		assert_eq!(metadata, metadata_decoded.unwrap());
 	}
 }

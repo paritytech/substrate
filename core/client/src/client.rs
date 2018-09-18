@@ -23,7 +23,7 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
-use substrate_metadata::JsonMetadataDecodable;
+use substrate_metadata::RuntimeMetadata;
 use primitives::{Blake2Hasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -254,26 +254,12 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self.executor
 	}
 
-	/// Returns the runtime metadata as JSON.
-	pub fn json_metadata(&self, id: &BlockId<Block>) -> error::Result<String> {
-		self.executor.call(id, "json_metadata",&[])
-			.and_then(|r| Vec::<JsonMetadataDecodable>::decode(&mut &r.return_data[..])
-					  .ok_or("JSON Metadata decoding failed".into()))
-			.and_then(|metadata| {
-				let mut json = metadata.into_iter().enumerate().fold(String::from("{"),
-					|mut json, (i, m)| {
-						if i > 0 {
-							json.push_str(",");
-						}
-						let (mtype, val) = m.into_json_string();
-						json.push_str(&format!(r#" "{}": {}"#, mtype, val));
-						json
-					}
-				);
-				json.push_str(" }");
-
-				Ok(json)
-			})
+	/// Returns the runtime metadata.
+	pub fn metadata(&self, id: &BlockId<Block>) -> error::Result<RuntimeMetadata> {
+		self.executor
+			.call(id, "metadata",&[])
+			.and_then(|r| RuntimeMetadata::decode(&mut &r.return_data[..])
+					  .ok_or("Metadata decoding failed".into()))
 	}
 
 	/// Reads storage value at a given block + key, returning read proof.
@@ -681,6 +667,7 @@ mod tests {
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::Transfer;
+	use substrate_metadata;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
@@ -774,7 +761,7 @@ mod tests {
 	}
 
 	#[test]
-	fn json_metadata() {
+	fn metadata() {
 		let client = test_client::new();
 
 		let mut builder = client.new_block().unwrap();
@@ -795,9 +782,14 @@ mod tests {
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		assert_eq!(
-			client.json_metadata(&BlockId::Number(1)).unwrap(),
-			r#"{ "events": { "name": "Test", "events": { "event": hallo } } }"#
-		);
+		let expected = substrate_metadata::RuntimeMetadata {
+			outer_event: substrate_metadata::OuterEventMetadata {
+				name: substrate_metadata::Cow::Borrowed("test"),
+				events: substrate_metadata::DecodeDifferent::Encode(&[]),
+			},
+			modules: substrate_metadata::DecodeDifferent::Encode(&[]),
+		};
+
+		assert_eq!(expected, client.metadata(&BlockId::Number(1)).unwrap());
 	}
 }
