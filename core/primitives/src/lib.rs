@@ -112,6 +112,7 @@ pub mod uint;
 mod authority_id;
 #[cfg(feature = "std")]
 mod rlp_codec;
+mod changes_trie;
 
 #[cfg(test)]
 mod tests;
@@ -119,6 +120,7 @@ mod tests;
 pub use self::hash::{H160, H256, H512};
 pub use self::uint::U256;
 pub use authority_id::AuthorityId;
+pub use changes_trie::ChangesTrieConfiguration;
 
 // Switch back to Blake after PoC-3 is out
 // pub use self::hasher::blake::BlakeHasher;

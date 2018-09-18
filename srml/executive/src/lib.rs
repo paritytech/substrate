@@ -204,11 +204,11 @@ impl<
 	}
 
 	fn final_checks(header: &System::Header) {
-		// check digest
-		assert!(header.digest() == &<system::Module<System>>::digest());
-
 		// remove temporaries.
-		<system::Module<System>>::finalise();
+		let new_header = <system::Module<System>>::finalise();
+
+		// check digest
+		assert!(header.digest() == new_header.digest());
 
 		// check storage root.
 		let storage_root = System::Hashing::storage_root();
@@ -266,10 +266,10 @@ mod tests {
 	use super::*;
 	use balances::Call;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher};
+	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256, Lookup};
-	use primitives::testing::{Digest, Header, Block};
+	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use system;
 
 	struct NullLookup;
@@ -305,6 +305,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = MetaEvent;
+		type Log = DigestItem;
 	}
 	impl balances::Trait for Runtime {
 		type Balance = u64;
@@ -330,16 +331,17 @@ mod tests {
 			reclaim_rebate: 0,
 		}.build_storage().unwrap());
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69));
-		let mut t = runtime_io::TestExternalities::from(t);
+		let mut t = runtime_io::TestExternalities::<Blake2Hasher, RlpCodec>::new(t);
 		with_externalities(&mut t, || {
-			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
+			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(),
+				[69u8; 32].into(), Digest::default()));
 			Executive::apply_extrinsic(xt).unwrap();
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&1), 32);
 			assert_eq!(<balances::Module<Runtime>>::total_balance(&2), 69);
 		});
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap());
 		t.into()

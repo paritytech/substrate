@@ -45,7 +45,7 @@ mod tests {
 	use codec::{Encode, Decode, Joiner};
 	use keyring::Keyring;
 	use executor::NativeExecutionDispatch;
-	use state_machine::{execute, OverlayedChanges, ExecutionStrategy};
+	use state_machine::{execute, OverlayedChanges, ExecutionStrategy, InMemoryChangesTrieStorage};
 	use state_machine::backend::InMemory;
 	use test_client;
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
@@ -58,7 +58,13 @@ mod tests {
 		NativeExecutionDispatch::new()
 	}
 
-	fn construct_block(backend: &InMemory<Blake2Hasher, RlpCodec>, number: BlockNumber, parent_hash: Hash, state_root: Hash, txs: Vec<Transfer>) -> (Vec<u8>, Hash) {
+	fn construct_block(
+		backend: &InMemory<Blake2Hasher, RlpCodec>,
+		number: BlockNumber,
+		parent_hash: Hash,
+		state_root: Hash,
+		txs: Vec<Transfer>
+	) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
@@ -83,6 +89,7 @@ mod tests {
 
 		execute(
 			backend,
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"initialise_block",
@@ -93,6 +100,7 @@ mod tests {
 		for tx in transactions.iter() {
 			execute(
 				backend,
+				Some(&InMemoryChangesTrieStorage::new()),
 				&mut overlay,
 				&executor(),
 				"apply_extrinsic",
@@ -101,8 +109,9 @@ mod tests {
 			).unwrap();
 		}
 
-		let (ret_data, _) = execute(
+		let (ret_data, _, _) = execute(
 			backend,
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"finalise_block",
@@ -145,6 +154,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"execute_block",
@@ -168,6 +178,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&executor(),
 			"execute_block",
@@ -192,6 +203,7 @@ mod tests {
 		let mut overlay = OverlayedChanges::default();
 		let _ = execute(
 			&backend,
+			Some(&InMemoryChangesTrieStorage::new()),
 			&mut overlay,
 			&Executor::new(),
 			"execute_block",

@@ -105,6 +105,7 @@ impl system::Trait for Runtime {
 	type AccountId = AccountId;
 	type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 	type Event = Event;
+	type Log = Log;
 }
 
 impl balances::Trait for Runtime {
@@ -177,18 +178,27 @@ impl contract::Trait for Runtime {
 }
 
 impl DigestItem for Log {
+	type Hash = Hash;
 	type AuthorityId = SessionKey;
 
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
 		match self.0 {
 			InternalLog::consensus(ref item) => item.as_authorities_change(),
+			_ => None,
+		}
+	}
+
+	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
+		match self.0 {
+			InternalLog::system(ref item) => item.as_changes_trie_root(),
+			_ => None,
 		}
 	}
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<SessionKey>) {
-		System: system,
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) {
+		System: system::{default, Log(ChangesTrieRoot)},
 		Consensus: consensus::{Module, Call, Storage, Config, Log(AuthoritiesChange)},
 		Balances: balances,
 		Timestamp: timestamp::{Module, Call, Storage, Config},

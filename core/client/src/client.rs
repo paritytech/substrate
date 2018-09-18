@@ -24,7 +24,7 @@ use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Blo
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
 use substrate_metadata::JsonMetadataDecodable;
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
 use codec::{Encode, Decode};
 use state_machine::{
@@ -170,6 +170,7 @@ pub fn new_in_mem<E, Block, S>(
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
 		Block: BlockT,
+		H256: From<Block::Hash>,
 {
 	let backend = Arc::new(in_mem::Backend::new());
 	let executor = LocalCallExecutor::new(backend.clone(), executor);
@@ -359,7 +360,7 @@ impl<B, E, Block> Client<B, E, Block> where
 				&header.encode(),
 				execution_manager()
 			)?;
-			let (r, _) = args.using_encoded(|input|
+			let (r, _, _) = args.using_encoded(|input|
 				self.executor().call_at_state(
 				&state,
 				&mut overlay,
@@ -436,7 +437,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
-		let (storage_update, storage_changes) = match transaction.state()? {
+		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
 				let mut overlay = Default::default();
 				let mut r = self.executor.call_at_state(
@@ -462,11 +463,11 @@ impl<B, E, Block> Client<B, E, Block> where
 						}),
 					},
 				);
-				let (_, storage_update) = r?;
+				let (_, storage_update, changes_update) = r?;
 				overlay.commit_prospective();
-				(Some(storage_update), Some(overlay.into_committed()))
+				(Some(storage_update), Some(changes_update), Some(overlay.into_committed()))
 			},
-			None => (None, None)
+			None => (None, None, None)
 		};
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
@@ -476,6 +477,9 @@ impl<B, E, Block> Client<B, E, Block> where
 		transaction.update_authorities(authorities);
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
+		}
+		if let Some(Some(changes_update)) = changes_update {
+			transaction.update_changes_trie(changes_update)?;
 		}
 		self.backend.commit_operation(transaction)?;
 

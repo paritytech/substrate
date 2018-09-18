@@ -20,16 +20,20 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::fmt::Debug;
 use codec::Codec;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
+use generic::DigestItem as GenDigestItem;
 
 pub use substrate_primitives::H256;
 
+pub type DigestItem = GenDigestItem<H256, u64>;
+
 #[derive(Default, PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 pub struct Digest {
-	pub logs: Vec<u64>,
+	pub logs: Vec<DigestItem>,
 }
 
 impl traits::Digest for Digest {
-	type Item = u64;
+	type Hash = H256;
+	type Item = DigestItem;
 
 	fn logs(&self) -> &[Self::Item] {
 		&self.logs
@@ -38,14 +42,6 @@ impl traits::Digest for Digest {
 	fn push(&mut self, item: Self::Item) {
 		self.logs.push(item);
 	}
-}
-
-impl traits::DigestItem for () {
-	type AuthorityId = ();
-}
-
-impl traits::DigestItem for u64 {
-	type AuthorityId = ();
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
@@ -88,7 +84,11 @@ impl traits::Header for Header {
 		digest: Self::Digest
 	) -> Self {
 		Header {
-			number, extrinsics_root: extrinsics_root, state_root, parent_hash, digest
+			number,
+			extrinsics_root: extrinsics_root,
+			state_root,
+			parent_hash,
+			digest
 		}
 	}
 }

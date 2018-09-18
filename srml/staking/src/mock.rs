@@ -20,8 +20,8 @@
 
 use primitives::BuildStorage;
 use primitives::traits::{Identity};
-use primitives::testing::{Digest, Header};
-use substrate_primitives::{H256, Blake2Hasher};
+use primitives::testing::{Digest, DigestItem, Header};
+use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 use runtime_io;
 use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balances};
 
@@ -34,7 +34,7 @@ impl_outer_origin!{
 pub struct Test;
 impl consensus::Trait for Test {
 	const NOTE_OFFLINE_POSITION: u32 = 1;
-	type Log = u64;
+	type Log = DigestItem;
 	type SessionKey = u64;
 	type OnOfflineValidator = ();
 }
@@ -48,6 +48,7 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Header = Header;
 	type Event = ();
+	type Log = DigestItem;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
@@ -70,7 +71,14 @@ impl Trait for Test {
 	type Event = ();
 }
 
-pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64, current_era: u64, monied: bool, reward: u64) -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(
+	ext_deposit: u64,
+	session_length: u64,
+	sessions_per_era: u64,
+	current_era: u64,
+	monied: bool,
+	reward: u64
+) -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let balance_factor = if ext_deposit > 0 {
 		256
@@ -116,7 +124,7 @@ pub fn new_test_ext(ext_deposit: u64, session_length: u64, sessions_per_era: u64
 	t.extend(timestamp::GenesisConfig::<Test>{
 		period: 5
 	}.build_storage().unwrap());
-	t.into()
+	runtime_io::TestExternalities::new(t)
 }
 
 pub type System = system::Module<Test>;

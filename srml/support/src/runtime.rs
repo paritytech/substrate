@@ -906,7 +906,7 @@ macro_rules! __decl_outer_log {
 		;
 	) => {
 		impl_outer_log!(
-			pub enum Log($log_internal: DigestItem<$( $log_genarg)* >) for $runtime {
+			pub enum Log($log_internal: DigestItem<$( $log_genarg ),*>) for $runtime {
 				$( $parsed_modules ( $( $parsed_args ),* ) ),*
 			}
 		);
