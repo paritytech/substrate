@@ -67,6 +67,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 1,
+	apis: apis_vec!([]),
 };
 
 fn version() -> RuntimeVersion {
