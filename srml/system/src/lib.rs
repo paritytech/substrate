@@ -45,6 +45,7 @@ extern crate safe_mix;
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As};
+use substrate_primitives::storage::well_known_keys::{EXTRINSIC_INDEX, CHANGES_TRIE_CONFIG};
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -56,11 +57,6 @@ use runtime_io::{twox_128, TestExternalities, Blake2Hasher, RlpCodec};
 
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::ChangesTrieConfiguration;
-
-/// Current extrinsic index (u32) is stored under this key.
-pub const EXTRINSIC_INDEX: &'static [u8] = b":extrinsic_index";
-/// Changes trie configuration is stored under this key.
-pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
 
 /// Compute the extrinsics root of a list of extrinsics.
 pub fn extrinsics_root<H: Hash, E: codec::Encode>(extrinsics: &[E]) -> H::Output {

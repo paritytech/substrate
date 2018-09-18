@@ -44,6 +44,7 @@ use patricia_trie::NodeCodec;
 use rlp::Encodable;
 use heapsize::HeapSizeOf;
 use codec::Decode;
+use primitives::storage::well_known_keys;
 
 pub mod backend;
 mod changes_trie;
@@ -260,11 +261,11 @@ where
 	let strategy: ExecutionStrategy = (&manager).into();
 
 	// make a copy.
-	let code = try_read_overlay_value(overlay, backend, b":code")?
+	let code = try_read_overlay_value(overlay, backend, well_known_keys::CODE)?
 		.ok_or_else(|| Box::new(ExecutionError::CodeEntryDoesNotExist) as Box<Error>)?
 		.to_vec();
 
-	let heap_pages = try_read_overlay_value(overlay, backend, b":heappages")?
+	let heap_pages = try_read_overlay_value(overlay, backend, well_known_keys::HEAP_PAGES)?
 		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
 
 	// read changes trie configuration. The reason why we're doing it here instead of the
@@ -272,7 +273,11 @@ where
 	// proof-of-execution on light clients. And the proof is recorded by the backend which
 	// is created after OverlayedChanges
 
-	let changes_trie_config = try_read_overlay_value(overlay, backend, b":changes_trie")?;
+	let changes_trie_config = try_read_overlay_value(
+		overlay,
+		backend,
+		well_known_keys::CHANGES_TRIE_CONFIG
+	)?;
 	set_changes_trie_config(overlay, changes_trie_config)?;
 
 	let result = {
