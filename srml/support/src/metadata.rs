@@ -14,13 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use alloc;
-pub use substrate_metadata::{Cow, MaybeOwnedArray, RuntimeMetadata};
-
-/// Make Box available on `std` and `no_std`.
-pub type Box<T> = alloc::boxed::Box<T>;
-/// Make Vec available on `std` and `no_std`.
-pub type Vec<T> = alloc::vec::Vec<T>;
+pub use substrate_metadata::{Cow, DecodeDifferent, FnEncode, RuntimeMetadata, RuntimeModuleMetadata};
 
 /// Implements the metadata support for the given runtime and all its modules.
 ///
@@ -37,16 +31,11 @@ macro_rules! impl_runtime_metadata {
 		$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn metadata() -> $crate::metadata::Vec<$crate::metadata::RuntimeMetadata> {
-				let events = Self::outer_event_json_metadata();
-				unimplemented!()
-				// __impl_runtime_metadata!($runtime;
-				// 	$crate::metadata::RuntimeMetadata::Events {
-				// 		name: events.0,
-				// 		events: events.1,
-				// 	};
-				// 	$( $rest )*
-				// )
+			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
+				$crate::metadata::RuntimeMetadata {
+					outer_event: Self::outer_event_metadata(),
+					modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+				}
 			}
 		}
 	}
@@ -54,75 +43,64 @@ macro_rules! impl_runtime_metadata {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __impl_runtime_metadata {
-	(
-		$runtime: ident;
-		$( $metadata:expr ),*;
-		$mod:ident::$module:ident,
-		$( $rest:tt )*
-	) => {
-		__impl_runtime_metadata!(
-			$runtime;
-			$( $metadata, )* $crate::metadata::RuntimeMetadata::Module {
-				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod)
-			};
-			$( $rest )*
-		)
-	};
+macro_rules! __runtime_modules_to_metadata {
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
 		$mod:ident::$module:ident
+		$(, $( $rest:tt )* )*
 	) => {
-		__impl_runtime_metadata!(
+		__runtime_modules_to_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::RuntimeMetadata::Module {
-				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod)
+			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
+				prefix: $crate::metadata::Cow::Borrowed(stringify!($mod)),
+				module: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode($mod::$module::<$runtime>::metadata)
+				),
+				storage: None,
 			};
-		)
-	};
-	(
-		$runtime: ident;
-		$( $metadata:expr ),*;
-		$mod:ident::$module:ident with Storage,
-		$( $rest:tt )*
-	) => {
-		__impl_runtime_metadata!(
-			$runtime;
-			$( $metadata, )* $crate::metadata::RuntimeMetadata::ModuleWithStorage {
-				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod),
-				storage: $mod::$module::<$runtime>::store_json_metadata()
-			};
-			$( $rest )*
+			$( $( $rest )* )*
 		)
 	};
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
 		$mod:ident::$module:ident with Storage
+		$(, $( $rest:tt )* )*
 	) => {
-		__impl_runtime_metadata!(
+		__runtime_modules_to_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::RuntimeMetadata::ModuleWithStorage {
-				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod),
-				storage: $mod::$module::<$runtime>::store_json_metadata()
+			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
+				prefix: $crate::metadata::Cow::Borrowed(stringify!($mod)),
+				module: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode($mod::$module::<$runtime>::metadata)
+				),
+				storage: Some($crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode($mod::$module::<$runtime>::store_metadata)
+				)),
 			};
+			$( $( $rest )* )*
 		)
 	};
 	(
 		$runtime:ident;
 		$( $metadata:expr ),*;
 	) => {
-		<[_]>::into_vec($crate::metadata::Box::new([ $( $metadata ),* ]))
+		$crate::metadata::DecodeDifferent::Encode(&[ $( $metadata ),* ])
 	};
 }
 
-/*
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
 	use super::*;
+	use substrate_metadata::{
+		EventMetadata, OuterEventMetadata, RuntimeModuleMetadata, CallMetadata, ModuleMetadata,
+		StorageFunctionModifier, StorageFunctionType, FunctionMetadata, FunctionArgumentMetadata,
+		StorageMetadata, StorageFunctionMetadata,
+	};
+	use codec::{Decode, Encode};
 
 	mod system {
 		pub trait Trait {
@@ -217,58 +195,112 @@ mod tests {
 		type Origin = u32;
 	}
 
-	fn system_event_json() -> &'static str {
-		r#"{ "SystemEvent": { "params": null, "description": [ ] } }"#
-	}
-
-	fn event_module_event_json() -> &'static str {
-		r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ " Hi, I am a comment." ] } }"#
-	}
-
-	fn event_module2_event_json() -> &'static str {
-		r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ ] } }"#
-	}
-
 	impl_runtime_metadata!(
 		for TestRuntime with modules
 			event_module::Module,
 			event_module2::ModuleWithStorage with Storage
 	);
 
-	const EXPECTED_METADATA: &[RuntimeMetadata] = &[
-		RuntimeMetadata::Events {
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata {
+		outer_event: OuterEventMetadata {
 			name: Cow::Borrowed("TestEvent"),
-			events: &[
-				("system", system_event_json),
-				("event_module", event_module_event_json),
-				("event_module2", event_module2_event_json),
-			]
+			events: DecodeDifferent::Encode(&[
+				(
+					"system",
+					FnEncode(|| &[
+						EventMetadata {
+							name: Cow::Borrowed("SystemEvent"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[]),
+						}
+					])
+				),
+				(
+					"event_module",
+					FnEncode(|| &[
+						EventMetadata {
+							name: Cow::Borrowed("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["Balance"]),
+							documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
+						}
+					])
+				),
+				(
+					"event_module2",
+					FnEncode(|| &[
+						EventMetadata {
+							name: Cow::Borrowed("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["Balance"]),
+							documentation: DecodeDifferent::Encode(&[])
+						}
+					])
+				)
+			]),
 		},
-		RuntimeMetadata::Module {
-			module: concat!(
-				r#"{ "name": "Module", "call": "#,
-					r#"{ "name": "Call", "functions": "#,
-						r#"{ "0": { "name": "aux_0", "params": [ "#,
-							r#"{ "name": "origin", "type": "T::Origin" } ], "#,
-							r#""description": [ ] } } } }"#
-			),
-			prefix: "event_module"
-		},
-		RuntimeMetadata::ModuleWithStorage {
-			module: r#"{ "name": "ModuleWithStorage", "call": { "name": "Call", "functions": { } } }"#,
-			prefix: "event_module2",
-			storage: concat!(
-				r#"{ "prefix": "TestStorage", "items": { "#,
-					r#""StorageMethod": { "description": [ ], "modifier": null, "type": "u32" }"#,
-				r#" } }"#
-			)
-		}
-	];
+		modules: DecodeDifferent::Encode(&[
+			RuntimeModuleMetadata {
+				prefix: Cow::Borrowed("event_module"),
+				module: DecodeDifferent::Encode(FnEncode(||
+					ModuleMetadata {
+						name: Cow::Borrowed("Module"),
+						call: CallMetadata {
+							name: Cow::Borrowed("Call"),
+							functions: DecodeDifferent::Encode(&[
+								FunctionMetadata {
+									id: 0,
+									name: Cow::Borrowed("aux_0"),
+									arguments: DecodeDifferent::Encode(&[
+										FunctionArgumentMetadata {
+											name: Cow::Borrowed("origin"),
+											ty: Cow::Borrowed("T::Origin"),
+										}
+									]),
+									documentation: DecodeDifferent::Encode(&[]),
+								}
+							])
+						}
+					}
+				)),
+				storage: None,
+			},
+			RuntimeModuleMetadata {
+				prefix: Cow::Borrowed("event_module2"),
+				module: DecodeDifferent::Encode(FnEncode(||
+					ModuleMetadata {
+						name: Cow::Borrowed("ModuleWithStorage"),
+						call: CallMetadata {
+							name: Cow::Borrowed("Call"),
+							functions: DecodeDifferent::Encode(&[])
+						}
+					}
+				)),
+				storage: Some(DecodeDifferent::Encode(FnEncode(||
+					StorageMetadata {
+						prefix: Cow::Borrowed("TestStorage"),
+						functions: DecodeDifferent::Encode(&[
+							StorageFunctionMetadata {
+								name: Cow::Borrowed("StorageMethod"),
+								modifier: StorageFunctionModifier::None,
+								ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+								documentation: DecodeDifferent::Encode(&[]),
+							}
+						])
+					}
+				))),
+			}
+		])
+	};
 
 	#[test]
 	fn runtime_metadata() {
 		let metadata = TestRuntime::metadata();
-		assert_eq!(EXPECTED_METADATA, &metadata[..]);
+		assert_eq!(EXPECTED_METADATA, metadata);
+
+		let metadata_encoded = metadata.encode();
+		let metadata_decoded = RuntimeMetadata::decode(&mut &metadata_encoded[..]);
+
+		println!("{:?}", metadata);
+		println!("{:?}", metadata_decoded.as_ref().unwrap());
+		assert_eq!(metadata, metadata_decoded.unwrap());
 	}
 }
-*/

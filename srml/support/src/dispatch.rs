@@ -24,7 +24,7 @@ pub use rstd::result;
 use serde;
 pub use codec::{Codec, Decode, Encode, Input, Output};
 pub use substrate_metadata::{
-	ModuleMetadata, FunctionMetadata, MaybeOwnedArray,
+	ModuleMetadata, FunctionMetadata, DecodeDifferent,
 	CallMetadata, FunctionArgumentMetadata, Cow
 };
 
@@ -561,7 +561,7 @@ macro_rules! __functions_to_metadata{
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
 	) => {
-		$crate::dispatch::MaybeOwnedArray::Borrowed(&[ $( $function_metadata ),* ])
+		$crate::dispatch::DecodeDifferent::Encode(&[ $( $function_metadata ),* ])
 	}
 }
 
@@ -579,7 +579,7 @@ macro_rules! __function_to_metadata {
 		$crate::dispatch::FunctionMetadata {
 			id: $fn_id,
 			name: $crate::dispatch::Cow::Borrowed(stringify!($fn_name)),
-			arguments: $crate::dispatch::MaybeOwnedArray::Borrowed(&[
+			arguments: $crate::dispatch::DecodeDifferent::Encode(&[
 				$(
 					$crate::dispatch::FunctionArgumentMetadata {
 						name: $crate::dispatch::Cow::Borrowed(stringify!($param_name)),
@@ -587,7 +587,7 @@ macro_rules! __function_to_metadata {
 					}
 				),*
 			]),
-			documentation: $crate::dispatch::MaybeOwnedArray::Borrowed(&[ $( $fn_doc ),* ]),
+			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
 		}
 	};
 	(
@@ -598,8 +598,8 @@ macro_rules! __function_to_metadata {
 		$crate::dispatch::FunctionMetadata {
 			id: $fn_id,
 			name: $crate::dispatch::Cow::Borrowed(stringify!($fn_name)),
-			arguments: $crate::dispatch::MaybeOwnedArray::Borrowed(&[]),
-			documentation: $crate::dispatch::MaybeOwnedArray::Borrowed(&[ $( $fn_doc ),* ]),
+			arguments: $crate::dispatch::DecodeDifferent::Encode(&[]),
+			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
 		}
 	};
 }
@@ -660,24 +660,24 @@ mod tests {
 		name: Cow::Borrowed("Module"),
 		call: CallMetadata {
 			name: Cow::Borrowed("Call"),
-			functions: MaybeOwnedArray::Borrowed(&[
+			functions: DecodeDifferent::Encode(&[
 				FunctionMetadata {
 					id: 0,
 					name: Cow::Borrowed("aux_0"),
-					arguments: MaybeOwnedArray::Borrowed(&[
+					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
 							name: Cow::Borrowed("origin"),
 							ty: Cow::Borrowed("T::Origin"),
 						}
 					]),
-					documentation: MaybeOwnedArray::Borrowed(&[
+					documentation: DecodeDifferent::Encode(&[
 						" Hi, this is a comment."
 					])
 				},
 				FunctionMetadata {
 					id: 1,
 					name: Cow::Borrowed("aux_1"),
-					arguments: MaybeOwnedArray::Borrowed(&[
+					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
 							name: Cow::Borrowed("origin"),
 							ty: Cow::Borrowed("T::Origin"),
@@ -687,12 +687,12 @@ mod tests {
 							ty: Cow::Borrowed("i32"),
 						}
 					]),
-					documentation: MaybeOwnedArray::Borrowed(&[]),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
 					id: 2,
 					name: Cow::Borrowed("aux_2"),
-					arguments: MaybeOwnedArray::Borrowed(&[
+					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
 							name: Cow::Borrowed("origin"),
 							ty: Cow::Borrowed("T::Origin"),
@@ -706,24 +706,24 @@ mod tests {
 							ty: Cow::Borrowed("String"),
 						}
 					]),
-					documentation: MaybeOwnedArray::Borrowed(&[]),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
 					id: 3,
 					name: Cow::Borrowed("aux_3"),
-					arguments: MaybeOwnedArray::Borrowed(&[]),
-					documentation: MaybeOwnedArray::Borrowed(&[]),
+					arguments: DecodeDifferent::Encode(&[]),
+					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
 					id: 4,
 					name: Cow::Borrowed("aux_4"),
-					arguments: MaybeOwnedArray::Borrowed(&[
+					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
 							name: Cow::Borrowed("data"),
 							ty: Cow::Borrowed("i32"),
 						}
 					]),
-					documentation: MaybeOwnedArray::Borrowed(&[]),
+					documentation: DecodeDifferent::Encode(&[]),
 				}
 			]),
 		},

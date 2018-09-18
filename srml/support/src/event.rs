@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use substrate_metadata::{Cow, EventMetadata, MaybeOwnedArray, OuterEventMetadata, FnEncode};
+pub use substrate_metadata::{Cow, EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
 
 /// Implement the `Event` for a module.
 ///
@@ -248,10 +248,10 @@ macro_rules! __events_to_metadata {
 			$( $metadata, )*
 			$crate::event::EventMetadata {
 				name: $crate::event::Cow::Borrowed(stringify!($event)),
-				arguments: $crate::event::MaybeOwnedArray::Borrowed(&[
+				arguments: $crate::event::DecodeDifferent::Encode(&[
 					$( $( stringify!($param) ),* )*
 				]),
-				documentation: $crate::event::MaybeOwnedArray::Borrowed(&[
+				documentation: $crate::event::DecodeDifferent::Encode(&[
 					$( $doc_attr ),*
 				]),
 			};
@@ -408,7 +408,7 @@ macro_rules! __impl_outer_event_json_metadata {
 			pub fn outer_event_metadata() -> $crate::event::OuterEventMetadata {
 				$crate::event::OuterEventMetadata {
 					name: $crate::event::Cow::Borrowed(stringify!($event_name)),
-					events: $crate::event::MaybeOwnedArray::Borrowed(&[
+					events: $crate::event::DecodeDifferent::Encode(&[
 						("system", $crate::event::FnEncode(system::Event::metadata))
 						$(
 							, (
@@ -566,14 +566,14 @@ mod tests {
 
 	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {
 		name: Cow::Borrowed("TestEvent"),
-		events: MaybeOwnedArray::Borrowed(&[
+		events: DecodeDifferent::Encode(&[
 			(
 				"system",
 				FnEncode(|| &[
 					EventMetadata {
 						name: Cow::Borrowed("SystemEvent"),
-						arguments: MaybeOwnedArray::Borrowed(&[]),
-						documentation: MaybeOwnedArray::Borrowed(&[]),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
 					}
 				])
 			),
@@ -582,13 +582,13 @@ mod tests {
 				FnEncode(|| &[
 					EventMetadata {
 						name: Cow::Borrowed("TestEvent"),
-						arguments: MaybeOwnedArray::Borrowed(&[ "Balance", "Origin" ]),
-						documentation: MaybeOwnedArray::Borrowed(&[ " Hi, I am a comment." ])
+						arguments: DecodeDifferent::Encode(&[ "Balance", "Origin" ]),
+						documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
 					},
 					EventMetadata {
 						name: Cow::Borrowed("EventWithoutParams"),
-						arguments: MaybeOwnedArray::Borrowed(&[]),
-						documentation: MaybeOwnedArray::Borrowed(&[ " Dog" ]),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[ " Dog" ]),
 					},
 				])
 			),
@@ -597,13 +597,13 @@ mod tests {
 				FnEncode(|| &[
 					EventMetadata {
 						name: Cow::Borrowed("TestEvent"),
-						arguments: MaybeOwnedArray::Borrowed(&[ "BalanceRenamed" ]),
-						documentation: MaybeOwnedArray::Borrowed(&[])
+						arguments: DecodeDifferent::Encode(&[ "BalanceRenamed" ]),
+						documentation: DecodeDifferent::Encode(&[])
 					},
 					EventMetadata {
 						name: Cow::Borrowed("TestOrigin"),
-						arguments: MaybeOwnedArray::Borrowed(&[ "OriginRenamed" ]),
-						documentation: MaybeOwnedArray::Borrowed(&[]),
+						arguments: DecodeDifferent::Encode(&[ "OriginRenamed" ]),
+						documentation: DecodeDifferent::Encode(&[]),
 					},
 				])
 			),
@@ -612,8 +612,8 @@ mod tests {
 				FnEncode(|| &[
 					EventMetadata {
 						name: Cow::Borrowed("HiEvent"),
-						arguments: MaybeOwnedArray::Borrowed(&[]),
-						documentation: MaybeOwnedArray::Borrowed(&[])
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[])
 					}
 				])
 			)

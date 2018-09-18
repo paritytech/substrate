@@ -16,8 +16,7 @@ mashup = "0.1.7"
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
-serde_json = { version = "1.0" }
-parity-codec-derive = { version = "~1.0" }
+parity-codec-derive = { version = "1.1" }
 
 [features]
 default = ["std"]

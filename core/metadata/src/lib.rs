@@ -34,49 +34,67 @@ pub mod alloc {
 	pub use std::borrow;
 }
 
-use std::fmt::Debug;
-
 use codec::{Decode, Encode, Input, Output};
 
 /// Make Cow available on `std` and `no_std`.
 pub use alloc::borrow::Cow;
 
-/// A somewhat specialized version of Cow for arrays.
-#[derive(PartialEq, Clone, Eq, Debug)]
-pub enum MaybeOwnedArray<B, O = B>
-	where
-		B: Debug + Eq + PartialEq + 'static,
-		O: Debug + Eq + PartialEq + 'static
-{
-	Borrowed(&'static [B]),
-	Owned(Vec<O>),
+/// A type that decodes to a different type than it encodes.
+/// The user needs to make sure that both types use the same encoding.
+///
+/// For example a `&'static [ &'static str ]` can be decoded to a `Vec<String>`.
+#[derive(Clone)]
+pub enum DecodeDifferent<B, O> where B: 'static, O: 'static {
+	Encode(B),
+	Decoded(O),
 }
 
-impl<B, O> Encode for MaybeOwnedArray<B, O>
-	where
-		B: Encode + Debug + Eq + PartialEq + 'static,
-		O: Encode + Debug + Eq + PartialEq + 'static
-{
+impl<B, O> Encode for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode + 'static {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		match self {
-			MaybeOwnedArray::Borrowed(b) => b.encode_to(dest),
-			MaybeOwnedArray::Owned(o) => o.encode_to(dest),
+			DecodeDifferent::Encode(b) => b.encode_to(dest),
+			DecodeDifferent::Decoded(o) => o.encode_to(dest),
 		}
 	}
 }
 
-impl<B, O> Decode for MaybeOwnedArray<B, O>
-	where
-		B: Encode + Debug + Eq + PartialEq + 'static,
-		O: Encode + Debug + Eq + PartialEq + 'static,
-		Vec<O>: Decode
-{
+impl<B, O> Decode for DecodeDifferent<B, O> where B: 'static, O: Decode + 'static {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
-		Vec::<O>::decode(input).and_then(|val| {
-			Some(MaybeOwnedArray::Owned(val))
+		<O>::decode(input).and_then(|val| {
+			Some(DecodeDifferent::Decoded(val))
 		})
 	}
 }
+
+impl<B, O> PartialEq for DecodeDifferent<B, O>
+where
+	B: Encode + Eq + PartialEq + 'static,
+	O: Encode + Eq + PartialEq + 'static,
+{
+	fn eq(&self, other: &Self) -> bool {
+		self.encode() == other.encode()
+	}
+}
+
+impl<B, O> Eq for DecodeDifferent<B, O>
+	where B: Encode + Eq + PartialEq + 'static, O: Encode + Eq + PartialEq + 'static
+{}
+
+#[cfg(feature = "std")]
+impl<B, O> std::fmt::Debug for DecodeDifferent<B, O>
+	where
+		B: ::std::fmt::Debug + Eq + 'static,
+		O: ::std::fmt::Debug + Eq + 'static,
+{
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		match self {
+			DecodeDifferent::Encode(b) => b.fmt(f),
+			DecodeDifferent::Decoded(o) => o.fmt(f),
+		}
+	}
+}
+
+type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
 
 /// All the metadata about a module.
 #[derive(Clone, PartialEq, Eq, Decode, Encode)]
@@ -91,7 +109,7 @@ pub struct ModuleMetadata {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct CallMetadata {
 	pub name: Cow<'static, str>,
-	pub functions: MaybeOwnedArray<FunctionMetadata>,
+	pub functions: DecodeDifferentArray<FunctionMetadata>,
 }
 
 /// All the metadata about a function.
@@ -100,8 +118,8 @@ pub struct CallMetadata {
 pub struct FunctionMetadata {
 	pub id: u16,
 	pub name: Cow<'static, str>,
-	pub arguments: MaybeOwnedArray<FunctionArgumentMetadata>,
-	pub documentation: MaybeOwnedArray<&'static str, String>,
+	pub arguments: DecodeDifferentArray<FunctionArgumentMetadata>,
+	pub documentation: DecodeDifferentArray<&'static str, String>,
 }
 
 /// All the metadata about a function argument.
@@ -114,22 +132,22 @@ pub struct FunctionArgumentMetadata {
 
 /// Newtype wrapper for support encoding functions (actual the result of the function).
 #[derive(Clone, Eq)]
-pub struct FnEncode(pub fn() -> &'static [EventMetadata]);
+pub struct FnEncode<E>(pub fn() -> E) where E: Encode + 'static;
 
-impl Encode for FnEncode {
+impl<E: Encode> Encode for FnEncode<E> {
 	fn encode_to<W: Output>(&self, dest: &mut W) {
 		self.0().encode_to(dest);
 	}
 }
 
-impl PartialEq for FnEncode {
+impl<E: Encode + PartialEq> PartialEq for FnEncode<E> {
 	fn eq(&self, other: &Self) -> bool {
-		self.0().eq(other.0())
+		self.0().eq(&other.0())
 	}
 }
 
 #[cfg(feature = "std")]
-impl std::fmt::Debug for FnEncode {
+impl<E: Encode + ::std::fmt::Debug> std::fmt::Debug for FnEncode<E> {
 	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
 		self.0().fmt(f)
 	}
@@ -140,8 +158,8 @@ impl std::fmt::Debug for FnEncode {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct OuterEventMetadata {
 	pub name: Cow<'static, str>,
-	pub events: MaybeOwnedArray<
-		(&'static str, FnEncode),
+	pub events: DecodeDifferentArray<
+		(&'static str, FnEncode<&'static [EventMetadata]>),
 		(String, Vec<EventMetadata>)
 	>,
 }
@@ -151,8 +169,8 @@ pub struct OuterEventMetadata {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct EventMetadata {
 	pub name: Cow<'static, str>,
-	pub arguments: MaybeOwnedArray<&'static str, String>,
-	pub documentation: MaybeOwnedArray<&'static str, String>,
+	pub arguments: DecodeDifferentArray<&'static str, String>,
+	pub documentation: DecodeDifferentArray<&'static str, String>,
 }
 
 /// All the metadata about a storage.
@@ -160,7 +178,7 @@ pub struct EventMetadata {
 #[cfg_attr(feature = "std", derive(Debug))]
 pub struct StorageMetadata {
 	pub prefix: Cow<'static, str>,
-	pub functions: MaybeOwnedArray<StorageFunctionMetadata>,
+	pub functions: DecodeDifferentArray<StorageFunctionMetadata>,
 }
 
 /// All the metadata about a storage function.
@@ -170,7 +188,7 @@ pub struct StorageFunctionMetadata {
 	pub name: Cow<'static, str>,
 	pub modifier: StorageFunctionModifier,
 	pub ty: StorageFunctionType,
-	pub documentation: MaybeOwnedArray<&'static str, String>,
+	pub documentation: DecodeDifferentArray<&'static str, String>,
 }
 
 /// A storage function type.
@@ -193,21 +211,19 @@ pub enum StorageFunctionModifier {
 	Required,
 }
 
+/// All metadata about an runtime module.
+#[derive(Clone, PartialEq, Eq, Decode, Encode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct RuntimeModuleMetadata {
+	pub prefix: Cow<'static, str>,
+	pub module: DecodeDifferent<FnEncode<ModuleMetadata>, ModuleMetadata>,
+	pub storage: Option<DecodeDifferent<FnEncode<StorageMetadata>, StorageMetadata>>,
+}
+
 /// The metadata of a runtime.
 #[derive(Eq, Encode, Decode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
-pub enum RuntimeMetadata {
-	Events {
-		name: Cow<'static, str>,
-		events: Cow<'static, str>,
-	},
-	Module {
-		module: ModuleMetadata,
-		prefix: Cow<'static, str>,
-	},
-	ModuleWithStorage {
-		module: ModuleMetadata,
-		prefix: Cow<'static, str>,
-		storage: Cow<'static, str>,
-	},
+pub struct RuntimeMetadata {
+	pub outer_event: OuterEventMetadata,
+	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
 }
