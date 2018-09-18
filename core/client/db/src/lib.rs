@@ -465,40 +465,51 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 
 			if pending_block.is_best || operation.finalized {
 				let meta = self.blockchain.meta.read();
-				let tree_route = ::utils::tree_route::<Block>(
-					&*self.blockchain.db,
-					columns::HEADER,
-					meta.best_hash,
-					hash
-				)?;
 
-				// update block number to hash lookup entries.
-				for retracted in tree_route.retracted() {
-					if retracted.hash == meta.finalized_hash {
-						// TODO: can we recover here?
-						warn!("Safety failure: reverting finalized block {:?}",
-							(&retracted.number, &retracted.hash));
+				// cannot find tree route with empty DB.
+				if meta.best_hash != Default::default() {
+					let parent_hash = *pending_block.header.parent_hash();
+					let tree_route = ::utils::tree_route::<Block>(
+						&*self.blockchain.db,
+						columns::HEADER,
+						meta.best_hash,
+						parent_hash,
+					)?;
+
+					// update block number to hash lookup entries.
+					for retracted in tree_route.retracted() {
+						if retracted.hash == meta.finalized_hash {
+							// TODO: can we recover here?
+							warn!("Safety failure: reverting finalized block {:?}",
+								(&retracted.number, &retracted.hash));
+						}
+
+						transaction.delete(
+							columns::HASH_LOOKUP,
+							&::utils::number_to_lookup_key(retracted.number)
+						);
 					}
 
-					transaction.delete(
-						columns::HASH_LOOKUP,
-						&::utils::number_to_lookup_key(retracted.number)
-					);
+					for enacted in tree_route.enacted() {
+						let hash: &Block::Hash = &enacted.hash;
+						transaction.put(
+							columns::HASH_LOOKUP,
+							&::utils::number_to_lookup_key(enacted.number),
+							hash.as_ref(),
+						)
+					}
 				}
 
-				for enacted in tree_route.enacted() {
-					let hash: &Block::Hash = &enacted.hash;
-					transaction.put(
-						columns::HASH_LOOKUP,
-						&::utils::number_to_lookup_key(enacted.number),
-						hash.as_ref(),
-					)
-				}
-
+				transaction.put(
+					columns::HASH_LOOKUP,
+					&::utils::number_to_lookup_key(number),
+					hash.as_ref()
+				);
 				transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
 			}
 
 			if number == Zero::zero() {
+				transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, hash.as_ref());
 				transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 			}
 
@@ -651,7 +662,7 @@ mod tests {
 	#[test]
 	fn set_state_data() {
 		let db = Backend::<Block>::new_test(2);
-		{
+		let hash = {
 			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
 			let mut header = Header {
 				number: 0,
@@ -671,6 +682,7 @@ mod tests {
 				.cloned()
 				.map(|(x, y)| (x, Some(y)))
 			).0.into();
+			let hash = header.hash();
 
 			op.reset_storage(storage.iter().cloned()).unwrap();
 			op.set_block_data(
@@ -688,13 +700,14 @@ mod tests {
 			assert_eq!(state.storage(&[1, 2, 3]).unwrap(), Some(vec![9, 9, 9]));
 			assert_eq!(state.storage(&[5, 5, 5]).unwrap(), None);
 
-		}
+			hash
+		};
 
 		{
 			let mut op = db.begin_operation(BlockId::Number(0)).unwrap();
 			let mut header = Header {
 				number: 1,
-				parent_hash: Default::default(),
+				parent_hash: hash,
 				state_root: Default::default(),
 				digest: Default::default(),
 				extrinsics_root: Default::default(),

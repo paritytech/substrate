@@ -204,6 +204,7 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<
 }
 
 /// An entry in a tree route.
+#[derive(Debug)]
 pub struct RouteEntry<Block: BlockT> {
 	/// The number of the block.
 	pub number: <Block::Header as HeaderT>::Number,
@@ -233,6 +234,7 @@ pub struct RouteEntry<Block: BlockT> {
 /// Tree route from C to E. Retracted empty. Common is C, enacted [E1, E2]
 /// C -> E1 -> E2
 /// ```
+#[derive(Debug)]
 pub struct TreeRoute<Block: BlockT> {
 	route: Vec<RouteEntry<Block>>,
 	pivot: usize,
