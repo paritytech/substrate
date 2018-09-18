@@ -22,8 +22,10 @@ use runtime_primitives::bft::Justification;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
+use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
+use memorydb::MemoryDB;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block, H, C>
@@ -53,6 +55,8 @@ where
 	fn update_storage(&mut self, update: <Self::State as StateBackend<H, C>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
+	/// Inject changes trie data into the database.
+	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
 }
 
 /// Client backend. Manages the data layer.
@@ -75,6 +79,8 @@ where
 	type Blockchain: ::blockchain::Backend<Block>;
 	/// Associated state backend type.
 	type State: StateBackend<H, C>;
+	/// Changes trie storage.
+	type ChangesTrieStorage: StateChangesTrieStorage<H>;
 
 	/// Begin a new block insertion transaction with given parent block id.
 	/// When constructing the genesis, this is called with all-zero hash.
@@ -83,6 +89,8 @@ where
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
+	/// Returns reference to changes trie storage.
+	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage>;
 	/// Returns state backend with post-state of given block.
 	fn state_at(&self, block: BlockId<Block>) -> error::Result<Self::State>;
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were

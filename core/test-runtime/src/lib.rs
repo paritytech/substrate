@@ -113,7 +113,7 @@ pub type BlockNumber = u64;
 /// Index of a transaction.
 pub type Index = u64;
 /// The item of a block digest.
-pub type DigestItem = runtime_primitives::generic::DigestItem<u64>;
+pub type DigestItem = runtime_primitives::generic::DigestItem<H256, u64>;
 /// The digest of a block.
 pub type Digest = runtime_primitives::generic::Digest<DigestItem>;
 /// A test block.

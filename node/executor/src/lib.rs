@@ -49,15 +49,17 @@ mod tests {
 	use codec::{Encode, Decode, Joiner};
 	use keyring::Keyring;
 	use runtime_support::{Hashable, StorageValue, StorageMap};
-	use state_machine::{CodeExecutor, TestExternalities};
-	use primitives::{twox_128, Blake2Hasher, ed25519::{Public, Pair}};
+	use state_machine::{CodeExecutor, Externalities, TestExternalities};
+	use primitives::{twox_128, Blake2Hasher, RlpCodec, ChangesTrieConfiguration,
+		ed25519::{Public, Pair}};
 	use node_primitives::{Hash, BlockNumber, AccountId};
-	use runtime_primitives::traits::Header as HeaderT;
-	use runtime_primitives::{ApplyOutcome, ApplyError, ApplyResult};
+	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
+	use runtime_primitives::{generic, ApplyOutcome, ApplyError, ApplyResult};
 	use {balances, staking, session, system, consensus, timestamp, treasury};
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
-		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System, Event};
+		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
+		SystemConfig, Event, Log};
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
@@ -115,7 +117,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
-		let mut t: TestExternalities<Blake2Hasher> = map![
+		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
@@ -125,7 +127,7 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let r = executor().call(&mut t, 8, BLOATY_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
@@ -136,7 +138,7 @@ mod tests {
 
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
-		let mut t: TestExternalities<Blake2Hasher> = map![
+		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
@@ -146,7 +148,7 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let r = executor().call(&mut t, 8, COMPACT_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
@@ -157,7 +159,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
-		let mut t: TestExternalities<Blake2Hasher> = map![
+		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
@@ -167,7 +169,7 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let r = executor().call(&mut t, 8, COMPACT_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
@@ -182,7 +184,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
-		let mut t: TestExternalities<Blake2Hasher> = map![
+		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
@@ -192,7 +194,7 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let r = executor().call(&mut t, 8, BLOATY_CODE, "initialise_block", &vec![].and(&from_block_number(1u64)), true).0;
 		assert!(r.is_ok());
@@ -205,12 +207,18 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
+	fn new_test_ext(support_changes_trie: bool) -> TestExternalities<Blake2Hasher, RlpCodec> {
 		use keyring::Keyring::*;
 		let three = [3u8; 32].into();
-		GenesisConfig {
+		TestExternalities::new(GenesisConfig {
 			consensus: Some(Default::default()),
-			system: Some(Default::default()),
+			system: Some(SystemConfig {
+				changes_trie_config: if support_changes_trie { Some(ChangesTrieConfiguration {
+					digest_interval: 2,
+					digest_levels: 2,
+				}) } else { None },
+				..Default::default()
+			}),
 			balances: Some(BalancesConfig {
 				balances: vec![(alice(), 111)],
 				transaction_base_fee: 1,
@@ -240,32 +248,52 @@ mod tests {
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
-		}.build_storage().unwrap().into()
+		}.build_storage().unwrap())
 	}
 
-	fn construct_block(number: BlockNumber, parent_hash: Hash, state_root: Hash, extrinsics: Vec<CheckedExtrinsic>) -> (Vec<u8>, Hash) {
+	fn construct_block(
+		number: BlockNumber,
+		parent_hash: Hash,
+		state_root: Hash,
+		changes_root: Option<Hash>,
+		extrinsics: Vec<CheckedExtrinsic>
+	) -> (Vec<u8>, Hash) {
 		use triehash::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
+
+		let mut digest = generic::Digest::<Log>::default();
+		if let Some(changes_root) = changes_root {
+			digest.push(Log::from(system::RawLog::ChangesTrieRoot::<Hash>(changes_root)));
+		}
 
 		let header = Header {
 			parent_hash,
 			number,
 			state_root,
 			extrinsics_root,
-			digest: Default::default(),
+			digest,
 		};
 		let hash = header.blake2_256();
 
 		(Block { header, extrinsics }.encode(), hash.into())
 	}
 
-	fn block1() -> (Vec<u8>, Hash) {
+	fn block1(support_changes_trie: bool) -> (Vec<u8>, Hash) {
 		construct_block(
 			1,
 			[69u8; 32].into(),
-			hex!("1f058f699ad3187bcf7e9ed8e44464d7a5added0cd912d2679b9dab2e7a04053").into(),
+			if support_changes_trie {
+				hex!("1755be7303767b4d3855694b4f0ebd9d64b7011124d0ec1ad3e17c2a0d65e245").into()
+			} else {
+				hex!("1f058f699ad3187bcf7e9ed8e44464d7a5added0cd912d2679b9dab2e7a04053").into()
+			},
+			if support_changes_trie {
+				Some(hex!("d7ff76d7fbb9b613e8d140da6f1d561b4928785d4e4818ed959bd1bd35abc7e8").into())
+			} else {
+				None
+			},
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -284,8 +312,9 @@ mod tests {
 	fn block2() -> (Vec<u8>, Hash) {
 		construct_block(
 			2,
-			block1().1,
+			block1(false).1,
 			hex!("29fa1d0aa83662c571315af54b106c73823a31f759793803bf8929960b67b138").into(),
+			None,
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -311,6 +340,7 @@ mod tests {
 			1,
 			[69u8; 32].into(),
 			hex!("fe0e07c7b054fe186387461d455d536860e9c71d6979fd9dbf755e96ce070d04").into(),
+			None,
 			vec![
 				CheckedExtrinsic {
 					signed: None,
@@ -328,9 +358,9 @@ mod tests {
 
 	#[test]
 	fn full_native_block_import_works() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false);
 
-		executor().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1().0, true).0.unwrap();
+		executor().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(false).0, true).0.unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 41);
@@ -438,9 +468,9 @@ mod tests {
 
 	#[test]
 	fn full_wasm_block_import_works() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false);
 
-		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1().0).unwrap();
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(false).0).unwrap();
 
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 41);
@@ -457,7 +487,7 @@ mod tests {
 
 	#[test]
 	fn wasm_big_block_import_fails() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false);
 
 		let r = WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1big().0);
 		assert!(!r.is_ok());
@@ -465,7 +495,7 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_succeeds() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false);
 
 		let r = Executor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1big().0, true).0;
 		assert!(r.is_ok());
@@ -473,7 +503,7 @@ mod tests {
 
 	#[test]
 	fn native_big_block_import_fails_on_fallback() {
-		let mut t = new_test_ext();
+		let mut t = new_test_ext(false);
 
 		let r = Executor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1big().0, false).0;
 		assert!(!r.is_ok());
@@ -481,7 +511,7 @@ mod tests {
 
 	#[test]
 	fn panic_execution_gives_error() {
-		let mut t: TestExternalities<Blake2Hasher> = map![
+		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
@@ -491,7 +521,7 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
 		let r = WasmExecutor::new().call(&mut t, 8, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)));
@@ -503,7 +533,7 @@ mod tests {
 
 	#[test]
 	fn successful_execution_gives_ok() {
-		let mut t: TestExternalities<Blake2Hasher> = map![
+		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
 			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
 			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
@@ -513,7 +543,7 @@ mod tests {
 			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
-		];
+		]);
 
 		let foreign_code = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
 		let r = WasmExecutor::new().call(&mut t, 8, &foreign_code[..], "initialise_block", &vec![].and(&from_block_number(1u64)));
@@ -526,5 +556,21 @@ mod tests {
 			assert_eq!(Balances::total_balance(&alice()), 42);
 			assert_eq!(Balances::total_balance(&bob()), 69);
 		});
+	}
+
+	#[test]
+	fn full_native_block_import_works_with_changes_trie() {
+		let mut t = new_test_ext(true);
+		Executor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(true).0, true).0.unwrap();
+
+		assert!(t.storage_changes_root(1).is_some());
+	}
+
+	#[test]
+	fn full_wasm_block_import_works_with_changes_trie() {
+		let mut t = new_test_ext(true);
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &block1(true).0).unwrap();
+
+		assert!(t.storage_changes_root(1).is_some());
 	}
 }

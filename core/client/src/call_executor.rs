@@ -24,6 +24,7 @@ use executor::{RuntimeVersion, RuntimeInfo};
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use rlp::Encodable;
+use memorydb::MemoryDB;
 use codec::Decode;
 use primitives::{Blake2Hasher, RlpCodec};
 
@@ -76,7 +77,7 @@ where
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>
-	) -> Result<(Vec<u8>, S::Transaction), error::Error>;
+	) -> Result<(Vec<u8>, S::Transaction, Option<MemoryDB<H>>), error::Error>;
 
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
@@ -129,7 +130,7 @@ where
 		call_data: &[u8],
 	) -> error::Result<CallResult> {
 		let mut changes = OverlayedChanges::default();
-		let (return_data, _) = self.call_at_state(
+		let (return_data, _, _) = self.call_at_state(
 			&self.backend.state_at(*id)?,
 			&mut changes,
 			method,
@@ -152,7 +153,8 @@ where
 			.and_then(|v| u64::decode(&mut &v[..]))
 			.unwrap_or(8) as usize;
 
-		self.executor.runtime_version(&mut Ext::new(&mut overlay, &state), heap_pages, &code)
+		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage());
+		self.executor.runtime_version(&mut ext, heap_pages, &code)
 			.ok_or(error::ErrorKind::VersionInvalid.into())
 	}
 
@@ -165,9 +167,10 @@ where
 		method: &str,
 		call_data: &[u8],
 		manager: ExecutionManager<F>,
-	) -> error::Result<(Vec<u8>, S::Transaction)> {
+	) -> error::Result<(Vec<u8>, S::Transaction, Option<MemoryDB<Blake2Hasher>>)> {
 		state_machine::execute_using_consensus_failure_handler(
 			state,
+			self.backend.changes_trie_storage(),
 			changes,
 			&self.executor,
 			method,
@@ -189,7 +192,6 @@ where
 			method,
 			call_data,
 		)
-		.map(|(result, proof, _)| (result, proof))
 		.map_err(Into::into)
 	}
 

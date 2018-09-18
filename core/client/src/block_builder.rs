@@ -94,7 +94,7 @@ where
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
 		match self.executor.call_at_state(&self.state, &mut self.changes, "apply_extrinsic", &xt.encode(), native_when_possible()) {
-			Ok((result, _)) => {
+			Ok((result, _, _)) => {
 				match ApplyResult::decode(&mut result.as_slice()) {
 					Some(Ok(ApplyOutcome::Success)) | Some(Ok(ApplyOutcome::Fail)) => {
 						self.extrinsics.push(xt);
@@ -120,7 +120,7 @@ where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		let (output, _) = self.executor.call_at_state(
+		let (output, _, _) = self.executor.call_at_state(
 			&self.state,
 			&mut self.changes,
 			"finalise_block",

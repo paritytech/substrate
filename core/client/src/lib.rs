@@ -39,6 +39,7 @@ extern crate patricia_trie;
 extern crate hashdb;
 extern crate rlp;
 extern crate heapsize;
+extern crate memorydb;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
