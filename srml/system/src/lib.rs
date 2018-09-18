@@ -44,7 +44,7 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As};
+	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, GetBlockNumber, BlockNumberToHash};
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -385,6 +385,21 @@ impl<T: Trait> Module<T> {
 		let extrinsics = (0..<ExtrinsicCount<T>>::get().unwrap_or_default()).map(<ExtrinsicData<T>>::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
+	}
+}
+
+impl<T: Trait> GetBlockNumber for Module<T> {
+	type BlockNumber = T::BlockNumber;
+	fn get_block_number(&self) -> Self::BlockNumber {
+		<Module<T>>::block_number()
+	}
+}
+
+impl<T: Trait> BlockNumberToHash for Module<T> {
+	type BlockNumber = T::BlockNumber;
+	type Hash = T::Hash;
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
+		Some(<Module<T>>::block_hash(n))
 	}
 }
 

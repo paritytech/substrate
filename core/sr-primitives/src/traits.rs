@@ -60,7 +60,28 @@ pub trait Lookup {
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
-	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+	fn lookup(&self, s: Self::Source) -> result::Result<Self::Target, &'static str>;
+}
+
+/// Get the "current" block number.
+pub trait GetBlockNumber {
+	/// The type of the block number.
+	type BlockNumber;
+
+	/// Return the current block number. Not allowed to fail.
+	fn get_block_number(&self) -> Self::BlockNumber;
+}
+
+/// Translate a block number into a hash.
+pub trait BlockNumberToHash {
+	/// The type of the block number.
+	type BlockNumber;
+
+	/// The type of the hash.
+	type Hash;
+
+	/// Get the hash for a given block number, or `None` if unknown.
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash>;
 }
 
 /// Simple payment making trait, operating on a single generic `AccountId` type.
@@ -78,6 +99,14 @@ impl<T> MakePayment<T> for () {
 pub trait Convert<A, B> {
 	/// Make conversion.
 	fn convert(a: A) -> B;
+}
+
+/// Simple factory trait that can statically create new instances of a given type.
+pub trait Factory {
+	/// Type that this factory creates.
+	type Item;
+	/// Create an instance.
+	fn create() -> Self::Item;
 }
 
 /// Simple trait similar to `Into`, except that it can be used to convert numerics between each
@@ -407,10 +436,23 @@ pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Implement for pieces of information that require some additional context `Context` in order to be
 /// checked.
 pub trait Checkable<Context>: Sized {
-	/// Returned if `check_with` succeeds.
+	/// Returned if `check` succeeds.
 	type Checked;
 
-	fn check_with(self, context: Context) -> Result<Self::Checked, &'static str>;
+	/// Check self, given an instance of Context.
+	fn check(self, c: &Context) -> Result<Self::Checked, &'static str>;
+}
+
+/// A "checkable" piece of information, used by the standard Substrate Executive in order to
+/// check the validity of a piece of extrinsic information, usually by verifying the signature.
+/// Implement for pieces of information that require some additional context `Context` in order to be
+/// checked.
+pub trait StaticCheckable<Context>: Sized {
+	/// Returned if `check` succeeds.
+	type Checked;
+
+	/// Check self.
+	fn check(self) -> Result<Self::Checked, &'static str>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -421,17 +463,26 @@ pub trait BlindCheckable: Sized {
 	/// Returned if `check` succeeds.
 	type Checked;
 
+	/// Check self.
 	fn check(self) -> Result<Self::Checked, &'static str>;
 }
-
-// Every `BlindCheckable` is also a `Checkable` for arbitrary `Context`.
-impl<T: BlindCheckable, Context> Checkable<Context> for T {
+/*
+// Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
+impl<T: BlindCheckable, Context> StaticCheckable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
-	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> {
+	fn check(self) -> Result<Self::Checked, &'static str> {
 		BlindCheckable::check(self)
 	}
 }
 
+// Every `StaticCheckable` is also a `Checkable` for the same `Context`.
+impl<T: StaticCheckable<Context>, Context> Checkable<Context> for T {
+	type Checked = <Self as BlindCheckable>::Checked;
+	fn check(self, _c: Context) -> Result<Self::Checked, &'static str> {
+		StaticCheckable::check(self)
+	}
+}
+*/
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
 /// enact a piece of extrinsic information by marshalling and dispatching to a named functioon
 /// call.
@@ -442,7 +493,7 @@ pub trait Applyable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
 	type Call: Member;
-	fn index(&self) -> &Self::Index;
+	fn index(&self) -> Option<&Self::Index>;
 	fn sender(&self) -> Option<&Self::AccountId>;
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
 }

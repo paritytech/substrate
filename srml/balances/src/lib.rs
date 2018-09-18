@@ -46,7 +46,7 @@ use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
-	As, Lookup, Member, CheckedAdd, CheckedSub};
+	As, Lookup, Member, CheckedAdd, CheckedSub, GetBlockNumber, BlockNumberToHash};
 use address::Address as RawAddress;
 use system::ensure_signed;
 
@@ -630,6 +630,13 @@ impl<T: Trait> Module<T> {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
+
+	pub fn lookup(a: address::Address<T::AccountId, T::AccountIndex>) -> result::Result<T::AccountId, &'static str> {
+		match a {
+			address::Address::Id(i) => Ok(i),
+			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
+		}
+	}
 }
 
 impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
@@ -640,11 +647,23 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 impl<T: Trait> Lookup for Module<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
-	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		match a {
-			address::Address::Id(i) => Ok(i),
-			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
-		}
+	fn lookup(&self, a: Self::Source) -> result::Result<Self::Target, &'static str> {
+		<Module<T>>::lookup(a)
+	}
+}
+
+impl<T: Trait> GetBlockNumber for Module<T> {
+	type BlockNumber = T::BlockNumber;
+	fn get_block_number(&self) -> Self::BlockNumber {
+		<system::Module<T>>::block_number()
+	}
+}
+
+impl<T: Trait> BlockNumberToHash for Module<T> {
+	type BlockNumber = T::BlockNumber;
+	type Hash = T::Hash;
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
+		Some(<system::Module<T>>::block_hash(n))
 	}
 }
 

@@ -54,7 +54,7 @@ mod tests {
 		ed25519::{Public, Pair}};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
-	use runtime_primitives::{generic, ApplyOutcome, ApplyError, ApplyResult};
+	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult};
 	use {balances, staking, session, system, consensus, timestamp, treasury};
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -81,19 +81,17 @@ mod tests {
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 		match xt.signed {
-			Some(signed) => {
-				let payload = (xt.index, xt.function);
+			Some((signed, index)) => {
+				let payload = (index, xt.function);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
 				let signature = pair.sign(&payload.encode()).into();
 				UncheckedExtrinsic {
-					signature: Some((balances::address::Address::Id(signed), signature)),
-					index: payload.0,
+					signature: Some((balances::address::Address::Id(signed), signature, payload.0, Era::new(131072, 0))),
 					function: payload.1,
 				}
 			}
 			None => UncheckedExtrinsic {
 				signature: None,
-				index: xt.index,
 				function: xt.function,
 			},
 		}
@@ -101,8 +99,7 @@ mod tests {
 
 	fn xt() -> UncheckedExtrinsic {
 		sign(CheckedExtrinsic {
-			signed: Some(alice()),
-			index: 0,
+			signed: Some((alice(), 0)),
 			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69)),
 		})
 	}
@@ -297,12 +294,10 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					index: 0,
 					function: Call::Timestamp(timestamp::Call::set(42)),
 				},
 				CheckedExtrinsic {
-					signed: Some(alice()),
-					index: 0,
+					signed: Some((alice(), 0)),
 					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
 				},
 			]
@@ -318,17 +313,14 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					index: 0,
 					function: Call::Timestamp(timestamp::Call::set(52)),
 				},
 				CheckedExtrinsic {
-					signed: Some(bob()),
-					index: 0,
+					signed: Some((bob(), 0)),
 					function: Call::Balances(balances::Call::transfer(alice().into(), 5)),
 				},
 				CheckedExtrinsic {
-					signed: Some(alice()),
-					index: 1,
+					signed: Some((alice(), 1)),
 					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
 				}
 			]
@@ -344,12 +336,10 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					index: 0,
 					function: Call::Timestamp(timestamp::Call::set(42)),
 				},
 				CheckedExtrinsic {
-					signed: Some(alice()),
-					index: 0,
+					signed: Some((alice(), 0)),
 					function: Call::Consensus(consensus::Call::remark(vec![0; 120000])),
 				}
 			]

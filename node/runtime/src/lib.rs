@@ -224,7 +224,7 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
-pub type UncheckedExtrinsic = generic::UncheckedExtrinsic<Address, Index, Call, Signature>;
+pub type UncheckedExtrinsic = generic::UncheckedMortalExtrinsic<Address, Index, Call, Signature>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
@@ -252,18 +252,12 @@ pub mod api {
 
 /// Produces the list of inherent extrinsics.
 fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
-	let make_inherent = |function| UncheckedExtrinsic {
-		signature: Default::default(),
-		function,
-		index: 0,
-	};
-
-	let mut inherent = vec![
-		make_inherent(Call::Timestamp(TimestampCall::set(data.timestamp))),
-	];
+	let mut inherent = vec![generic::UncheckedMortalExtrinsic::new_unsigned(
+		Call::Timestamp(TimestampCall::set(data.timestamp))
+	)];
 
 	if !data.offline_indices.is_empty() {
-		inherent.push(make_inherent(
+		inherent.push(generic::UncheckedMortalExtrinsic::new_unsigned(
 				Call::Consensus(ConsensusCall::note_offline(data.offline_indices))
 		));
 	}

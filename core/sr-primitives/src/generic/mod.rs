@@ -28,7 +28,7 @@ mod digest;
 mod tests;
 
 pub use self::unchecked_extrinsic::UncheckedExtrinsic;
-pub use self::unchecked_mortal_extrinsic::UncheckedMortalExtrinsic;
+pub use self::unchecked_mortal_extrinsic::{UncheckedMortalExtrinsic, Era};
 pub use self::checked_extrinsic::CheckedExtrinsic;
 pub use self::header::Header;
 pub use self::block::{Block, SignedBlock, BlockId};

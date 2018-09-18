@@ -46,7 +46,7 @@ use extrinsic_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, Extrinsi
 use node_api::Api;
 use primitives::{AccountId, BlockId, Block, Hash, Index};
 use runtime::{Address, UncheckedExtrinsic, RawAddress};
-use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256};
+use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup};
 
 pub use extrinsic_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
@@ -55,7 +55,7 @@ pub use error::{Error, ErrorKind, Result};
 const MAX_TRANSACTION_SIZE: usize = 4 * 1024 * 1024;
 
 /// Type alias for convenience.
-pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable<fn(Address) -> std::result::Result<AccountId, &'static str>>>::Checked;
+pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable<InstanceLookup>>::Checked;
 
 /// Type alias for the transaction pool.
 pub type TransactionPool<A> = extrinsic_pool::Pool<ChainApi<A>>;
@@ -122,6 +122,30 @@ impl<A> ChainApi<A> where
 	}
 }
 
+struct LocalContext;
+impl GetBlockNumber for LocalContext {
+	type BlockNumber = BlockNumber;
+	fn get_block_number(&self) -> BlockNumber {
+		unimplemented!()
+	}
+}
+impl BlockNumberToHash for LocalContext {
+	type BlockNumber = BlockNumber;
+	type Hash = Hash;
+	fn block_number_to_hash(&self, n: BlockNumber) -> Hash {
+		unimplemented!()
+	}
+}
+impl Lookup for LocalContext {
+	type Source = Address;
+	type Target = AccountId;
+	fn lookup(&self, a: Address) -> AccountId {
+		match a {
+			RawAddress::Id(id) => Ok(id),
+			RawAddress::Index(_) => Err("Index based addresses are not supported".into()),// TODO: Make index addressing optional in substrate
+		}
+	}
+}
 
 impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
 	A: Api + Send + Sync,
@@ -148,13 +172,8 @@ impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
 		}
 
 		debug!(target: "transaction-pool", "Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
-		let checked = uxt.clone().check_with(|a| {
-			match a {
-				RawAddress::Id(id) => Ok(id),
-				RawAddress::Index(_) => Err("Index based addresses are not supported".into()),// TODO: Make index addressing optional in substrate
-			}
-		})?;
-		let sender = checked.signed.expect("Only signed extrinsics are allowed at this point");
+		let checked = uxt.clone().check(&LocalContext)?;
+		let (sender, index) = checked.signed.expect("function previously bailed unless uxt.is_signed(); qed");
 
 
 		if encoded_size < 1024 {
@@ -164,7 +183,7 @@ impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
 		}
 
 		Ok(VerifiedTransaction {
-			index: checked.index,
+			index,
 			sender,
 			hash,
 			encoded_size,

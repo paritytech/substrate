@@ -21,7 +21,8 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::{Decode, Encode, Input};
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay};
+use traits::{self, Member, SimpleArithmetic, MaybeDisplay, GetBlockNumber, BlockNumberToHash, Lookup,
+	Checkable};
 use super::CheckedExtrinsic;
 
 const TRANSACTION_VERSION: i8 = 1;
@@ -90,12 +91,10 @@ impl Era {
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
-	/// An era describing the longevity of this transaction.
-	pub era: Era,
-	/// The signature and address, if this is a signed extrinsic.
-	pub signature: Option<(Address, Signature)>,
-	/// The number of extrinsics have come before from the same signer.
-	pub index: Index,
+	/// The signature, address, number of extrinsics have come before from
+	/// the same signer and an era describing the longevity of this transaction,
+	/// if this is a signed extrinsic.
+	pub signature: Option<(Address, Signature, Index, Era)>,
 	/// The function that should be called.
 	pub function: Call,
 }
@@ -104,19 +103,15 @@ impl<Address, Index, Call, Signature> UncheckedMortalExtrinsic<Address, Index, C
 	/// New instance of a signed extrinsic aka "transaction".
 	pub fn new_signed(index: Index, function: Call, signed: Address, signature: Signature, era: Era) -> Self {
 		UncheckedMortalExtrinsic {
-			era,
-			signature: Some((signed, signature)),
-			index,
+			signature: Some((signed, signature, index, era)),
 			function,
 		}
 	}
 
 	/// New instance of an unsigned extrinsic aka "inherent".
-	pub fn new_unsigned(index: Index, function: Call, era: Era) -> Self {
+	pub fn new_unsigned(function: Call) -> Self {
 		UncheckedMortalExtrinsic {
-			era,
 			signature: None,
-			index,
 			function,
 		}
 	}
@@ -127,40 +122,39 @@ impl<Address, Index, Call, Signature> UncheckedMortalExtrinsic<Address, Index, C
 	}
 }
 
-impl<Address, AccountId, Index, Call, Signature, ThisLookup, ThisHashLookup, BlockNumber, Hash> traits::Checkable<(ThisLookup, ThisHashLookup, BlockNumber)>
+impl<Address, AccountId, Index, Call, Signature, Context, Hash, BlockNumber> Checkable<Context>
 	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
 where
-	BlockNumber: SimpleArithmetic,
-	Hash: Encode,
 	Address: Member + MaybeDisplay,
 	Index: Encode + Member + MaybeDisplay + SimpleArithmetic,
 	Call: Encode + Member,
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	AccountId: Member + MaybeDisplay,
-	ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str>,
-	ThisHashLookup: FnOnce(BlockNumber) -> Result<Hash, &'static str>,
+	BlockNumber: SimpleArithmetic,
+	Hash: Encode,
+	Context: Lookup<Source=Address, Target=AccountId>
+		+ GetBlockNumber<BlockNumber=BlockNumber>
+		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 
-	fn check_with(self, context: (ThisLookup, ThisHashLookup, BlockNumber)) -> Result<Self::Checked, &'static str> {
+	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
-			Some((signed, signature)) => {
-				let (lookup, number_to_hash, current) = context;
-				let h = number_to_hash(BlockNumber::sa(self.era.birth(current.as_())));
-				let payload = (self.index, self.function, h);
-				let signed = lookup(signed)?;
+			Some((signed, signature, index, era)) => {
+				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.get_block_number().as_())))
+					.ok_or("transaction birth block ancient")?;
+				let payload = (index, self.function, h);
+				let signed = context.lookup(signed)?;
 				if !::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err("bad signature in extrinsic")
 				}
 				CheckedExtrinsic {
-					signed: Some(signed),
-					index: payload.0,
+					signed: Some((signed, payload.0)),
 					function: payload.1,
 				}
 			}
 			None => CheckedExtrinsic {
 				signed: None,
-				index: self.index,
 				function: self.function,
 			},
 		})
@@ -189,9 +183,7 @@ where
 		}
 
 		Some(UncheckedMortalExtrinsic {
-			era: Decode::decode(input)?,
 			signature: Decode::decode(input)?,
-			index: Decode::decode(input)?,
 			function: Decode::decode(input)?,
 		})
 	}
@@ -214,9 +206,7 @@ where
 
 		// 1 byte version id.
 		TRANSACTION_VERSION.encode_to(&mut v);
-		self.era.encode_to(&mut v);
 		self.signature.encode_to(&mut v);
-		self.index.encode_to(&mut v);
 		self.function.encode_to(&mut v);
 
 		let length = (v.len() - 4) as u32;
@@ -234,6 +224,6 @@ impl<Address, Index, Call, Signature> fmt::Debug for UncheckedMortalExtrinsic<Ad
 	Call: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedMortalExtrinsic({:?}, {:?}, {:?})", self.signature.as_ref().map(|x| &x.0), self.function, self.index)
+		write!(f, "UncheckedMortalExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2)), self.function)
 	}
 }
