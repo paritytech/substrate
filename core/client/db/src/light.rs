@@ -21,6 +21,7 @@ use parking_lot::RwLock;
 
 use kvdb::{KeyValueDB, DBTransaction};
 
+use client::backend::NewBlockState;
 use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use client::cht;
@@ -265,10 +266,9 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 {
 	fn import_header(
 		&self,
-		is_new_best: bool,
 		header: Block::Header,
 		_authorities: Option<Vec<AuthorityId>>,
-		finalized: bool,
+		leaf_state: NewBlockState,
 	) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();
 
@@ -278,7 +278,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		transaction.put(columns::HEADER, hash.as_ref(), &header.encode());
 		transaction.put(columns::HASH_LOOKUP, &number_to_lookup_key(number), hash.as_ref());
 
-		if is_new_best || finalized {
+		if leaf_state.is_best() {
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
 
 			// handle reorg.
@@ -321,13 +321,18 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			// TODO: cache authorities for previous block, accounting for reorgs.
 		}
 
+		let finalized = match leaf_state {
+			NewBlockState::Final => true,
+			_ => false,
+		};
+
 		if finalized {
 			self.note_finalized(&mut transaction, &header, hash)?;
 		}
 
 		debug!("Light DB Commit {:?} ({})", hash, number);
 		self.db.write(transaction).map_err(db_err)?;
-		self.update_meta(hash, number, is_new_best, finalized);
+		self.update_meta(hash, number, leaf_state.is_best(), finalized);
 
 		Ok(())
 	}
@@ -388,7 +393,7 @@ pub(crate) mod tests {
 		};
 
 		let hash = header.hash();
-		db.import_header(true, header, authorities, false).unwrap();
+		db.import_header(header, authorities, NewBlockState::Best).unwrap();
 		hash
 	}
 

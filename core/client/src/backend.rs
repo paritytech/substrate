@@ -25,6 +25,27 @@ use state_machine::backend::Backend as StateBackend;
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 
+/// State of a new block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewBlockState {
+	/// Normal block.
+	Normal,
+	/// New best block.
+	Best,
+	/// Newly finalized block (implicitly best).
+	Final,
+}
+
+impl NewBlockState {
+	/// Whether this block is the new best block.
+	pub fn is_best(self) -> bool {
+		match self {
+			NewBlockState::Best | NewBlockState::Final => true,
+			NewBlockState::Normal => false,
+		}
+	}
+}
+
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block, H, C>
 where
@@ -43,11 +64,8 @@ where
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
 		justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool,
+		state: NewBlockState,
 	) -> error::Result<()>;
-
-	/// Set the block as finalized.
-	fn set_finalized(&mut self, finalized: bool);
 
 	/// Append authorities set to the transaction. This is a set of parent block (set which
 	/// has been used to check justification of this block).

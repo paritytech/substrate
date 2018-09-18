@@ -49,6 +49,7 @@ use std::sync::Arc;
 use std::path::PathBuf;
 use std::io;
 
+use client::backend::NewBlockState;
 use codec::{Decode, Encode};
 use hashdb::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
@@ -112,7 +113,7 @@ struct PendingBlock<Block: BlockT> {
 	header: Block::Header,
 	justification: Option<Justification<Block::Hash>>,
 	body: Option<Vec<Block::Extrinsic>>,
-	is_best: bool,
+	leaf_state: NewBlockState,
 }
 
 // wrapper that implements trait required for state_db
@@ -242,7 +243,6 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	old_state: DbState,
 	updates: MemoryDB<H>,
 	pending_block: Option<PendingBlock<Block>>,
-	finalized: bool,
 }
 
 impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher, RlpCodec>
@@ -255,19 +255,21 @@ where Block: BlockT,
 		Ok(Some(&self.old_state))
 	}
 
-	fn set_block_data(&mut self, header: Block::Header, body: Option<Vec<Block::Extrinsic>>, justification: Option<Justification<Block::Hash>>, is_best: bool) -> Result<(), client::error::Error> {
+	fn set_block_data(
+		&mut self,
+		header: Block::Header,
+		body: Option<Vec<Block::Extrinsic>>,
+		justification: Option<Justification<Block::Hash>>,
+		leaf_state: NewBlockState,
+	) -> Result<(), client::error::Error> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
 			header,
 			body,
 			justification,
-			is_best,
+			leaf_state,
 		});
 		Ok(())
-	}
-
-	fn set_finalized(&mut self, finalized: bool) {
-		self.finalized = finalized;
 	}
 
 	fn update_authorities(&mut self, _authorities: Vec<AuthorityId>) {
@@ -439,7 +441,6 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 			pending_block: None,
 			old_state: state,
 			updates: MemoryDB::default(),
-			finalized: false,
 		})
 	}
 
@@ -457,7 +458,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 				transaction.put(columns::JUSTIFICATION, hash.as_ref(), &justification.encode());
 			}
 
-			if pending_block.is_best || operation.finalized {
+			if pending_block.leaf_state.is_best() {
 				let meta = self.blockchain.meta.read();
 
 				// cannot find tree route with empty DB.
@@ -519,14 +520,26 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 			let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset);
 			apply_state_commit(&mut transaction, commit);
 
-			if operation.finalized {
+			let finalized = match pending_block.leaf_state {
+				NewBlockState::Final => true,
+				_ => false,
+			};
+
+			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.note_finalized(&mut transaction, &pending_block.header, hash)?;
 			}
 
-			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number, pending_block.is_best);
+			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number,
+				pending_block.leaf_state.is_best());
+
 			self.storage.db.write(transaction).map_err(db_err)?;
-			self.blockchain.update_meta(hash, number, pending_block.is_best, operation.finalized);
+			self.blockchain.update_meta(
+				hash,
+				number,
+				pending_block.leaf_state.is_best(),
+				finalized,
+			);
 		}
 		Ok(())
 	}
@@ -644,7 +657,7 @@ mod tests {
 					header,
 					Some(vec![]),
 					None,
-					true,
+					NewBlockState::Best,
 				).unwrap();
 				db.commit_operation(op).unwrap();
 			}
@@ -683,7 +696,7 @@ mod tests {
 				header,
 				Some(vec![]),
 				None,
-				true
+				NewBlockState::Best,
 			).unwrap();
 
 			db.commit_operation(op).unwrap();
@@ -720,7 +733,7 @@ mod tests {
 				header,
 				Some(vec![]),
 				None,
-				true
+				NewBlockState::Best,
 			).unwrap();
 
 			db.commit_operation(op).unwrap();
@@ -764,7 +777,7 @@ mod tests {
 				header,
 				Some(vec![]),
 				None,
-				true
+				NewBlockState::Best,
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
@@ -798,7 +811,7 @@ mod tests {
 				header,
 				Some(vec![]),
 				None,
-				true
+				NewBlockState::Best,
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();
@@ -830,7 +843,7 @@ mod tests {
 				header,
 				Some(vec![]),
 				None,
-				true
+				NewBlockState::Best,
 			).unwrap();
 
 			backend.commit_operation(op).unwrap();

@@ -30,7 +30,7 @@ use state_machine::{
 	TryIntoTrieBackend as TryIntoStateTrieBackend
 };
 
-use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
+use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
@@ -45,10 +45,9 @@ pub struct Backend<S, F> {
 
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F> {
-	is_new_best: bool,
 	header: Option<Block::Header>,
 	authorities: Option<Vec<AuthorityId>>,
-	finalized: bool,
+	leaf_state: NewBlockState,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -85,10 +84,9 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 
 	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
-			is_new_best: false,
 			header: None,
 			authorities: None,
-			finalized: false,
+			leaf_state: NewBlockState::Normal,
 			_phantom: Default::default(),
 		})
 	}
@@ -96,10 +94,9 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
 		self.blockchain.storage().import_header(
-			operation.is_new_best,
 			header,
 			operation.authorities,
-			operation.finalized
+			operation.leaf_state,
 		)
 	}
 
@@ -159,15 +156,11 @@ where
 		header: Block::Header,
 		_body: Option<Vec<Block::Extrinsic>>,
 		_justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool
+		state: NewBlockState,
 	) -> ClientResult<()> {
-		self.is_new_best = is_new_best;
+		self.leaf_state = state;
 		self.header = Some(header);
 		Ok(())
-	}
-
-	fn set_finalized(&mut self, finalized: bool) {
-		self.finalized = finalized;
 	}
 
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {

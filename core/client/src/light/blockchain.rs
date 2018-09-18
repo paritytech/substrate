@@ -25,6 +25,7 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
+use backend::NewBlockState;
 use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use cht;
@@ -36,10 +37,9 @@ pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
 	/// Store new header. Should refuse to revert any finalized blocks.
 	fn import_header(
 		&self,
-		is_new_best: bool,
 		header: Block::Header,
 		authorities: Option<Vec<AuthorityId>>,
-		finalized: bool,
+		state: NewBlockState,
 	) -> ClientResult<()>;
 
 	/// Mark historic header as finalized.

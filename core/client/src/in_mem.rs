@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
 use error;
-use backend;
+use backend::{self, NewBlockState};
 use light;
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
@@ -34,7 +34,7 @@ use heapsize::HeapSizeOf;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
-	is_best: bool,
+	state: NewBlockState,
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -154,22 +154,23 @@ impl<Block: BlockT> Blockchain<Block> {
 		header: <Block as BlockT>::Header,
 		justification: Option<Justification<Block::Hash>>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
-		is_new_best: bool,
-		finalized: bool,
+		new_state: NewBlockState,
 	) {
 		let number = header.number().clone();
 		let mut storage = self.storage.write();
 		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
 		storage.hashes.insert(number, hash.clone());
-		if is_new_best {
+
+		if new_state.is_best() {
 			storage.best_hash = hash.clone();
 			storage.best_number = number.clone();
 		}
+		if let NewBlockState::Final = new_state {
+			storage.finalized_hash = hash;
+		}
+
 		if number == Zero::zero() {
 			storage.genesis_hash = hash;
-		}
-		if finalized {
-			storage.finalized_hash = hash;
 		}
 	}
 
@@ -266,15 +267,14 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 {
 	fn import_header(
 		&self,
-		is_new_best: bool,
 		header: Block::Header,
 		authorities: Option<Vec<AuthorityId>>,
-		finalized: bool,
+		state: NewBlockState,
 	) -> error::Result<()> {
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		self.insert(hash, header, None, None, is_new_best, finalized);
-		if is_new_best {
+		self.insert(hash, header, None, None, state);
+		if state.is_best() {
 			self.cache.insert(parent_hash, authorities);
 		}
 
@@ -305,7 +305,6 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher, C: NodeCodec<H>> {
 	pending_authorities: Option<Vec<AuthorityId>>,
 	old_state: InMemory<H, C>,
 	new_state: Option<InMemory<H, C>>,
-	finalized: bool,
 }
 
 impl<Block, H, C> backend::BlockImportOperation<Block, H, C> for BlockImportOperation<Block, H, C>
@@ -326,18 +325,14 @@ where
 		header: <Block as BlockT>::Header,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool
+		state: NewBlockState,
 	) -> error::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
 			block: StoredBlock::new(header, body, justification),
-			is_best: is_new_best,
+			state,
 		});
 		Ok(())
-	}
-
-	fn set_finalized(&mut self, finalized: bool) {
-		self.finalized = finalized;
 	}
 
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>) {
@@ -403,7 +398,6 @@ where
 			pending_authorities: None,
 			old_state: state,
 			new_state: None,
-			finalized: false,
 		})
 	}
 
@@ -415,9 +409,9 @@ where
 			let parent_hash = *header.parent_hash();
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
-			self.blockchain.insert(hash, header, justification, body, pending_block.is_best, operation.finalized);
+			self.blockchain.insert(hash, header, justification, body, pending_block.state);
 			// dumb implementation - store value for each block
-			if pending_block.is_best {
+			if pending_block.state.is_best() {
 				self.blockchain.cache.insert(parent_hash, operation.pending_authorities);
 			}
 		}
