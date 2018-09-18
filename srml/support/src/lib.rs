@@ -62,7 +62,7 @@ pub mod dispatch;
 pub mod storage;
 mod hashable;
 #[macro_use]
-mod event;
+pub mod event;
 #[macro_use]
 pub mod metadata;
 #[macro_use]

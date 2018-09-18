@@ -15,23 +15,23 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use alloc;
-pub use substrate_metadata::RuntimeMetadata;
+pub use substrate_metadata::{Cow, MaybeOwnedArray, RuntimeMetadata};
 
 /// Make Box available on `std` and `no_std`.
 pub type Box<T> = alloc::boxed::Box<T>;
 /// Make Vec available on `std` and `no_std`.
 pub type Vec<T> = alloc::vec::Vec<T>;
 
-/// Implements the json metadata support for the given runtime and all its modules.
+/// Implements the metadata support for the given runtime and all its modules.
 ///
 /// Example:
 /// ```compile_fail
-/// impl_json_metadata!(for RUNTIME_NAME with modules MODULE0, MODULE2, MODULE3 with Storage);
+/// impl_runtime_metadata!(for RUNTIME_NAME with modules MODULE0, MODULE2, MODULE3 with Storage);
 /// ```
 ///
 /// In this example, just `MODULE3` implements the `Storage` trait.
 #[macro_export]
-macro_rules! impl_json_metadata {
+macro_rules! impl_runtime_metadata {
 	(
 		for $runtime:ident with modules
 		$( $rest:tt )*
@@ -40,7 +40,7 @@ macro_rules! impl_json_metadata {
 			pub fn metadata() -> $crate::metadata::Vec<$crate::metadata::RuntimeMetadata> {
 				let events = Self::outer_event_json_metadata();
 				unimplemented!()
-				// __impl_json_metadata!($runtime;
+				// __impl_runtime_metadata!($runtime;
 				// 	$crate::metadata::RuntimeMetadata::Events {
 				// 		name: events.0,
 				// 		events: events.1,
@@ -54,14 +54,14 @@ macro_rules! impl_json_metadata {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __impl_json_metadata {
+macro_rules! __impl_runtime_metadata {
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
 		$mod:ident::$module:ident,
 		$( $rest:tt )*
 	) => {
-		__impl_json_metadata!(
+		__impl_runtime_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeMetadata::Module {
 				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod)
@@ -74,7 +74,7 @@ macro_rules! __impl_json_metadata {
 		$( $metadata:expr ),*;
 		$mod:ident::$module:ident
 	) => {
-		__impl_json_metadata!(
+		__impl_runtime_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeMetadata::Module {
 				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod)
@@ -87,7 +87,7 @@ macro_rules! __impl_json_metadata {
 		$mod:ident::$module:ident with Storage,
 		$( $rest:tt )*
 	) => {
-		__impl_json_metadata!(
+		__impl_runtime_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeMetadata::ModuleWithStorage {
 				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod),
@@ -101,7 +101,7 @@ macro_rules! __impl_json_metadata {
 		$( $metadata:expr ),*;
 		$mod:ident::$module:ident with Storage
 	) => {
-		__impl_json_metadata!(
+		__impl_runtime_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeMetadata::ModuleWithStorage {
 				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod),
@@ -117,15 +117,12 @@ macro_rules! __impl_json_metadata {
 	};
 }
 
+/*
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use serde;
-	use serde_json;
-	use substrate_metadata::JsonMetadataDecodable;
-	use codec::{Decode, Encode};
 
 	mod system {
 		pub trait Trait {
@@ -232,7 +229,7 @@ mod tests {
 		r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ ] } }"#
 	}
 
-	impl_json_metadata!(
+	impl_runtime_metadata!(
 		for TestRuntime with modules
 			event_module::Module,
 			event_module2::ModuleWithStorage with Storage
@@ -240,7 +237,7 @@ mod tests {
 
 	const EXPECTED_METADATA: &[RuntimeMetadata] = &[
 		RuntimeMetadata::Events {
-			name: "TestEvent",
+			name: Cow::Borrowed("TestEvent"),
 			events: &[
 				("system", system_event_json),
 				("event_module", event_module_event_json),
@@ -269,30 +266,9 @@ mod tests {
 	];
 
 	#[test]
-	fn runtime_json_metadata() {
+	fn runtime_metadata() {
 		let metadata = TestRuntime::metadata();
 		assert_eq!(EXPECTED_METADATA, &metadata[..]);
 	}
-
-	#[test]
-	fn json_metadata_encode_and_decode() {
-		let metadata = TestRuntime::metadata();
-		let metadata_encoded = metadata.encode();
-		let metadata_decoded = Vec::<JsonMetadataDecodable>::decode(&mut &metadata_encoded[..]);
-
-		assert_eq!(&metadata_decoded.unwrap()[..], &metadata[..]);
-	}
-
-	#[test]
-	fn into_json_string_is_valid_json() {
-		let metadata = TestRuntime::metadata();
-		let metadata_encoded = metadata.encode();
-		let metadata_decoded = Vec::<JsonMetadataDecodable>::decode(&mut &metadata_encoded[..]);
-
-		for mdata in metadata_decoded.unwrap().into_iter() {
-			let json = mdata.into_json_string();
-			let _: serde::de::IgnoredAny =
-				serde_json::from_str(&json.1).expect(&format!("Is valid json syntax: {}", json.1));
-		}
-	}
 }
+*/

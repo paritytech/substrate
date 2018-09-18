@@ -112,6 +112,49 @@ pub struct FunctionArgumentMetadata {
 	pub ty: Cow<'static, str>,
 }
 
+/// Newtype wrapper for support encoding functions (actual the result of the function).
+#[derive(Clone, Eq)]
+pub struct FnEncode(pub fn() -> &'static [EventMetadata]);
+
+impl Encode for FnEncode {
+	fn encode_to<W: Output>(&self, dest: &mut W) {
+		self.0().encode_to(dest);
+	}
+}
+
+impl PartialEq for FnEncode {
+	fn eq(&self, other: &Self) -> bool {
+		self.0().eq(other.0())
+	}
+}
+
+#[cfg(feature = "std")]
+impl std::fmt::Debug for FnEncode {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		self.0().fmt(f)
+	}
+}
+
+/// All the metadata about an outer event.
+#[derive(Clone, PartialEq, Eq, Decode, Encode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct OuterEventMetadata {
+	pub name: Cow<'static, str>,
+	pub events: MaybeOwnedArray<
+		(&'static str, FnEncode),
+		(String, Vec<EventMetadata>)
+	>,
+}
+
+/// All the metadata about a event.
+#[derive(Clone, PartialEq, Eq, Decode, Encode)]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct EventMetadata {
+	pub name: Cow<'static, str>,
+	pub arguments: MaybeOwnedArray<&'static str, String>,
+	pub documentation: MaybeOwnedArray<&'static str, String>,
+}
+
 /// The metadata of a runtime.
 #[derive(Eq, Encode, Decode, PartialEq)]
 #[cfg_attr(feature = "std", derive(Debug))]
