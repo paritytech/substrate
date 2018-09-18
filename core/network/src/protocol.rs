@@ -395,8 +395,11 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 
 		self.specialization.write().maintain_peers(&mut ProtocolContext::new(&self.context_data, io));
-		for p in aborting {
-			io.report_peer(p, Severity::Timeout);
+
+		if aborting.len() < self.context_data.peers.len() {
+			for p in aborting {
+				io.report_peer(p, Severity::Timeout);
+			}
 		}
 	}
 
