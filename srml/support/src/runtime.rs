@@ -275,7 +275,7 @@ macro_rules! construct_runtime {
 				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
 			),*;
 		);
-		__decl_json_metadata!(
+		__decl_runtime_metadata!(
 			$runtime;
 			;
 			;
@@ -664,7 +664,7 @@ macro_rules! __decl_outer_dispatch {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __decl_json_metadata {
+macro_rules! __decl_runtime_metadata {
 	(
 		$runtime:ident;
 		;
@@ -676,7 +676,7 @@ macro_rules! __decl_json_metadata {
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
 		})*;
 	) => {
-		__decl_json_metadata!(
+		__decl_runtime_metadata!(
 			$runtime;
 			$module { Module, };
 			$( $parsed_modules { Module $( with $parsed_storage )* } ),*;
@@ -699,7 +699,7 @@ macro_rules! __decl_json_metadata {
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
 		})*;
 	) => {
-		__decl_json_metadata!(
+		__decl_runtime_metadata!(
 			$runtime;
 			;
 			$( $parsed_modules { Module $( with $parsed_storage )* }, )* $module { Module with Storage };
@@ -721,7 +721,7 @@ macro_rules! __decl_json_metadata {
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
 		})*;
 	) => {
-		__decl_json_metadata!(
+		__decl_runtime_metadata!(
 			$runtime;
 			$module { , Storage };
 			$( $parsed_modules { Module $( with $parsed_storage )* } ),*;
@@ -744,7 +744,7 @@ macro_rules! __decl_json_metadata {
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
 		})*;
 	) => {
-		__decl_json_metadata!(
+		__decl_runtime_metadata!(
 			$runtime;
 			;
 			$( $parsed_modules { Module $( with $parsed_storage )* }, )* $module { Module with Storage };
@@ -766,7 +766,7 @@ macro_rules! __decl_json_metadata {
 				$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
 			})*;
 	) => {
-		__decl_json_metadata!(
+		__decl_runtime_metadata!(
 			$runtime;
 			$( $current_module { $( $current_module_storage )* } )*;
 			$( $parsed_modules { Module $( with $parsed_storage )* } ),*;
@@ -787,7 +787,7 @@ macro_rules! __decl_json_metadata {
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
 		})*;
 	) => {
-		__decl_json_metadata!(
+		__decl_runtime_metadata!(
 			$runtime;
 			;
 			$( $parsed_modules { Module $( with $parsed_storage )* }, )* $module { Module };
@@ -807,7 +807,7 @@ macro_rules! __decl_json_metadata {
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
 		})*;
 	) => {
-		__decl_json_metadata!(
+		__decl_runtime_metadata!(
 			$runtime;
 			;
 			$( $parsed_modules { Module $( with $parsed_storage )* } ),*;
@@ -824,7 +824,7 @@ macro_rules! __decl_json_metadata {
 		$( $parsed_modules:ident { Module $( with $parsed_storage:ident )* } ),*;
 		;
 	) => {
-		impl_json_metadata!(
+		impl_runtime_metadata!(
 			for $runtime with modules
 				$( $parsed_modules::Module $(with $parsed_storage)*, )*
 		);
