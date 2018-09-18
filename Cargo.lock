@@ -1598,6 +1598,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-transaction-graph"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "node-api 0.1.0",
+ "node-primitives 0.1.0",
+ "node-runtime 0.1.0",
+ "parity-codec 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "node-transaction-pool"
 version = "0.1.0"
 dependencies = [

@@ -68,6 +68,7 @@ members = [
 	"node/runtime",
 	"node/service",
 	"node/transaction-pool",
+	"node/transaction-graph",
 	"subkey",
 ]
 exclude = [
