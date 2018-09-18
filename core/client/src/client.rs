@@ -743,9 +743,10 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// Get the most recent block hash of the best (longest) chains
 	/// that contain block with the given `target_hash`.
 	/// If `maybe_max_block_number` is `Some(max_block_number)`
-	/// the operation is performed as if there are no blocks greater `max_block_number`
-	/// ignoring all blocks with numbers greater
+	/// the search is limited to block `numbers <= max_block_number`.
+	/// in other words as if there were no blocks greater `max_block_number`.
 	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
+	/// Returns `Ok(None)` if `target_hash` is not found in search space.
 	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>) -> error::Result<Option<Block::Hash>> {
 		let target_header = {
 			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
