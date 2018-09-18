@@ -939,6 +939,7 @@ mod tests {
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::Transfer;
+	use test_client::blockchain::HeaderBackend;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
@@ -1286,5 +1287,112 @@ mod tests {
 		// assert_eq!(None, client.best_containing(c3.hash().clone(), Some(0)).unwrap());
 
 		assert_eq!(None, client.best_containing(d2.hash().clone(), Some(0)).unwrap());
+	}
+
+	#[test]
+	fn blockchain_header_returns_canonical() {
+		// block tree:
+		// G -> A1 -> A2 -> A3 -> A4 -> A5
+		//		A1 -> B2 -> B3 -> B4
+		//			  B2 -> C3
+		//		A1 -> D2
+		let client = test_client::new();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		// A1 -> A2
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		// A2 -> A3
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a3.clone()).unwrap();
+
+		// A3 -> A4
+		let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a4.clone()).unwrap();
+
+		// A4 -> A5
+		let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a5.clone()).unwrap();
+
+		// A1 -> B2
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		// this push is required as otherwise B2 has the same hash as A2 and won't get imported
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 41,
+			nonce: 0,
+		}).unwrap();
+		let b2 = builder.bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, b2.clone()).unwrap();
+
+		// B2 -> B3
+		let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, b3.clone()).unwrap();
+
+		// B3 -> B4
+		let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, b4.clone()).unwrap();
+
+		// // B2 -> C3
+		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
+		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
+		// TODO [snd] fix that this fails with Error(ApplyExtinsicFailed(Stale)
+		// builder.push_transfer(Transfer {
+		//	from: Keyring::Alice.to_raw_public().into(),
+		//	to: Keyring::Ferdie.to_raw_public().into(),
+		//	amount: 1,
+		//	nonce: 0,
+		// }).unwrap();
+		// let c3 = builder.bake().unwrap();
+		// client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
+
+		// A1 -> D2
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		// this push is required as otherwise D2 has the same hash as B2 and won't get imported
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		let d2 = builder.bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, d2.clone()).unwrap();
+
+		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+
+		let genesis_header = client.backend().blockchain().header(BlockId::Hash(genesis_hash)).unwrap().unwrap();
+		assert_eq!(genesis_header.number(), &0);
+		assert_eq!(client.backend().blockchain().header(BlockId::Number(0)).unwrap().unwrap().hash(), genesis_hash);
+		assert_eq!(client.backend().blockchain().hash(0).unwrap().unwrap(), genesis_hash);
+
+		let a1_header = client.backend().blockchain().header(BlockId::Hash(a1.hash())).unwrap().unwrap();
+		assert_eq!(a1_header.number(), &1);
+		assert_eq!(client.backend().blockchain().header(BlockId::Number(1)).unwrap().unwrap().hash(), a1.hash());
+		assert_eq!(client.backend().blockchain().hash(1).unwrap().unwrap(), a1.hash());
+
+		let a2_header = client.backend().blockchain().header(BlockId::Hash(a2.hash())).unwrap().unwrap();
+		assert_eq!(a2_header.number(), &2);
+		assert_eq!(client.backend().blockchain().header(BlockId::Number(2)).unwrap().unwrap().hash(), d2.hash());
+		assert_eq!(client.backend().blockchain().hash(2).unwrap().unwrap(), d2.hash());
+
+		let a3_header = client.backend().blockchain().header(BlockId::Hash(a3.hash())).unwrap().unwrap();
+		assert_eq!(a3_header.number(), &3);
+		assert_eq!(client.backend().blockchain().header(BlockId::Number(3)).unwrap().unwrap().hash(), b3.hash());
+		assert_eq!(client.backend().blockchain().hash(3).unwrap().unwrap(), b3.hash());
+
+		let a4_header = client.backend().blockchain().header(BlockId::Hash(a4.hash())).unwrap().unwrap();
+		assert_eq!(a4_header.number(), &4);
+		assert_eq!(client.backend().blockchain().header(BlockId::Number(4)).unwrap().unwrap().hash(), b4.hash());
+		assert_eq!(client.backend().blockchain().hash(4).unwrap().unwrap(), b4.hash());
+
+		let a5_header = client.backend().blockchain().header(BlockId::Hash(a5.hash())).unwrap().unwrap();
+		assert_eq!(a5_header.number(), &5);
+		assert_eq!(client.backend().blockchain().header(BlockId::Number(5)).unwrap().unwrap().hash(), a5.hash());
+		assert_eq!(client.backend().blockchain().hash(5).unwrap().unwrap(), a5.hash());
 	}
 }
