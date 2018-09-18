@@ -148,6 +148,7 @@ fn prepare_digest_input<'a, S, H, C>(
 mod test {
 	use codec::Encode;
 	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use backend::InMemory;
 	use changes_trie::storage::InMemoryStorage;
 	use overlayed_changes::OverlayedValue;
@@ -208,7 +209,7 @@ mod test {
 				}),
 			].into_iter().collect(),
 			committed: vec![
-				(b":extrinsic_index".to_vec(), OverlayedValue {
+				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 					value: Some(3u32.encode()),
 					extrinsics: None,
 				}),

@@ -229,6 +229,7 @@ where
 mod tests {
 	use codec::Encode;
 	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use backend::InMemory;
 	use changes_trie::{Configuration as ChangesTrieConfiguration,
 		InMemoryStorage as InMemoryChangesTrieStorage};
@@ -242,7 +243,7 @@ mod tests {
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
 			prospective: vec![
-				(b":extrinsic_index".to_vec(), OverlayedValue {
+				(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 					value: Some(3u32.encode()),
 					extrinsics: Some(vec![1].into_iter().collect())
 				}),
