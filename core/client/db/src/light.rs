@@ -29,7 +29,7 @@ use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
 use primitives::{AuthorityId, H256, Blake2Hasher};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor,
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
 	Zero, One, As, NumberFor};
 use cache::DbCache;
 use utils::{meta_keys, Meta, db_err, number_to_lookup_key, open_database,
@@ -45,13 +45,14 @@ pub(crate) mod columns {
 }
 
 /// Keep authorities for last 'AUTHORITIES_ENTRIES_TO_KEEP' blocks.
+#[allow(unused)]
 pub(crate) const AUTHORITIES_ENTRIES_TO_KEEP: u64 = cht::SIZE;
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 pub struct LightStorage<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	meta: RwLock<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>>,
-	cache: DbCache<Block>,
+	_cache: DbCache<Block>,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -83,13 +84,18 @@ impl<Block> LightStorage<Block>
 	}
 
 	fn from_kvdb(db: Arc<KeyValueDB>) -> ClientResult<Self> {
-		let cache = DbCache::new(db.clone(), columns::BLOCK_INDEX, columns::AUTHORITIES)?;
+		let cache = DbCache::new(
+			db.clone(),
+			columns::HASH_LOOKUP,
+			columns::HEADER,
+			columns::AUTHORITIES
+		)?;
 		let meta = RwLock::new(read_meta::<Block>(&*db, columns::HEADER)?);
 
 		Ok(LightStorage {
 			db,
 			meta,
-			cache,
+			_cache: cache,
 		})
 	}
 
@@ -100,18 +106,33 @@ impl<Block> LightStorage<Block>
 
 	#[cfg(test)]
 	pub(crate) fn cache(&self) -> &DbCache<Block> {
-		&self.cache
+		&self._cache
 	}
 
-	fn update_meta(&self, hash: Block::Hash, number: <<Block as BlockT>::Header as HeaderT>::Number, is_best: bool) {
+	fn update_meta(
+		&self,
+		hash: Block::Hash,
+		number: <<Block as BlockT>::Header as HeaderT>::Number,
+		is_best: bool,
+		is_finalized: bool,
+	) {
+		let mut meta = self.meta.write();
 		if is_best {
-			let mut meta = self.meta.write();
 			if number == <<Block as BlockT>::Header as HeaderT>::Number::zero() {
 				meta.genesis_hash = hash;
 			}
 
 			meta.best_number = number;
 			meta.best_hash = hash;
+		}
+
+		if is_finalized {
+			if number == <<Block as BlockT>::Header as HeaderT>::Number::zero() {
+				meta.genesis_hash = hash;
+			}
+
+			meta.finalized_number = number;
+			meta.finalized_hash = hash;
 		}
 	}
 }
@@ -121,18 +142,12 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		Block: BlockT,
 {
 	fn header(&self, id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
-		match read_db(&*self.db, columns::HASH_LOOKUP, columns::HEADER, id)? {
-			Some(header) => match Block::Header::decode(&mut &header[..]) {
-				Some(header) => Ok(Some(header)),
-				None => return Err(client::error::ErrorKind::Backend("Error decoding header".into()).into()),
-			}
-			None => Ok(None),
-		}
+		::utils::read_header(&*self.db, columns::HASH_LOOKUP, columns::HEADER, id)
 	}
 
 	fn info(&self) -> ClientResult<BlockchainInfo<Block>> {
 		let meta = self.meta.read();
-		Ok(client::blockchain::Info {
+		Ok(BlockchainInfo {
 			best_hash: meta.best_hash,
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
@@ -150,8 +165,8 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 			BlockId::Number(n) => n <= self.meta.read().best_number,
 		};
 		match exists {
-			true => Ok(client::blockchain::BlockStatus::InChain),
-			false => Ok(client::blockchain::BlockStatus::Unknown),
+			true => Ok(BlockStatus::InChain),
+			false => Ok(BlockStatus::Unknown),
 		}
 	}
 
@@ -167,7 +182,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	}
 }
 
-impl<Block> LightStorage<Block> {
+impl<Block: BlockT> LightStorage<Block> where Block::Hash: From<H256> {
 	// note that a block is finalized. ensure that best chain contains the finalized
 	// block number first.
 	fn note_finalized(&self, transaction: &mut DBTransaction, header: &Block::Header, hash: Block::Hash) -> ClientResult<()> {
@@ -177,7 +192,7 @@ impl<Block> LightStorage<Block> {
 		let meta = self.meta.read();
 		let f_num = header.number().clone();
 		let number_u64: u64 = f_num.as_().into();
-		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
+		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, hash.as_ref());
 
 		let (last_finalized_hash, last_finalized_number)
 			= (meta.finalized_hash.clone(), meta.finalized_number);
@@ -186,14 +201,14 @@ impl<Block> LightStorage<Block> {
 
 		if finalized_gap.as_() >= NOTEWORTHY_FINALIZATION_GAP {
 			info!(target: "db", "Finalizing large run of blocks from {:?} to {:?}",
-				(&last_finalized_hash, last_finalized_number), (&f_hash, f_num));
+				(&last_finalized_hash, last_finalized_number), (&hash, f_num));
 		} else {
 			debug!(target: "db", "Finalizing blocks from {:?} to {:?}",
-				(&last_finalized_hash, last_finalized_number), (&f_hash, f_num));
+				(&last_finalized_hash, last_finalized_number), (&hash, f_num));
 		}
 
 		// build new CHT if required
-		let mut build_cht = |header| {
+		let mut build_cht = |header: &Block::Header| -> ClientResult<()> {
 			if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
 				let new_cht_start: NumberFor<Block> = cht::start_number(cht::SIZE, new_cht_number);
 				let new_cht_root: Option<Block::Hash> = cht::compute_root::<Block::Header, Blake2Hasher, _>(
@@ -209,7 +224,7 @@ impl<Block> LightStorage<Block> {
 					trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
 
 					while prune_block <= new_cht_end {
-						let id = read_id(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
+						let id = read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
 						if let Some(hash) = id {
 							let lookup_key = number_to_lookup_key(prune_block);
 							transaction.delete(columns::HASH_LOOKUP, &lookup_key);
@@ -221,15 +236,19 @@ impl<Block> LightStorage<Block> {
 			}
 
 			Ok(())
-		}
+		};
 
 		// attempt to build CHT for all newly finalized blocks.
-		for num in (last_finalized_number..f_num).map(|x| x + One::one()) {
+		let last_finalized_u64 = last_finalized_number.as_().into();
+		for num in (last_finalized_u64..number_u64).map(|x| x + 1) {
+			let num = As::sa(num);
 			if num == f_num {
 				build_cht(header)?;
 			} else {
-				let old_header= self.header(BlockId::Number(num))?
-					.expect("finalizing block {} implies existence of block {}", f_num, num);
+				let old_header = match self.header(BlockId::Number(num))? {
+					Some(x) => x,
+					None => panic!("finalizing block {} implies existence of block {}; qed", f_num, num),
+				};
 
 				build_cht(&old_header)?;
 			}
@@ -248,7 +267,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		&self,
 		is_new_best: bool,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>,
+		_authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
 	) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();
@@ -259,25 +278,48 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		transaction.put(columns::HEADER, hash.as_ref(), &header.encode());
 		transaction.put(columns::HASH_LOOKUP, &number_to_lookup_key(number), hash.as_ref());
 
-		let best_authorities = if is_new_best || finalized {
+		if is_new_best || finalized {
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
 
-			// cache authorities for previous block
-			let number: u64 = number.as_();
-			let previous_number = number.checked_sub(1);
-			let best_authorities = previous_number
-				.and_then(|previous_number| self.cache.authorities_at_cache()
-					.commit_best_entry(&mut transaction, As::sa(previous_number), authorities));
+			// handle reorg.
+			{
+				let meta = self.meta.read();
+				if meta.best_hash != Default::default() {
+					let parent_hash = *header.parent_hash();
+					let tree_route = ::utils::tree_route::<Block>(
+						&*self.db,
+						columns::HEADER,
+						meta.best_hash,
+						parent_hash,
+					)?;
 
-			// prune authorities from 'ancient' blocks
-			if let Some(ancient_number) = number.checked_sub(AUTHORITIES_ENTRIES_TO_KEEP) {
-				self.cache.authorities_at_cache().prune_entries(&mut transaction, As::sa(ancient_number))?;
+					// update block number to hash lookup entries.
+					for retracted in tree_route.retracted() {
+						if retracted.hash == meta.finalized_hash {
+							// TODO: can we recover here?
+							warn!("Safety failure: reverting finalized block {:?}",
+								(&retracted.number, &retracted.hash));
+						}
+
+						transaction.delete(
+							columns::HASH_LOOKUP,
+							&::utils::number_to_lookup_key(retracted.number)
+						);
+					}
+
+					for enacted in tree_route.enacted() {
+						let hash: &Block::Hash = &enacted.hash;
+						transaction.put(
+							columns::HASH_LOOKUP,
+							&::utils::number_to_lookup_key(enacted.number),
+							hash.as_ref(),
+						)
+					}
+				}
 			}
 
-			best_authorities
-		} else {
-			None
-		};
+			// TODO: cache authorities for previous block, accounting for reorgs.
+		}
 
 		if finalized {
 			self.note_finalized(&mut transaction, &header, hash)?;
@@ -285,10 +327,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		debug!("Light DB Commit {:?} ({})", hash, number);
 		self.db.write(transaction).map_err(db_err)?;
-		self.update_meta(hash, number, is_new_best);
-		if let Some(best_authorities) = best_authorities {
-			self.cache.authorities_at_cache().update_best_entry(Some(best_authorities));
-		}
+		self.update_meta(hash, number, is_new_best, finalized);
 
 		Ok(())
 	}
@@ -303,8 +342,26 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
 	}
 
+	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
+		if let Some(header) = self.header(id)? {
+			let mut transaction = DBTransaction::new();
+			// TODO: ensure best chain contains this block.
+			let hash = header.hash();
+			self.note_finalized(&mut transaction, &header, hash.clone())?;
+			self.db.write(transaction).map_err(db_err)?;
+			self.update_meta(hash, header.number().clone(), false, true);
+			Ok(())
+		} else {
+			Err(ClientErrorKind::UnknownBlock(format!("Cannot finalize block {:?}", id)).into())
+		}
+	}
+
+	fn last_finalized(&self) -> ClientResult<Block::Hash> {
+		Ok(self.meta.read().finalized_hash.clone())
+	}
+
 	fn cache(&self) -> Option<&BlockchainCache<Block>> {
-		Some(&self.cache)
+		None
 	}
 }
 
@@ -331,7 +388,7 @@ pub(crate) mod tests {
 		};
 
 		let hash = header.hash();
-		db.import_header(true, header, authorities).unwrap();
+		db.import_header(true, header, authorities, false).unwrap();
 		hash
 	}
 
@@ -398,7 +455,7 @@ pub(crate) mod tests {
 	}
 
 	#[test]
-	fn ancient_headers_are_replaced_with_cht() {
+	fn finalized_ancient_headers_are_replaced_with_cht() {
 		let db = LightStorage::new_test();
 
 		// insert genesis block header (never pruned)
@@ -419,10 +476,16 @@ pub(crate) mod tests {
 		assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
 		// insert block #{2 * cht::SIZE + 1} && check that new CHT is created + headers of this CHT are pruned
-		insert_block(&db, &prev_hash, 1 + cht::SIZE + cht::SIZE, None);
+		// nothing is yet finalized, so nothing is pruned.
+		prev_hash = insert_block(&db, &prev_hash, 1 + cht::SIZE + cht::SIZE, None);
+		assert_eq!(db.db.iter(columns::HEADER).count(), (2 + cht::SIZE + cht::SIZE) as usize);
+		assert_eq!(db.db.iter(columns::CHT).count(), 0);
+
+		// now finalize the block.
+		db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
-		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_db_key(1 + i)).unwrap().is_none()));
+		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_lookup_key(1 + i)).unwrap().is_none()));
 	}
 
 	#[test]
@@ -445,6 +508,7 @@ pub(crate) mod tests {
 			prev_hash = insert_block(&db, &prev_hash, i as u64, None);
 		}
 
+		db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		let cht_root_1 = db.cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
 		let cht_root_2 = db.cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
 		let cht_root_3 = db.cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();

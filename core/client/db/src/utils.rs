@@ -154,6 +154,24 @@ pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>,
 	})
 }
 
+/// Read a header from the database.
+pub fn read_header<Block: BlockT>(
+	db: &KeyValueDB,
+	col_index: Option<u32>,
+	col: Option<u32>,
+	id: BlockId<Block>,
+) -> client::error::Result<Option<Block::Header>> {
+	match read_db(db, col_index, col, id)? {
+		Some(header) => match Block::Header::decode(&mut &header[..]) {
+			Some(header) => Ok(Some(header)),
+			None => return Err(
+				client::error::ErrorKind::Backend("Error decoding header".into()).into()
+			),
+		}
+		None => Ok(None),
+	}
+}
+
 /// Read meta from the database.
 pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<
 	Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
@@ -222,7 +240,7 @@ pub struct RouteEntry<Block: BlockT> {
 /// The ancestry sets will include the given blocks, and thus the tree-route is
 /// never empty.
 ///
-/// ```
+/// ```ignore
 /// Tree route from R1 to E2. Retracted is [R1, R2, R3], Common is C, enacted [E1, E2]
 ///   <- R3 <- R2 <- R1
 ///  /
@@ -230,7 +248,7 @@ pub struct RouteEntry<Block: BlockT> {
 ///  \-> E1 -> E2
 /// ```
 ///
-/// ```
+/// ```ignore
 /// Tree route from C to E. Retracted empty. Common is C, enacted [E1, E2]
 /// C -> E1 -> E2
 /// ```
@@ -248,6 +266,7 @@ impl<Block: BlockT> TreeRoute<Block> {
 
 	/// Get the common ancestor block. This might be one of the two blocks of the
 	/// route.
+	#[allow(unused)]
 	pub fn common_block(&self) -> &RouteEntry<Block> {
 		self.route.get(self.pivot).expect("tree-routes are computed between blocks; \
 			which are included in the route; \

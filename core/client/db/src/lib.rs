@@ -40,9 +40,9 @@ extern crate parity_codec_derive;
 #[cfg(test)]
 extern crate kvdb_memorydb;
 
-//pub mod light;
+pub mod light;
 
-//mod cache;
+mod cache;
 mod utils;
 
 use std::sync::Arc;
@@ -167,13 +167,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 
 impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Block> {
 	fn header(&self, id: BlockId<Block>) -> Result<Option<Block::Header>, client::error::Error> {
-		match read_db(&*self.db, columns::HASH_LOOKUP, columns::HEADER, id)? {
-			Some(header) => match Block::Header::decode(&mut &header[..]) {
-				Some(header) => Ok(Some(header)),
-				None => return Err(client::error::ErrorKind::Backend("Error decoding header".into()).into()),
-			}
-			None => Ok(None),
-		}
+		::utils::read_header(&*self.db, columns::HASH_LOOKUP, columns::HEADER, id)
 	}
 
 	fn info(&self) -> Result<client::blockchain::Info<Block>, client::error::Error> {
