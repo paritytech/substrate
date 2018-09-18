@@ -21,6 +21,7 @@
 //! codec-encoded metadata.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(not(feature = "std"))]
 extern crate alloc;
@@ -38,12 +39,17 @@ extern crate serde_derive;
 #[cfg(feature = "std")]
 pub mod alloc {
 	pub use std::borrow;
+	pub use std::string;
+	pub use std::vec;
 }
 
 use codec::{Decode, Encode, Input, Output};
 
 /// Make Cow available on `std` and `no_std`.
 pub use alloc::borrow::Cow;
+
+use alloc::string::String;
+use alloc::vec::Vec;
 
 /// A type that decodes to a different type than it encodes.
 /// The user needs to make sure that both types use the same encoding.
