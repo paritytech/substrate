@@ -43,8 +43,27 @@ macro_rules! impl_serde {
 	}
 }
 
+macro_rules! impl_codec {
+	($name: ident, $len: expr) => {
+		impl ::codec::Encode for $name {
+			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				let mut bytes = [0u8; $len * 8];
+				self.to_big_endian(&mut bytes);
+				bytes.using_encoded(f)
+			}
+		}
+
+		impl ::codec::Decode for $name {
+			fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+				<[u8; $len * 8] as ::codec::Decode>::decode(input).map(Into::into)
+			}
+		}
+	}
+}
+
 construct_uint!(U256, 4);
 impl_serde!(U256, 4);
+impl_codec!(U256, 4);
 
 #[cfg(test)]
 mod tests {
