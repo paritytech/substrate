@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use alloc;
-pub use substrate_metadata::JsonMetadata;
+pub use substrate_metadata::RuntimeMetadata;
 
 /// Make Box available on `std` and `no_std`.
 pub type Box<T> = alloc::boxed::Box<T>;
@@ -37,11 +37,11 @@ macro_rules! impl_json_metadata {
 		$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn json_metadata() -> $crate::metadata::Vec<$crate::metadata::JsonMetadata> {
+			pub fn metadata() -> $crate::metadata::Vec<$crate::metadata::RuntimeMetadata> {
 				let events = Self::outer_event_json_metadata();
 				unimplemented!()
 				// __impl_json_metadata!($runtime;
-				// 	$crate::metadata::JsonMetadata::Events {
+				// 	$crate::metadata::RuntimeMetadata::Events {
 				// 		name: events.0,
 				// 		events: events.1,
 				// 	};
@@ -63,8 +63,8 @@ macro_rules! __impl_json_metadata {
 	) => {
 		__impl_json_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::JsonMetadata::Module {
-				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod)
+			$( $metadata, )* $crate::metadata::RuntimeMetadata::Module {
+				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod)
 			};
 			$( $rest )*
 		)
@@ -76,8 +76,8 @@ macro_rules! __impl_json_metadata {
 	) => {
 		__impl_json_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::JsonMetadata::Module {
-				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod)
+			$( $metadata, )* $crate::metadata::RuntimeMetadata::Module {
+				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod)
 			};
 		)
 	};
@@ -89,8 +89,8 @@ macro_rules! __impl_json_metadata {
 	) => {
 		__impl_json_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::JsonMetadata::ModuleWithStorage {
-				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod),
+			$( $metadata, )* $crate::metadata::RuntimeMetadata::ModuleWithStorage {
+				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod),
 				storage: $mod::$module::<$runtime>::store_json_metadata()
 			};
 			$( $rest )*
@@ -103,8 +103,8 @@ macro_rules! __impl_json_metadata {
 	) => {
 		__impl_json_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::JsonMetadata::ModuleWithStorage {
-				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod),
+			$( $metadata, )* $crate::metadata::RuntimeMetadata::ModuleWithStorage {
+				module: $mod::$module::<$runtime>::metadata(), prefix: stringify!($mod),
 				storage: $mod::$module::<$runtime>::store_json_metadata()
 			};
 		)
@@ -238,8 +238,8 @@ mod tests {
 			event_module2::ModuleWithStorage with Storage
 	);
 
-	const EXPECTED_METADATA: &[JsonMetadata] = &[
-		JsonMetadata::Events {
+	const EXPECTED_METADATA: &[RuntimeMetadata] = &[
+		RuntimeMetadata::Events {
 			name: "TestEvent",
 			events: &[
 				("system", system_event_json),
@@ -247,7 +247,7 @@ mod tests {
 				("event_module2", event_module2_event_json),
 			]
 		},
-		JsonMetadata::Module {
+		RuntimeMetadata::Module {
 			module: concat!(
 				r#"{ "name": "Module", "call": "#,
 					r#"{ "name": "Call", "functions": "#,
@@ -257,7 +257,7 @@ mod tests {
 			),
 			prefix: "event_module"
 		},
-		JsonMetadata::ModuleWithStorage {
+		RuntimeMetadata::ModuleWithStorage {
 			module: r#"{ "name": "ModuleWithStorage", "call": { "name": "Call", "functions": { } } }"#,
 			prefix: "event_module2",
 			storage: concat!(
@@ -270,13 +270,13 @@ mod tests {
 
 	#[test]
 	fn runtime_json_metadata() {
-		let metadata = TestRuntime::json_metadata();
+		let metadata = TestRuntime::metadata();
 		assert_eq!(EXPECTED_METADATA, &metadata[..]);
 	}
 
 	#[test]
 	fn json_metadata_encode_and_decode() {
-		let metadata = TestRuntime::json_metadata();
+		let metadata = TestRuntime::metadata();
 		let metadata_encoded = metadata.encode();
 		let metadata_decoded = Vec::<JsonMetadataDecodable>::decode(&mut &metadata_encoded[..]);
 
@@ -285,7 +285,7 @@ mod tests {
 
 	#[test]
 	fn into_json_string_is_valid_json() {
-		let metadata = TestRuntime::json_metadata();
+		let metadata = TestRuntime::metadata();
 		let metadata_encoded = metadata.encode();
 		let metadata_decoded = Vec::<JsonMetadataDecodable>::decode(&mut &metadata_encoded[..]);
 

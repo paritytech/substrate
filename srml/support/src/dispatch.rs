@@ -23,6 +23,10 @@ pub use rstd::result;
 #[cfg(feature = "std")]
 use serde;
 pub use codec::{Codec, Decode, Encode, Input, Output};
+pub use substrate_metadata::{
+	ModuleMetadata, FunctionMetadata, MaybeOwnedArray,
+	CallMetadata, FunctionArgumentMetadata, Cow
+};
 
 pub type Result = result::Result<(), &'static str>;
 
@@ -458,40 +462,6 @@ macro_rules! __impl_outer_dispatch_common {
 	}
 }
 
-/// All the metadata about a module.
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct ModuleMetadata {
-	pub name: &'static str,
-	pub call: CallMetadata,
-}
-
-/// All the metadata about a call.
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct CallMetadata {
-	pub name: &'static str,
-	pub functions: &'static [FunctionMetadata],
-}
-
-/// All the metadata about a function.
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct FunctionMetadata {
-	pub id: u16,
-	pub name: &'static str,
-	pub arguments: &'static [ FunctionArgumentMetadata ],
-	pub documentation: &'static [ &'static str ],
-}
-
-/// All the metadata about a function argument.
-#[derive(Clone, PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct FunctionArgumentMetadata {
-	pub name: &'static str,
-	pub ty: &'static str,
-}
-
 /// Implement the `json_metadata` function.
 #[macro_export]
 #[doc(hidden)]
@@ -591,7 +561,7 @@ macro_rules! __functions_to_metadata{
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
 	) => {
-		&[ $( $function_metadata ),* ]
+		$crate::dispatch::Cow::Borrowed(&[ $( $function_metadata ),* ])
 	}
 }
 
@@ -612,12 +582,12 @@ macro_rules! __function_to_metadata {
 			arguments: &[
 				$(
 					$crate::dispatch::FunctionArgumentMetadata {
-						name: stringify!($param_name),
-						ty: stringify!($param)
+						name: $crate::dispatch::Cow::Borrowed(stringify!($param_name)),
+						ty: $crate::dispatch::Cow::Borrowed(stringify!($param)),
 					}
 				),*
 			],
-			documentation: &[ $( $fn_doc ),* ],
+			documentation: $crate::dispatch::Cow::Borrowed(&[ $( $fn_doc ),* ]),
 		}
 	};
 	(
@@ -627,9 +597,9 @@ macro_rules! __function_to_metadata {
 	) => {
 		$crate::dispatch::FunctionMetadata {
 			id: $fn_id,
-			name: stringify!($fn_name),
-			arguments: &[],
-			documentation: &[ $( $fn_doc ),* ],
+			name: $crate::dispatch::Cow::Borrowed(stringify!($fn_name)),
+			arguments: $crate::dispatch::Cow::Borrowed(&[]),
+			documentation: $crate::dispatch::Cow::Borrowed(&[ $( $fn_doc ),* ]),
 		}
 	};
 }
@@ -687,75 +657,75 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: ModuleMetadata = ModuleMetadata {
-		name: "Module",
+		name: Cow::Borrowed("Module"),
 		call: CallMetadata {
-			name: "Call",
-			functions: &[
+			name: Cow::Borrowed("Call"),
+			functions: MaybeOwnedArray::Borrowed(&[
 				FunctionMetadata {
 					id: 0,
-					name: "aux_0",
-					arguments: &[
+					name: Cow::Borrowed("aux_0"),
+					arguments: MaybeOwnedArray::Borrowed(&[
 						FunctionArgumentMetadata {
-							name: "origin",
-							ty: "T::Origin",
+							name: Cow::Borrowed("origin"),
+							ty: Cow::Borrowed("T::Origin"),
 						}
-					],
-					documentation: &[
+					]),
+					documentation: MaybeOwnedArray::Borrowed(&[
 						" Hi, this is a comment."
-					]
+					])
 				},
 				FunctionMetadata {
 					id: 1,
-					name: "aux_1",
-					arguments: &[
+					name: Cow::Borrowed("aux_1"),
+					arguments: MaybeOwnedArray::Borrowed(&[
 						FunctionArgumentMetadata {
-							name: "origin",
-							ty: "T::Origin",
+							name: Cow::Borrowed("origin"),
+							ty: Cow::Borrowed("T::Origin"),
 						},
 						FunctionArgumentMetadata {
-							name: "data",
-							ty: "i32",
+							name: Cow::Borrowed("data"),
+							ty: Cow::Borrowed("i32"),
 						}
-					],
-					documentation: &[],
+					]),
+					documentation: MaybeOwnedArray::Borrowed(&[]),
 				},
 				FunctionMetadata {
 					id: 2,
-					name: "aux_2",
-					arguments: &[
+					name: Cow::Borrowed("aux_2"),
+					arguments: MaybeOwnedArray::Borrowed(&[
 						FunctionArgumentMetadata {
-							name: "origin",
-							ty: "T::Origin",
+							name: Cow::Borrowed("origin"),
+							ty: Cow::Borrowed("T::Origin"),
 						},
 						FunctionArgumentMetadata {
-							name: "data",
-							ty: "i32",
+							name: Cow::Borrowed("data"),
+							ty: Cow::Borrowed("i32"),
 						},
 						FunctionArgumentMetadata {
-							name: "data2",
-							ty: "String",
+							name: Cow::Borrowed("data2"),
+							ty: Cow::Borrowed("String"),
 						}
-					],
-					documentation: &[],
+					]),
+					documentation: MaybeOwnedArray::Borrowed(&[]),
 				},
 				FunctionMetadata {
 					id: 3,
-					name: "aux_3",
-					arguments: &[],
-					documentation: &[],
+					name: Cow::Borrowed("aux_3"),
+					arguments: MaybeOwnedArray::Borrowed(&[]),
+					documentation: MaybeOwnedArray::Borrowed(&[]),
 				},
 				FunctionMetadata {
 					id: 4,
-					name: "aux_4",
-					arguments: &[
+					name: Cow::Borrowed("aux_4"),
+					arguments: MaybeOwnedArray::Borrowed(&[
 						FunctionArgumentMetadata {
-							name: "data",
-							ty: "i32",
+							name: Cow::Borrowed("data"),
+							ty: Cow::Borrowed("i32"),
 						}
-					],
-					documentation: &[],
+					]),
+					documentation: MaybeOwnedArray::Borrowed(&[]),
 				}
-			]
+			]),
 		},
 	};
 
