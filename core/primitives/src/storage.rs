@@ -47,7 +47,7 @@ pub mod well_known_keys {
 
 	/// Wasm code of the runtime.
 	///
-	/// Required by substrate. Stored as a raw byte vector.
+	/// Stored as a raw byte vector. Required by substrate.
 	pub const CODE: &'static [u8] = b":code";
 
 	/// Number of wasm linear memory pages required for execution of the runtime.
@@ -55,9 +55,9 @@ pub mod well_known_keys {
 	/// The type of this value is encoded `u64`.
 	pub const HEAP_PAGES: &'static [u8] = b":heappages";
 
-	/// Number of authorities. Required by substrate.
+	/// Number of authorities.
 	///
-	/// The type of this value is encoded `u32`.
+	/// The type of this value is encoded `u32`. Required by substrate.
 	pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
 
 	/// Prefix under which authorities are storied.
