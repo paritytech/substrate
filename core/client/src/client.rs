@@ -1291,7 +1291,7 @@ mod tests {
 	}
 
 	#[test]
-	fn blockchain_header_returns_canonical() {
+	fn blockchain_header_and_hash_return_blocks_from_canonical_chain_given_block_numbers() {
 		// block tree:
 		// G -> A1 -> A2 -> A3 -> A4 -> A5
 		//		A1 -> B2 -> B3 -> B4
@@ -1366,33 +1366,21 @@ mod tests {
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
-		let genesis_header = client.backend().blockchain().header(BlockId::Hash(genesis_hash)).unwrap().unwrap();
-		assert_eq!(genesis_header.number(), &0);
 		assert_eq!(client.backend().blockchain().header(BlockId::Number(0)).unwrap().unwrap().hash(), genesis_hash);
 		assert_eq!(client.backend().blockchain().hash(0).unwrap().unwrap(), genesis_hash);
 
-		let a1_header = client.backend().blockchain().header(BlockId::Hash(a1.hash())).unwrap().unwrap();
-		assert_eq!(a1_header.number(), &1);
 		assert_eq!(client.backend().blockchain().header(BlockId::Number(1)).unwrap().unwrap().hash(), a1.hash());
 		assert_eq!(client.backend().blockchain().hash(1).unwrap().unwrap(), a1.hash());
 
-		let a2_header = client.backend().blockchain().header(BlockId::Hash(a2.hash())).unwrap().unwrap();
-		assert_eq!(a2_header.number(), &2);
-		assert_eq!(client.backend().blockchain().header(BlockId::Number(2)).unwrap().unwrap().hash(), d2.hash());
-		assert_eq!(client.backend().blockchain().hash(2).unwrap().unwrap(), d2.hash());
+		assert_eq!(client.backend().blockchain().header(BlockId::Number(2)).unwrap().unwrap().hash(), a2.hash());
+		assert_eq!(client.backend().blockchain().hash(2).unwrap().unwrap(), a2.hash());
 
-		let a3_header = client.backend().blockchain().header(BlockId::Hash(a3.hash())).unwrap().unwrap();
-		assert_eq!(a3_header.number(), &3);
-		assert_eq!(client.backend().blockchain().header(BlockId::Number(3)).unwrap().unwrap().hash(), b3.hash());
-		assert_eq!(client.backend().blockchain().hash(3).unwrap().unwrap(), b3.hash());
+		assert_eq!(client.backend().blockchain().header(BlockId::Number(3)).unwrap().unwrap().hash(), a3.hash());
+		assert_eq!(client.backend().blockchain().hash(3).unwrap().unwrap(), a3.hash());
 
-		let a4_header = client.backend().blockchain().header(BlockId::Hash(a4.hash())).unwrap().unwrap();
-		assert_eq!(a4_header.number(), &4);
-		assert_eq!(client.backend().blockchain().header(BlockId::Number(4)).unwrap().unwrap().hash(), b4.hash());
-		assert_eq!(client.backend().blockchain().hash(4).unwrap().unwrap(), b4.hash());
+		assert_eq!(client.backend().blockchain().header(BlockId::Number(4)).unwrap().unwrap().hash(), a4.hash());
+		assert_eq!(client.backend().blockchain().hash(4).unwrap().unwrap(), a4.hash());
 
-		let a5_header = client.backend().blockchain().header(BlockId::Hash(a5.hash())).unwrap().unwrap();
-		assert_eq!(a5_header.number(), &5);
 		assert_eq!(client.backend().blockchain().header(BlockId::Number(5)).unwrap().unwrap().hash(), a5.hash());
 		assert_eq!(client.backend().blockchain().hash(5).unwrap().unwrap(), a5.hash());
 	}
