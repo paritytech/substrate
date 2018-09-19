@@ -74,12 +74,12 @@ impl<Hash: hash::Hash + Eq> Default for FutureTransactions<Hash> {
 }
 
 impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
-	/// Import transaction to future queue.
+	/// Import transaction to Future queue.
 	///
 	/// Only transactions that don't have all their tags satisfied should occupy
-	/// the future queue.
+	/// the Future queue.
 	/// As soon as required tags are provided by some other transactions that are ready
-	/// we should remove the transactions from here and move them to the other queue.
+	/// we should remove the transactions from here and move them to the Ready queue.
 	pub fn import(&mut self, tx: WaitingTransaction<Hash>) {
 		assert!(!tx.is_ready(), "Transaction is ready.");
 		assert!(!self.waiting.contains_key(&tx.hash), "Transaction is already imported.");
@@ -102,7 +102,7 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 	/// Satisfies provided tags in transactions that are waiting for them.
 	///
 	/// Returns (and removes) transactions that became ready after their last tag got
-	/// satisfied and now we can remove them from future and move to ready queue.
+	/// satisfied and now we can remove them from Future and move to Ready queue.
 	pub fn satisfy_tags(&mut self, tags: &[Tag]) -> Vec<WaitingTransaction<Hash>> {
 		let mut became_ready = vec![];
 
@@ -126,5 +126,10 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 		}
 
 		became_ready
+	}
+
+	/// Returns number of transactions in the Future queue.
+	pub fn len(&self) -> usize {
+		self.waiting.len()
 	}
 }

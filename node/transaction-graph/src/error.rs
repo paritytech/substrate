@@ -14,31 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use sr_primitives::transaction_validity::TransactionPriority as Priority;
 
-// #![warn(missing_docs)]
-// #![warn(unused_crates)]
-
-extern crate substrate_client as client;
-extern crate parity_codec as codec;
-extern crate substrate_primitives;
-extern crate sr_primitives;
-extern crate node_runtime as runtime;
-extern crate node_primitives as primitives;
-extern crate node_api;
-extern crate parking_lot;
-
-#[cfg(test)]
-extern crate substrate_keyring;
-
-#[macro_use]
-extern crate error_chain;
-
-#[macro_use]
-extern crate log;
-
-mod error;
-mod future;
-mod pool;
-mod ready;
-
-pub use self::pool::{Transaction, Pool};
+error_chain! {
+	errors {
+		/// The transaction is already in the pool.
+		AlreadyImported {
+			description("Transaction is already in the pool."),
+			display("Already imported"),
+		}
+		/// The transaction cannot be imported cause it's a replacement and has too low priority.
+		TooLowPriority(old: Priority, new: Priority) {
+			description("The priority is too low to replace transactions already in the pool."),
+			display("Too low priority ({} > {})", old, new)
+		}
+	}
+}
