@@ -438,7 +438,6 @@ impl<Block: BlockT> Backend<Block> {
 		}
 
 		let mut canonicalize_state = |canonical_hash| {
-			trace!(target: "db", "Canonicalize block #{} ({:?})", number_u64 - self.pruning_window, canonical_hash);
 			let commit = self.storage.state_db.canonicalize_block(&canonical_hash);
 			apply_state_commit(transaction, commit);
 		};
@@ -463,6 +462,7 @@ impl<Block: BlockT> Backend<Block> {
 						implies existence of blocks with all nubmers before it; qed")
 				};
 
+				trace!(target: "db", "Canonicalize block #{} ({:?})", uncanonicalized_number, hash);
 				canonicalize_state(hash);
 			}
 		};

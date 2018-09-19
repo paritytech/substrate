@@ -249,7 +249,7 @@ pub struct RouteEntry<Block: BlockT> {
 /// ```
 ///
 /// ```ignore
-/// Tree route from C to E. Retracted empty. Common is C, enacted [E1, E2]
+/// Tree route from C to E2. Retracted empty. Common is C, enacted [E1, E2]
 /// C -> E1 -> E2
 /// ```
 #[derive(Debug)]
