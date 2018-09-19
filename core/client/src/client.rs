@@ -765,7 +765,6 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		// for each chain. longest chain first. shortest last
 		for leaf_hash in self.backend.blockchain().leaves()? {
-
 			// start at the leaf
 			let mut current_hash = leaf_hash;
 
