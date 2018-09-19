@@ -54,7 +54,7 @@ pub use rstd::borrow::Borrow;
 pub use rstd::marker::PhantomData;
 
 pub use substrate_metadata::{
-	Cow, DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
+	DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
 	StorageFunctionType, StorageFunctionModifier
 };
 
@@ -1092,7 +1092,7 @@ macro_rules! __impl_store_metadata {
 	) => {
 		pub fn store_metadata() -> $crate::storage::generator::StorageMetadata {
 			$crate::storage::generator::StorageMetadata {
-				prefix: $crate::storage::generator::Cow::Borrowed(stringify!($cratename)),
+				prefix: $crate::storage::generator::DecodeDifferent::Encode(stringify!($cratename)),
 				functions: __store_functions_to_metadata!(; $( $rest )* ),
 			}
 		}
@@ -1485,7 +1485,7 @@ macro_rules! __store_function_to_metadata {
 	};
 	($( $fn_doc:expr ),*; $name:ident; $type:expr; $modifier:expr) => {
 		$crate::storage::generator::StorageFunctionMetadata {
-			name: $crate::storage::generator::Cow::Borrowed(stringify!($name)),
+			name: $crate::storage::generator::DecodeDifferent::Encode(stringify!($name)),
 			modifier: $modifier,
 			ty: $type,
 			documentation: $crate::storage::generator::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
@@ -1498,13 +1498,13 @@ macro_rules! __store_function_to_metadata {
 macro_rules! __store_type_to_metadata {
 	($name:ty) => {
 		$crate::storage::generator::StorageFunctionType::Plain(
-			$crate::storage::generator::Cow::Borrowed(stringify!($name)),
+			$crate::storage::generator::DecodeDifferent::Encode(stringify!($name)),
 		)
 	};
 	($key: ty, $value:ty) => {
 		$crate::storage::generator::StorageFunctionType::Map {
-			key: $crate::storage::generator::Cow::Borrowed(stringify!($key)),
-			value: $crate::storage::generator::Cow::Borrowed(stringify!($value)),
+			key: $crate::storage::generator::DecodeDifferent::Encode(stringify!($key)),
+			value: $crate::storage::generator::DecodeDifferent::Encode(stringify!($value)),
 		}
 	}
 }
@@ -1630,175 +1630,175 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
-		prefix: Cow::Borrowed("TestStorage"),
+		prefix: DecodeDifferent::Encode("TestStorage"),
 		functions: DecodeDifferent::Encode(&[
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("U32"),
+				name: DecodeDifferent::Encode("U32"),
 				modifier: StorageFunctionModifier::None,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[ " Hello, this is doc!" ]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETU32"),
+				name: DecodeDifferent::Encode("GETU32"),
 				modifier: StorageFunctionModifier::None,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("PUBU32"),
+				name: DecodeDifferent::Encode("PUBU32"),
 				modifier: StorageFunctionModifier::None,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETPUBU32"),
+				name: DecodeDifferent::Encode("GETPUBU32"),
 				modifier: StorageFunctionModifier::None,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("U32Default"),
+				name: DecodeDifferent::Encode("U32Default"),
 				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETU32Default"),
+				name: DecodeDifferent::Encode("GETU32Default"),
 				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("PUBU32Default"),
+				name: DecodeDifferent::Encode("PUBU32Default"),
 				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETPUBU32Default"),
+				name: DecodeDifferent::Encode("GETPUBU32Default"),
 				modifier: StorageFunctionModifier::Default,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("U32Required"),
+				name: DecodeDifferent::Encode("U32Required"),
 				modifier: StorageFunctionModifier::Required,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETU32Required"),
+				name: DecodeDifferent::Encode("GETU32Required"),
 				modifier: StorageFunctionModifier::Required,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("PUBU32Required"),
+				name: DecodeDifferent::Encode("PUBU32Required"),
 				modifier: StorageFunctionModifier::Required,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETPUBU32Required"),
+				name: DecodeDifferent::Encode("GETPUBU32Required"),
 				modifier: StorageFunctionModifier::Required,
-				ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("MAPU32"),
+				name: DecodeDifferent::Encode("MAPU32"),
 				modifier: StorageFunctionModifier::None,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETMAPU32"),
+				name: DecodeDifferent::Encode("GETMAPU32"),
 				modifier: StorageFunctionModifier::None,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[
 					" Hello, this is doc!", " Hello, this is doc 2!"
 				]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("PUBMAPU32"),
+				name: DecodeDifferent::Encode("PUBMAPU32"),
 				modifier: StorageFunctionModifier::None,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETPUBMAPU32"),
+				name: DecodeDifferent::Encode("GETPUBMAPU32"),
 				modifier: StorageFunctionModifier::None,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("MAPU32Default"),
+				name: DecodeDifferent::Encode("MAPU32Default"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETMAPU32Default"),
+				name: DecodeDifferent::Encode("GETMAPU32Default"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("PUBMAPU32Default"),
+				name: DecodeDifferent::Encode("PUBMAPU32Default"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETPUBMAPU32Default"),
+				name: DecodeDifferent::Encode("GETPUBMAPU32Default"),
 				modifier: StorageFunctionModifier::Default,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("MAPU32Required"),
+				name: DecodeDifferent::Encode("MAPU32Required"),
 				modifier: StorageFunctionModifier::Required,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETMAPU32Required"),
+				name: DecodeDifferent::Encode("GETMAPU32Required"),
 				modifier: StorageFunctionModifier::Required,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("PUBMAPU32Required"),
+				name: DecodeDifferent::Encode("PUBMAPU32Required"),
 				modifier: StorageFunctionModifier::Required,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			},
 			StorageFunctionMetadata {
-				name: Cow::Borrowed("GETPUBMAPU32Required"),
+				name: DecodeDifferent::Encode("GETPUBMAPU32Required"),
 				modifier: StorageFunctionModifier::Required,
 				ty: StorageFunctionType::Map{
-					key: Cow::Borrowed("u32"), value: Cow::Borrowed("String")
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
 				},
 				documentation: DecodeDifferent::Encode(&[]),
 			}

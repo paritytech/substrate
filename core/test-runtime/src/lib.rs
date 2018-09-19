@@ -140,7 +140,7 @@ pub mod api {
 		metadata => |()| {
 			::runtime_support::metadata::RuntimeMetadata {
 				outer_event: ::runtime_support::event::OuterEventMetadata {
-					name: ::runtime_support::event::Cow::Borrowed("test"),
+					name: ::runtime_support::event::DecodeDifferent::Encode("test"),
 					events: ::runtime_support::event::DecodeDifferent::Encode(&[]),
 				},
 				modules: ::runtime_support::event::DecodeDifferent::Encode(&[]),

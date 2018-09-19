@@ -784,7 +784,7 @@ mod tests {
 
 		let expected = substrate_metadata::RuntimeMetadata {
 			outer_event: substrate_metadata::OuterEventMetadata {
-				name: substrate_metadata::Cow::Borrowed("test"),
+				name: substrate_metadata::DecodeDifferent::Encode("test"),
 				events: substrate_metadata::DecodeDifferent::Encode(&[]),
 			},
 			modules: substrate_metadata::DecodeDifferent::Encode(&[]),

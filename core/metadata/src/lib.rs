@@ -38,18 +38,21 @@ extern crate serde_derive;
 
 #[cfg(feature = "std")]
 pub mod alloc {
-	pub use std::borrow;
-	pub use std::string;
 	pub use std::vec;
 }
 
 use codec::{Decode, Encode, Input, Output};
 
-/// Make Cow available on `std` and `no_std`.
-pub use alloc::borrow::Cow;
-
-use alloc::string::String;
+// Make Vec available on `std` and `no_std`
 use alloc::vec::Vec;
+
+#[cfg(feature = "std")]
+type StringBuf = String;
+
+/// On `no_std` we do not support `Decode` and thus `StringBuf` is just `&'static str`.
+/// So, if someone tries to decode this stuff on `no_std`, they will get a compilation error.
+#[cfg(not(feature = "std"))]
+type StringBuf = &'static str;
 
 /// A type that decodes to a different type than it encodes.
 /// The user needs to make sure that both types use the same encoding.
@@ -70,6 +73,7 @@ impl<B, O> Encode for DecodeDifferent<B, O> where B: Encode + 'static, O: Encode
 	}
 }
 
+#[cfg(feature = "std")]
 impl<B, O> Decode for DecodeDifferent<B, O> where B: 'static, O: Decode + 'static {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		<O>::decode(input).and_then(|val| {
@@ -125,38 +129,43 @@ impl<B, O> serde::Serialize for DecodeDifferent<B, O>
 
 type DecodeDifferentArray<B, O=B> = DecodeDifferent<&'static [B], Vec<O>>;
 
+#[cfg(feature = "std")]
+type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
+#[cfg(not(feature = "std"))]
+type DecodeDifferentStr = DecodeDifferent<&'static str, StringBuf>;
+
 /// All the metadata about a module.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct ModuleMetadata {
-	pub name: Cow<'static, str>,
+	pub name: DecodeDifferentStr,
 	pub call: CallMetadata,
 }
 
 /// All the metadata about a call.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct CallMetadata {
-	pub name: Cow<'static, str>,
+	pub name: DecodeDifferentStr,
 	pub functions: DecodeDifferentArray<FunctionMetadata>,
 }
 
 /// All the metadata about a function.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct FunctionMetadata {
 	pub id: u16,
-	pub name: Cow<'static, str>,
+	pub name: DecodeDifferentStr,
 	pub arguments: DecodeDifferentArray<FunctionArgumentMetadata>,
-	pub documentation: DecodeDifferentArray<&'static str, String>,
+	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
 /// All the metadata about a function argument.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct FunctionArgumentMetadata {
-	pub name: Cow<'static, str>,
-	pub ty: Cow<'static, str>,
+	pub name: DecodeDifferentStr,
+	pub ty: DecodeDifferentStr,
 }
 
 /// Newtype wrapper for support encoding functions (actual the result of the function).
@@ -193,57 +202,57 @@ impl<E: Encode + serde::Serialize> serde::Serialize for FnEncode<E> {
 }
 
 /// All the metadata about an outer event.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct OuterEventMetadata {
-	pub name: Cow<'static, str>,
+	pub name: DecodeDifferentStr,
 	pub events: DecodeDifferentArray<
 		(&'static str, FnEncode<&'static [EventMetadata]>),
-		(String, Vec<EventMetadata>)
+		(StringBuf, Vec<EventMetadata>)
 	>,
 }
 
 /// All the metadata about a event.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct EventMetadata {
-	pub name: Cow<'static, str>,
-	pub arguments: DecodeDifferentArray<&'static str, String>,
-	pub documentation: DecodeDifferentArray<&'static str, String>,
+	pub name: DecodeDifferentStr,
+	pub arguments: DecodeDifferentArray<&'static str, StringBuf>,
+	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
 /// All the metadata about a storage.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct StorageMetadata {
-	pub prefix: Cow<'static, str>,
+	pub prefix: DecodeDifferentStr,
 	pub functions: DecodeDifferentArray<StorageFunctionMetadata>,
 }
 
 /// All the metadata about a storage function.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct StorageFunctionMetadata {
-	pub name: Cow<'static, str>,
+	pub name: DecodeDifferentStr,
 	pub modifier: StorageFunctionModifier,
 	pub ty: StorageFunctionType,
-	pub documentation: DecodeDifferentArray<&'static str, String>,
+	pub documentation: DecodeDifferentArray<&'static str, StringBuf>,
 }
 
 /// A storage function type.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum StorageFunctionType {
-	Plain(Cow<'static, str>),
+	Plain(DecodeDifferentStr),
 	Map {
-		key: Cow<'static, str>,
-		value: Cow<'static, str>,
+		key: DecodeDifferentStr,
+		value: DecodeDifferentStr,
 	}
 }
 
 /// A storage function modifier.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum StorageFunctionModifier {
 	None,
 	Default,
@@ -251,17 +260,17 @@ pub enum StorageFunctionModifier {
 }
 
 /// All metadata about an runtime module.
-#[derive(Clone, PartialEq, Eq, Decode, Encode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeModuleMetadata {
-	pub prefix: Cow<'static, str>,
+	pub prefix: DecodeDifferentStr,
 	pub module: DecodeDifferent<FnEncode<ModuleMetadata>, ModuleMetadata>,
 	pub storage: Option<DecodeDifferent<FnEncode<StorageMetadata>, StorageMetadata>>,
 }
 
 /// The metadata of a runtime.
-#[derive(Eq, Encode, Decode, PartialEq)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize))]
+#[derive(Eq, Encode, PartialEq)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub struct RuntimeMetadata {
 	pub outer_event: OuterEventMetadata,
 	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,

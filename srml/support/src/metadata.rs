@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use substrate_metadata::{Cow, DecodeDifferent, FnEncode, RuntimeMetadata, RuntimeModuleMetadata};
+pub use substrate_metadata::{DecodeDifferent, FnEncode, RuntimeMetadata, RuntimeModuleMetadata};
 
 /// Implements the metadata support for the given runtime and all its modules.
 ///
@@ -53,7 +53,7 @@ macro_rules! __runtime_modules_to_metadata {
 		__runtime_modules_to_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
-				prefix: $crate::metadata::Cow::Borrowed(stringify!($mod)),
+				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
 				module: $crate::metadata::DecodeDifferent::Encode(
 					$crate::metadata::FnEncode($mod::$module::<$runtime>::metadata)
 				),
@@ -71,7 +71,7 @@ macro_rules! __runtime_modules_to_metadata {
 		__runtime_modules_to_metadata!(
 			$runtime;
 			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
-				prefix: $crate::metadata::Cow::Borrowed(stringify!($mod)),
+				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
 				module: $crate::metadata::DecodeDifferent::Encode(
 					$crate::metadata::FnEncode($mod::$module::<$runtime>::metadata)
 				),
@@ -203,13 +203,13 @@ mod tests {
 
 	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata {
 		outer_event: OuterEventMetadata {
-			name: Cow::Borrowed("TestEvent"),
+			name: DecodeDifferent::Encode("TestEvent"),
 			events: DecodeDifferent::Encode(&[
 				(
 					"system",
 					FnEncode(|| &[
 						EventMetadata {
-							name: Cow::Borrowed("SystemEvent"),
+							name: DecodeDifferent::Encode("SystemEvent"),
 							arguments: DecodeDifferent::Encode(&[]),
 							documentation: DecodeDifferent::Encode(&[]),
 						}
@@ -219,7 +219,7 @@ mod tests {
 					"event_module",
 					FnEncode(|| &[
 						EventMetadata {
-							name: Cow::Borrowed("TestEvent"),
+							name: DecodeDifferent::Encode("TestEvent"),
 							arguments: DecodeDifferent::Encode(&["Balance"]),
 							documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
 						}
@@ -229,7 +229,7 @@ mod tests {
 					"event_module2",
 					FnEncode(|| &[
 						EventMetadata {
-							name: Cow::Borrowed("TestEvent"),
+							name: DecodeDifferent::Encode("TestEvent"),
 							arguments: DecodeDifferent::Encode(&["Balance"]),
 							documentation: DecodeDifferent::Encode(&[])
 						}
@@ -239,20 +239,20 @@ mod tests {
 		},
 		modules: DecodeDifferent::Encode(&[
 			RuntimeModuleMetadata {
-				prefix: Cow::Borrowed("event_module"),
+				prefix: DecodeDifferent::Encode("event_module"),
 				module: DecodeDifferent::Encode(FnEncode(||
 					ModuleMetadata {
-						name: Cow::Borrowed("Module"),
+						name: DecodeDifferent::Encode("Module"),
 						call: CallMetadata {
-							name: Cow::Borrowed("Call"),
+							name: DecodeDifferent::Encode("Call"),
 							functions: DecodeDifferent::Encode(&[
 								FunctionMetadata {
 									id: 0,
-									name: Cow::Borrowed("aux_0"),
+									name: DecodeDifferent::Encode("aux_0"),
 									arguments: DecodeDifferent::Encode(&[
 										FunctionArgumentMetadata {
-											name: Cow::Borrowed("origin"),
-											ty: Cow::Borrowed("T::Origin"),
+											name: DecodeDifferent::Encode("origin"),
+											ty: DecodeDifferent::Encode("T::Origin"),
 										}
 									]),
 									documentation: DecodeDifferent::Encode(&[]),
@@ -264,24 +264,24 @@ mod tests {
 				storage: None,
 			},
 			RuntimeModuleMetadata {
-				prefix: Cow::Borrowed("event_module2"),
+				prefix: DecodeDifferent::Encode("event_module2"),
 				module: DecodeDifferent::Encode(FnEncode(||
 					ModuleMetadata {
-						name: Cow::Borrowed("ModuleWithStorage"),
+						name: DecodeDifferent::Encode("ModuleWithStorage"),
 						call: CallMetadata {
-							name: Cow::Borrowed("Call"),
+							name: DecodeDifferent::Encode("Call"),
 							functions: DecodeDifferent::Encode(&[])
 						}
 					}
 				)),
 				storage: Some(DecodeDifferent::Encode(FnEncode(||
 					StorageMetadata {
-						prefix: Cow::Borrowed("TestStorage"),
+						prefix: DecodeDifferent::Encode("TestStorage"),
 						functions: DecodeDifferent::Encode(&[
 							StorageFunctionMetadata {
-								name: Cow::Borrowed("StorageMethod"),
+								name: DecodeDifferent::Encode("StorageMethod"),
 								modifier: StorageFunctionModifier::None,
-								ty: StorageFunctionType::Plain(Cow::Borrowed("u32")),
+								ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 								documentation: DecodeDifferent::Encode(&[]),
 							}
 						])

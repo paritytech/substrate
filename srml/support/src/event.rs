@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use substrate_metadata::{Cow, EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+pub use substrate_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
 
 /// Implement the `Event` for a module.
 ///
@@ -247,7 +247,7 @@ macro_rules! __events_to_metadata {
 		__events_to_metadata!(
 			$( $metadata, )*
 			$crate::event::EventMetadata {
-				name: $crate::event::Cow::Borrowed(stringify!($event)),
+				name: $crate::event::DecodeDifferent::Encode(stringify!($event)),
 				arguments: $crate::event::DecodeDifferent::Encode(&[
 					$( $( stringify!($param) ),* )*
 				]),
@@ -407,7 +407,7 @@ macro_rules! __impl_outer_event_json_metadata {
 			#[allow(dead_code)]
 			pub fn outer_event_metadata() -> $crate::event::OuterEventMetadata {
 				$crate::event::OuterEventMetadata {
-					name: $crate::event::Cow::Borrowed(stringify!($event_name)),
+					name: $crate::event::DecodeDifferent::Encode(stringify!($event_name)),
 					events: $crate::event::DecodeDifferent::Encode(&[
 						("system", $crate::event::FnEncode(system::Event::metadata))
 						$(
@@ -565,13 +565,13 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {
-		name: Cow::Borrowed("TestEvent"),
+		name: DecodeDifferent::Encode("TestEvent"),
 		events: DecodeDifferent::Encode(&[
 			(
 				"system",
 				FnEncode(|| &[
 					EventMetadata {
-						name: Cow::Borrowed("SystemEvent"),
+						name: DecodeDifferent::Encode("SystemEvent"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[]),
 					}
@@ -581,12 +581,12 @@ mod tests {
 				"event_module",
 				FnEncode(|| &[
 					EventMetadata {
-						name: Cow::Borrowed("TestEvent"),
+						name: DecodeDifferent::Encode("TestEvent"),
 						arguments: DecodeDifferent::Encode(&[ "Balance", "Origin" ]),
 						documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
 					},
 					EventMetadata {
-						name: Cow::Borrowed("EventWithoutParams"),
+						name: DecodeDifferent::Encode("EventWithoutParams"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[ " Dog" ]),
 					},
@@ -596,12 +596,12 @@ mod tests {
 				"event_module2",
 				FnEncode(|| &[
 					EventMetadata {
-						name: Cow::Borrowed("TestEvent"),
+						name: DecodeDifferent::Encode("TestEvent"),
 						arguments: DecodeDifferent::Encode(&[ "BalanceRenamed" ]),
 						documentation: DecodeDifferent::Encode(&[])
 					},
 					EventMetadata {
-						name: Cow::Borrowed("TestOrigin"),
+						name: DecodeDifferent::Encode("TestOrigin"),
 						arguments: DecodeDifferent::Encode(&[ "OriginRenamed" ]),
 						documentation: DecodeDifferent::Encode(&[]),
 					},
@@ -611,7 +611,7 @@ mod tests {
 				"event_module3",
 				FnEncode(|| &[
 					EventMetadata {
-						name: Cow::Borrowed("HiEvent"),
+						name: DecodeDifferent::Encode("HiEvent"),
 						arguments: DecodeDifferent::Encode(&[]),
 						documentation: DecodeDifferent::Encode(&[])
 					}

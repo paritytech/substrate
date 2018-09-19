@@ -25,7 +25,7 @@ use serde;
 pub use codec::{Codec, Decode, Encode, Input, Output};
 pub use substrate_metadata::{
 	ModuleMetadata, FunctionMetadata, DecodeDifferent,
-	CallMetadata, FunctionArgumentMetadata, Cow
+	CallMetadata, FunctionArgumentMetadata
 };
 
 pub type Result = result::Result<(), &'static str>;
@@ -473,7 +473,7 @@ macro_rules! __dispatch_impl_metadata {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
 			pub fn metadata() -> $crate::dispatch::ModuleMetadata {
 				$crate::dispatch::ModuleMetadata {
-					name: $crate::dispatch::Cow::Borrowed(stringify!($mod_type)),
+					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($mod_type)),
 					call: __call_to_metadata!($($rest)*),
 				}
 			}
@@ -497,7 +497,7 @@ macro_rules! __call_to_metadata {
 			)*}
 	) => {
 		$crate::dispatch::CallMetadata {
-			name: $crate::dispatch::Cow::Borrowed(stringify!($call_type)),
+			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
 			functions: __functions_to_metadata!(0; $origin_type;; $(
 				fn $fn_name($from $(, $param_name: $param )* ) -> $result;
 				$( $doc_attr ),*;
@@ -578,12 +578,12 @@ macro_rules! __function_to_metadata {
 	) => {
 		$crate::dispatch::FunctionMetadata {
 			id: $fn_id,
-			name: $crate::dispatch::Cow::Borrowed(stringify!($fn_name)),
+			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
 			arguments: $crate::dispatch::DecodeDifferent::Encode(&[
 				$(
 					$crate::dispatch::FunctionArgumentMetadata {
-						name: $crate::dispatch::Cow::Borrowed(stringify!($param_name)),
-						ty: $crate::dispatch::Cow::Borrowed(stringify!($param)),
+						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
+						ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($param)),
 					}
 				),*
 			]),
@@ -597,7 +597,7 @@ macro_rules! __function_to_metadata {
 	) => {
 		$crate::dispatch::FunctionMetadata {
 			id: $fn_id,
-			name: $crate::dispatch::Cow::Borrowed(stringify!($fn_name)),
+			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
 			arguments: $crate::dispatch::DecodeDifferent::Encode(&[]),
 			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
 		}
@@ -657,17 +657,17 @@ mod tests {
 	}
 
 	const EXPECTED_METADATA: ModuleMetadata = ModuleMetadata {
-		name: Cow::Borrowed("Module"),
+		name: DecodeDifferent::Encode("Module"),
 		call: CallMetadata {
-			name: Cow::Borrowed("Call"),
+			name: DecodeDifferent::Encode("Call"),
 			functions: DecodeDifferent::Encode(&[
 				FunctionMetadata {
 					id: 0,
-					name: Cow::Borrowed("aux_0"),
+					name: DecodeDifferent::Encode("aux_0"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
-							name: Cow::Borrowed("origin"),
-							ty: Cow::Borrowed("T::Origin"),
+							name: DecodeDifferent::Encode("origin"),
+							ty: DecodeDifferent::Encode("T::Origin"),
 						}
 					]),
 					documentation: DecodeDifferent::Encode(&[
@@ -676,51 +676,51 @@ mod tests {
 				},
 				FunctionMetadata {
 					id: 1,
-					name: Cow::Borrowed("aux_1"),
+					name: DecodeDifferent::Encode("aux_1"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
-							name: Cow::Borrowed("origin"),
-							ty: Cow::Borrowed("T::Origin"),
+							name: DecodeDifferent::Encode("origin"),
+							ty: DecodeDifferent::Encode("T::Origin"),
 						},
 						FunctionArgumentMetadata {
-							name: Cow::Borrowed("data"),
-							ty: Cow::Borrowed("i32"),
+							name: DecodeDifferent::Encode("data"),
+							ty: DecodeDifferent::Encode("i32"),
 						}
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
 					id: 2,
-					name: Cow::Borrowed("aux_2"),
+					name: DecodeDifferent::Encode("aux_2"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
-							name: Cow::Borrowed("origin"),
-							ty: Cow::Borrowed("T::Origin"),
+							name: DecodeDifferent::Encode("origin"),
+							ty: DecodeDifferent::Encode("T::Origin"),
 						},
 						FunctionArgumentMetadata {
-							name: Cow::Borrowed("data"),
-							ty: Cow::Borrowed("i32"),
+							name: DecodeDifferent::Encode("data"),
+							ty: DecodeDifferent::Encode("i32"),
 						},
 						FunctionArgumentMetadata {
-							name: Cow::Borrowed("data2"),
-							ty: Cow::Borrowed("String"),
+							name: DecodeDifferent::Encode("data2"),
+							ty: DecodeDifferent::Encode("String"),
 						}
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
 					id: 3,
-					name: Cow::Borrowed("aux_3"),
+					name: DecodeDifferent::Encode("aux_3"),
 					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[]),
 				},
 				FunctionMetadata {
 					id: 4,
-					name: Cow::Borrowed("aux_4"),
+					name: DecodeDifferent::Encode("aux_4"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
-							name: Cow::Borrowed("data"),
-							ty: Cow::Borrowed("i32"),
+							name: DecodeDifferent::Encode("data"),
+							ty: DecodeDifferent::Encode("i32"),
 						}
 					]),
 					documentation: DecodeDifferent::Encode(&[]),
