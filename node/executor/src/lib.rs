@@ -87,7 +87,7 @@ mod tests {
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
 				let signature = pair.sign(&payload.encode()).into();
 				UncheckedExtrinsic {
-					signature: Some((balances::address::Address::Id(signed), signature, payload.0, Era::new(256, 0))),
+					signature: Some((balances::address::Address::Id(signed), signature, payload.0, Era::mortal(256, 0))),
 					function: payload.1,
 				}
 			}

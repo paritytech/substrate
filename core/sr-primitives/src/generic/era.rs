@@ -49,7 +49,7 @@ n = Q(current - phase, period) + phase
 impl Era {
 	/// Create a new era based on a period (which should be a power of two between 4 and 65536 inclusive)
 	/// and a block number which on which it should start (or, for long periods, be shortly after the start).
-	pub fn new(period: u64, current: u64) -> Self {
+	pub fn mortal(period: u64, current: u64) -> Self {
 		let period = period.checked_next_power_of_two()
 			.unwrap_or(1 << 16)
 			.max(4)
@@ -145,7 +145,7 @@ mod tests {
 
 	#[test]
 	fn mortal_codec_works() {
-		let e = Era::new(64, 42);
+		let e = Era::mortal(64, 42);
 		assert!(!e.is_immortal());
 
 		let expected = vec![5 + 42 % 16 * 16, 42 / 16];
@@ -155,7 +155,7 @@ mod tests {
 
 	#[test]
 	fn long_period_mortal_codec_works() {
-		let e = Era::new(32768, 20000);
+		let e = Era::mortal(32768, 20000);
 
 		let expected = vec![(14 + 2500 % 16 * 16) as u8, (2500 / 16) as u8];
 		assert_eq!(e.encode(), expected);
@@ -164,22 +164,22 @@ mod tests {
 
 	#[test]
 	fn era_initialisation_works() {
-		assert_eq!(Era::new(64, 42), Era::Mortal(64, 42));
-		assert_eq!(Era::new(32768, 20000), Era::Mortal(32768, 20000));
-		assert_eq!(Era::new(200, 513), Era::Mortal(256, 1));
-		assert_eq!(Era::new(2, 1), Era::Mortal(4, 1));
-		assert_eq!(Era::new(4, 5), Era::Mortal(4, 1));
+		assert_eq!(Era::mortal(64, 42), Era::Mortal(64, 42));
+		assert_eq!(Era::mortal(32768, 20000), Era::Mortal(32768, 20000));
+		assert_eq!(Era::mortal(200, 513), Era::Mortal(256, 1));
+		assert_eq!(Era::mortal(2, 1), Era::Mortal(4, 1));
+		assert_eq!(Era::mortal(4, 5), Era::Mortal(4, 1));
 	}
 
 	#[test]
 	fn quantised_clamped_era_initialisation_works() {
 		// clamp 1000000 to 65536, quantise 1000001 % 65536 to the nearest 4
-		assert_eq!(Era::new(1000000, 1000001), Era::Mortal(65536, 1000001 % 65536 / 4 * 4));
+		assert_eq!(Era::mortal(1000000, 1000001), Era::Mortal(65536, 1000001 % 65536 / 4 * 4));
 	}
 
 	#[test]
 	fn mortal_birth_death_works() {
-		let e = Era::new(4, 6);
+		let e = Era::mortal(4, 6);
 		for i in 6..10 {
 			assert_eq!(e.birth(i), 6);
 			assert_eq!(e.death(i), 10);
