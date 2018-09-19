@@ -45,7 +45,7 @@ pub enum Imported<Hash> {
 		/// Transactions that failed to be promoted from the Future queue and are now discarded.
 		failed: Vec<Hash>,
 		/// Transactions removed from the Ready pool (replaced).
-		removed: Vec<Arc<Transaction>>,
+		removed: Vec<Arc<Transaction<Hash>>>,
 	},
 	/// Transaction was successfuly imported to Future queue.
 	Future {
@@ -57,9 +57,11 @@ pub enum Imported<Hash> {
 /// Immutable transaction
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug, PartialEq, Eq)]
-pub struct Transaction {
+pub struct Transaction<Hash> {
 	/// Raw extrinsic representing that transaction.
 	pub ex: UncheckedExtrinsic,
+	/// Transaction hash (unique)
+	pub hash: Hash,
 	/// Transaction priority (higher = better)
 	pub priority: Priority,
 	/// How many blocks the transaction is valid for.
@@ -74,34 +76,13 @@ pub struct Transaction {
 ///
 /// Builds a dependency graph for all transactions in the pool and returns
 /// the ones that are currently ready to be executed.
+#[derive(Default, Debug)]
 pub struct Pool<Hash: hash::Hash + Eq> {
 	future: FutureTransactions<Hash>,
 	ready: ReadyTransactions<Hash>,
-	hasher: Box<Fn(&UncheckedExtrinsic) -> Hash>,
 }
 
-impl<Hash: hash::Hash + fmt::Debug + Eq> fmt::Debug for Pool<Hash> {
-	fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-		fmt.debug_struct("Pool")
-			.field("future", &self.future)
-			.field("ready", &self.ready)
-			.finish()
-	}
-}
-
-impl<Hash: hash::Hash + Ord + Eq + Clone> Pool<Hash> {
-	/// Creates new transaction pool with given hasher.
-	pub fn new<F>(hasher: F) -> Self
-	where
-		F: Fn(&UncheckedExtrinsic) -> Hash + 'static,
-	{
-		Pool {
-			future: Default::default(),
-			ready: Default::default(),
-			hasher: Box::new(hasher),
-		}
-	}
-
+impl<Hash: hash::Hash + fmt::Debug + Ord + Eq + Clone> Pool<Hash> {
 	/// Imports transaction to the pool.
 	///
 	/// The pool consists of two parts: Future and Ready.
@@ -112,15 +93,16 @@ impl<Hash: hash::Hash + Ord + Eq + Clone> Pool<Hash> {
 	pub fn import(
 		&mut self,
 		block_number: BlockNumber,
-		tx: Transaction,
+		tx: Transaction<Hash>,
 	) -> error::Result<Imported<Hash>> {
-		let hash = (self.hasher)(&tx.ex);
+		let hash = tx.hash.clone();
 		if self.future.contains(&hash) || self.ready.contains(&hash) {
 			bail!(error::ErrorKind::AlreadyImported)
 		}
 
-		let tx = WaitingTransaction::new(tx, hash.clone(), self.ready.provided_tags());
-
+		let tx = WaitingTransaction::new(tx, self.ready.provided_tags());
+		trace!(target: "txpool", "[{:?}] {:?}", hash, tx);
+		debug!(target: "txpool", "[{:?}] Importing to {}", hash, if tx.is_ready() { "ready" } else { "future" });
 		// Tags provided from Ready queue satisfy all requirements, so just add to Ready.
 		if tx.is_ready() {
 			let mut promoted = vec![];
@@ -141,7 +123,7 @@ impl<Hash: hash::Hash + Ord + Eq + Clone> Pool<Hash> {
 				to_import.append(&mut self.future.satisfy_tags(&tx.transaction.provides));
 
 				// import this transaction
-				let hash = tx.hash.clone();
+				let hash = tx.transaction.hash.clone();
 				match self.ready.import(tx, block_number) {
 					Ok(mut replaced) => {
 						if !first {
@@ -152,6 +134,7 @@ impl<Hash: hash::Hash + Ord + Eq + Clone> Pool<Hash> {
 					},
 					// transaction failed to be imported.
 					Err(e) => if first {
+						debug!(target: "txpool", "[{:?}] Error importing: {:?}", hash, e);
 						return Err(e)
 					} else {
 						failed.push(hash);
@@ -173,7 +156,7 @@ impl<Hash: hash::Hash + Ord + Eq + Clone> Pool<Hash> {
 	}
 
 	/// Returns an iterator over ready transactions in the pool.
-	pub fn ready<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction>> + 'a {
+	pub fn ready<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction<Hash>>> + 'a {
 		self.ready.get()
 	}
 }
@@ -185,7 +168,7 @@ mod tests {
 	type Hash = u64;
 
 	fn pool() -> Pool<Hash> {
-		Pool::new(|ex| ex.0[0] as u64)
+		Pool::default()
 	}
 
 	#[test]
@@ -196,6 +179,7 @@ mod tests {
 		// when
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![1u8]),
+			hash: 1u64,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![],
@@ -214,6 +198,7 @@ mod tests {
 		// when
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![1u8]),
+			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![],
@@ -221,6 +206,7 @@ mod tests {
 		}).unwrap();
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![1u8]),
+			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![],
@@ -240,6 +226,7 @@ mod tests {
 		// when
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![1u8]),
+			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![vec![0]],
@@ -248,6 +235,7 @@ mod tests {
 		assert_eq!(pool.ready().count(), 0);
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![2u8]),
+			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![],
@@ -266,6 +254,7 @@ mod tests {
 		// when
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![1u8]),
+			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![vec![0]],
@@ -273,6 +262,7 @@ mod tests {
 		}).unwrap();
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![3u8]),
+			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![vec![2]],
@@ -280,6 +270,7 @@ mod tests {
 		}).unwrap();
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![2u8]),
+			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![vec![1]],
@@ -287,6 +278,7 @@ mod tests {
 		}).unwrap();
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![4u8]),
+			hash: 4,
 			priority: 1_000u64,
 			longevity: 64u64,
 			requires: vec![vec![3], vec![4]],
@@ -296,6 +288,7 @@ mod tests {
 
 		let res = pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![5u8]),
+			hash: 5,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![],
@@ -325,6 +318,7 @@ mod tests {
 		let mut pool = pool();
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![1u8]),
+			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![vec![0]],
@@ -332,6 +326,7 @@ mod tests {
 		}).unwrap();
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![3u8]),
+			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![vec![1]],
@@ -342,6 +337,7 @@ mod tests {
 		// when
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![2u8]),
+			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
 			requires: vec![vec![2]],
@@ -359,6 +355,7 @@ mod tests {
 		// let's close the cycle with one additional transaction
 		let res = pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![4u8]),
+			hash: 4,
 			priority: 50u64,
 			longevity: 64u64,
 			requires: vec![],

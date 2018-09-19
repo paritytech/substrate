@@ -27,13 +27,12 @@ use pool::Transaction;
 
 #[derive(Debug)]
 pub struct WaitingTransaction<Hash> {
-	pub transaction: Transaction,
+	pub transaction: Transaction<Hash>,
 	pub missing_tags: HashSet<Tag>,
-	pub hash: Hash,
 }
 
 impl<Hash> WaitingTransaction<Hash> {
-	pub fn new(transaction: Transaction, hash: Hash, provided: &HashMap<Tag, Hash>) -> Self {
+	pub fn new(transaction: Transaction<Hash>, provided: &HashMap<Tag, Hash>) -> Self {
 		let missing_tags = transaction.requires
 			.iter()
 			.filter(|tag| !provided.contains_key(&**tag))
@@ -43,7 +42,6 @@ impl<Hash> WaitingTransaction<Hash> {
 		WaitingTransaction {
 			transaction,
 			missing_tags,
-			hash,
 		}
 	}
 
@@ -82,16 +80,16 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 	/// we should remove the transactions from here and move them to the Ready queue.
 	pub fn import(&mut self, tx: WaitingTransaction<Hash>) {
 		assert!(!tx.is_ready(), "Transaction is ready.");
-		assert!(!self.waiting.contains_key(&tx.hash), "Transaction is already imported.");
+		assert!(!self.waiting.contains_key(&tx.transaction.hash), "Transaction is already imported.");
 
 		// Add all tags that are missing
 		for tag in &tx.missing_tags {
 			let mut entry = self.wanted_tags.entry(tag.clone()).or_insert_with(Vec::new);
-			entry.push(tx.hash.clone());
+			entry.push(tx.transaction.hash.clone());
 		}
 
 		// Add the transaction to a by-hash waiting map
-		self.waiting.insert(tx.hash.clone(), tx);
+		self.waiting.insert(tx.transaction.hash.clone(), tx);
 	}
 
 	/// Returns true if given hash is part of the queue.
