@@ -258,7 +258,7 @@ fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
 
 	if !data.offline_indices.is_empty() {
 		inherent.push(generic::UncheckedMortalExtrinsic::new_unsigned(
-				Call::Consensus(ConsensusCall::note_offline(data.offline_indices))
+			Call::Consensus(ConsensusCall::note_offline(data.offline_indices))
 		));
 	}
 
