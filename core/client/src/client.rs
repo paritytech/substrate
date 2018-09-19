@@ -763,6 +763,18 @@ impl<B, E, Block> Client<B, E, Block> where
 			}
 		}
 
+		let info = self.backend.blockchain().info()?;
+
+		let is_target_in_best_chain = self.backend.blockchain().hash(*target_header.number())?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))? == target_hash;
+
+		if is_target_in_best_chain {
+			if let Some(max_number) = maybe_max_number {
+				return Ok(Some(self.backend.blockchain().hash(max_number)?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", max_number)))?));
+			} else {
+				return Ok(Some(info.best_hash));
+			}
+		}
+
 		// for each chain. longest chain first. shortest last
 		for leaf_hash in self.backend.blockchain().leaves()? {
 			// start at the leaf
