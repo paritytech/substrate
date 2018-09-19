@@ -1077,30 +1077,14 @@ mod tests {
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {
-		let database_settings = DatabaseSettings {
-			cache_size: None,
-			// TODO [snd] tmp dir
-			path: "tmp".into(),
-			// TODO [snd] investigate
-			pruning: PruningMode::ArchiveAll,
-		};
-
-		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new(database_settings, FINALIZATION_WINDOW).unwrap());
+		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20));
 
 		test_client::trait_tests::test_leaves_for_backend(backend);
 	}
 
 	#[test]
 	fn test_blockchain_query_by_number_gets_canonical() {
-		let database_settings = DatabaseSettings {
-			cache_size: None,
-			// TODO [snd] tmp dir
-			path: "tmp".into(),
-			// TODO [snd] investigate
-			pruning: PruningMode::ArchiveAll,
-		};
-
-		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new(database_settings, FINALIZATION_WINDOW).unwrap());
+		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20));
 
 		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
 	}
