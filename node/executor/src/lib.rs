@@ -63,6 +63,7 @@ mod tests {
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
+	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
 	// TODO: move into own crate.
 	macro_rules! map {
@@ -82,11 +83,11 @@ mod tests {
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, index)) => {
-				let payload = (index, xt.function);
+				let payload = (index, xt.function, GENESIS_HASH);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
 				let signature = pair.sign(&payload.encode()).into();
 				UncheckedExtrinsic {
-					signature: Some((balances::address::Address::Id(signed), signature, payload.0, Era::new(131072, 0))),
+					signature: Some((balances::address::Address::Id(signed), signature, payload.0, Era::new(256, 0))),
 					function: payload.1,
 				}
 			}
@@ -280,7 +281,7 @@ mod tests {
 	fn block1(support_changes_trie: bool) -> (Vec<u8>, Hash) {
 		construct_block(
 			1,
-			[69u8; 32].into(),
+			GENESIS_HASH.into(),
 			if support_changes_trie {
 				hex!("1755be7303767b4d3855694b4f0ebd9d64b7011124d0ec1ad3e17c2a0d65e245").into()
 			} else {
@@ -308,7 +309,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("29fa1d0aa83662c571315af54b106c73823a31f759793803bf8929960b67b138").into(),
+			hex!("549f74db44c4dc35652a1f3c53a56e21d4d4634b39161a95526019519f620012").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -330,7 +331,7 @@ mod tests {
 	fn block1big() -> (Vec<u8>, Hash) {
 		construct_block(
 			1,
-			[69u8; 32].into(),
+			GENESIS_HASH.into(),
 			hex!("fe0e07c7b054fe186387461d455d536860e9c71d6979fd9dbf755e96ce070d04").into(),
 			None,
 			vec![

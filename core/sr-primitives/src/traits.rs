@@ -106,14 +106,6 @@ pub trait Convert<A, B> {
 	fn convert(a: A) -> B;
 }
 
-/// Simple factory trait that can statically create new instances of a given type.
-pub trait Factory {
-	/// Type that this factory creates.
-	type Item;
-	/// Create an instance.
-	fn create() -> Self::Item;
-}
-
 /// Simple trait similar to `Into`, except that it can be used to convert numerics between each
 /// other.
 pub trait As<T> {
