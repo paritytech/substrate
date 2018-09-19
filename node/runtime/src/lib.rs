@@ -65,6 +65,8 @@ use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
+#[cfg(feature = "std")]
+use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
 
@@ -215,9 +217,10 @@ construct_runtime!(
 		Session: session,
 		Staking: staking,
 		Democracy: democracy,
-		Council: council,
-		CouncilVoting: council_voting::{Module, Call, Storage, Event<T>},
+		Council: council::{Module, Call, Storage, Event<T>},
+		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
+		CouncilSeats: council_seats::{Config},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config, Event<T>},
 	}
