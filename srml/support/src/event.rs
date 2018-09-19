@@ -273,6 +273,21 @@ macro_rules! impl_outer_event {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident for $runtime:ident {
+			$( $rest:tt $( <$t:ident> )*, )*
+		}
+	) => {
+		impl_outer_event!(
+			$( #[$attr] )*;
+			$name;
+			$runtime;
+			system;
+			Modules { $( $rest $(<$t>)*, )* };
+			;
+		);
+	};
+	(
+		$(#[$attr:meta])*
+		pub enum $name:ident for $runtime:ident where system = $system:ident {
 			$module:ident<T>,
 			$( $rest:tt $( <$t:ident> )*, )*
 		}
@@ -281,13 +296,14 @@ macro_rules! impl_outer_event {
 			$( #[$attr] )*;
 			$name;
 			$runtime;
+			$system;
 			Modules { $( $rest $(<$t>)*, )* };
 			$module::Event<$runtime>,;
 		);
 	};
 	(
 		$(#[$attr:meta])*
-		pub enum $name:ident for $runtime:ident {
+		pub enum $name:ident for $runtime:ident where system = $system:ident {
 			$module:ident,
 			$( $rest:tt $( <$t:ident> )*, )*
 		}
@@ -296,6 +312,7 @@ macro_rules! impl_outer_event {
 			$( #[$attr] )*;
 			$name;
 			$runtime;
+			$system;
 			Modules { $( $rest $(<$t>)*, )* };
 			$module::Event,;
 		);
@@ -304,6 +321,7 @@ macro_rules! impl_outer_event {
 		$(#[$attr:meta])*;
 		$name:ident;
 		$runtime:ident;
+		$system:ident;
 		Modules {
 			$module:ident<T>,
 			$( $rest:tt $( <$t:ident> )*, )*
@@ -314,6 +332,7 @@ macro_rules! impl_outer_event {
 			$( #[$attr] )*;
 			$name;
 			$runtime;
+			$system;
 			Modules { $( $rest $(<$t>)*, )* };
 			$( $module_name::Event $( <$generic_param> )*, )* $module::Event<$runtime>,;
 		);
@@ -322,6 +341,7 @@ macro_rules! impl_outer_event {
 		$(#[$attr:meta])*;
 		$name:ident;
 		$runtime:ident;
+		$system:ident;
 		Modules {
 			$module:ident,
 			$( $rest:tt, )*
@@ -332,6 +352,7 @@ macro_rules! impl_outer_event {
 			$( #[$attr] )*;
 			$name;
 			$runtime;
+			$system;
 			Modules { $( $rest, )* };
 			$( $module_name::Event $( <$generic_param> )*, )* $module::Event,;
 		);
@@ -340,6 +361,7 @@ macro_rules! impl_outer_event {
 		$(#[$attr:meta])*;
 		$name:ident;
 		$runtime:ident;
+		$system:ident;
 		Modules {};
 		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
 	) => {
@@ -349,13 +371,13 @@ macro_rules! impl_outer_event {
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
 		pub enum $name {
-			system(system::Event),
+			system($system::Event),
 			$(
 				$module_name( $module_name::Event $( <$generic_param> )* ),
 			)*
 		}
-		impl From<system::Event> for $name {
-			fn from(x: system::Event) -> Self {
+		impl From<$system::Event> for $name {
+			fn from(x: $system::Event) -> Self {
 				$name::system(x)
 			}
 		}
@@ -369,6 +391,7 @@ macro_rules! impl_outer_event {
 		__impl_outer_event_json_metadata!(
 			$runtime;
 			$name;
+			$system;
 			$( $module_name::Event $( <$generic_param> )*, )*;
 		);
 	}
@@ -380,13 +403,14 @@ macro_rules! __impl_outer_event_json_metadata {
 	(
 		$runtime:ident;
 		$event_name:ident;
+		$system:ident;
 		$( $module_name:ident::Event $( <$generic_param:ident> )*, )*;
 	) => {
 		impl $runtime {
 			#[allow(dead_code)]
 			pub fn outer_event_json_metadata() -> (&'static str, &'static [(&'static str, fn() -> &'static str)]) {
 				static METADATA: &[(&str, fn() -> &'static str)] = &[
-					("system", system::Event::event_json_metadata)
+					("system", $system::Event::event_json_metadata)
 					$(
 						, (
 							stringify!($module_name),
@@ -410,6 +434,22 @@ mod tests {
 	use serde_json;
 
 	mod system {
+		pub trait Trait {
+			type Origin;
+		}
+
+		decl_module! {
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+		}
+
+		decl_event!(
+			pub enum Event {
+				SystemEvent,
+			}
+		);
+	}
+
+	mod system_renamed {
 		pub trait Trait {
 			type Origin;
 		}
@@ -488,6 +528,17 @@ mod tests {
 		}
 	}
 
+	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
+	pub struct TestRuntime2;
+
+	impl_outer_event! {
+		pub enum TestEventSystemRenamed for TestRuntime2 where system = system_renamed {
+			event_module<T>,
+			event_module2<T>,
+			event_module3,
+		}
+	}
+
 	impl event_module::Trait for TestRuntime {
 		type Origin = u32;
 		type Balance = u32;
@@ -499,6 +550,20 @@ mod tests {
 	}
 
 	impl system::Trait for TestRuntime {
+		type Origin = u32;
+	}
+
+	impl event_module::Trait for TestRuntime2 {
+		type Origin = u32;
+		type Balance = u32;
+	}
+
+	impl event_module2::Trait for TestRuntime2 {
+		type Origin = u32;
+		type Balance = u32;
+	}
+
+	impl system_renamed::Trait for TestRuntime2 {
 		type Origin = u32;
 	}
 

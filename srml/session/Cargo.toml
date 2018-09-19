@@ -10,7 +10,7 @@ serde_derive = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default_features = false}
 substrate-keyring = { path = "../../core/keyring", optional = true }
 substrate-primitives = { path = "../../core/primitives", default_features = false }
-parity-codec = { version = "~1.0", default_features = false }
+parity-codec = { version = "1.1", default_features = false }
 parity-codec-derive = { version = "~1.0", default_features = false }
 sr-std = { path = "../../core/sr-std", default_features = false }
 sr-io = { path = "../../core/sr-io", default_features = false }

@@ -30,7 +30,7 @@ pub extern crate parity_codec as codec;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256, ed25519};
 
-pub use primitives::Blake2Hasher;
+pub use primitives::{Blake2Hasher, RlpCodec};
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
@@ -102,6 +102,13 @@ pub fn storage_root() -> H256 {
 	ext::with(|ext|
 		ext.storage_root()
 	).unwrap_or(H256::new())
+}
+
+/// "Commit" all existing operations and get the resultant storage change root.
+pub fn storage_changes_root(block: u64) -> Option<H256> {
+	ext::with(|ext|
+		ext.storage_changes_root(block)
+	).unwrap_or(None)
 }
 
 /// A trie root formed from the enumerated items.
@@ -210,7 +217,7 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::<Blake2Hasher>::new();
+		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::default();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -220,7 +227,7 @@ mod std_tests {
 			true
 		}));
 
-		t = map![b"foo".to_vec() => b"bar".to_vec()];
+		t = TestExternalities::new(map![b"foo".to_vec() => b"bar".to_vec()]);
 
 		assert!(!with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
@@ -231,9 +238,9 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t: TestExternalities<Blake2Hasher> = map![
+		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
-		];
+		]);
 
 		with_externalities(&mut t, || {
 			let mut v = [0u8; 4];
@@ -247,12 +254,12 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t: TestExternalities<Blake2Hasher> = map![
+		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abdd".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
-		];
+		]);
 
 		with_externalities(&mut t, || {
 			clear_prefix(b":abc");

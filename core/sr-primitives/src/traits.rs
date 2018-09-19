@@ -244,6 +244,9 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 
 	/// Acquire the global storage root.
 	fn storage_root() -> Self::Output;
+
+	/// Acquire the global storage changes root.
+	fn storage_changes_root(block: u64) -> Option<Self::Output>;
 }
 
 /// Blake2-256 Hash implementation.
@@ -274,6 +277,9 @@ impl Hash for BlakeTwo256 {
 	}
 	fn storage_root() -> Self::Output {
 		runtime_io::storage_root().into()
+	}
+	fn storage_changes_root(block: u64) -> Option<Self::Output> {
+		runtime_io::storage_changes_root(block).map(Into::into)
 	}
 }
 
@@ -343,7 +349,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Digest;
+	type Digest: Digest<Hash = Self::Hash>;
 
 	fn new(
 		number: Self::Number,
@@ -444,8 +450,12 @@ pub trait Applyable: Sized + Send + Sync {
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
 pub trait Digest: Member + Default {
-	type Item: DigestItem;
+	type Hash: Member;
+	type Item: DigestItem<Hash = Self::Hash>;
+
+	/// Get reference to all digest items.
 	fn logs(&self) -> &[Self::Item];
+	/// Push new digest item.
 	fn push(&mut self, item: Self::Item);
 }
 
@@ -454,10 +464,16 @@ pub trait Digest: Member + Default {
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
 pub trait DigestItem: Member {
-	type AuthorityId;
+	type Hash: Member;
+	type AuthorityId: Member;
 
- 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
+	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+		None
+	}
+
+	/// Returns Some if the entry is the `ChangesTrieRoot` entry.
+	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 		None
 	}
 }

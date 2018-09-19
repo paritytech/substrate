@@ -16,4 +16,4 @@ sr-primitives = { path = "../../core/sr-primitives" }
 [dev-dependencies]
 substrate-test-client = { path = "../../core/test-client" }
 substrate-keyring = { path = "../../core/keyring" }
-parity-codec = { version = "~1.0" }
+parity-codec = { version = "1.1" }

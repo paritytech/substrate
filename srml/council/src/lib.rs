@@ -45,8 +45,6 @@ extern crate srml_system as system;
 #[cfg(feature = "std")]
 use rstd::prelude::*;
 #[cfg(feature = "std")]
-use std::collections::HashMap;
-#[cfg(feature = "std")]
 use primitives::traits::As;
 #[cfg(feature = "std")]
 use srml_support::StorageValue;
@@ -102,7 +100,7 @@ impl<T: seats::Trait + voting::Trait + motions::Trait> Default for GenesisConfig
 #[cfg(feature = "std")]
 impl<T: seats::Trait + voting::Trait + motions::Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
+	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
 		use codec::Encode;
 
 		Ok(map![
@@ -132,8 +130,8 @@ mod tests {
 	pub use substrate_primitives::H256;
 	pub use primitives::BuildStorage;
 	pub use primitives::traits::{BlakeTwo256};
-	pub use primitives::testing::{Digest, Header};
-	pub use substrate_primitives::Blake2Hasher;
+	pub use primitives::testing::{Digest, DigestItem, Header};
+	pub use substrate_primitives::{Blake2Hasher, RlpCodec};
 	pub use {seats, motions, voting};
 
 	impl_outer_origin! {
@@ -168,6 +166,7 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = Event;
+		type Log = DigestItem;
 	}
 	impl balances::Trait for Test {
 		type Balance = u64;
@@ -192,7 +191,7 @@ mod tests {
 		type Event = Event;
 	}
 
-	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<Blake2Hasher> {
+	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
@@ -226,7 +225,7 @@ mod tests {
 			cooloff_period: 2,
 			voting_period: 1,
 		}.build_storage().unwrap());
-		t.into()
+		runtime_io::TestExternalities::new(t)
 	}
 
 	pub type System = system::Module<Test>;

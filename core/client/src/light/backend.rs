@@ -24,11 +24,7 @@ use parking_lot::RwLock;
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
-use state_machine::{
-	Backend as StateBackend,
-	TrieBackend as StateTrieBackend,
-	TryIntoTrieBackend as TryIntoStateTrieBackend
-};
+use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
 
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -37,6 +33,8 @@ use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::fetcher::{Fetcher, RemoteReadRequest};
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
+use memorydb::MemoryDB;
+use heapsize::HeapSizeOf;
 
 /// Light client backend.
 pub struct Backend<S, F> {
@@ -77,10 +75,12 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 	F: Fetcher<Block>,
 	H: Hasher,
 	C: NodeCodec<H>,
+	H::Out: HeapSizeOf,
 {
 	type BlockImportOperation = ImportOperation<Block, S, F>;
 	type Blockchain = Blockchain<S, F>;
 	type State = OnDemandState<Block, S, F>;
+	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
 
 	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
@@ -98,6 +98,10 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 
 	fn blockchain(&self) -> &Blockchain<S, F> {
 		&self.blockchain
+	}
+
+	fn changes_trie_storage(&self) -> Option<&Self::ChangesTrieStorage> {
+		None
 	}
 
 	fn state_at(&self, block: BlockId<Block>) -> ClientResult<Self::State> {
@@ -125,6 +129,7 @@ where
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher,
+	H::Out: HeapSizeOf,
 	C: NodeCodec<H>,
 {}
 
@@ -164,6 +169,11 @@ where
 		Ok(())
 	}
 
+	fn update_changes_trie(&mut self, _update: MemoryDB<H>) -> ClientResult<()> {
+		// we're not storing anything locally => ignore changes
+		Ok(())
+	}
+
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, _iter: I) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
@@ -180,6 +190,7 @@ impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
 {
 	type Error = ClientError;
 	type Transaction = ();
+	type TrieBackendStorage = MemoryDB<H>;
 
 	fn storage(&self, key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
 		let mut header = self.cached_header.read().clone();
@@ -214,16 +225,8 @@ impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
 		// whole state is not available on light node
 		Vec::new()
 	}
-}
 
-impl<Block, S, F, H, C> TryIntoStateTrieBackend<H, C> for OnDemandState<Block, S, F>
-where
-	Block: BlockT,
-	F: Fetcher<Block>,
-	H: Hasher,
-	C: NodeCodec<H>,
-{
-	fn try_into_trie_backend(self) -> Option<StateTrieBackend<H, C>> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
 		None
 	}
 }

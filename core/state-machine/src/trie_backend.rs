@@ -15,135 +15,70 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 //! Trie-based state machine backend.
-use Backend;
-use hashdb::{Hasher, HashDB, AsHashDB};
-use memorydb::MemoryDB;
-use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, NodeCodec};
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::marker::PhantomData;
+
+use hashdb::Hasher;
 use heapsize::HeapSizeOf;
+use memorydb::MemoryDB;
+use rlp::Encodable;
+use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, NodeCodec};
+use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
+use {Backend};
 
 pub use hashdb::DBValue;
 
-/// Backend trie storage trait.
-pub trait Storage<H: Hasher>: Send + Sync {
-	/// Get a trie node.
-	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
-}
-
-/// Try convert into trie-based backend.
-pub trait TryIntoTrieBackend<H: Hasher, C: NodeCodec<H>> {
-	/// Try to convert self into trie backend.
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>>;
-}
-
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-#[derive(Clone)]
-pub struct TrieBackend<H: Hasher, C: NodeCodec<H>> {
-	storage: TrieBackendStorage<H>,
-	root: H::Out,
-	_codec: PhantomData<C>
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> {
+	essence: TrieBackendEssence<S, H, C>,
 }
 
-impl<H: Hasher, C: NodeCodec<H>> TrieBackend<H, C> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackend<S, H, C> where H::Out: HeapSizeOf {
 	/// Create new trie-based backend.
-	pub fn with_storage(db: Arc<Storage<H>>, root: H::Out) -> Self {
+	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
-			storage: TrieBackendStorage::Storage(db),
-			root,
-			_codec: PhantomData,
+			essence: TrieBackendEssence::new(storage, root),
 		}
 	}
 
-	/// Create new trie-based backend for genesis block.
-	pub fn with_storage_for_genesis(db: Arc<Storage<H>>) -> Self {
-		let mut root = <H as Hasher>::Out::default();
-		let mut mdb = MemoryDB::<H>::new();
-		TrieDBMut::<H, C>::new(&mut mdb, &mut root);
-
-		Self::with_storage(db, root)
-	}
-
-	/// Create new trie-based backend backed by MemoryDb storage.
-	pub fn with_memorydb(db: MemoryDB<H>, root: H::Out) -> Self {
-		// TODO: check that root is a part of db???
-		TrieBackend {
-			storage: TrieBackendStorage::MemoryDb(db),
-			root,
-			_codec: PhantomData,
-		}
+	/// Get backend essence reference.
+	pub fn essence(&self) -> &TrieBackendEssence<S, H, C> {
+		&self.essence
 	}
 
 	/// Get backend storage reference.
-	pub fn backend_storage(&self) -> &TrieBackendStorage<H> {
-		&self.storage
+	pub fn backend_storage(&self) -> &S {
+		self.essence.backend_storage()
 	}
 
 	/// Get trie root.
 	pub fn root(&self) -> &H::Out {
-		&self.root
+		self.essence.root()
 	}
 }
 
 impl super::Error for String {}
 
-impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<S, H, C>
+	where
+		H::Out: Ord + Encodable + HeapSizeOf,
+{
 	type Error = String;
 	type Transaction = MemoryDB<H>;
+	type TrieBackendStorage = S;
 
 	fn storage(&self, key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
-		let mut read_overlay = MemoryDB::new();
-		let eph = Ephemeral {
-			storage: &self.storage,
-			overlay: &mut read_overlay,
-		};
-
-		let map_e = |e| format!("Trie lookup error: {}", e);
-		TrieDB::<H, C>::new(&eph, &self.root).map_err(map_e)?
-			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
+		self.essence.storage(key)
 	}
 
-	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], mut f: F) {
-		let mut read_overlay = MemoryDB::new();
-		let eph = Ephemeral {
-			storage: &self.storage,
-			overlay: &mut read_overlay,
-		};
-
-		let mut iter = move || -> Result<(), Box<TrieError<H::Out, C::Error>>> {
-			let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
-			let mut iter = trie.iter()?;
-
-			iter.seek(prefix)?;
-
-			for x in iter {
-				let (key, _) = x?;
-
-				if !key.starts_with(prefix) {
-					break;
-				}
-
-				f(&key);
-			}
-
-			Ok(())
-		};
-
-		if let Err(e) = iter() {
-			debug!(target: "trie", "Error while iterating by prefix: {}", e);
-		}
+	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
+		self.essence.for_keys_with_prefix(prefix, f)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
 		let mut read_overlay = MemoryDB::new();
-		let eph = Ephemeral {
-			storage: &self.storage,
-			overlay: &mut read_overlay,
-		};
+		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
 		let collect_all = || -> Result<_, Box<TrieError<H::Out, C::Error>>> {
-			let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
+			let trie = TrieDB::<H, C>::new(&eph, self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
 				let (key, value) = x?;
@@ -165,13 +100,13 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> where H::Ou
 	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
-		let mut write_overlay = MemoryDB::new();
-		let mut root = self.root;
+		let mut write_overlay = MemoryDB::default();
+		let mut root = *self.essence.root();
 		{
-			let mut eph = Ephemeral {
-				storage: &self.storage,
-				overlay: &mut write_overlay,
-			};
+			let mut eph = Ephemeral::new(
+				self.essence.backend_storage(),
+				&mut write_overlay,
+			);
 
 			let mut trie = TrieDBMut::<H, C>::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
 			for (key, change) in delta {
@@ -188,99 +123,17 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<H, C> where H::Ou
 
 		(root, write_overlay)
 	}
-}
 
-impl<H: Hasher, C: NodeCodec<H>> TryIntoTrieBackend<H, C> for TrieBackend<H, C> {
-	fn try_into_trie_backend(self) -> Option<TrieBackend<H, C>> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
 		Some(self)
-	}
-}
-
-pub struct Ephemeral<'a, H: 'a + Hasher> {
-	storage: &'a TrieBackendStorage<H>,
-	overlay: &'a mut MemoryDB<H>,
-}
-
-impl<'a, H: Hasher> AsHashDB<H> for Ephemeral<'a, H> where H::Out: HeapSizeOf {
-	fn as_hashdb(&self) -> &HashDB<H> { self }
-	fn as_hashdb_mut(&mut self) -> &mut HashDB<H> { self }
-}
-
-impl<'a, H: Hasher> Ephemeral<'a, H> {
-	pub fn new(storage: &'a TrieBackendStorage<H>, overlay: &'a mut MemoryDB<H>) -> Self {
-		Ephemeral {
-			storage,
-			overlay,
-		}
-	}
-}
-
-impl<'a, H: Hasher> HashDB<H> for Ephemeral<'a, H> where H::Out: HeapSizeOf {
-	fn keys(&self) -> HashMap<H::Out, i32> {
-		self.overlay.keys() // TODO: iterate backing
-	}
-
-	fn get(&self, key: &H::Out) -> Option<DBValue> {
-		match self.overlay.raw(key) {
-			Some((val, i)) => {
-				if i <= 0 {
-					None
-				} else {
-					Some(val)
-				}
-			}
-			None => match self.storage.get(key) {
-				Ok(x) => x,
-				Err(e) => {
-					warn!(target: "trie", "Failed to read from DB: {}", e);
-					None
-				},
-			},
-		}
-	}
-
-	fn contains(&self, key: &H::Out) -> bool {
-		self.get(key).is_some()
-	}
-
-	fn insert(&mut self, value: &[u8]) -> H::Out {
-		self.overlay.insert(value)
-	}
-
-	fn emplace(&mut self, key: H::Out, value: DBValue) {
-		self.overlay.emplace(key, value)
-	}
-
-	fn remove(&mut self, key: &H::Out) {
-		self.overlay.remove(key)
-	}
-}
-
-#[derive(Clone)]
-pub enum TrieBackendStorage<H: Hasher> {
-	/// Key value db + storage column.
-	Storage(Arc<Storage<H>>),
-	/// Hash db.
-	MemoryDb(MemoryDB<H>),
-}
-
-impl<H: Hasher> TrieBackendStorage<H> {
-	pub fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		match *self {
-			TrieBackendStorage::Storage(ref db) =>
-				db.get(key)
-					.map_err(|e| format!("Trie lookup error: {}", e)),
-			TrieBackendStorage::MemoryDb(ref db) =>
-				Ok(db.get(key)),
-		}
 	}
 }
 
 #[cfg(test)]
 pub mod tests {
-	use super::*;
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, RlpCodec, H256};
+	use super::*;
 
 	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
@@ -298,9 +151,9 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<Blake2Hasher, RlpCodec> {
+	pub(crate) fn test_trie() -> TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher, RlpCodec> {
 		let (mdb, root) = test_db();
-		TrieBackend::with_memorydb(mdb, root)
+		TrieBackend::new(mdb, root)
 	}
 
 	#[test]
@@ -320,11 +173,10 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		let db = TrieBackend::<Blake2Hasher, RlpCodec>::with_memorydb(
+		assert!(TrieBackend::<MemoryDB<Blake2Hasher>, Blake2Hasher, RlpCodec>::new(
 			MemoryDB::new(),
-			Default::default()
-		);
-		assert!(db.pairs().is_empty());
+			Default::default(),
+		).pairs().is_empty());
 	}
 
 	#[test]

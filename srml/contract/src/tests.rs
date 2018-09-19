@@ -16,11 +16,11 @@
 
 use double_map::StorageDoubleMap;
 use runtime_io::with_externalities;
-use runtime_primitives::testing::{Digest, H256, Header};
+use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
 use runtime_primitives::traits::{BlakeTwo256};
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
-use substrate_primitives::Blake2Hasher;
+use substrate_primitives::{Blake2Hasher, RlpCodec};
 use wabt;
 use {
 	runtime_io, balances, system, CodeOf, ContractAddressFor,
@@ -43,6 +43,7 @@ impl system::Trait for Test {
 	type AccountId = u64;
 	type Header = Header;
 	type Event = ();
+	type Log = DigestItem;
 }
 impl balances::Trait for Test {
 	type Balance = u64;
@@ -105,7 +106,7 @@ impl ExtBuilder {
 		self.creation_fee = creation_fee;
 		self
 	}
-	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = system::GenesisConfig::<Test>::default()
 			.build_storage()
 			.unwrap();
@@ -132,7 +133,7 @@ impl ExtBuilder {
 			}.build_storage()
 			.unwrap(),
 		);
-		t.into()
+		runtime_io::TestExternalities::new(t)
 	}
 }
 
