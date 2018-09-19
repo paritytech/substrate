@@ -25,7 +25,7 @@ use traits::{self, Member, SimpleArithmetic, MaybeDisplay, GetHeight, BlockNumbe
 	Checkable};
 use super::{CheckedExtrinsic, Era};
 
-const TRANSACTION_VERSION: i8 = 1;
+const TRANSACTION_VERSION: u8 = 1;
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
@@ -117,14 +117,16 @@ where
 		// to use this).
 		let _length_do_not_remove_me_see_above: u32 = Decode::decode(input)?;
 
-		let version: i8 = Decode::decode(input)?;
+		let version = input.read_byte()?;
 
+		let is_signed = version & 0b1000_0000 != 0;
+		let version = version & 0b0111_1111;
 		if version != TRANSACTION_VERSION {
 			return None
 		}
 
 		Some(UncheckedMortalExtrinsic {
-			signature: Decode::decode(input)?,
+			signature: if is_signed { Some(Decode::decode(input)?) } else { None },
 			function: Decode::decode(input)?,
 		})
 	}
@@ -146,8 +148,15 @@ where
 		v.extend(&[0u8; 4]);
 
 		// 1 byte version id.
-		TRANSACTION_VERSION.encode_to(&mut v);
-		self.signature.encode_to(&mut v);
+		match self.signature.as_ref() {
+			Some(s) => {
+				v.push(TRANSACTION_VERSION | 0b1000_0000);
+				s.encode_to(&mut v);
+			}
+			None => {
+				v.push(TRANSACTION_VERSION & 0b0111_1111);
+			}
+		}
 		self.function.encode_to(&mut v);
 
 		let length = (v.len() - 4) as u32;
@@ -189,7 +198,7 @@ mod tests {
 		fn block_number_to_hash(&self, n: u64) -> Option<u64> { Some(n) }
 	}
 
-	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+	#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize, Encode, Decode)]
 	struct TestSig(u64, Vec<u8>);
 	impl traits::Verify for TestSig {
 		type Signer = u64;
@@ -203,6 +212,20 @@ mod tests {
 	
 	type Ex = UncheckedMortalExtrinsic<u64, u64, u64, TestSig>;
 	type CEx = CheckedExtrinsic<u64, u64, u64>;
+
+	#[test]
+	fn unsigned_codec_should_work() {
+		let ux = Ex::new_unsigned(DUMMY_FUNCTION);
+		let encoded = ux.encode();
+		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
+	}
+
+	#[test]
+	fn signed_codec_should_work() {
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, 0u64).encode()), Era::immortal());
+		let encoded = ux.encode();
+		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
+	}
 
 	#[test]
 	fn unsigned_check_should_work() {
