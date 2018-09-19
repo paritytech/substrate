@@ -190,7 +190,12 @@ pub struct Instance<T> {
 }
 
 impl<T> Instance<T> {
-	/// Instantiate a module with the given [`EnvironmentDefinitionBuilder`].
+	/// Instantiate a module with the given [`EnvironmentDefinitionBuilder`]. It will
+	/// run the `start` function with the given `state`.
+	///
+	/// Returns `Err(Error::Module)` if this module can't be instantiated with the given
+	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)` will
+	/// be returned.
 	///
 	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
 	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T) -> Result<Instance<T>, Error> {

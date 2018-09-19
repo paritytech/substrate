@@ -335,11 +335,27 @@ impl SandboxInstance {
 	}
 }
 
+/// Error occured during instantiation of a sandboxed module.
+pub enum InstantiationError {
+	/// Something wrong with the environment definition. It either can't
+	/// be decoded, have a reference to a non-existent or torn down memory instance.
+	EnvironmentDefintionCorrupted,
+	/// Provided module isn't recognized as a valid webassembly binary.
+	ModuleDecoding,
+	/// Module is a well-formed webassembly binary but could not be instantiated. This could
+	/// happen because, e.g. the module imports entries not provided by the environment.
+	Instantiation,
+	/// Module is well-formed, instantiated and linked, but while executing the start function
+	/// a trap was generated.
+	StartTrapped,
+}
+
 fn decode_environment_definition(
 	raw_env_def: &[u8],
 	memories: &[Option<MemoryRef>],
-) -> Result<(Imports, GuestToSupervisorFunctionMapping), UserError> {
-	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..]).ok_or_else(|| UserError("Sandbox error"))?;
+) -> Result<(Imports, GuestToSupervisorFunctionMapping), InstantiationError> {
+	let env_def = sandbox_primitives::EnvironmentDefinition::decode(&mut &raw_env_def[..])
+		.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?;
 
 	let mut func_map = HashMap::new();
 	let mut memories_map = HashMap::new();
@@ -359,8 +375,8 @@ fn decode_environment_definition(
 				let memory_ref = memories
 					.get(memory_idx as usize)
 					.cloned()
-					.ok_or_else(|| UserError("Sandbox error"))?
-					.ok_or_else(|| UserError("Sandbox error"))?;
+					.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?
+					.ok_or_else(|| InstantiationError::EnvironmentDefintionCorrupted)?;
 				memories_map.insert((module, field), memory_ref);
 			}
 		}
@@ -395,12 +411,12 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 	wasm: &[u8],
 	raw_env_def: &[u8],
 	state: u32,
-) -> Result<u32, UserError> {
+) -> Result<u32, InstantiationError> {
 	let (imports, guest_to_supervisor_mapping) =
 		decode_environment_definition(raw_env_def, &supervisor_externals.store().memories)?;
 
-	let module = Module::from_buffer(wasm).map_err(|_| UserError("Sandbox error"))?;
-	let instance = ModuleInstance::new(&module, &imports).map_err(|_| UserError("Sandbox error"))?;
+	let module = Module::from_buffer(wasm).map_err(|_| InstantiationError::ModuleDecoding)?;
+	let instance = ModuleInstance::new(&module, &imports).map_err(|_| InstantiationError::Instantiation)?;
 
 	let sandbox_instance = Rc::new(SandboxInstance {
 		// In general, it's not a very good idea to use `.not_started_instance()` for anything
@@ -418,14 +434,14 @@ pub fn instantiate<FE: SandboxCapabilities + Externals>(
 		|guest_externals| {
 			instance
 				.run_start(guest_externals)
-				.map_err(|_| UserError("Sandbox error"))
+				.map_err(|_| InstantiationError::StartTrapped)
 		},
 	)?;
 
+	// At last, register the instance.
 	let instance_idx = supervisor_externals
 		.store_mut()
 		.register_sandbox_instance(sandbox_instance);
-
 	Ok(instance_idx)
 }
 
@@ -672,6 +688,87 @@ mod tests {
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_return_val", &code).unwrap(),
 			vec![1],
+		);
+	}
+
+	#[test]
+	fn unlinkable_module() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(import "env" "non-existent" (func))
+
+			(func (export "call")
+			)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			vec![1],
+		);
+	}
+
+	#[test]
+	fn corrupted_module() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		// Corrupted wasm file
+		let code = &[0, 0, 0, 0, 1, 0, 0, 0];
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", code).unwrap(),
+			vec![1],
+		);
+	}
+
+	#[test]
+	fn start_fn_ok() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(func (export "call")
+			)
+
+			(func $start
+			)
+
+			(start $start)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			vec![0],
+		);
+	}
+
+	#[test]
+	fn start_fn_traps() {
+		let mut ext = TestExternalities::default();
+		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
+
+		let code = wabt::wat2wasm(r#"
+		(module
+			(func (export "call")
+			)
+
+			(func $start
+				unreachable
+			)
+
+			(start $start)
+		)
+		"#).unwrap();
+
+		assert_eq!(
+			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_sandbox_instantiate", &code).unwrap(),
+			vec![2],
 		);
 	}
 }
