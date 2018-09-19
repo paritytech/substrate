@@ -138,7 +138,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Set a new era length. Won't kick in until the next era change (at current length).
+	/// Set a new session length. Won't kick in until the next session change (at current length).
 	fn set_length(new: T::BlockNumber) -> Result {
 		<NextSessionLength<T>>::put(new);
 		Ok(())
@@ -193,7 +193,7 @@ impl<T: Trait> Module<T> {
 		<CurrentIndex<T>>::put(session_index);
 		<CurrentStart<T>>::put(now);
 
-		// Enact era length change.
+		// Enact session length change.
 		let len_changed = if let Some(next_len) = <NextSessionLength<T>>::take() {
 			<SessionLength<T>>::put(next_len);
 			true
