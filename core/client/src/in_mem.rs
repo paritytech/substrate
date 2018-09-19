@@ -325,7 +325,6 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	}
 
 	fn leaves(&self) -> error::Result<Vec<Block::Hash>> {
-		// TODO [snd] get rid of this clone
 		Ok(self.storage.read().leaves.clone())
 	}
 }
