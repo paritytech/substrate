@@ -253,6 +253,7 @@ impl<T> Instance<T> {
 		};
 		let instance_idx = match result {
 			sandbox_primitives::ERR_MODULE => return Err(Error::Module),
+			sandbox_primitives::ERR_EXECUTION => return Err(Error::Execution),
 			instance_idx => instance_idx,
 		};
 		Ok(Instance {

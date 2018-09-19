@@ -138,11 +138,11 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 
 fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
-	run_err: Option<sandbox::Error>,
+	sandbox_err: Option<sandbox::Error>,
 ) -> Result<(), Error> {
 	// Check the exact type of the error. It could be plain trap or
 	// special runtime trap the we must recognize.
-	match (run_err, runtime.special_trap) {
+	match (sandbox_err, runtime.special_trap) {
 		// No traps were generated. Proceed normally.
 		(None, None) => Ok(()),
 		// Special case. The trap was the result of the execution `return` host function.
@@ -188,12 +188,20 @@ pub fn execute<'a, E: Ext>(
 		special_trap: None,
 	};
 
-	let mut instance = sandbox::Instance::new(&instrumented_code, &imports, &mut runtime)
-		.map_err(|_| Error::Instantiate)?;
+	// Instantiate the instance from the instrumented module code.
+	let exec_error: Option<sandbox::Error> =
+		match sandbox::Instance::new(&instrumented_code, &imports, &mut runtime) {
+			// No errors or traps were generated on instantiation! That
+			// means we can now invoke the contract entrypoint.
+			Ok(mut instance) => instance.invoke(b"call", &[], &mut runtime).err(),
+			// `start` function trapped.
+			Err(err @ sandbox::Error::Execution) => Some(err),
+			// Other instantiation errors.
+			// Return without executing anything.
+			Err(_) => return Err(Error::Instantiate),
+		};
 
-	let run_result = instance.invoke(b"call", &[], &mut runtime);
-
-	to_execution_result(runtime, run_result.err())
+	to_execution_result(runtime, exec_error)
 }
 
 // TODO: Extract it to the root of the crate

@@ -25,6 +25,7 @@ use rlp::Encodable;
 use triehash::trie_root;
 use backend::InMemory;
 use changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage};
+use primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG;
 use super::{Externalities, OverlayedChanges};
 
 /// Simple HashMap-based Externalities impl.
@@ -41,7 +42,7 @@ impl<H: Hasher, C: NodeCodec<H>> TestExternalities<H, C> where H::Out: HeapSizeO
 		let mut overlay = OverlayedChanges::default();
 		super::set_changes_trie_config(
 			&mut overlay,
-			inner.get(&b":changes_trie".to_vec()).cloned())
+			inner.get(&CHANGES_TRIE_CONFIG.to_vec()).cloned())
 			.expect("changes trie configuration is correct in test env; qed");
 
 		TestExternalities {

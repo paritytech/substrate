@@ -45,7 +45,7 @@ pub mod blake2 {
 	impl Hasher for Blake2Hasher {
 		type Out = H256;
 		type StdHasher = PlainHasher;
-		const LENGTH:usize = 32;
+		const LENGTH: usize = 32;
 		fn hash(x: &[u8]) -> Self::Out {
 			blake2_256(x).into()
 		}
