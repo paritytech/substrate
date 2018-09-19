@@ -798,6 +798,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			// if search is not restricted then the leaf is the best
 			let mut best_hash = leaf_hash;
 
+			// go backwards entering the search space
 			// waiting until we are <= max_number
 			if let Some(max_number) = maybe_max_number {
 				loop {
