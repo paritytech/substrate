@@ -957,6 +957,64 @@ impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 	}
 }
 
+/// insert a new block into an existing leaf list
+/// TODO [snd] write down time complexity
+/// precondition: leaf_hashes is in descending order
+/// TODO [snd] make `hash_to_header` return header references to prevent copies
+/// requires introducing a lifetime
+pub fn update_leaves<Block, F>(header_to_insert: &Block::Header, leaf_hashes: &mut Vec<Block::Hash>, hash_to_header: F) -> error::Result<()> where
+	F: Fn(&Block::Hash) -> error::Result<Block::Header>,
+	Block: BlockT,
+{
+   // new block is leaf by definition. insert into leaf list.
+   let mut maybe_insertion_position = None;
+
+   // find the insertion position
+   for (i, leaf_hash) in leaf_hashes.iter().enumerate() {
+	   if hash_to_header(leaf_hash)?.number() < header_to_insert.number() {
+		   maybe_insertion_position = Some(i);
+		   break;
+	   }
+   }
+
+   let insertion_position = if let Some(insertion_position) = maybe_insertion_position {
+	   // TODO [snd] this moves all elements after `insert_at`. make it more efficient
+	   leaf_hashes.insert(insertion_position, header_to_insert.hash().clone());
+	   insertion_position
+   } else {
+	   // new number is smallest or first entry in leaf list
+	   leaf_hashes.push(header_to_insert.hash().clone());
+	   // inserted at end of leaf list which means parent wasn't in leaf list
+	   // and no need to remove parent
+	   return Ok(());
+   };
+
+   // genesis block does not have parent to remove
+   if header_to_insert.number() == &<NumberFor<Block> as Zero>::zero() {
+	   return Ok(());
+   }
+
+   let parent_header = hash_to_header(header_to_insert.parent_hash())?;
+
+   // parent of new block is no longer leaf by definition. remove from leaf list if present
+   // parent comes somewhere after child in leaf list since it's ordered by block number
+   // descending.
+   // `... + 1` = we ignore the inserted itself.
+   for i in (insertion_position + 1)..leaf_hashes.len() {
+	   let leaf_hash = leaf_hashes[i];
+	   if leaf_hash == parent_header.hash() {
+		   // TODO [snd] this moves all elements after `i`. make it more efficient
+		   leaf_hashes.remove(i);
+		   break;
+	   }
+	   if hash_to_header(&leaf_hash)?.number() < parent_header.number() {
+		   // parent was not in leaf list
+		   break;
+	   }
+   }
+   Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

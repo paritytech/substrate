@@ -34,6 +34,7 @@ use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use heapsize::HeapSizeOf;
 use memorydb::MemoryDB;
+use client::update_leaves;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -161,11 +162,22 @@ impl<Block: BlockT> Blockchain<Block> {
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
 	) {
-		// remember for after header is moved
 		let number = header.number().clone();
-		let parent_hash = header.parent_hash().clone();
 
 		let mut storage = self.storage.write();
+
+		let mut leaves = storage.leaves.clone();
+
+		{
+			let blocks = &mut storage.blocks;
+			let hash_to_header = |hash: &Block::Hash| {
+				Ok(blocks.get(hash).expect("failed to get header for hash q.e.d").header().clone())
+			};
+			update_leaves::<Block, _>(&header, &mut leaves, hash_to_header)
+				.expect("TODO update leaves faild q.e.d");
+		}
+
+		storage.leaves = leaves;
 		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
 		storage.hashes.insert(number, hash.clone());
 
@@ -179,60 +191,6 @@ impl<Block: BlockT> Blockchain<Block> {
 
 		if number == Zero::zero() {
 			storage.genesis_hash = hash;
-		}
-
-		// TODO [snd] reduce complexity of leaf list update code
-
-		// new block is leaf by definition. insert into leaf list.
-		let mut maybe_insertion_position = None;
-		for i in 0..storage.leaves.len() {
-			let leaf_number = {
-				storage.blocks.get(&storage.leaves[i]).expect("leaf hash must reference block in storage. q.e.d.").header().number().clone()
-			};
-			if leaf_number < number {
-				maybe_insertion_position = Some(i);
-				break;
-			}
-		}
-		if let Some(insertion_position) = maybe_insertion_position {
-			// TODO [snd] this moves all elements after `insert_at`. make it more efficient
-			storage.leaves.insert(insertion_position, hash);
-		} else {
-			// new number is smallest or first entry in leaf list
-			storage.leaves.push(hash);
-		}
-
-		// genesis block does not have parent to remove
-		if number == Zero::zero() {
-			return;
-		}
-
-		// inserted at end of leaf list which means parent wasn't in leaf list
-		// and no need to remove parent
-		let insertion_position = match maybe_insertion_position {
-			None => return,
-			Some(x) => x
-		};
-
-		let parent_header = storage.blocks.get(&parent_hash).expect("parent hash must reference block in storage. q.e.d.").header().clone();
-
-		// parent of new block is no longer leaf by definition. remove from leaf list if present
-		// parent comes somewhere after child in leaf list since it's ordered by block number
-		// descending.
-		for i in insertion_position..storage.leaves.len() {
-			let leaf_hash = storage.leaves[i];
-			if leaf_hash == parent_header.hash() {
-				// TODO [snd] this moves all elements after `i`. make it more efficient
-				storage.leaves.remove(i);
-				break;
-			}
-			let leaf_number = {
-				storage.blocks.get(&leaf_hash).expect("leaf hash must reference block in storage. q.e.d.").header().number().clone()
-			};
-			if leaf_number < *parent_header.number() {
-				// parent was not in leaf list
-				break;
-			}
 		}
 
 	}
