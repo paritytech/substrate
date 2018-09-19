@@ -54,9 +54,9 @@ impl Era {
 			.unwrap_or(1 << 16)
 			.max(4)
 			.min(1 << 16);
-		let phase = current - current / period * period;
+		let phase = current % period;
 		let quantize_factor = (period >> 12).max(1);
-		let quantized_phase = (phase / quantize_factor * quantize_factor).min(1 << 12 - 1);
+		let quantized_phase = phase / quantize_factor * quantize_factor;
 
 		Era::Mortal(period, quantized_phase)
 	}
@@ -98,7 +98,7 @@ impl Encode for Era {
 			Era::Immortal => output.push_byte(0),
 			Era::Mortal(period, phase) => {
 				let quantize_factor = (*period as u64 >> 12).max(1);
-				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 | ((phase / quantize_factor) >> 4) as u16;
+				let encoded = (period.trailing_zeros() - 1).max(1).min(15) as u16 | ((phase / quantize_factor) << 4) as u16;
 				output.push(&encoded);
 			}
 		}
@@ -111,7 +111,7 @@ impl Decode for Era {
 		if first == 0 {
 			Some(Era::Immortal)
 		} else {
-			let encoded = first as u64 + (input.read_byte()? as u64 >> 8);
+			let encoded = first as u64 + ((input.read_byte()? as u64) << 8);
 			let period = 2 << (encoded % (1 << 4));
 			let quantize_factor = (period >> 12).max(1);
 			let phase = (encoded >> 4) * quantize_factor;
@@ -121,5 +121,72 @@ impl Decode for Era {
 				None
 			}
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn immortal_works() {
+		let e = Era::immortal();
+		assert_eq!(e.birth(0), 0);
+		assert_eq!(e.death(0), u64::max_value());
+		assert_eq!(e.birth(1), 0);
+		assert_eq!(e.death(1), u64::max_value());
+		assert_eq!(e.birth(u64::max_value()), 0);
+		assert_eq!(e.death(u64::max_value()), u64::max_value());
+		assert!(e.is_immortal());
+
+		assert_eq!(e.encode(), vec![0u8]);
+		assert_eq!(e, Era::decode(&mut&[0u8][..]).unwrap());
+	}
+
+	#[test]
+	fn mortal_codec_works() {
+		let e = Era::new(64, 42);
+		assert!(!e.is_immortal());
+
+		let expected = vec![5 + 42 % 16 * 16, 42 / 16];
+		assert_eq!(e.encode(), expected);
+		assert_eq!(e, Era::decode(&mut&expected[..]).unwrap());
+	}
+
+	#[test]
+	fn long_period_mortal_codec_works() {
+		let e = Era::new(32768, 20000);
+
+		let expected = vec![(14 + 2500 % 16 * 16) as u8, (2500 / 16) as u8];
+		assert_eq!(e.encode(), expected);
+		assert_eq!(e, Era::decode(&mut&expected[..]).unwrap());
+	}
+
+	#[test]
+	fn era_initialisation_works() {
+		assert_eq!(Era::new(64, 42), Era::Mortal(64, 42));
+		assert_eq!(Era::new(32768, 20000), Era::Mortal(32768, 20000));
+		assert_eq!(Era::new(200, 513), Era::Mortal(256, 1));
+		assert_eq!(Era::new(2, 1), Era::Mortal(4, 1));
+		assert_eq!(Era::new(4, 5), Era::Mortal(4, 1));
+	}
+
+	#[test]
+	fn quantised_clamped_era_initialisation_works() {
+		// clamp 1000000 to 65536, quantise 1000001 % 65536 to the nearest 4
+		assert_eq!(Era::new(1000000, 1000001), Era::Mortal(65536, 1000001 % 65536 / 4 * 4));
+	}
+
+	#[test]
+	fn mortal_birth_death_works() {
+		let e = Era::new(4, 6);
+		for i in 6..10 {
+			assert_eq!(e.birth(i), 6);
+			assert_eq!(e.death(i), 10);
+		}
+
+		// wrong because it's outside of the (current...current + period) range
+		assert_ne!(e.birth(10), 6);
+		assert_ne!(e.birth(5), 6);
 	}
 }
