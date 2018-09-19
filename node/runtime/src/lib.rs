@@ -64,7 +64,6 @@ mod checked_block;
 
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
-use codec::{Encode, Decode, Input};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
