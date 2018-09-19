@@ -34,6 +34,7 @@ pub extern crate substrate_keyring as keyring;
 pub extern crate substrate_test_runtime as runtime;
 
 pub mod client_ext;
+pub mod trait_tests;
 mod block_builder_ext;
 
 use std::sync::Arc;
