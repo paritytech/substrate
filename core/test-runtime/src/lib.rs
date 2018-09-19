@@ -138,13 +138,15 @@ pub mod api {
 	impl_stubs!(
 		version => |()| super::version(),
 		metadata => |()| {
-			::runtime_support::metadata::RuntimeMetadata {
-				outer_event: ::runtime_support::event::OuterEventMetadata {
-					name: ::runtime_support::event::DecodeDifferent::Encode("test"),
-					events: ::runtime_support::event::DecodeDifferent::Encode(&[]),
-				},
-				modules: ::runtime_support::event::DecodeDifferent::Encode(&[]),
-			}
+			::runtime_support::metadata::RuntimeMetadataVersioned::Version1(
+				::runtime_support::metadata::RuntimeMetadata {
+					outer_event: ::runtime_support::event::OuterEventMetadata {
+						name: ::runtime_support::event::DecodeDifferent::Encode("test"),
+						events: ::runtime_support::event::DecodeDifferent::Encode(&[]),
+					},
+					modules: ::runtime_support::event::DecodeDifferent::Encode(&[]),
+				}
+			)
 		},
 		authorities => |()| system::authorities(),
 		initialise_block => |header| system::initialise_block(header),

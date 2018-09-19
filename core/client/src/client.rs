@@ -23,7 +23,7 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
-use substrate_metadata::RuntimeMetadata;
+use substrate_metadata::RuntimeMetadataVersioned;
 use primitives::{Blake2Hasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -255,10 +255,10 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Returns the runtime metadata.
-	pub fn metadata(&self, id: &BlockId<Block>) -> error::Result<RuntimeMetadata> {
+	pub fn metadata(&self, id: &BlockId<Block>) -> error::Result<RuntimeMetadataVersioned> {
 		self.executor
 			.call(id, "metadata",&[])
-			.and_then(|r| RuntimeMetadata::decode(&mut &r.return_data[..])
+			.and_then(|r| RuntimeMetadataVersioned::decode(&mut &r.return_data[..])
 					  .ok_or("Metadata decoding failed".into()))
 	}
 
@@ -782,13 +782,15 @@ mod tests {
 
 		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
-		let expected = substrate_metadata::RuntimeMetadata {
-			outer_event: substrate_metadata::OuterEventMetadata {
-				name: substrate_metadata::DecodeDifferent::Encode("test"),
-				events: substrate_metadata::DecodeDifferent::Encode(&[]),
-			},
-			modules: substrate_metadata::DecodeDifferent::Encode(&[]),
-		};
+		let expected = substrate_metadata::RuntimeMetadataVersioned::Version1(
+			substrate_metadata::RuntimeMetadata {
+				outer_event: substrate_metadata::OuterEventMetadata {
+					name: substrate_metadata::DecodeDifferent::Encode("test"),
+					events: substrate_metadata::DecodeDifferent::Encode(&[]),
+				},
+				modules: substrate_metadata::DecodeDifferent::Encode(&[]),
+			}
+		);
 
 		assert_eq!(expected, client.metadata(&BlockId::Number(1)).unwrap());
 	}
