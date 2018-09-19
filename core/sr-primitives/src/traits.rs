@@ -64,24 +64,29 @@ pub trait Lookup {
 }
 
 /// Get the "current" block number.
-pub trait GetBlockNumber {
+pub trait GetHeight {
 	/// The type of the block number.
 	type BlockNumber;
 
 	/// Return the current block number. Not allowed to fail.
-	fn get_block_number(&self) -> Self::BlockNumber;
+	fn get_height(&self) -> Self::BlockNumber;
 }
 
 /// Translate a block number into a hash.
 pub trait BlockNumberToHash {
 	/// The type of the block number.
-	type BlockNumber;
+	type BlockNumber: Zero;
 
 	/// The type of the hash.
 	type Hash;
 
 	/// Get the hash for a given block number, or `None` if unknown.
 	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash>;
+
+	/// Get the genesis block hash; this should always be known.
+	fn genesis_hash(&self) -> Self::Hash {
+		self.block_number_to_hash(Zero::zero()).expect("All blockchains must know their genesis block hash; qed")
+	}
 }
 
 /// Simple payment making trait, operating on a single generic `AccountId` type.
@@ -445,18 +450,6 @@ pub trait Checkable<Context>: Sized {
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
-/// Implement for pieces of information that require some additional context `Context` in order to be
-/// checked.
-pub trait StaticCheckable<Context>: Sized {
-	/// Returned if `check` succeeds.
-	type Checked;
-
-	/// Check self.
-	fn check(self) -> Result<Self::Checked, &'static str>;
-}
-
-/// A "checkable" piece of information, used by the standard Substrate Executive in order to
-/// check the validity of a piece of extrinsic information, usually by verifying the signature.
 /// Implement for pieces of information that don't require additional context in order to be
 /// checked.
 pub trait BlindCheckable: Sized {
@@ -466,23 +459,15 @@ pub trait BlindCheckable: Sized {
 	/// Check self.
 	fn check(self) -> Result<Self::Checked, &'static str>;
 }
-/*
+
 // Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
-impl<T: BlindCheckable, Context> StaticCheckable<Context> for T {
+impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
-	fn check(self) -> Result<Self::Checked, &'static str> {
+	fn check(self, _c: &Context) -> Result<Self::Checked, &'static str> {
 		BlindCheckable::check(self)
 	}
 }
 
-// Every `StaticCheckable` is also a `Checkable` for the same `Context`.
-impl<T: StaticCheckable<Context>, Context> Checkable<Context> for T {
-	type Checked = <Self as BlindCheckable>::Checked;
-	fn check(self, _c: Context) -> Result<Self::Checked, &'static str> {
-		StaticCheckable::check(self)
-	}
-}
-*/
 /// An "executable" piece of information, used by the standard Substrate Executive in order to
 /// enact a piece of extrinsic information by marshalling and dispatching to a named functioon
 /// call.

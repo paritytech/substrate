@@ -228,7 +228,7 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalExtrinsic<Address, Index, 
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
-pub type Executive = executive::Executive<Runtime, Block, Balances, Balances, AllModules>;
+pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
 
 pub mod api {
 	impl_stubs!(

@@ -21,70 +21,11 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::{Decode, Encode, Input};
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay, GetBlockNumber, BlockNumberToHash, Lookup,
+use traits::{self, Member, SimpleArithmetic, MaybeDisplay, GetHeight, BlockNumberToHash, Lookup,
 	Checkable};
-use super::CheckedExtrinsic;
+use super::{CheckedExtrinsic, Era};
 
 const TRANSACTION_VERSION: i8 = 1;
-
-/// An era to describe the longevity of a transaction.
-#[derive(PartialEq, Eq, Clone, Copy, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct Era(u16);
-
-/*
-E.g. with period == 4:
-0         10        20        30        40
-0123456789012345678901234567890123456789012
-             |...|
-   authored -/   \- expiry
-phase = 1
-n = Q(current - phase, period) + phase
-*/
-impl Era {
-	/// Create a new era based on a period (which should be a power of two between 4 and 131072 inclusive)
-	/// and a block number which on which it should start (or, for long periods, be shortly after the start).
-	///
-	/// Once created, check the 
-	pub fn new(period: u64, current: u64) -> Self {
-		let log_period_minus_two = period.checked_next_power_of_two()
-			.unwrap_or(1 << 17)
-			.trailing_zeros()
-			.min(17)
-			.max(2) - 2;
-		let period = 4 << log_period_minus_two;
-		let phase = current - current / period * period;
-		let encoded_phase = (phase / (period >> 12).max(1)).min(1 << 12 - 1);
-
-		Era(encoded_phase as u16 | (log_period_minus_two << 12) as u16)
-	}
-
-	/// The phase in the period that this transaction's lifetime begins (and, importantly,
-	/// implies which block hash is included in the signature material). If the `period` is
-	/// greater than 1 << 12, then it will be a factor of the times greater than 1<<12 that
-	/// `period` is.
-	pub fn phase(self) -> u64 {
-		(self.0 as u64) % (1 << 12) * (self.period() >> 12).max(1)
-	}
-
-	/// The period of validity from the block hash found in the signing material.
-	pub fn period(self) -> u64 {
-		4 << (self.0 as u64 >> 12)
-	}
-
-	/// Get the block number of the start of the era whose properties this object
-	/// describes that `current` belongs to. 
-	pub fn birth(self, current: u64) -> u64 {
-		let phase = self.phase();
-		let period = self.period();
-		(current - phase) / period * period + phase
-	}
-
-	/// Get the block number of the first block at which the era has ended.
-	pub fn death(self, current: u64) -> u64 {
-		self.birth(current) + self.period()
-	}
-}
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
@@ -133,7 +74,7 @@ where
 	BlockNumber: SimpleArithmetic,
 	Hash: Encode,
 	Context: Lookup<Source=Address, Target=AccountId>
-		+ GetBlockNumber<BlockNumber=BlockNumber>
+		+ GetHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
@@ -141,7 +82,7 @@ where
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
 			Some((signed, signature, index, era)) => {
-				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.get_block_number().as_())))
+				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.get_height().as_())))
 					.ok_or("transaction birth block ancient")?;
 				let payload = (index, self.function, h);
 				let signed = context.lookup(signed)?;

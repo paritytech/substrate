@@ -44,7 +44,7 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, GetBlockNumber, BlockNumberToHash};
+	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, GetHeight, BlockNumberToHash};
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
 
@@ -388,9 +388,9 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> GetBlockNumber for Module<T> {
+impl<T: Trait> GetHeight for Module<T> {
 	type BlockNumber = T::BlockNumber;
-	fn get_block_number(&self) -> Self::BlockNumber {
+	fn get_height(&self) -> Self::BlockNumber {
 		<Module<T>>::block_number()
 	}
 }

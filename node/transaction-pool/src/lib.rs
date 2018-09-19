@@ -44,9 +44,9 @@ use std::{
 use codec::{Decode, Encode};
 use extrinsic_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
 use node_api::Api;
-use primitives::{AccountId, BlockId, Block, Hash, Index};
+use primitives::{AccountId, BlockId, Block, Hash, Index, BlockNumber};
 use runtime::{Address, UncheckedExtrinsic, RawAddress};
-use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup};
+use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup, GetHeight, BlockNumberToHash};
 
 pub use extrinsic_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
@@ -55,7 +55,7 @@ pub use error::{Error, ErrorKind, Result};
 const MAX_TRANSACTION_SIZE: usize = 4 * 1024 * 1024;
 
 /// Type alias for convenience.
-pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable<InstanceLookup>>::Checked;
+pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable<LocalContext>>::Checked;
 
 /// Type alias for the transaction pool.
 pub type TransactionPool<A> = extrinsic_pool::Pool<ChainApi<A>>;
@@ -122,27 +122,30 @@ impl<A> ChainApi<A> where
 	}
 }
 
-struct LocalContext;
-impl GetBlockNumber for LocalContext {
+/// "Chain" context (used for checking transactions) which uses data local to our node/transaction pool.
+///
+/// This is due for removal along with #721
+pub struct LocalContext;
+impl GetHeight for LocalContext {
 	type BlockNumber = BlockNumber;
-	fn get_block_number(&self) -> BlockNumber {
+	fn get_height(&self) -> BlockNumber {
 		unimplemented!()
 	}
 }
 impl BlockNumberToHash for LocalContext {
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
-	fn block_number_to_hash(&self, n: BlockNumber) -> Hash {
+	fn block_number_to_hash(&self, _n: BlockNumber) -> Option<Hash> {
 		unimplemented!()
 	}
 }
 impl Lookup for LocalContext {
 	type Source = Address;
 	type Target = AccountId;
-	fn lookup(&self, a: Address) -> AccountId {
+	fn lookup(&self, a: Address) -> ::std::result::Result<AccountId, &'static str> {
 		match a {
 			RawAddress::Id(id) => Ok(id),
-			RawAddress::Index(_) => Err("Index based addresses are not supported".into()),// TODO: Make index addressing optional in substrate
+			RawAddress::Index(_) => Err("Index based addresses are not supported".into()),
 		}
 	}
 }

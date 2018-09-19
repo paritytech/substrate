@@ -283,7 +283,7 @@ mod tests {
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize, Default)]
+	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
 	pub struct Runtime;
 	impl system::Trait for Runtime {
 		type Origin = Origin;
@@ -306,7 +306,7 @@ mod tests {
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, balances::Module<Runtime>, balances::Module<Runtime>, ()>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, balances::ChainContext<Runtime>, balances::Module<Runtime>, ()>;
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
