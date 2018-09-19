@@ -129,6 +129,7 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 	}
 
 	/// Returns number of transactions in the Future queue.
+	#[cfg(test)]
 	pub fn len(&self) -> usize {
 		self.waiting.len()
 	}

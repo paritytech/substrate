@@ -4,14 +4,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-log = "0.3.0"
 error-chain = "0.12"
-parking_lot = "0.4"
-node-api = { path = "../api" }
+log = "0.3.0"
 node-primitives = { path = "../primitives" }
-node-runtime = { path = "../runtime" }
-substrate-client = { path = "../../core/client" }
-parity-codec = { version = "1.1" }
-substrate-keyring = { path = "../../core/keyring" }
-substrate-primitives = { path = "../../core/primitives" }
 sr-primitives = { path = "../../core/sr-primitives" }

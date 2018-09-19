@@ -14,21 +14,18 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Generic Transaction Pool
+//!
+//! The pool is based on dependency graph between transactions
+//! and their priority.
+//! The pool is able to return an iterator that traverses transaction
+//! graph in the correct order taking into account priorities and dependencies.
 
-// #![warn(missing_docs)]
-// #![warn(unused_crates)]
+#![warn(missing_docs)]
+#![warn(unused_extern_crates)]
 
-extern crate substrate_client as client;
-extern crate parity_codec as codec;
-extern crate substrate_primitives;
 extern crate sr_primitives;
-extern crate node_runtime as runtime;
 extern crate node_primitives as primitives;
-extern crate node_api;
-extern crate parking_lot;
-
-#[cfg(test)]
-extern crate substrate_keyring;
 
 #[macro_use]
 extern crate error_chain;

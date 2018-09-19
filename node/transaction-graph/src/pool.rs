@@ -58,10 +58,15 @@ pub enum Imported<Hash> {
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug, PartialEq, Eq)]
 pub struct Transaction {
+	/// Raw extrinsic representing that transaction.
 	pub ex: UncheckedExtrinsic,
+	/// Transaction priority (higher = better)
 	pub priority: Priority,
+	/// How many blocks the transaction is valid for.
 	pub longevity: Longevity,
+	/// Tags required by the transaction.
 	pub requires: Vec<Tag>,
+	/// Tags that this transaction provides.
 	pub provides: Vec<Tag>,
 }
 
@@ -85,6 +90,7 @@ impl<Hash: hash::Hash + fmt::Debug + Eq> fmt::Debug for Pool<Hash> {
 }
 
 impl<Hash: hash::Hash + Ord + Eq + Clone> Pool<Hash> {
+	/// Creates new transaction pool with given hasher.
 	pub fn new<F>(hasher: F) -> Self
 	where
 		F: Fn(&UncheckedExtrinsic) -> Hash + 'static,
@@ -166,8 +172,9 @@ impl<Hash: hash::Hash + Ord + Eq + Clone> Pool<Hash> {
 		}
 	}
 
-	pub fn ready(&self) -> Vec<Arc<Transaction>> {
-		self.ready.get().collect()
+	/// Returns an iterator over ready transactions in the pool.
+	pub fn ready<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction>> + 'a {
+		self.ready.get()
 	}
 }
 
@@ -196,7 +203,7 @@ mod tests {
 		}).unwrap();
 
 		// then
-		assert_eq!(pool.ready().len(), 1);
+		assert_eq!(pool.ready().count(), 1);
 	}
 
 	#[test]
@@ -221,7 +228,7 @@ mod tests {
 		}).unwrap_err();
 
 		// then
-		assert_eq!(pool.ready().len(), 1);
+		assert_eq!(pool.ready().count(), 1);
 	}
 
 
@@ -238,7 +245,7 @@ mod tests {
 			requires: vec![vec![0]],
 			provides: vec![vec![1]],
 		}).unwrap();
-		assert_eq!(pool.ready().len(), 0);
+		assert_eq!(pool.ready().count(), 0);
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![2u8]),
 			priority: 5u64,
@@ -248,7 +255,7 @@ mod tests {
 		}).unwrap();
 
 		// then
-		assert_eq!(pool.ready().len(), 2);
+		assert_eq!(pool.ready().count(), 2);
 	}
 
 	#[test]
@@ -285,7 +292,7 @@ mod tests {
 			requires: vec![vec![3], vec![4]],
 			provides: vec![],
 		}).unwrap();
-		assert_eq!(pool.ready().len(), 0);
+		assert_eq!(pool.ready().count(), 0);
 
 		let res = pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![5u8]),
@@ -330,7 +337,7 @@ mod tests {
 			requires: vec![vec![1]],
 			provides: vec![vec![2]],
 		}).unwrap();
-		assert_eq!(pool.ready().len(), 0);
+		assert_eq!(pool.ready().count(), 0);
 
 		// when
 		pool.import(1, Transaction {
@@ -342,8 +349,10 @@ mod tests {
 		}).unwrap();
 
 		// then
-		let mut it = pool.ready().into_iter().map(|tx| tx.ex.0[0]);
-		assert_eq!(it.next(), None);
+		{
+			let mut it = pool.ready().into_iter().map(|tx| tx.ex.0[0]);
+			assert_eq!(it.next(), None);
+		}
 		// all transactions occupy the Future queue - it's fine
 		assert_eq!(pool.future.len(), 3);
 
