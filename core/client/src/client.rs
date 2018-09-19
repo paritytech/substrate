@@ -239,7 +239,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			Some(cached_value) => Ok(cached_value),
 			None => self.executor.call(id, "authorities",&[])
 				.and_then(|r| Vec::<AuthorityId>::decode(&mut &r.return_data[..])
-					.ok_or(error::ErrorKind::AuthLenInvalid.into()))
+					.ok_or(error::ErrorKind::InvalidAuthoritiesSet.into()))
 		}
 	}
 
