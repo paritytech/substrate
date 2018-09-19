@@ -74,7 +74,14 @@ impl<Hash: hash::Hash + Eq> Default for FutureTransactions<Hash> {
 }
 
 impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
+	/// Import transaction to future queue.
+	///
+	/// Only transactions that don't have all their tags satisfied should occupy
+	/// the future queue.
+	/// As soon as required tags are provided by some other transactions that are ready
+	/// we should remove the transactions from here and move them to the other queue.
 	pub fn import(&mut self, tx: WaitingTransaction<Hash>) {
+		assert!(!tx.is_ready(), "Transaction is ready.");
 		assert!(!self.waiting.contains_key(&tx.hash), "Transaction is already imported.");
 
 		// Add all tags that are missing
@@ -85,5 +92,39 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 
 		// Add the transaction to a by-hash waiting map
 		self.waiting.insert(tx.hash.clone(), tx);
+	}
+
+	/// Returns true if given hash is part of the queue.
+	pub fn contains(&self, hash: &Hash) -> bool {
+		self.waiting.contains_key(hash)
+	}
+
+	/// Satisfies provided tags in transactions that are waiting for them.
+	///
+	/// Returns (and removes) transactions that became ready after their last tag got
+	/// satisfied and now we can remove them from future and move to ready queue.
+	pub fn satisfy_tags(&mut self, tags: &[Tag]) -> Vec<WaitingTransaction<Hash>> {
+		let mut became_ready = vec![];
+
+		for tag in tags {
+			if let Some(hashes) = self.wanted_tags.remove(tag) {
+				for hash in hashes {
+					let is_ready = {
+						let mut tx = self.waiting.get_mut(&hash)
+							.expect("Every transaction in wanted_tags is present in waiting; qed");
+						tx.satisfy_tag(tag);
+						tx.is_ready()
+					};
+
+					if is_ready {
+						let tx = self.waiting.remove(&hash)
+							.expect("We just get_mut the entry; qed");
+						became_ready.push(tx);
+					}
+				}
+			}
+		}
+
+		became_ready
 	}
 }

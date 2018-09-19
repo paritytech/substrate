@@ -145,6 +145,11 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 			unlocks: vec![],
 		});
 	}
+
+	/// Returns true if given hash is part of the queue.
+	pub fn contains(&self, hash: &Hash) -> bool {
+		self.ready.contains_key(hash)
+	}
 }
 
 pub struct BestIterator<'a, Hash: 'a> {
@@ -157,10 +162,14 @@ impl<'a, Hash: 'a + hash:: Hash + Eq + Clone> BestIterator<'a, Hash> {
 	/// Depending on number of satisfied requirements insert given ref
 	/// either to awaiting set or to best set.
 	fn best_or_awaiting(&mut self, satisfied: usize, tx_ref: TransactionRef<Hash>) {
+		println!("[{}/{}] Considering: {:?}", satisfied, tx_ref.transaction.requires.len(), tx_ref.transaction);
 		if satisfied == tx_ref.transaction.requires.len() {
 			// If we have satisfied all deps insert to best
 			self.best.insert(tx_ref);
+
+			println!("Best: {:?}", self.best.iter().map(|tx| tx.transaction.clone()).collect::<Vec<_>>());
 		} else {
+			println!("     Still awaiting");
 			// otherwise we're still awaiting for some deps
 			self.awaiting.insert(tx_ref.hash.clone(), (satisfied, tx_ref));
 		}
@@ -171,7 +180,7 @@ impl<'a, Hash: 'a + hash::Hash + Eq + Clone> Iterator for BestIterator<'a, Hash>
 	type Item = Arc<Transaction>;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let best = self.best.iter().next()?.clone();
+		let best = self.best.iter().next_back()?.clone();
 		let best = self.best.take(&best)?;
 
 		let ready = self.all.get(&best.hash)?;
@@ -251,9 +260,9 @@ mod tests {
 		let mut it = ready.get().map(|tx| tx.ex.0[0]);
 
 		assert_eq!(it.next(), Some(1));
-		assert_eq!(it.next(), Some(4));
 		assert_eq!(it.next(), Some(2));
 		assert_eq!(it.next(), Some(3));
+		assert_eq!(it.next(), Some(4));
 		assert_eq!(it.next(), None);
 	}
 
