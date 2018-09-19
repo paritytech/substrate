@@ -52,34 +52,16 @@ error_chain! {
 			display("Blockchain: {}", e),
 		}
 
-		/// Invalid state data.
-		AuthLenEmpty {
-			description("authority count state error"),
-			display("Current state of blockchain has no authority count value"),
-		}
-
-		/// Invalid state data.
-		AuthEmpty(i: u32) {
-			description("authority value state error"),
-			display("Current state of blockchain has no authority value for index {}", i),
-		}
-
-		/// Invalid state data.
-		AuthLenInvalid {
-			description("authority count state error"),
-			display("Current state of blockchain has invalid authority count value"),
+		/// Invalid authorities set received from the runtime.
+		InvalidAuthoritiesSet {
+			description("authorities set is invalid"),
+			display("Current state of blockchain has invalid authorities set"),
 		}
 
 		/// Cound not get runtime version.
 		VersionInvalid {
 			description("Runtime version error"),
 			display("On-chain runtime does not specify version"),
-		}
-
-		/// Invalid state data.
-		AuthInvalid(i: u32) {
-			description("authority value state error"),
-			display("Current state of blockchain has invalid authority value for index {}", i),
 		}
 
 		/// Bad justification for header.
@@ -98,12 +80,6 @@ error_chain! {
 		InvalidHeaderProof {
 			description("invalid header proof"),
 			display("Remote node has responded with invalid header proof"),
-		}
-
-		/// Invalid remote execution proof.
-		InvalidExecutionProof {
-			description("invalid execution proof"),
-			display("Remote node has responded with invalid execution proof"),
 		}
 
 		/// Remote fetch has been cancelled.
