@@ -167,11 +167,11 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 
-	use runtime_io::with_externalities;
+	use runtime_io::{with_externalities, TestExternalities, RlpCodec};
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256};
-	use runtime_primitives::testing::{Digest, Header};
+	use runtime_primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -189,10 +189,11 @@ mod tests {
 		type AccountId = u64;
 		type Header = Header;
 		type Event = ();
+		type Log = DigestItem;
 	}
 	impl consensus::Trait for Test {
 		const NOTE_OFFLINE_POSITION: u32 = 1;
-		type Log = u64;
+		type Log = DigestItem;
 		type SessionKey = u64;
 		type OnOfflineValidator = ();
 	}
@@ -206,8 +207,8 @@ mod tests {
 	fn timestamp_works() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
-		let mut t = runtime_io::TestExternalities::from(t);
-		with_externalities(&mut t, || {
+
+		with_externalities(&mut TestExternalities::<_, RlpCodec>::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
@@ -219,8 +220,8 @@ mod tests {
 	fn double_timestamp_should_fail() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
-		let mut t = runtime_io::TestExternalities::from(t);
-		with_externalities(&mut t, || {
+
+		with_externalities(&mut TestExternalities::<_, RlpCodec>::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
@@ -232,8 +233,8 @@ mod tests {
 	fn block_period_is_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
-		let mut t = runtime_io::TestExternalities::from(t);
-		with_externalities(&mut t, || {
+
+		with_externalities(&mut TestExternalities::<_, RlpCodec>::new(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
 		});

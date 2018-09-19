@@ -46,25 +46,16 @@ use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member, DigestItem};
+use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member};
 use primitives::bft::MisbehaviorReport;
+use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
-
-#[cfg(any(feature = "std", test))]
-use substrate_primitives::Blake2Hasher;
-#[cfg(any(feature = "std", test))]
-use std::collections::HashMap;
-
-pub const AUTHORITY_AT: &'static [u8] = b":auth:";
-pub const AUTHORITY_COUNT: &'static [u8] = b":auth:len";
 
 struct AuthorityStorageVec<S: codec::Codec + Default>(rstd::marker::PhantomData<S>);
 impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
 	type Item = S;
-	const PREFIX: &'static [u8] = AUTHORITY_AT;
+	const PREFIX: &'static [u8] = well_known_keys::AUTHORITY_PREFIX;
 }
-
-pub const CODE: &'static [u8] = b":code";
 
 pub type KeyValue = (Vec<u8>, Vec<u8>);
 
@@ -88,22 +79,24 @@ pub enum RawLog<SessionKey> {
 	AuthoritiesChange(Vec<SessionKey>),
 }
 
-impl<SessionKey: Member> DigestItem for RawLog<SessionKey> {
-	type AuthorityId = SessionKey;
-
+impl<SessionKey: Member> RawLog<SessionKey> {
 	/// Try to cast the log entry as AuthoritiesChange log entry.
-	fn as_authorities_change(&self) -> Option<&[SessionKey]> {
+	pub fn as_authorities_change(&self) -> Option<&[SessionKey]> {
 		match *self {
-			RawLog::AuthoritiesChange(ref item) => Some(&item),
+			RawLog::AuthoritiesChange(ref item) => Some(item),
 		}
 	}
 }
 
 // Implementation for tests outside of this crate.
-impl<N> From<RawLog<N>> for u64 {
-	fn from(log: RawLog<N>) -> u64 {
+#[cfg(any(feature = "std", test))]
+impl<N> From<RawLog<N>> for primitives::testing::DigestItem {
+	fn from(log: RawLog<N>) -> primitives::testing::DigestItem {
 		match log {
-			RawLog::AuthoritiesChange(_) => 1,
+			RawLog::AuthoritiesChange(authorities) =>
+				primitives::generic::DigestItem::AuthoritiesChange
+					::<substrate_primitives::H256, u64>(authorities.into_iter()
+						.enumerate().map(|(i, _)| i as u64).collect()),
 		}
 	}
 }
@@ -145,7 +138,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the new code.
 	fn set_code(new: Vec<u8>) -> Result {
-		storage::unhashed::put_raw(CODE, &new);
+		storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		Ok(())
 	}
 
@@ -178,7 +171,7 @@ impl<T: Trait> Module<T> {
 		for validator_index in offline_val_indices.into_iter() {
 			T::OnOfflineValidator::on_offline_validator(validator_index as usize);
 		}
-		
+
 		Ok(())
 	}
 
@@ -252,14 +245,14 @@ impl<T: Trait> Default for GenesisConfig<T> {
 #[cfg(any(feature = "std", test))]
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 {
-	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
+	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
 		use codec::{Encode, KeyedVec};
 		let auth_count = self.authorities.len() as u32;
-		let mut r: runtime_io::TestExternalities<Blake2Hasher> = self.authorities.into_iter().enumerate().map(|(i, v)|
-			((i as u32).to_keyed_vec(AUTHORITY_AT), v.encode())
+		let mut r: primitives::StorageMap = self.authorities.into_iter().enumerate().map(|(i, v)|
+			((i as u32).to_keyed_vec(well_known_keys::AUTHORITY_PREFIX), v.encode())
 		).collect();
-		r.insert(AUTHORITY_COUNT.to_vec(), auth_count.encode());
-		r.insert(CODE.to_vec(), self.code);
+		r.insert(well_known_keys::AUTHORITY_COUNT.to_vec(), auth_count.encode());
+		r.insert(well_known_keys::CODE.to_vec(), self.code);
 		Ok(r.into())
 	}
 }

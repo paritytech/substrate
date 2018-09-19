@@ -22,6 +22,7 @@
 extern crate node_primitives as primitives;
 extern crate node_runtime as runtime;
 extern crate substrate_client as client;
+extern crate sr_primitives;
 extern crate substrate_primitives;
 
 pub use client::error::{Error, ErrorKind, Result};
@@ -31,8 +32,9 @@ use client::block_builder::BlockBuilder as ClientBlockBuilder;
 use client::{Client, CallExecutor};
 use primitives::{
 	AccountId, Block, BlockId, Hash, Index, InherentData,
-	SessionKey, Timestamp, UncheckedExtrinsic,
+	SessionKey, Timestamp, UncheckedExtrinsic
 };
+use sr_primitives::transaction_validity::TransactionValidity;
 use substrate_primitives::{Blake2Hasher, RlpCodec};
 
 /// Build new blocks.
@@ -63,11 +65,16 @@ pub trait Api {
 	/// Get the timestamp registered at a block.
 	fn timestamp(&self, at: &BlockId) -> Result<Timestamp>;
 
+	// TODO: remove in favour of validate_transaction
+
 	/// Get the nonce (né index) of an account at a block.
 	fn index(&self, at: &BlockId, account: AccountId) -> Result<Index>;
 
 	/// Get the account id of an address at a block.
 	fn lookup(&self, at: &BlockId, address: Address) -> Result<Option<AccountId>>;
+
+	/// Validate a transaction and determine its dependencies.
+	fn validate_transaction(&self, at: &BlockId, transaction: UncheckedExtrinsic) -> Result<TransactionValidity>;
 
 	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
 	/// and an error if we can't evaluate for some reason.
@@ -138,18 +145,24 @@ where
 		self.call_api_at(at, "lookup_address", &address)
 	}
 
-	fn build_block(&self, at: &BlockId, inherent_data: InherentData) -> Result<Self::BlockBuilder> {
-		let mut block_builder = self.new_block_at(at)?;
-		for inherent in self.inherent_extrinsics(at, inherent_data)? {
-			block_builder.push(inherent)?;
-		}
+	fn validate_transaction(&self, at: &BlockId, tx: UncheckedExtrinsic) -> Result<TransactionValidity> {
+		self.call_api_at(at, "validate_transaction", &tx)
+	}
 
+	fn build_block(&self, at: &BlockId, inherent_data: InherentData) -> Result<Self::BlockBuilder> {
+		let runtime_version = self.runtime_version_at(at)?;
+
+		let mut block_builder = self.new_block_at(at)?;
+		if runtime_version.has_api(*b"inherent", 1) {
+			for inherent in self.inherent_extrinsics(at, inherent_data)? {
+				block_builder.push(inherent)?;
+			}
+		}
 		Ok(block_builder)
 	}
 
 	fn inherent_extrinsics(&self, at: &BlockId, inherent_data: InherentData) -> Result<Vec<UncheckedExtrinsic>> {
-		let runtime_version = self.runtime_version_at(at)?;
-		self.call_api_at(at, "inherent_extrinsics", &(inherent_data, runtime_version.spec_version))
+		self.call_api_at(at, "inherent_extrinsics", &inherent_data)
 	}
 }
 

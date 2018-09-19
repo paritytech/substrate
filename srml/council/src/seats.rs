@@ -622,7 +622,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext_with_candidate_holes() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
 		let mut t = new_test_ext(false);
 		with_externalities(&mut t, || {
 			<Candidates<Test>>::put(vec![0, 0, 1]);

@@ -8,6 +8,7 @@ node-runtime = { path = "../runtime" }
 node-primitives = { path = "../primitives" }
 substrate-client = { path = "../../core/client" }
 substrate-primitives = { path = "../../core/primitives" }
+sr-primitives = { path = "../../core/sr-primitives" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../core/keyring" }

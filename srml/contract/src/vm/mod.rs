@@ -17,10 +17,10 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use exec::{CallReceipt, CreateReceipt};
+use exec::{CreateReceipt};
 use gas::{GasMeter, GasMeterResult};
 use rstd::prelude::*;
-use runtime_primitives::traits::{As, CheckedMul};
+use runtime_primitives::traits::As;
 use {sandbox, balances, system};
 use Trait;
 
@@ -48,7 +48,6 @@ pub trait Ext {
 	/// Sets the storage entry by the given key to the specified value.
 	fn set_storage(&mut self, key: &[u8], value: Option<Vec<u8>>);
 
-	// TODO: Return the address of the created contract.
 	/// Create a new account for a contract.
 	///
 	/// The newly created account will be associated with the `code`. `value` specifies the amount of value
@@ -68,7 +67,8 @@ pub trait Ext {
 		value: BalanceOf<Self::T>,
 		gas_meter: &mut GasMeter<Self::T>,
 		data: &[u8],
-	) -> Result<CallReceipt, ()>;
+		output_data: &mut Vec<u8>,
+	) -> Result<(), ()>;
 }
 
 /// Error that can occur while preparing or executing wasm smart-contract.
@@ -116,14 +116,15 @@ pub enum Error {
 /// In this runtime traps used not only for signaling about errors but also
 /// to just terminate quickly in some cases.
 enum SpecialTrap {
-	// TODO: Can we pass wrapped memory instance instead of copying?
 	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return(Vec<u8>),
+	Return,
 }
 
 pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	ext: &'a mut E,
 	input_data: &'data [u8],
+	output_data: &'data mut Vec<u8>,
+	scratch_buf: Vec<u8>,
 	config: &'a Config<E::T>,
 	memory: sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
@@ -133,68 +134,35 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 	fn memory(&self) -> &sandbox::Memory {
 		&self.memory
 	}
-	/// Save a data buffer as a result of the execution.
-	///
-	/// This function also charges gas for the returning.
-	///
-	/// Returns `Err` if there is not enough gas.
-	fn store_return_data(&mut self, data: Vec<u8>) -> Result<(), ()> {
-		let data_len = <<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(data.len() as u64);
-		let price = (self.config.return_data_per_byte_cost)
-			.checked_mul(&data_len)
-			.ok_or_else(|| ())?;
-
-		match self.gas_meter.charge(price) {
-			GasMeterResult::Proceed => {
-				self.special_trap = Some(SpecialTrap::Return(data));
-				Ok(())
-			}
-			GasMeterResult::OutOfGas => Err(()),
-		}
-	}
 }
 
 fn to_execution_result<E: Ext>(
 	runtime: Runtime<E>,
 	run_err: Option<sandbox::Error>,
-) -> Result<ExecutionResult, Error> {
+) -> Result<(), Error> {
 	// Check the exact type of the error. It could be plain trap or
 	// special runtime trap the we must recognize.
-	let return_data = match (run_err, runtime.special_trap) {
+	match (run_err, runtime.special_trap) {
 		// No traps were generated. Proceed normally.
-		(None, None) => Vec::new(),
+		(None, None) => Ok(()),
 		// Special case. The trap was the result of the execution `return` host function.
-		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return(rd))) => rd,
+		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return)) => Ok(()),
 		// Any other kind of a trap should result in a failure.
-		(Some(_), _) => return Err(Error::Invoke),
+		(Some(_), _) => Err(Error::Invoke),
 		// Any other case (such as special trap flag without actual trap) signifies
 		// a logic error.
 		_ => unreachable!(),
-	};
-
-	Ok(ExecutionResult { return_data })
-}
-
-/// The result of execution of a smart-contract.
-#[derive(PartialEq, Eq)]
-#[cfg_attr(feature = "std", derive(Debug))]
-pub struct ExecutionResult {
-	/// The result produced by the execution of the contract.
-	///
-	/// The contract can designate some buffer at the execution time via a special function.
-	/// If contract called this function with non-empty buffer it will be copied here.
-	///
-	/// Note that gas is already charged for returning the data.
-	pub return_data: Vec<u8>,
+	}
 }
 
 /// Execute the given code as a contract.
 pub fn execute<'a, E: Ext>(
 	code: &[u8],
 	input_data: &[u8],
+	output_data: &mut Vec<u8>,
 	ext: &'a mut E,
 	gas_meter: &mut GasMeter<E::T>,
-) -> Result<ExecutionResult, Error> {
+) -> Result<(), Error> {
 	let config = Config::default();
 	let env = env_def::init_env();
 
@@ -212,7 +180,9 @@ pub fn execute<'a, E: Ext>(
 	let mut runtime = Runtime {
 		ext,
 		input_data,
+		output_data,
 		config: &config,
+		scratch_buf: Vec::new(),
 		memory,
 		gas_meter,
 		special_trap: None,
@@ -323,7 +293,8 @@ mod tests {
 			value: u64,
 			gas_meter: &mut GasMeter<Test>,
 			data: &[u8],
-		) -> Result<CallReceipt, ()> {
+			_output_data: &mut Vec<u8>,
+		) -> Result<(), ()> {
 			self.transfers.push(TransferEntry {
 				to: *to,
 				value,
@@ -332,9 +303,7 @@ mod tests {
 			});
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
-			Ok(CallReceipt {
-				return_data: Vec::new(),
-			})
+			Ok(())
 		}
 	}
 
@@ -383,6 +352,7 @@ mod tests {
 		execute(
 			&code_transfer,
 			&[],
+			&mut Vec::new(),
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
@@ -444,6 +414,7 @@ mod tests {
 		execute(
 			&code_create,
 			&[],
+			&mut Vec::new(),
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
@@ -482,6 +453,7 @@ mod tests {
 			execute(
 				&code_mem,
 				&[],
+				&mut Vec::new(),
 				&mut mock_ext,
 				&mut GasMeter::with_limit(100_000, 1)
 			),
@@ -534,6 +506,7 @@ mod tests {
 		execute(
 			&code_transfer,
 			&[],
+			&mut Vec::new(),
 			&mut mock_ext,
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
@@ -548,6 +521,91 @@ mod tests {
 				],
 				gas_left: 228,
 			}]
+		);
+	}
+
+	const CODE_GET_STORAGE: &str = r#"
+(module
+	(import "env" "ext_get_storage" (func $ext_get_storage (param i32) (result i32)))
+	(import "env" "ext_scratch_size" (func $ext_scratch_size (result i32)))
+	(import "env" "ext_scratch_copy" (func $ext_scratch_copy (param i32 i32 i32)))
+	(import "env" "ext_return" (func $ext_return (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func $assert (param i32)
+		(block $ok
+			(br_if $ok
+				(get_local 0)
+			)
+			(unreachable)
+		)
+	)
+
+	(func (export "call")
+		(local $buf_size i32)
+
+
+		;; Load a storage value into the scratch buf.
+		(call $assert
+			(i32.eq
+				(call $ext_get_storage
+					(i32.const 4)		;; The pointer to the storage key to fetch
+				)
+
+				;; Return value 0 means that the value is found and there were
+				;; no errors.
+				(i32.const 0)
+			)
+		)
+
+		;; Find out the size of the scratch buffer
+		(set_local $buf_size
+			(call $ext_scratch_size)
+		)
+
+		;; Copy scratch buffer into this contract memory.
+		(call $ext_scratch_copy
+			(i32.const 36)		;; The pointer where to store the scratch buffer contents,
+								;; 36 = 4 + 32
+			(i32.const 0)		;; Offset from the start of the scratch buffer.
+			(get_local			;; Count of bytes to copy.
+				$buf_size
+			)
+		)
+
+		;; Return the contents of the buffer
+		(call $ext_return
+			(i32.const 36)
+			(get_local $buf_size)
+		)
+
+		;; env:ext_return doesn't return, so this is effectively unreachable.
+		(unreachable)
+	)
+
+	(data (i32.const 4) "\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11\11")
+)
+"#;
+
+	#[test]
+	fn get_storage_puts_data_into_scratch_buf() {
+		let code_get_storage = wabt::wat2wasm(CODE_GET_STORAGE).unwrap();
+
+		let mut mock_ext = MockExt::default();
+		mock_ext.storage.insert([0x11; 32].to_vec(), [0x22; 32].to_vec());
+
+		let mut return_buf = Vec::new();
+		execute(
+			&code_get_storage,
+			&[],
+			&mut return_buf,
+			&mut mock_ext,
+			&mut GasMeter::with_limit(50_000, 1),
+		).unwrap();
+
+		assert_eq!(
+			return_buf,
+			[0x22; 32].to_vec(),
 		);
 	}
 }

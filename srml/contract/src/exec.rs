@@ -24,13 +24,13 @@ use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
 use runtime_support::{StorageMap, StorageValue};
 use balances::{self, EnsureAccountLiquid};
 
+// TODO: Add logs
 pub struct CreateReceipt<T: Trait> {
 	pub address: T::AccountId,
 }
 
-pub struct CallReceipt {
-	pub return_data: Vec<u8>,
-}
+// TODO: Add logs.
+pub struct CallReceipt;
 
 pub struct ExecutionContext<'a, T: Trait + 'a> {
 	// typically should be dest
@@ -48,6 +48,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
+		output_data: &mut Vec<u8>,
 	) -> Result<CallReceipt, &'static str> {
 		if self.depth == <MaxDepth<T>>::get() as usize {
 			return Err("reached maximum depth, cannot make a call");
@@ -60,7 +61,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 
 		let dest_code = <CodeOf<T>>::get(&dest);
 
-		let (exec_result, change_set) = {
+		let change_set = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 
 			if value > T::Balance::zero() {
@@ -79,31 +80,26 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				self_account: dest.clone(),
 				depth: self.depth + 1,
 			};
-			let exec_result = if !dest_code.is_empty() {
+
+			if !dest_code.is_empty() {
 				vm::execute(
 					&dest_code,
 					data,
+					output_data,
 					&mut CallContext {
 						ctx: &mut nested,
 						_caller: caller,
 					},
 					gas_meter,
-				).map_err(|_| "vm execute returned error while call")?
-			} else {
-				// that was a plain transfer
-				vm::ExecutionResult {
-					return_data: Vec::new(),
-				}
-			};
+				).map_err(|_| "vm execute returned error while call")?;
+			}
 
-			(exec_result, nested.overlay.into_change_set())
+			nested.overlay.into_change_set()
 		};
 
 		self.overlay.commit(change_set);
 
-		Ok(CallReceipt {
-			return_data: exec_result.return_data,
-		})
+		Ok(CallReceipt)
 	}
 
 	pub fn create(
@@ -111,7 +107,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		caller: T::AccountId,
 		endowment: T::Balance,
 		gas_meter: &mut GasMeter<T>,
-		ctor: &[u8],
+		init_code: &[u8],
 		data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
 		if self.depth == <MaxDepth<T>>::get() as usize {
@@ -123,7 +119,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base create fee");
 		}
 
-		let dest = T::DetermineContractAddress::contract_address_for(ctor, data, &self.self_account);
+		let dest = T::DetermineContractAddress::contract_address_for(init_code, data, &self.self_account);
 		if <CodeOf<T>>::exists(&dest) {
 			// TODO: Is it enough?
 			return Err("contract already exists");
@@ -148,19 +144,20 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				self_account: dest.clone(),
 				depth: self.depth + 1,
 			};
-			let exec_result = {
-				vm::execute(
-					ctor,
-					data,
-					&mut CallContext {
-						ctx: &mut nested,
-						_caller: caller,
-					},
-					gas_meter,
-				).map_err(|_| "vm execute returned error while create")?
-			};
 
-			nested.overlay.set_code(&dest, exec_result.return_data);
+			let mut contract_code = Vec::new();
+			vm::execute(
+				init_code,
+				data,
+				&mut contract_code,
+				&mut CallContext {
+					ctx: &mut nested,
+					_caller: caller,
+				},
+				gas_meter,
+			).map_err(|_| "vm execute returned error while create")?;
+
+			nested.overlay.set_code(&dest, contract_code);
 			nested.overlay.into_change_set()
 		};
 
@@ -269,10 +266,12 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
 		value: T::Balance,
 		gas_meter: &mut GasMeter<T>,
 		data: &[u8],
-	) -> Result<CallReceipt, ()> {
+		output_data: &mut Vec<u8>,
+	) -> Result<(), ()> {
 		let caller = self.ctx.self_account.clone();
 		self.ctx
-			.call(caller, to.clone(), value, gas_meter, data)
+			.call(caller, to.clone(), value, gas_meter, data, output_data)
 			.map_err(|_| ())
+			.map(|_| ())
 	}
 }

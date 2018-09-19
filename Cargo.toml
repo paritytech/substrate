@@ -1,3 +1,24 @@
+[[bin]]
+name = "substrate"
+path = "node/src/main.rs"
+
+[package]
+name = "substrate"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+build = "build.rs"
+
+[dependencies]
+error-chain = "0.12"
+node-cli = { path = "node/cli" }
+futures = "0.1"
+ctrlc = { version = "3.0", features = ["termination"] }
+
+[build-dependencies]
+vergen = "0.1"
+
+
+
 [workspace]
 members = [
 	"core/bft",
@@ -38,7 +59,6 @@ members = [
 	"core/test-runtime",
 	"core/telemetry",
 	"core/keystore",
-	"node",
 	"node/cli",
 	"node/api",
 	"node/consensus",

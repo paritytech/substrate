@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 futures = "0.1.17"
-parity-codec = { version = "~1.0" }
+parity-codec = { version = "1.1" }
 substrate-primitives = { path = "../primitives" }
 sr-primitives = { path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }

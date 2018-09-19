@@ -18,13 +18,11 @@
 
 #![cfg(feature = "std")]
 
-use std::collections::HashMap;
 use rstd::prelude::*;
 use codec::Encode;
 use runtime_support::{StorageValue, StorageMap};
 use primitives::traits::{Zero, As};
-use substrate_primitives::Blake2Hasher;
-use {runtime_io, primitives};
+use primitives;
 use super::{Trait, ENUM_SET_SIZE, EnumSet, NextEnumSet, CreationFee, TransferFee,
 	ReclaimRebate, ExistentialDeposit, TransactionByteFee, TransactionBaseFee, TotalIssuance,
 	FreeBalance};
@@ -57,10 +55,10 @@ impl<T: Trait> Default for GenesisConfig<T> {
 }
 
 impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
-	fn build_storage(self) -> ::std::result::Result<HashMap<Vec<u8>, Vec<u8>>, String> {
+	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
 		let total_issuance: T::Balance = self.balances.iter().fold(Zero::zero(), |acc, &(_, n)| acc + n);
 
-		let mut r: runtime_io::TestExternalities<Blake2Hasher> = map![
+		let mut r: primitives::StorageMap = map![
 			Self::hash(<NextEnumSet<T>>::key()).to_vec() => T::AccountIndex::sa(self.balances.len() / ENUM_SET_SIZE).encode(),
 			Self::hash(<TransactionBaseFee<T>>::key()).to_vec() => self.transaction_base_fee.encode(),
 			Self::hash(<TransactionByteFee<T>>::key()).to_vec() => self.transaction_byte_fee.encode(),
@@ -79,6 +77,6 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 		for (who, value) in self.balances.into_iter() {
 			r.insert(Self::hash(&<FreeBalance<T>>::key_for(who)).to_vec(), value.encode());
 		}
-		Ok(r.into())
+		Ok(r)
 	}
 }
