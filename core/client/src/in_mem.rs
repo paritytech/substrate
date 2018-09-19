@@ -584,4 +584,11 @@ mod tests {
 
 		test_client::trait_tests::test_leaves_for_backend(backend);
 	}
+
+	#[test]
+	fn test_blockchain_query_by_number_gets_canonical() {
+		let backend = Arc::new(TestBackend::new());
+
+		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+	}
 }
