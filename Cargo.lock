@@ -2741,7 +2741,6 @@ dependencies = [
  "substrate-bft 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
- "substrate-metadata 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-telemetry 0.3.0",

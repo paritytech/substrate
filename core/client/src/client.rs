@@ -23,7 +23,6 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
-use substrate_metadata::RuntimeMetadataVersioned;
 use primitives::{Blake2Hasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -255,11 +254,8 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Returns the runtime metadata.
-	pub fn metadata(&self, id: &BlockId<Block>) -> error::Result<RuntimeMetadataVersioned> {
-		self.executor
-			.call(id, "metadata",&[])
-			.and_then(|r| RuntimeMetadataVersioned::decode(&mut &r.return_data[..])
-					  .ok_or("Metadata decoding failed".into()))
+	pub fn metadata(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
+		self.executor.call(id, "metadata",&[]).map(|v| v.return_data)
 	}
 
 	/// Reads storage value at a given block + key, returning read proof.
@@ -667,7 +663,6 @@ mod tests {
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::Transfer;
-	use substrate_metadata;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
@@ -758,40 +753,5 @@ mod tests {
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
 		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
-	}
-
-	#[test]
-	fn metadata() {
-		let client = test_client::new();
-
-		let mut builder = client.new_block().unwrap();
-
-		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
-			amount: 42,
-			nonce: 0,
-		}).unwrap();
-
-		assert!(builder.push_transfer(Transfer {
-			from: Keyring::Eve.to_raw_public().into(),
-			to: Keyring::Alice.to_raw_public().into(),
-			amount: 42,
-			nonce: 0,
-		}).is_err());
-
-		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-
-		let expected = substrate_metadata::RuntimeMetadataVersioned::Version1(
-			substrate_metadata::RuntimeMetadata {
-				outer_event: substrate_metadata::OuterEventMetadata {
-					name: substrate_metadata::DecodeDifferent::Encode("test"),
-					events: substrate_metadata::DecodeDifferent::Encode(&[]),
-				},
-				modules: substrate_metadata::DecodeDifferent::Encode(&[]),
-			}
-		);
-
-		assert_eq!(expected, client.metadata(&BlockId::Number(1)).unwrap());
 	}
 }

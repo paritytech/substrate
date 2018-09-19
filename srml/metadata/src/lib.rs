@@ -277,17 +277,3 @@ pub struct RuntimeMetadata {
 	pub outer_event: OuterEventMetadata,
 	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
 }
-
-/// To support multiple versions of runtime metadata, we use a enum that holds all these versions.
-#[derive(Eq, Encode, PartialEq)]
-#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
-pub enum RuntimeMetadataVersioned {
-	Version1(RuntimeMetadata),
-}
-
-// The `From` trait should always only support the latest runtime version!
-impl From<RuntimeMetadata> for RuntimeMetadataVersioned {
-	fn from(meta: RuntimeMetadata) -> RuntimeMetadataVersioned {
-		RuntimeMetadataVersioned::Version1(meta)
-	}
-}
