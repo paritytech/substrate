@@ -693,7 +693,7 @@ mod tests {
 
 	#[test]
 	fn unlinkable_module() {
-		let mut ext = TestExternalities::default();
+		let mut ext = TestExternalities::<Blake2Hasher, RlpCodec>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		let code = wabt::wat2wasm(r#"
@@ -713,7 +713,7 @@ mod tests {
 
 	#[test]
 	fn corrupted_module() {
-		let mut ext = TestExternalities::default();
+		let mut ext = TestExternalities::<Blake2Hasher, RlpCodec>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		// Corrupted wasm file
@@ -727,7 +727,7 @@ mod tests {
 
 	#[test]
 	fn start_fn_ok() {
-		let mut ext = TestExternalities::default();
+		let mut ext = TestExternalities::<Blake2Hasher, RlpCodec>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		let code = wabt::wat2wasm(r#"
@@ -750,7 +750,7 @@ mod tests {
 
 	#[test]
 	fn start_fn_traps() {
-		let mut ext = TestExternalities::default();
+		let mut ext = TestExternalities::<Blake2Hasher, RlpCodec>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		let code = wabt::wat2wasm(r#"
