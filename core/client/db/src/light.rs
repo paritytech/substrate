@@ -192,7 +192,7 @@ impl<Block: BlockT> LightStorage<Block> where Block::Hash: From<H256> {
 		// TODO: ensure this doesn't conflict with old finalized block.
 		let meta = self.meta.read();
 		let f_num = header.number().clone();
-		let number_u64: u64 = f_num.as_().into();
+		let number_u64: u64 = f_num.as_();
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, hash.as_ref());
 
 		let (last_finalized_hash, last_finalized_number)
@@ -240,7 +240,7 @@ impl<Block: BlockT> LightStorage<Block> where Block::Hash: From<H256> {
 		};
 
 		// attempt to build CHT for all newly finalized blocks.
-		let last_finalized_u64 = last_finalized_number.as_().into();
+		let last_finalized_u64 = last_finalized_number.as_();
 		for num in (last_finalized_u64..number_u64).map(|x| x + 1) {
 			let num = As::sa(num);
 			if num == f_num {

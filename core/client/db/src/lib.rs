@@ -421,7 +421,6 @@ impl<Block: BlockT> Backend<Block> {
 		// TODO: ensure this doesn't conflict with old finalized block.
 		let meta = self.blockchain.meta.read();
 		let f_num = f_header.number().clone();
-		let number_u64: u64 = f_num.as_().into();
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
 
 		let (last_finalized_hash, last_finalized_number)
@@ -580,7 +579,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 					changeset.deleted.push(key.0.into());
 				}
 			}
-			let number_u64 = number.as_().into();
+			let number_u64 = number.as_();
 			let commit = self.storage.state_db.insert_block(&hash, number_u64, &pending_block.header.parent_hash(), changeset);
 			apply_state_commit(&mut transaction, commit);
 			apply_changes_trie_commit(&mut transaction, operation.changes_trie_updates);
