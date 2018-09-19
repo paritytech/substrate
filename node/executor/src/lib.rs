@@ -309,7 +309,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("549f74db44c4dc35652a1f3c53a56e21d4d4634b39161a95526019519f620012").into(),
+			hex!("60efe1a65e7c79041b02e56ec122d6eaedfa476e0a9f6f1f68eb0c8f402c4514").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
