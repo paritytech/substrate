@@ -763,20 +763,34 @@ impl<B, E, Block> Client<B, E, Block> where
 			}
 		}
 
-		let info = self.backend.blockchain().info()?;
+		let (leaves, best_already_checked) = {
+			// ensure no blocks are imported during this code block.
+			// an import could trigger a reorg which could change the canonical chain.
+			// we depend on the canonical chain staying the same during this code block.
+			let _import_lock = self.import_lock.lock();
 
-		let is_target_in_best_chain = self.backend.blockchain().hash(*target_header.number())?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))? == target_hash;
+			let info = self.backend.blockchain().info()?;
 
-		if is_target_in_best_chain {
-			if let Some(max_number) = maybe_max_number {
-				return Ok(Some(self.backend.blockchain().hash(max_number)?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", max_number)))?));
-			} else {
-				return Ok(Some(info.best_hash));
+			let is_target_in_best_chain = self.backend.blockchain().hash(*target_header.number())?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))? == target_hash;
+
+			if is_target_in_best_chain {
+				if let Some(max_number) = maybe_max_number {
+					// something has to guarantee that max_number is in chain
+					return Ok(Some(self.backend.blockchain().hash(max_number)?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", max_number)))?));
+				} else {
+					return Ok(Some(info.best_hash));
+				}
 			}
-		}
+			(self.backend.blockchain().leaves()?, info.best_hash)
+		};
 
 		// for each chain. longest chain first. shortest last
-		for leaf_hash in self.backend.blockchain().leaves()? {
+		for leaf_hash in leaves {
+			// ignore canonical chain which we already checked above
+			if leaf_hash == best_already_checked {
+				continue;
+			}
+
 			// start at the leaf
 			let mut current_hash = leaf_hash;
 
