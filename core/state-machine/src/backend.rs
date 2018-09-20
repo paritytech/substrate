@@ -117,14 +117,6 @@ impl<H, C> PartialEq for InMemory<H, C> {
 }
 
 impl<H: Hasher, C: NodeCodec<H>> InMemory<H, C> where H::Out: HeapSizeOf {
-	/// Try convert into trie backend.
-	pub fn try_into_trie_backend(self) -> Option<TrieBackend<MemoryDB<H>, H, C>> {
-		let mut mdb = MemoryDB::default();
-		let root = insert_into_memory_db::<H, C, _>(&mut mdb, self.inner.into_iter())?;
-
-		Some(TrieBackend::new(mdb, root))
-	}
-
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H, C>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
@@ -189,7 +181,7 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> where H::Out: 
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
 		let mut mdb = MemoryDB::new();
-		let root = insert_into_memory_db::<H, C, _>(&mut mdb, self.inner.clone().into_iter())?;
+		let root = insert_into_memory_db::<H, C, _>(&mut mdb, self.inner.into_iter())?;
 		Some(TrieBackend::new(mdb, root))
 	}
 }
