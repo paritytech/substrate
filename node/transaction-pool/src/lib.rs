@@ -45,7 +45,7 @@ use codec::{Decode, Encode};
 use transaction_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
 use node_api::Api;
 use primitives::{AccountId, BlockId, Block, Hash, Index, BlockNumber};
-use runtime::{Address, UncheckedExtrinsic, RawAddress};
+use runtime::{Address, UncheckedExtrinsic};
 use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup, GetHeight, BlockNumberToHash};
 
 pub use transaction_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
@@ -121,29 +121,26 @@ impl<A> ChainApi<A> where
 
 /// "Chain" context (used for checking transactions) which uses data local to our node/transaction pool.
 ///
-/// This is due for removal along with #721
-pub struct LocalContext;
-impl GetHeight for LocalContext {
+/// This is due for removal when #721 lands
+pub struct LocalContext<'a, A: 'a>(&'a Arc<A>);
+impl<'a, A: 'a + Api> GetHeight for LocalContext<'a, A> {
 	type BlockNumber = BlockNumber;
 	fn get_height(&self) -> BlockNumber {
-		unimplemented!()
+		self.0.get_height()
 	}
 }
-impl BlockNumberToHash for LocalContext {
+impl<'a, A: 'a + Api> BlockNumberToHash for LocalContext<'a, A> {
 	type BlockNumber = BlockNumber;
 	type Hash = Hash;
-	fn block_number_to_hash(&self, _n: BlockNumber) -> Option<Hash> {
-		unimplemented!()
+	fn block_number_to_hash(&self, n: BlockNumber) -> Option<Hash> {
+		self.0.block_number_to_hash(n)
 	}
 }
-impl Lookup for LocalContext {
+impl<'a, A: 'a + Api> Lookup for LocalContext<'a, A> {
 	type Source = Address;
 	type Target = AccountId;
 	fn lookup(&self, a: Address) -> ::std::result::Result<AccountId, &'static str> {
-		match a {
-			RawAddress::Id(id) => Ok(id),
-			RawAddress::Index(_) => Err("Index based addresses are not supported".into()),
-		}
+		self.0.lookup(&BlockId::number(self.get_height()), a).unwrap_or(None).ok_or("error with lookup")
 	}
 }
 
@@ -172,7 +169,7 @@ impl<A> transaction_pool::ChainApi for ChainApi<A> where
 		}
 
 		debug!(target: "transaction-pool", "Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
-		let checked = uxt.clone().check(&LocalContext)?;
+		let checked = uxt.clone().check(&LocalContext(&self.api))?;
 		let (sender, index) = checked.signed.expect("function previously bailed unless uxt.is_signed(); qed");
 
 
