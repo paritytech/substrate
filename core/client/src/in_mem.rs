@@ -86,6 +86,9 @@ impl<B: BlockT> StoredBlock<B> {
 	}
 }
 
+/// helper wrapper type to keep a list of block hashes ordered
+/// by `number` descending in a `BTreeSet` which allows faster and simpler
+/// insertion and removal than keeping them in a list.
 #[derive(Clone)]
 struct LeafEntry<Block: BlockT> {
 	number: NumberFor<Block>,
