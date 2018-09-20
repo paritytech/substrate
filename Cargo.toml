@@ -26,7 +26,7 @@ members = [
 	"core/client",
 	"core/client/db",
 	"core/executor",
-	"core/extrinsic-pool",
+	"core/transaction-pool",
 	"core/keyring",
 	"core/misbehavior-check",
 	"core/network",

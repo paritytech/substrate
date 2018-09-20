@@ -17,7 +17,7 @@
 //! Council system: Handles the voting in and maintenance of council members.
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, As, Lookup, OnFinalise};
+use primitives::traits::{Zero, One, As, OnFinalise};
 use runtime_io::print;
 use srml_support::{StorageValue, StorageMap, dispatch::Result};
 use democracy;

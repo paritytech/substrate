@@ -1610,9 +1610,9 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
- "substrate-extrinsic-pool 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-transaction-pool 0.1.0",
 ]
 
 [[package]]
@@ -2796,23 +2796,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-extrinsic-pool"
-version = "0.1.0"
-dependencies = [
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-primitives 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-test-client 0.1.0",
- "transaction-pool 1.13.2 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
 name = "substrate-keyring"
 version = "0.1.0"
 dependencies = [
@@ -2956,10 +2939,10 @@ dependencies = [
  "sr-version 0.1.0",
  "substrate-client 0.1.0",
  "substrate-executor 0.1.0",
- "substrate-extrinsic-pool 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-test-client 0.1.0",
+ "substrate-transaction-pool 0.1.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3005,13 +2988,13 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-client-db 0.1.0",
  "substrate-executor 0.1.0",
- "substrate-extrinsic-pool 0.1.0",
  "substrate-keystore 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-rpc 0.1.0",
  "substrate-rpc-servers 0.1.0",
  "substrate-telemetry 0.3.0",
+ "substrate-transaction-pool 0.1.0",
  "target_info 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3094,6 +3077,23 @@ dependencies = [
  "srml-support 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+]
+
+[[package]]
+name = "substrate-transaction-pool"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-test-client 0.1.0",
+ "transaction-pool 1.13.2 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

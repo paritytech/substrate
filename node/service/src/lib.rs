@@ -50,7 +50,7 @@ use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
 use primitives::{Blake2Hasher, RlpCodec};
 
-pub use service::{Roles, PruningMode, ExtrinsicPoolOptions,
+pub use service::{Roles, PruningMode, TransactionPoolOptions,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 pub use client::ExecutionStrategy;
 
@@ -97,20 +97,20 @@ impl service::ServiceFactory for Factory {
 	type ExtrinsicHash = Hash;
 	type NetworkProtocol = DemoProtocol;
 	type RuntimeDispatch = node_executor::Executor;
-	type FullExtrinsicPoolApi = transaction_pool::ChainApi<service::FullClient<Self>>;
-	type LightExtrinsicPoolApi = transaction_pool::ChainApi<service::LightClient<Self>>;
+	type FullTransactionPoolApi = transaction_pool::ChainApi<service::FullClient<Self>>;
+	type LightTransactionPoolApi = transaction_pool::ChainApi<service::LightClient<Self>>;
 	type Genesis = GenesisConfig;
 	type Configuration = CustomConfiguration;
 
 	const NETWORK_PROTOCOL_ID: network::ProtocolId = ::node_network::PROTOCOL_ID;
 
-	fn build_full_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::FullClient<Self>>)
+	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<service::FullClient<Self>>)
 		-> Result<TransactionPool<service::FullClient<Self>>, Error>
 	{
 		Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
 	}
 
-	fn build_light_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<service::LightClient<Self>>)
+	fn build_light_transaction_pool(config: TransactionPoolOptions, client: Arc<service::LightClient<Self>>)
 		-> Result<TransactionPool<service::LightClient<Self>>, Error>
 	{
 		Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
@@ -180,7 +180,7 @@ pub fn new_full(config: Configuration, executor: TaskExecutor)
 			client.clone(),
 			client.clone(),
 			consensus_net,
-			service.extrinsic_pool(),
+			service.transaction_pool(),
 			executor,
 			key,
 		))

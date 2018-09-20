@@ -54,7 +54,7 @@ mod tests {
 		ed25519::{Public, Pair}};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
-	use runtime_primitives::{generic, ApplyOutcome, ApplyError, ApplyResult};
+	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult};
 	use {balances, staking, session, system, consensus, timestamp, treasury};
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -63,6 +63,7 @@ mod tests {
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
+	const GENESIS_HASH: [u8; 32] = [69u8; 32];
 
 	// TODO: move into own crate.
 	macro_rules! map {
@@ -81,19 +82,17 @@ mod tests {
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 		match xt.signed {
-			Some(signed) => {
-				let payload = (xt.index, xt.function);
+			Some((signed, index)) => {
+				let payload = (index, xt.function, GENESIS_HASH);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
 				let signature = pair.sign(&payload.encode()).into();
 				UncheckedExtrinsic {
-					signature: Some((balances::address::Address::Id(signed), signature)),
-					index: payload.0,
+					signature: Some((balances::address::Address::Id(signed), signature, payload.0, Era::mortal(256, 0))),
 					function: payload.1,
 				}
 			}
 			None => UncheckedExtrinsic {
 				signature: None,
-				index: xt.index,
 				function: xt.function,
 			},
 		}
@@ -101,8 +100,7 @@ mod tests {
 
 	fn xt() -> UncheckedExtrinsic {
 		sign(CheckedExtrinsic {
-			signed: Some(alice()),
-			index: 0,
+			signed: Some((alice(), 0)),
 			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69)),
 		})
 	}
@@ -283,7 +281,7 @@ mod tests {
 	fn block1(support_changes_trie: bool) -> (Vec<u8>, Hash) {
 		construct_block(
 			1,
-			[69u8; 32].into(),
+			GENESIS_HASH.into(),
 			if support_changes_trie {
 				hex!("1755be7303767b4d3855694b4f0ebd9d64b7011124d0ec1ad3e17c2a0d65e245").into()
 			} else {
@@ -297,12 +295,10 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					index: 0,
 					function: Call::Timestamp(timestamp::Call::set(42)),
 				},
 				CheckedExtrinsic {
-					signed: Some(alice()),
-					index: 0,
+					signed: Some((alice(), 0)),
 					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
 				},
 			]
@@ -313,22 +309,19 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("29fa1d0aa83662c571315af54b106c73823a31f759793803bf8929960b67b138").into(),
+			hex!("60efe1a65e7c79041b02e56ec122d6eaedfa476e0a9f6f1f68eb0c8f402c4514").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					index: 0,
 					function: Call::Timestamp(timestamp::Call::set(52)),
 				},
 				CheckedExtrinsic {
-					signed: Some(bob()),
-					index: 0,
+					signed: Some((bob(), 0)),
 					function: Call::Balances(balances::Call::transfer(alice().into(), 5)),
 				},
 				CheckedExtrinsic {
-					signed: Some(alice()),
-					index: 1,
+					signed: Some((alice(), 1)),
 					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
 				}
 			]
@@ -338,18 +331,16 @@ mod tests {
 	fn block1big() -> (Vec<u8>, Hash) {
 		construct_block(
 			1,
-			[69u8; 32].into(),
+			GENESIS_HASH.into(),
 			hex!("fe0e07c7b054fe186387461d455d536860e9c71d6979fd9dbf755e96ce070d04").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					index: 0,
 					function: Call::Timestamp(timestamp::Call::set(42)),
 				},
 				CheckedExtrinsic {
-					signed: Some(alice()),
-					index: 0,
+					signed: Some((alice(), 0)),
 					function: Call::Consensus(consensus::Call::remark(vec![0; 120000])),
 				}
 			]

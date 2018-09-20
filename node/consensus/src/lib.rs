@@ -48,6 +48,7 @@ use std::time::{self, Duration, Instant};
 use codec::{Decode, Encode};
 use node_api::Api;
 use node_primitives::{AccountId, Hash, Block, BlockId, BlockNumber, Header, Timestamp, SessionKey};
+use runtime_primitives::generic::Era;
 use primitives::{AuthorityId, ed25519};
 use transaction_pool::TransactionPool;
 use tokio::runtime::TaskExecutor;
@@ -400,14 +401,13 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1, s1.signature), (h2, s2.signature)),
 				}
 			};
-			let payload = (next_index, Call::Consensus(ConsensusCall::report_misbehavior(report)));
+			let payload = (next_index, Call::Consensus(ConsensusCall::report_misbehavior(report)), self.client.genesis_hash());
 			let signature = self.local_key.sign(&payload.encode()).into();
 			next_index += 1;
 
 			let local_id = self.local_key.public().0.into();
 			let extrinsic = UncheckedExtrinsic {
-				signature: Some((node_runtime::RawAddress::Id(local_id), signature)),
-				index: payload.0,
+				signature: Some((node_runtime::RawAddress::Id(local_id), signature, payload.0, Era::immortal())),
 				function: payload.1,
 			};
 			let uxt: GenericExtrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");

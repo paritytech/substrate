@@ -31,10 +31,9 @@ use client::backend::Backend;
 use client::block_builder::BlockBuilder as ClientBlockBuilder;
 use client::{Client, CallExecutor};
 use primitives::{
-	AccountId, Block, BlockId, Hash, Index, InherentData,
-	SessionKey, Timestamp, UncheckedExtrinsic
+	AccountId, Block, BlockId, BlockNumber, Hash, Index, InherentData, SessionKey, Timestamp, UncheckedExtrinsic
 };
-use sr_primitives::transaction_validity::TransactionValidity;
+use sr_primitives::{transaction_validity::TransactionValidity, traits::{GetHeight, BlockNumberToHash}};
 use substrate_primitives::{Blake2Hasher, RlpCodec};
 
 /// Build new blocks.
@@ -49,7 +48,7 @@ pub trait BlockBuilder {
 /// Trait encapsulating the node API.
 ///
 /// All calls should fail when the exact runtime is unknown.
-pub trait Api {
+pub trait Api: GetHeight<BlockNumber=BlockNumber> + BlockNumberToHash<BlockNumber=BlockNumber,Hash=Hash> {
 	/// The block builder for this API type.
 	type BlockBuilder: BlockBuilder;
 
@@ -91,7 +90,7 @@ pub trait Api {
 impl<B, E> BlockBuilder for ClientBlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>
 where
 	B: Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec>+ Clone,
+	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
 {
 	fn push_extrinsic(&mut self, extrinsic: UncheckedExtrinsic) -> Result<()> {
 		self.push(extrinsic).map_err(Into::into)

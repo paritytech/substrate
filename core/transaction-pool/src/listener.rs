@@ -76,15 +76,15 @@ impl<H, T> txpool::Listener<T> for Listener<H> where
 	}
 
 	fn rejected(&mut self, tx: &Arc<T>, reason: &txpool::ErrorKind) {
-		warn!(target: "extrinsic-pool", "Extrinsic rejected ({}): {:?}", reason, tx);
+		warn!(target: "transaction-pool", "Extrinsic rejected ({}): {:?}", reason, tx);
 	}
 
 	fn invalid(&mut self, tx: &Arc<T>) {
-		warn!(target: "extrinsic-pool", "Extrinsic invalid: {:?}", tx);
+		warn!(target: "transaction-pool", "Extrinsic invalid: {:?}", tx);
 	}
 
 	fn canceled(&mut self, tx: &Arc<T>) {
-		debug!(target: "extrinsic-pool", "Extrinsic canceled: {:?}", tx);
+		debug!(target: "transaction-pool", "Extrinsic canceled: {:?}", tx);
 	}
 
 	fn culled(&mut self, tx: &Arc<T>) {
