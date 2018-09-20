@@ -19,7 +19,7 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::traits::{Identity};
+use primitives::{Perbill, traits::Identity};
 use primitives::testing::{Digest, DigestItem, Header};
 use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 use runtime_io;
@@ -117,8 +117,8 @@ pub fn new_test_ext(
 		validator_count: 2,
 		minimum_validator_count: 0,
 		bonding_duration: sessions_per_era * session_length * 3,
-		session_reward: Perbill::from_millionths(1000000 * 20 / reward),
-		offline_slash: if monied { Perbill::from_millionths(1000000 * 20 / balance_factor) } else { Perbill::zero() },
+		session_reward: Perbill::from_millionths((1000000 * 20 / reward) as u32),
+		offline_slash: if monied { Perbill::from_millionths((1000000 * 20 / balance_factor) as u32) } else { Perbill::zero() },
 		offline_slash_grace: 0,
 	}.build_storage().unwrap());
 	t.extend(timestamp::GenesisConfig::<Test>{

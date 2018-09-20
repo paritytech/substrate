@@ -54,7 +54,7 @@ mod tests {
 		ed25519::{Public, Pair}};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
-	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult};
+	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
 	use {balances, staking, session, system, consensus, timestamp, treasury};
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -283,9 +283,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("1755be7303767b4d3855694b4f0ebd9d64b7011124d0ec1ad3e17c2a0d65e245").into()
+				hex!("2825ebe76b743b4ace9ca42fa621948cf2df6463be7cdae0f82e518070935ee1").into()
 			} else {
-				hex!("1f058f699ad3187bcf7e9ed8e44464d7a5added0cd912d2679b9dab2e7a04053").into()
+				hex!("e8388bd3315dbe7d81010eb6b957768b831c116cdad1e11cd7474d9a78ec1df5").into()
 			},
 			if support_changes_trie {
 				Some(hex!("d7ff76d7fbb9b613e8d140da6f1d561b4928785d4e4818ed959bd1bd35abc7e8").into())
@@ -332,7 +332,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("fe0e07c7b054fe186387461d455d536860e9c71d6979fd9dbf755e96ce070d04").into(),
+			hex!("e01174bbf3f1773adfafa4fc778273e2bab2a1409eb5fec9e4b9bfa4c1d82a9e").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
