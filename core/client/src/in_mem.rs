@@ -96,19 +96,21 @@ struct LeafEntry<Block: BlockT> {
 }
 
 impl<Block: BlockT> Ord for LeafEntry<Block> {
-		fn cmp(&self, other: &LeafEntry<Block>) -> Ordering {
+	fn cmp(&self, other: &LeafEntry<Block>) -> Ordering {
+		// descending order
 		other.number.cmp(&self.number)
 	}
 }
 
 impl<Block: BlockT> PartialOrd for LeafEntry<Block> {
-		fn partial_cmp(&self, other: &LeafEntry<Block>) -> Option<Ordering> {
+	fn partial_cmp(&self, other: &LeafEntry<Block>) -> Option<Ordering> {
+		// descending order
 		Some(other.number.cmp(&self.number))
 	}
 }
 
 impl<Block: BlockT> PartialEq for LeafEntry<Block> {
-		fn eq(&self, other: &LeafEntry<Block>) -> bool {
+	fn eq(&self, other: &LeafEntry<Block>) -> bool {
 		self.number == other.number
 	}
 }
