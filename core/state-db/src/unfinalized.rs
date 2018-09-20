@@ -115,6 +115,7 @@ impl<BlockHash: Hash, Key: Hash> UnfinalizedOverlay<BlockHash, Key> {
 		let mut commit = CommitSet::default();
 		if self.levels.is_empty() && self.last_finalized.is_none() {
 			// assume that parent was finalized
+			assert!(number >= 1);
 			let last_finalized = (parent_hash.clone(), number - 1);
 			commit.meta.inserted.push((to_meta_key(LAST_FINALIZED, &()), last_finalized.encode()));
 			self.last_finalized = Some(last_finalized);
