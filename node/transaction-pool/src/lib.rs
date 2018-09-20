@@ -16,7 +16,7 @@
 
 extern crate substrate_client as client;
 extern crate parity_codec as codec;
-extern crate substrate_extrinsic_pool as extrinsic_pool;
+extern crate substrate_transaction_pool as transaction_pool;
 extern crate substrate_primitives;
 extern crate sr_primitives;
 extern crate node_runtime as runtime;
@@ -42,13 +42,13 @@ use std::{
 };
 
 use codec::{Decode, Encode};
-use extrinsic_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
+use transaction_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
 use node_api::Api;
 use primitives::{AccountId, BlockId, Block, Hash, Index, BlockNumber};
 use runtime::{Address, UncheckedExtrinsic, RawAddress};
 use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup, GetHeight, BlockNumberToHash};
 
-pub use extrinsic_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
+pub use transaction_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
 
 /// Maximal size of a single encoded extrinsic.
@@ -58,7 +58,7 @@ const MAX_TRANSACTION_SIZE: usize = 4 * 1024 * 1024;
 pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable<LocalContext>>::Checked;
 
 /// Type alias for the transaction pool.
-pub type TransactionPool<A> = extrinsic_pool::Pool<ChainApi<A>>;
+pub type TransactionPool<A> = transaction_pool::Pool<ChainApi<A>>;
 
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Clone, Debug)]
@@ -89,7 +89,7 @@ impl VerifiedTransaction {
 	}
 }
 
-impl extrinsic_pool::VerifiedTransaction for VerifiedTransaction {
+impl transaction_pool::VerifiedTransaction for VerifiedTransaction {
 	type Hash = Hash;
 	type Sender = AccountId;
 
@@ -150,7 +150,7 @@ impl Lookup for LocalContext {
 	}
 }
 
-impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
+impl<A> transaction_pool::ChainApi for ChainApi<A> where
 	A: Api + Send + Sync,
 {
 	type Block = Block;
@@ -239,7 +239,7 @@ impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
 	}
 
 	fn update_scores(
-		xts: &[extrinsic_pool::Transaction<VerifiedFor<Self>>],
+		xts: &[transaction_pool::Transaction<VerifiedFor<Self>>],
 		scores: &mut [Self::Score],
 		_change: Change<()>
 	) {

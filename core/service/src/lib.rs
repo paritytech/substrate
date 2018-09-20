@@ -33,7 +33,7 @@ extern crate substrate_executor;
 extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 extern crate parity_codec as codec;
-extern crate substrate_extrinsic_pool as extrinsic_pool;
+extern crate substrate_transaction_pool as transaction_pool;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate target_info;
@@ -73,7 +73,7 @@ use codec::{Encode, Decode};
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::ChainSpec;
-pub use extrinsic_pool::{Pool as ExtrinsicPool, Options as ExtrinsicPoolOptions, ChainApi, VerifiedTransaction, IntoPoolError};
+pub use transaction_pool::{Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, VerifiedTransaction, IntoPoolError};
 pub use client::ExecutionStrategy;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
@@ -88,7 +88,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
-	extrinsic_pool: Arc<ExtrinsicPool<Components::ExtrinsicPoolApi>>,
+	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
@@ -150,12 +150,12 @@ impl<Components> Service<Components>
 		telemetry!("node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
-		let extrinsic_pool = Arc::new(
-			Components::build_extrinsic_pool(config.extrinsic_pool, client.clone())?
+		let transaction_pool = Arc::new(
+			Components::build_transaction_pool(config.transaction_pool, client.clone())?
 		);
-		let extrinsic_pool_adapter = ExtrinsicPoolAdapter::<Components> {
+		let transaction_pool_adapter = TransactionPoolAdapter::<Components> {
 			imports_external_transactions: !config.roles == Roles::LIGHT,
-			pool: extrinsic_pool.clone(),
+			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 };
 
@@ -167,7 +167,7 @@ impl<Components> Service<Components>
 			chain: client.clone(),
 			on_demand: on_demand.clone()
 				.map(|d| d as Arc<network::OnDemandService<ComponentBlock<Components>>>),
-			transaction_pool: Arc::new(extrinsic_pool_adapter),
+			transaction_pool: Arc::new(transaction_pool_adapter),
 			specialization: network_protocol,
 		};
 
@@ -177,7 +177,7 @@ impl<Components> Service<Components>
 		{
 			// block notifications
 			let network = network.clone();
-			let txpool = extrinsic_pool.clone();
+			let txpool = transaction_pool.clone();
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
@@ -194,7 +194,7 @@ impl<Components> Service<Components>
 		{
 			// extrinsic notifications
 			let network = network.clone();
-			let events = extrinsic_pool.import_notification_stream()
+			let events = transaction_pool.import_notification_stream()
 				// TODO [ToDr] Consider throttling?
 				.for_each(move |_| {
 					network.trigger_repropagate();
@@ -218,7 +218,7 @@ impl<Components> Service<Components>
 				let client = client.clone();
 				let chain = rpc::apis::chain::Chain::new(client.clone(), task_executor.clone());
 				let state = rpc::apis::state::State::new(client.clone(), task_executor.clone());
-				let author = rpc::apis::author::Author::new(client.clone(), extrinsic_pool.clone(), task_executor.clone());
+				let author = rpc::apis::author::Author::new(client.clone(), transaction_pool.clone(), task_executor.clone());
 				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _, _>(
 					state,
 					chain,
@@ -262,7 +262,7 @@ impl<Components> Service<Components>
 		Ok(Service {
 			client: client,
 			network: Some(network),
-			extrinsic_pool: extrinsic_pool,
+			transaction_pool: transaction_pool,
 			signal: Some(signal),
 			keystore: keystore,
 			exit,
@@ -283,8 +283,8 @@ impl<Components> Service<Components>
 	}
 
 	/// Get shared extrinsic pool instance.
-	pub fn extrinsic_pool(&self) -> Arc<ExtrinsicPool<Components::ExtrinsicPoolApi>> {
-		self.extrinsic_pool.clone()
+	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
+		self.transaction_pool.clone()
 	}
 
 	/// Get shared keystore.
@@ -350,13 +350,13 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 }
 
 /// Transaction pool adapter.
-pub struct ExtrinsicPoolAdapter<C: Components> {
+pub struct TransactionPoolAdapter<C: Components> {
 	imports_external_transactions: bool,
-	pool: Arc<ExtrinsicPool<C::ExtrinsicPoolApi>>,
+	pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 	client: Arc<ComponentClient<C>>,
 }
 
-impl<C: Components> ExtrinsicPoolAdapter<C> {
+impl<C: Components> TransactionPoolAdapter<C> {
 	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
 		self.client.info()
 			.map(|info| BlockId::hash(info.chain.best_hash))
@@ -367,7 +367,7 @@ impl<C: Components> ExtrinsicPoolAdapter<C> {
 	}
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for ExtrinsicPoolAdapter<C> {
+impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
 		let best_block_id = match self.best_block_id() {
 			Some(id) => id,
@@ -398,7 +398,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 				Ok(xt) => Some(*xt.hash()),
 				Err(e) => match e.into_pool_error() {
 					Ok(e) => match e.kind() {
-						extrinsic_pool::ErrorKind::AlreadyImported(hash) =>
+						transaction_pool::ErrorKind::AlreadyImported(hash) =>
 							Some(::std::str::FromStr::from_str(&hash).map_err(|_| {})
 								.expect("Hash string is always valid")),
 						_ => {

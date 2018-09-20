@@ -38,7 +38,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 
 	let network = service.network();
 	let client = service.client();
-	let txpool = service.extrinsic_pool();
+	let txpool = service.transaction_pool();
 	let mut last_number = None;
 
 	let mut sys = System::new();
@@ -98,7 +98,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 		Ok(())
 	});
 
-	let txpool = service.extrinsic_pool();
+	let txpool = service.transaction_pool();
 	let display_txpool_import = txpool.import_notification_stream().for_each(move |_| {
 		let status = txpool.light_status();
 		telemetry!("txpool.import"; "mem_usage" => status.mem_usage, "count" => status.transaction_count, "sender" => status.senders);

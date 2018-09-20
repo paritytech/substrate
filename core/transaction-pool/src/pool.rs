@@ -133,7 +133,7 @@ pub struct Ready<'a, 'b, B: 'a + ChainApi> {
 impl<'a, 'b, B: ChainApi> txpool::Ready<VerifiedFor<B>> for Ready<'a, 'b, B> {
 	fn is_ready(&mut self, xt: &VerifiedFor<B>) -> Readiness {
 		if self.rotator.ban_if_stale(&self.now, xt) {
-			debug!(target: "extrinsic-pool", "[{:?}] Banning as stale.", txpool::VerifiedTransaction::hash(xt));
+			debug!(target: "transaction-pool", "[{:?}] Banning as stale.", txpool::VerifiedTransaction::hash(xt));
 			return Readiness::Stale;
 		}
 
