@@ -22,12 +22,11 @@ use libp2p::core::nodes::handled_node::{NodeHandler, NodeHandlerEndpoint, NodeHa
 use libp2p::kad::{KadConnecConfig, KadFindNodeRespond, KadIncomingRequest, KadConnecController};
 use libp2p::{identify, ping};
 use parking_lot::Mutex;
-use std::error::Error;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_timer::{Delay, Interval, Timeout, timeout::Error as TimeoutError};
+use tokio_timer::{Delay, Interval};
 use {Multiaddr, PacketId, ProtocolId};
 
 /// Duration after which we consider that a ping failed.
@@ -60,11 +59,11 @@ pub struct SubstrateNodeHandler<TSubstream, TUserData> {
 	need_report_kad_open: bool,
 
 	/// Substream open for sending pings, if any.
-	ping_out_substream: Option<(ping::Pinger, Box<Future<Item = (), Error = IoError> + Send>)>,
-	/// Active pinging attempt. Includes the moment when we started the ping.
-	active_ping_out: Option<(Instant, Box<Future<Item = (), Error = TimeoutError<Box<Error + Send + Sync>>> + Send>)>,
+	ping_out_substream: Option<ping::PingDialer<TSubstream, Instant>>,
+	/// Active pinging attempt with the moment it expires.
+	active_ping_out: Option<Delay>,
 	/// Substreams open for receiving pings.
-	ping_in_substreams: Vec<Box<Future<Item = (), Error = IoError> + Send>>,
+	ping_in_substreams: Vec<ping::PingListener<TSubstream>>,
 	/// Future that fires when we need to ping the node again.
 	///
 	/// Every time we receive a pong, we reset the timer to the next time.
@@ -255,7 +254,7 @@ macro_rules! listener_upgrade {
 		upgrade::or(upgrade::or(upgrade::or(
 			upgrade::map((*$self.registered_custom).clone(), move |c| FinalUpgrade::Custom(c)),
 			upgrade::map(KadConnecConfig::new(), move |(c, s)| FinalUpgrade::Kad(c, s))),
-			upgrade::map(ping::Ping, move |p| FinalUpgrade::from(p))),
+			upgrade::map(ping::Ping::default(), move |p| FinalUpgrade::from(p))),
 			upgrade::map(identify::IdentifyProtocolConfig, move |i| FinalUpgrade::from(i)))
 			// TODO: meh for cloning a Vec here
 	)
@@ -363,7 +362,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Ping => {
-				let wanted = upgrade::map(ping::Ping, move |p| FinalUpgrade::from(p));
+				let wanted = upgrade::map(ping::Ping::default(), move |p| FinalUpgrade::from(p));
 				// TODO: shouldn't be future::empty() ; requires a change in libp2p
 				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, future::empty::<Multiaddr, IoError>())
 					.map(|(out, _): (FinalUpgrade<TSubstream, TUserData>, _)| out);
@@ -547,10 +546,10 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 				self.cancel_dial_upgrade(&UpgradePurpose::Identify);
 				Some(SubstrateOutEvent::Identified { info, observed_addr })
 			},
-			FinalUpgrade::PingDialer(pinger, ping_process) => {
+			FinalUpgrade::PingDialer(ping_dialer) => {
 				self.cancel_dial_upgrade(&UpgradePurpose::Ping);
 				// We always open the ping substream for a reason, which is to immediately ping.
-				self.ping_out_substream = Some((pinger, ping_process));
+				self.ping_out_substream = Some(ping_dialer);
 				if self.ping_remote() {
 					Some(SubstrateOutEvent::PingStart)
 				} else {
@@ -611,9 +610,11 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		}
 
 		// If we have a ping open, ping it!
-		if let Some((ref mut pinger, _)) = self.ping_out_substream {
-			let future = Timeout::new(pinger.ping(), PING_TIMEOUT);
-			self.active_ping_out = Some((Instant::now(), Box::new(future) as Box<_>));
+		if let Some(ref mut pinger) = self.ping_out_substream {
+			let now = Instant::now();
+			pinger.ping(now);
+			let future = Delay::new(now + PING_TIMEOUT);
+			self.active_ping_out = Some(future);
 			return true;
 		}
 
@@ -758,24 +759,33 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		}
 
 		// Poll the ping substream.
-		// TODO: the pinging API would benefit from some improvements on the side of libp2p.
-		if let Some((pinger, mut future)) = self.ping_out_substream.take() {
-			match future.poll() {
-				Ok(Async::Ready(())) => {},
-				Ok(Async::NotReady) => self.ping_out_substream = Some((pinger, future)),
+		if let Some(mut ping_dialer) = self.ping_out_substream.take() {
+			match ping_dialer.poll() {
+				Ok(Async::Ready(Some(started))) => {
+					self.active_ping_out = None;
+					self.next_ping.reset(Instant::now() + DELAY_TO_NEXT_PING);
+					return Ok(Async::Ready(Some(SubstrateOutEvent::PingSuccess(started.elapsed()))));
+				},
+				Ok(Async::Ready(None)) => {
+					// Try re-open ping if it got closed.
+					self.queued_dial_upgrades.push(UpgradePurpose::Ping);
+					self.num_out_user_must_open += 1;
+				},
+				Ok(Async::NotReady) => self.ping_out_substream = Some(ping_dialer),
 				Err(_) => {},
 			}
 		}
 
 		// Poll the active ping attempt.
-		if let Some((started, mut ping_attempt)) = self.active_ping_out.take() {
-			match ping_attempt.poll() {
-				Ok(Async::Ready(())) => {
-					self.next_ping.reset(Instant::now() + DELAY_TO_NEXT_PING);
-					return Ok(Async::Ready(Some(SubstrateOutEvent::PingSuccess(started.elapsed()))));
+		if let Some(mut deadline) = self.active_ping_out.take() {
+			match deadline.poll() {
+				Ok(Async::Ready(())) =>
+					return Ok(Async::Ready(Some(SubstrateOutEvent::Unresponsive))),
+				Ok(Async::NotReady) => self.active_ping_out = Some(deadline),
+				Err(err) => {
+					warn!(target: "sub-libp2p", "Active ping deadline errored: {:?}", err);
+					return Err(IoError::new(IoErrorKind::Other, err));
 				},
-				Ok(Async::NotReady) => self.active_ping_out = Some((started, ping_attempt)),
-				Err(_) => return Ok(Async::Ready(Some(SubstrateOutEvent::Unresponsive))),
 			}
 		}
 
@@ -837,18 +847,16 @@ enum FinalUpgrade<TSubstream, TUserData> {
 	Kad(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>),
 	IdentifyListener(identify::IdentifySender<TSubstream>),
 	IdentifyDialer(identify::IdentifyInfo, Multiaddr),
-	PingDialer(ping::Pinger, Box<Future<Item = (), Error = IoError> + Send>),
-	PingListener(Box<Future<Item = (), Error = IoError> + Send>),
+	PingDialer(ping::PingDialer<TSubstream, Instant>),
+	PingListener(ping::PingListener<TSubstream>),
 	Custom(RegisteredProtocolOutput<TUserData>),
 }
 
-impl<TSubstream, TUserData> From<ping::PingOutput> for FinalUpgrade<TSubstream, TUserData> {
-	fn from(out: ping::PingOutput) -> Self {
+impl<TSubstream, TUserData> From<ping::PingOutput<TSubstream, Instant>> for FinalUpgrade<TSubstream, TUserData> {
+	fn from(out: ping::PingOutput<TSubstream, Instant>) -> Self {
 		match out {
-			ping::PingOutput::Ponger(processing) =>
-				FinalUpgrade::PingListener(processing),
-			ping::PingOutput::Pinger { pinger, processing } =>
-				FinalUpgrade::PingDialer(pinger, processing),
+			ping::PingOutput::Ponger(ponger) => FinalUpgrade::PingListener(ponger),
+			ping::PingOutput::Pinger(pinger) => FinalUpgrade::PingDialer(pinger),
 		}
 	}
 }
