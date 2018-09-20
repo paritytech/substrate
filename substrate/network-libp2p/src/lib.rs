@@ -53,7 +53,7 @@ use libp2p::PeerId;
 
 pub use connection_filter::{ConnectionFilter, ConnectionDirection};
 pub use error::{Error, ErrorKind, DisconnectReason};
-pub use libp2p::{Multiaddr, multiaddr::AddrComponent};
+pub use libp2p::{Multiaddr, multiaddr::Protocol};
 pub use traits::*;
 
 pub type TimerToken = usize;
@@ -87,7 +87,7 @@ pub fn validate_node_url(url: &str) -> Result<(), Error> {
 pub(crate) fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), Error> {
 	let mut addr: Multiaddr = addr_str.parse().map_err(|_| ErrorKind::AddressParse)?;
 	let who = match addr.pop() {
-		Some(AddrComponent::P2P(key)) =>
+		Some(Protocol::P2p(key)) =>
 			PeerId::from_multihash(key).map_err(|_| ErrorKind::AddressParse)?,
 		_ => return Err(ErrorKind::AddressParse.into()),
 	};

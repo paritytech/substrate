@@ -18,7 +18,7 @@ use bytes::Bytes;
 use custom_proto::RegisteredProtocols;
 use fnv::FnvHashMap;
 use futures::{prelude::*, Stream};
-use libp2p::{Multiaddr, multiaddr::AddrComponent, PeerId};
+use libp2p::{Multiaddr, multiaddr::Protocol, PeerId};
 use libp2p::core::{muxing, Endpoint, PublicKey};
 use libp2p::core::nodes::node::Substream;
 use libp2p::core::nodes::swarm::{ConnectedPoint, Swarm as Libp2pSwarm, HandlerFactory};
@@ -267,7 +267,7 @@ impl<TUserData> Swarm<TUserData>
 	pub fn listen_on(&mut self, addr: Multiaddr) -> Result<Multiaddr, Multiaddr> {
 		match self.swarm.listen_on(addr) {
 			Ok(mut addr) => {
-				addr.append(AddrComponent::P2P(self.local_peer_id.clone().into()));
+				addr.append(Protocol::P2p(self.local_peer_id.clone().into()));
 				info!(target: "sub-libp2p", "Local node address is: {}", addr);
 				Ok(addr)
 			},
@@ -457,7 +457,7 @@ impl<TUserData> Swarm<TUserData>
 			);
 
 			self.listening_addrs.push(addr.clone());
-			addr.append(AddrComponent::P2P(self.local_peer_id.clone().into()));
+			addr.append(Protocol::P2p(self.local_peer_id.clone().into()));
 			info!(target: "sub-libp2p", "New external node address: {}", addr);
 		}
 	}

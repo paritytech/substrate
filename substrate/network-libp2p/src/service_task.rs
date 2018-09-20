@@ -108,8 +108,8 @@ pub fn start_service(
 				// If the format of the bootstrap node is not a multiaddr, try to parse it as
 				// a `SocketAddr`. This corresponds to the format `IP:PORT`.
 				let addr = match bootnode.parse::<SocketAddr>() { 
-					Ok(SocketAddr::V4(socket)) => multiaddr![IP4(*socket.ip()), TCP(socket.port())],
-					Ok(SocketAddr::V6(socket)) => multiaddr![IP6(*socket.ip()), TCP(socket.port())],
+					Ok(SocketAddr::V4(socket)) => multiaddr![Ip4(*socket.ip()), Tcp(socket.port())],
+					Ok(SocketAddr::V6(socket)) => multiaddr![Ip6(*socket.ip()), Tcp(socket.port())],
 					_ => {
 						warn!(target: "sub-libp2p", "Not a valid bootnode address: {}", bootnode);
 						continue;
