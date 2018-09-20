@@ -422,12 +422,6 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			return Ok(Async::Ready(Some(NodeHandlerEvent::Custom(event))));
 		}
 
-		// Request new outbound substreams from the user if necessary.
-		if self.num_out_user_must_open >= 1 {
-			self.num_out_user_must_open -= 1;
-			return Ok(Async::Ready(Some(NodeHandlerEvent::OutboundSubstreamRequest(()))));
-		}
-
 		match self.poll_upgrades_in_progress()? {
 			Async::Ready(value) => return Ok(Async::Ready(value.map(NodeHandlerEvent::Custom))),
 			Async::NotReady => (),
@@ -452,6 +446,12 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			Async::Ready(value) => return Ok(Async::Ready(value.map(NodeHandlerEvent::Custom))),
 			Async::NotReady => (),
 		};
+
+		// Request new outbound substreams from the user if necessary.
+		if self.num_out_user_must_open >= 1 {
+			self.num_out_user_must_open -= 1;
+			return Ok(Async::Ready(Some(NodeHandlerEvent::OutboundSubstreamRequest(()))));
+		}
 
 		// Nothing happened. Register our task to be notified and return.
 		self.to_notify = Some(task::current());
@@ -504,6 +504,9 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			// Opening a new substream for Kademlia.
 			self.queued_dial_upgrades.push(UpgradePurpose::Kad);
 			self.num_out_user_must_open += 1;
+			if let Some(to_notify) = self.to_notify.take() {
+				to_notify.notify();
+			}
 		}
 	}
 
@@ -595,6 +598,9 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		if !self.has_upgrade_purpose(&UpgradePurpose::Identify) {
 			self.queued_dial_upgrades.push(UpgradePurpose::Identify);
 			self.num_out_user_must_open += 1;
+			if let Some(to_notify) = self.to_notify.take() {
+				to_notify.notify();
+			}
 		}
 	}
 
@@ -623,6 +629,9 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		if !self.has_upgrade_purpose(&UpgradePurpose::Ping) {
 			self.queued_dial_upgrades.push(UpgradePurpose::Ping);
 			self.num_out_user_must_open += 1;
+			if let Some(to_notify) = self.to_notify.take() {
+				to_notify.notify();
+			}
 		}
 
 		false
