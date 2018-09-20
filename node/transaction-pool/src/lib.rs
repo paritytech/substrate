@@ -45,7 +45,7 @@ use codec::{Decode, Encode};
 use extrinsic_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
 use node_api::Api;
 use primitives::{AccountId, BlockId, Block, Hash, Index};
-use runtime::{Address, UncheckedExtrinsic, RawAddress};
+use runtime::{UncheckedExtrinsic, RawAddress};
 use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256};
 
 pub use extrinsic_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
@@ -53,9 +53,6 @@ pub use error::{Error, ErrorKind, Result};
 
 /// Maximal size of a single encoded extrinsic.
 const MAX_TRANSACTION_SIZE: usize = 4 * 1024 * 1024;
-
-/// Type alias for convenience.
-pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable<fn(Address) -> std::result::Result<AccountId, &'static str>>>::Checked;
 
 /// Type alias for the transaction pool.
 pub type TransactionPool<A> = extrinsic_pool::Pool<ChainApi<A>>;
