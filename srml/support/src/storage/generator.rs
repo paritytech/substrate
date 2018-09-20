@@ -53,6 +53,11 @@ pub use rstd::borrow::Borrow;
 #[doc(hidden)]
 pub use rstd::marker::PhantomData;
 
+pub use substrate_metadata::{
+	DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
+	StorageFunctionType, StorageFunctionModifier
+};
+
 /// Abstraction around storage.
 pub trait Storage {
 	/// true if the key exists in storage.
@@ -530,7 +535,7 @@ macro_rules! decl_storage {
 		}
 		impl<$traitinstance: $traittype> $modulename<$traitinstance> {
 			__impl_store_fns!($traitinstance $($t)*);
-			__impl_store_json_metadata!($cratename; $($t)*);
+			__impl_store_metadata!($cratename; $($t)*);
 		}
 	};
 	(
@@ -1080,390 +1085,427 @@ macro_rules! __impl_store_item {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __impl_store_json_metadata {
+macro_rules! __impl_store_metadata {
 	(
 		$cratename:ident;
 		$($rest:tt)*
 	) => {
-		pub fn store_json_metadata() -> &'static str {
-			concat!(r#"{ "prefix": ""#, stringify!($cratename), r#"", "items": {"#,
-				__store_functions_to_json!(""; $($rest)*), " } }")
+		pub fn store_metadata() -> $crate::storage::generator::StorageMetadata {
+			$crate::storage::generator::StorageMetadata {
+				prefix: $crate::storage::generator::DecodeDifferent::Encode(stringify!($cratename)),
+				functions: __store_functions_to_metadata!(; $( $rest )* ),
+			}
 		}
 	}
 }
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __store_functions_to_json {
+macro_rules! __store_functions_to_metadata {
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident :
-			default $ty:ty; $($t:tt)*
+		$name:ident : default $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty), default
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		pub $name:ident :
-			default $ty:ty; $($t:tt)*
+		pub $name:ident : default $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty), default
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident :
-			required $ty:ty; $($t:tt)*
+		$name:ident : required $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty), required
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		pub $name:ident :
-			required $ty:ty; $($t:tt)*
+		pub $name:ident : required $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty), required
+			);
+			$( $t )*
 		)
 	};
 	// simple values
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident :
-			$ty:ty; $($t:tt)*
+		$name:ident : $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty)
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		pub $name:ident :
-			$ty:ty; $($t:tt)*
+		pub $name:ident : $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty)
+			);
+			$( $t )*
 		)
 	};
-
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		$name:ident get($getfn:ident) :
-			default $ty:ty; $($t:tt)*
+			default $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty), default
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		pub $name:ident get($getfn:ident) :
-			default $ty:ty; $($t:tt)*
+			default $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty), default
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		$name:ident get($getfn:ident) :
-			required $ty:ty; $($t:tt)*
+			required $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty), required
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		pub $name:ident get($getfn:ident) :
-			required $ty:ty; $($t:tt)*
+			required $ty:ty;
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty), required
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident get($getfn:ident) :
-			$ty:ty; $($t:tt)*
+		$name:ident get($getfn:ident) : $ty:ty;
+		$( $t:tt )*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty)
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		pub $name:ident get($getfn:ident) :
-			$ty:ty; $($t:tt)*
+		pub $name:ident get($getfn:ident) : $ty:ty;
+		$( $t:tt )*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($ty)
+			);
+			$( $t )*
 		)
 	};
 
 	// maps
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		$name:ident :
-			default map [$kty:ty => $ty:ty]; $($t:tt)*
+			default map [$kty:ty => $ty:ty];
+		$( $t:tt )*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty), default
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		pub $name:ident :
-			default map [$kty:ty => $ty:ty]; $($t:tt)*
+			default map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty), default
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		$name:ident :
-			required map [$kty:ty => $ty:ty]; $($t:tt)*
+			required map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty), required
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		pub $name:ident :
-			required map [$kty:ty => $ty:ty]; $($t:tt)*
+			required map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty), required
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		$name:ident :
-			map [$kty:ty => $ty:ty]; $($t:tt)*
+			map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty)
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		pub $name:ident :
-			map [$kty:ty => $ty:ty]; $($t:tt)*
+			map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty)
+			);
+			$( $t )*
 		)
 	};
 
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])* $name:ident get($getfn:ident) :
-			default map [$kty:ty => $ty:ty]; $($t:tt)*
+			default map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty), default
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		pub $name:ident get($getfn:ident) :
-			default map [$kty:ty => $ty:ty]; $($t:tt)*
+			default map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), default
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty), default
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])* $name:ident get($getfn:ident) :
-			required map [$kty:ty => $ty:ty]; $($t:tt)*
+			required map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty), required
+			);
+			$( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		pub $name:ident get($getfn:ident) :
-			required map [$kty:ty => $ty:ty]; $($t:tt)*
+			required map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty), required
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty), required
+			); $( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		$name:ident get($getfn:ident) :
-			map [$kty:ty => $ty:ty]; $($t:tt)*
+			map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty)
+			); $( $t )*
 		)
 	};
 	(
-		$prefix_str:tt;
+		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
 		pub $name:ident get($getfn:ident) :
-		map [$kty:ty => $ty:ty]; $($t:tt)*
+			map [$kty:ty => $ty:ty];
+		$($t:tt)*
 	) => {
-		concat!(
-			__store_function_to_json!($prefix_str,
-				__function_doc_to_json!(""; $($doc_attr)*),
-				$name, __store_type_to_json!($kty, $ty)
-			),
-			__store_functions_to_json!(","; $($t)*)
+		__store_functions_to_metadata!(
+			$( $metadata, )*
+			__store_function_to_metadata!(
+				$( $doc_attr ),*; $name, __store_type_to_metadata!($kty, $ty)
+			); $( $t )*
 		)
 	};
-	($prefix_str:tt;) => { "" }
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __store_function_to_json {
-	($prefix_str:tt, $fn_doc:expr, $name:ident, $type:expr, $modifier:ident) => {
-		__store_function_to_json!($prefix_str; $fn_doc; $name; $type; 
-			concat!("\"", stringify!($modifier), "\""))
-	};
-	($prefix_str:tt, $fn_doc:expr, $name:ident, $type:expr) => {
-		__store_function_to_json!($prefix_str; $fn_doc; $name; $type; "null")
-	};
-	($prefix_str:tt; $fn_doc:expr; $name:ident; $type:expr; $modifier:expr) => {
-		concat!($prefix_str, " \"", stringify!($name), "\": { ",
-			r#""description": ["#, $fn_doc, " ], ",
-			r#""modifier": "#, $modifier, r#", "type": "#, $type, r#" }"#
-		)
+	(
+		$( $metadata:expr ),*;
+	) => {
+		$crate::storage::generator::DecodeDifferent::Encode(&[
+			$( $metadata ),*
+		])
 	}
 }
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __store_type_to_json {
+macro_rules! __store_function_to_metadata {
+	($( $fn_doc:expr ),*; $name:ident, $type:expr, required) => {
+		__store_function_to_metadata!(
+			$( $fn_doc ),*; $name; $type;
+			$crate::storage::generator::StorageFunctionModifier::Required
+		)
+	};
+	($( $fn_doc:expr ),*; $name:ident, $type:expr, default) => {
+		__store_function_to_metadata!(
+			$( $fn_doc ),*; $name; $type;
+			$crate::storage::generator::StorageFunctionModifier::Default
+		)
+	};
+	($( $fn_doc:expr ),*; $name:ident, $type:expr) => {
+		__store_function_to_metadata!(
+			$( $fn_doc ),*; $name; $type;
+			$crate::storage::generator::StorageFunctionModifier::None
+		)
+	};
+	($( $fn_doc:expr ),*; $name:ident; $type:expr; $modifier:expr) => {
+		$crate::storage::generator::StorageFunctionMetadata {
+			name: $crate::storage::generator::DecodeDifferent::Encode(stringify!($name)),
+			modifier: $modifier,
+			ty: $type,
+			documentation: $crate::storage::generator::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
+		}
+	}
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __store_type_to_metadata {
 	($name:ty) => {
-		concat!("\"", stringify!($name), "\"")
+		$crate::storage::generator::StorageFunctionType::Plain(
+			$crate::storage::generator::DecodeDifferent::Encode(stringify!($name)),
+		)
 	};
 	($key: ty, $value:ty) => {
-		concat!(r#"{ "key": ""#, stringify!($key), r#"", "value": ""#,
-			stringify!($value), "\" }")
+		$crate::storage::generator::StorageFunctionType::Map {
+			key: $crate::storage::generator::DecodeDifferent::Encode(stringify!($key)),
+			value: $crate::storage::generator::DecodeDifferent::Encode(stringify!($value)),
+		}
 	}
 }
 
@@ -1475,8 +1517,6 @@ mod tests {
 	use std::cell::RefCell;
 	use codec::Codec;
 	use super::*;
-	use serde;
-	use serde_json;
 
 	impl Storage for RefCell<HashMap<Vec<u8>, Vec<u8>>> {
 		fn exists(&self, key: &[u8]) -> bool {
@@ -1580,7 +1620,6 @@ mod tests {
 			GETMAPU32Required get(map_get_u32_required): required map [ u32 => String ];
 			pub PUBMAPU32Required : required map [ u32 => String ];
 			pub GETPUBMAPU32Required get(map_pub_get_u32_required): required map [ u32 => String ];
-
 		}
 	}
 
@@ -1590,41 +1629,186 @@ mod tests {
 		type Origin = u32;
 	}
 
-	const EXPECTED_METADATA: &str = concat!(
-		r#"{ "prefix": "TestStorage", "items": { "#,
-			r#""U32": { "description": [ " Hello, this is doc!" ], "modifier": null, "type": "u32" }, "#,
-			r#""GETU32": { "description": [ ], "modifier": null, "type": "u32" }, "#,
-			r#""PUBU32": { "description": [ ], "modifier": null, "type": "u32" }, "#,
-			r#""GETPUBU32": { "description": [ ], "modifier": null, "type": "u32" }, "#,
-			r#""U32Default": { "description": [ ], "modifier": "default", "type": "u32" }, "#,
-			r#""GETU32Default": { "description": [ ], "modifier": "default", "type": "u32" }, "#,
-			r#""PUBU32Default": { "description": [ ], "modifier": "default", "type": "u32" }, "#,
-			r#""GETPUBU32Default": { "description": [ ], "modifier": "default", "type": "u32" }, "#,
-			r#""U32Required": { "description": [ ], "modifier": "required", "type": "u32" }, "#,
-			r#""GETU32Required": { "description": [ ], "modifier": "required", "type": "u32" }, "#,
-			r#""PUBU32Required": { "description": [ ], "modifier": "required", "type": "u32" }, "#,
-			r#""GETPUBU32Required": { "description": [ ], "modifier": "required", "type": "u32" }, "#,
-			r#""MAPU32": { "description": [ ], "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
-			r#""GETMAPU32": { "description": [ " Hello, this is doc!", " Hello, this is doc 2!" ], "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
-			r#""PUBMAPU32": { "description": [ ], "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
-			r#""GETPUBMAPU32": { "description": [ ], "modifier": null, "type": { "key": "u32", "value": "String" } }, "#,
-			r#""MAPU32Default": { "description": [ ], "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
-			r#""GETMAPU32Default": { "description": [ ], "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
-			r#""PUBMAPU32Default": { "description": [ ], "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
-			r#""GETPUBMAPU32Default": { "description": [ ], "modifier": "default", "type": { "key": "u32", "value": "String" } }, "#,
-			r#""MAPU32Required": { "description": [ ], "modifier": "required", "type": { "key": "u32", "value": "String" } }, "#,
-			r#""GETMAPU32Required": { "description": [ ], "modifier": "required", "type": { "key": "u32", "value": "String" } }, "#,
-			r#""PUBMAPU32Required": { "description": [ ], "modifier": "required", "type": { "key": "u32", "value": "String" } }, "#,
-			r#""GETPUBMAPU32Required": { "description": [ ], "modifier": "required", "type": { "key": "u32", "value": "String" } }"#,
-		" } }"
-	);
+	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
+		prefix: DecodeDifferent::Encode("TestStorage"),
+		functions: DecodeDifferent::Encode(&[
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("U32"),
+				modifier: StorageFunctionModifier::None,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[ " Hello, this is doc!" ]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETU32"),
+				modifier: StorageFunctionModifier::None,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("PUBU32"),
+				modifier: StorageFunctionModifier::None,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETPUBU32"),
+				modifier: StorageFunctionModifier::None,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("U32Default"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETU32Default"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("PUBU32Default"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETPUBU32Default"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("U32Required"),
+				modifier: StorageFunctionModifier::Required,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETU32Required"),
+				modifier: StorageFunctionModifier::Required,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("PUBU32Required"),
+				modifier: StorageFunctionModifier::Required,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETPUBU32Required"),
+				modifier: StorageFunctionModifier::Required,
+				ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("MAPU32"),
+				modifier: StorageFunctionModifier::None,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETMAPU32"),
+				modifier: StorageFunctionModifier::None,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[
+					" Hello, this is doc!", " Hello, this is doc 2!"
+				]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("PUBMAPU32"),
+				modifier: StorageFunctionModifier::None,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETPUBMAPU32"),
+				modifier: StorageFunctionModifier::None,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("MAPU32Default"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETMAPU32Default"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("PUBMAPU32Default"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETPUBMAPU32Default"),
+				modifier: StorageFunctionModifier::Default,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("MAPU32Required"),
+				modifier: StorageFunctionModifier::Required,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETMAPU32Required"),
+				modifier: StorageFunctionModifier::Required,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("PUBMAPU32Required"),
+				modifier: StorageFunctionModifier::Required,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			},
+			StorageFunctionMetadata {
+				name: DecodeDifferent::Encode("GETPUBMAPU32Required"),
+				modifier: StorageFunctionModifier::Required,
+				ty: StorageFunctionType::Map{
+					key: DecodeDifferent::Encode("u32"), value: DecodeDifferent::Encode("String")
+				},
+				documentation: DecodeDifferent::Encode(&[]),
+			}
+		])
+	};
 
 	#[test]
-	fn store_json_metadata() {
-		let metadata = Module::<TraitImpl>::store_json_metadata();
+	fn store_metadata() {
+		let metadata = Module::<TraitImpl>::store_metadata();
 		assert_eq!(EXPECTED_METADATA, metadata);
-		let _: serde::de::IgnoredAny =
-			serde_json::from_str(metadata).expect("Is valid json syntax");
 	}
 }
 

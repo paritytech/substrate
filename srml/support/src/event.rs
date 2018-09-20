@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+pub use substrate_metadata::{EventMetadata, DecodeDifferent, OuterEventMetadata, FnEncode};
+
 /// Implement the `Event` for a module.
 ///
 /// # Simple Event Example:
@@ -125,8 +127,8 @@ macro_rules! decl_event {
 		}
 		impl Event {
 			#[allow(dead_code)]
-			pub fn event_json_metadata() -> &'static str {
-				concat!("{", __events_to_json!(""; $( $events )* ), " }")
+			pub fn metadata() -> &'static [ $crate::event::EventMetadata ] {
+				__events_to_metadata!(; $( $events )* )
 			}
 		}
 	}
@@ -226,8 +228,8 @@ macro_rules! __decl_generic_event {
 		}
 		impl<$( $generic_param ),*> RawEvent<$( $generic_param ),*> {
 			#[allow(dead_code)]
-			pub fn event_json_metadata() -> &'static str {
-				concat!("{", __events_to_json!(""; $( $events )* ), " }")
+			pub fn metadata() -> &'static [$crate::event::EventMetadata] {
+				__events_to_metadata!(; $( $events )* )
 			}
 		}
 	}
@@ -235,36 +237,31 @@ macro_rules! __decl_generic_event {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __events_to_json {
+macro_rules! __events_to_metadata {
 	(
-		$prefix_str:expr;
+		$( $metadata:expr ),*;
 		$( #[doc = $doc_attr:tt] )*
-		$event:ident( $first_param:path $(, $param:path )* ),
+		$event:ident $( ( $( $param:path ),* ) )*,
 		$( $rest:tt )*
 	) => {
-		concat!($prefix_str, " ", "\"", stringify!($event), r#"": { "params": [ ""#,
-				stringify!($first_param), "\""
-				$(, concat!(", \"", stringify!($param), "\"") )*, r#" ], "description": ["#,
-				__function_doc_to_json!(""; $( $doc_attr )*), " ] }",
-				__events_to_json!(","; $( $rest )*)
+		__events_to_metadata!(
+			$( $metadata, )*
+			$crate::event::EventMetadata {
+				name: $crate::event::DecodeDifferent::Encode(stringify!($event)),
+				arguments: $crate::event::DecodeDifferent::Encode(&[
+					$( $( stringify!($param) ),* )*
+				]),
+				documentation: $crate::event::DecodeDifferent::Encode(&[
+					$( $doc_attr ),*
+				]),
+			};
+			$( $rest )*
 		)
 	};
 	(
-		$prefix_str:expr;
-		$( #[doc = $doc_attr:tt] )*
-		$event:ident,
-		$( $rest:tt )*
+		$( $metadata:expr ),*;
 	) => {
-		concat!($prefix_str, " ", "\"", stringify!($event),
-				r#"": { "params": null, "description": ["#,
-				__function_doc_to_json!(""; $( $doc_attr )*), " ] }",
-				__events_to_json!(","; $( $rest )*)
-		)
-	};
-	(
-		$prefix_str:expr;
-	) => {
-		""
+		&[ $( $metadata ),* ]
 	}
 }
 
@@ -408,20 +405,21 @@ macro_rules! __impl_outer_event_json_metadata {
 	) => {
 		impl $runtime {
 			#[allow(dead_code)]
-			pub fn outer_event_json_metadata() -> (&'static str, &'static [(&'static str, fn() -> &'static str)]) {
-				static METADATA: &[(&str, fn() -> &'static str)] = &[
-					("system", $system::Event::event_json_metadata)
-					$(
-						, (
-							stringify!($module_name),
-							$module_name::Event $( ::<$generic_param> )*::event_json_metadata
-						)
-					)*
-				];
-				(
-					stringify!($event_name),
-					METADATA
-				)
+			pub fn outer_event_metadata() -> $crate::event::OuterEventMetadata {
+				$crate::event::OuterEventMetadata {
+					name: $crate::event::DecodeDifferent::Encode(stringify!($event_name)),
+					events: $crate::event::DecodeDifferent::Encode(&[
+						("system", $crate::event::FnEncode(system::Event::metadata))
+						$(
+							, (
+								stringify!($module_name),
+								$crate::event::FnEncode(
+									$module_name::Event $( ::<$generic_param> )* ::metadata
+								)
+							)
+						)*
+					])
+				}
 			}
 		}
 	}
@@ -430,8 +428,7 @@ macro_rules! __impl_outer_event_json_metadata {
 #[cfg(test)]
 #[allow(dead_code)]
 mod tests {
-	use serde;
-	use serde_json;
+	use super::*;
 
 	mod system {
 		pub trait Trait {
@@ -567,46 +564,64 @@ mod tests {
 		type Origin = u32;
 	}
 
-	const EXPECTED_METADATA: (&str, &[(&str, &str)]) = (
-		"TestEvent", &[
-			("system", r#"{ "SystemEvent": { "params": null, "description": [ ] } }"#),
-			("event_module",
-				concat!(
-					"{",
-					r#" "TestEvent": { "params": [ "Balance", "Origin" ], "description": [ " Hi, I am a comment." ] },"#,
-					r#" "EventWithoutParams": { "params": null, "description": [ " Dog" ] }"#,
-					" }"
-				)
+	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {
+		name: DecodeDifferent::Encode("TestEvent"),
+		events: DecodeDifferent::Encode(&[
+			(
+				"system",
+				FnEncode(|| &[
+					EventMetadata {
+						name: DecodeDifferent::Encode("SystemEvent"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[]),
+					}
+				])
 			),
-			("event_module2",
-				concat!(
-					"{",
-					r#" "TestEvent": { "params": [ "BalanceRenamed" ], "description": [ ] },"#,
-					r#" "TestOrigin": { "params": [ "OriginRenamed" ], "description": [ ] }"#,
-					" }"
-				)
+			(
+				"event_module",
+				FnEncode(|| &[
+					EventMetadata {
+						name: DecodeDifferent::Encode("TestEvent"),
+						arguments: DecodeDifferent::Encode(&[ "Balance", "Origin" ]),
+						documentation: DecodeDifferent::Encode(&[ " Hi, I am a comment." ])
+					},
+					EventMetadata {
+						name: DecodeDifferent::Encode("EventWithoutParams"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[ " Dog" ]),
+					},
+				])
 			),
-			("event_module3",
-			 concat!(
-				 "{",
-				 r#" "HiEvent": { "params": null, "description": [ ] }"#,
-				 " }"
-			 )
+			(
+				"event_module2",
+				FnEncode(|| &[
+					EventMetadata {
+						name: DecodeDifferent::Encode("TestEvent"),
+						arguments: DecodeDifferent::Encode(&[ "BalanceRenamed" ]),
+						documentation: DecodeDifferent::Encode(&[])
+					},
+					EventMetadata {
+						name: DecodeDifferent::Encode("TestOrigin"),
+						arguments: DecodeDifferent::Encode(&[ "OriginRenamed" ]),
+						documentation: DecodeDifferent::Encode(&[]),
+					},
+				])
 			),
-		]
-	);
+			(
+				"event_module3",
+				FnEncode(|| &[
+					EventMetadata {
+						name: DecodeDifferent::Encode("HiEvent"),
+						arguments: DecodeDifferent::Encode(&[]),
+						documentation: DecodeDifferent::Encode(&[])
+					}
+				])
+			)
+		])
+	};
 
 	#[test]
-	fn outer_event_json_metadata() {
-		let metadata = TestRuntime::outer_event_json_metadata();
-		assert_eq!(EXPECTED_METADATA.0, metadata.0);
-		assert_eq!(EXPECTED_METADATA.1.len(), metadata.1.len());
-
-		for (expected, got) in EXPECTED_METADATA.1.iter().zip(metadata.1.iter()) {
-			assert_eq!(expected.0, got.0);
-			assert_eq!(expected.1, got.1());
-			let _: serde::de::IgnoredAny =
-				serde_json::from_str(got.1()).expect(&format!("Is valid json syntax: {}", got.1()));
-		}
+	fn outer_event_metadata() {
+		assert_eq!(EXPECTED_METADATA, TestRuntime::outer_event_metadata());
 	}
 }

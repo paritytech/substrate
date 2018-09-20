@@ -23,7 +23,6 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
 use runtime_primitives::BuildStorage;
-use substrate_metadata::JsonMetadataDecodable;
 use primitives::{Blake2Hasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -254,26 +253,9 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self.executor
 	}
 
-	/// Returns the runtime metadata as JSON.
-	pub fn json_metadata(&self, id: &BlockId<Block>) -> error::Result<String> {
-		self.executor.call(id, "json_metadata",&[])
-			.and_then(|r| Vec::<JsonMetadataDecodable>::decode(&mut &r.return_data[..])
-					  .ok_or("JSON Metadata decoding failed".into()))
-			.and_then(|metadata| {
-				let mut json = metadata.into_iter().enumerate().fold(String::from("{"),
-					|mut json, (i, m)| {
-						if i > 0 {
-							json.push_str(",");
-						}
-						let (mtype, val) = m.into_json_string();
-						json.push_str(&format!(r#" "{}": {}"#, mtype, val));
-						json
-					}
-				);
-				json.push_str(" }");
-
-				Ok(json)
-			})
+	/// Returns the runtime metadata.
+	pub fn metadata(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
+		self.executor.call(id, "metadata",&[]).map(|v| v.return_data)
 	}
 
 	/// Reads storage value at a given block + key, returning read proof.
@@ -771,33 +753,5 @@ mod tests {
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
 		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
-	}
-
-	#[test]
-	fn json_metadata() {
-		let client = test_client::new();
-
-		let mut builder = client.new_block().unwrap();
-
-		builder.push_transfer(Transfer {
-			from: Keyring::Alice.to_raw_public().into(),
-			to: Keyring::Ferdie.to_raw_public().into(),
-			amount: 42,
-			nonce: 0,
-		}).unwrap();
-
-		assert!(builder.push_transfer(Transfer {
-			from: Keyring::Eve.to_raw_public().into(),
-			to: Keyring::Alice.to_raw_public().into(),
-			amount: 42,
-			nonce: 0,
-		}).is_err());
-
-		client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-
-		assert_eq!(
-			client.json_metadata(&BlockId::Number(1)).unwrap(),
-			r#"{ "events": { "name": "Test", "events": { "event": hallo } } }"#
-		);
 	}
 }

@@ -9,15 +9,14 @@ serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
 parity-codec = { version = "1.1", default_features = false }
 substrate-primitives = { path = "../../core/primitives", default_features = false }
-substrate-metadata = { path = "../../core/metadata", default_features = false }
+substrate-metadata = { path = "../metadata", default_features = false }
 sr-std = { path = "../../core/sr-std", default_features = false }
 sr-io = { path = "../../core/sr-io", default_features = false }
 mashup = "0.1.7"
 
 [dev-dependencies]
 pretty_assertions = "0.5.1"
-serde_json = { version = "1.0" }
-parity-codec-derive = { version = "~1.0" }
+parity-codec-derive = { version = "1.0" }
 
 [features]
 default = ["std"]

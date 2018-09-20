@@ -145,8 +145,8 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 
 	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<serde_json::Value> {
 		let block = self.unwrap_or_best(block)?;
-		let metadata = self.client.json_metadata(&BlockId::Hash(block))?;
-		serde_json::from_str(&metadata).map_err(Into::into)
+		let metadata = self.client.metadata(&BlockId::Hash(block))?;
+		serde_json::to_value(metadata).map_err(Into::into)
 	}
 
 	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
