@@ -232,7 +232,7 @@ pub type Executive = executive::Executive<Runtime, Block, Balances, Balances, Al
 pub mod api {
 	impl_stubs!(
 		version => |()| super::VERSION,
-		json_metadata => |()| super::Runtime::json_metadata(),
+		metadata => |()| super::Runtime::metadata(),
 		authorities => |()| super::Consensus::authorities(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),

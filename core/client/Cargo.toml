@@ -18,7 +18,6 @@ parity-codec = { version = "1.1" }
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
 sr-io = { path = "../sr-io" }
-substrate-metadata = { path = "../metadata" }
 sr-primitives = { path = "../sr-primitives" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-keyring = { path = "../../core/keyring" }

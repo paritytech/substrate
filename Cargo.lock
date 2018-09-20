@@ -2578,7 +2578,6 @@ dependencies = [
  "pretty_assertions 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 0.1.0",
  "sr-std 0.1.0",
  "substrate-metadata 0.1.0",
@@ -2742,7 +2741,6 @@ dependencies = [
  "substrate-bft 0.1.0",
  "substrate-executor 0.1.0",
  "substrate-keyring 0.1.0",
- "substrate-metadata 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-state-machine 0.1.0",
  "substrate-telemetry 0.3.0",
@@ -2844,6 +2842,9 @@ name = "substrate-metadata"
 version = "0.1.0"
 dependencies = [
  "parity-codec 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
