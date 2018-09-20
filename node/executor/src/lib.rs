@@ -239,6 +239,8 @@ mod tests {
 				bonding_duration: 0,
 				offline_slash: Perbill::zero(),
 				session_reward: Perbill::zero(),
+				current_offline_slash: 0,
+				current_session_reward: 0,
 				offline_slash_grace: 0,
 			}),
 			democracy: Some(Default::default()),
@@ -309,7 +311,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("60efe1a65e7c79041b02e56ec122d6eaedfa476e0a9f6f1f68eb0c8f402c4514").into(),
+			hex!("be42fe35f214011b97a763c374e20a61a3eb0a92f50c065d1de9165af60225c4").into(),
 			None,
 			vec![
 				CheckedExtrinsic {

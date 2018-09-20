@@ -63,6 +63,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
 			offline_slash: Perbill::from_millionths(1000),
 			session_reward: Perbill::from_billionths(60),
+			current_offline_slash: 0,
+			current_session_reward: 0,
 			validator_count: 12,
 			sessions_per_era: 12,	// 1 hour per era
 			bonding_duration: 24 * 60 * 12,	// 1 day per bond.
@@ -158,6 +160,8 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			bonding_duration: 2 * 60 * 12,
 			offline_slash: Perbill::zero(),
 			session_reward: Perbill::zero(),
+			current_offline_slash: 0,
+			current_session_reward: 0,
 			offline_slash_grace: 0,
 		}),
 		democracy: Some(DemocracyConfig {

@@ -165,9 +165,9 @@ decl_storage! {
 		pub CurrentNominatorsFor get(current_nominators_for): default map [ T::AccountId => Vec<T::AccountId> ];
 
 		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub CurrentSessionReward get(current_session_reward): required T::Balance;
+		pub CurrentSessionReward get(current_session_reward): default T::Balance;
 		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub CurrentOfflineSlash get(current_offline_slash): required T::Balance;
+		pub CurrentOfflineSlash get(current_offline_slash): default T::Balance;
 
 		/// The next value of sessions per era.
 		pub NextSessionsPerEra get(next_sessions_per_era): T::BlockNumber;

@@ -24,7 +24,8 @@ use runtime_support::StorageValue;
 use primitives::traits::As;
 use primitives::{self, Perbill};
 use super::{Trait, Intentions, CurrentEra, OfflineSlashGrace, MinimumValidatorCount,
-	BondingDuration, SessionsPerEra, ValidatorCount, SessionReward, OfflineSlash};
+	BondingDuration, SessionsPerEra, ValidatorCount, SessionReward, OfflineSlash,
+	CurrentSessionReward, CurrentOfflineSlash};
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -38,6 +39,8 @@ pub struct GenesisConfig<T: Trait> {
 	pub bonding_duration: T::BlockNumber,
 	pub session_reward: Perbill,
 	pub offline_slash: Perbill,
+	pub current_session_reward: T::Balance,
+	pub current_offline_slash: T::Balance,
 	pub offline_slash_grace: u32,
 }
 
@@ -52,6 +55,8 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			bonding_duration: T::BlockNumber::sa(1000),
 			session_reward: Perbill::from_billionths(60),
 			offline_slash: Perbill::from_fraction(0.001),
+			current_session_reward: T::Balance::sa(0),
+			current_offline_slash: T::Balance::sa(0),
 			offline_slash_grace: 0,
 		}
 	}
@@ -68,6 +73,8 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T> {
 			Self::hash(<CurrentEra<T>>::key()).to_vec() => self.current_era.encode(),
 			Self::hash(<SessionReward<T>>::key()).to_vec() => self.session_reward.encode(),
 			Self::hash(<OfflineSlash<T>>::key()).to_vec() => self.offline_slash.encode(),
+			Self::hash(<CurrentSessionReward<T>>::key()).to_vec() => self.current_session_reward.encode(),
+			Self::hash(<CurrentOfflineSlash<T>>::key()).to_vec() => self.current_offline_slash.encode(),
 			Self::hash(<OfflineSlashGrace<T>>::key()).to_vec() => self.offline_slash_grace.encode()
 		])
 	}
