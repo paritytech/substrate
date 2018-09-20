@@ -475,7 +475,8 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		let proto = match self.custom_protocols_substreams.iter().find(|p| p.protocol_id == protocol) {
 			Some(proto) => proto,
 			None => {
-				error!(target: "sub-libp2p", "Protocol {:?} isn't open", protocol);
+				// We are processing a message event before we could report to the outside that
+				// we disconnected from the protocol. This is not an error.
 				return
 			},
 		};
