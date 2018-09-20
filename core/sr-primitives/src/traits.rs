@@ -64,12 +64,12 @@ pub trait Lookup {
 }
 
 /// Get the "current" block number.
-pub trait GetHeight {
+pub trait CurrentHeight {
 	/// The type of the block number.
 	type BlockNumber;
 
 	/// Return the current block number. Not allowed to fail.
-	fn get_height(&self) -> Self::BlockNumber;
+	fn current_height(&self) -> Self::BlockNumber;
 }
 
 /// Translate a block number into a hash.

@@ -401,7 +401,7 @@ impl<C> bft::Proposer<Block> for Proposer<C>
 						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1, s1.signature), (h2, s2.signature)),
 				}
 			};
-			let payload = (next_index, Call::Consensus(ConsensusCall::report_misbehavior(report)), self.client.genesis_hash());
+			let payload = (next_index, Call::Consensus(ConsensusCall::report_misbehavior(report)), Era::immortal(), self.client.genesis_hash());
 			let signature = self.local_key.sign(&payload.encode()).into();
 			next_index += 1;
 
