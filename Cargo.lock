@@ -2729,6 +2729,7 @@ dependencies = [
  "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "kvdb 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "memorydb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",

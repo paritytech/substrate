@@ -39,6 +39,7 @@ extern crate hashdb;
 extern crate rlp;
 extern crate heapsize;
 extern crate memorydb;
+extern crate kvdb;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
@@ -53,6 +54,7 @@ pub mod in_mem;
 pub mod genesis;
 pub mod block_builder;
 pub mod light;
+mod leaves;
 mod call_executor;
 mod client;
 mod notifications;
@@ -68,3 +70,4 @@ pub use client::{
 };
 pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
+pub use leaves::LeafSet;
