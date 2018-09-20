@@ -18,6 +18,7 @@ use bytes::Bytes;
 use custom_proto::{RegisteredProtocols, RegisteredProtocolOutput};
 use futures::{prelude::*, future, task};
 use libp2p::core::{ConnectionUpgrade, Endpoint, PeerId, PublicKey, upgrade};
+use libp2p::core::nodes::handled_node::{NodeHandler, NodeHandlerEndpoint, NodeHandlerEvent};
 use libp2p::kad::{KadConnecConfig, KadFindNodeRespond, KadIncomingRequest, KadConnecController};
 use libp2p::{identify, ping};
 use parking_lot::Mutex;
@@ -47,7 +48,7 @@ const DELAY_TO_FIRST_IDENTIFY: Duration = Duration::from_secs(2);
 ///
 /// The node will be pinged at a regular interval to determine whether it's still alive. We will
 /// also regularly query the remote for identification information, for statistics purposes.
-pub struct NodeHandler<TSubstream, TUserData> {
+pub struct SubstrateNodeHandler<TSubstream, TUserData> {
 	/// List of registered custom protocols.
 	registered_custom: Arc<RegisteredProtocols<TUserData>>,
 	/// Substreams open for "custom" protocols (eg. dot).
@@ -55,6 +56,8 @@ pub struct NodeHandler<TSubstream, TUserData> {
 
 	/// Substream open for Kademlia, if any.
 	kademlia_substream: Option<(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>)>,
+	/// If true, we need to send back a `KadOpen` event on the stream (if Kademlia is open).
+	need_report_kad_open: bool,
 
 	/// Substream open for sending pings, if any.
 	ping_out_substream: Option<(ping::Pinger, Box<Future<Item = (), Error = IoError> + Send>)>,
@@ -81,9 +84,14 @@ pub struct NodeHandler<TSubstream, TUserData> {
 	upgrades_in_progress_dial: Vec<(UpgradePurpose, Box<Future<Item = FinalUpgrade<TSubstream, TUserData>, Error = IoError> + Send>)>,
 	/// The substreams we want to open.
 	queued_dial_upgrades: Vec<UpgradePurpose>,
-	/// Number of outbound substreams that the user should open.
-	/// While this is non-zero, polling the handler will produce `OutboundSubstreamRequested`.
+	/// Number of outbound substreams the outside should open for us.
 	num_out_user_must_open: usize,
+
+	/// The `Multiaddr` event to produce.
+	multiaddr_event: Option<Result<Multiaddr, IoError>>,
+
+	/// The node has started its shutdown process.
+	is_shutting_down: bool,
 
 	/// Task to notify if we add an element to one of the lists from the public API.
 	to_notify: Option<task::Task>,
@@ -98,8 +106,8 @@ enum UpgradePurpose {
 	Ping,
 }
 
-/// Event that can happen on the `NodeHandler`.
-pub enum NodeEvent<TSubstream> {
+/// Event that can happen on the `SubstrateNodeHandler`.
+pub enum SubstrateOutEvent<TSubstream> {
 	/// The node has been determined to be unresponsive.
 	Unresponsive,
 
@@ -111,6 +119,9 @@ pub enum NodeEvent<TSubstream> {
 
 	/// The node has successfully responded to a ping.
 	PingSuccess(Duration),
+
+	/// The multiaddress of the node is now known.
+	Multiaddr(Result<Multiaddr, IoError>),
 
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
@@ -150,13 +161,6 @@ pub enum NodeEvent<TSubstream> {
 	///
 	/// The `IdentificationRequest` object should be used to send the information.
 	IdentificationRequest(IdentificationRequest<TSubstream>),
-
-	/// The emitter wants a new outbound substream to be opened.
-	///
-	/// In the future, the user should answer that request by calling `inject_substream` with
-	/// `endpoint` set to `Dialer`.
-	/// If multiple such events are produced, the user should open a new substream once per event.
-	OutboundSubstreamRequested,
 
 	/// Opened a Kademlia substream with the node.
 	KadOpen(KadConnecController),
@@ -224,7 +228,26 @@ impl<TSubstream> IdentificationRequest<TSubstream> {
 	}
 }
 
-/// Ideally we would have a method on `NodeHandler` that builds this type, but in practice it's a
+/// Event that can be received by a `SubstrateNodeHandler`.
+#[derive(Debug, Clone)]
+pub enum SubstrateInEvent {
+	/// Before anything happens on the node, we wait for an `Accept` event. This is used to deny
+	/// nodes based on their peer ID.
+	Accept,
+
+	/// Sends a message through a custom protocol substream.
+	SendCustomMessage {
+		protocol: ProtocolId,
+		packet_id: PacketId,
+		data: Vec<u8>,
+	},
+
+	/// Requests to open a Kademlia substream.
+	// TODO: document better
+	OpenKademlia,
+}
+
+/// Ideally we would have a method on `SubstrateNodeHandler` that builds this type, but in practice it's a
 /// bit tedious to express, even with the `impl Trait` syntax.
 /// Therefore we simply use a macro instead.
 macro_rules! listener_upgrade {
@@ -238,7 +261,7 @@ macro_rules! listener_upgrade {
 	)
 }
 
-impl<TSubstream, TUserData> NodeHandler<TSubstream, TUserData>
+impl<TSubstream, TUserData> SubstrateNodeHandler<TSubstream, TUserData>
 where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	  TUserData: Clone + Send + 'static,
 {
@@ -251,9 +274,10 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			.map(|proto| UpgradePurpose::Custom(proto.id()))
 			.collect();
 
-		NodeHandler {
+		SubstrateNodeHandler {
 			custom_protocols_substreams: Vec::with_capacity(registered_custom_len),
 			kademlia_substream: None,
+			need_report_kad_open: false,
 			identify_send_back: Arc::new(Mutex::new(Vec::with_capacity(1))),
 			ping_in_substreams: Vec::with_capacity(1),
 			ping_out_substream: None,
@@ -265,59 +289,24 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			next_identify: Interval::new(Instant::now() + DELAY_TO_FIRST_IDENTIFY, PERIOD_IDENTIFY),
 			queued_dial_upgrades,
 			num_out_user_must_open: registered_custom_len,
+			multiaddr_event: None,
+			is_shutting_down: false,
 			to_notify: None,
 		}
 	}
+}
 
-	/// Closes the node and returns all the events that should be produced by gracefully closing
-	/// everything.
-	// TODO: stronger return type
-	pub fn close(self) -> Vec<NodeEvent<TSubstream>> {
-		let mut events = Vec::new();
+impl<TSubstream, TUserData> NodeHandler<TSubstream> for SubstrateNodeHandler<TSubstream, TUserData>
+where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
+	  TUserData: Clone + Send + 'static,
+{
+	type InEvent = SubstrateInEvent;
+	type OutEvent = SubstrateOutEvent<TSubstream>;
+	type OutboundOpenInfo = ();
 
-		if let Some(_) = self.kademlia_substream {
-			events.push(NodeEvent::KadClosed(Ok(())));
-		}
-
-		for proto in self.custom_protocols_substreams {
-			events.push(NodeEvent::CustomProtocolClosed {
-				protocol_id: proto.protocol_id,
-				result: Ok(()),
-			});
-		}
-
-		events
-	}
-
-	/// Sends a message on a custom protocol substream.
-	pub fn send_custom_message(
-		&mut self,
-		protocol: ProtocolId,
-		packet_id: PacketId,
-		data: Vec<u8>,
-	) {
-		debug_assert!(self.registered_custom.has_protocol(protocol),
-			"invalid protocol id requested in the API of the libp2p networking");
-		let proto = match self.custom_protocols_substreams.iter().find(|p| p.protocol_id == protocol) {
-			Some(proto) => proto,
-			None => return, // TODO: diagnostic message?
-		};
-
-		let mut message = Bytes::with_capacity(1 + data.len());
-		message.extend_from_slice(&[packet_id]);
-		message.extend_from_slice(&data);
-
-		// TODO: report error?
-		let _ = proto.outgoing.unbounded_send(message);
-	}
-
-	/// Injects a substream that has been successfully opened with this node.
-	///
-	/// If `endpoint` is `Listener`, the remote opened the substream. If `endpoint` is `Dialer`,
-	/// our node opened it.
-	pub fn inject_substream(&mut self, substream: TSubstream, endpoint: Endpoint) {
+	fn inject_substream(&mut self, substream: TSubstream, endpoint: NodeHandlerEndpoint<Self::OutboundOpenInfo>) {
 		// For listeners, propose all the possible upgrades.
-		if endpoint == Endpoint::Listener {
+		if endpoint == NodeHandlerEndpoint::Listener {
 			let listener_upgrade = listener_upgrade!(self);
 			// TODO: shouldn't be future::empty() ; requires a change in libp2p
 			let upgrade = upgrade::apply(substream, listener_upgrade, Endpoint::Listener, future::empty())
@@ -332,8 +321,12 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 
 		// If we're the dialer, we have to decide which upgrade we want.
 		let purpose = if self.queued_dial_upgrades.is_empty() {
-			error!(target: "sub-libp2p", "Logic error: opened an outgoing substream \
-				with no purpose");
+			// Since we sometimes remove elements from `queued_dial_upgrades` before they succeed
+			// but after the outbound substream has started opening, it is possible that the queue
+			// is empty when we receive a substream. This is not an error.
+			// Example: we want to open a Kademlia substream, we start opening one, but in the
+			// meanwhile the remote opens a Kademlia substream. When we receive the new substream,
+			// we don't need it anymore.
 			return;
 		} else {
 			self.queued_dial_upgrades.remove(0)
@@ -384,20 +377,133 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		}
 	}
 
-	/// If we have a Kademlia substream open, returns a copy of the controller. Otherwise, the node
-	/// will try to open a Kademlia substream and produce a `KadOpen` event containing the
-	/// controller.
-	pub fn open_kademlia(&mut self) -> Option<KadConnecController> {
-		if let Some((ref ctrl, _)) = self.kademlia_substream {
-			Some(ctrl.clone())
+	#[inline]
+	fn inject_inbound_closed(&mut self) {
+	}
+
+	#[inline]
+	fn inject_outbound_closed(&mut self, _: Self::OutboundOpenInfo) {
+	}
+
+	#[inline]
+	fn inject_multiaddr(&mut self, multiaddr: Result<Multiaddr, IoError>) {
+		self.multiaddr_event = Some(multiaddr);
+		if let Some(to_notify) = self.to_notify.take() {
+			to_notify.notify();
+		}
+	}
+
+	fn inject_event(&mut self, event: Self::InEvent) {
+		match event {
+			SubstrateInEvent::SendCustomMessage { protocol, packet_id, data } => {
+				self.send_custom_message(protocol, packet_id, data);
+			},
+			SubstrateInEvent::OpenKademlia => self.open_kademlia(),
+			SubstrateInEvent::Accept => {
+				// TODO: implement
+			},
+		}
+	}
+
+	fn shutdown(&mut self) {
+		// TODO: close gracefully
+		self.is_shutting_down = true;
+		if let Some(to_notify) = self.to_notify.take() {
+			to_notify.notify();
+		}
+	}
+
+	fn poll(&mut self) -> Poll<Option<NodeHandlerEvent<Self::OutboundOpenInfo, Self::OutEvent>>, IoError> {
+		if self.is_shutting_down {
+			return Ok(Async::Ready(None));
+		}
+
+		if let Some(multiaddr_event) = self.multiaddr_event.take() {
+			let event = SubstrateOutEvent::Multiaddr(multiaddr_event);
+			return Ok(Async::Ready(Some(NodeHandlerEvent::Custom(event))));
+		}
+
+		// Request new outbound substreams from the user if necessary.
+		if self.num_out_user_must_open >= 1 {
+			self.num_out_user_must_open -= 1;
+			return Ok(Async::Ready(Some(NodeHandlerEvent::OutboundSubstreamRequest(()))));
+		}
+
+		match self.poll_upgrades_in_progress()? {
+			Async::Ready(value) => return Ok(Async::Ready(value.map(NodeHandlerEvent::Custom))),
+			Async::NotReady => (),
+		};
+
+		match self.poll_custom_protocols()? {
+			Async::Ready(value) => return Ok(Async::Ready(value.map(NodeHandlerEvent::Custom))),
+			Async::NotReady => (),
+		};
+
+		match self.poll_kademlia()? {
+			Async::Ready(value) => return Ok(Async::Ready(value.map(NodeHandlerEvent::Custom))),
+			Async::NotReady => (),
+		};
+
+		match self.poll_ping()? {
+			Async::Ready(value) => return Ok(Async::Ready(value.map(NodeHandlerEvent::Custom))),
+			Async::NotReady => (),
+		};
+
+		match self.poll_identify()? {
+			Async::Ready(value) => return Ok(Async::Ready(value.map(NodeHandlerEvent::Custom))),
+			Async::NotReady => (),
+		};
+
+		// Nothing happened. Register our task to be notified and return.
+		self.to_notify = Some(task::current());
+		Ok(Async::NotReady)
+	}
+}
+
+impl<TSubstream, TUserData> SubstrateNodeHandler<TSubstream, TUserData>
+where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
+	  TUserData: Clone + Send + 'static,
+{
+	/// Sends a message on a custom protocol substream.
+	fn send_custom_message(
+		&mut self,
+		protocol: ProtocolId,
+		packet_id: PacketId,
+		data: Vec<u8>,
+	) {
+		debug_assert!(self.registered_custom.has_protocol(protocol),
+			"invalid protocol id requested in the API of the libp2p networking");
+		let proto = match self.custom_protocols_substreams.iter().find(|p| p.protocol_id == protocol) {
+			Some(proto) => proto,
+			None => {
+				error!(target: "sub-libp2p", "Protocol {:?} isn't open", protocol);
+				return
+			},
+		};
+
+		let mut message = Bytes::with_capacity(1 + data.len());
+		message.extend_from_slice(&[packet_id]);
+		message.extend_from_slice(&data);
+
+		if let Err(_) = proto.outgoing.unbounded_send(message) {
+			error!(target: "sub-libp2p", "Error while sending custom message to channel");
+		}
+	}
+
+	/// The node will try to open a Kademlia substream and produce a `KadOpen` event containing the
+	/// controller. If a Kademlia substream is already open, produces the event immediately.
+	fn open_kademlia(&mut self) {
+		if self.kademlia_substream.is_some() {
+			self.need_report_kad_open = true;
+			if let Some(to_notify) = self.to_notify.take() {
+				to_notify.notify();
+			}
 		} else if self.has_upgrade_purpose(&UpgradePurpose::Kad) {
 			// We are currently upgrading a substream to Kademlia ; nothing more to do except wait.
-			None
 		} else {
 			// Opening a new substream for Kademlia.
 			self.queued_dial_upgrades.push(UpgradePurpose::Kad);
 			self.num_out_user_must_open += 1;
-			None
 		}
 	}
 
@@ -429,24 +535,24 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	fn inject_fully_negotiated(
 		&mut self,
 		upgrade: FinalUpgrade<TSubstream, TUserData>
-	) -> Option<NodeEvent<TSubstream>> {
+	) -> Option<SubstrateOutEvent<TSubstream>> {
 		match upgrade {
 			FinalUpgrade::IdentifyListener(sender) =>
-				Some(NodeEvent::IdentificationRequest(IdentificationRequest {
+				Some(SubstrateOutEvent::IdentificationRequest(IdentificationRequest {
 					sender,
 					identify_send_back: self.identify_send_back.clone(),
 					protocols: self.supported_protocol_names(),
 				})),
 			FinalUpgrade::IdentifyDialer(info, observed_addr) => {
 				self.cancel_dial_upgrade(&UpgradePurpose::Identify);
-				Some(NodeEvent::Identified { info, observed_addr })
+				Some(SubstrateOutEvent::Identified { info, observed_addr })
 			},
 			FinalUpgrade::PingDialer(pinger, ping_process) => {
 				self.cancel_dial_upgrade(&UpgradePurpose::Ping);
 				// We always open the ping substream for a reason, which is to immediately ping.
 				self.ping_out_substream = Some((pinger, ping_process));
 				if self.ping_remote() {
-					Some(NodeEvent::PingStart)
+					Some(SubstrateOutEvent::PingStart)
 				} else {
 					None
 				}
@@ -461,7 +567,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 				// Refuse the substream if we already have Kademlia substream open.
 				if self.kademlia_substream.is_none() {
 					self.kademlia_substream = Some((controller.clone(), stream));
-					Some(NodeEvent::KadOpen(controller))
+					Some(SubstrateOutEvent::KadOpen(controller))
 				} else {
 					None
 				}
@@ -473,7 +579,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					return None;
 				}
 
-				let event = NodeEvent::CustomProtocolOpen {
+				let event = SubstrateOutEvent::CustomProtocolOpen {
 					protocol_id: proto.protocol_id,
 					version: proto.protocol_version,
 				};
@@ -521,7 +627,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	}
 
 	/// Polls the upgrades in progress.
-	fn poll_upgrades_in_progress(&mut self) -> Poll<Option<NodeEvent<TSubstream>>, IoError> {
+	fn poll_upgrades_in_progress(&mut self) -> Poll<Option<SubstrateOutEvent<TSubstream>>, IoError> {
 		// Continue negotiation of newly-opened substreams on the listening side.
 		// We remove each element from `upgrades_in_progress_listen` one by one and add them back
 		// if not ready.
@@ -537,7 +643,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					self.upgrades_in_progress_listen.push(in_progress);
 				},
 				Err(err) => {
-					return Ok(Async::Ready(Some(NodeEvent::SubstreamUpgradeFail(err))));
+					return Ok(Async::Ready(Some(SubstrateOutEvent::SubstreamUpgradeFail(err))));
 				},
 			}
 		}
@@ -559,11 +665,11 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					// TODO: dispatch depending on actual error ; right now we assume that
 					// error == not supported, which is not necessarily true in theory
 					if let UpgradePurpose::Custom(_) = purpose {
-						return Ok(Async::Ready(Some(NodeEvent::Useless)));
+						return Ok(Async::Ready(Some(SubstrateOutEvent::Useless)));
 					} else {
 						let msg = format!("While upgrading to {:?}: {:?}", purpose, err);
 						let err = IoError::new(IoErrorKind::Other, msg);
-						return Ok(Async::Ready(Some(NodeEvent::SubstreamUpgradeFail(err))));
+						return Ok(Async::Ready(Some(SubstrateOutEvent::SubstreamUpgradeFail(err))));
 					}
 				},
 			}
@@ -573,7 +679,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	}
 
 	/// Polls the upgrades in progress.
-	fn poll_custom_protocols(&mut self) -> Poll<Option<NodeEvent<TSubstream>>, IoError> {
+	fn poll_custom_protocols(&mut self) -> Poll<Option<SubstrateOutEvent<TSubstream>>, IoError> {
 		// Poll for messages on the custom protocol stream.
 		for n in (0 .. self.custom_protocols_substreams.len()).rev() {
 			let mut custom_proto = self.custom_protocols_substreams.swap_remove(n);
@@ -582,7 +688,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 				Ok(Async::Ready(Some((packet_id, data)))) => {
 					let protocol_id = custom_proto.protocol_id;
 					self.custom_protocols_substreams.push(custom_proto);
-					return Ok(Async::Ready(Some(NodeEvent::CustomMessage {
+					return Ok(Async::Ready(Some(SubstrateOutEvent::CustomMessage {
 						protocol_id,
 						packet_id,
 						data,
@@ -592,7 +698,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					// Trying to reopen the protocol.
 					self.queued_dial_upgrades.push(UpgradePurpose::Custom(custom_proto.protocol_id));
 					self.num_out_user_must_open += 1;
-					return Ok(Async::Ready(Some(NodeEvent::CustomProtocolClosed {
+					return Ok(Async::Ready(Some(SubstrateOutEvent::CustomProtocolClosed {
 						protocol_id: custom_proto.protocol_id,
 						result: Ok(()),
 					})))
@@ -601,7 +707,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					// Trying to reopen the protocol.
 					self.queued_dial_upgrades.push(UpgradePurpose::Custom(custom_proto.protocol_id));
 					self.num_out_user_must_open += 1;
-					return Ok(Async::Ready(Some(NodeEvent::CustomProtocolClosed {
+					return Ok(Async::Ready(Some(SubstrateOutEvent::CustomProtocolClosed {
 						protocol_id: custom_proto.protocol_id,
 						result: Err(err),
 					})))
@@ -613,18 +719,26 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	}
 
 	/// Polls the open Kademlia substream, if any.
-	fn poll_kademlia(&mut self) -> Poll<Option<NodeEvent<TSubstream>>, IoError> {
+	fn poll_kademlia(&mut self) -> Poll<Option<SubstrateOutEvent<TSubstream>>, IoError> {
+		// Produce a `KadOpen` event if necessary.
+		if self.need_report_kad_open {
+			self.need_report_kad_open = false;
+			if let Some((ref kad_ctrl, _)) = self.kademlia_substream {
+				return Ok(Async::Ready(Some(SubstrateOutEvent::KadOpen(kad_ctrl.clone()))));
+			}
+		}
+
 		// Poll for Kademlia events.
 		if let Some((controller, mut stream)) = self.kademlia_substream.take() {
 			match stream.poll() {
 				Ok(Async::Ready(Some(KadIncomingRequest::FindNode { searched, responder }))) => {
-					return Ok(Async::Ready(Some(NodeEvent::KadFindNode { searched, responder })));
+					return Ok(Async::Ready(Some(SubstrateOutEvent::KadFindNode { searched, responder })));
 				},
 				// We don't care about Kademlia pings, they are unused.
 				Ok(Async::Ready(Some(KadIncomingRequest::PingPong))) => {},
 				Ok(Async::NotReady) => self.kademlia_substream = Some((controller, stream)),
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(Some(NodeEvent::KadClosed(Ok(()))))),
-				Err(err) => return Ok(Async::Ready(Some(NodeEvent::KadClosed(Err(err))))),
+				Ok(Async::Ready(None)) => return Ok(Async::Ready(Some(SubstrateOutEvent::KadClosed(Ok(()))))),
+				Err(err) => return Ok(Async::Ready(Some(SubstrateOutEvent::KadClosed(Err(err))))),
 			}
 		}
 
@@ -632,7 +746,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	}
 
 	/// Polls the ping substreams.
-	fn poll_ping(&mut self) -> Poll<Option<NodeEvent<TSubstream>>, IoError> {
+	fn poll_ping(&mut self) -> Poll<Option<SubstrateOutEvent<TSubstream>>, IoError> {
 		// Poll for answering pings.
 		for n in (0 .. self.ping_in_substreams.len()).rev() {
 			let mut ping = self.ping_in_substreams.swap_remove(n);
@@ -658,10 +772,10 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			match ping_attempt.poll() {
 				Ok(Async::Ready(())) => {
 					self.next_ping.reset(Instant::now() + DELAY_TO_NEXT_PING);
-					return Ok(Async::Ready(Some(NodeEvent::PingSuccess(started.elapsed()))));
+					return Ok(Async::Ready(Some(SubstrateOutEvent::PingSuccess(started.elapsed()))));
 				},
 				Ok(Async::NotReady) => self.active_ping_out = Some((started, ping_attempt)),
-				Err(_) => return Ok(Async::Ready(Some(NodeEvent::Unresponsive))),
+				Err(_) => return Ok(Async::Ready(Some(SubstrateOutEvent::Unresponsive))),
 			}
 		}
 
@@ -673,7 +787,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 				// it again without having an accident.
 				self.next_ping.reset(Instant::now() + Duration::from_secs(5 * 60));
 				if self.ping_remote() {
-					return Ok(Async::Ready(Some(NodeEvent::PingStart)));
+					return Ok(Async::Ready(Some(SubstrateOutEvent::PingStart)));
 				}
 			},
 			Err(err) => {
@@ -686,7 +800,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	}
 
 	/// Polls the identify substreams.
-	fn poll_identify(&mut self) -> Poll<Option<NodeEvent<TSubstream>>, IoError> {
+	fn poll_identify(&mut self) -> Poll<Option<SubstrateOutEvent<TSubstream>>, IoError> {
 		// Poll the future that fires when we need to identify the node again.
 		loop {
 			match self.next_identify.poll() {
@@ -714,51 +828,6 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			}
 		}
 
-		Ok(Async::NotReady)
-	}
-}
-
-impl<TSubstream, TUserData> Stream for NodeHandler<TSubstream, TUserData>
-where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
-	  TUserData: Clone + Send + 'static,
-{
-	type Item = NodeEvent<TSubstream>;
-	type Error = IoError;
-
-	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		// Request new outbound substreams from the user if necessary.
-		if self.num_out_user_must_open >= 1 {
-			self.num_out_user_must_open -= 1;
-			return Ok(Async::Ready(Some(NodeEvent::OutboundSubstreamRequested)));
-		}
-
-		match self.poll_upgrades_in_progress()? {
-			Async::Ready(value) => return Ok(Async::Ready(value)),
-			Async::NotReady => (),
-		};
-
-		match self.poll_custom_protocols()? {
-			Async::Ready(value) => return Ok(Async::Ready(value)),
-			Async::NotReady => (),
-		};
-
-		match self.poll_kademlia()? {
-			Async::Ready(value) => return Ok(Async::Ready(value)),
-			Async::NotReady => (),
-		};
-
-		match self.poll_ping()? {
-			Async::Ready(value) => return Ok(Async::Ready(value)),
-			Async::NotReady => (),
-		};
-
-		match self.poll_identify()? {
-			Async::Ready(value) => return Ok(Async::Ready(value)),
-			Async::NotReady => (),
-		};
-
-		// Nothing happened. Register our task to be notified and return.
-		self.to_notify = Some(task::current());
 		Ok(Async::NotReady)
 	}
 }

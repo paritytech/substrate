@@ -17,21 +17,18 @@
 use bytes::Bytes;
 use custom_proto::RegisteredProtocols;
 use fnv::FnvHashMap;
-use futures::{prelude::*, Stream, sync::mpsc, task};
+use futures::{prelude::*, Stream};
 use libp2p::{Multiaddr, multiaddr::AddrComponent, PeerId};
 use libp2p::core::{muxing, Endpoint, PublicKey};
 use libp2p::core::nodes::node::Substream;
-use libp2p::core::nodes::swarm::{ConnectedPoint, Swarm as Libp2pSwarm};
+use libp2p::core::nodes::swarm::{ConnectedPoint, Swarm as Libp2pSwarm, HandlerFactory};
 use libp2p::core::nodes::swarm::{SwarmEvent as Libp2pSwarmEvent, Peer as SwarmPeer};
 use libp2p::core::transport::boxed::Boxed;
 use libp2p::kad::{KadConnecController, KadFindNodeRespond};
 use libp2p::secio;
-use node_handler::{NodeEvent, NodeHandler, IdentificationRequest};
+use node_handler::{SubstrateOutEvent, SubstrateNodeHandler, SubstrateInEvent, IdentificationRequest};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
-use std::mem;
-use std::sync::Arc;
-use std::time::Duration;
-use tokio_executor;
+use std::{mem, sync::Arc, time::Duration};
 use transport;
 use {Error, NodeIndex, PacketId, ProtocolId};
 
@@ -41,7 +38,8 @@ use {Error, NodeIndex, PacketId, ProtocolId};
 pub fn start_swarm<TUserData>(
 	registered_custom: Arc<RegisteredProtocols<TUserData>>,
 	local_private_key: secio::SecioKeyPair,
-) -> Result<Swarm<TUserData>, Error> {
+) -> Result<Swarm<TUserData>, Error>
+where TUserData: Send + Sync + Clone + 'static {
 	// Private and public keys.
 	let local_public_key = local_private_key.to_public_key();
 	let local_peer_id = local_public_key.clone().into_peer_id();
@@ -50,23 +48,32 @@ pub fn start_swarm<TUserData>(
 	let transport = transport::build_transport(local_private_key);
 
 	// Build the underlying libp2p swarm.
-	let swarm = Libp2pSwarm::new(transport);
+	let swarm = Libp2pSwarm::with_handler_builder(transport, HandlerBuilder(registered_custom));
 
-	let (node_tasks_events_tx, node_tasks_events_rx) = mpsc::unbounded();
 	Ok(Swarm {
 		swarm,
 		local_public_key,
 		local_peer_id,
 		listening_addrs: Vec::new(),
-		registered_custom,
 		node_by_peer: Default::default(),
 		nodes_info: Default::default(),
 		next_node_index: 0,
-		node_tasks_events_rx,
-		node_tasks_events_tx,
-		tasks_to_spawn: Vec::new(),
-		to_notify: None,
 	})
+}
+
+/// Dummy structure that exists because we need to be able to express the type. Otherwise we would
+/// use a closure.
+#[derive(Clone)]
+struct HandlerBuilder<TUserData>(Arc<RegisteredProtocols<TUserData>>);
+impl<TUserData> HandlerFactory for HandlerBuilder<TUserData>
+where TUserData: Clone + Send + Sync + 'static
+{
+	type Handler = SubstrateNodeHandler<Substream<Muxer>, TUserData>;
+
+	#[inline]
+	fn new_handler(&self) -> Self::Handler {
+		SubstrateNodeHandler::new(self.0.clone())
+	}
 }
 
 /// Event produced by the swarm.
@@ -84,7 +91,17 @@ pub enum SwarmEvent {
 		endpoint: ConnectedPoint,
 	},
 
-	/// Closed connection to a node.
+	/// The connection to a peer has changed.
+	Reconnected {
+		/// Index of the node.
+		node_index: NodeIndex,
+		/// The new endpoint.
+		endpoint: ConnectedPoint,
+		/// List of custom protocols that were closed in the process.
+		closed_custom_protocols: Vec<ProtocolId>,
+	},
+
+	/// Closed connection to a node, either gracefully or because of an error.
 	///
 	/// It is guaranteed that this node has been opened with a `NewNode` event beforehand. However
 	/// not all `ClosedCustomProtocol` events have been dispatched.
@@ -202,7 +219,12 @@ pub enum SwarmEvent {
 /// Network swarm. Must be polled regularly in order for the networking to work.
 pub struct Swarm<TUserData> {
 	/// Stream of events of the swarm.
-	swarm: Libp2pSwarm<Boxed<(PeerId, Muxer)>, Muxer, ()>,
+	swarm: Libp2pSwarm<
+		Boxed<(PeerId, Muxer)>,
+		SubstrateInEvent,
+		SubstrateOutEvent<Substream<Muxer>>,
+		HandlerBuilder<TUserData>
+	>,
 
 	/// Public key of the local node.
 	local_public_key: PublicKey,
@@ -213,50 +235,14 @@ pub struct Swarm<TUserData> {
 	/// Addresses we know we're listening on. Only includes NAT traversed addresses.
 	listening_addrs: Vec<Multiaddr>,
 
-	/// List of registered custom protocols.
-	registered_custom: Arc<RegisteredProtocols<TUserData>>,
-
 	/// For each peer id, the corresponding node index.
-	/// This is filled when the swarm receives a node, and is emptied when the node handler closes.
-	///
-	/// Note that we may temporarily have multiple node indices pointing to the same peer ID. This
-	/// hash map only contains the latest node for each given peer.
-	/// Nodes that are not in this list should all be in the closing state.
 	node_by_peer: FnvHashMap<PeerId, NodeIndex>,
 
 	/// All the nodes tasks. Must be maintained consistent with `node_by_peer`.
-	///
-	/// # How it works
-	///
-	/// First, the `swarm` generates events about connected nodes. This creates an entry in
-	/// `nodes_info` and `node_by_peer`, where the node is in pending mode. Accepting the node
-	/// spawns a background task and puts a sender in `nodes_info`.
-	///
-	/// If the `swarm` tells us that a node is closed, or if the user wants to drop a peer, we
-	/// destroy that sender, which tells the background task that it needs to stop.
-	///
-	/// Once the background task stops, we remove the entries in `node_by_peer` and `nodes_info`.
-	///
-	/// In order to maintain a consistent state, at no point we should close the sender without
-	/// removing the peer from the nework first (removing a peer from the network is
-	/// instantaneous), and at no point should we remove entries before the background task is
-	/// stopped.
 	nodes_info: FnvHashMap<NodeIndex, NodeInfo>,
 
 	/// Next key to use when we insert a new entry in `nodes_info`.
 	next_node_index: NodeIndex,
-
-	/// Events received by the node tasks. If `None`, means that the task finished for this node.
-	node_tasks_events_rx: mpsc::UnboundedReceiver<(NodeIndex, Option<NodeEvent<Substream<Muxer>>>)>,
-
-	/// Sending side of `node_tasks_events_rx`. Meant to be cloned and sent to background tasks.
-	node_tasks_events_tx: mpsc::UnboundedSender<(NodeIndex, Option<NodeEvent<Substream<Muxer>>>)>,
-
-	/// List of tasks to spawn when we're in a polling context.
-	tasks_to_spawn: Vec<NodeTask<TUserData>>,
-
-	/// Task to notify when an element is added to `tasks_to_spawn`.
-	to_notify: Option<task::Task>,
 }
 
 /// Local information about a peer.
@@ -267,86 +253,11 @@ struct NodeInfo {
 	/// Whether we opened the connection or the remote opened it.
 	endpoint: Endpoint,
 
-	/// State of the node.
-	state: NodeState,
-
 	/// List of custom protocol substreams that are open.
 	open_protocols: Vec<ProtocolId>,
 }
 
-/// State of the node.
-enum NodeState {
-	/// The node is waiting to be accepted or denied.
-	/// Contains both ends of a channel, so that we can start appending messages that will be
-	/// processed once the node gets accepted.
-	Pending(mpsc::UnboundedSender<OutToTaskMsg>, mpsc::UnboundedReceiver<OutToTaskMsg>),
-
-	/// The node is active. The sender can be used to dispatch messages to the background task.
-	/// Destroying the sender will close the background task.
-	Accepted(mpsc::UnboundedSender<OutToTaskMsg>),
-
-	/// The node is closing. We dropped the sender, and thus.
-	Closing,
-
-	/// The node has been closed by calling `drop_node`. Same as `closing`, except that we must
-	/// must not generate any event about this node anymore.
-	Closed,
-}
-
-impl NodeState {
-	/// Returns the inner sender, if any.
-	#[inline]
-	fn as_sender(&mut self) -> Option<&mut mpsc::UnboundedSender<OutToTaskMsg>> {
-		match *self {
-			NodeState::Pending(ref mut tx, _) => Some(tx),
-			NodeState::Accepted(ref mut tx) => Some(tx),
-			NodeState::Closing => None,
-			NodeState::Closed => None,
-		}
-	}
-
-	/// Returns `true` for `NodeState::Closed`.
-	#[inline]
-	fn is_closed(&self) -> bool {
-		match *self {
-			NodeState::Pending(_, _) => false,
-			NodeState::Accepted(_) => false,
-			NodeState::Closing => false,
-			NodeState::Closed => true,
-		}
-	}
-
-	/// Switches the state to `Closing`, unless we're already closing or closed.
-	#[inline]
-	fn close_if_necessary(&mut self) {
-		match *self {
-			NodeState::Pending(_, _) | NodeState::Accepted(_) => (),
-			NodeState::Closing | NodeState::Closed => return,
-		};
-
-		*self = NodeState::Closing;
-	}
-}
-
-/// Message from the service to one of the background node tasks.
-enum OutToTaskMsg {
-	/// Must call `inject_substream()` on the node handler.
-	InjectSubstream {
-		substream: Substream<muxing::StreamMuxerBox>,
-		endpoint: Endpoint,
-	},
-
-	/// Must call `open_kademlia()` on the node handler.
-	OpenKademlia,
-
-	/// Must call `send_custom_message()` on the node handler.
-	SendCustomMessage {
-		protocol: ProtocolId,
-		packet_id: PacketId,
-		data: Vec<u8>,
-	},
-}
-
+/// The muxer used by the transport.
 type Muxer = muxing::StreamMuxerBox;
 
 impl<TUserData> Swarm<TUserData>
@@ -406,10 +317,15 @@ impl<TUserData> Swarm<TUserData>
 		data: Vec<u8>
 	) {
 		if let Some(info) = self.nodes_info.get_mut(&node_index) {
-			if let Some(ref mut sender) = info.state.as_sender() {
-				let msg = OutToTaskMsg::SendCustomMessage { protocol, packet_id, data };
-				let _ = sender.unbounded_send(msg);
+			if let Some(mut connected) = self.swarm.peer(info.peer_id.clone()).as_connected() {
+				connected.send_event(SubstrateInEvent::SendCustomMessage { protocol, packet_id, data });
+			} else {
+				error!(target: "sub-libp2p", "Tried to send message to {:?}, but we're not \
+					connected to it", info.peer_id);
 			}
+		} else {
+			error!(target: "sub-libp2p", "Tried to send message to invalid node index {:?}",
+				node_index);
 		}
 	}
 
@@ -453,36 +369,24 @@ impl<TUserData> Swarm<TUserData>
 	/// with the specified index.
 	///
 	/// Returns an error if the node index is invalid, or if it was already accepted.
-	#[inline]
 	pub fn accept_node(&mut self, node_index: NodeIndex) -> Result<(), ()> {
-		let info = match self.nodes_info.get_mut(&node_index) {
-			Some(i) => i,
-			None => return Err(()),
+		// TODO: detect if already accepted?
+		let peer_id = match self.nodes_info.get(&node_index) {
+			Some(info) => &info.peer_id,
+			None => return Err(())
 		};
 
-		let out_commands_rx = match mem::replace(&mut info.state, NodeState::Closing) {
-			NodeState::Pending(tx, rx) => {
-				info.state = NodeState::Accepted(tx);
-				rx
+		match self.swarm.peer(peer_id.clone()) {
+			SwarmPeer::Connected(mut peer) => {
+				peer.send_event(SubstrateInEvent::Accept);
+				Ok(())
 			},
-			other => {
-				info.state = other;
-				return Err(())
+			SwarmPeer::PendingConnect(_) | SwarmPeer::NotConnected(_) => {
+				error!(target: "sub-libp2p", "State inconsistency detected in accept_node ; \
+					nodes_info is not in sync with the underlying swarm");
+				Err(())
 			},
-		};
-
-		self.tasks_to_spawn.push(NodeTask {
-			node_index,
-			handler: Some(NodeHandler::new(self.registered_custom.clone())),
-			out_commands_rx,
-			node_tasks_events_tx: self.node_tasks_events_tx.clone(),
-		});
-
-		if let Some(to_notify) = self.to_notify.take() {
-			to_notify.notify();
 		}
-
-		Ok(())
 	}
 
 	/// Disconnects a peer.
@@ -493,40 +397,25 @@ impl<TUserData> Swarm<TUserData>
 	/// Returns the list of custom protocol substreams that were opened.
 	#[inline]
 	pub fn drop_node(&mut self, node_index: NodeIndex) -> Result<Vec<ProtocolId>, ()> {
-		let mut must_remove = false;
-
-		let ret = {
-			let info = match self.nodes_info.get_mut(&node_index) {
-				Some(i) => i,
-				None => {
-					error!(target: "sub-libp2p", "Trying to close non-existing node #{}", node_index);
-					return Err(());
-				},
-			};
-
-			if let Some(connected) = self.swarm.peer(info.peer_id.clone()).as_connected() {
-				connected.close();
-			}
-
-			// If we don't have a background task yet, remove the entry immediately.
-			if let NodeState::Pending(_, _) = info.state {
-				must_remove = true;
-				Vec::new()
-			} else {
-				// There may be events pending on the rx side about this node, so we switch it to
-				// the `Closed` state in order to know not emit any more event about it.
-				info.state = NodeState::Closed;
-				info.open_protocols.clone()
-			}
+		let info = match self.nodes_info.remove(&node_index) {
+			Some(i) => i,
+			None => {
+				error!(target: "sub-libp2p", "Trying to close non-existing node #{}", node_index);
+				return Err(());
+			},
 		};
 
-		if must_remove {
-			let info = self.nodes_info.remove(&node_index)
-				.expect("We checked the key a few lines above");
-			self.node_by_peer.remove(&info.peer_id);
+		let idx_in_hashmap = self.node_by_peer.remove(&info.peer_id);
+		debug_assert_eq!(idx_in_hashmap, Some(node_index));
+
+		if let Some(connected) = self.swarm.peer(info.peer_id.clone()).as_connected() {
+			connected.close();
+		} else {
+			error!(target: "sub-libp2p", "State inconsistency: node_by_peer and nodes_info are \
+				not in sync with the underlying swarm");
 		}
 
-		Ok(ret)
+		Ok(info.open_protocols)
 	}
 
 	/// Opens a Kademlia substream with the given node. A `KadOpen` event will later be produced
@@ -537,13 +426,17 @@ impl<TUserData> Swarm<TUserData>
 	/// Returns an error if the node index is invalid.
 	pub fn open_kademlia(&mut self, node_index: NodeIndex) -> Result<(), ()> {
 		if let Some(info) = self.nodes_info.get_mut(&node_index) {
-			if let Some(ref mut sender) = info.state.as_sender() {
-				let _ = sender.unbounded_send(OutToTaskMsg::OpenKademlia);
+			if let Some(mut connected) = self.swarm.peer(info.peer_id.clone()).as_connected() {
+				connected.send_event(SubstrateInEvent::OpenKademlia);
 				Ok(())
 			} else {
+				error!(target: "sub-libp2p", "Tried to open Kademlia with {:?}, but we're not \
+					connected to it", info.peer_id);
 				Err(())
 			}
 		} else {
+			error!(target: "sub-libp2p", "Tried to open Kademlia with invalid node index {:?}",
+				node_index);
 			Err(())
 		}
 	}
@@ -599,75 +492,6 @@ impl<TUserData> Swarm<TUserData>
 		}
 	}
 
-	/// Handles the swarm opening a connection to the given peer.
-	///
-	/// Returns the `NewNode` event to produce.
-	///
-	/// > **Note**: Must be called from inside `poll()`, otherwise it will panic. This method
-	/// > shouldn't be made public because of this requirement.
-	fn handle_connection(
-		&mut self,
-		peer_id: PeerId,
-		endpoint: ConnectedPoint
-	) -> Option<SwarmEvent> {
-		let (tx, rx) = mpsc::unbounded();
-
-		// Assign the node index.
-		let node_index = self.next_node_index.clone();
-		self.next_node_index += 1;
-		self.node_by_peer.insert(peer_id.clone(), node_index);
-		self.nodes_info.insert(node_index, NodeInfo {
-			peer_id: peer_id.clone(),
-			endpoint: match endpoint {
-				ConnectedPoint::Listener { .. } => Endpoint::Listener,
-				ConnectedPoint::Dialer { .. } => Endpoint::Dialer,
-			},
-			state: NodeState::Pending(tx, rx),
-			open_protocols: Vec::new(),
-		});
-
-		Some(SwarmEvent::NodePending {
-			node_index,
-			peer_id,
-			endpoint
-		})
-	}
-
-	/// Handles a swarm event about a newly-opened substream for the given peer.
-	///
-	/// Dispatches the substream to the corresponding task.
-	fn handle_new_substream(
-		&mut self,
-		peer_id: PeerId,
-		substream: Substream<Muxer>,
-		endpoint: Endpoint,
-	) {
-		let node_index = match self.node_by_peer.get(&peer_id) {
-			Some(i) => *i,
-			None => {
-				error!(target: "sub-libp2p", "Logic error: new substream for closed node");
-				return
-			},
-		};
-
-		let info = match self.nodes_info.get_mut(&node_index) {
-			Some(i) => i,
-			None => {
-				error!(target: "sub-libp2p", "Logic error: new substream for closed node");
-				return
-			},
-		};
-
-		if let Some(ref mut sender) = info.state.as_sender() {
-			let _ = sender.unbounded_send(OutToTaskMsg::InjectSubstream {
-				substream,
-				endpoint,
-			});
-		} else {
-			error!(target: "sub-libp2p", "Logic error: no background task for {:?}", peer_id);
-		}
-	}
-
 	/// Processes an event received by the swarm.
 	///
 	/// Optionally returns an event to report back to the outside.
@@ -676,32 +500,72 @@ impl<TUserData> Swarm<TUserData>
 	/// > shouldn't be made public because of this requirement.
 	fn process_network_event(
 		&mut self,
-		event: Libp2pSwarmEvent<Boxed<(PeerId, Muxer)>, Muxer, ()>
+		event: Libp2pSwarmEvent<Boxed<(PeerId, Muxer)>, SubstrateOutEvent<Substream<Muxer>>>
 	) -> Option<SwarmEvent> {
 		match event {
-			Libp2pSwarmEvent::Connected { peer_id, endpoint } =>
-				if let Some(event) = self.handle_connection(peer_id, endpoint) {
-					return Some(event);
-				},
+			Libp2pSwarmEvent::Connected { peer_id, endpoint } => {
+				let node_index = self.next_node_index.clone();
+				self.next_node_index += 1;
+				self.node_by_peer.insert(peer_id.clone(), node_index);
+				self.nodes_info.insert(node_index, NodeInfo {
+					peer_id: peer_id.clone(),
+					endpoint: match endpoint {
+						ConnectedPoint::Listener { .. } => Endpoint::Listener,
+						ConnectedPoint::Dialer { .. } => Endpoint::Dialer,
+					},
+					open_protocols: Vec::new(),
+				});
+
+				return Some(SwarmEvent::NodePending {
+					node_index,
+					peer_id,
+					endpoint
+				});
+			}
 			Libp2pSwarmEvent::Replaced { peer_id, endpoint, .. } => {
-				let node_index = *self.node_by_peer.get(&peer_id).expect("State inconsistency");
-				self.nodes_info.get_mut(&node_index).expect("State inconsistency")
-					.state.close_if_necessary();
-				if let Some(event) = self.handle_connection(peer_id, endpoint) {
-					return Some(event);
-				}
+				let node_index = self.next_node_index.clone();
+				self.next_node_index += 1;
+				debug_assert_eq!(self.node_by_peer.get(&peer_id), Some(&node_index));
+				let infos = self.nodes_info.get_mut(&node_index)
+					.expect("nodes_info is always kept in sync with the swarm");
+				debug_assert_eq!(infos.peer_id, peer_id);
+				infos.endpoint = match endpoint {
+					ConnectedPoint::Listener { .. } => Endpoint::Listener,
+					ConnectedPoint::Dialer { .. } => Endpoint::Dialer,
+				};
+				let closed_custom_protocols = mem::replace(&mut infos.open_protocols, Vec::new());
+
+				return Some(SwarmEvent::Reconnected {
+					node_index,
+					endpoint,
+					closed_custom_protocols,
+				});
 			},
 			Libp2pSwarmEvent::NodeClosed { peer_id, .. } => {
 				debug!(target: "sub-libp2p", "Connection to {:?} closed gracefully", peer_id);
-				let node_index = *self.node_by_peer.get(&peer_id).expect("State inconsistency");
-				self.nodes_info.get_mut(&node_index).expect("State inconsistency")
-					.state.close_if_necessary();
+				let node_index = self.node_by_peer.remove(&peer_id)
+					.expect("node_by_peer is always kept in sync with the inner swarm");
+				let infos = self.nodes_info.remove(&node_index)
+					.expect("nodes_info is always kept in sync with the inner swarm");
+				debug_assert_eq!(infos.peer_id, peer_id);
+				return Some(SwarmEvent::NodeClosed {
+					node_index,
+					peer_id,
+					closed_custom_protocols: infos.open_protocols,
+				});
 			},
 			Libp2pSwarmEvent::NodeError { peer_id, error, .. } => {
 				debug!(target: "sub-libp2p", "Closing {:?} because of error: {:?}", peer_id, error);
-				let node_index = *self.node_by_peer.get(&peer_id).expect("State inconsistency");
-				self.nodes_info.get_mut(&node_index).expect("State inconsistency")
-					.state.close_if_necessary();
+				let node_index = self.node_by_peer.remove(&peer_id)
+					.expect("node_by_peer is always kept in sync with the inner swarm");
+				let infos = self.nodes_info.remove(&node_index)
+					.expect("nodes_info is always kept in sync with the inner swarm");
+				debug_assert_eq!(infos.peer_id, peer_id);
+				return Some(SwarmEvent::NodeClosed {
+					node_index,
+					peer_id,
+					closed_custom_protocols: infos.open_protocols,
+				});
 			},
 			Libp2pSwarmEvent::DialError { multiaddr, error, .. } =>
 				return Some(SwarmEvent::DialFail {
@@ -732,139 +596,72 @@ impl<TUserData> Swarm<TUserData>
 					warn!(target: "sub-libp2p", "No listener left");
 				}
 			},
-			Libp2pSwarmEvent::NodeMultiaddr { peer_id, address: Ok(address) } => {
-				trace!(target: "sub-libp2p", "Determined the multiaddr of {:?} => {}",
-					peer_id, address);
-				if let Some(&node_index) = self.node_by_peer.get(&peer_id) {
-					return Some(SwarmEvent::NodeAddress {
-						node_index,
-						address,
-					});
-				} else {
-					error!(target: "sub-libp2p", "Logic error: no index for {:?}", peer_id);
-				}
-			},
-			Libp2pSwarmEvent::NodeMultiaddr { peer_id, address: Err(err) } =>
-				trace!(target: "sub-libp2p", "Error when determining the multiaddr of {:?} => {:?}",
-					peer_id, err),
+			Libp2pSwarmEvent::NodeEvent { peer_id, event } =>
+				if let Some(event) = self.handle_node_event(peer_id, event) {
+					return Some(event);
+				},
 			Libp2pSwarmEvent::IncomingConnection { listen_addr } =>
 				trace!(target: "sub-libp2p", "Incoming connection on listener {}", listen_addr),
 			Libp2pSwarmEvent::IncomingConnectionError { listen_addr, error } =>
 				trace!(target: "sub-libp2p", "Incoming connection on listener {} errored: {:?}",
 					listen_addr, error),
-			Libp2pSwarmEvent::InboundSubstream { peer_id, substream } =>
-				self.handle_new_substream(peer_id, substream, Endpoint::Listener),
-			Libp2pSwarmEvent::OutboundSubstream { peer_id, substream, .. } =>
-				self.handle_new_substream(peer_id, substream, Endpoint::Dialer),
-			Libp2pSwarmEvent::InboundClosed { .. } => {},
-			Libp2pSwarmEvent::OutboundClosed { .. } => {},
 		}
 
 		None
 	}
 
-	/// Polls for what happened on the main network side.
-	fn poll_network(&mut self) -> Poll<Option<SwarmEvent>, IoError> {
-		loop {
-			match self.swarm.poll() {
-				Ok(Async::Ready(Some(event))) =>
-					if let Some(event) = self.process_network_event(event) {
-						return Ok(Async::Ready(Some(event)));
-					}
-				Ok(Async::NotReady) => return Ok(Async::NotReady),
-				Ok(Async::Ready(None)) => unreachable!("The Swarm stream never ends"),
-				// TODO: this `Err` contains a `Void` ; remove variant when Rust allows that
-				Err(_) => unreachable!("The Swarm stream never errors"),
-			}
-		}
-	}
-
-	/// Polls for what happened on the background node tasks.
-	fn poll_node_tasks(&mut self) -> Poll<Option<SwarmEvent>, IoError> {
-		loop {
-			match self.node_tasks_events_rx.poll() {
-				Ok(Async::NotReady) => return Ok(Async::NotReady),
-				Ok(Async::Ready(Some((node_index, event)))) =>
-					if let Some(event) = self.handle_node_event(node_index, event) {
-						return Ok(Async::Ready(Some(event)));
-					},
-				Ok(Async::Ready(None)) => unreachable!("The tx is in self so the rx never closes"),
-				Err(()) => unreachable!("An UnboundedReceiver never errors"),
-			}
-		}
-	}
-
-	/// Processes an event obtained by a node background task.
-	///
-	/// If the `event` is `None`, that means that the background task finished.
+	/// Processes an event obtained by a node in the swarm.
 	///
 	/// Optionally returns an event that the service must emit.
 	///
-	/// > **Note**: The event **must** have been produced by a background task, otherwise state
+	/// > **Note**: The event **must** have been produced by the swarm, otherwise state
 	/// > inconsistencies will likely happen.
 	fn handle_node_event(
 		&mut self,
-		node_index: NodeIndex,
-		event: Option<NodeEvent<Substream<Muxer>>>
+		peer_id: PeerId,
+		event: SubstrateOutEvent<Substream<Muxer>>
 	) -> Option<SwarmEvent> {
 		// Obtain the peer id and whether the node has been closed earlier.
 		// If the node has been closed, do not generate any additional event about it.
-		let (peer_id, node_is_closed) = {
-			let info = self.nodes_info.get_mut(&node_index)
-				.expect("Handlers are created when we fill nodes_info, and nodes_info is cleared \
-						only when a background task ends");
-			(info.peer_id.clone(), info.state.is_closed())
-		};
+		let node_index = *self.node_by_peer.get(&peer_id)
+			.expect("node_by_peer is always kept in sync with the underlying swarm");
 
 		match event {
-			None => {
-				let _info = self.nodes_info.remove(&node_index).expect("Inconsistent state");
-				// It is possible that the entry in `node_by_peer` doesn't match our node, if a new
-				// node was created with the same peer.
-				if self.node_by_peer.get(&peer_id) == Some(&node_index) {
-					self.node_by_peer.remove(&peer_id);
-				}
-
-				// Only generate an event if `drop_node` hasn't been called with this node index.
-				if !node_is_closed {
-					Some(SwarmEvent::NodeClosed {
-						node_index,
-						peer_id,
-						closed_custom_protocols: Vec::new(),
-					})
-				} else {
-					None
-				}
-			},
-			Some(NodeEvent::Unresponsive) => {
+			SubstrateOutEvent::Unresponsive => {
 				debug!(target: "sub-libp2p", "Node {:?} is unresponsive", peer_id);
-				if !node_is_closed {
-					Some(SwarmEvent::UnresponsiveNode { node_index })
-				} else {
-					None
-				}
+				Some(SwarmEvent::UnresponsiveNode { node_index })
 			},
-			Some(NodeEvent::Useless) => {
+			SubstrateOutEvent::Useless => {
 				debug!(target: "sub-libp2p", "Node {:?} is useless", peer_id);
-				if !node_is_closed {
-					Some(SwarmEvent::UselessNode { node_index })
-				} else {
-					None
-				}
+				Some(SwarmEvent::UselessNode { node_index })
 			},
-			Some(NodeEvent::PingStart) => {
+			SubstrateOutEvent::PingStart => {
 				trace!(target: "sub-libp2p", "Pinging {:?}", peer_id);
 				None
 			},
-			Some(NodeEvent::PingSuccess(ping)) => {
+			SubstrateOutEvent::PingSuccess(ping) => {
 				trace!(target: "sub-libp2p", "Pong from {:?} in {:?}", peer_id, ping);
-				if !node_is_closed {
-					Some(SwarmEvent::PingDuration(node_index, ping))
+				Some(SwarmEvent::PingDuration(node_index, ping))
+			},
+			SubstrateOutEvent::Multiaddr(Ok(address)) => {
+				trace!(target: "sub-libp2p", "Determined the multiaddr of {:?} => {}",
+					peer_id, address);
+				if let Some(&node_index) = self.node_by_peer.get(&peer_id) {
+					Some(SwarmEvent::NodeAddress {
+						node_index,
+						address,
+					})
 				} else {
+					error!(target: "sub-libp2p", "Logic error: no index for {:?}", peer_id);
 					None
 				}
 			},
-			Some(NodeEvent::Identified { info, observed_addr }) => {
+			SubstrateOutEvent::Multiaddr(Err(err)) => {
+				trace!(target: "sub-libp2p", "Error when determining the multiaddr of {:?} => {:?}",
+					peer_id, err);
+				None
+			},
+			SubstrateOutEvent::Identified { info, observed_addr } => {
 				self.add_observed_addr(&peer_id, &observed_addr);
 				trace!(target: "sub-libp2p", "Client version of {:?}: {:?}", peer_id, info.agent_version);
 				if !info.agent_version.contains("substrate") {
@@ -872,91 +669,57 @@ impl<TUserData> Swarm<TUserData>
 						peer_id, info.agent_version);
 				}
 
-				if !node_is_closed {
-					Some(SwarmEvent::NodeInfos {
-						node_index,
-						client_version: info.agent_version,
-						listen_addrs: info.listen_addrs,
-					})
-				} else {
-					None
-				}
+				Some(SwarmEvent::NodeInfos {
+					node_index,
+					client_version: info.agent_version,
+					listen_addrs: info.listen_addrs,
+				})
 			},
-			Some(NodeEvent::IdentificationRequest(request)) => {
+			SubstrateOutEvent::IdentificationRequest(request) => {
 				self.respond_to_identify_request(&peer_id, request);
 				None
 			},
-			Some(NodeEvent::KadFindNode { searched, responder }) => {
-				if !node_is_closed {
-					Some(SwarmEvent::KadFindNode { node_index, searched, responder })
-				} else {
-					None
-				}
+			SubstrateOutEvent::KadFindNode { searched, responder } => {
+				Some(SwarmEvent::KadFindNode { node_index, searched, responder })
 			},
-			Some(NodeEvent::KadOpen(ctrl)) => {
+			SubstrateOutEvent::KadOpen(ctrl) => {
 				trace!(target: "sub-libp2p", "Opened Kademlia substream with {:?}", peer_id);
-				if !node_is_closed {
-					Some(SwarmEvent::KadOpen { node_index, controller: ctrl })
-				} else {
-					None
-				}
+				Some(SwarmEvent::KadOpen { node_index, controller: ctrl })
 			},
-			Some(NodeEvent::KadClosed(result)) => {
+			SubstrateOutEvent::KadClosed(result) => {
 				trace!(target: "sub-libp2p", "Closed Kademlia substream with {:?}: {:?}", peer_id, result);
-				if !node_is_closed {
-					Some(SwarmEvent::KadClosed { node_index, result })
-				} else {
-					None
-				}
+				Some(SwarmEvent::KadClosed { node_index, result })
 			},
-			Some(NodeEvent::OutboundSubstreamRequested) => {
-				if let Some(mut peer) = self.swarm.peer(peer_id.clone()).as_connected() {
-					peer.open_substream(());
-				} else {
-					error!(target: "sub-libp2p", "Inconsistent state in the service task");
-				}
-				None
-			},
-			Some(NodeEvent::CustomProtocolOpen { protocol_id, version }) => {
+			SubstrateOutEvent::CustomProtocolOpen { protocol_id, version } => {
 				trace!(target: "sub-libp2p", "Opened custom protocol with {:?}", peer_id);
-				self.nodes_info.get_mut(&node_index).expect("Inconsistent state")
+				self.nodes_info.get_mut(&node_index)
+					.expect("nodes_info is kept in sync with the underlying swarm")
 					.open_protocols.push(protocol_id);
-				if !node_is_closed {
-					Some(SwarmEvent::OpenedCustomProtocol {
-						node_index,
-						protocol: protocol_id,
-						version,
-					})
-				} else {
-					None
-				}
+				Some(SwarmEvent::OpenedCustomProtocol {
+					node_index,
+					protocol: protocol_id,
+					version,
+				})
 			},
-			Some(NodeEvent::CustomProtocolClosed { protocol_id, result }) => {
+			SubstrateOutEvent::CustomProtocolClosed { protocol_id, result } => {
 				trace!(target: "sub-libp2p", "Closed custom protocol with {:?}: {:?}", peer_id, result);
-				self.nodes_info.get_mut(&node_index).expect("Inconsistent state")
+				self.nodes_info.get_mut(&node_index)
+					.expect("nodes_info is kept in sync with the underlying swarm")
 					.open_protocols.retain(|p| p != &protocol_id);
-				if !node_is_closed {
-					Some(SwarmEvent::ClosedCustomProtocol {
-						node_index,
-						protocol: protocol_id,
-					})
-				} else {
-					None
-				}
+				Some(SwarmEvent::ClosedCustomProtocol {
+					node_index,
+					protocol: protocol_id,
+				})
 			},
-			Some(NodeEvent::CustomMessage { protocol_id, packet_id, data }) => {
-				if !node_is_closed {
-					Some(SwarmEvent::CustomMessage {
-						node_index,
-						protocol_id,
-						packet_id,
-						data,
-					})
-				} else {
-					None
-				}
+			SubstrateOutEvent::CustomMessage { protocol_id, packet_id, data } => {
+				Some(SwarmEvent::CustomMessage {
+					node_index,
+					protocol_id,
+					packet_id,
+					data,
+				})
 			},
-			Some(NodeEvent::SubstreamUpgradeFail(err)) => {
+			SubstrateOutEvent::SubstreamUpgradeFail(err) => {
 				debug!(target: "sub-libp2p", "Error while negotiating final protocol \
 					with {:?}: {:?}", peer_id, err);
 				None
@@ -971,110 +734,17 @@ impl<TUserData> Stream for Swarm<TUserData>
 	type Error = IoError;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		for task in self.tasks_to_spawn.drain(..) {
-			tokio_executor::spawn(task);
-		}
-
-		match self.poll_network()? {
-			Async::Ready(value) => return Ok(Async::Ready(value)),
-			Async::NotReady => (),
-		}
-
-		match self.poll_node_tasks()? {
-			Async::Ready(value) => return Ok(Async::Ready(value)),
-			Async::NotReady => (),
-		}
-
-		// The only way we reach this is if we went through all the `NotReady` paths above,
-		// ensuring the current task is registered everywhere.
-		self.to_notify = Some(task::current());
-		Ok(Async::NotReady)
-	}
-}
-
-/// Wraps around a `NodeHandler` and adds communication with the outside through channels.
-struct NodeTask<TUserData> {
-	node_index: NodeIndex,
-	handler: Option<NodeHandler<Substream<Muxer>, TUserData>>,
-	out_commands_rx: mpsc::UnboundedReceiver<OutToTaskMsg>,
-	node_tasks_events_tx: mpsc::UnboundedSender<(NodeIndex, Option<NodeEvent<Substream<Muxer>>>)>,
-}
-
-impl<TUserData> NodeTask<TUserData>
-where TUserData: Clone + Send + Sync + 'static
-{
-	fn handle_out_command(&mut self, command: OutToTaskMsg) {
-		match command {
-			OutToTaskMsg::InjectSubstream { substream, endpoint } =>
-				if let Some(handler) = self.handler.as_mut() {
-					handler.inject_substream(substream, endpoint);
-				} else {
-					error!(target: "sub-libp2p", "Received message after handler is closed");
-				},
-			OutToTaskMsg::OpenKademlia =>
-				if let Some(handler) = self.handler.as_mut() {
-					if let Some(ctrl) = handler.open_kademlia() {
-						let event = NodeEvent::KadOpen(ctrl);
-						let _ = self.node_tasks_events_tx.unbounded_send((self.node_index, Some(event)));
-					}
-				} else {
-					error!(target: "sub-libp2p", "Received message after handler is closed");
-				},
-			OutToTaskMsg::SendCustomMessage { protocol, packet_id, data } =>
-				if let Some(handler) = self.handler.as_mut() {
-					handler.send_custom_message(protocol, packet_id, data);
-				} else {
-					error!(target: "sub-libp2p", "Received message after handler is closed");
-				},
-		}
-	}
-}
-
-impl<TUserData> Future for NodeTask<TUserData>
-where TUserData: Clone + Send + Sync + 'static
-{
-	type Item = ();
-	type Error = ();
-
-	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
-		// Poll for commands sent from the service.
 		loop {
-			match self.out_commands_rx.poll() {
-				Ok(Async::NotReady) => break,
-				Ok(Async::Ready(Some(command))) => self.handle_out_command(command),
-				Ok(Async::Ready(None)) => {
-					if let Some(handler) = self.handler.take() {
-						for event in handler.close() {
-							let _ = self.node_tasks_events_tx.unbounded_send((self.node_index, Some(event)));
-						}
+			match self.swarm.poll() {
+				Ok(Async::Ready(Some(event))) =>
+					if let Some(event) = self.process_network_event(event) {
+						return Ok(Async::Ready(Some(event)));
 					}
-					let _ = self.node_tasks_events_tx.unbounded_send((self.node_index, None));
-					return Ok(Async::Ready(()))
-				},
-				Err(_) => unreachable!("An UnboundedReceiver never errors"),
+				Ok(Async::NotReady) => return Ok(Async::NotReady),
+				Ok(Async::Ready(None)) => unreachable!("The Swarm stream never ends"),
+				// TODO: this `Err` contains a `Void` ; remove variant when Rust allows that
+				Err(_) => unreachable!("The Swarm stream never errors"),
 			}
 		}
-
-		// Poll events from the node.
-		loop {
-			match self.handler.as_mut().map(|h| h.poll()).unwrap_or(Ok(Async::Ready(None))) {
-				Ok(Async::Ready(event)) => {
-					let finished = event.is_none();
-					let _ = self.node_tasks_events_tx.unbounded_send((self.node_index, event));
-					// If the node's events stream ends, end the task as well.
-					if finished {
-						return Ok(Async::Ready(()));
-					}
-				},
-				Ok(Async::NotReady) => break,
-				Err(err) => {
-					warn!(target: "sub-libp2p", "Error in node handler: {:?}", err);
-					return Ok(Async::Ready(()));
-				}
-			}
-		}
-
-		// If we reach here, that means nothing is ready.
-		Ok(Async::NotReady)
 	}
 }

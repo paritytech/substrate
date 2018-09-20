@@ -372,51 +372,56 @@ fn init_thread(
 					local_address: None,	// TODO: fill
 				});
 			},
-			ServiceEvent::NodeClosed { node_index, closed_custom_protocols } => {
+			ServiceEvent::NodeClosed { node_index, closed_custom_protocols: protocols } |
+			ServiceEvent::ClosedCustomProtocols { node_index, protocols } => {
 				let old = peers.lock().remove(&node_index);
 				debug_assert!(old.is_some());
-				for protocol in closed_custom_protocols {
+				for protocol in protocols {
 					registered_custom.find_protocol(protocol)
-						.expect("Invalid protocol ID")
+					.expect("we passed a list of protocols when building the service, and never \
+						modify that list ; therefore all the reported ids should always be valid")
 						.custom_data()
 						.disconnected(&ctxt!(protocol, node_index), &node_index);
 				}
 			},
 			ServiceEvent::PingDuration(node_index, ping) =>
 				peers.lock().get_mut(&node_index)
-					.expect("State mismatch in the network service")
+					.expect("peers is kept in sync with the state in the service")
 					.ping = Some(ping),
 			ServiceEvent::NodeInfos { node_index, client_version } =>
 				peers.lock().get_mut(&node_index)
-					.expect("State mismatch in the network service")
+					.expect("peers is kept in sync with the state in the service")
 					.client_version = Some(client_version),
 			ServiceEvent::NodeAddress { node_index, address } =>
 				peers.lock().get_mut(&node_index)
-					.expect("State mismatch in the network service")
+					.expect("peers is kept in sync with the state in the service")
 					.remote_address = Some(address),
 			ServiceEvent::OpenedCustomProtocol { node_index, protocol, version } => {
 				peers.lock().get_mut(&node_index)
-					.expect("State inconsistency in service")
+					.expect("peers is kept in sync with the state in the service")
 					.protocols
 					.push((protocol, version));
 				registered_custom.find_protocol(protocol)
-					.expect("Invalid protocol ID")
+					.expect("we passed a list of protocols when building the service, and never \
+						modify that list ; therefore all the reported ids should always be valid")
 					.custom_data()
 					.connected(&ctxt!(protocol, node_index), &node_index)
 			},
 			ServiceEvent::ClosedCustomProtocol { node_index, protocol } => {
 				peers.lock().get_mut(&node_index)
-					.expect("State inconsistency in service")
+					.expect("peers is kept in sync with the state in the service")
 					.protocols
 					.retain(|&(ref p, _)| p != &protocol);
 				registered_custom.find_protocol(protocol)
-					.expect("Invalid protocol ID")
+					.expect("we passed a list of protocols when building the service, and never \
+						modify that list ; therefore all the reported ids should always be valid")
 					.custom_data()
 					.disconnected(&ctxt!(protocol, node_index), &node_index)
 			},
 			ServiceEvent::CustomMessage { node_index, protocol_id, packet_id, data } => {
 				registered_custom.find_protocol(protocol_id)
-					.expect("Invalid protocol ID")
+					.expect("we passed a list of protocols when building the service, and never \
+						modify that list ; therefore all the reported ids should always be valid")
 					.custom_data()
 					.read(&ctxt!(protocol_id, node_index), &node_index, packet_id, &data)
 			},
