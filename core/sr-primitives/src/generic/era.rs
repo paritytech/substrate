@@ -79,7 +79,7 @@ impl Era {
 	pub fn birth(self, current: u64) -> u64 {
 		match self {
 			Era::Immortal => 0,
-			Era::Mortal(period, phase) => (current - phase) / period * period + phase,
+			Era::Mortal(period, phase) => (current.max(phase) - phase) / period * period + phase,
 		}
 	}
 
@@ -188,5 +188,11 @@ mod tests {
 		// wrong because it's outside of the (current...current + period) range
 		assert_ne!(e.birth(10), 6);
 		assert_ne!(e.birth(5), 6);
+	}
+	
+	#[test]
+	fn current_less_than_phase() {
+		// should not panic
+		Era::mortal(4, 3).birth(1);
 	}
 }
