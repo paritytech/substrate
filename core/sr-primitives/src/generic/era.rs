@@ -48,7 +48,7 @@ n = Q(current - phase, period) + phase
 */
 impl Era {
 	/// Create a new era based on a period (which should be a power of two between 4 and 65536 inclusive)
-	/// and a block number which on which it should start (or, for long periods, be shortly after the start).
+	/// and a block number on which it should start (or, for long periods, be shortly after the start).
 	pub fn mortal(period: u64, current: u64) -> Self {
 		let period = period.checked_next_power_of_two()
 			.unwrap_or(1 << 16)
