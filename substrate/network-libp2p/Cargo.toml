@@ -11,7 +11,7 @@ bytes = "0.4"
 error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
-libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "3e53a9dcc728d2e932d731bf90a8e81e0e4257ab", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
+libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "f2a5eee5e8363b5cf567206ab2c01c564943d2ef", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
 ethereum-types = "0.3"
 parking_lot = "0.5"
 libc = "0.2"

@@ -230,6 +230,16 @@ pub enum ServiceEvent {
 		protocol: ProtocolId,
 	},
 
+	/// Sustom protocol substreams has been closed.
+	///
+	/// Same as `ClosedCustomProtocol` but with multiple protocols.
+	ClosedCustomProtocols {
+		/// Index of the node.
+		node_index: NodeIndex,
+		/// Protocols that have been closed.
+		protocols: Vec<ProtocolId>,
+	},
+
 	/// Receives a message on a custom protocol stream.
 	CustomMessage {
 		/// Index of the node.
@@ -333,7 +343,7 @@ impl Service {
 				.nodes()
 				.filter(|&n| {
 					let peer_id = self.swarm.peer_id_of_node(n)
-						.expect("Logic error ; invalid node index which we just retreived");
+						.expect("swarm.nodes() always returns valid node indices");
 					!self.reserved_peers.contains(peer_id)
 				})
 				.collect();
@@ -383,11 +393,15 @@ impl Service {
 
 		// Kill the node from the swarm, and inject an event about it.
 		let closed_custom_protocols = self.swarm.drop_node(node_index)
-			.expect("Checked right above that node is valid");
+			.expect("we checked right above that node is valid");
 		self.injected_events.push(ServiceEvent::NodeClosed {
 			node_index,
 			closed_custom_protocols,
 		});
+
+		if let Some(to_notify) = self.to_notify.take() {
+			to_notify.notify();
+		}
 
 		if let Some(addr) = self.nodes_addresses.remove(&node_index) {
 			let reason = if disable_duration.is_some() {
@@ -660,6 +674,21 @@ impl Service {
 				} else {
 					None
 				},
+			SwarmEvent::Reconnected { node_index, endpoint, closed_custom_protocols } => {
+				if let Some(addr) = self.nodes_addresses.remove(&node_index) {
+					self.topology.report_disconnected(&addr, DisconnectReason::ClosedGracefully);
+				}
+				if let ConnectedPoint::Dialer { address } = endpoint {
+					let peer_id = self.swarm.peer_id_of_node(node_index)
+						.expect("the swarm always produces events containing valid node indices");
+					self.nodes_addresses.insert(node_index, address.clone());
+					self.topology.report_connected(&address, peer_id);
+				}
+				Some(ServiceEvent::ClosedCustomProtocols {
+					node_index,
+					protocols: closed_custom_protocols,
+				})
+			},
 			SwarmEvent::NodeClosed { node_index, peer_id, closed_custom_protocols } => {
 				debug!(target: "sub-libp2p", "Connection to {:?} closed gracefully", peer_id);
 				if let Some(addr) = self.nodes_addresses.get(&node_index) {
@@ -679,7 +708,7 @@ impl Service {
 			},
 			SwarmEvent::NodeAddress { node_index, address } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("Inconsistent state ; got NodeAddress event about non-existing node");
+					.expect("the swarm always produces events containing valid node indices");
 				self.topology.report_connected(&address, &peer_id);
 				self.nodes_addresses.insert(node_index, address.clone());
 				Some(ServiceEvent::NodeAddress {
@@ -689,7 +718,7 @@ impl Service {
 			},
 			SwarmEvent::UnresponsiveNode { node_index } => {
 				let closed_custom_protocols = self.swarm.drop_node(node_index)
-					.expect("Got UnresponsiveNode event about a non-existing node");
+					.expect("the swarm always produces events containing valid node indices");
 				if let Some(addr) = self.nodes_addresses.remove(&node_index) {
 					self.topology.report_disconnected(&addr, DisconnectReason::ClosedGracefully);
 				}
@@ -700,10 +729,10 @@ impl Service {
 			},
 			SwarmEvent::UselessNode { node_index } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("Got UselessNode event about non-existing node")
+					.expect("the swarm always produces events containing valid node indices")
 					.clone();
 				let closed_custom_protocols = self.swarm.drop_node(node_index)
-					.expect("Got UselessNode event about a non-existing node");
+					.expect("the swarm always produces events containing valid node indices");
 				self.topology.report_useless(&peer_id);
 				if let Some(addr) = self.nodes_addresses.remove(&node_index) {
 					self.topology.report_disconnected(&addr, DisconnectReason::ClosedGracefully);
@@ -715,13 +744,13 @@ impl Service {
 			},
 			SwarmEvent::PingDuration(node_index, ping) => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("Got PingDuration event about non-existing node");
+					.expect("the swarm always produces events containing valid node indices");
 				self.kad_system.update_kbuckets(peer_id.clone());
 				Some(ServiceEvent::PingDuration(node_index, ping))
 			},
 			SwarmEvent::NodeInfos { node_index, client_version, listen_addrs } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("Inconsistent state ; got NodeAddress event about non-existing node");
+					.expect("the swarm always produces events containing valid node indices");
 				// TODO: wrong function name
 				self.topology.add_kademlia_discovered_addrs(
 					peer_id,
@@ -734,7 +763,7 @@ impl Service {
 			},
 			SwarmEvent::KadFindNode { node_index, searched, responder } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("Got KadFindNode event about non-existing node");
+					.expect("the swarm always produces events containing valid node indices");
 				let response = self.build_kademlia_response(&searched);
 				self.kad_system.update_kbuckets(peer_id.clone());
 				responder.respond(response);
@@ -742,7 +771,7 @@ impl Service {
 			},
 			SwarmEvent::KadOpen { node_index, controller } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("Got KadOpen event about non-existing node");
+					.expect("the swarm always produces events containing valid node indices");
 				trace!(target: "sub-libp2p", "Opened Kademlia substream with {:?}", peer_id);
 				self.kad_system.update_kbuckets(peer_id.clone());
 				if let Some(list) = self.kad_pending_ctrls.lock().remove(&peer_id) {
@@ -768,7 +797,7 @@ impl Service {
 				}),
 			SwarmEvent::CustomMessage { node_index, protocol_id, packet_id, data } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("Got CustomMessage event about non-existing node");
+					.expect("the swarm always produces events containing valid node indices");
 				self.kad_system.update_kbuckets(peer_id.clone());
 				Some(ServiceEvent::CustomMessage {
 					node_index,
