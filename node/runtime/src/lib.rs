@@ -74,7 +74,7 @@ use council::{motions as council_motions, voting as council_voting};
 pub use runtime_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
-pub use runtime_primitives::Permill;
+pub use runtime_primitives::{Permill, Perbill};
 #[cfg(any(feature = "std", test))]
 pub use checked_block::CheckedBlock;
 

@@ -22,7 +22,7 @@ use rstd::prelude::*;
 use codec::Encode;
 use runtime_support::StorageValue;
 use primitives::traits::As;
-use primitives;
+use primitives::{self, Perbill};
 use super::{Trait, Intentions, CurrentEra, OfflineSlashGrace, MinimumValidatorCount,
 	BondingDuration, SessionsPerEra, ValidatorCount, SessionReward, OfflineSlash};
 
@@ -36,8 +36,8 @@ pub struct GenesisConfig<T: Trait> {
 	pub validator_count: u32,
 	pub minimum_validator_count: u32,
 	pub bonding_duration: T::BlockNumber,
-	pub session_reward: T::Balance,
-	pub offline_slash: T::Balance,
+	pub session_reward: Perbill,
+	pub offline_slash: Perbill,
 	pub offline_slash_grace: u32,
 }
 
@@ -50,8 +50,8 @@ impl<T: Trait> Default for GenesisConfig<T> {
 			validator_count: 0,
 			minimum_validator_count: 0,
 			bonding_duration: T::BlockNumber::sa(1000),
-			session_reward: T::Balance::sa(0),
-			offline_slash: T::Balance::sa(0),
+			session_reward: Perbill::from_billionths(60),
+			offline_slash: Perbill::from_fraction(0.001),
 			offline_slash_grace: 0,
 		}
 	}
