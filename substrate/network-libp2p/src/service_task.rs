@@ -265,6 +265,8 @@ pub struct Service {
 	max_outgoing_connections: usize,
 
 	/// For each node we're connected to, its address if known.
+	///
+	/// This is used purely to report disconnections to the topology.
 	nodes_addresses: FnvHashMap<NodeIndex, Multiaddr>,
 
 	/// If true, only reserved peers can connect.
@@ -707,10 +709,6 @@ impl Service {
 				None
 			},
 			SwarmEvent::NodeAddress { node_index, address } => {
-				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("the swarm always produces events containing valid node indices");
-				self.topology.report_connected(&address, &peer_id);
-				self.nodes_addresses.insert(node_index, address.clone());
 				Some(ServiceEvent::NodeAddress {
 					node_index,
 					address,
