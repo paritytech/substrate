@@ -331,7 +331,7 @@ impl Service {
 		self.reserved_peers.remove(&peer_id);
 		if self.reserved_only {
 			if let Some(node_index) = self.swarm.latest_node_by_peer_id(&peer_id) {
-				self.drop_node(node_index);
+				self.drop_node_inner(node_index, DisconnectReason::NoSlot, None);
 			}
 		}
 	}
@@ -350,7 +350,7 @@ impl Service {
 				})
 				.collect();
 			for node_index in to_disconnect {
-				self.drop_node(node_index);
+				self.drop_node_inner(node_index, DisconnectReason::NoSlot, None);
 			}
 		} else {
 			self.connect_to_nodes();
@@ -374,7 +374,7 @@ impl Service {
 	/// Same as `drop_node`, except that the same peer will not be able to reconnect later.
 	#[inline]
 	pub fn ban_node(&mut self, node_index: NodeIndex) {
-		self.drop_node_inner(node_index, Some(PEER_DISABLE_DURATION));
+		self.drop_node_inner(node_index, DisconnectReason::Banned, Some(PEER_DISABLE_DURATION));
 	}
 
 	/// Disconnects a peer.
@@ -383,11 +383,16 @@ impl Service {
 	/// Corresponding closing events will be generated once the closing actually happens.
 	#[inline]
 	pub fn drop_node(&mut self, node_index: NodeIndex) {
-		self.drop_node_inner(node_index, None);
+		self.drop_node_inner(node_index, DisconnectReason::Useless, None);
 	}
 
 	/// Common implementation of `drop_node` and `ban_node`.
-	fn drop_node_inner(&mut self, node_index: NodeIndex, disable_duration: Option<Duration>) {
+	fn drop_node_inner(
+		&mut self,
+		node_index: NodeIndex,
+		reason: DisconnectReason,
+		disable_duration: Option<Duration>
+	) {
 		let peer_id = match self.swarm.peer_id_of_node(node_index) {
 			Some(pid) => pid.clone(),
 			None => return,		// TODO: report?
@@ -406,12 +411,6 @@ impl Service {
 		}
 
 		if let Some(addr) = self.nodes_addresses.remove(&node_index) {
-			let reason = if disable_duration.is_some() {
-				DisconnectReason::Banned
-			} else {
-				DisconnectReason::ClosedGracefully
-			};
-
 			self.topology.report_disconnected(&addr, reason);
 		}
 
@@ -678,7 +677,7 @@ impl Service {
 				},
 			SwarmEvent::Reconnected { node_index, endpoint, closed_custom_protocols } => {
 				if let Some(addr) = self.nodes_addresses.remove(&node_index) {
-					self.topology.report_disconnected(&addr, DisconnectReason::ClosedGracefully);
+					self.topology.report_disconnected(&addr, DisconnectReason::FoundBetterAddr);
 				}
 				if let ConnectedPoint::Dialer { address } = endpoint {
 					let peer_id = self.swarm.peer_id_of_node(node_index)
@@ -694,7 +693,7 @@ impl Service {
 			SwarmEvent::NodeClosed { node_index, peer_id, closed_custom_protocols } => {
 				debug!(target: "sub-libp2p", "Connection to {:?} closed gracefully", peer_id);
 				if let Some(addr) = self.nodes_addresses.get(&node_index) {
-					self.topology.report_disconnected(addr, DisconnectReason::ClosedGracefully);
+					self.topology.report_disconnected(addr, DisconnectReason::RemoteClosed);
 				}
 				self.connect_to_nodes();
 				Some(ServiceEvent::NodeClosed {
@@ -718,7 +717,7 @@ impl Service {
 				let closed_custom_protocols = self.swarm.drop_node(node_index)
 					.expect("the swarm always produces events containing valid node indices");
 				if let Some(addr) = self.nodes_addresses.remove(&node_index) {
-					self.topology.report_disconnected(&addr, DisconnectReason::ClosedGracefully);
+					self.topology.report_disconnected(&addr, DisconnectReason::Useless);
 				}
 				Some(ServiceEvent::NodeClosed {
 					node_index,
@@ -733,7 +732,7 @@ impl Service {
 					.expect("the swarm always produces events containing valid node indices");
 				self.topology.report_useless(&peer_id);
 				if let Some(addr) = self.nodes_addresses.remove(&node_index) {
-					self.topology.report_disconnected(&addr, DisconnectReason::ClosedGracefully);
+					self.topology.report_disconnected(&addr, DisconnectReason::Useless);
 				}
 				Some(ServiceEvent::NodeClosed {
 					node_index,

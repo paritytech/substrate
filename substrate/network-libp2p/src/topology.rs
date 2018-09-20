@@ -366,8 +366,11 @@ impl NetTopology {
 	/// If we were indeed connected to this addr, then we can find out which peer ID it is.
 	pub fn report_disconnected(&mut self, addr: &Multiaddr, reason: DisconnectReason) {
 		let score_diff = match reason {
-			DisconnectReason::ClosedGracefully => -1,
-			DisconnectReason::Banned => -1,
+			DisconnectReason::NoSlot => -1,
+			DisconnectReason::FoundBetterAddr => -5,
+			DisconnectReason::RemoteClosed => -5,
+			DisconnectReason::Useless => -5,
+			DisconnectReason::Banned => -5,
 		};
 
 		for info in self.store.values_mut() {
@@ -419,9 +422,17 @@ impl NetTopology {
 }
 
 /// Reason why we disconnected from a peer.
+#[derive(Debug)]
 pub enum DisconnectReason {
-	/// The disconnection was graceful.
-	ClosedGracefully,
+	/// No slot available locally anymore for this peer.
+	NoSlot,
+	/// A better way to connect to this peer has been found, therefore we disconnect from
+	/// the old one.
+	FoundBetterAddr,
+	/// The remote closed the connection.
+	RemoteClosed,
+	/// This node is considered useless for our needs. This includes time outs.
+	Useless,
 	/// The peer has been banned.
 	Banned,
 }
