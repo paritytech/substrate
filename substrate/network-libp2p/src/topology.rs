@@ -240,6 +240,7 @@ impl NetTopology {
 	/// Adds addresses that a node says it is listening on.
 	///
 	/// The addresses are most likely to be valid.
+	#[inline]
 	pub fn add_self_reported_listen_addrs<I>(
 		&mut self,
 		peer_id: &PeerId,
@@ -254,6 +255,7 @@ impl NetTopology {
 	///
 	/// For each address, incorporates a boolean. If true, that means we have some sort of hint
 	/// that this address can be reached.
+	#[inline]
 	pub fn add_kademlia_discovered_addrs<I>(
 		&mut self,
 		peer_id: &PeerId,
