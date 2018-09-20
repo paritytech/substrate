@@ -16,7 +16,7 @@
 
 extern crate substrate_client as client;
 extern crate parity_codec as codec;
-extern crate substrate_extrinsic_pool as extrinsic_pool;
+extern crate substrate_transaction_pool as transaction_pool;
 extern crate substrate_primitives;
 extern crate sr_primitives;
 extern crate node_runtime as runtime;
@@ -42,20 +42,20 @@ use std::{
 };
 
 use codec::{Decode, Encode};
-use extrinsic_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
+use transaction_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
 use node_api::Api;
-use primitives::{AccountId, BlockId, Block, Hash, Index};
-use runtime::{UncheckedExtrinsic, RawAddress};
-use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256};
+use primitives::{AccountId, BlockId, Block, Hash, Index, BlockNumber};
+use runtime::{Address, UncheckedExtrinsic};
+use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup, GetHeight, BlockNumberToHash};
 
-pub use extrinsic_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
+pub use transaction_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
 
 /// Maximal size of a single encoded extrinsic.
 const MAX_TRANSACTION_SIZE: usize = 4 * 1024 * 1024;
 
 /// Type alias for the transaction pool.
-pub type TransactionPool<A> = extrinsic_pool::Pool<ChainApi<A>>;
+pub type TransactionPool<A> = transaction_pool::Pool<ChainApi<A>>;
 
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Clone, Debug)]
@@ -86,7 +86,7 @@ impl VerifiedTransaction {
 	}
 }
 
-impl extrinsic_pool::VerifiedTransaction for VerifiedTransaction {
+impl transaction_pool::VerifiedTransaction for VerifiedTransaction {
 	type Hash = Hash;
 	type Sender = AccountId;
 
@@ -119,8 +119,32 @@ impl<A> ChainApi<A> where
 	}
 }
 
+/// "Chain" context (used for checking transactions) which uses data local to our node/transaction pool.
+///
+/// This is due for removal when #721 lands
+pub struct LocalContext<'a, A: 'a>(&'a Arc<A>);
+impl<'a, A: 'a + Api> GetHeight for LocalContext<'a, A> {
+	type BlockNumber = BlockNumber;
+	fn get_height(&self) -> BlockNumber {
+		self.0.get_height()
+	}
+}
+impl<'a, A: 'a + Api> BlockNumberToHash for LocalContext<'a, A> {
+	type BlockNumber = BlockNumber;
+	type Hash = Hash;
+	fn block_number_to_hash(&self, n: BlockNumber) -> Option<Hash> {
+		self.0.block_number_to_hash(n)
+	}
+}
+impl<'a, A: 'a + Api> Lookup for LocalContext<'a, A> {
+	type Source = Address;
+	type Target = AccountId;
+	fn lookup(&self, a: Address) -> ::std::result::Result<AccountId, &'static str> {
+		self.0.lookup(&BlockId::number(self.get_height()), a).unwrap_or(None).ok_or("error with lookup")
+	}
+}
 
-impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
+impl<A> transaction_pool::ChainApi for ChainApi<A> where
 	A: Api + Send + Sync,
 {
 	type Block = Block;
@@ -145,13 +169,8 @@ impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
 		}
 
 		debug!(target: "transaction-pool", "Transaction submitted: {}", ::substrate_primitives::hexdisplay::HexDisplay::from(&encoded));
-		let checked = uxt.clone().check_with(|a| {
-			match a {
-				RawAddress::Id(id) => Ok(id),
-				RawAddress::Index(_) => Err("Index based addresses are not supported".into()),// TODO: Make index addressing optional in substrate
-			}
-		})?;
-		let sender = checked.signed.expect("Only signed extrinsics are allowed at this point");
+		let checked = uxt.clone().check(&LocalContext(&self.api))?;
+		let (sender, index) = checked.signed.expect("function previously bailed unless uxt.is_signed(); qed");
 
 
 		if encoded_size < 1024 {
@@ -161,7 +180,7 @@ impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
 		}
 
 		Ok(VerifiedTransaction {
-			index: checked.index,
+			index,
 			sender,
 			hash,
 			encoded_size,
@@ -214,7 +233,7 @@ impl<A> extrinsic_pool::ChainApi for ChainApi<A> where
 	}
 
 	fn update_scores(
-		xts: &[extrinsic_pool::Transaction<VerifiedFor<Self>>],
+		xts: &[transaction_pool::Transaction<VerifiedFor<Self>>],
 		scores: &mut [Self::Score],
 		_change: Change<()>
 	) {

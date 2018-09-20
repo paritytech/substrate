@@ -52,8 +52,7 @@ use rstd::cmp;
 use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
-use primitives::traits::{Zero, One, Bounded, OnFinalise,
-	As, Lookup};
+use primitives::traits::{Zero, One, Bounded, OnFinalise, As};
 use balances::{address::Address, OnDilution};
 use system::ensure_signed;
 

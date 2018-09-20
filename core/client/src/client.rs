@@ -21,7 +21,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor, GetHeight, BlockNumberToHash};
 use runtime_primitives::BuildStorage;
 use primitives::{Blake2Hasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
@@ -565,6 +565,29 @@ impl<B, E, Block> Client<B, E, Block> where
 	pub fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
 		Ok(self.header(&BlockId::Hash(info.best_hash))?.expect("Best block header must always exist"))
+	}
+}
+
+impl<B, E, Block> GetHeight for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
+	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
+	Block: BlockT,
+{
+	type BlockNumber = <Block::Header as HeaderT>::Number;
+	fn get_height(&self) -> Self::BlockNumber {
+		self.backend.blockchain().info().map(|i| i.best_number).unwrap_or_else(|_| Zero::zero())
+	}
+}
+
+impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
+	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
+	Block: BlockT,
+{
+	type BlockNumber = <Block::Header as HeaderT>::Number;
+	type Hash = Block::Hash;
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
+		self.block_hash(n).unwrap_or(None)
 	}
 }
 

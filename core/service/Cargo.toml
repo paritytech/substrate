@@ -25,7 +25,7 @@ substrate-client = { path = "../../core/client" }
 substrate-client-db = { path = "../../core/client/db" }
 parity-codec = { version = "1.1" }
 substrate-executor = { path = "../../core/executor" }
-substrate-extrinsic-pool = { path = "../../core/extrinsic-pool" }
+substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-rpc = { path = "../../core/rpc" }
 substrate-rpc-servers = { path = "../../core/rpc-servers" }
 substrate-telemetry = { path = "../../core/telemetry" }

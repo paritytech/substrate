@@ -46,7 +46,7 @@ use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
-	As, Lookup, Member, CheckedAdd, CheckedSub};
+	As, Lookup, Member, CheckedAdd, CheckedSub, GetHeight, BlockNumberToHash};
 use address::Address as RawAddress;
 use system::ensure_signed;
 
@@ -630,6 +630,13 @@ impl<T: Trait> Module<T> {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
+
+	pub fn lookup(a: address::Address<T::AccountId, T::AccountIndex>) -> result::Result<T::AccountId, &'static str> {
+		match a {
+			address::Address::Id(i) => Ok(i),
+			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
+		}
+	}
 }
 
 impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
@@ -637,14 +644,33 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	}
 }
 
-impl<T: Trait> Lookup for Module<T> {
+pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
+impl<T> Default for ChainContext<T> {
+	fn default() -> Self {
+		ChainContext(::rstd::marker::PhantomData)
+	}
+}
+
+impl<T: Trait> Lookup for ChainContext<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
-	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		match a {
-			address::Address::Id(i) => Ok(i),
-			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
-		}
+	fn lookup(&self, a: Self::Source) -> result::Result<Self::Target, &'static str> {
+		<Module<T>>::lookup(a)
+	}
+}
+
+impl<T: Trait> GetHeight for ChainContext<T> {
+	type BlockNumber = T::BlockNumber;
+	fn get_height(&self) -> Self::BlockNumber {
+		<system::Module<T>>::block_number()
+	}
+}
+
+impl<T: Trait> BlockNumberToHash for ChainContext<T> {
+	type BlockNumber = T::BlockNumber;
+	type Hash = T::Hash;
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
+		Some(<system::Module<T>>::block_hash(n))
 	}
 }
 

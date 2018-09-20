@@ -76,23 +76,22 @@ mod internal {
 pub struct Executive<
 	System,
 	Block,
-	Lookup,
+	Context,
 	Payment,
 	Finalisation,
->(PhantomData<(System, Block, Lookup, Payment, Finalisation)>);
+>(PhantomData<(System, Block, Context, Payment, Finalisation)>);
 
 impl<
-	Address,
+	Context: Default,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Lookup: traits::Lookup<Source=Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: OnFinalise<System::BlockNumber>,
-> Executive<System, Block, Lookup, Payment, Finalisation> where
-	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Codec,
-	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
-	<<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
+> Executive<System, Block, Context, Payment, Finalisation> where
+	Block::Extrinsic: Checkable<Context> + Codec,
+	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
@@ -177,13 +176,13 @@ impl<
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
-		let xt = uxt.check_with(Lookup::lookup).map_err(internal::ApplyError::BadSignature)?;
+		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
-		if let Some(sender) = xt.sender() {
+		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// check index
 			let expected_index = <system::Module<System>>::account_nonce(sender);
-			if xt.index() != &expected_index { return Err(
-				if xt.index() < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
+			if index != &expected_index { return Err(
+				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
 
 			// pay any fees.
@@ -223,7 +222,7 @@ impl<
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.encode().len();
 		
-		let xt = match uxt.check_with(Lookup::lookup) {
+		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
 			// An unknown account index implies that the transaction may yet become valid.
@@ -233,7 +232,7 @@ impl<
 			Err(_) => return TransactionValidity::Invalid,
 		};
 
-		if let Some(sender) = xt.sender() {
+		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
 			if Payment::make_payment(sender, encoded_len).is_err() {
 				return TransactionValidity::Invalid
@@ -241,20 +240,20 @@ impl<
 
 			// check index
 			let mut expected_index = <system::Module<System>>::account_nonce(sender);
-			if xt.index() < &expected_index {
+			if index < &expected_index {
 				return TransactionValidity::Invalid
 			}
-			if *xt.index() > expected_index + As::sa(256) {
+			if *index > expected_index + As::sa(256) {
 				return TransactionValidity::Unknown
 			}
 
 			let mut deps = Vec::new();
-			while expected_index < *xt.index() {
+			while expected_index < *index {
 				deps.push((sender, expected_index).encode());
 				expected_index = expected_index + One::one();
 			}
 			
-			TransactionValidity::Valid(encoded_len as TransactionPriority, deps, vec![(sender, *xt.index()).encode()], TransactionLongevity::max_value())
+			TransactionValidity::Valid(encoded_len as TransactionPriority, deps, vec![(sender, *index).encode()], TransactionLongevity::max_value())
 		} else {
 			return TransactionValidity::Invalid
 		}
@@ -268,18 +267,9 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
 	use primitives::BuildStorage;
-	use primitives::traits::{Header as HeaderT, BlakeTwo256, Lookup};
+	use primitives::traits::{Header as HeaderT, BlakeTwo256};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use system;
-
-	struct NullLookup;
-	impl Lookup for NullLookup {
-		type Source = u64;
-		type Target = u64;
-		fn lookup(s: Self::Source) -> Result<Self::Target, &'static str> {
-			Ok(s)
-		}
-	}
 
 	impl_outer_origin! {
 		pub enum Origin for Runtime {
@@ -316,7 +306,7 @@ mod tests {
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, NullLookup, balances::Module<Runtime>, ()>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, balances::ChainContext<Runtime>, balances::Module<Runtime>, ()>;
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
