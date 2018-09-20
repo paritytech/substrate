@@ -54,9 +54,6 @@ pub use error::{Error, ErrorKind, Result};
 /// Maximal size of a single encoded extrinsic.
 const MAX_TRANSACTION_SIZE: usize = 4 * 1024 * 1024;
 
-/// Type alias for convenience.
-pub type CheckedExtrinsic = <UncheckedExtrinsic as Checkable<LocalContext>>::Checked;
-
 /// Type alias for the transaction pool.
 pub type TransactionPool<A> = transaction_pool::Pool<ChainApi<A>>;
 

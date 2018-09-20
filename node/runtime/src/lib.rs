@@ -64,7 +64,6 @@ mod checked_block;
 
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
-use codec::{Encode, Decode, Input};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
@@ -233,7 +232,7 @@ pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext
 pub mod api {
 	impl_stubs!(
 		version => |()| super::VERSION,
-		json_metadata => |()| super::Runtime::json_metadata(),
+		metadata => |()| super::Runtime::metadata(),
 		authorities => |()| super::Consensus::authorities(),
 		initialise_block => |header| super::Executive::initialise_block(&header),
 		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
