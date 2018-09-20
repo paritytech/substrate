@@ -21,7 +21,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor, GetHeight, BlockNumberToHash};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor, CurrentHeight, BlockNumberToHash};
 use runtime_primitives::BuildStorage;
 use primitives::{Blake2Hasher, RlpCodec, H256};
 use primitives::storage::{StorageKey, StorageData};
@@ -568,13 +568,13 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> GetHeight for Client<B, E, Block> where
+impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
 	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
 	Block: BlockT,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
-	fn get_height(&self) -> Self::BlockNumber {
+	fn current_height(&self) -> Self::BlockNumber {
 		self.backend.blockchain().info().map(|i| i.best_number).unwrap_or_else(|_| Zero::zero())
 	}
 }

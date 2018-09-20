@@ -83,11 +83,12 @@ mod tests {
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
 		match xt.signed {
 			Some((signed, index)) => {
-				let payload = (index, xt.function, GENESIS_HASH);
+				let era = Era::mortal(256, 0);
+				let payload = (index, xt.function, era, GENESIS_HASH);
 				let pair = Pair::from(Keyring::from_public(Public::from_raw(signed.clone().into())).unwrap());
 				let signature = pair.sign(&payload.encode()).into();
 				UncheckedExtrinsic {
-					signature: Some((balances::address::Address::Id(signed), signature, payload.0, Era::mortal(256, 0))),
+					signature: Some((balances::address::Address::Id(signed), signature, payload.0, era)),
 					function: payload.1,
 				}
 			}
@@ -309,7 +310,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("60efe1a65e7c79041b02e56ec122d6eaedfa476e0a9f6f1f68eb0c8f402c4514").into(),
+			hex!("0acf8b3c169ce8f16faf5610f646f371681dcc3b544d3dd05036dbae7890e399").into(),
 			None,
 			vec![
 				CheckedExtrinsic {

@@ -21,7 +21,7 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::{Decode, Encode, Input};
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay, GetHeight, BlockNumberToHash, Lookup,
+use traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
 	Checkable};
 use super::{CheckedExtrinsic, Era};
 
@@ -74,7 +74,7 @@ where
 	BlockNumber: SimpleArithmetic,
 	Hash: Encode,
 	Context: Lookup<Source=Address, Target=AccountId>
-		+ GetHeight<BlockNumber=BlockNumber>
+		+ CurrentHeight<BlockNumber=BlockNumber>
 		+ BlockNumberToHash<BlockNumber=BlockNumber, Hash=Hash>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
@@ -82,9 +82,9 @@ where
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
 			Some((signed, signature, index, era)) => {
-				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.get_height().as_())))
+				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.current_height().as_())))
 					.ok_or("transaction birth block ancient")?;
-				let payload = (index, self.function, h);
+				let payload = (index, self.function, era, h);
 				let signed = context.lookup(signed)?;
 				if !::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err("bad signature in extrinsic")
@@ -188,9 +188,9 @@ mod tests {
 		type Target = u64;
 		fn lookup(&self, s: u64) -> Result<u64, &'static str> { Ok(s) }
 	}
-	impl GetHeight for TestContext {
+	impl CurrentHeight for TestContext {
 		type BlockNumber = u64;
-		fn get_height(&self) -> u64 { 42 }
+		fn current_height(&self) -> u64 { 42 }
 	}
 	impl BlockNumberToHash for TestContext {
 		type BlockNumber = u64;
@@ -222,7 +222,7 @@ mod tests {
 
 	#[test]
 	fn signed_codec_should_work() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, 0u64).encode()), Era::immortal());
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::immortal(), 0u64).encode()), Era::immortal());
 		let encoded = ux.encode();
 		assert_eq!(Ex::decode(&mut &encoded[..]), Some(ux));
 	}
@@ -243,35 +243,35 @@ mod tests {
 
 	#[test]
 	fn immortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, 0u64).encode()), Era::immortal());
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::immortal(), 0u64).encode()), Era::immortal());
 		assert!(ux.is_signed());
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: DUMMY_FUNCTION }));
 	}
 
 	#[test]
 	fn mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, 42u64).encode()), Era::mortal(32, 42));
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 42), 42u64).encode()), Era::mortal(32, 42));
 		assert!(ux.is_signed());
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: DUMMY_FUNCTION }));
 	}
 
 	#[test]
 	fn later_mortal_signed_check_should_work() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, 11u64).encode()), Era::mortal(32, 11));
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 11), 11u64).encode()), Era::mortal(32, 11));
 		assert!(ux.is_signed());
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Ok(CEx { signed: Some((DUMMY_ACCOUNTID, 0)), function: DUMMY_FUNCTION }));
 	}
 
 	#[test]
 	fn too_late_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, 10u64).encode()), Era::mortal(32, 10));
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 10), 10u64).encode()), Era::mortal(32, 10));
 		assert!(ux.is_signed());
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err("bad signature in extrinsic"));
 	}
 
 	#[test]
 	fn too_early_mortal_signed_check_should_fail() {
-		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, 43u64).encode()), Era::mortal(32, 43));
+		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 43), 43u64).encode()), Era::mortal(32, 43));
 		assert!(ux.is_signed());
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err("bad signature in extrinsic"));
 	}

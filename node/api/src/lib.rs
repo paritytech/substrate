@@ -33,7 +33,7 @@ use client::{Client, CallExecutor};
 use primitives::{
 	AccountId, Block, BlockId, BlockNumber, Hash, Index, InherentData, SessionKey, Timestamp, UncheckedExtrinsic
 };
-use sr_primitives::{transaction_validity::TransactionValidity, traits::{GetHeight, BlockNumberToHash}};
+use sr_primitives::{transaction_validity::TransactionValidity, traits::{CurrentHeight, BlockNumberToHash}};
 use substrate_primitives::{Blake2Hasher, RlpCodec};
 
 /// Build new blocks.
@@ -48,7 +48,7 @@ pub trait BlockBuilder {
 /// Trait encapsulating the node API.
 ///
 /// All calls should fail when the exact runtime is unknown.
-pub trait Api: GetHeight<BlockNumber=BlockNumber> + BlockNumberToHash<BlockNumber=BlockNumber,Hash=Hash> {
+pub trait Api: CurrentHeight<BlockNumber=BlockNumber> + BlockNumberToHash<BlockNumber=BlockNumber,Hash=Hash> {
 	/// The block builder for this API type.
 	type BlockBuilder: BlockBuilder;
 

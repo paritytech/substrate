@@ -46,7 +46,7 @@ use transaction_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, Extrin
 use node_api::Api;
 use primitives::{AccountId, BlockId, Block, Hash, Index, BlockNumber};
 use runtime::{Address, UncheckedExtrinsic};
-use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup, GetHeight, BlockNumberToHash};
+use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup, CurrentHeight, BlockNumberToHash};
 
 pub use transaction_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
@@ -123,10 +123,10 @@ impl<A> ChainApi<A> where
 ///
 /// This is due for removal when #721 lands
 pub struct LocalContext<'a, A: 'a>(&'a Arc<A>);
-impl<'a, A: 'a + Api> GetHeight for LocalContext<'a, A> {
+impl<'a, A: 'a + Api> CurrentHeight for LocalContext<'a, A> {
 	type BlockNumber = BlockNumber;
-	fn get_height(&self) -> BlockNumber {
-		self.0.get_height()
+	fn current_height(&self) -> BlockNumber {
+		self.0.current_height()
 	}
 }
 impl<'a, A: 'a + Api> BlockNumberToHash for LocalContext<'a, A> {
@@ -140,7 +140,7 @@ impl<'a, A: 'a + Api> Lookup for LocalContext<'a, A> {
 	type Source = Address;
 	type Target = AccountId;
 	fn lookup(&self, a: Address) -> ::std::result::Result<AccountId, &'static str> {
-		self.0.lookup(&BlockId::number(self.get_height()), a).unwrap_or(None).ok_or("error with lookup")
+		self.0.lookup(&BlockId::number(self.current_height()), a).unwrap_or(None).ok_or("error with lookup")
 	}
 }
 

@@ -46,7 +46,7 @@ use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
-	As, Lookup, Member, CheckedAdd, CheckedSub, GetHeight, BlockNumberToHash};
+	As, Lookup, Member, CheckedAdd, CheckedSub, CurrentHeight, BlockNumberToHash};
 use address::Address as RawAddress;
 use system::ensure_signed;
 
@@ -659,9 +659,9 @@ impl<T: Trait> Lookup for ChainContext<T> {
 	}
 }
 
-impl<T: Trait> GetHeight for ChainContext<T> {
+impl<T: Trait> CurrentHeight for ChainContext<T> {
 	type BlockNumber = T::BlockNumber;
-	fn get_height(&self) -> Self::BlockNumber {
+	fn current_height(&self) -> Self::BlockNumber {
 		<system::Module<T>>::block_number()
 	}
 }
