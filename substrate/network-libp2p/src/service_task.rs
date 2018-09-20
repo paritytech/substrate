@@ -751,10 +751,9 @@ impl Service {
 			SwarmEvent::NodeInfos { node_index, client_version, listen_addrs } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
 					.expect("the swarm always produces events containing valid node indices");
-				// TODO: wrong function name
-				self.topology.add_kademlia_discovered_addrs(
+				self.topology.add_self_reported_listen_addrs(
 					peer_id,
-					listen_addrs.into_iter().map(|a| (a, false))
+					listen_addrs.into_iter()
 				);
 				Some(ServiceEvent::NodeInfos {
 					node_index,

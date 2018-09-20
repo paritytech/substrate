@@ -31,9 +31,9 @@ const MAX_SCORE: u32 = 100;
 const CONNECTED_MINIMUM_SCORE: u32 = 20;
 /// Initial score that a node discovered through Kademlia receives, where we have a hint that the
 /// node is reachable.
-const KADEMLIA_DISCOVERY_INITIAL_SCORE_CONNECTABLE: u32 = 15;
+const DISCOVERY_INITIAL_SCORE_CONNECTABLE: u32 = 15;
 /// Initial score that a node discovered through Kademlia receives, without any hint.
-const KADEMLIA_DISCOVERY_INITIAL_SCORE: u32 = 10;
+const DISCOVERY_INITIAL_SCORE: u32 = 10;
 /// Score adjustement when we fail to connect to an address.
 const SCORE_DIFF_ON_FAILED_TO_CONNECT: i32 = -1;
 /// Default time-to-live for addresses discovered through Kademlia.
@@ -237,6 +237,17 @@ impl NetTopology {
 		}
 	}
 
+	/// Adds addresses that a node says it is listening on.
+	///
+	/// The addresses are most likely to be valid.
+	pub fn add_self_reported_listen_addrs<I>(
+		&mut self,
+		peer_id: &PeerId,
+		addrs: I,
+	) where I: Iterator<Item = Multiaddr> {
+		self.add_discovered_addrs(peer_id, addrs.map(|a| (a, true)))
+	}
+
 	/// Adds addresses discovered through the Kademlia DHT.
 	///
 	/// The addresses are not necessarily valid and should expire after a TTL.
@@ -244,6 +255,15 @@ impl NetTopology {
 	/// For each address, incorporates a boolean. If true, that means we have some sort of hint
 	/// that this address can be reached.
 	pub fn add_kademlia_discovered_addrs<I>(
+		&mut self,
+		peer_id: &PeerId,
+		addrs: I,
+	) where I: Iterator<Item = (Multiaddr, bool)> {
+		self.add_discovered_addrs(peer_id, addrs)
+	}
+
+	/// Inner implementaiton of the `add_*_discovered_addrs`.
+	fn add_discovered_addrs<I>(
 		&mut self,
 		peer_id: &PeerId,
 		addrs: I,
@@ -275,9 +295,9 @@ impl NetTopology {
 
 		for (addr, connectable) in addrs {
 			let initial_score = if connectable {
-				KADEMLIA_DISCOVERY_INITIAL_SCORE_CONNECTABLE
+				DISCOVERY_INITIAL_SCORE_CONNECTABLE
 			} else {
-				KADEMLIA_DISCOVERY_INITIAL_SCORE
+				DISCOVERY_INITIAL_SCORE
 			};
 
 			peer.addrs.push(Addr {
