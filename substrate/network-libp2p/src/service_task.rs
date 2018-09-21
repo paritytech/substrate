@@ -863,7 +863,7 @@ impl Service {
 			}
 		}
 
-		// Poll the future that fires when we need to perform a random Kademlia query.
+		// Poll the future that fires when we need to reply to a Kademlia query.
 		loop {
 			match self.kad_new_ctrl_req_rx.poll() {
 				Ok(Async::NotReady) => break,
