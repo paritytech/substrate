@@ -41,8 +41,6 @@ extern crate pretty_assertions;
 #[macro_use]
 extern crate serde_derive;
 #[cfg(test)]
-extern crate serde_json;
-#[cfg(test)]
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -62,7 +60,7 @@ pub mod dispatch;
 pub mod storage;
 mod hashable;
 #[macro_use]
-mod event;
+pub mod event;
 #[macro_use]
 pub mod metadata;
 #[macro_use]

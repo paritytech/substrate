@@ -17,7 +17,7 @@
 //! Service configuration.
 
 use std::net::SocketAddr;
-use extrinsic_pool;
+use transaction_pool;
 use chain_spec::ChainSpec;
 pub use client::ExecutionStrategy;
 pub use network::Roles;
@@ -38,7 +38,7 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
-	pub extrinsic_pool: extrinsic_pool::Options,
+	pub transaction_pool: transaction_pool::Options,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to key files.
@@ -77,7 +77,7 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			chain_spec,
 			name: Default::default(),
 			roles: Roles::FULL,
-			extrinsic_pool: Default::default(),
+			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
 			database_path: Default::default(),

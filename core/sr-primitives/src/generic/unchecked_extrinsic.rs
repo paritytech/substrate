@@ -21,7 +21,7 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::{Decode, Encode, Input};
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay};
+use traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup};
 use super::CheckedExtrinsic;
 
 /// A extrinsic right from the external world. This is unchecked and so
@@ -29,10 +29,9 @@ use super::CheckedExtrinsic;
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UncheckedExtrinsic<Address, Index, Call, Signature> {
-	/// The signature and address, if this is a signed extrinsic.
-	pub signature: Option<(Address, Signature)>,
-	/// The number of extrinsics have come before from the same signer.
-	pub index: Index,
+	/// The signature, address and number of extrinsics have come before from
+	/// the same signer, if this is a signed extrinsic.
+	pub signature: Option<(Address, Signature, Index)>,
 	/// The function that should be called.
 	pub function: Call,
 }
@@ -41,17 +40,15 @@ impl<Address, Index, Call, Signature> UncheckedExtrinsic<Address, Index, Call, S
 	/// New instance of a signed extrinsic aka "transaction".
 	pub fn new_signed(index: Index, function: Call, signed: Address, signature: Signature) -> Self {
 		UncheckedExtrinsic {
-			signature: Some((signed, signature)),
-			index,
+			signature: Some((signed, signature, index)),
 			function,
 		}
 	}
 
 	/// New instance of an unsigned extrinsic aka "inherent".
-	pub fn new_unsigned(index: Index, function: Call) -> Self {
+	pub fn new_unsigned(function: Call) -> Self {
 		UncheckedExtrinsic {
 			signature: None,
-			index,
 			function,
 		}
 	}
@@ -62,7 +59,7 @@ impl<Address, Index, Call, Signature> UncheckedExtrinsic<Address, Index, Call, S
 	}
 }
 
-impl<Address, AccountId, Index, Call, Signature, ThisLookup> traits::Checkable<ThisLookup>
+impl<Address, AccountId, Index, Call, Signature, Context> traits::Checkable<Context>
 	for UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: Member + MaybeDisplay,
@@ -70,27 +67,25 @@ where
 	Call: Encode + Member,
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	AccountId: Member + MaybeDisplay,
-	ThisLookup: FnOnce(Address) -> Result<AccountId, &'static str>,
+	Context: Lookup<Source=Address, Target=AccountId>,
 {
 	type Checked = CheckedExtrinsic<AccountId, Index, Call>;
 
-	fn check_with(self, lookup: ThisLookup) -> Result<Self::Checked, &'static str> {
+	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
-			Some((signed, signature)) => {
-				let payload = (self.index, self.function);
-				let signed = lookup(signed)?;
+			Some((signed, signature, index)) => {
+				let payload = (index, self.function);
+				let signed = context.lookup(signed)?;
 				if !::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err("bad signature in extrinsic")
 				}
 				CheckedExtrinsic {
-					signed: Some(signed),
-					index: payload.0,
+					signed: Some((signed, payload.0)),
 					function: payload.1,
 				}
 			}
 			None => CheckedExtrinsic {
 				signed: None,
-				index: self.index,
 				function: self.function,
 			},
 		})
@@ -114,7 +109,6 @@ where
 
 		Some(UncheckedExtrinsic {
 			signature: Decode::decode(input)?,
-			index: Decode::decode(input)?,
 			function: Decode::decode(input)?,
 		})
 	}
@@ -136,7 +130,6 @@ where
 		v.extend(&[0u8; 4]);
 
 		self.signature.encode_to(&mut v);
-		self.index.encode_to(&mut v);
 		self.function.encode_to(&mut v);
 
 		let length = (v.len() - 4) as u32;
@@ -154,6 +147,6 @@ impl<Address, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Address,
 	Call: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedExtrinsic({:?}, {:?}, {:?})", self.signature.as_ref().map(|x| &x.0), self.function, self.index)
+		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2)), self.function)
 	}
 }

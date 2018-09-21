@@ -37,7 +37,8 @@ extern crate num_traits;
 extern crate integer_sqrt;
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
-extern crate parity_codec as codec;
+#[doc(hidden)]
+pub extern crate parity_codec as codec;
 extern crate substrate_primitives;
 
 #[cfg(test)]
@@ -94,9 +95,9 @@ pub struct Permill(u32);
 
 // TODO: impl Mul<Permill> for N where N: As<usize>
 impl Permill {
-	pub fn times<N: traits::As<usize> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
+	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
 		// TODO: handle overflows
-		b * <N as traits::As<usize>>::sa(self.0 as usize) / <N as traits::As<usize>>::sa(1000000)
+		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1000000)
 	}
 
 	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
@@ -118,6 +119,61 @@ impl From<f64> for Permill {
 impl From<f32> for Permill {
 	fn from(x: f32) -> Permill {
 		Permill::from_fraction(x as f64)
+	}
+}
+
+/// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
+/// provides a means to multiply some other value by that.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+pub struct Perbill(u32);
+
+// TODO: impl Mul<Perbill> for N where N: As<usize>
+impl Perbill {
+	/// Attenuate `b` by self.
+	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
+		// TODO: handle overflows
+		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000_000)
+	}
+
+	/// Nothing.
+	pub fn zero() -> Perbill { Perbill(0) }
+
+	/// `true` if this is nothing.
+	pub fn is_zero(&self) -> bool { self.0 == 0 }
+
+	/// Everything.
+	pub fn one() -> Perbill { Perbill(1_000_000_000) }
+
+	/// Construct new instance where `x` is in billionths. Value equivalent to `x / 1,000,000,000`.
+	pub fn from_billionths(x: u32) -> Perbill { Perbill(x.min(1_000_000_000)) }
+
+	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
+	pub fn from_millionths(x: u32) -> Perbill { Perbill(x.min(1_000_000) * 1000) }
+
+	/// Construct new instance where `x` is a percent. Value equivalent to `x%`.
+	pub fn from_percent(x: u32) -> Perbill { Perbill(x.min(100) * 10_000_000) }
+
+	#[cfg(feature = "std")]
+	/// Construct new instance whose value is equal to `x` (between 0 and 1).
+	pub fn from_fraction(x: f64) -> Perbill { Perbill((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+
+	#[cfg(feature = "std")]
+	/// Construct new instance whose value is equal to `n / d` (between 0 and 1).
+	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+}
+
+#[cfg(feature = "std")]
+impl From<f64> for Perbill {
+	fn from(x: f64) -> Perbill {
+		Perbill::from_fraction(x)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<f32> for Perbill {
+	fn from(x: f32) -> Perbill {
+		Perbill::from_fraction(x as f64)
 	}
 }
 
@@ -250,8 +306,6 @@ macro_rules! impl_outer_config {
 /// Generated enum is binary-compatible with and could be interpreted
 /// as `generic::DigestItem`.
 ///
-/// Requires `use runtime_primitives::generic;` to be used.
-///
 /// Runtime requirements:
 /// 1) binary representation of all supported 'system' log items should stay
 ///    the same. Otherwise, the native code will be unable to read log items
@@ -293,53 +347,55 @@ macro_rules! impl_outer_log {
 			/// `self` is a 'system' log && it has been marked as 'system' in macro call.
 			/// Otherwise, None is returned.
 			#[allow(unreachable_patterns)]
-			fn dref<'a>(&'a self) -> Option<generic::DigestItemRef<'a, $($genarg),*>> {
+			fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
 				match self.0 {
 					$($(
 					$internal::$module($module::RawLog::$item(ref v)) =>
-						Some(generic::DigestItemRef::$item(v)),
+						Some($crate::generic::DigestItemRef::$item(v)),
 					)*)*
 					_ => None,
 				}
 			}
 		}
 
-		impl From<generic::DigestItem<$($genarg),*>> for $name {
+		impl From<$crate::generic::DigestItem<$($genarg),*>> for $name {
 			/// Converts `generic::DigestItem` into `$name`. If `generic::DigestItem` represents
 			/// a system item which is supported by the runtime, it is returned.
 			/// Otherwise we expect a `Other` log item. Trying to convert from anything other
 			/// will lead to panic in runtime, since the runtime does not supports this 'system'
 			/// log item.
 			#[allow(unreachable_patterns)]
-			fn from(gen: generic::DigestItem<$($genarg),*>) -> Self {
+			fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
 				match gen {
 					$($(
-					generic::DigestItem::$item(value) =>
+					$crate::generic::DigestItem::$item(value) =>
 						$name($internal::$module($module::RawLog::$item(value))),
 					)*)*
 					_ => gen.as_other()
-						.and_then(|value| Decode::decode(&mut &value[..]))
+						.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
 						.map($name)
 						.expect("not allowed to fail in runtime"),
 				}
 			}
 		}
 
-		impl Decode for $name {
+		impl $crate::codec::Decode for $name {
 			/// `generic::DigestItem` binray compatible decode.
-			fn decode<I: Input>(input: &mut I) -> Option<Self> {
-				let gen: generic::DigestItem<$($genarg),*> = Decode::decode(input)?;
+			fn decode<I: $crate::codec::Input>(input: &mut I) -> Option<Self> {
+				let gen: $crate::generic::DigestItem<$($genarg),*> =
+					$crate::codec::Decode::decode(input)?;
 				Some($name::from(gen))
 			}
 		}
 
-		impl Encode for $name {
+		impl $crate::codec::Encode for $name {
 			/// `generic::DigestItem` binray compatible encode.
 			fn encode(&self) -> Vec<u8> {
 				match self.dref() {
 					Some(dref) => dref.encode(),
 					None => {
-						let gen: generic::DigestItem<$($genarg),*> = generic::DigestItem::Other(self.0.encode());
+						let gen: $crate::generic::DigestItem<$($genarg),*> =
+							$crate::generic::DigestItem::Other(self.0.encode());
 						gen.encode()
 					},
 				}
@@ -367,12 +423,12 @@ macro_rules! impl_outer_log {
 #[cfg(test)]
 mod tests {
 	use substrate_primitives::hash::H256;
-	use codec::{Encode, Decode, Input};
+	use codec::{Encode as EncodeHidden, Decode as DecodeHidden};
 
 	pub trait RuntimeT {
 		type AuthorityId;
 	}
-	
+
 	pub struct Runtime;
 
 	impl RuntimeT for Runtime {
@@ -397,8 +453,6 @@ mod tests {
 			pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
 		}
 
-		use super::generic; // required before macro invocation
-
 		// TODO try to avoid redundant brackets: a(AuthoritiesChange), b
 		impl_outer_log! {
 			pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
@@ -409,26 +463,26 @@ mod tests {
 		// encode/decode regular item
 		let b1: Log = b::RawLog::B1::<u64>(777).into();
 		let encoded_b1 = b1.encode();
-		let decoded_b1: Log = Decode::decode(&mut &encoded_b1[..]).unwrap();
+		let decoded_b1: Log = DecodeHidden::decode(&mut &encoded_b1[..]).unwrap();
 		assert_eq!(b1, decoded_b1);
 
 		// encode/decode system item
 		let auth_change: Log = a::RawLog::AuthoritiesChange::<u64>(vec![100, 200, 300]).into();
 		let encoded_auth_change = auth_change.encode();
-		let decoded_auth_change: Log = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
+		let decoded_auth_change: Log = DecodeHidden::decode(&mut &encoded_auth_change[..]).unwrap();
 		assert_eq!(auth_change, decoded_auth_change);
 
 		// interpret regular item using `generic::DigestItem`
-		let generic_b1: generic::DigestItem<H256, u64> = Decode::decode(&mut &encoded_b1[..]).unwrap();
+		let generic_b1: super::generic::DigestItem<H256, u64> = DecodeHidden::decode(&mut &encoded_b1[..]).unwrap();
 		match generic_b1 {
-			generic::DigestItem::Other(_) => (),
+			super::generic::DigestItem::Other(_) => (),
 			_ => panic!("unexpected generic_b1: {:?}", generic_b1),
 		}
 
 		// interpret system item using `generic::DigestItem`
-		let generic_auth_change: generic::DigestItem<H256, u64> = Decode::decode(&mut &encoded_auth_change[..]).unwrap();
+		let generic_auth_change: super::generic::DigestItem<H256, u64> = DecodeHidden::decode(&mut &encoded_auth_change[..]).unwrap();
 		match generic_auth_change {
-			generic::DigestItem::AuthoritiesChange::<H256, u64>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
+			super::generic::DigestItem::AuthoritiesChange::<H256, u64>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
 			_ => panic!("unexpected generic_auth_change: {:?}", generic_auth_change),
 		}
 	}
