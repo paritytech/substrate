@@ -622,6 +622,9 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			pinger.ping(now);
 			let future = Delay::new(now + PING_TIMEOUT);
 			self.active_ping_out = Some(future);
+			if let Some(to_notify) = self.to_notify.take() {
+				to_notify.notify();
+			}
 			return true;
 		}
 
@@ -758,6 +761,23 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 
 	/// Polls the ping substreams.
 	fn poll_ping(&mut self) -> Poll<Option<SubstrateOutEvent<TSubstream>>, IoError> {
+		// Poll the future that fires when we need to ping the node again.
+		match self.next_ping.poll() {
+			Ok(Async::NotReady) => {},
+			Ok(Async::Ready(())) => {
+				// We reset `next_ping` to a very long time in the future so that we can poll
+				// it again without having an accident.
+				self.next_ping.reset(Instant::now() + Duration::from_secs(5 * 60));
+				if self.ping_remote() {
+					return Ok(Async::Ready(Some(SubstrateOutEvent::PingStart)));
+				}
+			},
+			Err(err) => {
+				warn!(target: "sub-libp2p", "Ping timer errored: {:?}", err);
+				return Err(IoError::new(IoErrorKind::Other, err));
+			}
+		}
+
 		// Poll for answering pings.
 		for n in (0 .. self.ping_in_substreams.len()).rev() {
 			let mut ping = self.ping_in_substreams.swap_remove(n);
@@ -796,23 +816,6 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					warn!(target: "sub-libp2p", "Active ping deadline errored: {:?}", err);
 					return Err(IoError::new(IoErrorKind::Other, err));
 				},
-			}
-		}
-
-		// Poll the future that fires when we need to ping the node again.
-		match self.next_ping.poll() {
-			Ok(Async::NotReady) => {},
-			Ok(Async::Ready(())) => {
-				// We reset `next_ping` to a very long time in the future so that we can poll
-				// it again without having an accident.
-				self.next_ping.reset(Instant::now() + Duration::from_secs(5 * 60));
-				if self.ping_remote() {
-					return Ok(Async::Ready(Some(SubstrateOutEvent::PingStart)));
-				}
-			},
-			Err(err) => {
-				warn!(target: "sub-libp2p", "Ping timer errored: {:?}", err);
-				return Err(IoError::new(IoErrorKind::Other, err));
 			}
 		}
 
