@@ -17,10 +17,11 @@
 //! Errors that can occur during the consensus process.
 
 use primitives::AuthorityId;
+use client;
 
 error_chain! {
 	links {
-		Api(::node_api::Error, ::node_api::ErrorKind);
+		Client(client::error::Error, client::error::ErrorKind);
 		Bft(::bft::Error, ::bft::ErrorKind);
 	}
 

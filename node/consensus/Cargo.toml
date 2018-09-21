@@ -20,6 +20,7 @@ parity-codec = { version = "2.0" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-client = { path = "../../core/client" }
 sr-primitives = { path = "../../core/sr-primitives" }
+srml-system = { path = "../../srml/system" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../core/keyring" }
