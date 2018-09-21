@@ -109,6 +109,10 @@ where
 	/// Commit block insertion.
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
 	/// Finalize block with given Id. This should also implicitly finalize all ancestors.
+	///
+	/// If the finalized block is not an ancestor of the current "best block", then
+	/// the chain will be implicitly reorganized to the best chain containing the newly
+	/// finalized block.
 	fn finalize_block(&self, block: BlockId<Block>) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
