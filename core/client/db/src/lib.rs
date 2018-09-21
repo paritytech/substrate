@@ -414,7 +414,8 @@ impl<Block: BlockT> Backend<Block> {
 	// write stuff to a transaction after a new block is finalized.
 	// this manages state pruning. Fails if called with a block which
 	// was not a child of the last finalized block.
-	fn note_finalized(&self,
+	fn note_finalized(
+		&self,
 		transaction: &mut DBTransaction,
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
