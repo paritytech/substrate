@@ -20,24 +20,24 @@
 
 #![warn(unused_extern_crates)]
 
-extern crate substrate_bft as bft;
+// extern crate substrate_consensus_rhd as bft;
 extern crate substrate_network;
-extern crate substrate_primitives;
+// extern crate substrate_primitives;
 
-extern crate node_consensus;
+// extern crate node_consensus;
 extern crate node_primitives;
 
-extern crate futures;
-extern crate tokio;
-extern crate rhododendron;
+// extern crate futures;
+// extern crate tokio;
+// extern crate rhododendron;
 
 #[macro_use]
 extern crate log;
 
-pub mod consensus;
+// pub mod consensus;
 
 use node_primitives::{Block, Hash, Header};
-use substrate_network::{NodeIndex, Context, Severity};
+use substrate_network::{NodeIndex, Context};
 use substrate_network::consensus_gossip::ConsensusGossip;
 use substrate_network::{message, generic_message};
 use substrate_network::specialization::Specialization;
@@ -87,17 +87,9 @@ impl Specialization<Block> for Protocol {
 	}
 
 	fn on_message(&mut self, ctx: &mut Context<Block>, who: NodeIndex, message: message::Message<Block>) {
-		match message {
-			generic_message::Message::BftMessage(msg) => {
-				trace!(target: "node-network", "BFT message from {}: {:?}", who, msg);
-				// TODO: check signature here? what if relevant block is unknown?
-				self.consensus_gossip.on_bft_message(ctx, who, msg)
-			}
-			generic_message::Message::ChainSpecific(_) => {
-				trace!(target: "node-network", "Bad message from {}", who);
-				ctx.report_peer(who, Severity::Bad("Invalid node protocol message format"));
-			}
-			_ => {}
+		if let generic_message::Message::Consensus(topic, msg) = message {
+			trace!(target: "node-network", "Consensus message from {}: {:?} on  {:?}", who, msg, topic);
+			self.consensus_gossip.on_incoming(ctx, who, topic, msg);
 		}
 	}
 

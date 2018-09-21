@@ -21,7 +21,6 @@
 #![warn(missing_docs)]
 
 extern crate rhododendron;
-extern crate substrate_bft as bft;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;

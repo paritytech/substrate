@@ -18,8 +18,7 @@
 
 use error;
 use primitives::AuthorityId;
-use runtime_primitives::bft::Justification;
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::{generic::BlockId, Justification};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
@@ -64,7 +63,7 @@ where
 		&mut self,
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
-		justification: Option<Justification<Block::Hash>>,
+		justification: Option<Justification>,
 		state: NewBlockState,
 	) -> error::Result<()>;
 

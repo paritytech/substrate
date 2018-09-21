@@ -23,7 +23,6 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
 use runtime;
-use bft;
 
 /// Extension trait for a test client.
 pub trait TestClient {

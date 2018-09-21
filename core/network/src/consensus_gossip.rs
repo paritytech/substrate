@@ -24,7 +24,7 @@ use rand::{self, Rng};
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
-use message::{self, generic::Message as GenericMessage};
+use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
 use service::Roles;
 
@@ -36,30 +36,24 @@ struct PeerConsensus<H> {
 	is_authority: bool,
 }
 
-/// Consensus messages.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ConsensusMessage<B: BlockT> {
-	/// A message concerning BFT agreement
-	Bft(message::LocalizedBftMessage<B>),
-	/// A message concerning some chain-specific aspect of consensus
-	ChainSpecific(Vec<u8>, B::Hash),
-}
-
 struct MessageEntry<B: BlockT> {
-	hash: B::Hash,
-	message: ConsensusMessage<B>,
+	topic: B::Hash,
+	message: ConsensusMessage,
 	instant: Instant,
 }
 
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<NodeIndex, PeerConsensus<B::Hash>>,
-	live_message_sinks: HashMap<B::Hash, mpsc::UnboundedSender<ConsensusMessage<B>>>,
+	live_message_sinks: HashMap<B::Hash, mpsc::UnboundedSender<ConsensusMessage>>,
 	messages: Vec<MessageEntry<B>>,
 	message_hashes: HashSet<B::Hash>,
 }
 
-impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
+impl<B: BlockT> ConsensusGossip<B>
+where
+	B::Header: HeaderT<Number=u64>
+{
 	/// Create a new instance.
 	pub fn new() -> Self {
 		ConsensusGossip {
@@ -83,13 +77,8 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			// TODO: limit by size
 			let mut known_messages = HashSet::new();
 			for entry in self.messages.iter() {
-				known_messages.insert(entry.hash);
-				let message = match entry.message {
-					ConsensusMessage::Bft(ref bft) => GenericMessage::BftMessage(bft.clone()),
-					ConsensusMessage::ChainSpecific(ref msg, _) => GenericMessage::ChainSpecific(msg.clone()),
-				};
-
-				protocol.send_message(who, message);
+				known_messages.insert(entry.topic);
+				protocol.send_message(who, Message::Consensus(entry.topic.clone(), entry.message.clone()));
 			}
 			self.peers.insert(who, PeerConsensus {
 				known_messages,
@@ -104,9 +93,9 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		}
 	}
 
-	fn propagate(&mut self, protocol: &mut Context<B>, message: message::Message<B>, hash: B::Hash) {
+	fn propagate(&mut self, protocol: &mut Context<B>, topic: B::Hash, message: ConsensusMessage) {
 		let mut non_authorities: Vec<_> = self.peers.iter()
-			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&hash) { Some(*id) } else { None })
+			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&topic) { Some(*id) } else { None })
 			.collect();
 
 		rand::thread_rng().shuffle(&mut non_authorities);
@@ -118,77 +107,27 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.is_authority {
-				if peer.known_messages.insert(hash.clone()) {
+				if peer.known_messages.insert(topic.clone()) {
 					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
-					protocol.send_message(*id, message.clone());
+					protocol.send_message(*id, Message::Consensus(topic, message.clone()));
 				}
 			}
 			else if non_authorities.contains(&id) {
 				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
-				peer.known_messages.insert(hash.clone());
-				protocol.send_message(*id, message.clone());
+				peer.known_messages.insert(topic.clone());
+				protocol.send_message(*id, Message::Consensus(topic, message.clone()));
 			}
 		}
 	}
 
-	fn register_message(&mut self, hash: B::Hash, message: ConsensusMessage<B>) {
-		if self.message_hashes.insert(hash) {
+	fn register_message(&mut self, topic: B::Hash, message: ConsensusMessage) {
+		if self.message_hashes.insert(topic) {
 			self.messages.push(MessageEntry {
-				hash,
+				topic,
 				instant: Instant::now(),
 				message,
 			});
 		}
-	}
-
-	/// Handles incoming BFT message, passing to stream and repropagating.
-	pub fn on_bft_message(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: message::LocalizedBftMessage<B>) {
-		if let Some((hash, message)) = self.handle_incoming(protocol, who, ConsensusMessage::Bft(message)) {
-			// propagate to other peers.
-			self.multicast(protocol, message, Some(hash));
-		}
-	}
-
-	/// Handles incoming chain-specific message and repropagates
-	pub fn on_chain_specific(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: Vec<u8>, topic: B::Hash) {
-		debug!(target: "gossip", "received chain-specific gossip message");
-		if let Some((hash, message)) = self.handle_incoming(protocol, who, ConsensusMessage::ChainSpecific(message, topic)) {
-			debug!(target: "gossip", "handled incoming chain-specific message");
-			// propagate to other peers.
-			self.multicast(protocol, message, Some(hash));
-		}
-	}
-
-	/// Get a stream of messages relevant to consensus for the given topic.
-	pub fn messages_for(&mut self, topic: B::Hash) -> mpsc::UnboundedReceiver<ConsensusMessage<B>> {
-		let (sink, stream) = mpsc::unbounded();
-
-		for entry in self.messages.iter() {
-			let message_matches = match entry.message {
-				ConsensusMessage::Bft(ref msg) => msg.parent_hash == topic,
-				ConsensusMessage::ChainSpecific(_, ref h) => h == &topic,
-			};
-
-			if message_matches {
-				sink.unbounded_send(entry.message.clone()).expect("receiving end known to be open; qed");
-			}
-		}
-
-		self.live_message_sinks.insert(topic, sink);
-		stream
-	}
-
-	/// Multicast a chain-specific message to other authorities.
-	pub fn multicast_chain_specific(&mut self, protocol: &mut Context<B>, message: Vec<u8>, topic: B::Hash) {
-		trace!(target:"gossip", "sending chain-specific message");
-		self.multicast(protocol, ConsensusMessage::ChainSpecific(message, topic), None);
-	}
-
-	/// Multicast a BFT message to other authorities
-	pub fn multicast_bft_message(&mut self, protocol: &mut Context<B>, message: message::LocalizedBftMessage<B>) {
-		// Broadcast message to all authorities.
-		trace!(target:"gossip", "Broadcasting BFT message {:?}", message);
-		self.multicast(protocol, ConsensusMessage::Bft(message), None);
 	}
 
 	/// Call when a peer has been disconnected to stop tracking gossip status.
@@ -205,15 +144,10 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		let before = self.messages.len();
 		let now = Instant::now();
 		self.messages.retain(|entry| {
-			let topic = match entry.message {
-				ConsensusMessage::Bft(ref msg) => &msg.parent_hash,
-				ConsensusMessage::ChainSpecific(_, ref h) => h,
-			};
-
-			if entry.instant + MESSAGE_LIFETIME >= now && predicate(topic) {
+			if entry.instant + MESSAGE_LIFETIME >= now && predicate(&entry.topic) {
 				true
 			} else {
-				hashes.remove(&entry.hash);
+				hashes.remove(&entry.topic);
 				false
 			}
 		});
@@ -223,34 +157,19 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		}
 	}
 
-	fn handle_incoming(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: ConsensusMessage<B>) -> Option<(B::Hash, ConsensusMessage<B>)> {
-		let (hash, topic, message) = match message {
-			ConsensusMessage::Bft(msg) => {
-				let parent = msg.parent_hash;
-				let generic = GenericMessage::BftMessage(msg);
-				(
-					::protocol::hash_message(&generic),
-					parent,
-					match generic {
-						GenericMessage::BftMessage(msg) => ConsensusMessage::Bft(msg),
-						_ => panic!("`generic` is known to be the `BftMessage` variant; qed"),
-					}
-				)
-			}
-			ConsensusMessage::ChainSpecific(msg, topic) => {
-				let generic = GenericMessage::ChainSpecific(msg);
-				(
-					::protocol::hash_message::<B>(&generic),
-					topic,
-					match generic {
-						GenericMessage::ChainSpecific(msg) => ConsensusMessage::ChainSpecific(msg, topic),
-						_ => panic!("`generic` is known to be the `ChainSpecific` variant; qed"),
-					}
-				)
-			}
-		};
+	/// Handle an incoming ConsensusMessage for topic by who via protocol. Discard message if topic
+	/// already known, the message is old, its source peers isn't a registered peer or the connection
+	/// to them is broken. Return `Some(topic, message)` if it was added to the internal queue, `None`
+	/// in all other cases.
+	pub fn on_incoming(
+		&mut self,
+		protocol: &mut Context<B>,
+		who: NodeIndex,
+		topic: B::Hash,
+		message: ConsensusMessage,
+	) -> Option<(B::Hash, ConsensusMessage)> {
 
-		if self.message_hashes.contains(&hash) {
+		if self.message_hashes.contains(&topic) {
 			trace!(target:"gossip", "Ignored already known message from {}", who);
 			return None;
 		}
@@ -268,6 +187,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			},
 			(Ok(_), Ok(None)) => {},
 		}
+
 
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			use std::collections::hash_map::Entry;
@@ -287,18 +207,12 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			return None;
 		}
 
-		Some((hash, message))
+		Some((topic, message))
 	}
 
-	fn multicast(&mut self, protocol: &mut Context<B>, message: ConsensusMessage<B>, hash: Option<B::Hash>) {
-		let generic = match message {
-			ConsensusMessage::Bft(ref message) => GenericMessage::BftMessage(message.clone()),
-			ConsensusMessage::ChainSpecific(ref message, _) => GenericMessage::ChainSpecific(message.clone()),
-		};
-
-		let hash = hash.unwrap_or_else(|| ::protocol::hash_message(&generic));
-		self.register_message(hash, message);
-		self.propagate(protocol, generic, hash);
+	fn multicast(&mut self, protocol: &mut Context<B>, topic: B::Hash, message: ConsensusMessage) {
+		self.register_message(topic, message.clone());
+		self.propagate(protocol, topic, message);
 	}
 }
 
@@ -320,20 +234,20 @@ mod tests {
 		let now = Instant::now();
 		let m1_hash = H256::random();
 		let m2_hash = H256::random();
-		let m1 = ConsensusMessage::Bft(message::LocalizedBftMessage {
-			parent_hash: prev_hash,
+		let m1 = Message::Bft(message::LocalizedBftMessage {
+			parent_topic: prev_hash,
 			message: message::generic::BftMessage::Auxiliary(Justification {
 				round_number: 0,
-				hash: Default::default(),
+				topic: Default::default(),
 				signatures: Default::default(),
 			}),
 		});
-		let m2 = ConsensusMessage::ChainSpecific(vec![1, 2, 3], best_hash);
+		let m2 = Message::ChainSpecific(vec![1, 2, 3], best_hash);
 
 		macro_rules! push_msg {
-			($hash:expr, $now: expr, $m:expr) => {
+			($topic:expr, $now: expr, $m:expr) => {
 				consensus.messages.push(MessageEntry {
-					hash: $hash,
+					topic: $hash,
 					instant: $now,
 					message: $m,
 				})
@@ -384,7 +298,7 @@ mod tests {
 
 		let mut consensus = ConsensusGossip::new();
 
-		let bft_message = generic::BftMessage::Consensus(generic::SignedConsensusMessage::Vote(generic::SignedConsensusVote {
+		let bft_message = generic::BftMessage::Consensus(generic::SignedMessage::Vote(generic::SignedConsensusVote {
 			vote: generic::ConsensusVote::AdvanceRound(0),
 			sender: [0; 32].into(),
 			signature: Default::default(),
@@ -400,7 +314,7 @@ mod tests {
 		let message = generic::Message::BftMessage(localized.clone());
 		let message_hash = ::protocol::hash_message::<Block>(&message);
 
-		let message = ConsensusMessage::Bft(localized);
+		let message = Message::Bft(localized);
 		consensus.register_message(message_hash, message.clone());
 		let stream = consensus.messages_for(parent_hash);
 

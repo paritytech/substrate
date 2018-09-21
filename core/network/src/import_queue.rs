@@ -21,7 +21,7 @@ use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
 
-use client::{BlockOrigin, ImportResult};
+use client::{BlockOrigin, ImportBlock, ImportResult};
 use network_libp2p::{NodeIndex, Severity};
 
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
@@ -319,13 +319,14 @@ fn import_single_block<B: BlockT>(
 			let hash = header.hash();
 			let parent = header.parent_hash().clone();
 
-			let result = chain.import(
-				block_origin,
-				header,
-				justification,
-				block.body,
-				instant_finality,
-			);
+			let result = chain.import( ImportBlock {
+				origin: block_origin,
+				header: header,
+				external_justification: justification,
+				internal_justification: vec![],
+				body: block.body,
+				finalized: instant_finality
+			}, None);
 			match result {
 				Ok(ImportResult::AlreadyInChain) => {
 					trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);

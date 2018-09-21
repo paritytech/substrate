@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! BFT Agreement based on a rotating proposer in different rounds.
 //!
 //! Where this crate refers to input stream, should never logically conclude.
@@ -30,17 +29,19 @@
 //! conclude without having witnessed the conclusion.
 //! In general, this future should be pre-empted by the import of a justification
 //! set for this block height.
-// end::description[]
 
 #![recursion_limit="128"]
 
-pub mod error;
-
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
+extern crate srml_support as runtime_support;
 extern crate sr_primitives as runtime_primitives;
 extern crate sr_version as runtime_version;
+extern crate sr_io as runtime_io;
 extern crate tokio;
+
+#[cfg(test)]
+extern crate substrate_keyring as keyring;
 extern crate parking_lot;
 extern crate rhododendron;
 
@@ -52,14 +53,24 @@ extern crate futures;
 #[macro_use]
 extern crate error_chain;
 
+#[macro_use]
+extern crate serde;
+
+#[macro_use]
+extern crate parity_codec_derive;
+
+
+pub mod error;
+pub mod network_messages;
+
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Instant, Duration};
 
 use codec::Encode;
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::{generic::BlockId, Justification};
 use runtime_primitives::traits::{Block, Header};
-use runtime_primitives::bft::{Message as PrimitiveMessage, Action as PrimitiveAction, Justification as PrimitiveJustification};
+use netwwork_messages::{Message as PrimitiveMessage, Action as PrimitiveAction};
 use primitives::{AuthorityId, ed25519, ed25519::LocalizedSignature};
 
 use futures::{Async, Stream, Sink, Future, IntoFuture};
@@ -67,8 +78,13 @@ use futures::sync::oneshot;
 use tokio::timer::Delay;
 use parking_lot::Mutex;
 
-pub use rhododendron::{InputStreamConcluded, AdvanceRoundReason};
+pub use rhododendron::{InputStreamConcluded, AdvanceRoundReason,
+	Message as RhdMessage, Vote as RhdMessageVote};
 pub use error::{Error, ErrorKind};
+
+#[cfg(feature = "std")] use serde::de::DeserializeOwned;
+
+pub mod misbehaviour_check;
 
 // statuses for an agreement
 mod status {
@@ -76,10 +92,6 @@ mod status {
 	pub const BAD: usize = 1;
 	pub const GOOD: usize = 2;
 }
-
-/// Messages over the proposal.
-/// Each message carries an associated round number.
-pub type Message<B> = rhododendron::Message<B, <B as Block>::Hash>;
 
 /// Localized message type.
 pub type LocalizedMessage<B> = rhododendron::LocalizedMessage<
@@ -89,11 +101,56 @@ pub type LocalizedMessage<B> = rhododendron::LocalizedMessage<
 	LocalizedSignature
 >;
 
+
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
+#[serde(bound = "D: DeserializeOwned")]
+pub enum VoteInner<D : serde::Serialize> {
+	Prepare(usize, D),
+	Commit(usize, D),
+	AdvanceRound(usize),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Serialize, Deserialize)]
+#[serde(bound = "B: DeserializeOwned")]
+pub enum Message<B: Block> {
+	Propose(usize, B),
+	Vote(VoteInner<<B as Block>::Hash>),
+}
+
+
+impl<B> From<RhdMessage<B, <B as Block>::Hash>> for Message<B> where B: Block {
+	fn from(other: RhdMessage<B, <B as Block>::Hash>) -> Message<B> {
+		match other {
+			RhdMessage::Propose(u, b) => Message::Propose(u, b),
+			RhdMessage::Vote(v) => Message::Vote(match v {
+				rhododendron::Vote::Prepare(u, d) => VoteInner::Prepare(u, d),
+				rhododendron::Vote::Commit(u, d) => VoteInner::Commit(u, d),
+				rhododendron::Vote::AdvanceRound(u) => VoteInner::AdvanceRound(u)
+			})
+		}
+	}
+}
+
+impl<B> Into<RhdMessage<B, <B as Block>::Hash>> for Message<B> where B: Block {
+	fn into(self) -> RhdMessage<B, <B as Block>::Hash> {
+		match self {
+			Message::Propose(u, b) => RhdMessage::Propose(u, b),
+			Message::Vote(v) => RhdMessage::Vote(match v {
+				VoteInner::Prepare(u, d) => rhododendron::Vote::Prepare(u, d),
+				VoteInner::Commit(u, d) => rhododendron::Vote::Commit(u, d),
+				VoteInner::AdvanceRound(u) => rhododendron::Vote::AdvanceRound(u)
+			})
+		}
+	}
+}
+
+
 /// Justification of some hash.
-pub type Justification<H> = rhododendron::Justification<H, LocalizedSignature>;
+pub struct RhdJustification<H>(rhododendron::Justification<H, LocalizedSignature>);
 
 /// Justification of a prepare message.
-pub type PrepareJustification<H> = rhododendron::PrepareJustification<H, LocalizedSignature>;
+pub struct PrepareJustification<H>(rhododendron::PrepareJustification<H, LocalizedSignature>);
 
 /// Unchecked justification.
 pub struct UncheckedJustification<H>(rhododendron::UncheckedJustification<H, LocalizedSignature>);
@@ -109,14 +166,22 @@ impl<H> UncheckedJustification<H> {
 	}
 }
 
+impl<H> Into<Justification> for RhdJustification<H> {
+	fn into(self) -> Justification {
+		let p : Justification = UncheckedJustification(self.0.uncheck()).into();
+		p
+	}
+}
+
+
 impl<H> From<rhododendron::UncheckedJustification<H, LocalizedSignature>> for UncheckedJustification<H> {
 	fn from(inner: rhododendron::UncheckedJustification<H, LocalizedSignature>) -> Self {
 		UncheckedJustification(inner)
 	}
 }
 
-impl<H> From<PrimitiveJustification<H>> for UncheckedJustification<H> {
-	fn from(just: PrimitiveJustification<H>) -> Self {
+impl<H> From<Justification> for UncheckedJustification<H> {
+	fn from(just: Justification) -> Self {
 		UncheckedJustification(rhododendron::UncheckedJustification {
 			round_number: just.round_number as usize,
 			digest: just.hash,
@@ -128,9 +193,9 @@ impl<H> From<PrimitiveJustification<H>> for UncheckedJustification<H> {
 	}
 }
 
-impl<H> Into<PrimitiveJustification<H>> for UncheckedJustification<H> {
-	fn into(self) -> PrimitiveJustification<H> {
-		PrimitiveJustification {
+impl<H> Into<Justification> for UncheckedJustification<H> {
+	fn into(self) -> Justification {
+		Justification {
 			round_number: self.0.round_number as u32,
 			hash: self.0.digest,
 			signatures: self.0.signatures.into_iter().map(|s| (s.signer.into(), s.signature)).collect(),
@@ -192,12 +257,6 @@ pub trait Proposer<B: Block> {
 
 	/// Hook called when a BFT round advances without a proposal.
 	fn on_round_end(&self, _round_number: usize, _proposed: bool) { }
-}
-
-/// Block import trait.
-pub trait BlockImport<B: Block> {
-	/// Import a block alongside its corresponding justification.
-	fn import_block(&self, block: B, justification: Justification<B::Hash>, authorities: &[AuthorityId]) -> bool;
 }
 
 /// Trait for getting the authorities at a given block.
@@ -282,7 +341,7 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 		proposal.hash()
 	}
 
-	fn sign_local(&self, message: Message<B>) -> LocalizedMessage<B> {
+	fn sign_local(&self, message: RhdMessage<B, B::Hash>) -> LocalizedMessage<B> {
 		sign_message(message, &*self.key, self.parent_hash.clone())
 	}
 
@@ -313,7 +372,7 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 		use std::collections::HashSet;
 
 		let collect_pubkeys = |participants: HashSet<&Self::AuthorityId>| participants.into_iter()
-			.map(|p| ed25519::Public::from_raw(p.0))
+			.map(|p| ::ed25519::Public::from_raw(p.0))
 			.collect::<Vec<_>>();
 
 		let round_timeout = self.round_timeout_duration(next_round);
@@ -383,10 +442,11 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 			let hash = justified_block.hash();
 			info!(target: "bft", "Importing block #{} ({}) directly from BFT consensus",
 				justified_block.header().number(), hash);
+			let just : Justification = RhdJustification(committed.justification).into();
 
 			let import_ok = self.import.import_block(
 				justified_block,
-				committed.justification,
+				just,
 				&self.inner.context().authorities
 			);
 
@@ -617,7 +677,7 @@ pub fn bft_threshold(n: usize) -> usize {
 }
 
 fn check_justification_signed_message<H>(authorities: &[AuthorityId], message: &[u8], just: UncheckedJustification<H>)
-	-> Result<Justification<H>, UncheckedJustification<H>>
+	-> Result<RhdJustification<H>, UncheckedJustification<H>>
 {
 	// TODO: return additional error information.
 	just.0.check(authorities.len() - max_faulty_of(authorities.len()), |_, _, sig| {
@@ -629,16 +689,18 @@ fn check_justification_signed_message<H>(authorities: &[AuthorityId], message: &
 		} else {
 			None
 		}
-	}).map_err(UncheckedJustification)
+	}).map(RhdJustification).map_err(UncheckedJustification)
 }
 
 /// Check a full justification for a header hash.
 /// Provide all valid authorities.
 ///
 /// On failure, returns the justification back.
-pub fn check_justification<B: Block>(authorities: &[AuthorityId], parent: B::Hash, just: UncheckedJustification<B::Hash>)
-	-> Result<Justification<B::Hash>, UncheckedJustification<B::Hash>>
-{
+pub fn check_justification<B: Block>(
+	authorities: &[AuthorityId],
+	parent: B::Hash,
+	just: UncheckedJustification<B::Hash>
+) -> Result<RhdJustification<B::Hash>, UncheckedJustification<B::Hash>> {
 	let message = Encode::encode(&PrimitiveMessage::<B, _> {
 		parent,
 		action: PrimitiveAction::Commit(just.0.round_number as u32, just.0.digest.clone()),
@@ -659,7 +721,7 @@ pub fn check_prepare_justification<B: Block>(authorities: &[AuthorityId], parent
 		action: PrimitiveAction::Prepare(just.0.round_number as u32, just.0.digest.clone()),
 	});
 
-	check_justification_signed_message(authorities, &message[..], just)
+	check_justification_signed_message(authorities, &message[..], just).map(|e| PrepareJustification(e.0))
 }
 
 /// Check proposal message signatures and authority.
@@ -715,7 +777,11 @@ fn check_action<B: Block>(action: PrimitiveAction<B, B::Hash>, parent_hash: &B::
 }
 
 /// Sign a BFT message with the given key.
-pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, parent_hash: B::Hash) -> LocalizedMessage<B> {
+pub fn sign_message<B: Block + Clone>(
+	message: RhdMessage<B, B::Hash>,
+	key: &ed25519::Pair,
+	parent_hash: B::Hash
+) -> LocalizedMessage<B> {
 	let signer = key.public();
 
 	let sign_action = |action: PrimitiveAction<B, B::Hash>| {
@@ -732,7 +798,7 @@ pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, 
 	};
 
 	match message {
-		::rhododendron::Message::Propose(r, proposal) => {
+		RhdMessage::Propose(r, proposal) => {
 			let header_hash = proposal.hash();
 			let action_header = PrimitiveAction::ProposeHeader(r as u32, header_hash.clone());
 			let action_propose = PrimitiveAction::Propose(r as u32, proposal.clone());
@@ -746,7 +812,7 @@ pub fn sign_message<B: Block + Clone>(message: Message<B>, key: &ed25519::Pair, 
 				full_signature: sign_action(action_propose),
 			})
 		}
-		::rhododendron::Message::Vote(vote) => {
+		RhdMessage::Vote(vote) => {
 			let action = match vote {
 				::rhododendron::Vote::Prepare(r, ref h) => PrimitiveAction::Prepare(r as u32, h.clone()),
 				::rhododendron::Vote::Commit(r, ref h) => PrimitiveAction::Commit(r as u32, h.clone()),
@@ -780,7 +846,7 @@ mod tests {
 	}
 
 	impl BlockImport<TestBlock> for FakeClient {
-		fn import_block(&self, block: TestBlock, _justification: Justification<H256>, _authorities: &[AuthorityId]) -> bool {
+		fn import_block(&self, block: TestBlock, _justification: Justification<<TestBlock as Block>::Hash>, _authorities: &[AuthorityId]) -> bool {
 			assert!(self.imported_heights.lock().insert(block.header.number));
 			true
 		}

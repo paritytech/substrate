@@ -16,16 +16,22 @@
 
 //! This service uses BFT consensus provided by the substrate.
 
+#![cfg(feature = "rhd")]
+
 extern crate parking_lot;
 extern crate node_transaction_pool as transaction_pool;
 extern crate node_runtime;
 extern crate node_primitives;
 
-extern crate substrate_bft as bft;
 extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
+extern crate substrate_consensus_common as consensus;
+extern crate substrate_consensus_rhd as rhd;
 extern crate sr_primitives as runtime_primitives;
 extern crate srml_system;
+
+extern crate sr_support as runtime_support;
+extern crate srml_primitives as runtime_primitives;
+extern crate srml_consensus as rhd_runtime;
 extern crate substrate_client as client;
 
 extern crate exit_future;
@@ -54,6 +60,7 @@ use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as Heade
 use runtime_primitives::generic::{BlockId, Era};
 use srml_system::Trait as SystemT;
 use transaction_pool::{TransactionPool, Client as TPClient};
+use consensus::offline_tracker::OfflineTracker;
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Delay;
 
@@ -62,16 +69,14 @@ use futures::future;
 use parking_lot::RwLock;
 
 pub use self::error::{ErrorKind, Error, Result};
-pub use self::offline_tracker::OfflineTracker;
 pub use service::Service;
 
 mod evaluation;
 mod error;
-mod offline_tracker;
 mod service;
 
 /// Shared offline validator tracker.
-pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
+pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker<AccountId>>>;
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
@@ -180,10 +185,10 @@ pub trait Network {
 	/// The block used for this API type.
 	type Block: BlockT;
 	/// The input stream of BFT messages. Should never logically conclude.
-	type Input: Stream<Item=bft::Communication<Self::Block>,Error=Error>;
+	type Input: Stream<Item=rhd::Communication<Self::Block>,Error=Error>;
 	/// The output sink of BFT messages. Messages sent here should eventually pass to all
 	/// current authorities.
-	type Output: Sink<SinkItem=bft::Communication<Self::Block>,SinkError=Error>;
+	type Output: Sink<SinkItem=rhd::Communication<Self::Block>,SinkError=Error>;
 
 	/// Instantiate input and output streams.
 	fn communication_for(
@@ -213,7 +218,8 @@ pub struct ProposerFactory<N, C> where
 	pub force_delay: Timestamp,
 }
 
-impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C> where
+
+impl<N, C> rhd::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C> where
 	N: Network<Block=<C as AuthoringApi>::Block>,
 	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
@@ -294,7 +300,8 @@ impl<C: AuthoringApi + TPClient> Proposer<C> {
 	}
 }
 
-impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
+
+impl<C> rhd::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
@@ -460,9 +467,10 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 		proposer
 	}
 
-	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>) {
+
+	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, rhd::Misbehavior<Hash>)>) {
 		use rhododendron::Misbehavior as GenericMisbehavior;
-		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
+		use rhd_runtime::messages::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
 
 		let local_id = self.local_key.public().0.into();

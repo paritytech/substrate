@@ -154,6 +154,7 @@ impl<C: Client> ChainApi<C> {
 ///
 /// This is due for removal when #721 lands
 pub struct LocalContext<'a, A: 'a>(&'a Arc<A>);
+
 impl<'a, C: 'a + Client> CurrentHeight for LocalContext<'a, C> {
 	type BlockNumber = <C as CurrentHeight>::BlockNumber;
 	fn current_height(&self) -> Self::BlockNumber {

@@ -68,8 +68,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 use trie::MemoryDB;
 use parking_lot::RwLock;
 use primitives::{H256, AuthorityId, Blake2Hasher};
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::bft::Justification;
+use runtime_primitives::{generic::BlockId, Justification};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
@@ -127,7 +126,7 @@ mod columns {
 
 struct PendingBlock<Block: BlockT> {
 	header: Block::Header,
-	justification: Option<Justification<Block::Hash>>,
+	justification: Option<Justification>,
 	body: Option<Vec<Block::Extrinsic>>,
 	leaf_state: NewBlockState,
 }
@@ -241,7 +240,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		}
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, client::error::Error> {
+	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>, client::error::Error> {
 		match read_db(&*self.db, columns::HASH_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Some(justification) => Ok(Some(justification)),
@@ -286,7 +285,7 @@ where Block: BlockT,
 		&mut self,
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
-		justification: Option<Justification<Block::Hash>>,
+		justification: Option<Justification>,
 		leaf_state: NewBlockState,
 	) -> Result<(), client::error::Error> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");

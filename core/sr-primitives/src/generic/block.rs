@@ -22,7 +22,7 @@ use std::fmt;
 use rstd::prelude::*;
 use codec::Codec;
 use traits::{self, Member, Block as BlockT, Header as HeaderT};
-use bft::Justification;
+use ::Justification;
 
 /// Something to identify a block.
 #[derive(PartialEq, Eq, Clone)]
@@ -97,9 +97,9 @@ where
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct SignedBlock<Header, Extrinsic, Hash> {
+pub struct SignedBlock<H, E> {
 	/// Full block.
-	pub block: Block<Header, Extrinsic>,
-	/// Block header justification.
-	pub justification: Justification<Hash>,
+	pub block: Block<H, E>,
+	/// Block justification.
+	pub justification: Justification,
 }

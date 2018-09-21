@@ -22,7 +22,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 
-use bft::{self, BftService};
+use rhd::{self, BftService};
 use client::{BlockchainEvents, ChainHead, BlockBody};
 use ed25519;
 use futures::prelude::*;
@@ -47,11 +47,11 @@ fn start_bft<F, C, Block>(
 	header: <Block as BlockT>::Header,
 	bft_service: Arc<BftService<Block, F, C>>,
 ) where
-	F: bft::Environment<Block> + 'static,
-	C: bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
+	F: rhd::Environment<Block> + 'static,
+	C: rhd::BlockImport<Block> + rhd::Authorities<Block> + 'static,
 	F::Error: ::std::fmt::Debug,
-	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
-	<F as bft::Environment<Block>>::Error: ::std::fmt::Display,
+	<F::Proposer as rhd::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
+	<F as rhd::Environment<Block>>::Error: ::std::fmt::Display,
 	Block: BlockT,
 {
 	let mut handle = LocalThreadHandle::current();
@@ -82,15 +82,10 @@ impl Service {
 		block_delay: u64,
 	) -> Service
 		where
-			A: AuthoringApi + TPClient<Block = <A as AuthoringApi>::Block> + 'static,
-			C: BlockchainEvents<<A as AuthoringApi>::Block>
-				+ ChainHead<<A as AuthoringApi>::Block>
-				+ BlockBody<<A as AuthoringApi>::Block>,
-			C: bft::BlockImport<<A as AuthoringApi>::Block>
-				+ bft::Authorities<<A as AuthoringApi>::Block> + Send + Sync + 'static,
-			primitives::H256: From<<<A as AuthoringApi>::Block as BlockT>::Hash>,
-			<<A as AuthoringApi>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,
-			N: Network<Block = <A as AuthoringApi>::Block> + Send + 'static,
+			A: Api + Send + Sync + 'static,
+			C: BlockchainEvents<Block> + ChainHead<Block> + BlockBody<Block>,
+			C: rhd::BlockImport<Block> + rhd::Authorities<Block> + Send + Sync + 'static,
+			N: Network + Send + 'static,
 	{
 		use parking_lot::RwLock;
 		use super::OfflineTracker;

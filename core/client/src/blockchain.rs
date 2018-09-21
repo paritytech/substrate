@@ -19,7 +19,7 @@
 use primitives::AuthorityId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::bft::Justification;
+use runtime_primitives::Justification;
 
 use error::{ErrorKind, Result};
 
@@ -47,10 +47,9 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	/// Get block body. Returns `None` if block is not found.
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>>;
+	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>>;
 	/// Get last finalized block hash.
 	fn last_finalized(&self) -> Result<Block::Hash>;
-
 	/// Returns data cache reference, if it is enabled on this backend.
 	fn cache(&self) -> Option<&Cache<Block>>;
 
