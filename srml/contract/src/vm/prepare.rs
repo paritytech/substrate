@@ -138,7 +138,7 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 
 			let ext_func = env
 				.funcs
-				.get(import.field())
+				.get(import.field().as_bytes())
 				.ok_or_else(|| Error::Instantiate)?;
 			if !ext_func.func_type_matches(func_ty) {
 				return Err(Error::Instantiate);
