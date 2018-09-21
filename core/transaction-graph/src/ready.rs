@@ -96,7 +96,7 @@ impl<Hash: hash::Hash + Eq> Default for ReadyTransactions<Hash> {
 	}
 }
 
-impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
+impl<Hash: hash::Hash + Eq + Clone + ::std::fmt::Debug> ReadyTransactions<Hash> {
 	/// Borrows a map of tags that are provided by transactions in this queue.
 	pub fn provided_tags(&self) -> &HashMap<Tag, Hash> {
 		&self.provided_tags
@@ -289,7 +289,7 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 					}
 				}
 
-				debug!(target: "txpool", "[{:?}] Pruned.", hash);
+				debug!(target: "txpool", "[{:?}] Pruned.", tx.hash);
 				removed.push(tx);
 			}
 		}
@@ -425,11 +425,10 @@ fn remove_item<T: PartialEq>(vec: &mut Vec<T>, item: &T) {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::UncheckedExtrinsic;
 
 	fn tx(id: u8) -> Transaction<u64> {
 		Transaction {
-			ex: UncheckedExtrinsic(vec![id]),
+			ex: vec![id],
 			hash: id as u64,
 			priority: 1,
 			longevity: 2,
@@ -502,7 +501,7 @@ mod tests {
 		// then
 		assert_eq!(ready.best.len(), 1);
 
-		let mut it = ready.get().map(|tx| tx.ex.0[0]);
+		let mut it = ready.get().map(|tx| tx.ex[0]);
 
 		assert_eq!(it.next(), Some(1));
 		assert_eq!(it.next(), Some(2));

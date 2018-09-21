@@ -20,7 +20,6 @@ use std::{
 	sync::Arc,
 };
 
-use primitives::UncheckedExtrinsic;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 	TransactionLongevity as Longevity,
@@ -70,7 +69,7 @@ pub struct PruneStatus<Hash> {
 #[derive(Debug, PartialEq, Eq)]
 pub struct Transaction<Hash> {
 	/// Raw extrinsic representing that transaction.
-	pub ex: UncheckedExtrinsic,
+	pub ex: Vec<u8>,
 	/// Transaction hash (unique)
 	pub hash: Hash,
 	/// Transaction priority (higher = better)
@@ -269,7 +268,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![1u8]),
+			ex: vec![1u8],
 			hash: 1u64,
 			priority: 5u64,
 			longevity: 64u64,
@@ -289,7 +288,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![1u8]),
+			ex: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -297,7 +296,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![1u8]),
+			ex: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -318,7 +317,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![1u8]),
+			ex: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -328,7 +327,7 @@ mod tests {
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![2u8]),
+			ex: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -348,7 +347,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![1u8]),
+			ex: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -356,7 +355,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![3u8]),
+			ex: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -364,7 +363,7 @@ mod tests {
 			provides: vec![],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![2u8]),
+			ex: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -372,7 +371,7 @@ mod tests {
 			provides: vec![vec![3], vec![2]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![4u8]),
+			ex: vec![4u8],
 			hash: 4,
 			priority: 1_000u64,
 			longevity: 64u64,
@@ -383,7 +382,7 @@ mod tests {
 		assert_eq!(pool.ready.len(), 0);
 
 		let res = pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![5u8]),
+			ex: vec![5u8],
 			hash: 5,
 			priority: 5u64,
 			longevity: 64u64,
@@ -392,7 +391,7 @@ mod tests {
 		}).unwrap();
 
 		// then
-		let mut it = pool.ready().into_iter().map(|tx| tx.ex.0[0]);
+		let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
 
 		assert_eq!(it.next(), Some(5));
 		assert_eq!(it.next(), Some(1));
@@ -413,7 +412,7 @@ mod tests {
 		// given
 		let mut pool = pool();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![1u8]),
+			ex: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -421,7 +420,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![3u8]),
+			ex: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -433,7 +432,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![2u8]),
+			ex: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -443,7 +442,7 @@ mod tests {
 
 		// then
 		{
-			let mut it = pool.ready().into_iter().map(|tx| tx.ex.0[0]);
+			let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
 			assert_eq!(it.next(), None);
 		}
 		// all transactions occupy the Future queue - it's fine
@@ -451,14 +450,14 @@ mod tests {
 
 		// let's close the cycle with one additional transaction
 		let res = pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![4u8]),
+			ex: vec![4u8],
 			hash: 4,
 			priority: 50u64,
 			longevity: 64u64,
 			requires: vec![],
 			provides: vec![vec![0]],
 		}).unwrap();
-		let mut it = pool.ready().into_iter().map(|tx| tx.ex.0[0]);
+		let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
 		assert_eq!(it.next(), Some(4));
 		assert_eq!(it.next(), Some(1));
 		assert_eq!(it.next(), Some(3));
@@ -478,7 +477,7 @@ mod tests {
 		// given
 		let mut pool = pool();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![1u8]),
+			ex: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -486,7 +485,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![3u8]),
+			ex: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -498,7 +497,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![2u8]),
+			ex: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -508,7 +507,7 @@ mod tests {
 
 		// then
 		{
-			let mut it = pool.ready().into_iter().map(|tx| tx.ex.0[0]);
+			let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
 			assert_eq!(it.next(), None);
 		}
 		// all transactions occupy the Future queue - it's fine
@@ -516,14 +515,14 @@ mod tests {
 
 		// let's close the cycle with one additional transaction
 		let err = pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![4u8]),
+			ex: vec![4u8],
 			hash: 4,
 			priority: 1u64, // lower priority than Tx(2)
 			longevity: 64u64,
 			requires: vec![],
 			provides: vec![vec![0]],
 		}).unwrap_err();
-		let mut it = pool.ready().into_iter().map(|tx| tx.ex.0[0]);
+		let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
 		assert_eq!(it.next(), None);
 		assert_eq!(pool.ready.len(), 0);
 		assert_eq!(pool.future.len(), 0);
@@ -538,7 +537,7 @@ mod tests {
 		// given
 		let mut pool = pool();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![5u8]),
+			ex: vec![5u8],
 			hash: 5,
 			priority: 5u64,
 			longevity: 64u64,
@@ -546,7 +545,7 @@ mod tests {
 			provides: vec![vec![0], vec![4]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![1u8]),
+			ex: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -554,7 +553,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![3u8]),
+			ex: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -562,7 +561,7 @@ mod tests {
 			provides: vec![],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![2u8]),
+			ex: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -570,7 +569,7 @@ mod tests {
 			provides: vec![vec![3], vec![2]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![4u8]),
+			ex: vec![4u8],
 			hash: 4,
 			priority: 1_000u64,
 			longevity: 64u64,
@@ -579,7 +578,7 @@ mod tests {
 		}).unwrap();
 		// future
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![6u8]),
+			ex: vec![6u8],
 			hash: 6,
 			priority: 1_000u64,
 			longevity: 64u64,
@@ -604,7 +603,7 @@ mod tests {
 		let mut pool = pool();
 		// future (waiting for 0)
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![5u8]),
+			ex: vec![5u8],
 			hash: 5,
 			priority: 5u64,
 			longevity: 64u64,
@@ -613,7 +612,7 @@ mod tests {
 		}).unwrap();
 		// ready
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![1u8]),
+			ex: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -621,7 +620,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![2u8]),
+			ex: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -629,7 +628,7 @@ mod tests {
 			provides: vec![vec![3]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![3u8]),
+			ex: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -637,7 +636,7 @@ mod tests {
 			provides: vec![vec![2]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: UncheckedExtrinsic(vec![4u8]),
+			ex: vec![4u8],
 			hash: 4,
 			priority: 1_000u64,
 			longevity: 64u64,
