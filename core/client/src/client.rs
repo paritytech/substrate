@@ -21,7 +21,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, One, As, NumberFor};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor};
 use runtime_primitives::BuildStorage;
 use substrate_metadata::JsonMetadataDecodable;
 use primitives::{Blake2Hasher, RlpCodec, H256};
@@ -454,6 +454,14 @@ impl<B, E, Block> Client<B, E, Block> where
 			blockchain::BlockStatus::Unknown => {},
 		}
 
+		let last_best = self.backend.blockchain().info()?.best_hash;
+
+		// ensure parent block is finalized to maintain invariant that
+		// finality is called sequentially.
+		if finalized {
+			self.apply_finality(parent_hash, last_best)?;
+		}
+
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
 		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
@@ -488,7 +496,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			None => (None, None, None)
 		};
 
-		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
+		let is_new_best = finalized || parent_hash == last_best;
 		let leaf_state = if finalized {
 			::backend::NewBlockState::Final
 		} else if is_new_best {
@@ -517,7 +525,6 @@ impl<B, E, Block> Client<B, E, Block> where
 		self.backend.commit_operation(transaction)?;
 
 		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
-
 			if let Some(storage_changes) = storage_changes {
 				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 				self.storage_notifications.lock()
@@ -533,7 +540,52 @@ impl<B, E, Block> Client<B, E, Block> where
 			self.import_notification_sinks.lock()
 				.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
 		}
+
+		if finalized {
+			// TODO: finality notification.
+		}
+
 		Ok(ImportResult::Queued)
+	}
+
+	/// Finalizes all blocks up to given.
+	fn apply_finality(&self, block: Block::Hash, best_block: Block::Hash) -> error::Result<()> {
+		// find tree route from last finalized to given block.
+		let last_finalized = self.backend.blockchain().last_finalized()?;
+
+		if block == last_finalized { return Ok(()) }
+		let route_from_finalized = ::blockchain::tree_route(
+			self.backend.blockchain(),
+			BlockId::Hash(last_finalized),
+			BlockId::Hash(block),
+		)?;
+
+		if let Some(retracted) = route_from_finalized.retracted().get(0) {
+			warn!("Safety violation: attempted to revert finalized block {:?} which is not in the \
+				same chain as last finalized {:?}", retracted, last_finalized);
+
+			bail!(error::ErrorKind::NotInFinalizedChain);
+		}
+
+		let route_from_best = ::blockchain::tree_route(
+			self.backend.blockchain(),
+			BlockId::Hash(best_block),
+			BlockId::Hash(block),
+		)?;
+
+		// if the block is not a direct ancestor of the current best chain,
+		// then some other block is the common ancestor.
+		if route_from_best.common_block().hash != block {
+			// TODO: reorganize best block to be the best chain containing
+			// `block`.
+		}
+
+		for finalize_new in route_from_finalized.enacted() {
+			self.backend.finalize_block(BlockId::Hash(finalize_new.hash))?;
+			// TODO: fire finality notification (under what conditions?)
+		}
+
+		Ok(())
 	}
 
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were

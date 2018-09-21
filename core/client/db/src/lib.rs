@@ -1021,7 +1021,7 @@ mod tests {
 
 			assert_eq!(tree_route.common_block().hash, block0);
 			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2, a1]);
-			assert_eq!(tree_route.enacted().ter()map(|r| r.hash).collect::<Vec<_>>(), vec![b1, b2]);
+			assert_eq!(tree_route.enacted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![b1, b2]);
 		}
 
 		{
