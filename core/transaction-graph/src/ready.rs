@@ -21,6 +21,7 @@ use std::{
 	sync::Arc,
 };
 
+use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
@@ -96,7 +97,7 @@ impl<Hash: hash::Hash + Eq> Default for ReadyTransactions<Hash> {
 	}
 }
 
-impl<Hash: hash::Hash + Eq + Clone + ::std::fmt::Debug> ReadyTransactions<Hash> {
+impl<Hash: hash::Hash + Member> ReadyTransactions<Hash> {
 	/// Borrows a map of tags that are provided by transactions in this queue.
 	pub fn provided_tags(&self) -> &HashMap<Tag, Hash> {
 		&self.provided_tags
@@ -371,7 +372,7 @@ pub struct BestIterator<'a, Hash: 'a> {
 	best: BTreeSet<TransactionRef<Hash>>,
 }
 
-impl<'a, Hash: 'a + hash:: Hash + Eq + Clone> BestIterator<'a, Hash> {
+impl<'a, Hash: 'a + hash::Hash + Member> BestIterator<'a, Hash> {
 	/// Depending on number of satisfied requirements insert given ref
 	/// either to awaiting set or to best set.
 	fn best_or_awaiting(&mut self, satisfied: usize, tx_ref: TransactionRef<Hash>) {
@@ -386,7 +387,7 @@ impl<'a, Hash: 'a + hash:: Hash + Eq + Clone> BestIterator<'a, Hash> {
 	}
 }
 
-impl<'a, Hash: 'a + hash::Hash + Eq + Clone> Iterator for BestIterator<'a, Hash> {
+impl<'a, Hash: 'a + hash::Hash + Member> Iterator for BestIterator<'a, Hash> {
 	type Item = Arc<Transaction<Hash>>;
 
 	fn next(&mut self) -> Option<Self::Item> {

@@ -15,11 +15,11 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	fmt,
 	hash,
 	sync::Arc,
 };
 
+use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 	TransactionLongevity as Longevity,
@@ -98,7 +98,7 @@ pub struct Pool<Hash: hash::Hash + Eq> {
 	ready: ReadyTransactions<Hash>,
 }
 
-impl<Hash: hash::Hash + fmt::Debug + Ord + Eq + Clone> Pool<Hash> {
+impl<Hash: hash::Hash + Member> Pool<Hash> {
 	/// Imports transaction to the pool.
 	///
 	/// The pool consists of two parts: Future and Ready.
