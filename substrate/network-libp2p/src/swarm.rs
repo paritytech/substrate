@@ -523,9 +523,8 @@ impl<TUserData> Swarm<TUserData>
 				});
 			}
 			Libp2pSwarmEvent::Replaced { peer_id, endpoint, .. } => {
-				let node_index = self.next_node_index.clone();
-				self.next_node_index += 1;
-				debug_assert_eq!(self.node_by_peer.get(&peer_id), Some(&node_index));
+				let node_index = *self.node_by_peer.get(&peer_id)
+					.expect("node_by_peer is always kept in sync with the inner swarm");
 				let infos = self.nodes_info.get_mut(&node_index)
 					.expect("nodes_info is always kept in sync with the swarm");
 				debug_assert_eq!(infos.peer_id, peer_id);
