@@ -17,5 +17,5 @@ triehash = "0.2"
 rlp = "0.2.4"
 
 substrate-primitives = { path = "../primitives", version = "0.1.0" }
-parity-codec = { version = "1.1", default_features = false }
+parity-codec = { version = "2.0", default_features = false }
 

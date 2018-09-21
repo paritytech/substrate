@@ -286,12 +286,12 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("6ed28a339a836a106e244dd78a2952606169cdeef3f72e29fa61c6ab827626c1").into()
+				hex!("8c276aaee09396d7630285caccb6e90d5e910da6590794b88f2a4178dcb1bbd4").into()
 			} else {
-				hex!("fc51c67ef0f8b2b91db40e6d8757e12ee670b9775479312f3d25bab66b1bec35").into()
+				hex!("dc725478bd4650be5ca4d096b77f5115301bdc889c7c341490ad0e06f17aa3f5").into()
 			},
 			if support_changes_trie {
-				Some(hex!("d7ff76d7fbb9b613e8d140da6f1d561b4928785d4e4818ed959bd1bd35abc7e8").into())
+				Some(hex!("8ddfae3e9a7c5a3443d10978d84fe13fc032f485f45db383b5f6c72942d08cd1").into())
 			} else {
 				None
 			},
@@ -312,7 +312,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("4611bee90608d504e0e66773391361a1f9084adbb15732b82206f381d27d64d0").into(),
+			hex!("703efd5294ae5677c3c975593c64796cce27b471f27936c0cf31fda0a55ede19").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -335,7 +335,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("681893f1698410a9b378ff7b69c7a0d8f7cc417a274583f6217d041b84c3cbae").into(),
+			hex!("ea9955f8c3d48761b6e712dc73bdf933e0884c88d06a5cb0fd70b28e91852948").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
