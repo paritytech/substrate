@@ -26,7 +26,6 @@ members = [
 	"core/client",
 	"core/client/db",
 	"core/executor",
-	"core/transaction-pool",
 	"core/keyring",
 	"core/misbehavior-check",
 	"core/network",
@@ -37,6 +36,8 @@ members = [
 	"core/sr-sandbox",
 	"core/sr-std",
 	"core/sr-version",
+	"core/transaction-graph",
+	"core/transaction-pool",
 	"srml/support",
 	"srml/balances",
 	"srml/consensus",
@@ -68,7 +69,6 @@ members = [
 	"node/runtime",
 	"node/service",
 	"node/transaction-pool",
-	"node/transaction-graph",
 	"subkey",
 ]
 exclude = [

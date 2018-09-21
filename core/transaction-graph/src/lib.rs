@@ -22,10 +22,9 @@
 //! graph in the correct order taking into account priorities and dependencies.
 //!
 //! TODO [ToDr]
-//! - [ ] Culling/draining
-//! - [ ] Longevity handling (remove obsolete transactions)
-//! - [ ] Banning / Future-rotation
-//! - [ ] Multi-threading
+//! - [ ] Longevity handling (remove obsolete transactions periodically)
+//! - [ ] Banning / Future-rotation (once rejected (as invalid) should not be accepted for some time)
+//! - [ ] Multi-threading (getting ready transactions should not block the pool)
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]

@@ -1,5 +1,5 @@
 [package]
-name = "node-transaction-graph"
+name = "substrate-transaction-graph"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
