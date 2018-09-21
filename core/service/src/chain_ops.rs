@@ -20,9 +20,9 @@ use std::{self, io::{Read, Write}};
 use futures::Future;
 use serde_json;
 
-use client::BlockOrigin;
+use client::{BlockOrigin, ImportBlock};
 use runtime_primitives::generic::{SignedBlock, BlockId};
-use runtime_primitives::traits::{As};
+use runtime_primitives::traits::As;
 use components::{ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber, RuntimeGenesis};
 use new_client;
 use codec::{Decode, Encode};
@@ -101,10 +101,16 @@ pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut 
 			break;
 		}
 		match SignedBlock::decode(&mut input) {
-			Some(block) => {
-				// TODO: non-instant finality.
-				let header = client.check_justification(block.block.header, block.justification.into())?;
-				client.import_block(BlockOrigin::File, header, Some(block.block.extrinsics), true)?;
+			Some(signed) => {
+				// FIXME: check justification
+				client.import_block(ImportBlock {
+					origin: BlockOrigin::File,
+					header: signed.block.header,
+					external_justification: signed.justification,
+					internal_justification: vec![],
+					body: Some(signed.block.extrinsics),
+					finalized: true
+					}, None)?;
 			},
 			None => {
 				warn!("Error reading block data.");

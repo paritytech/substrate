@@ -16,6 +16,8 @@
 
 //! This service uses BFT consensus provided by the substrate.
 
+#![cfg(feature="rhd")]
+
 extern crate node_runtime;
 extern crate node_primitives;
 

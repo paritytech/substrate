@@ -33,7 +33,7 @@ use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
-use codec::{Encode, Decode};
+use codec::Encode;
 use import_queue::SyncImportQueue;
 use test_client::{self, TestClient};
 use specialization::Specialization;
@@ -47,14 +47,6 @@ pub struct DummySpecialization {
 	pub gossip: ConsensusGossip<Block>,
 }
 
-#[derive(Encode, Decode)]
-pub struct GossipMessage {
-	/// The topic to classify under.
-	pub topic: Hash,
-	/// The data to send.
-	pub data: Vec<u8>,
-}
-
 impl Specialization<Block> for DummySpecialization {
 	fn status(&self) -> Vec<u8> { vec![] }
 
@@ -66,11 +58,14 @@ impl Specialization<Block> for DummySpecialization {
 		self.gossip.peer_disconnected(ctx, peer_id);
 	}
 
-	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, message: &mut Option<::message::Message<Block>>) {
-		if let Some(::message::generic::Message::ChainSpecific(data)) = message.take() {
-			let gossip_message = GossipMessage::decode(&mut &data[..])
-				.expect("gossip messages all in known format; qed");
-			self.gossip.on_chain_specific(ctx, peer_id, data, gossip_message.topic)
+	fn on_message(
+		&mut self,
+			ctx: &mut Context<Block>,
+			peer_id: NodeIndex,
+			message: &mut Option<::message::Message<Block>>
+	) {
+		if let Some(::message::generic::Message::Consensus(topic, data)) = message.take() {
+			self.gossip.on_incoming(ctx, peer_id, topic, data);
 		}
 	}
 }
@@ -189,8 +184,7 @@ impl Peer {
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>) {
 		self.sync.with_spec(&mut TestIo::new(&self.queue, None), |spec, ctx| {
-			let message = GossipMessage { topic, data }.encode();
-			spec.gossip.multicast_chain_specific(ctx, message, topic);
+			spec.gossip.multicast(ctx, topic, data);
 		})
 	}
 

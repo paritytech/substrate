@@ -20,22 +20,22 @@
 
 #![warn(unused_extern_crates)]
 
-extern crate substrate_bft as bft;
 #[macro_use]
+// extern crate substrate_consensus_rhd as bft;
 extern crate substrate_network;
-extern crate substrate_primitives;
+// extern crate substrate_primitives;
 
-extern crate node_consensus;
+// extern crate node_consensus;
 extern crate node_primitives;
 
-extern crate futures;
-extern crate tokio;
-extern crate rhododendron;
+// extern crate futures;
+// extern crate tokio;
+// extern crate rhododendron;
 
 #[macro_use]
 extern crate log;
 
-pub mod consensus;
+// pub mod consensus;
 
 use node_primitives::{Block, Hash};
 use substrate_network::consensus_gossip::ConsensusGossip;

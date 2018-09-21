@@ -19,7 +19,6 @@
 #![warn(missing_docs)]
 #![recursion_limit="128"]
 
-extern crate substrate_bft as bft;
 extern crate substrate_trie as trie;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
@@ -63,7 +62,7 @@ pub use client::{
 	new_with_backend,
 	new_in_mem,
 	BlockBody, BlockStatus, BlockOrigin, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	Client, ClientInfo, ChainHead, ImportResult, JustifiedHeader,
+	Client, ClientInfo, ChainHead, ImportResult, ImportBlock,
 };
 pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
