@@ -54,7 +54,7 @@ mod tests {
 		ed25519::{Public, Pair}};
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
-	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult};
+	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
 	use {balances, staking, session, system, consensus, timestamp, treasury};
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
@@ -238,8 +238,10 @@ mod tests {
 				validator_count: 3,
 				minimum_validator_count: 0,
 				bonding_duration: 0,
-				offline_slash: 0,
-				session_reward: 0,
+				offline_slash: Perbill::zero(),
+				session_reward: Perbill::zero(),
+				current_offline_slash: 0,
+				current_session_reward: 0,
 				offline_slash_grace: 0,
 			}),
 			democracy: Some(Default::default()),
@@ -284,9 +286,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("1755be7303767b4d3855694b4f0ebd9d64b7011124d0ec1ad3e17c2a0d65e245").into()
+				hex!("6ed28a339a836a106e244dd78a2952606169cdeef3f72e29fa61c6ab827626c1").into()
 			} else {
-				hex!("1f058f699ad3187bcf7e9ed8e44464d7a5added0cd912d2679b9dab2e7a04053").into()
+				hex!("fc51c67ef0f8b2b91db40e6d8757e12ee670b9775479312f3d25bab66b1bec35").into()
 			},
 			if support_changes_trie {
 				Some(hex!("d7ff76d7fbb9b613e8d140da6f1d561b4928785d4e4818ed959bd1bd35abc7e8").into())
@@ -310,7 +312,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("0acf8b3c169ce8f16faf5610f646f371681dcc3b544d3dd05036dbae7890e399").into(),
+			hex!("4611bee90608d504e0e66773391361a1f9084adbb15732b82206f381d27d64d0").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -333,7 +335,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("fe0e07c7b054fe186387461d455d536860e9c71d6979fd9dbf755e96ce070d04").into(),
+			hex!("681893f1698410a9b378ff7b69c7a0d8f7cc417a274583f6217d041b84c3cbae").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
