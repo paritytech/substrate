@@ -280,6 +280,6 @@ mod tests {
 		);
 
 		let env = init_env::<MockExt>();
-		assert!(env.funcs.get("ext_gas").is_some());
+		assert!(env.funcs.get(&b"ext_gas"[..]).is_some());
 	}
 }
