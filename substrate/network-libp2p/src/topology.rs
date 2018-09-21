@@ -131,10 +131,10 @@ impl NetTopology {
 		});
 	}
 
-	/// Returns the known potential addresses of a peer, ordered by score.
+	/// Returns the known potential addresses of a peer, ordered by score. Excludes backed-off
+	/// addresses.
 	///
 	/// The boolean associated to each address indicates whether we're connected to it.
-	// TODO: filter out backed off ones?
 	pub fn addrs_of_peer(&self, peer: &PeerId) -> impl Iterator<Item = (&Multiaddr, bool)> {
 		let peer = if let Some(peer) = self.store.get(peer) {
 			peer
@@ -143,10 +143,12 @@ impl NetTopology {
 			return Vec::new().into_iter();
 		};
 
-		let now = SystemTime::now();
+		let now_st = SystemTime::now();
+		let now_is = Instant::now();
+
 		let mut list = peer.addrs.iter().filter_map(move |addr| {
 			let (score, connected) = addr.score_and_is_connected();
-			if (addr.expires >= now && score > 0) || connected {
+			if (addr.expires >= now_st && score > 0 && addr.back_off_until < now_is) || connected {
 				Some((score, connected, &addr.addr))
 			} else {
 				None
