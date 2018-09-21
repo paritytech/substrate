@@ -25,13 +25,20 @@ use sr_primitives::transaction_validity::{
 
 use pool::Transaction;
 
+/// Transaction with partially satisfied dependencies.
 #[derive(Debug)]
 pub struct WaitingTransaction<Hash> {
+	/// Transaction details.
 	pub transaction: Transaction<Hash>,
+	/// Tags that are required and have not been satisfied yet by other transactions in the pool.
 	pub missing_tags: HashSet<Tag>,
 }
 
 impl<Hash> WaitingTransaction<Hash> {
+	/// Creates a new `WaitingTransaction`.
+	///
+	/// Computes the set of missing tags based on the requirements and tags that
+	/// are provided by all transactions in the ready queue.
 	pub fn new(transaction: Transaction<Hash>, provided: &HashMap<Tag, Hash>) -> Self {
 		let missing_tags = transaction.requires
 			.iter()
@@ -45,15 +52,21 @@ impl<Hash> WaitingTransaction<Hash> {
 		}
 	}
 
+	/// Marks the tag as satisfied.
 	pub fn satisfy_tag(&mut self, tag: &Tag) {
 		self.missing_tags.remove(tag);
 	}
 
+	/// Returns true if transaction has all requirements satisfied.
 	pub fn is_ready(&self) -> bool {
 		self.missing_tags.is_empty()
 	}
 }
 
+/// A pool of transactions that are not yet ready to be included in the block.
+///
+/// Contains transactions that are still awaiting for some other transactions that
+/// could provide a tag that they require.
 #[derive(Debug)]
 pub struct FutureTransactions<Hash: hash::Hash + Eq> {
 	/// tags that are not yet provided by any transaction and we await for them
@@ -70,6 +83,13 @@ impl<Hash: hash::Hash + Eq> Default for FutureTransactions<Hash> {
 		}
 	}
 }
+
+const WAITING_PROOF: &str = r"#
+In import we always insert to `waiting` if we push to `wanted_tags`;
+when removing from `waiting` we always clear `wanted_tags`;
+every hash from `wanted_tags` is always present in `waiting`;
+qed
+#";
 
 impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 	/// Import transaction to Future queue.
@@ -109,13 +129,13 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 				for hash in hashes {
 					let is_ready = {
 						let mut tx = self.waiting.get_mut(&hash)
-							.expect("Every transaction in wanted_tags is present in waiting; qed");
+							.expect(WAITING_PROOF);
 						tx.satisfy_tag(tag.as_ref());
 						tx.is_ready()
 					};
 
 					if is_ready {
-						let tx = self.waiting.remove(&hash).expect("We just get_mut the entry; qed");
+						let tx = self.waiting.remove(&hash).expect(WAITING_PROOF);
 						became_ready.push(tx);
 					}
 				}
