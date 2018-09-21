@@ -14,7 +14,7 @@ substrate-primitives = { path = "../../../core/primitives" }
 sr-primitives = { path = "../../../core/sr-primitives" }
 substrate-client = { path = "../../../core/client" }
 substrate-state-machine = { path = "../../../core/state-machine" }
-parity-codec = { version = "1.1" }
+parity-codec = { version = "2.0" }
 parity-codec-derive = { version = "~1.0" }
 substrate-executor = { path = "../../../core/executor" }
 substrate-state-db = { path = "../../../core/state-db" }

@@ -10,7 +10,7 @@ jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-pubsub = { git="https://github.com/paritytech/jsonrpc.git" }
 log = "0.3"
 parking_lot = "0.4"
-parity-codec = { version = "1.1" }
+parity-codec = { version = "2.0" }
 substrate-client = { path = "../client" }
 substrate-executor = { path = "../executor" }
 substrate-transaction-pool = { path = "../transaction-pool" }

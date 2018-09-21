@@ -8,7 +8,7 @@ num-traits = { version = "0.2", default_features = false }
 integer-sqrt = { git = "https://github.com/paritytech/integer-sqrt-rs.git", branch = "master" }
 serde = { version = "1.0", optional = true }
 serde_derive = { version = "1.0", optional = true }
-parity-codec = { version = "1.1", default_features = false }
+parity-codec = { version = "2.0", default_features = false }
 parity-codec-derive = { version = "~1.0", default_features = false }
 substrate-primitives = { path = "../primitives", default_features = false }
 sr-std = { path = "../sr-std", default_features = false }

@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 parking_lot = "0.5"
 log = "0.4"
 substrate-primitives = { path = "../../core/primitives" }
-parity-codec = { version = "1.1" }
+parity-codec = { version = "2.0" }
 parity-codec-derive = { version = "~1.0" }
 
 [dev-dependencies]

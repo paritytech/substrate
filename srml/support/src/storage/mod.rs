@@ -584,7 +584,7 @@ mod tests {
 	fn vecs_can_be_retrieved() {
 		let mut t = TestExternalities::<_, RlpCodec>::default();
 		with_externalities(&mut t, || {
-			runtime_io::set_storage(&twox_128(b":test"), b"\x0b\0\0\0Hello world");
+			runtime_io::set_storage(&twox_128(b":test"), b"\x2cHello world");
 			let x = b"Hello world".to_vec();
 			let y = get::<Vec<u8>>(b":test").unwrap();
 			assert_eq!(x, y);
