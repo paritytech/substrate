@@ -588,6 +588,19 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok(())
 	}
 
+	/// Finalize a block. This will implicitly finalize all blocks up to it and
+	/// fire finality notifications.
+	pub fn finalize_block(&self, id: BlockId<Block>) -> error::Result<()> {
+		let last_best = self.backend.blockchain().info()?.best_hash;
+		let to_finalize_hash = match id {
+			BlockId::Hash(h) => h,
+			BlockId::Number(n) => self.backend.blockchain().hash(n)?
+				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("No block with number {:?}", n)))?,
+		};
+
+		self.apply_finality(to_finalize_hash, last_best)
+	}
+
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
 	/// successfully reverted.
 	pub fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
