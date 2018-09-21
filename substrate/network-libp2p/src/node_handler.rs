@@ -554,6 +554,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 				self.cancel_dial_upgrade(&UpgradePurpose::Ping);
 				// We always open the ping substream for a reason, which is to immediately ping.
 				self.ping_out_substream = Some(ping_dialer);
+				self.active_ping_out = None;
 				if self.ping_remote() {
 					Some(SubstrateOutEvent::PingStart)
 				} else {
@@ -632,6 +633,10 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		if !self.has_upgrade_purpose(&UpgradePurpose::Ping) {
 			self.queued_dial_upgrades.push(UpgradePurpose::Ping);
 			self.num_out_user_must_open += 1;
+			// We also start the unresponsiveness counter when opening the substream, as a
+			// peer may not respond to our opening request.
+			let future = Delay::new(Instant::now() + PING_TIMEOUT);
+			self.active_ping_out = Some(future);
 			if let Some(to_notify) = self.to_notify.take() {
 				to_notify.notify();
 			}
