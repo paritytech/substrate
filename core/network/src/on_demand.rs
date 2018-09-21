@@ -717,7 +717,7 @@ pub mod tests {
 		});
 		let thread = ::std::thread::spawn(move || {
 			let result = response.wait().unwrap();
-			assert_eq!(result.hash(), "80729accb7bb10ff9c637a10e8bb59f21c52571aa7b46544c5885ca89ed190f4".into());
+			assert_eq!(result.hash(), "0x950856031909d22d42b7e11a837051fbde05beaa3ffb793d6e8e373c646459b1".into());
 		});
 
 		on_demand.on_remote_header_response(&mut network, 0, message::RemoteHeaderResponse {

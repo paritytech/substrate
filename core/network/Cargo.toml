@@ -18,7 +18,7 @@ rustc-hex = "1.0"
 substrate-primitives = { path = "../../core/primitives" }
 substrate-client = { path = "../../core/client" }
 sr-primitives = { path = "../../core/sr-primitives" }
-parity-codec = { version = "1.1" }
+parity-codec = { version = "2.0" }
 parity-codec-derive = { version = "~1.0" }
 substrate-network-libp2p = { path = "../../core/network-libp2p" }
 

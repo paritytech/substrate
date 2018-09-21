@@ -76,7 +76,7 @@ fn system_digest_item_encoding() {
 		// type = DigestItemType::AuthoritiesChange
 		1,
 		// number of items in athorities set
-		3, 0, 0, 0,
+		12,
 		// authorities
 		10, 0, 0, 0,
 		20, 0, 0, 0,
@@ -95,7 +95,7 @@ fn non_system_digest_item_encoding() {
 		// type = DigestItemType::Other
 		0,
 		// length of other data
-		3, 0, 0, 0,
+		12,
 		// authorities
 		10, 20, 30,
 	]);
