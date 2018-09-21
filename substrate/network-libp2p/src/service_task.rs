@@ -460,6 +460,10 @@ impl Service {
 				break;
 			}
 
+			if peer_id == self.kad_system.local_peer_id() {
+				continue;
+			}
+
 			if self.disabled_peers.contains_key(&peer_id) {
 				continue;
 			}
