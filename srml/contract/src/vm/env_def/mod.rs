@@ -18,7 +18,6 @@ use super::{SpecialTrap, BalanceOf, CreateReceipt, Ext, GasMeterResult, Runtime}
 use codec::{Encode, Decode};
 use parity_wasm::elements::{FunctionType, ValueType};
 use rstd::prelude::*;
-use rstd::string::String;
 use rstd::collections::btree_map::BTreeMap;
 use runtime_primitives::traits::{As, CheckedMul};
 use sandbox::{self, TypedValue};
@@ -75,7 +74,7 @@ impl ConvertibleToWasm for u64 {
 /// which can be imported and called by the module.
 pub(crate) struct HostFunctionSet<E: Ext> {
 	/// Functions which defined in the environment.
-	pub funcs: BTreeMap<String, HostFunction<E>>,
+	pub funcs: BTreeMap<Vec<u8>, HostFunction<E>>,
 }
 impl<E: Ext> HostFunctionSet<E> {
 	pub fn new() -> Self {
