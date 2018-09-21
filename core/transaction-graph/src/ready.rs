@@ -203,8 +203,14 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 				for tag in &tx.transaction.transaction.provides {
 					self.provided_tags.remove(tag);
 				}
-				// remove from unlocks?
-				// TODO [ToDr]
+				// remove from unlocks
+				for tag in &tx.transaction.transaction.requires {
+					if let Some(hash) = self.provided_tags.get(tag) {
+						if let Some(tx) = self.ready.get_mut(hash) {
+							remove_item(&mut tx.unlocks, &hash);
+						}
+					}
+				}
 
 				// remove from best
 				self.best.remove(&tx.transaction);
@@ -213,6 +219,7 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 				to_remove.append(&mut tx.unlocks);
 
 				// add to removed
+				debug!(target: "txpool", "[{:?}] Removed as invalid: ", hash);
 				removed.push(tx.transaction.transaction);
 			}
 		}
@@ -282,6 +289,7 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 					}
 				}
 
+				debug!(target: "txpool", "[{:?}] Pruned.", hash);
 				removed.push(tx);
 			}
 		}

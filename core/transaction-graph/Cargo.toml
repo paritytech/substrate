@@ -6,5 +6,4 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 error-chain = "0.12"
 log = "0.3.0"
-node-primitives = { path = "../primitives" }
-sr-primitives = { path = "../../core/sr-primitives" }
+sr-primitives = { path = "../sr-primitives" }

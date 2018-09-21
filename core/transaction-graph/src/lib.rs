@@ -30,7 +30,6 @@
 #![warn(unused_extern_crates)]
 
 extern crate sr_primitives;
-extern crate node_primitives as primitives;
 
 #[macro_use]
 extern crate error_chain;
