@@ -62,9 +62,9 @@ impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
 	Block: BlockT,
 {
 	fn import(&self, origin: BlockOrigin, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error> {
-		// TODO: defer justification check.
+		// TODO: defer justification check and non-instant finality.
 		let justified_header = self.check_justification(header, justification.into())?;
-		(self as &SubstrateClient<B, E, Block>).import_block(origin, justified_header, body)
+		(self as &SubstrateClient<B, E, Block>).import_block(origin, justified_header, body, true)
 	}
 
 	fn info(&self) -> Result<ClientInfo<Block>, Error> {

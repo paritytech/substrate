@@ -20,14 +20,14 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use parking_lot::RwLock;
 use error;
-use backend;
+use backend::{self, NewBlockState};
 use light;
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem};
 use runtime_primitives::bft::Justification;
-use blockchain::{self, BlockStatus};
+use blockchain::{self, BlockStatus, HeaderBackend};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::InMemoryChangesTrieStorage;
 use patricia_trie::NodeCodec;
@@ -37,7 +37,7 @@ use memorydb::MemoryDB;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
-	is_best: bool,
+	state: NewBlockState,
 }
 
 #[derive(PartialEq, Eq, Clone)]
@@ -91,6 +91,7 @@ struct BlockchainStorage<Block: BlockT> {
 	hashes: HashMap<NumberFor<Block>, Block::Hash>,
 	best_hash: Block::Hash,
 	best_number: NumberFor<Block>,
+	finalized_hash: Block::Hash,
 	genesis_hash: Block::Hash,
 	cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 }
@@ -136,6 +137,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				hashes: HashMap::new(),
 				best_hash: Default::default(),
 				best_number: Zero::zero(),
+				finalized_hash: Default::default(),
 				genesis_hash: Default::default(),
 				cht_roots: HashMap::new(),
 			}));
@@ -155,16 +157,21 @@ impl<Block: BlockT> Blockchain<Block> {
 		header: <Block as BlockT>::Header,
 		justification: Option<Justification<Block::Hash>>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
-		is_new_best: bool
+		new_state: NewBlockState,
 	) {
 		let number = header.number().clone();
 		let mut storage = self.storage.write();
 		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
 		storage.hashes.insert(number, hash.clone());
-		if is_new_best {
+
+		if new_state.is_best() {
 			storage.best_hash = hash.clone();
 			storage.best_number = number.clone();
 		}
+		if let NewBlockState::Final = new_state {
+			storage.finalized_hash = hash;
+		}
+
 		if number == Zero::zero() {
 			storage.genesis_hash = hash;
 		}
@@ -189,9 +196,19 @@ impl<Block: BlockT> Blockchain<Block> {
 	pub fn insert_cht_root(&self, block: NumberFor<Block>, cht_root: Block::Hash) {
 		self.storage.write().cht_roots.insert(block, cht_root);
 	}
+
+	fn finalize_header(&self, id: BlockId<Block>) -> error::Result<()> {
+		let hash = match self.header(id)? {
+			Some(h) => h.hash(),
+			None => return Err(error::ErrorKind::UnknownBlock(format!("{}", id)).into()),
+		};
+
+		self.storage.write().finalized_hash = hash;
+		Ok(())
+	}
 }
 
-impl<Block: BlockT> blockchain::HeaderBackend<Block> for Blockchain<Block> {
+impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash).map(|b| b.header().clone())
@@ -238,6 +255,10 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		))
 	}
 
+	fn last_finalized(&self) -> error::Result<Block::Hash> {
+		Ok(self.storage.read().finalized_hash.clone())
+	}
+
 	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
 		Some(&self.cache)
 	}
@@ -249,17 +270,26 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 {
 	fn import_header(
 		&self,
-		is_new_best: bool,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>
+		authorities: Option<Vec<AuthorityId>>,
+		state: NewBlockState,
 	) -> error::Result<()> {
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		self.insert(hash, header, None, None, is_new_best);
-		if is_new_best {
+		self.insert(hash, header, None, None, state);
+		if state.is_best() {
 			self.cache.insert(parent_hash, authorities);
 		}
+
 		Ok(())
+	}
+
+	fn last_finalized(&self) -> error::Result<Block::Hash> {
+		Ok(self.storage.read().finalized_hash.clone())
+	}
+
+	fn finalize_header(&self, id: BlockId<Block>) -> error::Result<()> {
+		Blockchain::finalize_header(self, id)
 	}
 
 	fn cht_root(&self, _cht_size: u64, block: NumberFor<Block>) -> error::Result<Block::Hash> {
@@ -299,12 +329,12 @@ where
 		header: <Block as BlockT>::Header,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool
+		state: NewBlockState,
 	) -> error::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
 		self.pending_block = Some(PendingBlock {
 			block: StoredBlock::new(header, body, justification),
-			is_best: is_new_best,
+			state,
 		});
 		Ok(())
 	}
@@ -395,6 +425,7 @@ where
 			let parent_hash = *header.parent_hash();
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
+
 			let changes_trie_root = header.digest().logs().iter()
 				.find(|log| log.as_changes_trie_root().is_some())
 				.and_then(DigestItem::as_changes_trie_root)
@@ -405,13 +436,18 @@ where
 					self.changes_trie_storage.insert(header.number().as_(), changes_trie_root, changes_trie_update);
 				}
 			}
-			self.blockchain.insert(hash, header, justification, body, pending_block.is_best);
+
+			self.blockchain.insert(hash, header, justification, body, pending_block.state);
 			// dumb implementation - store value for each block
-			if pending_block.is_best {
+			if pending_block.state.is_best() {
 				self.blockchain.cache.insert(parent_hash, operation.pending_authorities);
 			}
 		}
 		Ok(())
+	}
+
+	fn finalize_block(&self, block: BlockId<Block>) -> error::Result<()> {
+		self.blockchain.finalize_header(block)
 	}
 
 	fn blockchain(&self) -> &Self::Blockchain {

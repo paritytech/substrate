@@ -27,6 +27,27 @@ use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use memorydb::MemoryDB;
 
+/// State of a new block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NewBlockState {
+	/// Normal block.
+	Normal,
+	/// New best block.
+	Best,
+	/// Newly finalized block (implicitly best).
+	Final,
+}
+
+impl NewBlockState {
+	/// Whether this block is the new best block.
+	pub fn is_best(self) -> bool {
+		match self {
+			NewBlockState::Best | NewBlockState::Final => true,
+			NewBlockState::Normal => false,
+		}
+	}
+}
+
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block, H, C>
 where
@@ -45,7 +66,7 @@ where
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
 		justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool
+		state: NewBlockState,
 	) -> error::Result<()>;
 
 	/// Append authorities set to the transaction. This is a set of parent block (set which
@@ -87,6 +108,12 @@ where
 	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation>;
 	/// Commit block insertion.
 	fn commit_operation(&self, transaction: Self::BlockImportOperation) -> error::Result<()>;
+	/// Finalize block with given Id. This should also implicitly finalize all ancestors.
+	///
+	/// If the finalized block is not an ancestor of the current "best block", then
+	/// the chain will be implicitly reorganized to the best chain containing the newly
+	/// finalized block.
+	fn finalize_block(&self, block: BlockId<Block>) -> error::Result<()>;
 	/// Returns reference to blockchain backend.
 	fn blockchain(&self) -> &Self::Blockchain;
 	/// Returns reference to changes trie storage.

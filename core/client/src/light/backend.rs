@@ -26,7 +26,7 @@ use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
 
-use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
+use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
@@ -43,9 +43,9 @@ pub struct Backend<S, F> {
 
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F> {
-	is_new_best: bool,
 	header: Option<Block::Header>,
 	authorities: Option<Vec<AuthorityId>>,
+	leaf_state: NewBlockState,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -84,16 +84,24 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 
 	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
-			is_new_best: false,
 			header: None,
 			authorities: None,
+			leaf_state: NewBlockState::Normal,
 			_phantom: Default::default(),
 		})
 	}
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
-		self.blockchain.storage().import_header(operation.is_new_best, header, operation.authorities)
+		self.blockchain.storage().import_header(
+			header,
+			operation.authorities,
+			operation.leaf_state,
+		)
+	}
+
+	fn finalize_block(&self, block: BlockId<Block>) -> ClientResult<()> {
+		self.blockchain.storage().finalize_header(block)
 	}
 
 	fn blockchain(&self) -> &Blockchain<S, F> {
@@ -153,9 +161,9 @@ where
 		header: Block::Header,
 		_body: Option<Vec<Block::Extrinsic>>,
 		_justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool
+		state: NewBlockState,
 	) -> ClientResult<()> {
-		self.is_new_best = is_new_best;
+		self.leaf_state = state;
 		self.header = Some(header);
 		Ok(())
 	}
