@@ -52,7 +52,7 @@ use rstd::cmp;
 use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
-use primitives::traits::{Zero, One, Bounded, OnFinalise, As};
+use primitives::{Perbill, traits::{Zero, One, Bounded, OnFinalise, As}};
 use balances::{address::Address, OnDilution};
 use system::ensure_signed;
 
@@ -143,9 +143,9 @@ decl_storage! {
 		/// The length of a staking era in sessions.
 		pub SessionsPerEra get(sessions_per_era): required T::BlockNumber;
 		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub SessionReward get(session_reward): required T::Balance;
+		pub SessionReward get(session_reward): required Perbill;
 		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub OfflineSlash get(offline_slash): required T::Balance;
+		pub OfflineSlash get(offline_slash): required Perbill;
 		/// Number of instances of offline reports before slashing begins for validators.
 		pub OfflineSlashGrace get(offline_slash_grace): default u32;
 		/// The length of the bonding duration in blocks.
@@ -163,6 +163,12 @@ decl_storage! {
 		pub NominatorsFor get(nominators_for): default map [ T::AccountId => Vec<T::AccountId> ];
 		/// Nominators for a particular account that is in action right now.
 		pub CurrentNominatorsFor get(current_nominators_for): default map [ T::AccountId => Vec<T::AccountId> ];
+
+		/// Maximum reward, per validator, that is provided per acceptable session.
+		pub CurrentSessionReward get(current_session_reward): default T::Balance;
+		/// Slash, per validator that is taken for the first time they are found to be offline.
+		pub CurrentOfflineSlash get(current_offline_slash): default T::Balance;
+
 		/// The next value of sessions per era.
 		pub NextSessionsPerEra get(next_sessions_per_era): T::BlockNumber;
 		/// The session index at which the era length last changed.
@@ -423,7 +429,7 @@ impl<T: Trait> Module<T> {
 	fn this_session_reward(actual_elapsed: T::Moment) -> T::Balance {
 		let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
 		let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
-		Self::session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64)
+		Self::current_session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64)
 	}
 
 	/// Session has just changed. We need to determine whether we pay a reward, slash and/or
@@ -438,7 +444,7 @@ impl<T: Trait> Module<T> {
 			}
 			Self::deposit_event(RawEvent::Reward(reward));
 			let total_minted = reward * <T::Balance as As<usize>>::sa(validators.len());
-			let total_rewarded_stake = Self::stake_range().0 * <T::Balance as As<usize>>::sa(validators.len());
+			let total_rewarded_stake = Self::stake_range().1 * <T::Balance as As<usize>>::sa(validators.len());
 			T::OnRewardMinted::on_dilution(total_minted, total_rewarded_stake);
 		}
 
@@ -485,14 +491,14 @@ impl<T: Trait> Module<T> {
 		intentions.sort_unstable_by(|&(ref b1, _), &(ref b2, _)| b2.cmp(&b1));
 
 		let desired_validator_count = <ValidatorCount<T>>::get() as usize;
-		<StakeRange<T>>::put(
-			if !intentions.is_empty() {
-				let n = cmp::min(desired_validator_count, intentions.len());
-				(intentions[0].0, intentions[n - 1].0)
-			} else {
-				(Zero::zero(), Zero::zero())
-			}
-		);
+		let stake_range = if !intentions.is_empty() {
+			let n = cmp::min(desired_validator_count, intentions.len());
+			(intentions[0].0, intentions[n - 1].0)
+		} else {
+			(Zero::zero(), Zero::zero())
+		};
+		<StakeRange<T>>::put(&stake_range);
+
 		let vals = &intentions.into_iter()
 			.map(|(_, v)| v)
 			.take(desired_validator_count)
@@ -508,6 +514,10 @@ impl<T: Trait> Module<T> {
 			<CurrentNominatorsFor<T>>::insert(v, Self::nominators_for(v));
 		}
 		<session::Module<T>>::set_validators(vals);
+
+		// Update the balances for slashing/rewarding according to the stakes.
+		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
+		<CurrentSessionReward<T>>::put(Self::session_reward().times(stake_range.1));
 	}
 }
 
@@ -547,7 +557,7 @@ impl<T: Trait> consensus::OnOfflineValidator for Module<T> {
 
 		let event = if slash_count >= grace {
 			let instances = slash_count - grace;
-			let slash = Self::offline_slash() << instances;
+			let slash = Self::current_offline_slash() << instances;
 			let next_slash = slash << 1u32;
 			let _ = Self::slash_validator(&v, slash);
 			if instances >= Self::validator_preferences(&v).unstake_threshold

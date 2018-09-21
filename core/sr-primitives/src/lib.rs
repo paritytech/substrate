@@ -95,9 +95,9 @@ pub struct Permill(u32);
 
 // TODO: impl Mul<Permill> for N where N: As<usize>
 impl Permill {
-	pub fn times<N: traits::As<usize> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
+	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
 		// TODO: handle overflows
-		b * <N as traits::As<usize>>::sa(self.0 as usize) / <N as traits::As<usize>>::sa(1000000)
+		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1000000)
 	}
 
 	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
@@ -119,6 +119,61 @@ impl From<f64> for Permill {
 impl From<f32> for Permill {
 	fn from(x: f32) -> Permill {
 		Permill::from_fraction(x as f64)
+	}
+}
+
+/// Perbill is parts-per-billion. It stores a value between 0 and 1 in fixed point and
+/// provides a means to multiply some other value by that.
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, Default, Copy, Clone, PartialEq, Eq)]
+pub struct Perbill(u32);
+
+// TODO: impl Mul<Perbill> for N where N: As<usize>
+impl Perbill {
+	/// Attenuate `b` by self.
+	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
+		// TODO: handle overflows
+		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000_000)
+	}
+
+	/// Nothing.
+	pub fn zero() -> Perbill { Perbill(0) }
+
+	/// `true` if this is nothing.
+	pub fn is_zero(&self) -> bool { self.0 == 0 }
+
+	/// Everything.
+	pub fn one() -> Perbill { Perbill(1_000_000_000) }
+
+	/// Construct new instance where `x` is in billionths. Value equivalent to `x / 1,000,000,000`.
+	pub fn from_billionths(x: u32) -> Perbill { Perbill(x.min(1_000_000_000)) }
+
+	/// Construct new instance where `x` is in millionths. Value equivalent to `x / 1,000,000`.
+	pub fn from_millionths(x: u32) -> Perbill { Perbill(x.min(1_000_000) * 1000) }
+
+	/// Construct new instance where `x` is a percent. Value equivalent to `x%`.
+	pub fn from_percent(x: u32) -> Perbill { Perbill(x.min(100) * 10_000_000) }
+
+	#[cfg(feature = "std")]
+	/// Construct new instance whose value is equal to `x` (between 0 and 1).
+	pub fn from_fraction(x: f64) -> Perbill { Perbill((x.max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+
+	#[cfg(feature = "std")]
+	/// Construct new instance whose value is equal to `n / d` (between 0 and 1).
+	pub fn from_rational(n: f64, d: f64) -> Perbill { Perbill(((n / d).max(0.0).min(1.0) * 1_000_000_000.0) as u32) }
+}
+
+#[cfg(feature = "std")]
+impl From<f64> for Perbill {
+	fn from(x: f64) -> Perbill {
+		Perbill::from_fraction(x)
+	}
+}
+
+#[cfg(feature = "std")]
+impl From<f32> for Perbill {
+	fn from(x: f32) -> Perbill {
+		Perbill::from_fraction(x as f64)
 	}
 }
 
