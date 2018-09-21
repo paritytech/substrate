@@ -118,9 +118,9 @@ pub fn execute<'a, E: Ext>(
 	input_data: &[u8],
 	output_data: &mut Vec<u8>,
 	ext: &'a mut E,
+	config: &Config<E::T>,
 	gas_meter: &mut GasMeter<E::T>,
 ) -> Result<(), Error> {
-	let config = Config::default();
 	let env = runtime::init_env();
 
 	let PreparedContract {
@@ -137,24 +137,24 @@ pub fn execute<'a, E: Ext>(
 	let mut runtime = Runtime::new(ext, input_data, output_data, &config, memory, gas_meter);
 
 	// Instantiate the instance from the instrumented module code.
-	let exec_error: Option<sandbox::Error> =
-		match sandbox::Instance::new(&instrumented_code, &imports, &mut runtime) {
-			// No errors or traps were generated on instantiation! That
-			// means we can now invoke the contract entrypoint.
-			Ok(mut instance) => instance.invoke(b"call", &[], &mut runtime).err(),
-			// `start` function trapped.
-			Err(err @ sandbox::Error::Execution) => Some(err),
-			// Other instantiation errors.
-			// Return without executing anything.
-			Err(_) => return Err(Error::Instantiate),
-		};
-
-	to_execution_result(runtime, exec_error)
+	match sandbox::Instance::new(&instrumented_code, &imports, &mut runtime) {
+		// No errors or traps were generated on instantiation! That
+		// means we can now invoke the contract entrypoint.
+		Ok(mut instance) => {
+			let err = instance.invoke(b"call", &[], &mut runtime).err();
+			to_execution_result(runtime, err)
+		}
+		// `start` function trapped. Treat it in the same manner as an execution error.
+		Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
+		// Other instantiation errors.
+		// Return without executing anything.
+		Err(_) => return Err(Error::Instantiate),
+	}
 }
 
 // TODO: Extract it to the root of the crate
 #[derive(Clone)]
-pub(crate) struct Config<T: Trait> {
+pub struct Config<T: Trait> {
 	/// Gas cost of a growing memory by single page.
 	grow_mem_cost: T::Gas,
 
@@ -310,6 +310,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
+			&::vm::Config::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -372,6 +373,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
+			&::vm::Config::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -411,6 +413,7 @@ mod tests {
 				&[],
 				&mut Vec::new(),
 				&mut mock_ext,
+				&::vm::Config::default(),
 				&mut GasMeter::with_limit(100_000, 1)
 			),
 			Err(_)
@@ -464,6 +467,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
+			&::vm::Config::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -556,6 +560,7 @@ mod tests {
 			&[],
 			&mut return_buf,
 			&mut mock_ext,
+			&Config::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
