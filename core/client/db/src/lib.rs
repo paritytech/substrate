@@ -411,59 +411,41 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	// write stuff to a transaction after a new block is finalized.
-	//
-	// this manages state pruning and ensuring reorgs don't occur.
-	// this function should only be called if the finalized block is contained
-	// in the best chain.
-	fn note_finalized(&self, transaction: &mut DBTransaction, f_header: &Block::Header, f_hash: Block::Hash) -> Result<(), client::error::Error> {
-		const NOTEWORTHY_FINALIZATION_GAP: u64 = 32;
-
-		// TODO: ensure this doesn't conflict with old finalized block.
+	// this manages state pruning. Fails if called with a block which
+	// was not a child of the last finalized block.
+	fn note_finalized(&self,
+		transaction: &mut DBTransaction,
+		f_header: &Block::Header,
+		f_hash: Block::Hash,
+	) -> Result<(), client::error::Error> {
 		let meta = self.blockchain.meta.read();
 		let f_num = f_header.number().clone();
+		if &meta.finalized_hash != f_header.parent_hash() {
+			return Err(::client::error::ErrorKind::NonSequentialFinalization(
+				format!("Last finalized {:?} not parent of {:?}",
+					meta.finalized_hash, f_header.parent_hash()),
+			).into())
+		}
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
 
-		let (last_finalized_hash, last_finalized_number)
-			= (meta.finalized_hash.clone(), meta.finalized_number);
-
-		let finalized_gap = f_num - last_finalized_number;
-
-		if finalized_gap.as_() >= NOTEWORTHY_FINALIZATION_GAP {
-			info!(target: "db", "Finalizing large run of blocks from {:?} to {:?}",
-				(&last_finalized_hash, last_finalized_number), (&f_hash, f_num));
-		} else {
-			debug!(target: "db", "Finalizing blocks from {:?} to {:?}",
-				(&last_finalized_hash, last_finalized_number), (&f_hash, f_num));
-		}
-
-		let mut canonicalize_state = |canonical_hash| {
-			let commit = self.storage.state_db.canonicalize_block(&canonical_hash);
-			apply_state_commit(transaction, commit);
-		};
-
-		// when finalizing a block, we must also implicitly finalize all the blocks
-		// in between the last finalized block and this one. That means canonicalizing
-		// all their states in order.
 		let number_u64 = f_num.as_();
 		if number_u64 > self.pruning_window {
 			let new_canonical = number_u64 - self.pruning_window;
-			let best_canonical = self.storage.state_db.best_canonical();
 
-			for uncanonicalized_number in (best_canonical..new_canonical).map(|x| x + 1) {
-				let hash = if uncanonicalized_number == number_u64 {
-					f_hash
-				} else {
-					read_id::<Block>(
-						&*self.blockchain.db,
-						columns::HASH_LOOKUP,
-						BlockId::Number(As::sa(uncanonicalized_number))
-					)?.expect("existence of block with number `new_canonical` \
-						implies existence of blocks with all nubmers before it; qed")
-				};
+			let hash = if new_canonical == number_u64 {
+				f_hash
+			} else {
+				read_id::<Block>(
+					&*self.blockchain.db,
+					columns::HASH_LOOKUP,
+					BlockId::Number(As::sa(new_canonical))
+				)?.expect("existence of block with number `new_canonical` \
+					implies existence of blocks with all nubmers before it; qed")
+			};
 
-				trace!(target: "db", "Canonicalize block #{} ({:?})", uncanonicalized_number, hash);
-				canonicalize_state(hash);
-			}
+			trace!(target: "db", "Canonicalize block #{} ({:?})", new_canonical, hash);
+			let commit = self.storage.state_db.canonicalize_block(&hash);
+			apply_state_commit(transaction, commit);
 		};
 
 		Ok(())
@@ -507,7 +489,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 		})
 	}
 
-	fn commit_operation(&self, mut operation: Self::BlockImportOperation) -> Result<(), client::error::Error> {
+	fn commit_operation(&self, mut operation: Self::BlockImportOperation)
+		-> Result<(), client::error::Error>
+	{
 		let mut transaction = DBTransaction::new();
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
@@ -527,9 +511,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 				// cannot find tree route with empty DB.
 				if meta.best_hash != Default::default() {
 					let parent_hash = *pending_block.header.parent_hash();
-					let tree_route = ::utils::tree_route::<Block>(
-						&*self.blockchain.db,
-						columns::HEADER,
+					let tree_route = ::client::blockchain::tree_route(
+						&self.blockchain,
 						meta.best_hash,
 						parent_hash,
 					)?;
@@ -537,9 +520,10 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 					// update block number to hash lookup entries.
 					for retracted in tree_route.retracted() {
 						if retracted.hash == meta.finalized_hash {
-							// TODO: can we recover here?
-							warn!("Safety failure: reverting finalized block {:?}",
+							warn!("Potential safety failure: reverting finalized block {:?}",
 								(&retracted.number, &retracted.hash));
+
+							return Err(::client::error::ErrorKind::NotInFinalizedChain.into());
 						}
 
 						transaction.delete(
@@ -924,6 +908,7 @@ mod tests {
 			assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_some());
 		}
 
+		backend.finalize_block(BlockId::Number(1)).unwrap();
 		backend.finalize_block(BlockId::Number(2)).unwrap();
 		assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
 	}

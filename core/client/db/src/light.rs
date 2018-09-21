@@ -184,74 +184,42 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 }
 
 impl<Block: BlockT> LightStorage<Block> where Block::Hash: From<H256> {
-	// note that a block is finalized. ensure that best chain contains the finalized
-	// block number first.
+	// note that a block is finalized. only call with child of last finalized block.
 	fn note_finalized(&self, transaction: &mut DBTransaction, header: &Block::Header, hash: Block::Hash) -> ClientResult<()> {
-		const NOTEWORTHY_FINALIZATION_GAP: u64 = 32;
-
-		// TODO: ensure this doesn't conflict with old finalized block.
 		let meta = self.meta.read();
-		let f_num = header.number().clone();
-		let number_u64: u64 = f_num.as_();
-		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, hash.as_ref());
-
-		let (last_finalized_hash, last_finalized_number)
-			= (meta.finalized_hash.clone(), meta.finalized_number);
-
-		let finalized_gap = f_num - last_finalized_number;
-
-		if finalized_gap.as_() >= NOTEWORTHY_FINALIZATION_GAP {
-			info!(target: "db", "Finalizing large run of blocks from {:?} to {:?}",
-				(&last_finalized_hash, last_finalized_number), (&hash, f_num));
-		} else {
-			debug!(target: "db", "Finalizing blocks from {:?} to {:?}",
-				(&last_finalized_hash, last_finalized_number), (&hash, f_num));
+		if &meta.finalized_hash != header.parent_hash() {
+			return Err(::client::error::ErrorKind::NonSequentialFinalization(
+				format!("Last finalized {:?} not parent of {:?}",
+					meta.finalized_hash, header.parent_hash()),
+			).into())
 		}
 
+		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, hash.as_ref());
+
 		// build new CHT if required
-		let mut build_cht = |header: &Block::Header| -> ClientResult<()> {
-			if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
-				let new_cht_start: NumberFor<Block> = cht::start_number(cht::SIZE, new_cht_number);
-				let new_cht_root: Option<Block::Hash> = cht::compute_root::<Block::Header, Blake2Hasher, _>(
-					cht::SIZE, new_cht_number, (new_cht_start.as_()..)
-					.map(|num| self.hash(As::sa(num)).unwrap_or_default())
-				);
+		if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
+			let new_cht_start: NumberFor<Block> = cht::start_number(cht::SIZE, new_cht_number);
+			let new_cht_root: Option<Block::Hash> = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+				cht::SIZE, new_cht_number, (new_cht_start.as_()..)
+				.map(|num| self.hash(As::sa(num)).unwrap_or_default())
+			);
 
-				if let Some(new_cht_root) = new_cht_root {
-					transaction.put(columns::CHT, &number_to_lookup_key(new_cht_start), new_cht_root.as_ref());
+			if let Some(new_cht_root) = new_cht_root {
+				transaction.put(columns::CHT, &number_to_lookup_key(new_cht_start), new_cht_root.as_ref());
 
-					let mut prune_block = new_cht_start;
-					let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
-					trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
+				let mut prune_block = new_cht_start;
+				let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
+				trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
 
-					while prune_block <= new_cht_end {
-						let id = read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
-						if let Some(hash) = id {
-							let lookup_key = number_to_lookup_key(prune_block);
-							transaction.delete(columns::HASH_LOOKUP, &lookup_key);
-							transaction.delete(columns::HEADER, hash.as_ref());
-						}
-						prune_block += <<Block as BlockT>::Header as HeaderT>::Number::one();
+				while prune_block <= new_cht_end {
+					let id = read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
+					if let Some(hash) = id {
+						let lookup_key = number_to_lookup_key(prune_block);
+						transaction.delete(columns::HASH_LOOKUP, &lookup_key);
+						transaction.delete(columns::HEADER, hash.as_ref());
 					}
+					prune_block += <<Block as BlockT>::Header as HeaderT>::Number::one();
 				}
-			}
-
-			Ok(())
-		};
-
-		// attempt to build CHT for all newly finalized blocks.
-		let last_finalized_u64 = last_finalized_number.as_();
-		for num in (last_finalized_u64..number_u64).map(|x| x + 1) {
-			let num = As::sa(num);
-			if num == f_num {
-				build_cht(header)?;
-			} else {
-				let old_header = match self.header(BlockId::Number(num))? {
-					Some(x) => x,
-					None => panic!("finalizing block {} implies existence of block {}; qed", f_num, num),
-				};
-
-				build_cht(&old_header)?;
 			}
 		}
 
@@ -286,9 +254,8 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				let meta = self.meta.read();
 				if meta.best_hash != Default::default() {
 					let parent_hash = *header.parent_hash();
-					let tree_route = ::utils::tree_route::<Block>(
-						&*self.db,
-						columns::HEADER,
+					let tree_route = ::client::blockchain::tree_route(
+						self,
 						meta.best_hash,
 						parent_hash,
 					)?;
@@ -487,6 +454,9 @@ pub(crate) mod tests {
 		assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
 		// now finalize the block.
+		for i in (0..(cht::SIZE + cht::SIZE)).map(|i| i + 1) {
+			db.finalize_header(BlockId::Number(i)).unwrap();
+		}
 		db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
@@ -511,9 +481,9 @@ pub(crate) mod tests {
 		let mut prev_hash = Default::default();
 		for i in 0..1 + cht::SIZE + cht::SIZE + 1 {
 			prev_hash = insert_block(&db, &prev_hash, i as u64, None);
+			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		}
 
-		db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		let cht_root_1 = db.cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
 		let cht_root_2 = db.cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
 		let cht_root_3 = db.cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
