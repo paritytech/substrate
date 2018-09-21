@@ -118,20 +118,18 @@ impl<Block> LightStorage<Block>
 		is_finalized: bool,
 	) {
 		let mut meta = self.meta.write();
-		if is_best {
-			if number == <<Block as BlockT>::Header as HeaderT>::Number::zero() {
-				meta.genesis_hash = hash;
-			}
 
+		if number == Zero::zero() {
+			meta.genesis_hash = hash;
+			meta.finalized_hash = hash;
+		}
+
+		if is_best {
 			meta.best_number = number;
 			meta.best_hash = hash;
 		}
 
 		if is_finalized {
-			if number == <<Block as BlockT>::Header as HeaderT>::Number::zero() {
-				meta.genesis_hash = hash;
-			}
-
 			meta.finalized_number = number;
 			meta.finalized_hash = hash;
 		}
@@ -190,7 +188,7 @@ impl<Block: BlockT> LightStorage<Block> where Block::Hash: From<H256> {
 		if &meta.finalized_hash != header.parent_hash() {
 			return Err(::client::error::ErrorKind::NonSequentialFinalization(
 				format!("Last finalized {:?} not parent of {:?}",
-					meta.finalized_hash, header.parent_hash()),
+					meta.finalized_hash, hash),
 			).into())
 		}
 
@@ -256,8 +254,8 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					let parent_hash = *header.parent_hash();
 					let tree_route = ::client::blockchain::tree_route(
 						self,
-						meta.best_hash,
-						parent_hash,
+						BlockId::Hash(meta.best_hash),
+						BlockId::Hash(parent_hash),
 					)?;
 
 					// update block number to hash lookup entries.
@@ -344,6 +342,26 @@ pub(crate) mod tests {
 	use super::*;
 
 	type Block = RawBlock<u32>;
+
+	pub fn insert_block_with_extrinsics_root(
+		db: &LightStorage<Block>,
+		parent: &Hash,
+		number: u64,
+		authorities: Option<Vec<AuthorityId>>,
+		extrinsics_root: Hash,
+	) -> Hash {
+		let header = Header {
+			number: number.into(),
+			parent_hash: *parent,
+			state_root: Default::default(),
+			digest: Default::default(),
+			extrinsics_root,
+		};
+
+		let hash = header.hash();
+		db.import_header(header, authorities, NewBlockState::Best).unwrap();
+		hash
+	}
 
 	pub fn insert_block(
 		db: &LightStorage<Block>,
@@ -478,8 +496,8 @@ pub(crate) mod tests {
 		let db = LightStorage::new_test();
 
 		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
-		let mut prev_hash = Default::default();
-		for i in 0..1 + cht::SIZE + cht::SIZE + 1 {
+		let mut prev_hash = insert_block(&db, &Default::default(), 0, None);
+		for i in 1..1 + cht::SIZE + cht::SIZE + 1 {
 			prev_hash = insert_block(&db, &prev_hash, i as u64, None);
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		}
@@ -489,5 +507,68 @@ pub(crate) mod tests {
 		let cht_root_3 = db.cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
+	}
+
+	#[test]
+	fn tree_route_works() {
+		let db = LightStorage::new_test();
+		let block0 = insert_block(&db, &Default::default(), 0, None);
+
+		// fork from genesis: 3 prong.
+		let a1 = insert_block(&db, &block0, 1, None);
+		let a2 = insert_block(&db, &a1, 2, None);
+		let a3 = insert_block(&db, &a2, 3, None);
+
+		// fork from genesis: 2 prong.
+		let b1 = insert_block_with_extrinsics_root(&db, &block0, 1, None, H256::from([1; 32]));
+		let b2 = insert_block(&db, &b1, 2, None);
+
+		{
+			let tree_route = ::client::blockchain::tree_route(
+				&db,
+				BlockId::Hash(a3),
+				BlockId::Hash(b2)
+			).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, block0);
+			assert_eq!(tree_route.retracted().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2, a1]);
+			assert_eq!(tree_route.enacted().map(|r| r.hash).collect::<Vec<_>>(), vec![b1, b2]);
+		}
+
+		{
+			let tree_route = ::client::blockchain::tree_route(
+				&db,
+				BlockId::Hash(a1),
+				BlockId::Hash(a3),
+			).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, a1);
+			assert_eq!(tree_route.retracted().count(), 0);
+			assert_eq!(tree_route.enacted().map(|r| r.hash).collect::<Vec<_>>(), vec![a2, a3]);
+		}
+
+		{
+			let tree_route = ::client::blockchain::tree_route(
+				&db,
+				BlockId::Hash(a3),
+				BlockId::Hash(a1),
+			).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, a1);
+			assert_eq!(tree_route.retracted().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2]);
+			assert_eq!(tree_route.enacted().count(), 0);
+		}
+
+		{
+			let tree_route = ::client::blockchain::tree_route(
+				&db,
+				BlockId::Hash(a2),
+				BlockId::Hash(a2),
+			).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, a2);
+			assert_eq!(tree_route.retracted().count(), 0);
+			assert_eq!(tree_route.enacted().count(), 0);
+		}
 	}
 }

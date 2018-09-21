@@ -153,6 +153,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		let mut meta = self.meta.write();
 		if number == Zero::zero() {
 			meta.genesis_hash = hash;
+			meta.finalized_hash = hash;
 		}
 
 		if is_best {
@@ -423,7 +424,7 @@ impl<Block: BlockT> Backend<Block> {
 		if &meta.finalized_hash != f_header.parent_hash() {
 			return Err(::client::error::ErrorKind::NonSequentialFinalization(
 				format!("Last finalized {:?} not parent of {:?}",
-					meta.finalized_hash, f_header.parent_hash()),
+					meta.finalized_hash, f_hash),
 			).into())
 		}
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
@@ -513,8 +514,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 					let parent_hash = *pending_block.header.parent_hash();
 					let tree_route = ::client::blockchain::tree_route(
 						&self.blockchain,
-						meta.best_hash,
-						parent_hash,
+						BlockId::Hash(meta.best_hash),
+						BlockId::Hash(parent_hash),
 					)?;
 
 					// update block number to hash lookup entries.
@@ -682,6 +683,60 @@ mod tests {
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieStorage};
 
 	type Block = RawBlock<u64>;
+
+	fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<Blake2Hasher>) {
+		let mut changes_root = H256::default();
+		let mut changes_trie_update = MemoryDB::<Blake2Hasher>::new();
+		{
+			let mut trie = TrieDBMut::<Blake2Hasher, RlpCodec>::new(
+				&mut changes_trie_update,
+				&mut changes_root
+			);
+			for (key, value) in changes {
+				trie.insert(&key, &value).unwrap();
+			}
+		}
+
+		(changes_root, changes_trie_update)
+	}
+
+	fn insert_header(
+		backend: &Backend<Block>,
+		number: u64,
+		parent_hash: H256,
+		changes: Vec<(Vec<u8>, Vec<u8>)>,
+		extrinsics_root: H256,
+	) -> H256 {
+		use runtime_primitives::generic::DigestItem;
+		use runtime_primitives::testing::Digest;
+
+		let (changes_root, changes_trie_update) = prepare_changes(changes);
+		let digest = Digest {
+			logs: vec![
+				DigestItem::ChangesTrieRoot(changes_root),
+			],
+		};
+		let header = Header {
+			number,
+			parent_hash,
+			state_root: Default::default(),
+			digest,
+			extrinsics_root,
+		};
+		let header_hash = header.hash();
+
+		let block_id = if number == 0 {
+			BlockId::Hash(Default::default())
+		} else {
+			BlockId::Number(number - 1)
+		};
+		let mut op = backend.begin_operation(block_id).unwrap();
+		op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
+		op.update_changes_trie(changes_trie_update).unwrap();
+		backend.commit_operation(op).unwrap();
+
+		header_hash
+	}
 
 	#[test]
 	fn block_hash_inserted_correctly() {
@@ -917,54 +972,6 @@ mod tests {
 	fn changes_trie_storage_works() {
 		let backend = Backend::<Block>::new_test(1000);
 
-		let prepare_changes = |changes: Vec<(Vec<u8>, Vec<u8>)>| {
-			let mut changes_root = H256::default();
-			let mut changes_trie_update = MemoryDB::<Blake2Hasher>::new();
-			{
-				let mut trie = TrieDBMut::<Blake2Hasher, RlpCodec>::new(
-					&mut changes_trie_update,
-					&mut changes_root
-				);
-				for (key, value) in changes {
-					trie.insert(&key, &value).unwrap();
-				}
-			}
-
-			(changes_root, changes_trie_update)
-		};
-
-		let insert_header = |number: u64, parent_hash: H256, changes: Vec<(Vec<u8>, Vec<u8>)>| {
-			use runtime_primitives::generic::DigestItem;
-			use runtime_primitives::testing::Digest;
-
-			let (changes_root, changes_trie_update) = prepare_changes(changes);
-			let digest = Digest {
-				logs: vec![
-					DigestItem::ChangesTrieRoot(changes_root),
-				],
-			};
-			let header = Header {
-				number,
-				parent_hash,
-				state_root: Default::default(),
-				digest,
-				extrinsics_root: Default::default(),
-			};
-			let header_hash = header.hash();
-
-			let block_id = if number == 0 {
-				BlockId::Hash(Default::default())
-			} else {
-				BlockId::Number(number - 1)
-			};
-			let mut op = backend.begin_operation(block_id).unwrap();
-			op.set_block_data(header, None, None, NewBlockState::Best).unwrap();
-			op.update_changes_trie(changes_trie_update).unwrap();
-			backend.commit_operation(op).unwrap();
-
-			header_hash
-		};
-
 		let check_changes = |backend: &Backend<Block>, block: u64, changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let (changes_root, mut changes_trie_update) = prepare_changes(changes);
 			assert_eq!(backend.tries_change_storage.root(block), Ok(Some(changes_root)));
@@ -981,13 +988,76 @@ mod tests {
 		];
 		let changes2 = vec![(b"key_at_2".to_vec(), b"val_at_2".to_vec())];
 
-		let block0 = insert_header(0, Default::default(), changes0.clone());
-		let block1 = insert_header(1, block0, changes1.clone());
-		let _ = insert_header(2, block1, changes2.clone());
+		let block0 = insert_header(&backend, 0, Default::default(), changes0.clone(), Default::default());
+		let block1 = insert_header(&backend, 1, block0, changes1.clone(), Default::default());
+		let _ = insert_header(&backend, 2, block1, changes2.clone(), Default::default());
 
 		// check that the storage contains tries for all blocks
 		check_changes(&backend, 0, changes0);
 		check_changes(&backend, 1, changes1);
 		check_changes(&backend, 2, changes2);
+	}
+
+	#[test]
+	fn tree_route_works() {
+		let backend = Backend::<Block>::new_test(1000);
+		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
+
+		// fork from genesis: 3 prong.
+		let a1 = insert_header(&backend, 1, block0, Vec::new(), Default::default());
+		let a2 = insert_header(&backend, 2, a1, Vec::new(), Default::default());
+		let a3 = insert_header(&backend, 3, a2, Vec::new(), Default::default());
+
+		// fork from genesis: 2 prong.
+		let b1 = insert_header(&backend, 1, block0, Vec::new(), H256::from([1; 32]));
+		let b2 = insert_header(&backend, 2, b1, Vec::new(), Default::default());
+
+		{
+			let tree_route = ::client::blockchain::tree_route(
+				backend.blockchain(),
+				BlockId::Hash(a3),
+				BlockId::Hash(b2)
+			).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, block0);
+			assert_eq!(tree_route.retracted().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2, a1]);
+			assert_eq!(tree_route.enacted().map(|r| r.hash).collect::<Vec<_>>(), vec![b1, b2]);
+		}
+
+		{
+			let tree_route = ::client::blockchain::tree_route(
+				backend.blockchain(),
+				BlockId::Hash(a1),
+				BlockId::Hash(a3),
+			).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, a1);
+			assert_eq!(tree_route.retracted().count(), 0);
+			assert_eq!(tree_route.enacted().map(|r| r.hash).collect::<Vec<_>>(), vec![a2, a3]);
+		}
+
+		{
+			let tree_route = ::client::blockchain::tree_route(
+				backend.blockchain(),
+				BlockId::Hash(a3),
+				BlockId::Hash(a1),
+			).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, a1);
+			assert_eq!(tree_route.retracted().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2]);
+			assert_eq!(tree_route.enacted().count(), 0);
+		}
+
+		{
+			let tree_route = ::client::blockchain::tree_route(
+				backend.blockchain(),
+				BlockId::Hash(a2),
+				BlockId::Hash(a2),
+			).unwrap();
+
+			assert_eq!(tree_route.common_block().hash, a2);
+			assert_eq!(tree_route.retracted().count(), 0);
+			assert_eq!(tree_route.enacted().count(), 0);
+		}
 	}
 }

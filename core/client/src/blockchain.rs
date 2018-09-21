@@ -153,21 +153,21 @@ impl<Block: BlockT> TreeRoute<Block> {
 /// Compute a tree-route between two blocks. See tree-route docs for more details.
 pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
 	backend: &Backend,
-	from: Block::Hash,
-	to: Block::Hash,
+	from: BlockId<Block>,
+	to: BlockId<Block>,
 ) -> Result<TreeRoute<Block>> {
 	use runtime_primitives::traits::Header;
 
-	let load_header = |hash: &Block::Hash| {
-		match backend.header(BlockId::Hash(*hash)) {
+	let load_header = |id: BlockId<Block>| {
+		match backend.header(id) {
 			Ok(Some(hdr)) => Ok(hdr),
-			Ok(None) => Err(ErrorKind::UnknownBlock(format!("Unknown block {:?}", hash)).into()),
+			Ok(None) => Err(ErrorKind::UnknownBlock(format!("Unknown block {:?}", id)).into()),
 			Err(e) => Err(e),
 		}
 	};
 
-	let mut from = load_header(&from)?;
-	let mut to = load_header(&to)?;
+	let mut from = load_header(from)?;
+	let mut to = load_header(to)?;
 
 	let mut from_branch = Vec::new();
 	let mut to_branch = Vec::new();
@@ -178,7 +178,7 @@ pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
 			hash: to.hash(),
 		});
 
-		to = load_header(to.parent_hash())?;
+		to = load_header(BlockId::Hash(*to.parent_hash()))?;
 	}
 
 	while from.number() > to.number() {
@@ -186,7 +186,7 @@ pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
 			number: from.number().clone(),
 			hash: from.hash(),
 		});
-		from = load_header(from.parent_hash())?;
+		from = load_header(BlockId::Hash(*from.parent_hash()))?;
 	}
 
 	// numbers are equal now. walk backwards until the block is the same
@@ -196,13 +196,13 @@ pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
 			number: to.number().clone(),
 			hash: to.hash(),
 		});
-		to = load_header(to.parent_hash())?;
+		to = load_header(BlockId::Hash(*to.parent_hash()))?;
 
 		from_branch.push(RouteEntry {
 			number: from.number().clone(),
 			hash: from.hash(),
 		});
-		from = load_header(from.parent_hash())?;
+		from = load_header(BlockId::Hash(*from.parent_hash()))?;
 	}
 
 	// add the pivot block. and append the reversed to-branch (note that it's reverse order originalls)
