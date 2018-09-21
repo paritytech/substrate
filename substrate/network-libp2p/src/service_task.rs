@@ -650,8 +650,6 @@ impl Service {
 		}
 		drop(kad_pending_ctrls);
 
-		self.kad_system.update_kbuckets(peer_id.clone());
-
 		Some(ServiceEvent::NewNode {
 			node_index,
 			peer_id,
@@ -739,12 +737,8 @@ impl Service {
 					closed_custom_protocols,
 				})
 			},
-			SwarmEvent::PingDuration(node_index, ping) => {
-				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("the swarm always produces events containing valid node indices");
-				self.kad_system.update_kbuckets(peer_id.clone());
-				Some(ServiceEvent::PingDuration(node_index, ping))
-			},
+			SwarmEvent::PingDuration(node_index, ping) =>
+				Some(ServiceEvent::PingDuration(node_index, ping)),
 			SwarmEvent::NodeInfos { node_index, client_version, listen_addrs } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
 					.expect("the swarm always produces events containing valid node indices");
@@ -757,11 +751,8 @@ impl Service {
 					client_version,
 				})
 			},
-			SwarmEvent::KadFindNode { node_index, searched, responder } => {
-				let peer_id = self.swarm.peer_id_of_node(node_index)
-					.expect("the swarm always produces events containing valid node indices");
+			SwarmEvent::KadFindNode { searched, responder, .. } => {
 				let response = self.build_kademlia_response(&searched);
-				self.kad_system.update_kbuckets(peer_id.clone());
 				responder.respond(response);
 				None
 			},
@@ -769,7 +760,6 @@ impl Service {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
 					.expect("the swarm always produces events containing valid node indices");
 				trace!(target: "sub-libp2p", "Opened Kademlia substream with {:?}", peer_id);
-				self.kad_system.update_kbuckets(peer_id.clone());
 				if let Some(list) = self.kad_pending_ctrls.lock().remove(&peer_id) {
 					for tx in list {
 						let _ = tx.send(controller.clone());
@@ -780,12 +770,16 @@ impl Service {
 			SwarmEvent::KadClosed { .. } => {
 				None
 			},
-			SwarmEvent::OpenedCustomProtocol { node_index, protocol, version } =>
+			SwarmEvent::OpenedCustomProtocol { node_index, protocol, version } => {
+				let peer_id = self.swarm.peer_id_of_node(node_index)
+					.expect("the swarm always produces events containing valid node indices");
+				self.kad_system.update_kbuckets(peer_id.clone());
 				Some(ServiceEvent::OpenedCustomProtocol {
 					node_index,
 					protocol,
 					version,
-				}),
+				})
+			},
 			SwarmEvent::ClosedCustomProtocol { node_index, protocol } =>
 				Some(ServiceEvent::ClosedCustomProtocol {
 					node_index,
