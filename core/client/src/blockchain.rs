@@ -131,9 +131,9 @@ pub struct TreeRoute<Block: BlockT> {
 }
 
 impl<Block: BlockT> TreeRoute<Block> {
-	/// Get an iterator of all retracted blocks in reverse order (towards common ancestor)
-	pub fn retracted(&self) -> impl Iterator<Item=&RouteEntry<Block>> {
-		self.route.iter().take(self.pivot)
+	/// Get a slice of all retracted blocks in reverse order (towards common ancestor)
+	pub fn retracted(&self) -> &[RouteEntry<Block>] {
+		&self.route[..self.pivot]
 	}
 
 	/// Get the common ancestor block. This might be one of the two blocks of the
@@ -144,9 +144,9 @@ impl<Block: BlockT> TreeRoute<Block> {
 			thus it is never empty; qed")
 	}
 
-	/// Get an iterator of enacted blocks (descendents of the common ancestor)
-	pub fn enacted(&self) -> impl Iterator<Item=&RouteEntry<Block>> {
-		self.route.iter().skip(self.pivot + 1)
+	/// Get a slice of enacted blocks (descendents of the common ancestor)
+	pub fn enacted(&self) -> &[RouteEntry<Block>] {
+		&self.route[self.pivot + 1 ..]
 	}
 }
 

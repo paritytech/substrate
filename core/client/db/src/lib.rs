@@ -1020,8 +1020,8 @@ mod tests {
 			).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, block0);
-			assert_eq!(tree_route.retracted().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2, a1]);
-			assert_eq!(tree_route.enacted().map(|r| r.hash).collect::<Vec<_>>(), vec![b1, b2]);
+			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2, a1]);
+			assert_eq!(tree_route.enacted().ter()map(|r| r.hash).collect::<Vec<_>>(), vec![b1, b2]);
 		}
 
 		{
@@ -1032,8 +1032,8 @@ mod tests {
 			).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
-			assert_eq!(tree_route.retracted().count(), 0);
-			assert_eq!(tree_route.enacted().map(|r| r.hash).collect::<Vec<_>>(), vec![a2, a3]);
+			assert!(tree_route.retracted().is_empty());
+			assert_eq!(tree_route.enacted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a2, a3]);
 		}
 
 		{
@@ -1044,8 +1044,8 @@ mod tests {
 			).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a1);
-			assert_eq!(tree_route.retracted().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2]);
-			assert_eq!(tree_route.enacted().count(), 0);
+			assert_eq!(tree_route.retracted().iter().map(|r| r.hash).collect::<Vec<_>>(), vec![a3, a2]);
+			assert!(tree_route.enacted().is_empty());
 		}
 
 		{
@@ -1056,8 +1056,8 @@ mod tests {
 			).unwrap();
 
 			assert_eq!(tree_route.common_block().hash, a2);
-			assert_eq!(tree_route.retracted().count(), 0);
-			assert_eq!(tree_route.enacted().count(), 0);
+			assert!(tree_route.retracted().is_empty());
+			assert!(tree_route.enacted().is_empty());
 		}
 	}
 }
