@@ -59,8 +59,15 @@ impl<Hash> Eq for TransactionRef<Hash> {}
 
 #[derive(Debug)]
 struct ReadyTx<Hash> {
+	/// A reference to a transaction
 	pub transaction: TransactionRef<Hash>,
+	/// A list of transactions that get unlocked by this one
 	pub unlocks: Vec<Hash>,
+	/// How many required tags are provided inherently
+	///
+	/// Some transactions might be already pruned from the queue,
+	/// so when we compute ready set we may consider this transactions ready earlier.
+	pub requires_offset: usize,
 }
 
 const HASH_READY: &str = "Every hash is in ready map; qed";
@@ -120,8 +127,8 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 	/// that are in this queue.
 	pub fn import(
 		&mut self,
-		tx: WaitingTransaction<Hash>,
 		block_number: BlockNumber,
+		tx: WaitingTransaction<Hash>,
 	) -> error::Result<Vec<Arc<Transaction<Hash>>>> {
 		assert!(tx.is_ready(), "Only ready transactions can be imported.");
 		assert!(!self.ready.contains_key(&tx.transaction.hash), "Transaction is already imported.");
@@ -165,6 +172,7 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 		self.ready.insert(hash, ReadyTx {
 			transaction,
 			unlocks: vec![],
+			requires_offset: 0,
 		});
 
 		Ok(replaced)
@@ -195,6 +203,9 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 				for tag in &tx.transaction.transaction.provides {
 					self.provided_tags.remove(tag);
 				}
+				// remove from unlocks?
+				// TODO [ToDr]
+
 				// remove from best
 				self.best.remove(&tx.transaction);
 
@@ -203,6 +214,75 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 
 				// add to removed
 				removed.push(tx.transaction.transaction);
+			}
+		}
+	}
+
+	/// Removes transactions that provide given tag.
+	///
+	/// All transactions that lead to a transaction, which provides this tag
+	/// are going to be removed from the queue, but no other transactions are touched -
+	/// i.e. all other subgraphs starting from given tag are still considered valid & ready.
+	pub fn prune_tags(&mut self, tag: Tag) -> Vec<Arc<Transaction<Hash>>> {
+		let mut removed = vec![];
+		let mut to_remove = vec![tag];
+
+		loop {
+			let tag = match to_remove.pop() {
+				Some(tag) => tag,
+				None => return removed,
+			};
+
+			let res = self.provided_tags.remove(&tag)
+					.and_then(|hash| self.ready.remove(&hash));
+
+			if let Some(tx) = res {
+				let unlocks = tx.unlocks;
+				let tx = tx.transaction.transaction;
+
+				// prune previous transactions as well
+				{
+					let hash = &tx.hash;
+					let mut find_previous = |tag| -> Option<Vec<Tag>> {
+						let prev_hash = self.provided_tags.get(tag)?;
+						let tx2 = self.ready.get_mut(&prev_hash)?;
+						remove_item(&mut tx2.unlocks, hash);
+						// We eagerly prune previous transactions as well.
+						// But it might not always be good.
+						// Possible edge case:
+						// - tx provides two tags
+						// - the second tag enables some subgraph we don't know of yet
+						// - we will prune the transaction
+						// - when we learn about the subgraph it will go to future
+						// - we will have to wait for re-propagation of that transaction
+						// Alternatively the caller may attempt to re-import these transactions.
+						if tx2.unlocks.is_empty() {
+							Some(tx2.transaction.transaction.provides.clone())
+						} else {
+							None
+						}
+					};
+
+					// find previous transactions
+					for tag in &tx.requires {
+						if let Some(mut tags_to_remove) = find_previous(tag) {
+							to_remove.append(&mut tags_to_remove);
+						}
+					}
+				}
+
+				// add the transactions that just got unlocked to `best`
+				for hash in unlocks {
+					if let Some(tx) = self.ready.get_mut(&hash) {
+						tx.requires_offset += 1;
+						// this transaction is ready
+						if tx.requires_offset == tx.transaction.transaction.requires.len() {
+							self.best.insert(tx.transaction.clone());
+						}
+					}
+				}
+
+				removed.push(tx);
 			}
 		}
 	}
@@ -319,11 +399,18 @@ impl<'a, Hash: 'a + hash::Hash + Eq + Clone> Iterator for BestIterator<'a, Hash>
 				self.best_or_awaiting(satisfied, tx_ref);
 			// then get from the pool
 			} else if let Some(next) = self.all.get(hash) {
-				self.best_or_awaiting(1, next.transaction.clone());
+				self.best_or_awaiting(next.requires_offset + 1, next.transaction.clone());
 			}
 		}
 
 		Some(best.transaction.clone())
+	}
+}
+
+// See: https://github.com/rust-lang/rust/issues/40062
+fn remove_item<T: PartialEq>(vec: &mut Vec<T>, item: &T) {
+	if let Some(idx) = vec.iter().position(|i| i == item) {
+		vec.swap_remove(idx);
 	}
 }
 
@@ -359,18 +446,18 @@ mod tests {
 
 		// when
 		let x = WaitingTransaction::new(tx2, &ready.provided_tags());
-		ready.import(x, block_number).unwrap();
+		ready.import(block_number, x).unwrap();
 		let x = WaitingTransaction::new(tx3, &ready.provided_tags());
-		ready.import(x, block_number).unwrap();
+		ready.import(block_number, x).unwrap();
 		assert_eq!(ready.get().count(), 2);
 
 		// too low priority
 		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags());
-		ready.import(x, block_number).unwrap_err();
+		ready.import(block_number, x).unwrap_err();
 
 		tx1.priority = 10;
 		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags());
-		ready.import(x, block_number).unwrap();
+		ready.import(block_number, x).unwrap();
 
 		// then
 		assert_eq!(ready.get().count(), 1);
@@ -396,13 +483,13 @@ mod tests {
 
 		// when
 		let x = WaitingTransaction::new(tx1, &ready.provided_tags());
-		ready.import(x, block_number).unwrap();
+		ready.import(block_number, x).unwrap();
 		let x = WaitingTransaction::new(tx2, &ready.provided_tags());
-		ready.import(x, block_number).unwrap();
+		ready.import(block_number, x).unwrap();
 		let x = WaitingTransaction::new(tx3, &ready.provided_tags());
-		ready.import(x, block_number).unwrap();
+		ready.import(block_number, x).unwrap();
 		let x = WaitingTransaction::new(tx4, &ready.provided_tags());
-		ready.import(x, block_number).unwrap();
+		ready.import(block_number, x).unwrap();
 
 		// then
 		assert_eq!(ready.best.len(), 1);

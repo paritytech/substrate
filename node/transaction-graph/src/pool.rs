@@ -54,6 +54,17 @@ pub enum Imported<Hash> {
 	}
 }
 
+/// Status of pruning the queue.
+#[derive(Debug)]
+pub struct PruneStatus<Hash> {
+	/// A list of imports that satisfying the tag triggered.
+	pub promoted: Vec<Imported<Hash>>,
+	/// A list of transactions that failed to be promoted and now are discarded.
+	pub failed: Vec<Hash>,
+	/// A list of transactions that got pruned from the ready queue.
+	pub pruned: Vec<Arc<Transaction<Hash>>>,
+}
+
 /// Immutable transaction
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug, PartialEq, Eq)]
@@ -76,6 +87,12 @@ pub struct Transaction<Hash> {
 ///
 /// Builds a dependency graph for all transactions in the pool and returns
 /// the ones that are currently ready to be executed.
+///
+/// General note:
+/// If function returns some transactions it usually means that importing them
+/// as-is for the second time will fail or produce unwanted results.
+/// Most likely it is required to revalidate them and recompute set of
+/// required tags.
 #[derive(Default, Debug)]
 pub struct Pool<Hash: hash::Hash + Eq> {
 	future: FutureTransactions<Hash>,
@@ -95,21 +112,29 @@ impl<Hash: hash::Hash + fmt::Debug + Ord + Eq + Clone> Pool<Hash> {
 		block_number: BlockNumber,
 		tx: Transaction<Hash>,
 	) -> error::Result<Imported<Hash>> {
-		let hash = tx.hash.clone();
-		if self.future.contains(&hash) || self.ready.contains(&hash) {
+		if self.future.contains(&tx.hash) || self.ready.contains(&tx.hash) {
 			bail!(error::ErrorKind::AlreadyImported)
 		}
 
 		let tx = WaitingTransaction::new(tx, self.ready.provided_tags());
-		trace!(target: "txpool", "[{:?}] {:?}", hash, tx);
-		debug!(target: "txpool", "[{:?}] Importing to {}", hash, if tx.is_ready() { "ready" } else { "future" });
+		trace!(target: "txpool", "[{:?}] {:?}", tx.transaction.hash, tx);
+		debug!(target: "txpool", "[{:?}] Importing to {}", tx.transaction.hash, if tx.is_ready() { "ready" } else { "future" });
 
 		// If all tags are not satisfied import to future.
 		if !tx.is_ready() {
+			let hash = tx.transaction.hash.clone();
 			self.future.import(tx);
 			return Ok(Imported::Future { hash });
 		}
 
+		self.import_to_ready(block_number, tx)
+	}
+
+	/// Imports transaction to ready queue.
+	///
+	/// NOTE the transaction has to have all requirements satisfied.
+	fn import_to_ready(&mut self, block_number: BlockNumber, tx: WaitingTransaction<Hash>) -> error::Result<Imported<Hash>> {
+		let hash = tx.transaction.hash.clone();
 		let mut promoted = vec![];
 		let mut failed = vec![];
 		let mut removed = vec![];
@@ -129,7 +154,7 @@ impl<Hash: hash::Hash + fmt::Debug + Ord + Eq + Clone> Pool<Hash> {
 
 			// import this transaction
 			let current_hash = tx.transaction.hash.clone();
-			match self.ready.import(tx, block_number) {
+			match self.ready.import(block_number, tx) {
 				Ok(mut replaced) => {
 					if !first {
 						promoted.push(current_hash);
@@ -183,22 +208,47 @@ impl<Hash: hash::Hash + fmt::Debug + Ord + Eq + Clone> Pool<Hash> {
 	/// they were part of a chain, you may attempt to re-import them later.
 	/// NOTE If you want to just mark ready transactions that were already used
 	/// and you no longer need to store them use `mark_used` method.
-	pub fn remove_invalid<'a>(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash>>> where
-		Hash: 'a,
-	{
+	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash>>> {
 		let mut removed = self.ready.remove_invalid(hashes);
 		removed.extend(self.future.remove(hashes).into_iter().map(Arc::new));
 		removed
 	}
 
-	/// Satisfies given list of tags.
+	/// Prunes transactions that provide given list of tags.
 	///
 	/// This will cause all transactions that provide these tags to be removed from the pool,
 	/// but unlike `remove_invalid`, dependent transactions are not touched.
 	/// Additional transactions from future queue might be promoted to ready if you satisfy tags
 	/// that the pool didn't previously know about.
-	pub fn satisfy_tags(&mut self, _tags: impl Iterator<Item=Tag>) {
-		unimplemented!()
+	pub fn prune_tags(&mut self, block_number: BlockNumber, tags: impl IntoIterator<Item=Tag>) -> PruneStatus<Hash> {
+		let mut to_import = vec![];
+		let mut pruned = vec![];
+
+		for tag in tags {
+			// make sure to promote any future transactions that could be unlocked
+			to_import.append(&mut self.future.satisfy_tags(::std::iter::once(&tag)));
+			// and actually prune transactions in ready queue
+			pruned.append(&mut self.ready.prune_tags(tag));
+		}
+
+		let mut promoted = vec![];
+		let mut failed = vec![];
+		for tx in to_import {
+			let hash = tx.transaction.hash.clone();
+			match self.import_to_ready(block_number, tx) {
+				Ok(res) => promoted.push(res),
+				Err(e) => {
+					warn!(target: "txpool", "[{:?}] Failed to promote during pruning: {:?}", hash, e);
+					failed.push(hash)
+				},
+			}
+		}
+
+		PruneStatus {
+			pruned,
+			failed,
+			promoted,
+		}
 	}
 }
 
@@ -545,6 +595,75 @@ mod tests {
 		// then
 		assert_eq!(pool.ready().count(), 1);
 		assert_eq!(pool.future.len(), 0);
-
 	}
+
+
+	#[test]
+	fn should_prune_ready_transactions() {
+		// given
+		let mut pool = pool();
+		// future (waiting for 0)
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![5u8]),
+			hash: 5,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![0]],
+			provides: vec![vec![100]],
+		}).unwrap();
+		// ready
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![1u8]),
+			hash: 1,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![],
+			provides: vec![vec![1]],
+		}).unwrap();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![2u8]),
+			hash: 2,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![2]],
+			provides: vec![vec![3]],
+		}).unwrap();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![3u8]),
+			hash: 3,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![1]],
+			provides: vec![vec![2]],
+		}).unwrap();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![4u8]),
+			hash: 4,
+			priority: 1_000u64,
+			longevity: 64u64,
+			requires: vec![vec![3], vec![2]],
+			provides: vec![vec![4]],
+		}).unwrap();
+
+		assert_eq!(pool.ready().count(), 4);
+		assert_eq!(pool.future.len(), 1);
+
+		// when
+		let result = pool.prune_tags(1, vec![vec![0], vec![2]]);
+
+		// then
+		assert_eq!(result.pruned.len(), 2);
+		assert_eq!(result.failed.len(), 0);
+		assert_eq!(result.promoted[0], Imported::Ready {
+			hash: 5,
+			promoted: vec![],
+			failed: vec![],
+			removed: vec![],
+		});
+		assert_eq!(result.promoted.len(), 1);
+		assert_eq!(pool.future.len(), 0);
+		assert_eq!(pool.ready.len(), 3);
+		assert_eq!(pool.ready().count(), 3);
+	}
+
 }

@@ -101,22 +101,21 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 	///
 	/// Returns (and removes) transactions that became ready after their last tag got
 	/// satisfied and now we can remove them from Future and move to Ready queue.
-	pub fn satisfy_tags(&mut self, tags: &[Tag]) -> Vec<WaitingTransaction<Hash>> {
+	pub fn satisfy_tags<T: AsRef<Tag>>(&mut self, tags: impl IntoIterator<Item=T>) -> Vec<WaitingTransaction<Hash>> {
 		let mut became_ready = vec![];
 
 		for tag in tags {
-			if let Some(hashes) = self.wanted_tags.remove(tag) {
+			if let Some(hashes) = self.wanted_tags.remove(tag.as_ref()) {
 				for hash in hashes {
 					let is_ready = {
 						let mut tx = self.waiting.get_mut(&hash)
 							.expect("Every transaction in wanted_tags is present in waiting; qed");
-						tx.satisfy_tag(tag);
+						tx.satisfy_tag(tag.as_ref());
 						tx.is_ready()
 					};
 
 					if is_ready {
-						let tx = self.waiting.remove(&hash)
-							.expect("We just get_mut the entry; qed");
+						let tx = self.waiting.remove(&hash).expect("We just get_mut the entry; qed");
 						became_ready.push(tx);
 					}
 				}
