@@ -195,7 +195,12 @@ impl<B, E, Block> Client<B, E, Block> where
 			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
 			op.reset_storage(genesis_storage.into_iter())?;
-			op.set_block_data(genesis_block.deconstruct().0, Some(vec![]), None, true)?;
+			op.set_block_data(
+				genesis_block.deconstruct().0,
+				Some(vec![]),
+				None,
+				::backend::NewBlockState::Final
+			)?;
 			backend.commit_operation(op)?;
 		}
 		Ok(Client {
@@ -383,6 +388,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		origin: BlockOrigin,
 		header: JustifiedHeader<Block>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
+		finalized: bool,
 	) -> error::Result<ImportResult> {
 		let (header, justification, authorities) = header.into_inner();
 		let parent_hash = header.parent_hash().clone();
@@ -394,7 +400,17 @@ impl<B, E, Block> Client<B, E, Block> where
 		let _import_lock = self.import_lock.lock();
 		let height: u64 = header.number().as_();
 		*self.importing_block.write() = Some(hash);
-		let result = self.execute_and_import_block(origin, hash, header, justification, body, authorities);
+
+		let result = self.execute_and_import_block(
+			origin,
+			hash,
+			header,
+			justification,
+			body,
+			authorities,
+			finalized
+		);
+
 		*self.importing_block.write() = None;
 		telemetry!("block.import";
 			"height" => height,
@@ -412,6 +428,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		justification: bft::Justification<Block::Hash>,
 		body: Option<Vec<Block::Extrinsic>>,
 		authorities: Vec<AuthorityId>,
+		finalized: bool,
 	) -> error::Result<ImportResult> {
 		let parent_hash = header.parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
@@ -454,9 +471,24 @@ impl<B, E, Block> Client<B, E, Block> where
 		};
 
 		let is_new_best = header.number() == &(self.backend.blockchain().info()?.best_number + One::one());
+		let leaf_state = if finalized {
+			::backend::NewBlockState::Final
+		} else if is_new_best {
+			::backend::NewBlockState::Best
+		} else {
+			::backend::NewBlockState::Normal
+		};
+
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
 		let unchecked: bft::UncheckedJustification<_> = justification.uncheck().into();
-		transaction.set_block_data(header.clone(), body, Some(unchecked.into()), is_new_best)?;
+
+		transaction.set_block_data(
+			header.clone(),
+			body,
+			Some(unchecked.into()),
+			leaf_state,
+		)?;
+
 		transaction.update_authorities(authorities);
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
@@ -601,7 +633,7 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 		&self,
 		block: Block,
 		justification: ::bft::Justification<Block::Hash>,
-		authorities: &[AuthorityId]
+		authorities: &[AuthorityId],
 	) -> bool {
 		let (header, extrinsics) = block.deconstruct();
 		let justified_header = JustifiedHeader {
@@ -610,7 +642,13 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 			authorities: authorities.to_vec(),
 		};
 
-		self.import_block(BlockOrigin::ConsensusBroadcast, justified_header, Some(extrinsics)).is_ok()
+		// TODO [rob]: non-instant finality.
+		self.import_block(
+			BlockOrigin::ConsensusBroadcast,
+			justified_header,
+			Some(extrinsics),
+			true
+		).is_ok()
 	}
 }
 

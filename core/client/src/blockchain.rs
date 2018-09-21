@@ -48,6 +48,8 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 	fn body(&self, id: BlockId<Block>) -> Result<Option<Vec<<Block as BlockT>::Extrinsic>>>;
 	/// Get block justification. Returns `None` if justification does not exist.
 	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>>;
+	/// Get last finalized block hash.
+	fn last_finalized(&self) -> Result<Block::Hash>;
 
 	/// Returns data cache reference, if it is enabled on this backend.
 	fn cache(&self) -> Option<&Cache<Block>>;

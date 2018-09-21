@@ -230,7 +230,13 @@ pub mod tests {
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
-		local_storage.insert(remote_block_hash, remote_block_header.clone(), None, None, true);
+		local_storage.insert(
+			remote_block_hash,
+			remote_block_header.clone(),
+			None,
+			None,
+			::backend::NewBlockState::Final,
+		);
 		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = LightDataChecker::new(local_executor);
 		(local_checker, remote_block_header, remote_read_proof, authorities_len)
