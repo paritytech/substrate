@@ -57,7 +57,7 @@ impl<Hash> WaitingTransaction<Hash> {
 #[derive(Debug)]
 pub struct FutureTransactions<Hash: hash::Hash + Eq> {
 	/// tags that are not yet provided by any transaction and we await for them
-	wanted_tags: HashMap<Tag, Vec<Hash>>,
+	wanted_tags: HashMap<Tag, HashSet<Hash>>,
 	/// Transactions waiting for a particular other transaction
 	waiting: HashMap<Hash, WaitingTransaction<Hash>>,
 }
@@ -84,8 +84,8 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 
 		// Add all tags that are missing
 		for tag in &tx.missing_tags {
-			let mut entry = self.wanted_tags.entry(tag.clone()).or_insert_with(Vec::new);
-			entry.push(tx.transaction.hash.clone());
+			let mut entry = self.wanted_tags.entry(tag.clone()).or_insert_with(HashSet::new);
+			entry.insert(tx.transaction.hash.clone());
 		}
 
 		// Add the transaction to a by-hash waiting map
@@ -124,6 +124,30 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 		}
 
 		became_ready
+	}
+
+	/// Removes transactions for given list of hashes.
+	///
+	/// Returns a list of actually removed transactions.
+	pub fn remove(&mut self, hashes: &[Hash]) -> Vec<Transaction<Hash>> {
+		let mut removed = vec![];
+		for hash in hashes {
+			if let Some(waiting_tx) = self.waiting.remove(hash) {
+				// remove from wanted_tags as well
+				for tag in waiting_tx.missing_tags {
+					let remove = if let Some(mut wanted) = self.wanted_tags.get_mut(&tag) {
+						wanted.remove(hash);
+						wanted.is_empty()
+					} else { false };
+					if remove {
+						self.wanted_tags.remove(&tag);
+					}
+				}
+				// add to result
+				removed.push(waiting_tx.transaction)
+			}
+		}
+		removed
 	}
 
 	/// Returns number of transactions in the Future queue.

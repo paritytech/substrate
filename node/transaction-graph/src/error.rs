@@ -28,5 +28,10 @@ error_chain! {
 			description("The priority is too low to replace transactions already in the pool."),
 			display("Too low priority ({} > {})", old, new)
 		}
+		/// Deps cycle detected and we couldn't import transaction.
+		CycleDetected {
+			description("Transaction was not imported because of detected cycle."),
+			display("Cycle Detected"),
+		}
 	}
 }

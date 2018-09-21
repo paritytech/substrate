@@ -20,6 +20,12 @@
 //! and their priority.
 //! The pool is able to return an iterator that traverses transaction
 //! graph in the correct order taking into account priorities and dependencies.
+//!
+//! TODO [ToDr]
+//! - [ ] Culling/draining
+//! - [ ] Longevity handling (remove obsolete transactions)
+//! - [ ] Banning / Future-rotation
+//! - [ ] Multi-threading
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]

@@ -175,6 +175,38 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 		self.ready.contains_key(hash)
 	}
 
+	/// Removes invalid transactions from the ready pool.
+	///
+	/// NOTE removing a transaction will also cause a removal of all transactions that depend on that one
+	/// (i.e. the entire subgraph that this transaction is a start of will be removed).
+	/// All removed transactions are returned.
+	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash>>> {
+		let mut removed = vec![];
+		let mut to_remove = hashes.iter().cloned().collect::<Vec<_>>();
+
+		loop {
+			let hash = match to_remove.pop() {
+				Some(hash) => hash,
+				None => return removed,
+			};
+
+			if let Some(mut tx) = self.ready.remove(&hash) {
+				// remove entries from provided_tags
+				for tag in &tx.transaction.transaction.provides {
+					self.provided_tags.remove(tag);
+				}
+				// remove from best
+				self.best.remove(&tx.transaction);
+
+				// remove all transactions that the current one unlocks
+				to_remove.append(&mut tx.unlocks);
+
+				// add to removed
+				removed.push(tx.transaction.transaction);
+			}
+		}
+	}
+
 	/// Checks if the transaction is providing the same tags as other transactions.
 	///
 	/// In case that's true it determines if the priority of transactions that
@@ -237,6 +269,11 @@ impl<Hash: hash::Hash + Eq + Clone> ReadyTransactions<Hash> {
 		}
 	}
 
+	/// Returns number of transactions in this queue.
+	#[cfg(test)]
+	pub fn len(&self) -> usize {
+		self.ready.len()
+	}
 
 }
 

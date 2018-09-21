@@ -103,61 +103,102 @@ impl<Hash: hash::Hash + fmt::Debug + Ord + Eq + Clone> Pool<Hash> {
 		let tx = WaitingTransaction::new(tx, self.ready.provided_tags());
 		trace!(target: "txpool", "[{:?}] {:?}", hash, tx);
 		debug!(target: "txpool", "[{:?}] Importing to {}", hash, if tx.is_ready() { "ready" } else { "future" });
-		// Tags provided from Ready queue satisfy all requirements, so just add to Ready.
-		if tx.is_ready() {
-			let mut promoted = vec![];
-			let mut failed = vec![];
-			let mut removed = vec![];
 
-			let mut first = true;
-			let mut to_import = vec![tx];
-
-			loop {
-				// take first transaction from the list
-				let tx = match to_import.pop() {
-					Some(tx) => tx,
-					None => break,
-				};
-
-				// find transactions in Future that it unlocks
-				to_import.append(&mut self.future.satisfy_tags(&tx.transaction.provides));
-
-				// import this transaction
-				let hash = tx.transaction.hash.clone();
-				match self.ready.import(tx, block_number) {
-					Ok(mut replaced) => {
-						if !first {
-							promoted.push(hash);
-						}
-						// The transactions were removed from the ready pool. We might attempt to re-import them.
-						removed.append(&mut replaced);
-					},
-					// transaction failed to be imported.
-					Err(e) => if first {
-						debug!(target: "txpool", "[{:?}] Error importing: {:?}", hash, e);
-						return Err(e)
-					} else {
-						failed.push(hash);
-					},
-				}
-				first = false;
-			}
-
-			Ok(Imported::Ready {
-				hash,
-				promoted,
-				failed,
-				removed,
-			})
-		} else {
+		// If all tags are not satisfied import to future.
+		if !tx.is_ready() {
 			self.future.import(tx);
-			Ok(Imported::Future { hash })
+			return Ok(Imported::Future { hash });
 		}
+
+		let mut promoted = vec![];
+		let mut failed = vec![];
+		let mut removed = vec![];
+
+		let mut first = true;
+		let mut to_import = vec![tx];
+
+		loop {
+			// take first transaction from the list
+			let tx = match to_import.pop() {
+				Some(tx) => tx,
+				None => break,
+			};
+
+			// find transactions in Future that it unlocks
+			to_import.append(&mut self.future.satisfy_tags(&tx.transaction.provides));
+
+			// import this transaction
+			let current_hash = tx.transaction.hash.clone();
+			match self.ready.import(tx, block_number) {
+				Ok(mut replaced) => {
+					if !first {
+						promoted.push(current_hash);
+					}
+					// The transactions were removed from the ready pool. We might attempt to re-import them.
+					removed.append(&mut replaced);
+				},
+				// transaction failed to be imported.
+				Err(e) => if first {
+					debug!(target: "txpool", "[{:?}] Error importing: {:?}", current_hash, e);
+					return Err(e)
+				} else {
+					failed.push(current_hash);
+				},
+			}
+			first = false;
+		}
+
+		// An edge case when importing transaction caused
+		// some future transactions to be imported and that
+		// future transactions pushed out current transaction.
+		// This means that there is a cycle and the transactions should
+		// be moved back to future, since we can't resolve it.
+		if removed.iter().any(|tx| tx.hash == hash) {
+			// We still need to remove all transactions that we promoted
+			// since they depend on each other and will never get to the best iterator.
+			self.ready.remove_invalid(&promoted);
+
+			debug!(target: "txpool", "[{:?}] Cycle detected, bailing.", hash);
+			bail!(error::ErrorKind::CycleDetected)
+		}
+
+		Ok(Imported::Ready {
+			hash,
+			promoted,
+			failed,
+			removed,
+		})
 	}
 
 	/// Returns an iterator over ready transactions in the pool.
 	pub fn ready<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction<Hash>>> + 'a {
 		self.ready.get()
+	}
+
+	/// Removes all transactions represented by the hashes and all other transactions
+	/// that depend on them.
+	///
+	/// Returns a list of actually removed transactions.
+	/// NOTE some transactions might still be valid, but were just removed because
+	/// they were part of a chain, you may attempt to re-import them later.
+	/// NOTE If you want to just mark ready transactions that were already used
+	/// and you no longer need to store them use `mark_used` method.
+	pub fn remove_invalid<'a>(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash>>> where
+		Hash: 'a,
+	{
+		let mut removed = self.ready.remove_invalid(hashes);
+		removed.extend(self.future.remove(hashes).into_iter().map(Arc::new));
+		removed
+	}
+
+	/// Satisfies given list of tags.
+	///
+	/// This will cause all transactions that provide these tags to be removed from the pool,
+	/// but unlike `remove_invalid`, dependent transactions are not touched.
+	/// Additional transactions from future queue might be promoted to ready if you satisfy tags
+	/// that the pool didn't previously know about.
+	pub fn satisfy_tags(&mut self, _tags: impl Iterator<Item=Tag>) {
+		unimplemented!()
 	}
 }
 
@@ -188,6 +229,7 @@ mod tests {
 
 		// then
 		assert_eq!(pool.ready().count(), 1);
+		assert_eq!(pool.ready.len(), 1);
 	}
 
 	#[test]
@@ -215,6 +257,7 @@ mod tests {
 
 		// then
 		assert_eq!(pool.ready().count(), 1);
+		assert_eq!(pool.ready.len(), 1);
 	}
 
 
@@ -233,6 +276,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
+		assert_eq!(pool.ready.len(), 0);
 		pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![2u8]),
 			hash: 2,
@@ -244,6 +288,7 @@ mod tests {
 
 		// then
 		assert_eq!(pool.ready().count(), 2);
+		assert_eq!(pool.ready.len(), 2);
 	}
 
 	#[test]
@@ -285,6 +330,7 @@ mod tests {
 			provides: vec![],
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
+		assert_eq!(pool.ready.len(), 0);
 
 		let res = pool.import(1, Transaction {
 			ex: UncheckedExtrinsic(vec![5u8]),
@@ -333,6 +379,7 @@ mod tests {
 			provides: vec![vec![2]],
 		}).unwrap();
 		assert_eq!(pool.ready().count(), 0);
+		assert_eq!(pool.ready.len(), 0);
 
 		// when
 		pool.import(1, Transaction {
@@ -373,5 +420,131 @@ mod tests {
 			removed: vec![],
 		});
 		assert_eq!(pool.future.len(), 0);
+	}
+
+
+	#[test]
+	fn should_handle_a_cycle_with_low_priority() {
+		// given
+		let mut pool = pool();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![1u8]),
+			hash: 1,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![0]],
+			provides: vec![vec![1]],
+		}).unwrap();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![3u8]),
+			hash: 3,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![1]],
+			provides: vec![vec![2]],
+		}).unwrap();
+		assert_eq!(pool.ready().count(), 0);
+		assert_eq!(pool.ready.len(), 0);
+
+		// when
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![2u8]),
+			hash: 2,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![2]],
+			provides: vec![vec![0]],
+		}).unwrap();
+
+		// then
+		{
+			let mut it = pool.ready().into_iter().map(|tx| tx.ex.0[0]);
+			assert_eq!(it.next(), None);
+		}
+		// all transactions occupy the Future queue - it's fine
+		assert_eq!(pool.future.len(), 3);
+
+		// let's close the cycle with one additional transaction
+		let err = pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![4u8]),
+			hash: 4,
+			priority: 1u64, // lower priority than Tx(2)
+			longevity: 64u64,
+			requires: vec![],
+			provides: vec![vec![0]],
+		}).unwrap_err();
+		let mut it = pool.ready().into_iter().map(|tx| tx.ex.0[0]);
+		assert_eq!(it.next(), None);
+		assert_eq!(pool.ready.len(), 0);
+		assert_eq!(pool.future.len(), 0);
+		if let error::ErrorKind::CycleDetected = *err.kind() {
+		} else {
+			assert!(false, "Invalid error kind: {:?}", err.kind());
+		}
+	}
+
+	#[test]
+	fn should_remove_invalid_transactions() {
+		// given
+		let mut pool = pool();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![5u8]),
+			hash: 5,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![],
+			provides: vec![vec![0], vec![4]],
+		}).unwrap();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![1u8]),
+			hash: 1,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![0]],
+			provides: vec![vec![1]],
+		}).unwrap();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![3u8]),
+			hash: 3,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![2]],
+			provides: vec![],
+		}).unwrap();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![2u8]),
+			hash: 2,
+			priority: 5u64,
+			longevity: 64u64,
+			requires: vec![vec![1]],
+			provides: vec![vec![3], vec![2]],
+		}).unwrap();
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![4u8]),
+			hash: 4,
+			priority: 1_000u64,
+			longevity: 64u64,
+			requires: vec![vec![3], vec![4]],
+			provides: vec![],
+		}).unwrap();
+		// future
+		pool.import(1, Transaction {
+			ex: UncheckedExtrinsic(vec![6u8]),
+			hash: 6,
+			priority: 1_000u64,
+			longevity: 64u64,
+			requires: vec![vec![11]],
+			provides: vec![],
+		}).unwrap();
+		assert_eq!(pool.ready().count(), 5);
+		assert_eq!(pool.future.len(), 1);
+
+		// when
+		pool.remove_invalid(&[6, 1]);
+
+		// then
+		assert_eq!(pool.ready().count(), 1);
+		assert_eq!(pool.future.len(), 0);
+
 	}
 }
