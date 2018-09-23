@@ -384,6 +384,10 @@ fn init_thread(
 				}
 			},
 			ServiceEvent::ClosedCustomProtocols { node_index, protocols } => {
+				peers.lock().get_mut(&node_index)
+					.expect("peers is kept in sync with the state in the service")
+					.protocols
+					.retain(|&(ref p, _)| !protocols.iter().any(|pr| pr == p));
 				for protocol in protocols {
 					registered_custom.find_protocol(protocol)
 					.expect("we passed a list of protocols when building the service, and never \
