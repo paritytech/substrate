@@ -29,7 +29,7 @@ use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
 use config::Configuration;
-use primitives::{Blake2Hasher, RlpCodec, H256};
+use primitives::{Blake2Hasher, RlpCodec};
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -214,11 +214,7 @@ pub struct LightComponents<Factory: ServiceFactory> {
 	_factory: PhantomData<Factory>,
 }
 
-impl<Factory: ServiceFactory> Components for LightComponents<Factory>
-	where
-		<<Factory as ServiceFactory>::Block as BlockT>::Hash: From<H256>,
-		H256: From<<<Factory as ServiceFactory>::Block as BlockT>::Hash>,
-{
+impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type Factory = Factory;
 	type Executor = LightExecutor<Factory>;
 	type Backend = LightBackend<Factory>;
