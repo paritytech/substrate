@@ -25,7 +25,6 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	execution_proof_check, ExecutionManager};
-use primitives::H256;
 use patricia_trie::NodeCodec;
 use hashdb::Hasher;
 use rlp::Encodable;
@@ -138,14 +137,16 @@ pub fn check_execution_proof<Header, E, H, C>(
 		Header: HeaderT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Ord + Encodable + HeapSizeOf + From<H256>,
+		H::Out: Ord + Encodable + HeapSizeOf,
 		C: NodeCodec<H>,
 {
 	let local_state_root = request.header.state_root();
+	let mut root: H::Out = Default::default();
+	root.as_mut().copy_from_slice(local_state_root.as_ref());
 
 	let mut changes = OverlayedChanges::default();
 	let local_result = execution_proof_check::<H, C, _>(
-		H256::from_slice(local_state_root.as_ref()).into(),
+		root,
 		remote_proof,
 		&mut changes,
 		executor,

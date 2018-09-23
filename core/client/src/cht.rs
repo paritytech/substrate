@@ -65,16 +65,15 @@ pub fn compute_root<Header, Hasher, I>(
 	cht_size: u64,
 	cht_num: Header::Number,
 	hashes: I,
-) -> Option<Header::Hash>
+) -> Option<Hasher::Out>
 	where
 		Header: HeaderT,
-		Header::Hash: From<Hasher::Out>,
 		Hasher: hashdb::Hasher,
 		Hasher::Out: Ord + Encodable,
 		I: IntoIterator<Item=Option<Header::Hash>>,
 {
 	build_pairs::<Header, I>(cht_size, cht_num, hashes)
-		.map(|pairs| triehash::trie_root::<Hasher, _, _, _>(pairs).into())
+		.map(|pairs| triehash::trie_root::<Hasher, _, _, _>(pairs))
 }
 
 /// Build CHT-based header proof.
@@ -113,17 +112,19 @@ pub fn check_proof<Header, Hasher, Codec>(
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,
-		Header::Hash: From<H256>,
+		Header::Hash: AsRef<[u8]>,
 		Hasher: hashdb::Hasher,
-		Hasher::Out: Ord + Encodable + HeapSizeOf + From<Header::Hash>,
+		Hasher::Out: Ord + Encodable + HeapSizeOf,
 		Codec: NodeCodec<Hasher>,
 {
+	let mut root: Hasher::Out = Default::default();
+	root.as_mut().copy_from_slice(local_root.as_ref());
 	let local_cht_key = encode_cht_key(local_number);
-	let local_cht_value = read_proof_check::<Hasher, Codec>(local_root.into(), remote_proof,
+	let local_cht_value = read_proof_check::<Hasher, Codec>(root, remote_proof,
 		&local_cht_key).map_err(|e| ClientError::from(e))?;
 	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
-	let local_hash: Header::Hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
-	match local_hash == remote_hash {
+	let local_hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
+	match &local_hash[..] == remote_hash.as_ref() {
 		true => Ok(()),
 		false => Err(ClientErrorKind::InvalidHeaderProof.into()),
 	}
@@ -203,9 +204,9 @@ fn encode_cht_value<Hash: AsRef<[u8]>>(hash: Hash) -> Vec<u8> {
 }
 
 /// Convert CHT value into block header hash.
-pub fn decode_cht_value<Hash: From<H256>>(value: &[u8]) -> Option<Hash> {
+pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 	match value.len() {
-		32 => Some(H256::from_slice(&value[0..32]).into()),
+		32 => Some(H256::from_slice(&value[0..32])),
 		_ => None,
 	}
 	
