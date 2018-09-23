@@ -41,7 +41,10 @@ use notifications::{StorageNotifications, StorageEventStream};
 use {cht, error, in_mem, block_builder, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
-pub type BlockchainEventStream<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
+pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
+
+/// A stream of block finality notifications.
+pub type FinalityNotifications<Block> = mpsc::UnboundedReceiver<FinalityNotification<Block>>;
 
 /// Substrate Client
 pub struct Client<B, E, Block> where Block: BlockT {
@@ -49,6 +52,7 @@ pub struct Client<B, E, Block> where Block: BlockT {
 	executor: E,
 	storage_notifications: Mutex<StorageNotifications<Block>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<BlockImportNotification<Block>>>>,
+	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
 	execution_strategy: ExecutionStrategy,
@@ -56,8 +60,13 @@ pub struct Client<B, E, Block> where Block: BlockT {
 
 /// A source of blockchain evenets.
 pub trait BlockchainEvents<Block: BlockT> {
-	/// Get block import event stream.
-	fn import_notification_stream(&self) -> BlockchainEventStream<Block>;
+	/// Get block import event stream. Not guaranteed to be fired for every
+	/// imported block.
+	fn import_notification_stream(&self) -> ImportNotifications<Block>;
+
+	/// Get a stream of finality notifications. Not guaranteed to be fired for every
+	/// finalized block.
+	fn finality_notification_stream(&self) -> FinalityNotifications<Block>;
 
 	/// Get storage changes event stream.
 	///
@@ -147,6 +156,15 @@ pub struct BlockImportNotification<Block: BlockT> {
 	pub is_new_best: bool,
 }
 
+/// Summary of a finalized block.
+#[derive(Clone, Debug)]
+pub struct FinalityNotification<Block: BlockT> {
+	/// Imported block header hash.
+	pub hash: Block::Hash,
+	/// Imported block header.
+	pub header: Block::Header,
+}
+
 /// A header paired with a justification which has already been checked.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct JustifiedHeader<Block: BlockT> {
@@ -209,6 +227,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			executor,
 			storage_notifications: Default::default(),
 			import_notification_sinks: Default::default(),
+			finality_notification_sinks: Default::default(),
 			import_lock: Default::default(),
 			importing_block: Default::default(),
 			execution_strategy,
@@ -456,10 +475,15 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		let last_best = self.backend.blockchain().info()?.best_hash;
 
+		let make_notifications = match origin {
+			BlockOrigin::NetworkBroadcast | BlockOrigin::Own | BlockOrigin::ConsensusBroadcast => true,
+			_ => false,
+		};
+
 		// ensure parent block is finalized to maintain invariant that
 		// finality is called sequentially.
 		if finalized {
-			self.apply_finality(parent_hash, last_best)?;
+			self.apply_finality(parent_hash, last_best, make_notifications)?;
 		}
 
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
@@ -524,32 +548,39 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 		self.backend.commit_operation(transaction)?;
 
-		if origin == BlockOrigin::NetworkBroadcast || origin == BlockOrigin::Own || origin == BlockOrigin::ConsensusBroadcast {
+		if make_notifications {
 			if let Some(storage_changes) = storage_changes {
 				// TODO [ToDr] How to handle re-orgs? Should we re-emit all storage changes?
 				self.storage_notifications.lock()
 					.trigger(&hash, storage_changes);
 			}
 
+			if finalized {
+				let notification = FinalityNotification::<Block> {
+					hash,
+					header: header.clone(),
+				};
+
+				self.finality_notification_sinks.lock()
+					.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+			}
+
 			let notification = BlockImportNotification::<Block> {
-				hash: hash,
-				origin: origin,
-				header: header,
-				is_new_best: is_new_best,
+				hash,
+				origin,
+				header,
+				is_new_best,
 			};
+
 			self.import_notification_sinks.lock()
 				.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
-		}
-
-		if finalized {
-			// TODO: finality notification.
 		}
 
 		Ok(ImportResult::Queued)
 	}
 
 	/// Finalizes all blocks up to given.
-	fn apply_finality(&self, block: Block::Hash, best_block: Block::Hash) -> error::Result<()> {
+	fn apply_finality(&self, block: Block::Hash, best_block: Block::Hash, notify: bool) -> error::Result<()> {
 		// find tree route from last finalized to given block.
 		let last_finalized = self.backend.blockchain().last_finalized()?;
 
@@ -582,7 +613,25 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		for finalize_new in route_from_finalized.enacted() {
 			self.backend.finalize_block(BlockId::Hash(finalize_new.hash))?;
-			// TODO: fire finality notification (under what conditions?)
+		}
+
+		if notify {
+			// sometimes when syncing, tons of blocks can be finalized at once.
+			// we'll send notifications spuriously in that case.
+			const MAX_TO_NOTIFY: usize = 256;
+			let enacted = route_from_finalized.enacted();
+			let start = enacted.len() - ::std::cmp::min(enacted.len(), MAX_TO_NOTIFY);
+			let mut sinks = self.finality_notification_sinks.lock();
+			for finalized in &enacted[start..] {
+				let header = self.header(&BlockId::Hash(finalized.hash))?
+					.expect("header already known to exist in DB because it is indicated in the tree route; qed");
+				let notification = FinalityNotification {
+					header,
+					hash: finalized.hash,
+				};
+
+				sinks.retain(|sink| sink.unbounded_send(notification.clone()).is_ok());
+			}
 		}
 
 		Ok(())
@@ -590,7 +639,11 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Finalize a block. This will implicitly finalize all blocks up to it and
 	/// fire finality notifications.
-	pub fn finalize_block(&self, id: BlockId<Block>) -> error::Result<()> {
+	///
+	/// Pass a flag to indicate whether finality notifications should be propagated.
+	/// This is usually tied to some synchronization state, where we don't send notifications
+	/// while performing major synchronization work.
+	pub fn finalize_block(&self, id: BlockId<Block>, notify: bool) -> error::Result<()> {
 		let last_best = self.backend.blockchain().info()?.best_hash;
 		let to_finalize_hash = match id {
 			BlockId::Hash(h) => h,
@@ -598,7 +651,7 @@ impl<B, E, Block> Client<B, E, Block> where
 				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("No block with number {:?}", n)))?,
 		};
 
-		self.apply_finality(to_finalize_hash, last_best)
+		self.apply_finality(to_finalize_hash, last_best, notify)
 	}
 
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
@@ -741,9 +794,15 @@ where
 	Block: BlockT,
 {
 	/// Get block import event stream.
-	fn import_notification_stream(&self) -> BlockchainEventStream<Block> {
+	fn import_notification_stream(&self) -> ImportNotifications<Block> {
 		let (sink, stream) = mpsc::unbounded();
 		self.import_notification_sinks.lock().push(sink);
+		stream
+	}
+
+	fn finality_notification_stream(&self) -> FinalityNotifications<Block> {
+		let (sink, stream) = mpsc::unbounded();
+		self.finality_notification_sinks.lock().push(sink);
 		stream
 	}
 

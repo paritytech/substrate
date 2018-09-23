@@ -77,11 +77,13 @@ pub enum ImportResult<E> {
 #[derive(Debug)]
 pub struct Info<Block: BlockT> {
 	/// Best block hash.
-	pub best_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
+	pub best_hash: Block::Hash,
 	/// Best block number.
 	pub best_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	/// Genesis block hash.
-	pub genesis_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
+	pub genesis_hash: Block::Hash,
+	/// The head of the finalized chain.
+	pub finalized_hash: Block::Hash,
 }
 
 /// Block status.
