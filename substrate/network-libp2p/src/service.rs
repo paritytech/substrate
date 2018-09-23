@@ -372,10 +372,18 @@ fn init_thread(
 					local_address: None,	// TODO: fill
 				});
 			},
-			ServiceEvent::NodeClosed { node_index, closed_custom_protocols: protocols } |
-			ServiceEvent::ClosedCustomProtocols { node_index, protocols } => {
+			ServiceEvent::NodeClosed { node_index, closed_custom_protocols } => {
 				let old = peers.lock().remove(&node_index);
 				debug_assert!(old.is_some());
+				for protocol in protocols {
+					registered_custom.find_protocol(protocol)
+					.expect("we passed a list of protocols when building the service, and never \
+						modify that list ; therefore all the reported ids should always be valid")
+						.custom_data()
+						.disconnected(&ctxt!(protocol, node_index), &node_index);
+				}
+			},
+			ServiceEvent::ClosedCustomProtocols { node_index, protocols } => {
 				for protocol in protocols {
 					registered_custom.find_protocol(protocol)
 					.expect("we passed a list of protocols when building the service, and never \
