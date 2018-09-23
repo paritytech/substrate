@@ -735,14 +735,12 @@ impl<TUserData> Stream for Swarm<TUserData>
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		loop {
 			match self.swarm.poll() {
-				Ok(Async::Ready(Some(event))) =>
+				Async::Ready(Some(event)) =>
 					if let Some(event) = self.process_network_event(event) {
 						return Ok(Async::Ready(Some(event)));
 					}
-				Ok(Async::NotReady) => return Ok(Async::NotReady),
-				Ok(Async::Ready(None)) => unreachable!("The Swarm stream never ends"),
-				// TODO: this `Err` contains a `Void` ; remove variant when Rust allows that
-				Err(_) => unreachable!("The Swarm stream never errors"),
+				Async::NotReady => return Ok(Async::NotReady),
+				Async::Ready(None) => unreachable!("The Swarm stream never ends"),
 			}
 		}
 	}

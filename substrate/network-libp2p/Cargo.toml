@@ -11,7 +11,7 @@ bytes = "0.4"
 error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
-libp2p = { git = "https://github.com/libp2p/rust-libp2p", rev = "ee9ff643a547f45113793315eaad7a4ed7fcb9b2", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
+libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "67ce3d8bbfe7c6196dcedc04fd74890204ab54bc", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
 ethereum-types = "0.3"
 parking_lot = "0.5"
 libc = "0.2"
