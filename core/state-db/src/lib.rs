@@ -83,7 +83,7 @@ pub enum Error<E: fmt::Debug> {
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Error::Db(e) => e.fmt(f),
 			Error::Decoding => write!(f, "Error decoding slicable value"),
