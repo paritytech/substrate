@@ -17,6 +17,7 @@
 use fnv::FnvHashMap;
 use parking_lot::Mutex;
 use libp2p::core::{nodes::swarm::ConnectedPoint, Multiaddr, PeerId as PeerstorePeerId};
+use libp2p::multiaddr::Protocol;
 use {PacketId, SessionInfo, TimerToken};
 use service_task::ServiceEvent;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
@@ -56,6 +57,9 @@ pub struct NetworkService {
 
 	/// List of registered protocols.
 	registered_custom: Arc<RegisteredProtocols<Arc<NetworkProtocolHandler + Send + Sync>>>,
+
+	/// The external URL to report to the user.
+	external_url: Option<String>,
 }
 
 /// Known information about a peer.
@@ -156,9 +160,9 @@ impl NetworkService {
 				msg_tx_clone,
 				msg_rx
 			) {
-				Ok(future) => {
+				Ok((future, external_url)) => {
 					debug!(target: "sub-libp2p", "Successfully started networking service");
-					let _ = init_tx.send(Ok(()));
+					let _ = init_tx.send(Ok(external_url));
 					future
 				},
 				Err(err) => {
@@ -176,13 +180,14 @@ impl NetworkService {
 			}
 		});
 
-		init_rx.recv().expect("libp2p background thread panicked")?;
+		let external_url = init_rx.recv().expect("libp2p background thread panicked")?;
 
 		Ok(NetworkService {
 			config,
 			peer_infos,
 			timeouts_register_tx,
 			msg_tx,
+			external_url,
 			bg_thread: Some((close_tx, join_handle)),
 			registered_custom,
 		})
@@ -195,15 +200,8 @@ impl NetworkService {
 	}
 
 	pub fn external_url(&self) -> Option<String> {
-		None
-		// TODO:
-		/*// TODO: in the context of libp2p, it is hard to define what an external
-		// URL is, as different nodes can have multiple different ways to
-		// reach us
-		self.shared.original_listened_addr.read().get(0)
-			.map(|addr|
-				format!("{}/p2p/{}", addr, self.shared.kad_system.local_peer_id().to_base58())
-			)*/
+		// TODO: cleanup this in external API layers
+		self.external_url.clone()
 	}
 
 	/// Get a list of all connected peers by id.
@@ -267,6 +265,8 @@ impl Drop for NetworkService {
 }
 
 /// Builds the main `Future` for the network service.
+///
+/// Also returns a diagnostic external node address, to report to the user.
 fn init_thread(
 	config: NetworkConfiguration,
 	registered_custom: Arc<RegisteredProtocols<Arc<NetworkProtocolHandler + Send + Sync>>>,
@@ -279,7 +279,7 @@ fn init_thread(
 	>,
 	msg_tx: mpsc::UnboundedSender<MsgToBgThread>,
 	mut msg_rx: mpsc::UnboundedReceiver<MsgToBgThread>,
-) -> Result<impl Future<Item = (), Error = IoError>, Error> {
+) -> Result<(impl Future<Item = (), Error = IoError>, Option<String>), Error> {
 	// Build the timeouts system for the `register_timeout` function.
 	// (note: this has nothing to do with socket timeouts)
 	let timeouts = timeouts::build_timeouts_stream(timeouts_register_rx)
@@ -307,6 +307,16 @@ fn init_thread(
 
 	// Start the main service.
 	let mut service = start_service(config, registered_custom.clone())?;
+
+	// Build the external URL to report to the user.
+	let external_url = service
+		.listeners()
+		.next()
+		.map(|addr| {
+			let mut addr = addr.clone();
+			addr.append(Protocol::P2p(service.peer_id().clone().into()));
+			addr.to_string()
+		});
 
 	let service_stream = stream::poll_fn(move || {
 		loop {
@@ -432,15 +442,14 @@ fn init_thread(
 		Box::new(service_stream),
 		Box::new(timeouts),
 	];
-
-	Ok(
-		select_all(futures)
+	let final_future = select_all(futures)
 		.and_then(move |_| {
 			debug!(target: "sub-libp2p", "Networking ended");
 			Ok(())
 		})
-		.map_err(|(r, _, _)| r)
-	)
+		.map_err(|(r, _, _)| r);
+	
+	Ok((final_future, external_url))
 }
 
 #[derive(Clone)]

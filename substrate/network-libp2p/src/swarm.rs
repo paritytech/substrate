@@ -267,6 +267,12 @@ impl<TUserData> Swarm<TUserData>
 		}
 	}
 
+    /// Returns an iterator that produces the list of addresses we're listening on.
+    #[inline]
+    pub fn listeners(&self) -> impl Iterator<Item = &Multiaddr> {
+        self.swarm.listeners()
+    }
+
 	/// Adds an external address. Sent to other nodes when they query it.
 	#[inline]
 	pub fn add_external_address(&mut self, addr: Multiaddr) {

@@ -310,6 +310,24 @@ pub struct Service {
 }
 
 impl Service {
+    /// Returns an iterator that produces the list of addresses we're listening on.
+	#[inline]
+	pub fn listeners(&self) -> impl Iterator<Item = &Multiaddr> {
+		self.swarm.listeners()
+	}
+
+	/// Returns an iterator to our known external addresses.
+	#[inline]
+	pub fn external_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
+		self.swarm.external_addresses()
+	}
+
+	/// Returns the peer id of the local node.
+	#[inline]
+	pub fn peer_id(&self) -> &PeerId {
+		self.kad_system.local_peer_id()
+	}
+
 	/// Try to add a reserved peer.
 	pub fn add_reserved_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.reserved_peers.insert(peer_id.clone());
