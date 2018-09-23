@@ -58,7 +58,7 @@ pub mod error;
 pub mod informant;
 mod panic_hook;
 
-use network_libp2p::AddrComponent;
+use network_libp2p::Protocol;
 use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
@@ -305,8 +305,8 @@ where
 				None => 30333,
 			};
 			config.network.listen_addresses = vec![
-				iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
-					.chain(iter::once(AddrComponent::TCP(port)))
+				iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
+					.chain(iter::once(Protocol::Tcp(port)))
 					.collect()
 			];
 		}
