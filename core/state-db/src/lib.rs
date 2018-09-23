@@ -21,9 +21,9 @@
 //!
 //! # Canonicalization.
 //! Canonicalization window tracks a tree of blocks identified by header hash. The in-memory
-//! overlay allows to get any node that was was inserted in any any of the blocks within the window.
+//! overlay allows to get any node that was inserted in any of the blocks within the window.
 //! The tree is journaled to the backing database and rebuilt on startup.
-//! Canonicalization function select one root from the top of the tree and discards all other roots and
+//! Canonicalization function selects one root from the top of the tree and discards all other roots and
 //! their subtrees.
 //!
 //! # Pruning.
