@@ -21,7 +21,7 @@ use std::net::Ipv4Addr;
 use std::str;
 use std::time::Duration;
 use TimerToken;
-use libp2p::{multiaddr::AddrComponent, Multiaddr};
+use libp2p::{multiaddr::Protocol, Multiaddr};
 use error::Error;
 use ethereum_types::H512;
 
@@ -139,8 +139,8 @@ impl NetworkConfiguration {
 			config_path: None,
 			net_config_path: None,
 			listen_addresses: vec![
-				iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
-					.chain(iter::once(AddrComponent::TCP(30333)))
+				iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
+					.chain(iter::once(Protocol::Tcp(30333)))
 					.collect()
 			],
 			public_addresses: Vec::new(),
@@ -158,8 +158,8 @@ impl NetworkConfiguration {
 	pub fn new_local() -> NetworkConfiguration {
 		let mut config = NetworkConfiguration::new();
 		config.listen_addresses = vec![
-			iter::once(AddrComponent::IP4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(AddrComponent::TCP(0)))
+			iter::once(Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+				.chain(iter::once(Protocol::Tcp(0)))
 				.collect()
 		];
 		config

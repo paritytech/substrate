@@ -31,9 +31,9 @@ const MAX_SCORE: u32 = 100;
 const CONNECTED_MINIMUM_SCORE: u32 = 20;
 /// Initial score that a node discovered through Kademlia receives, where we have a hint that the
 /// node is reachable.
-const KADEMLIA_DISCOVERY_INITIAL_SCORE_CONNECTABLE: u32 = 15;
+const DISCOVERY_INITIAL_SCORE_CONNECTABLE: u32 = 15;
 /// Initial score that a node discovered through Kademlia receives, without any hint.
-const KADEMLIA_DISCOVERY_INITIAL_SCORE: u32 = 10;
+const DISCOVERY_INITIAL_SCORE: u32 = 10;
 /// Score adjustement when we fail to connect to an address.
 const SCORE_DIFF_ON_FAILED_TO_CONNECT: i32 = -1;
 /// Default time-to-live for addresses discovered through Kademlia.
@@ -131,10 +131,10 @@ impl NetTopology {
 		});
 	}
 
-	/// Returns the known potential addresses of a peer, ordered by score.
+	/// Returns the known potential addresses of a peer, ordered by score. Excludes backed-off
+	/// addresses.
 	///
 	/// The boolean associated to each address indicates whether we're connected to it.
-	// TODO: filter out backed off ones?
 	pub fn addrs_of_peer(&self, peer: &PeerId) -> impl Iterator<Item = (&Multiaddr, bool)> {
 		let peer = if let Some(peer) = self.store.get(peer) {
 			peer
@@ -143,10 +143,12 @@ impl NetTopology {
 			return Vec::new().into_iter();
 		};
 
-		let now = SystemTime::now();
+		let now_st = SystemTime::now();
+		let now_is = Instant::now();
+
 		let mut list = peer.addrs.iter().filter_map(move |addr| {
 			let (score, connected) = addr.score_and_is_connected();
-			if (addr.expires >= now && score > 0) || connected {
+			if (addr.expires >= now_st && score > 0 && addr.back_off_until < now_is) || connected {
 				Some((score, connected, &addr.addr))
 			} else {
 				None
@@ -237,13 +239,35 @@ impl NetTopology {
 		}
 	}
 
+	/// Adds addresses that a node says it is listening on.
+	///
+	/// The addresses are most likely to be valid.
+	#[inline]
+	pub fn add_self_reported_listen_addrs<I>(
+		&mut self,
+		peer_id: &PeerId,
+		addrs: I,
+	) where I: Iterator<Item = Multiaddr> {
+		self.add_discovered_addrs(peer_id, addrs.map(|a| (a, true)))
+	}
+
 	/// Adds addresses discovered through the Kademlia DHT.
 	///
 	/// The addresses are not necessarily valid and should expire after a TTL.
 	///
 	/// For each address, incorporates a boolean. If true, that means we have some sort of hint
 	/// that this address can be reached.
+	#[inline]
 	pub fn add_kademlia_discovered_addrs<I>(
+		&mut self,
+		peer_id: &PeerId,
+		addrs: I,
+	) where I: Iterator<Item = (Multiaddr, bool)> {
+		self.add_discovered_addrs(peer_id, addrs)
+	}
+
+	/// Inner implementaiton of the `add_*_discovered_addrs`.
+	fn add_discovered_addrs<I>(
 		&mut self,
 		peer_id: &PeerId,
 		addrs: I,
@@ -275,9 +299,9 @@ impl NetTopology {
 
 		for (addr, connectable) in addrs {
 			let initial_score = if connectable {
-				KADEMLIA_DISCOVERY_INITIAL_SCORE_CONNECTABLE
+				DISCOVERY_INITIAL_SCORE_CONNECTABLE
 			} else {
-				KADEMLIA_DISCOVERY_INITIAL_SCORE
+				DISCOVERY_INITIAL_SCORE
 			};
 
 			peer.addrs.push(Addr {
@@ -344,8 +368,11 @@ impl NetTopology {
 	/// If we were indeed connected to this addr, then we can find out which peer ID it is.
 	pub fn report_disconnected(&mut self, addr: &Multiaddr, reason: DisconnectReason) {
 		let score_diff = match reason {
-			DisconnectReason::ClosedGracefully => -1,
-			DisconnectReason::Banned => -1,
+			DisconnectReason::NoSlot => -1,
+			DisconnectReason::FoundBetterAddr => -5,
+			DisconnectReason::RemoteClosed => -5,
+			DisconnectReason::Useless => -5,
+			DisconnectReason::Banned => -5,
 		};
 
 		for info in self.store.values_mut() {
@@ -397,9 +424,17 @@ impl NetTopology {
 }
 
 /// Reason why we disconnected from a peer.
+#[derive(Debug)]
 pub enum DisconnectReason {
-	/// The disconnection was graceful.
-	ClosedGracefully,
+	/// No slot available locally anymore for this peer.
+	NoSlot,
+	/// A better way to connect to this peer has been found, therefore we disconnect from
+	/// the old one.
+	FoundBetterAddr,
+	/// The remote closed the connection.
+	RemoteClosed,
+	/// This node is considered useless for our needs. This includes time outs.
+	Useless,
 	/// The peer has been banned.
 	Banned,
 }
