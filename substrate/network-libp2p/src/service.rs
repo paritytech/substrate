@@ -375,7 +375,7 @@ fn init_thread(
 			ServiceEvent::NodeClosed { node_index, closed_custom_protocols } => {
 				let old = peers.lock().remove(&node_index);
 				debug_assert!(old.is_some());
-				for protocol in protocols {
+				for protocol in closed_custom_protocols {
 					registered_custom.find_protocol(protocol)
 					.expect("we passed a list of protocols when building the service, and never \
 						modify that list ; therefore all the reported ids should always be valid")
