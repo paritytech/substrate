@@ -457,9 +457,12 @@ impl<B, E, Block> Client<B, E, Block> where
 
 		let last_best = self.backend.blockchain().info()?.best_hash;
 
+		// this is a fairly arbitrary choice of where to draw the line on making notifications,
+		// but the general goal is to only make notifications when we are already fully synced
+		// and get a new chain head.
 		let make_notifications = match origin {
 			BlockOrigin::NetworkBroadcast | BlockOrigin::Own | BlockOrigin::ConsensusBroadcast => true,
-			_ => false,
+			BlockOrigin::Genesis | BlockOrigin::NetworkInitialSync | BlockOrigin::File => false,
 		};
 
 		// ensure parent block is finalized to maintain invariant that
