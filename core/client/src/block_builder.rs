@@ -25,7 +25,6 @@ use {backend, error, Client, CallExecutor};
 use runtime_primitives::{ApplyResult, ApplyOutcome};
 use primitives::{Blake2Hasher};
 use hash_db::Hasher;
-use rlp::Encodable;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<B, E, Block, H>
