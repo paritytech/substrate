@@ -29,13 +29,13 @@ macro_rules! convert_args {
 macro_rules! gen_signature {
 	( ( $( $params: ty ),* ) ) => (
 		{
-			FunctionType::new(convert_args!($($params),*), None)
+			$crate::parity_wasm::elements::FunctionType::new(convert_args!($($params),*), None)
 		}
 	);
 
 	( ( $( $params: ty ),* ) -> $returns: ty ) => (
 		{
-			FunctionType::new(convert_args!($($params),*), Some({
+			$crate::parity_wasm::elements::FunctionType::new(convert_args!($($params),*), Some({
 				use $crate::vm::env_def::ConvertibleToWasm; <$returns>::VALUE_TYPE
 			}))
 		}
@@ -132,13 +132,13 @@ macro_rules! define_env {
 		$( $name:ident ( $ctx:ident $( , $names:ident : $params:ty )* )
 			$( -> $returns:ty )* => $body:tt , )*
 	) => {
-		pub(crate) fn $init_name<E: Ext>() -> HostFunctionSet<E> {
-			let mut env = HostFunctionSet::new();
+		pub(crate) fn $init_name<E: Ext>() -> $crate::vm::env_def::HostFunctionSet<E> {
+			let mut env = $crate::vm::env_def::HostFunctionSet::new();
 
 			$(
 				env.funcs.insert(
 					stringify!( $name ).into(),
-					HostFunction::new(
+					$crate::vm::env_def::HostFunction::new(
 						gen_signature!( ( $( $params ),* ) $( -> $returns )* ),
 						{
 							define_func!(
@@ -161,7 +161,6 @@ mod tests {
 	use parity_wasm::elements::ValueType;
 	use runtime_primitives::traits::{As, Zero};
 	use sandbox::{self, ReturnValue, TypedValue};
-	use vm::env_def::{HostFunction, HostFunctionSet};
 	use vm::tests::MockExt;
 	use vm::{Ext, Runtime};
 	use Trait;
