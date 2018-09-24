@@ -30,14 +30,13 @@ pub extern crate parity_codec as codec;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256, ed25519};
 
-pub use primitives::{Blake2Hasher, RlpCodec};
+pub use primitives::{Blake2Hasher};
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 use primitives::H256;
 use hash_db::Hasher;
-use rlp::Encodable;
 
 // TODO: use the real error, not NoError.
 
@@ -217,7 +216,7 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::default();
+		let mut t = TestExternalities::<Blake2Hasher>::default();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -238,7 +237,7 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
+		let mut t = TestExternalities::<Blake2Hasher>::new(map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		]);
 
@@ -254,7 +253,7 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
+		let mut t = TestExternalities::<Blake2Hasher>::new(map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),

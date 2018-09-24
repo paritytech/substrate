@@ -15,7 +15,6 @@ memory-db = { git = "https://github.com/paritytech/trie" }
 trie-db = { git = "https://github.com/paritytech/trie" }
 trie-root = { git = "https://github.com/paritytech/trie" }
 rlp = "0.2.4"
-
-substrate-primitives = { path = "../primitives", version = "0.1.0" }
-parity-codec = { version = "2.0", default_features = false }
-
+substrate-trie = { path = "../trie" }
+substrate-primitives = { path = "../primitives" }
+parity-codec = { version = "2.0" }

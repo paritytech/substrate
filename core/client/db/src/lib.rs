@@ -55,7 +55,7 @@ use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use memory_db::MemoryDB;
 use parking_lot::RwLock;
-use primitives::{H256, AuthorityId, Blake2Hasher, RlpCodec};
+use primitives::{H256, AuthorityId, Blake2Hasher};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem};
@@ -70,7 +70,7 @@ pub use state_db::PruningMode;
 const FINALIZATION_WINDOW: u64 = 32;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
-pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher, RlpCodec>;
+pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
 
 /// Database settings.
 pub struct DatabaseSettings {
@@ -247,7 +247,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
 }
 
-impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher, RlpCodec>
+impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 for BlockImportOperation<Block, Blake2Hasher>
 where Block: BlockT,
 {
@@ -323,7 +323,7 @@ impl DbGenesisStorage {
 	pub fn new() -> Self {
 		let mut root = H256::default();
 		let mut mdb = MemoryDB::<Blake2Hasher>::new();
-		state_machine::TrieDBMut::<Blake2Hasher, RlpCodec>::new(&mut mdb, &mut root);
+		state_machine::TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
 		DbGenesisStorage(root)
 	}
 }
@@ -491,7 +491,7 @@ fn apply_changes_trie_commit(transaction: &mut DBTransaction, mut commit: Memory
 	}
 }
 
-impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<Block> where Block: BlockT {
+impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT {
 	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
@@ -684,7 +684,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 	}
 }
 
-impl<Block> client::backend::LocalBackend<Block, Blake2Hasher, RlpCodec> for Backend<Block>
+impl<Block> client::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
 where Block: BlockT {}
 
 #[cfg(test)]
@@ -936,7 +936,7 @@ mod tests {
 			let mut changes_root = H256::default();
 			let mut changes_trie_update = MemoryDB::<Blake2Hasher>::new();
 			{
-				let mut trie = TrieDBMut::<Blake2Hasher, RlpCodec>::new(
+				let mut trie = TrieDBMut::<Blake2Hasher>::new(
 					&mut changes_trie_update,
 					&mut changes_root
 				);

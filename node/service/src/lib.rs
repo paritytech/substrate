@@ -48,7 +48,7 @@ use client::Client;
 use node_network::{Protocol as DemoProtocol, consensus::ConsensusNetwork};
 use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 
 pub use service::{Roles, PruningMode, TransactionPoolOptions,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
@@ -65,9 +65,9 @@ pub trait Components: service::Components {
 	/// Demo API.
 	type Api: 'static + Api + Send + Sync;
 	/// Client backend.
-	type Backend: 'static + client::backend::Backend<Block, Blake2Hasher, RlpCodec>;
+	type Backend: 'static + client::backend::Backend<Block, Blake2Hasher>;
 	/// Client executor.
-	type Executor: 'static + client::CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync;
+	type Executor: 'static + client::CallExecutor<Block, Blake2Hasher> + Send + Sync;
 }
 
 impl Components for service::LightComponents<Factory> {

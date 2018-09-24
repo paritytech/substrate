@@ -29,7 +29,7 @@ use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
 use config::Configuration;
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -66,7 +66,6 @@ pub type LightExecutor<F> = client::light::call_executor::RemoteCallExecutor<
 	>,
 	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
 	Blake2Hasher,
-	RlpCodec,
 >;
 
 /// Full client type for a factory.
@@ -153,9 +152,9 @@ pub trait Components: 'static {
 	/// Associated service factory.
 	type Factory: ServiceFactory;
 	/// Client backend.
-	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, Blake2Hasher, RlpCodec>;
+	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, Blake2Hasher>;
 	/// Client executor.
-	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher, RlpCodec> + Send + Sync;
+	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync;
 	/// Extrinsic pool type.
 	type TransactionPoolApi: 'static + transaction_pool::ChainApi<Hash=<Self::Factory as ServiceFactory>::ExtrinsicHash, Block=FactoryBlock<Self::Factory>>;
 
@@ -237,7 +236,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		};
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(client::light::new_fetch_checker::<_, Blake2Hasher, RlpCodec>(executor));
+		let fetch_checker = Arc::new(client::light::new_fetch_checker::<_, Blake2Hasher>(executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
 		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec)?;

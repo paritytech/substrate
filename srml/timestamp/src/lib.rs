@@ -167,10 +167,10 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, TestExternalities, RlpCodec};
+	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256};
+	use runtime_primitives::traits::BlakeTwo256;
 	use runtime_primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
@@ -208,7 +208,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
 
-		with_externalities(&mut TestExternalities::<_, RlpCodec>::new(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
@@ -221,7 +221,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
 
-		with_externalities(&mut TestExternalities::<_, RlpCodec>::new(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
@@ -234,7 +234,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
 
-		with_externalities(&mut TestExternalities::<_, RlpCodec>::new(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
 		});

@@ -20,7 +20,7 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
 use runtime_primitives::traits::{BlakeTwo256};
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
-use substrate_primitives::{Blake2Hasher, RlpCodec};
+use substrate_primitives::{Blake2Hasher};
 use wabt;
 use {
 	runtime_io, balances, system, CodeOf, ContractAddressFor,
@@ -106,7 +106,7 @@ impl ExtBuilder {
 		self.creation_fee = creation_fee;
 		self
 	}
-	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default()
 			.build_storage()
 			.unwrap();

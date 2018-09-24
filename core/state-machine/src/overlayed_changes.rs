@@ -201,7 +201,7 @@ impl From<Option<Vec<u8>>> for OverlayedValue {
 
 #[cfg(test)]
 mod tests {
-	use primitives::{Blake2Hasher, RlpCodec, H256};
+	use primitives::{Blake2Hasher, H256};
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use backend::InMemory;
 	use changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
@@ -251,7 +251,7 @@ mod tests {
 			(b"dogglesworth".to_vec(), b"catXXX".to_vec()),
 			(b"doug".to_vec(), b"notadog".to_vec()),
 		].into_iter().collect();
-		let backend = InMemory::<Blake2Hasher, RlpCodec>::from(initial);
+		let backend = InMemory::<Blake2Hasher>::from(initial);
 		let mut overlay = OverlayedChanges {
 			committed: vec![
 				(b"dog".to_vec(), Some(b"puppy".to_vec()).into()),

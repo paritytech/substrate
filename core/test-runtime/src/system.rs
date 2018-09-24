@@ -181,10 +181,10 @@ mod tests {
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
 	use ::{Header, Digest, Extrinsic, Transfer};
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys;
 
-	fn new_test_ext() -> TestExternalities<Blake2Hasher, RlpCodec> {
+	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(well_known_keys::AUTHORITY_COUNT).to_vec() => vec![].and(&3u32),

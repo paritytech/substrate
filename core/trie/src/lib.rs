@@ -18,13 +18,14 @@
 //!
 //! This module should be used to generate trie root hash.
 
+// TODO: no_std
+
 extern crate trie_root;
 extern crate parity_codec as codec;
 extern crate trie_db;
 extern crate hash_db;
-
-#[cfg(test)]
 extern crate memory_db;
+
 #[cfg(test)]
 extern crate substrate_primitives;
 #[cfg(test)]
@@ -37,9 +38,15 @@ mod trie_stream;
 
 use hash_db::Hasher;
 pub use error::Error;
-pub use node_codec::NodeCodec;
 pub use trie_stream::TrieStream;
+pub use node_codec::NodeCodec;
+pub use trie_db::{Trie, TrieMut, DBValue, Recorder};
 
+pub type TrieError<H> = trie_db::TrieError<H, Error>;
+pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
+impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
+pub type HashDB<H> = hash_db::HashDB<H, trie_db::DBValue>;
+pub type MemoryDB<H> = memory_db::MemoryDB<H, trie_db::DBValue>;
 pub type TrieDB<'a, H> = trie_db::TrieDB<'a, H, NodeCodec<H>>;
 pub type TrieDBMut<'a, H> = trie_db::TrieDBMut<'a, H, NodeCodec<H>>;
 pub type FatDB<'a, H> = trie_db::FatDB<'a, H, NodeCodec<H>>;
@@ -194,7 +201,7 @@ mod tests {
 			let persistent = {
 				let mut memdb = MemoryDB::default();
 				let mut root = Default::default();
-				let mut t = TrieDBMut::<Blake2Hasher, NodeCodec<Blake2Hasher>>::new(&mut memdb, &mut root);
+				let mut t = TrieDBMut::<Blake2Hasher<Blake2Hasher>>::new(&mut memdb, &mut root);
 				for (x, y) in input {
 					t.insert(x, y).unwrap();
 				}

@@ -34,7 +34,7 @@ extern crate fnv;
 extern crate futures;
 extern crate parking_lot;
 extern crate trie_root;
-extern crate patricia_trie;
+extern crate trie_db;
 extern crate hash_db;
 extern crate rlp;
 extern crate heapsize;

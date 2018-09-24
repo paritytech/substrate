@@ -35,8 +35,6 @@ extern crate parity_codec_derive;
 extern crate rustc_hex;
 extern crate byteorder;
 extern crate parity_codec as codec;
-#[cfg(feature = "std")]
-extern crate rlp;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -64,6 +62,7 @@ extern crate core;
 extern crate wasmi;
 extern crate hash_db;
 extern crate hash256_std_hasher;
+pub extern crate substrate_trie as trie;
 #[cfg(feature = "std")]
 extern crate trie_db;
 #[cfg(feature = "std")]

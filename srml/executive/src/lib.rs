@@ -267,7 +267,7 @@ mod tests {
 	use super::*;
 	use balances::Call;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
+	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{Header as HeaderT, BlakeTwo256};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
@@ -323,7 +323,7 @@ mod tests {
 			reclaim_rebate: 0,
 		}.build_storage().unwrap());
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69));
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher, RlpCodec>::new(t);
+		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(),
 				[69u8; 32].into(), Digest::default()));
@@ -333,7 +333,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap());
 		t.into()

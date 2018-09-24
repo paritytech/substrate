@@ -22,7 +22,7 @@ use keyring;
 use runtime;
 
 use {Backend, Executor};
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
@@ -30,7 +30,7 @@ pub trait BlockBuilderExt {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 }
 
-impl BlockBuilderExt for client::block_builder::BlockBuilder<Backend, Executor, runtime::Block, Blake2Hasher, RlpCodec> {
+impl BlockBuilderExt for client::block_builder::BlockBuilder<Backend, Executor, runtime::Block, Blake2Hasher> {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(sign_tx(transfer))
 	}

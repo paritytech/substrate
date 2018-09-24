@@ -17,7 +17,7 @@
 //! `NodeCodec` implementation for Rlp
 
 use std::marker::PhantomData;
-use patricia_trie::{DBValue, NibbleSlice, NodeCodec, node::Node, ChildReference, Hasher};
+use trie_db::{DBValue, NibbleSlice, NodeCodec, node::Node, ChildReference, Hasher};
 use codec::{Encode, Decode, Compact};
 use codec_error::CodecError;
 use codec_triestream::{EMPTY_TRIE, LEAF_NODE_OFFSET, LEAF_NODE_BIG, EXTENSION_NODE_OFFSET,

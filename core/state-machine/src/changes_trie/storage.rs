@@ -17,17 +17,16 @@
 //! Changes trie storage utilities.
 
 use std::collections::HashMap;
-use hash_db::{Hasher, HashDB, DBValue};
+use hash_db::Hasher;
+use primitives::trie::DBValue;
 use heapsize::HeapSizeOf;
-use memory_db::MemoryDB;
+use trie::{MemoryDB, HashDB};
 use parking_lot::RwLock;
 use changes_trie::Storage;
 use trie_backend_essence::TrieBackendStorage;
 
 #[cfg(test)]
 use backend::insert_into_memory_db;
-#[cfg(test)]
-use patricia_trie::NodeCodec;
 #[cfg(test)]
 use changes_trie::input::InputPair;
 
@@ -64,11 +63,11 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 	}
 
 	#[cfg(test)]
-	pub fn with_inputs<C: NodeCodec<H>>(inputs: Vec<(u64, Vec<InputPair>)>) -> Self {
+	pub fn with_inputs(inputs: Vec<(u64, Vec<InputPair>)>) -> Self {
 		let mut mdb = MemoryDB::default();
 		let mut roots = HashMap::new();
 		for (block, pairs) in inputs {
-			let root = insert_into_memory_db::<H, C, _>(&mut mdb, pairs.into_iter().map(Into::into));
+			let root = insert_into_memory_db::<H, _>(&mut mdb, pairs.into_iter().map(Into::into));
 			if let Some(root) = root {
 				roots.insert(block, root);
 			}
@@ -84,7 +83,7 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 
 	#[cfg(test)]
 	pub fn clear_storage(&self) {
-		self.data.write().mdb = MemoryDB::new();
+		self.data.write().mdb = MemoryDB::default();	// use new to be more correct
 	}
 
 	/// Insert changes trie for given block.
@@ -95,13 +94,13 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 	}
 }
 
-impl<H: Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
+impl<H: 'static + Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSizeOf {
 	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {
 		Ok(self.data.read().roots.get(&block).cloned())
 	}
 
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Ok(HashDB::<H>::get(&self.data.read().mdb, key))
+		Ok(HashDB::<H>::get(&self.data.read().mdb, key).cloned())
 	}
 }
 

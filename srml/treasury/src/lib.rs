@@ -331,7 +331,7 @@ mod tests {
 	use super::*;
 
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
+	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
 	use runtime_primitives::traits::{BlakeTwo256};
 	use runtime_primitives::testing::{Digest, DigestItem, Header};
@@ -369,7 +369,7 @@ mod tests {
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],

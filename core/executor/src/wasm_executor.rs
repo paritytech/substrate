@@ -554,7 +554,6 @@ impl WasmExecutor {
 
 #[cfg(test)]
 mod tests {
-	use primitives::RlpCodec;
 	use super::*;
 	use codec::Encode;
 	use state_machine::TestExternalities;
@@ -568,7 +567,7 @@ mod tests {
 
 	#[test]
 	fn returning_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
@@ -577,7 +576,7 @@ mod tests {
 
 	#[test]
 	fn panicking_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
@@ -589,7 +588,7 @@ mod tests {
 
 	#[test]
 	fn storage_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
@@ -607,7 +606,7 @@ mod tests {
 
 	#[test]
 	fn clear_prefix_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
 		ext.set_storage(b"aab".to_vec(), b"2".to_vec());
 		ext.set_storage(b"aba".to_vec(), b"3".to_vec());
@@ -620,7 +619,7 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: TestExternalities<_, RlpCodec> = map![
+		let expected: TestExternalities = map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
@@ -630,7 +629,7 @@ mod tests {
 
 	#[test]
 	fn blake2_256_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", &[]).unwrap(),
@@ -644,7 +643,7 @@ mod tests {
 
 	#[test]
 	fn twox_256_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
@@ -658,7 +657,7 @@ mod tests {
 
 	#[test]
 	fn twox_128_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", &[]).unwrap(),
@@ -672,7 +671,7 @@ mod tests {
 
 	#[test]
 	fn ed25519_verify_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher, RlpCodec>::default();
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
@@ -698,7 +697,7 @@ mod tests {
 
 	#[test]
 	fn enumerated_trie_root_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher, RlpCodec>::default();
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
