@@ -132,7 +132,6 @@ impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		C: Sync + Send,
 		H::Out: Ord + HeapSizeOf,
 {
 	fn check_header_proof(

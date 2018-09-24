@@ -33,7 +33,7 @@ where
 	E: CallExecutor<Block, H> + Clone,
 	Block: BlockT,
 	H: Hasher,
-	H::Out: Encodable + Ord,
+	H::Out: Ord,
 
 {
 	header: <Block as BlockT>::Header,

@@ -25,7 +25,7 @@
 
 use hash_db;
 use heapsize::HeapSizeOf;
-use trie_root;
+use trie;
 
 use primitives::H256;
 use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
@@ -71,7 +71,7 @@ pub fn compute_root<Header, Hasher, I>(
 		I: IntoIterator<Item=Option<Header::Hash>>,
 {
 	build_pairs::<Header, I>(cht_size, cht_num, hashes)
-		.map(|pairs| trie_root::trie_root::<Hasher, _, _, _>(pairs))
+		.map(|pairs| trie::trie_root::<Hasher, _, _, _>(pairs))
 }
 
 /// Build CHT-based header proof.

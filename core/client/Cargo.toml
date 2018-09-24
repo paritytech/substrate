@@ -20,7 +20,8 @@ substrate-primitives = { path = "../primitives" }
 sr-io = { path = "../sr-io" }
 sr-primitives = { path = "../sr-primitives" }
 substrate-state-machine = { path = "../state-machine" }
-substrate-keyring = { path = "../../core/keyring" }
+substrate-keyring = { path = "../keyring" }
+substrate-trie = { path = "../trie" }
 substrate-telemetry = { path = "../telemetry" }
 hash-db = { git = "https://github.com/paritytech/trie" }
 trie-db = { git = "https://github.com/paritytech/trie" }

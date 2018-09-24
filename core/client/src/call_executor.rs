@@ -22,7 +22,7 @@ use state_machine::{self, OverlayedChanges, Ext,
 	CodeExecutor, ExecutionManager, native_when_possible};
 use executor::{RuntimeVersion, RuntimeInfo};
 use hash_db::Hasher;
-use memory_db::MemoryDB;
+use trie::MemoryDB;
 use codec::Decode;
 use primitives::{Blake2Hasher};
 use primitives::storage::well_known_keys;

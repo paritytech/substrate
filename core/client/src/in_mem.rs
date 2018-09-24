@@ -32,7 +32,7 @@ use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::InMemoryChangesTrieStorage;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use memory_db::MemoryDB;
+use trie::MemoryDB;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -393,7 +393,6 @@ where
 	Block: BlockT,
 	H: Hasher,
 	H::Out: HeapSizeOf + From<Block::Hash>,
-	C: Send + Sync,
 {
 	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
@@ -474,7 +473,6 @@ where
 	Block: BlockT,
 	H: Hasher,
 	H::Out: HeapSizeOf + From<Block::Hash>,
-	C: Send + Sync,
 {}
 
 impl<Block: BlockT> Cache<Block> {

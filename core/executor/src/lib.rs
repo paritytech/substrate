@@ -36,6 +36,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_serializer as serializer;
 extern crate substrate_state_machine as state_machine;
 extern crate sr_version as runtime_version;
+extern crate substrate_trie as trie;
 
 extern crate serde;
 extern crate wasmi;

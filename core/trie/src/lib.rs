@@ -57,18 +57,30 @@ pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, H, NodeCodec<H>, Q>;
 
 pub fn trie_root<H: Hasher, I, A, B>(input: I) -> H::Out where
 	I: IntoIterator<Item = (A, B)>,
-	A: AsRef<[u8]> + Ord + trie_root::DebugIfStd,
-	B: AsRef<[u8]> + trie_root::DebugIfStd,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
 {
 	trie_root::trie_root::<H, TrieStream, _, _, _>(input)
 }
 
 pub fn unhashed_trie<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
-	I: IntoIterator<Item = (A, B)> + trie_root::DebugIfStd,
-	A: AsRef<[u8]> + Ord + trie_root::DebugIfStd,
-	B: AsRef<[u8]> + trie_root::DebugIfStd,
+	I: IntoIterator<Item = (A, B)>,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
 {
 	trie_root::unhashed_trie::<H, TrieStream, _, _, _>(input)
+}
+
+/// A trie root formed from the enumerated items.
+pub fn ordered_trie_root<H: Hasher, I, A>(input: I) -> H::Out
+where
+	I: IntoIterator<Item = A> + Iterator<Item = A>,
+	A: AsRef<[u8]>,
+{
+	trie_root::<H, _, _, _>(input
+		.enumerate()
+		.map(|(i, v)| (codec::Encode::encode(&codec::Compact(i as u32)), v))
+	)
 }
 
 // Utilities (not exported):

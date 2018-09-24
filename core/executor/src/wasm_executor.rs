@@ -30,7 +30,7 @@ use primitives::{blake2_256, twox_128, twox_256, ed25519};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::Blake2Hasher;
-use trie_root::ordered_trie_root;
+use trie::ordered_trie_root;
 use sandbox;
 
 

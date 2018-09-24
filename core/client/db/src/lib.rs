@@ -30,6 +30,7 @@ extern crate sr_primitives as runtime_primitives;
 extern crate parity_codec as codec;
 extern crate substrate_executor as executor;
 extern crate substrate_state_db as state_db;
+extern crate substrate_trie as trie;
 
 #[macro_use]
 extern crate log;
@@ -53,7 +54,7 @@ use client::backend::NewBlockState;
 use codec::{Decode, Encode};
 use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
-use memory_db::MemoryDB;
+use trie::MemoryDB;
 use parking_lot::RwLock;
 use primitives::{H256, AuthorityId, Blake2Hasher};
 use runtime_primitives::generic::BlockId;
@@ -322,7 +323,7 @@ struct DbGenesisStorage(pub H256);
 impl DbGenesisStorage {
 	pub fn new() -> Self {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<Blake2Hasher>::new();
+		let mut mdb = MemoryDB::<Blake2Hasher>::default();	// TODO: use new() to make it more correct
 		state_machine::TrieDBMut::<Blake2Hasher>::new(&mut mdb, &mut root);
 		DbGenesisStorage(root)
 	}

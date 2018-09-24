@@ -32,7 +32,7 @@ use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as Client
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::fetcher::{Fetcher, RemoteReadRequest};
 use hash_db::Hasher;
-use memory_db::MemoryDB;
+use trie::MemoryDB;
 use heapsize::HeapSizeOf;
 
 /// Light client backend.

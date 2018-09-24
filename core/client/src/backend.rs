@@ -24,7 +24,7 @@ use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use hash_db::Hasher;
-use memory_db::MemoryDB;
+use trie::MemoryDB;
 
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

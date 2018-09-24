@@ -34,7 +34,7 @@ use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
 use codec::Decode;
 use heapsize::HeapSizeOf;
-use memory_db::MemoryDB;
+use trie::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
