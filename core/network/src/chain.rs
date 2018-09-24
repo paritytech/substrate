@@ -26,7 +26,14 @@ use primitives::{Blake2Hasher, RlpCodec};
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
 	/// Import a new block. Parent is supposed to be existing in the blockchain.
-	fn import(&self, origin: BlockOrigin, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error>;
+	fn import(
+		&self,
+		origin: BlockOrigin,
+		header: Block::Header,
+		justification: Justification<Block::Hash>,
+		body: Option<Vec<Block::Extrinsic>>,
+		finalized: bool,
+	) -> Result<ImportResult, Error>;
 
 	/// Get blockchain info.
 	fn info(&self) -> Result<ClientInfo<Block>, Error>;
@@ -61,10 +68,17 @@ impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
 	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
 	Block: BlockT,
 {
-	fn import(&self, origin: BlockOrigin, header: Block::Header, justification: Justification<Block::Hash>, body: Option<Vec<Block::Extrinsic>>) -> Result<ImportResult, Error> {
-		// TODO: defer justification check and non-instant finality.
+	fn import(
+		&self,
+		origin: BlockOrigin,
+		header: Block::Header,
+		justification: Justification<Block::Hash>,
+		body: Option<Vec<Block::Extrinsic>>,
+		finalized: bool,
+	) -> Result<ImportResult, Error> {
+		// TODO: defer justification check and add finality.
 		let justified_header = self.check_justification(header, justification.into())?;
-		(self as &SubstrateClient<B, E, Block>).import_block(origin, justified_header, body, true)
+		(self as &SubstrateClient<B, E, Block>).import_block(origin, justified_header, body, finalized)
 	}
 
 	fn info(&self) -> Result<ClientInfo<Block>, Error> {

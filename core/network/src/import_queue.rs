@@ -59,6 +59,7 @@ pub struct ImportQueueStatus<B: BlockT> {
 pub struct AsyncImportQueue<B: BlockT> {
 	handle: Mutex<Option<::std::thread::JoinHandle<()>>>,
 	data: Arc<AsyncImportQueueData<B>>,
+	instant_finality: bool,
 }
 
 /// Locks order: queue, queue_blocks, best_importing_number
@@ -71,10 +72,11 @@ struct AsyncImportQueueData<B: BlockT> {
 }
 
 impl<B: BlockT> AsyncImportQueue<B> {
-	pub fn new() -> Self {
+	pub fn new(instant_finality: bool) -> Self {
 		Self {
 			handle: Mutex::new(None),
 			data: Arc::new(AsyncImportQueueData::new()),
+			instant_finality,
 		}
 	}
 
@@ -82,8 +84,9 @@ impl<B: BlockT> AsyncImportQueue<B> {
 		debug_assert!(self.handle.lock().is_none());
 
 		let qdata = self.data.clone();
+		let instant_finality = self.instant_finality;
 		*self.handle.lock() = Some(::std::thread::Builder::new().name("ImportQueue".into()).spawn(move || {
-			import_thread(sync, service, chain, qdata)
+			import_thread(sync, service, chain, qdata, instant_finality)
 		}).map_err(|err| Error::from(ErrorKind::Io(err)))?);
 		Ok(())
 	}
@@ -159,7 +162,13 @@ impl<B: BlockT> Drop for AsyncImportQueue<B> {
 }
 
 /// Blocks import thread.
-fn import_thread<B: BlockT, E: ExecuteInContext<B>>(sync: Weak<RwLock<ChainSync<B>>>, service: Weak<E>, chain: Weak<Client<B>>, qdata: Arc<AsyncImportQueueData<B>>) {
+fn import_thread<B: BlockT, E: ExecuteInContext<B>>(
+	sync: Weak<RwLock<ChainSync<B>>>,
+	service: Weak<E>,
+	chain: Weak<Client<B>>,
+	qdata: Arc<AsyncImportQueueData<B>>,
+	instant_finality: bool,
+) {
 	trace!(target: "sync", "Starting import thread");
 	loop {
 		if qdata.is_stopping.load(Ordering::SeqCst) {
@@ -181,7 +190,12 @@ fn import_thread<B: BlockT, E: ExecuteInContext<B>>(sync: Weak<RwLock<ChainSync<
 		match (sync.upgrade(), service.upgrade(), chain.upgrade()) {
 			(Some(sync), Some(service), Some(chain)) => {
 				let blocks_hashes: Vec<B::Hash> = new_blocks.1.iter().map(|b| b.block.hash.clone()).collect();
-				if !import_many_blocks(&mut SyncLink::Indirect(&sync, &*chain, &*service), Some(&*qdata), new_blocks) {
+				if !import_many_blocks(
+					&mut SyncLink::Indirect(&sync, &*chain, &*service),
+					Some(&*qdata),
+					new_blocks,
+					instant_finality,
+				) {
 					break;
 				}
 
@@ -246,7 +260,8 @@ enum BlockImportError {
 fn import_many_blocks<'a, B: BlockT>(
 	link: &mut SyncLinkApi<B>,
 	qdata: Option<&AsyncImportQueueData<B>>,
-	blocks: (BlockOrigin, Vec<BlockData<B>>)
+	blocks: (BlockOrigin, Vec<BlockData<B>>),
+	instant_finality: bool,
 ) -> bool
 {
 	let (blocks_origin, blocks) = blocks;
@@ -265,7 +280,12 @@ fn import_many_blocks<'a, B: BlockT>(
 
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
-		let import_result = import_single_block(link.chain(), blocks_origin.clone(), block);
+		let import_result = import_single_block(
+			link.chain(),
+			blocks_origin.clone(),
+			block,
+			instant_finality,
+		);
 		let is_import_failed = import_result.is_err();
 		imported += process_import_result(link, import_result);
 		if is_import_failed {
@@ -287,7 +307,8 @@ fn import_many_blocks<'a, B: BlockT>(
 fn import_single_block<B: BlockT>(
 	chain: &Client<B>,
 	block_origin: BlockOrigin,
-	block: BlockData<B>
+	block: BlockData<B>,
+	instant_finality: bool,
 ) -> Result<BlockImportResult<B::Hash, <<B as BlockT>::Header as HeaderT>::Number>, BlockImportError>
 {
 	let origin = block.origin;
@@ -303,6 +324,7 @@ fn import_single_block<B: BlockT>(
 				header,
 				justification,
 				block.body,
+				instant_finality,
 			);
 			match result {
 				Ok(ImportResult::AlreadyInChain) => {
@@ -436,7 +458,8 @@ pub mod tests {
 	use super::*;
 
 	/// Blocks import queue that is importing blocks in the same thread.
-	pub struct SyncImportQueue;
+	/// The boolean value indicates whether blocks should be imported without instant finality.
+	pub struct SyncImportQueue(pub bool);
 	struct DummyExecuteInContext;
 
 	impl<B: 'static + BlockT> ExecuteInContext<B> for DummyExecuteInContext {
@@ -460,7 +483,7 @@ pub mod tests {
 		}
 
 		fn import_blocks(&self, sync: &mut ChainSync<B>, protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>)) {
-			import_many_blocks(&mut SyncLink::Direct::<_, DummyExecuteInContext>(sync, protocol), None, blocks);
+			import_many_blocks(&mut SyncLink::Direct::<_, DummyExecuteInContext>(sync, protocol), None, blocks, self.0);
 		}
 	}
 
@@ -518,27 +541,39 @@ pub mod tests {
 	#[test]
 	fn import_single_good_block_works() {
 		let (_, hash, number, block) = prepare_good_block();
-		assert_eq!(import_single_block(&test_client::new(), BlockOrigin::File, block), Ok(BlockImportResult::ImportedUnknown(hash, number)));
+		assert_eq!(
+			import_single_block(&test_client::new(), BlockOrigin::File, block, true),
+			Ok(BlockImportResult::ImportedUnknown(hash, number))
+		);
 	}
 
 	#[test]
 	fn import_single_good_known_block_is_ignored() {
 		let (client, hash, number, block) = prepare_good_block();
-		assert_eq!(import_single_block(&client, BlockOrigin::File, block), Ok(BlockImportResult::ImportedKnown(hash, number)));
+		assert_eq!(
+			import_single_block(&client, BlockOrigin::File, block, true),
+			Ok(BlockImportResult::ImportedKnown(hash, number))
+		);
 	}
 
 	#[test]
 	fn import_single_good_block_without_header_fails() {
 		let (_, _, _, mut block) = prepare_good_block();
 		block.block.header = None;
-		assert_eq!(import_single_block(&test_client::new(), BlockOrigin::File, block), Err(BlockImportError::Disconnect(0)));
+		assert_eq!(
+			import_single_block(&test_client::new(), BlockOrigin::File, block, true),
+			Err(BlockImportError::Disconnect(0))
+		);
 	}
 
 	#[test]
 	fn import_single_good_block_without_justification_fails() {
 		let (_, _, _, mut block) = prepare_good_block();
 		block.block.justification = None;
-		assert_eq!(import_single_block(&test_client::new(), BlockOrigin::File, block), Err(BlockImportError::Disconnect(0)));
+		assert_eq!(
+			import_single_block(&test_client::new(), BlockOrigin::File, block, true),
+			Err(BlockImportError::Disconnect(0))
+		);
 	}
 
 	#[test]
@@ -579,12 +614,17 @@ pub mod tests {
 		let (_, _, _, block) = prepare_good_block();
 		let qdata = AsyncImportQueueData::new();
 		qdata.is_stopping.store(true, Ordering::SeqCst);
-		assert!(!import_many_blocks(&mut TestLink::new(), Some(&qdata), (BlockOrigin::File, vec![block.clone(), block])));
+		assert!(!import_many_blocks(
+			&mut TestLink::new(),
+			Some(&qdata),
+			(BlockOrigin::File, vec![block.clone(), block]),
+			true
+		));
 	}
 
 	#[test]
 	fn async_import_queue_drops() {
-		let queue = AsyncImportQueue::new();
+		let queue = AsyncImportQueue::new(true);
 		let service = Arc::new(DummyExecutor);
 		let chain = Arc::new(test_client::new());
 		queue.start(Weak::new(), Arc::downgrade(&service), Arc::downgrade(&chain) as Weak<Client<Block>>).unwrap();

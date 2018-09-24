@@ -99,6 +99,18 @@ error_chain! {
 			description("Error decoding call result")
 			display("Error decoding call result of {}", method)
 		}
+
+		/// Last finalized block not parent of current.
+		NonSequentialFinalization(s: String) {
+			description("Did not finalize blocks in sequential order."),
+			display("Did not finalize blocks in sequential order."),
+		}
+
+		/// Safety violation: new best block not descendent of last finalized.
+		NotInFinalizedChain {
+			description("Potential long-range attack: block not in finalized chain."),
+			display("Potential long-range attack: block not in finalized chain."),
+		}
 	}
 }
 
