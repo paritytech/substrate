@@ -11,3 +11,5 @@ env_logger = "0.4"
 substrate-service = { path = "../../../core/service" }
 substrate-network = { path = "../../../core/network" }
 substrate-primitives = { path = "../../../core/primitives" }
+substrate-client = { path = "../../../core/client" }
+sr-primitives = { path = "../../../core/sr-primitives" }

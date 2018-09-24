@@ -112,7 +112,7 @@ impl<T: Trait> Module<T> {
 		);
 		assert!(
 			Self::now().is_zero() || now >= Self::now() + Self::block_period(),
-			"Timestamp but increment by at least <BlockPeriod> between sequential blocks"
+			"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
 		);
 		<Self as Store>::Now::put(now);
 		<Self as Store>::DidUpdate::put(true);

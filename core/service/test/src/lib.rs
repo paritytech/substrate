@@ -23,7 +23,8 @@ extern crate env_logger;
 extern crate substrate_service as service;
 extern crate substrate_network as network;
 extern crate substrate_primitives as primitives;
-
+extern crate substrate_client as client;
+extern crate sr_primitives;
 use std::iter;
 use std::sync::Arc;
 use std::net::Ipv4Addr;
@@ -40,8 +41,15 @@ use service::{
 	FactoryFullConfiguration,
 	FactoryChainSpec,
 	Roles,
+	FactoryExtrinsic,
 };
+<<<<<<< HEAD
 use network::{NetworkConfiguration, NonReservedPeerMode, Secret, AddrComponent, SyncProvider, ManageNetwork};
+=======
+use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
+use client::{BlockOrigin, JustifiedHeader};
+use sr_primitives::traits::As;
+>>>>>>> 21e6f360... Sync test
 
 struct TestNet<F: ServiceFactory> {
 	runtime: Runtime,
@@ -142,15 +150,89 @@ impl<F: ServiceFactory> TestNet<F> {
 	}
 }
 
-pub fn connectivity_test<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
-	let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
-	let mut network = TestNet::<F>::new(&temp, spec, 25, 0, 0);
-	let first_address = network.full_nodes[0].1.network().node_id().unwrap();
-	println!("Center node ID: {}", first_address);
+pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
+	const NUM_NODES: usize = 3;
+	{
+		println!("Checking star topology");
+		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
+		let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES as u32, 0, 0);
+		let first_address = network.full_nodes[0].1.network().node_id().unwrap();
+		for (_, service) in network.full_nodes.iter().skip(1) {
+			service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
+		}
+		network.run_until_all_full(|_index, service| {
+			service.network().status().num_peers == NUM_NODES - 1
+		});
+	}
+	{
+		println!("Checking linked topology");
+		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
+		let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES as u32, 0, 0);
+		let mut address = network.full_nodes[0].1.network().node_id().unwrap();
+		for (_, service) in network.full_nodes.iter().skip(1) {
+			service.network().add_reserved_peer(address.clone()).expect("Error adding reserved peer");
+			address = service.network().node_id().unwrap();
+		}
+		network.run_until_all_full(|_index, service| {
+			service.network().status().num_peers == NUM_NODES - 1
+		});
+	}
+}
+
+pub fn sync<F, B>(spec: FactoryChainSpec<F>, block_factory: B)
+where
+	F: ServiceFactory,
+	B: Fn(&F::FullService) -> (JustifiedHeader<F::Block>, Option<Vec<FactoryExtrinsic<F>>>),
+{
+	const NUM_NODES: usize = 3;
+	const NUM_BLOCKS: usize = 2048;
+	println!("Checking block sync");
+	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
+	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES as u32, 0, 0);
+	let first_address = {
+		let first_service = &network.full_nodes[0].1;
+		for i in 0 .. NUM_BLOCKS {
+			if i % 128 == 0 {
+				println!("Generating #{}", i);
+			}
+			let (header, body) = block_factory(&first_service);
+			first_service.client().import_block(BlockOrigin::File, header, body, true).expect("Error importing test block");
+		}
+		first_service.network().node_id().unwrap()
+	};
 	for (_, service) in network.full_nodes.iter().skip(1) {
 		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service| {
-		service.network().status().num_peers == 24
+		service.client().info().unwrap().chain.best_number == As::sa(2048)
+	});
+}
+
+pub fn consensus<F, B>(spec: FactoryChainSpec<F>, block_factory: B)
+where
+	F: ServiceFactory,
+	B: Fn(&F::FullService) -> (JustifiedHeader<F::Block>, Option<Vec<FactoryExtrinsic<F>>>),
+{
+	const NUM_NODES: usize = 3;
+	const NUM_BLOCKS: usize = 2048;
+	println!("Checking block sync");
+	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
+	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES as u32, 0, 0);
+	let first_address = {
+		let first_service = &network.full_nodes[0].1;
+		for i in 0 .. NUM_BLOCKS {
+			if i % 128 == 0 {
+				println!("Generating #{}", i);
+			}
+			let (header, body) = block_factory(&first_service);
+			first_service.client().import_block(BlockOrigin::File, header, body, true).expect("Error importing test block");
+		}
+		first_service.network().node_id().unwrap()
+	};
+	for (_, service) in network.full_nodes.iter().skip(1) {
+		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
+	}
+	network.run_until_all_full(|_index, service| {
+		service.client().info().unwrap().chain.best_number == As::sa(2048)
 	});
 }

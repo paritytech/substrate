@@ -168,17 +168,17 @@ impl<N, P> bft::Environment<Block> for ProposerFactory<N, P>
 
 /// The proposer logic.
 pub struct Proposer<C: Api + Send + Sync> {
-	client: Arc<C>,
-	start: Instant,
-	local_key: Arc<ed25519::Pair>,
-	parent_hash: Hash,
-	parent_id: BlockId,
-	parent_number: BlockNumber,
-	random_seed: Hash,
-	transaction_pool: Arc<TransactionPool<C>>,
-	offline: SharedOfflineTracker,
-	validators: Vec<AccountId>,
-	minimum_timestamp: u64,
+	pub client: Arc<C>,
+	pub start: Instant,
+	pub local_key: Arc<ed25519::Pair>,
+	pub parent_hash: Hash,
+	pub parent_id: BlockId,
+	pub parent_number: BlockNumber,
+	pub random_seed: Hash,
+	pub transaction_pool: Arc<TransactionPool<C>>,
+	pub offline: SharedOfflineTracker,
+	pub validators: Vec<AccountId>,
+	pub minimum_timestamp: u64,
 }
 
 impl<C: Api + Send + Sync> Proposer<C> {

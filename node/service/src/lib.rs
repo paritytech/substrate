@@ -32,11 +32,19 @@ extern crate substrate_service as service;
 extern crate tokio;
 #[cfg(test)]
 extern crate substrate_service_test as service_test;
+#[cfg(test)]
+extern crate sr_primitives as runtime_primitives;
 
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate hex_literal;
+#[cfg(test)]
+extern crate parking_lot;
+#[cfg(test)]
+extern crate substrate_bft as bft;
+#[cfg(test)]
+extern crate rhododendron;
 
 pub mod chain_spec;
 
@@ -192,12 +200,75 @@ impl<C: Components> ::std::ops::Deref for Service<C> {
 
 #[cfg(test)]
 mod tests {
-	use service_test;
-	use super::Factory;
-	use chain_spec;
+	use std::time;
+	use std::sync::Arc;
+	use parking_lot::RwLock;
+	use {service, service_test, Factory, chain_spec};
+	use consensus::{self, OfflineTracker};
+	use primitives::ed25519;
+	use node_primitives::{BlockId, Header, Hash, Block};
+	use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
+	use node_api::Api;
+	use bft::{self, Proposer};
+	use rhododendron;
 
 	#[test]
 	fn test_connectivity() {
-		service_test::connectivity_test::<Factory>(chain_spec::local_testnet_config());
+		service_test::connectivity::<Factory>(chain_spec::integration_test_config());
+	}
+
+	#[test]
+	fn test_sync() {
+		let alice = Arc::new(ed25519::Pair::from_seed(b"Alice                           "));
+		let bob = Arc::new(ed25519::Pair::from_seed(b"Bob                             "));
+		let authorities = vec![alice.clone(), bob.clone()];
+		let validators = vec![alice.public().0.into(), bob.public().0.into()];
+		let offline = Arc::new(RwLock::new(OfflineTracker::new()));
+		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
+			let parent_hash = service.client().info().unwrap().chain.best_hash;
+			let parent_number = service.client().info().unwrap().chain.best_number;
+			let parent_id = BlockId::hash(parent_hash);
+			let random_seed = service.client().random_seed(&parent_id).unwrap();
+			let random_seed = BlakeTwo256::hash(&*random_seed);
+			let timestamp = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs();
+			let proposer = consensus::Proposer {
+				client: service.client().clone(),
+				start: time::Instant::now(),
+				local_key: alice.clone(),
+				parent_hash,
+				parent_id: parent_id,
+				parent_number: parent_number,
+				random_seed,
+				transaction_pool: service.transaction_pool().clone(),
+				offline: offline.clone(),
+				validators: validators.clone(),
+				minimum_timestamp: timestamp,
+			};
+			let block = proposer.propose().expect("Error making test block");
+			let justification = justify(&block.header, authorities.as_slice());
+			let justification = service.client().check_justification(block.header, justification).unwrap();
+			(justification, Some(block.extrinsics))
+		};
+		service_test::sync::<Factory, _>(chain_spec::integration_test_config(), block_factory);
+	}
+
+	fn justify(header: &Header, authorities: &[Arc<ed25519::Pair>]) -> bft::UncheckedJustification<Hash> {
+		let hash = header.hash();
+		bft::UncheckedJustification::new(
+			hash,
+			authorities.iter().map(|key| {
+				let msg = bft::sign_message::<Block>(
+					rhododendron::Vote::Commit(1, hash).into(),
+					key,
+					header.parent_hash
+					);
+
+				match msg {
+					rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
+					_ => panic!("signing vote leads to signed vote"),
+				}
+			}).collect(),
+			1,
+		)
 	}
 }

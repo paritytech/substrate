@@ -85,6 +85,9 @@ pub type FactoryGenesis<F> = <F as ServiceFactory>::Genesis;
 /// `Block` type for a factory.
 pub type FactoryBlock<F> = <F as ServiceFactory>::Block;
 
+/// `Extrinsic` type for a factory.
+pub type FactoryExtrinsic<F> = <<F as ServiceFactory>::Block as BlockT>::Extrinsic;
+
 /// `Number` type for a factory.
 pub type FactoryBlockNumber<F> = <<FactoryBlock<F> as BlockT>::Header as HeaderT>::Number;
 

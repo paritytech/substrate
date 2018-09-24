@@ -27,3 +27,6 @@ substrate-telemetry = { path = "../../core/telemetry" }
 
 [dev-dependencies]
 substrate-service-test = { path = "../../core/service/test" }
+sr-primitives = { path = "../../core/sr-primitives" }
+substrate-bft = { path = "../../core/bft" }
+rhododendron = "0.3"
