@@ -34,7 +34,7 @@ pub type BlockNumber = u64;
 
 /// Successful import result.
 #[derive(Debug, PartialEq, Eq)]
-pub enum Imported<Hash> {
+pub enum Imported<Hash, Ex> {
 	/// Transaction was successfuly imported to Ready queue.
 	Ready {
 		/// Hash of transaction that was successfuly imported.
@@ -44,7 +44,7 @@ pub enum Imported<Hash> {
 		/// Transactions that failed to be promoted from the Future queue and are now discarded.
 		failed: Vec<Hash>,
 		/// Transactions removed from the Ready pool (replaced).
-		removed: Vec<Arc<Transaction<Hash>>>,
+		removed: Vec<Arc<Transaction<Hash, Ex>>>,
 	},
 	/// Transaction was successfuly imported to Future queue.
 	Future {
@@ -55,21 +55,21 @@ pub enum Imported<Hash> {
 
 /// Status of pruning the queue.
 #[derive(Debug)]
-pub struct PruneStatus<Hash> {
+pub struct PruneStatus<Hash, Ex> {
 	/// A list of imports that satisfying the tag triggered.
-	pub promoted: Vec<Imported<Hash>>,
+	pub promoted: Vec<Imported<Hash, Ex>>,
 	/// A list of transactions that failed to be promoted and now are discarded.
 	pub failed: Vec<Hash>,
 	/// A list of transactions that got pruned from the ready queue.
-	pub pruned: Vec<Arc<Transaction<Hash>>>,
+	pub pruned: Vec<Arc<Transaction<Hash, Ex>>>,
 }
 
 /// Immutable transaction
 #[cfg_attr(test, derive(Clone))]
 #[derive(Debug, PartialEq, Eq)]
-pub struct Transaction<Hash> {
+pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
-	pub ex: Vec<u8>,
+	pub data: Extrinsic,
 	/// Transaction hash (unique)
 	pub hash: Hash,
 	/// Transaction priority (higher = better)
@@ -93,12 +93,12 @@ pub struct Transaction<Hash> {
 /// Most likely it is required to revalidate them and recompute set of
 /// required tags.
 #[derive(Default, Debug)]
-pub struct Pool<Hash: hash::Hash + Eq> {
-	future: FutureTransactions<Hash>,
-	ready: ReadyTransactions<Hash>,
+pub struct Pool<Hash: hash::Hash + Eq, Ex> {
+	future: FutureTransactions<Hash, Ex>,
+	ready: ReadyTransactions<Hash, Ex>,
 }
 
-impl<Hash: hash::Hash + Member> Pool<Hash> {
+impl<Hash: hash::Hash + Member, Ex: ::std::fmt::Debug> Pool<Hash, Ex> {
 	/// Imports transaction to the pool.
 	///
 	/// The pool consists of two parts: Future and Ready.
@@ -109,8 +109,8 @@ impl<Hash: hash::Hash + Member> Pool<Hash> {
 	pub fn import(
 		&mut self,
 		block_number: BlockNumber,
-		tx: Transaction<Hash>,
-	) -> error::Result<Imported<Hash>> {
+		tx: Transaction<Hash, Ex>,
+	) -> error::Result<Imported<Hash, Ex>> {
 		if self.future.contains(&tx.hash) || self.ready.contains(&tx.hash) {
 			bail!(error::ErrorKind::AlreadyImported)
 		}
@@ -132,7 +132,7 @@ impl<Hash: hash::Hash + Member> Pool<Hash> {
 	/// Imports transaction to ready queue.
 	///
 	/// NOTE the transaction has to have all requirements satisfied.
-	fn import_to_ready(&mut self, block_number: BlockNumber, tx: WaitingTransaction<Hash>) -> error::Result<Imported<Hash>> {
+	fn import_to_ready(&mut self, block_number: BlockNumber, tx: WaitingTransaction<Hash, Ex>) -> error::Result<Imported<Hash, Ex>> {
 		let hash = tx.transaction.hash.clone();
 		let mut promoted = vec![];
 		let mut failed = vec![];
@@ -195,7 +195,7 @@ impl<Hash: hash::Hash + Member> Pool<Hash> {
 	}
 
 	/// Returns an iterator over ready transactions in the pool.
-	pub fn ready<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction<Hash>>> + 'a {
+	pub fn ready<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> + 'a {
 		self.ready.get()
 	}
 
@@ -207,7 +207,7 @@ impl<Hash: hash::Hash + Member> Pool<Hash> {
 	/// they were part of a chain, you may attempt to re-import them later.
 	/// NOTE If you want to remove ready transactions that were already used
 	/// and you don't want them to be stored in the pool use `prune_tags` method.
-	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash>>> {
+	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = self.ready.remove_invalid(hashes);
 		removed.extend(self.future.remove(hashes).into_iter().map(Arc::new));
 		removed
@@ -219,7 +219,7 @@ impl<Hash: hash::Hash + Member> Pool<Hash> {
 	/// but unlike `remove_invalid`, dependent transactions are not touched.
 	/// Additional transactions from future queue might be promoted to ready if you satisfy tags
 	/// that the pool didn't previously know about.
-	pub fn prune_tags(&mut self, block_number: BlockNumber, tags: impl IntoIterator<Item=Tag>) -> PruneStatus<Hash> {
+	pub fn prune_tags(&mut self, block_number: BlockNumber, tags: impl IntoIterator<Item=Tag>) -> PruneStatus<Hash, Ex> {
 		let mut to_import = vec![];
 		let mut pruned = vec![];
 
@@ -257,7 +257,7 @@ mod tests {
 
 	type Hash = u64;
 
-	fn pool() -> Pool<Hash> {
+	fn pool() -> Pool<Hash, Vec<u8>> {
 		Pool::default()
 	}
 
@@ -268,7 +268,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: vec![1u8],
+			data: vec![1u8],
 			hash: 1u64,
 			priority: 5u64,
 			longevity: 64u64,
@@ -288,7 +288,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: vec![1u8],
+			data: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -296,7 +296,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![1u8],
+			data: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -317,7 +317,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: vec![1u8],
+			data: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -327,7 +327,7 @@ mod tests {
 		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.ready.len(), 0);
 		pool.import(1, Transaction {
-			ex: vec![2u8],
+			data: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -347,7 +347,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: vec![1u8],
+			data: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -355,7 +355,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![3u8],
+			data: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -363,7 +363,7 @@ mod tests {
 			provides: vec![],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![2u8],
+			data: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -371,7 +371,7 @@ mod tests {
 			provides: vec![vec![3], vec![2]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![4u8],
+			data: vec![4u8],
 			hash: 4,
 			priority: 1_000u64,
 			longevity: 64u64,
@@ -382,7 +382,7 @@ mod tests {
 		assert_eq!(pool.ready.len(), 0);
 
 		let res = pool.import(1, Transaction {
-			ex: vec![5u8],
+			data: vec![5u8],
 			hash: 5,
 			priority: 5u64,
 			longevity: 64u64,
@@ -391,7 +391,7 @@ mod tests {
 		}).unwrap();
 
 		// then
-		let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
+		let mut it = pool.ready().into_iter().map(|tx| tx.data[0]);
 
 		assert_eq!(it.next(), Some(5));
 		assert_eq!(it.next(), Some(1));
@@ -412,7 +412,7 @@ mod tests {
 		// given
 		let mut pool = pool();
 		pool.import(1, Transaction {
-			ex: vec![1u8],
+			data: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -420,7 +420,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![3u8],
+			data: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -432,7 +432,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: vec![2u8],
+			data: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -442,7 +442,7 @@ mod tests {
 
 		// then
 		{
-			let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
+			let mut it = pool.ready().into_iter().map(|tx| tx.data[0]);
 			assert_eq!(it.next(), None);
 		}
 		// all transactions occupy the Future queue - it's fine
@@ -450,14 +450,14 @@ mod tests {
 
 		// let's close the cycle with one additional transaction
 		let res = pool.import(1, Transaction {
-			ex: vec![4u8],
+			data: vec![4u8],
 			hash: 4,
 			priority: 50u64,
 			longevity: 64u64,
 			requires: vec![],
 			provides: vec![vec![0]],
 		}).unwrap();
-		let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
+		let mut it = pool.ready().into_iter().map(|tx| tx.data[0]);
 		assert_eq!(it.next(), Some(4));
 		assert_eq!(it.next(), Some(1));
 		assert_eq!(it.next(), Some(3));
@@ -477,7 +477,7 @@ mod tests {
 		// given
 		let mut pool = pool();
 		pool.import(1, Transaction {
-			ex: vec![1u8],
+			data: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -485,7 +485,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![3u8],
+			data: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -497,7 +497,7 @@ mod tests {
 
 		// when
 		pool.import(1, Transaction {
-			ex: vec![2u8],
+			data: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -507,7 +507,7 @@ mod tests {
 
 		// then
 		{
-			let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
+			let mut it = pool.ready().into_iter().map(|tx| tx.data[0]);
 			assert_eq!(it.next(), None);
 		}
 		// all transactions occupy the Future queue - it's fine
@@ -515,14 +515,14 @@ mod tests {
 
 		// let's close the cycle with one additional transaction
 		let err = pool.import(1, Transaction {
-			ex: vec![4u8],
+			data: vec![4u8],
 			hash: 4,
 			priority: 1u64, // lower priority than Tx(2)
 			longevity: 64u64,
 			requires: vec![],
 			provides: vec![vec![0]],
 		}).unwrap_err();
-		let mut it = pool.ready().into_iter().map(|tx| tx.ex[0]);
+		let mut it = pool.ready().into_iter().map(|tx| tx.data[0]);
 		assert_eq!(it.next(), None);
 		assert_eq!(pool.ready.len(), 0);
 		assert_eq!(pool.future.len(), 0);
@@ -537,7 +537,7 @@ mod tests {
 		// given
 		let mut pool = pool();
 		pool.import(1, Transaction {
-			ex: vec![5u8],
+			data: vec![5u8],
 			hash: 5,
 			priority: 5u64,
 			longevity: 64u64,
@@ -545,7 +545,7 @@ mod tests {
 			provides: vec![vec![0], vec![4]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![1u8],
+			data: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -553,7 +553,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![3u8],
+			data: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -561,7 +561,7 @@ mod tests {
 			provides: vec![],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![2u8],
+			data: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -569,7 +569,7 @@ mod tests {
 			provides: vec![vec![3], vec![2]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![4u8],
+			data: vec![4u8],
 			hash: 4,
 			priority: 1_000u64,
 			longevity: 64u64,
@@ -578,7 +578,7 @@ mod tests {
 		}).unwrap();
 		// future
 		pool.import(1, Transaction {
-			ex: vec![6u8],
+			data: vec![6u8],
 			hash: 6,
 			priority: 1_000u64,
 			longevity: 64u64,
@@ -603,7 +603,7 @@ mod tests {
 		let mut pool = pool();
 		// future (waiting for 0)
 		pool.import(1, Transaction {
-			ex: vec![5u8],
+			data: vec![5u8],
 			hash: 5,
 			priority: 5u64,
 			longevity: 64u64,
@@ -612,7 +612,7 @@ mod tests {
 		}).unwrap();
 		// ready
 		pool.import(1, Transaction {
-			ex: vec![1u8],
+			data: vec![1u8],
 			hash: 1,
 			priority: 5u64,
 			longevity: 64u64,
@@ -620,7 +620,7 @@ mod tests {
 			provides: vec![vec![1]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![2u8],
+			data: vec![2u8],
 			hash: 2,
 			priority: 5u64,
 			longevity: 64u64,
@@ -628,7 +628,7 @@ mod tests {
 			provides: vec![vec![3]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![3u8],
+			data: vec![3u8],
 			hash: 3,
 			priority: 5u64,
 			longevity: 64u64,
@@ -636,7 +636,7 @@ mod tests {
 			provides: vec![vec![2]],
 		}).unwrap();
 		pool.import(1, Transaction {
-			ex: vec![4u8],
+			data: vec![4u8],
 			hash: 4,
 			priority: 1_000u64,
 			longevity: 64u64,
