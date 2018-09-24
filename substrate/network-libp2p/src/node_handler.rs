@@ -733,15 +733,21 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 
 		// Poll for Kademlia events.
 		if let Some((controller, mut stream)) = self.kademlia_substream.take() {
-			match stream.poll() {
-				Ok(Async::Ready(Some(KadIncomingRequest::FindNode { searched, responder }))) => {
-					return Ok(Async::Ready(Some(SubstrateOutEvent::KadFindNode { searched, responder })));
-				},
-				// We don't care about Kademlia pings, they are unused.
-				Ok(Async::Ready(Some(KadIncomingRequest::PingPong))) => {},
-				Ok(Async::NotReady) => self.kademlia_substream = Some((controller, stream)),
-				Ok(Async::Ready(None)) => return Ok(Async::Ready(Some(SubstrateOutEvent::KadClosed(Ok(()))))),
-				Err(err) => return Ok(Async::Ready(Some(SubstrateOutEvent::KadClosed(Err(err))))),
+			loop {
+				match stream.poll() {
+					Ok(Async::Ready(Some(KadIncomingRequest::FindNode { searched, responder }))) => {
+						self.kademlia_substream = Some((controller, stream));
+						return Ok(Async::Ready(Some(SubstrateOutEvent::KadFindNode { searched, responder })));
+					},
+					// We don't care about Kademlia pings, they are unused.
+					Ok(Async::Ready(Some(KadIncomingRequest::PingPong))) => {},
+					Ok(Async::NotReady) => {
+						self.kademlia_substream = Some((controller, stream));
+						break;
+					},
+					Ok(Async::Ready(None)) => return Ok(Async::Ready(Some(SubstrateOutEvent::KadClosed(Ok(()))))),
+					Err(err) => return Ok(Async::Ready(Some(SubstrateOutEvent::KadClosed(Err(err))))),
+				}
 			}
 		}
 
