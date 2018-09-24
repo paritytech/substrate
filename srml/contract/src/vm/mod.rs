@@ -17,22 +17,23 @@
 //! This module provides a means for executing contracts
 //! represented in wasm.
 
-use exec::{CreateReceipt};
-use gas::{GasMeter, GasMeterResult};
+use exec::CreateReceipt;
+use gas::GasMeter;
 use rstd::prelude::*;
 use runtime_primitives::traits::As;
-use {sandbox, balances, system};
 use Trait;
+use {balances, sandbox, system};
 
 type BalanceOf<T> = <T as balances::Trait>::Balance;
 type AccountIdOf<T> = <T as system::Trait>::AccountId;
 
 mod prepare;
-
 #[macro_use]
 mod env_def;
+mod runtime;
 
 use self::prepare::{prepare_contract, PreparedContract};
+use self::runtime::{to_execution_result, Runtime};
 
 /// An interface that provides an access to the external environment in which the
 /// smart-contract is executed.
@@ -111,60 +112,16 @@ pub enum Error {
 	Memory,
 }
 
-/// Enumerates all possible *special* trap conditions.
-///
-/// In this runtime traps used not only for signaling about errors but also
-/// to just terminate quickly in some cases.
-enum SpecialTrap {
-	/// Signals that trap was generated in response to call `ext_return` host function.
-	Return,
-}
-
-pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
-	ext: &'a mut E,
-	input_data: &'data [u8],
-	output_data: &'data mut Vec<u8>,
-	scratch_buf: Vec<u8>,
-	config: &'a Config<E::T>,
-	memory: sandbox::Memory,
-	gas_meter: &'a mut GasMeter<E::T>,
-	special_trap: Option<SpecialTrap>,
-}
-impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
-	fn memory(&self) -> &sandbox::Memory {
-		&self.memory
-	}
-}
-
-fn to_execution_result<E: Ext>(
-	runtime: Runtime<E>,
-	sandbox_err: Option<sandbox::Error>,
-) -> Result<(), Error> {
-	// Check the exact type of the error. It could be plain trap or
-	// special runtime trap the we must recognize.
-	match (sandbox_err, runtime.special_trap) {
-		// No traps were generated. Proceed normally.
-		(None, None) => Ok(()),
-		// Special case. The trap was the result of the execution `return` host function.
-		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return)) => Ok(()),
-		// Any other kind of a trap should result in a failure.
-		(Some(_), _) => Err(Error::Invoke),
-		// Any other case (such as special trap flag without actual trap) signifies
-		// a logic error.
-		_ => unreachable!(),
-	}
-}
-
 /// Execute the given code as a contract.
 pub fn execute<'a, E: Ext>(
 	code: &[u8],
 	input_data: &[u8],
 	output_data: &mut Vec<u8>,
 	ext: &'a mut E,
+	config: &Config<E::T>,
 	gas_meter: &mut GasMeter<E::T>,
 ) -> Result<(), Error> {
-	let config = Config::default();
-	let env = env_def::init_env();
+	let env = runtime::init_env();
 
 	let PreparedContract {
 		instrumented_code,
@@ -177,36 +134,27 @@ pub fn execute<'a, E: Ext>(
 	}
 	imports.add_memory("env", "memory", memory.clone());
 
-	let mut runtime = Runtime {
-		ext,
-		input_data,
-		output_data,
-		config: &config,
-		scratch_buf: Vec::new(),
-		memory,
-		gas_meter,
-		special_trap: None,
-	};
+	let mut runtime = Runtime::new(ext, input_data, output_data, &config, memory, gas_meter);
 
 	// Instantiate the instance from the instrumented module code.
-	let exec_error: Option<sandbox::Error> =
-		match sandbox::Instance::new(&instrumented_code, &imports, &mut runtime) {
-			// No errors or traps were generated on instantiation! That
-			// means we can now invoke the contract entrypoint.
-			Ok(mut instance) => instance.invoke(b"call", &[], &mut runtime).err(),
-			// `start` function trapped.
-			Err(err @ sandbox::Error::Execution) => Some(err),
-			// Other instantiation errors.
-			// Return without executing anything.
-			Err(_) => return Err(Error::Instantiate),
-		};
-
-	to_execution_result(runtime, exec_error)
+	match sandbox::Instance::new(&instrumented_code, &imports, &mut runtime) {
+		// No errors or traps were generated on instantiation! That
+		// means we can now invoke the contract entrypoint.
+		Ok(mut instance) => {
+			let err = instance.invoke(b"call", &[], &mut runtime).err();
+			to_execution_result(runtime, err)
+		}
+		// `start` function trapped. Treat it in the same manner as an execution error.
+		Err(err @ sandbox::Error::Execution) => to_execution_result(runtime, Some(err)),
+		// Other instantiation errors.
+		// Return without executing anything.
+		Err(_) => return Err(Error::Instantiate),
+	}
 }
 
 // TODO: Extract it to the root of the crate
 #[derive(Clone)]
-struct Config<T: Trait> {
+pub struct Config<T: Trait> {
 	/// Gas cost of a growing memory by single page.
 	grow_mem_cost: T::Gas,
 
@@ -362,6 +310,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
+			&::vm::Config::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -424,6 +373,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
+			&::vm::Config::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -463,6 +413,7 @@ mod tests {
 				&[],
 				&mut Vec::new(),
 				&mut mock_ext,
+				&::vm::Config::default(),
 				&mut GasMeter::with_limit(100_000, 1)
 			),
 			Err(_)
@@ -516,6 +467,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
+			&::vm::Config::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
@@ -608,6 +560,7 @@ mod tests {
 			&[],
 			&mut return_buf,
 			&mut mock_ext,
+			&Config::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 
