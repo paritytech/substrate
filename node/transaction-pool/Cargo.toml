@@ -11,8 +11,8 @@ node-api = { path = "../api" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 substrate-client = { path = "../../core/client" }
-parity-codec = { version = "1.1" }
+parity-codec = { version = "2.0" }
 substrate-keyring = { path = "../../core/keyring" }
-substrate-extrinsic-pool = { path = "../../core/extrinsic-pool" }
+substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-primitives = { path = "../../core/primitives" }
 sr-primitives = { path = "../../core/sr-primitives" }

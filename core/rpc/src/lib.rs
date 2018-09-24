@@ -25,7 +25,7 @@ extern crate jsonrpc_pubsub;
 extern crate parking_lot;
 extern crate parity_codec as codec;
 extern crate substrate_client as client;
-extern crate substrate_extrinsic_pool as extrinsic_pool;
+extern crate substrate_transaction_pool as transaction_pool;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;

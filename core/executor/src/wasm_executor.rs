@@ -344,7 +344,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			5
 		})
 	},
-	ext_sandbox_instantiate(dispatch_thunk_idx: usize, wasm_ptr: *const u8, wasm_len: usize, imports_ptr: *const u8, imports_len: usize, state: usize) -> u32 => {
+	ext_sandbox_instantiate(
+		dispatch_thunk_idx: usize,
+		wasm_ptr: *const u8,
+		wasm_len: usize,
+		imports_ptr: *const u8,
+		imports_len: usize,
+		state: usize
+	) -> u32 => {
 		let wasm = this.memory.get(wasm_ptr, wasm_len as usize).map_err(|_| UserError("Sandbox error"))?;
 		let raw_env_def = this.memory.get(imports_ptr, imports_len as usize).map_err(|_| UserError("Sandbox error"))?;
 
@@ -357,9 +364,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.clone()
 		};
 
-		let instance_idx = sandbox::instantiate(this, dispatch_thunk, &wasm, &raw_env_def, state)?;
+		let instance_idx_or_err_code =
+			match sandbox::instantiate(this, dispatch_thunk, &wasm, &raw_env_def, state) {
+				Ok(instance_idx) => instance_idx,
+				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
+				Err(_) => sandbox_primitives::ERR_MODULE,
+			};
 
-		Ok(instance_idx as u32)
+		Ok(instance_idx_or_err_code as u32)
 	},
 	ext_sandbox_instance_teardown(instance_idx: u32) => {
 		this.sandbox_store.instance_teardown(instance_idx)?;

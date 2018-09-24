@@ -19,7 +19,7 @@
 use primitives::{AuthorityId, ed25519};
 use node_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
-	ContractConfig, Permill};
+	ContractConfig, Permill, Perbill};
 use service::ChainSpec;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -61,8 +61,10 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
-			offline_slash: 10000,
-			session_reward: 100,
+			offline_slash: Perbill::from_millionths(1000),
+			session_reward: Perbill::from_billionths(60),
+			current_offline_slash: 0,
+			current_session_reward: 0,
 			validator_count: 12,
 			sessions_per_era: 12,	// 1 hour per era
 			bonding_duration: 24 * 60 * 12,	// 1 day per bond.
@@ -156,8 +158,10 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			validator_count: 2,
 			sessions_per_era: 5,
 			bonding_duration: 2 * 60 * 12,
-			offline_slash: 0,
-			session_reward: 0,
+			offline_slash: Perbill::zero(),
+			session_reward: Perbill::zero(),
+			current_offline_slash: 0,
+			current_session_reward: 0,
 			offline_slash_grace: 0,
 		}),
 		democracy: Some(DemocracyConfig {

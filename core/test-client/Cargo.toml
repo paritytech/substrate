@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 rhododendron = "0.3"
 substrate-bft = { path = "../bft" }
 substrate-client = { path = "../client" }
-parity-codec = { version = "1.1" }
+parity-codec = { version = "2.0" }
 substrate-executor = { path = "../executor" }
 substrate-keyring = { path = "../../core/keyring" }
 substrate-primitives = { path = "../primitives" }

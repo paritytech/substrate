@@ -20,7 +20,7 @@ use std::sync::Arc;
 
 use client::{self, Client};
 use codec::Decode;
-use extrinsic_pool::{
+use transaction_pool::{
 	Pool,
 	IntoPoolError,
 	ChainApi as PoolChainApi,
