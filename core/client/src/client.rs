@@ -455,7 +455,10 @@ impl<B, E, Block> Client<B, E, Block> where
 			blockchain::BlockStatus::Unknown => {},
 		}
 
-		let last_best = self.backend.blockchain().info()?.best_hash;
+		let (last_best, last_best_number) = {
+			let info = self.backend.blockchain().info()?;
+			(info.best_hash, info.best_number)
+		};
 
 		// this is a fairly arbitrary choice of where to draw the line on making notifications,
 		// but the general goal is to only make notifications when we are already fully synced
@@ -505,7 +508,8 @@ impl<B, E, Block> Client<B, E, Block> where
 			None => (None, None, None)
 		};
 
-		let is_new_best = finalized || parent_hash == last_best;
+		// TODO: non longest-chain rule.
+		let is_new_best = finalized || header.number() > &last_best_number;
 		let leaf_state = if finalized {
 			::backend::NewBlockState::Final
 		} else if is_new_best {

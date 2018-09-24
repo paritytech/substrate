@@ -165,7 +165,8 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 	/// Creates and register protocol with the network service
 	pub fn new(params: Params<B, S, H>, protocol_id: ProtocolId) -> Result<Arc<Service<B, S, H>>, Error> {
 		let chain = params.chain.clone();
-		let import_queue = Arc::new(AsyncImportQueue::new());
+		// TODO: non-insatnt finality.
+		let import_queue = Arc::new(AsyncImportQueue::new(true));
 		let handler = Arc::new(ProtocolHandler {
 			protocol: Protocol::new(
 				params.config,
