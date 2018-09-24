@@ -3223,6 +3223,7 @@ version = "0.4.0"
 dependencies = [
  "criterion 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
+ "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "keccak-hasher 0.1.0 (git+https://github.com/paritytech/trie)",
  "memory-db 0.9.0 (git+https://github.com/paritytech/trie)",
  "parity-codec 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",

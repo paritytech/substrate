@@ -30,6 +30,9 @@ extern crate memory_db;
 extern crate substrate_primitives;
 #[cfg(test)]
 extern crate trie_standardmap;
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
 
 mod error;
 mod node_header;
@@ -459,6 +462,29 @@ mod tests {
 		ex.push(0xfe);									// value data
 
 		assert_eq!(trie, ex);
+	}
+
+	#[test]
+	fn iterator_works() {
+		let pairs = vec![
+			(hex!("0103000000000000000464").to_vec(), hex!("0400000000").to_vec()),
+			(hex!("0103000000000000000469").to_vec(), hex!("0401000000").to_vec()),
+		];
+
+		let mut mdb = MemoryDB::default();
+		let mut root = Default::default();
+		let _ = populate_trie(&mut mdb, &mut root, &pairs);
+
+		let trie = TrieDB::<Blake2Hasher>::new(&mdb, &root).unwrap();
+
+		let iter = trie.iter().unwrap();
+		let mut iter_pairs = Vec::new();
+		for pair in iter {
+			let (key, value) = pair.unwrap();
+			iter_pairs.push((key, value.to_vec()));
+		}
+
+		assert_eq!(pairs, iter_pairs);
 	}
 
 	// TODO: make other tests work.
