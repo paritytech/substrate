@@ -155,27 +155,33 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 	{
 		println!("Checking star topology");
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
-		let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES as u32, 0, 0);
-		let first_address = network.full_nodes[0].1.network().node_id().unwrap();
-		for (_, service) in network.full_nodes.iter().skip(1) {
-			service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
+		{
+			let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES as u32, 0, 0);
+			let first_address = network.full_nodes[0].1.network().node_id().unwrap();
+			for (_, service) in network.full_nodes.iter().skip(1) {
+				service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
+			}
+			network.run_until_all_full(|_index, service| {
+				service.network().status().num_peers == NUM_NODES - 1
+			});
 		}
-		network.run_until_all_full(|_index, service| {
-			service.network().status().num_peers == NUM_NODES - 1
-		});
+		temp.close().expect("Error removing temp dir");
 	}
 	{
 		println!("Checking linked topology");
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
-		let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES as u32, 0, 0);
-		let mut address = network.full_nodes[0].1.network().node_id().unwrap();
-		for (_, service) in network.full_nodes.iter().skip(1) {
-			service.network().add_reserved_peer(address.clone()).expect("Error adding reserved peer");
-			address = service.network().node_id().unwrap();
+		{
+			let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES as u32, 0, 0);
+			let mut address = network.full_nodes[0].1.network().node_id().unwrap();
+			for (_, service) in network.full_nodes.iter().skip(1) {
+				service.network().add_reserved_peer(address.clone()).expect("Error adding reserved peer");
+				address = service.network().node_id().unwrap();
+			}
+			network.run_until_all_full(|_index, service| {
+				service.network().status().num_peers == NUM_NODES - 1
+			});
 		}
-		network.run_until_all_full(|_index, service| {
-			service.network().status().num_peers == NUM_NODES - 1
-		});
+		temp.close().expect("Error removing temp dir");
 	}
 }
 
@@ -229,6 +235,7 @@ where
 		}
 		first_service.network().node_id().unwrap()
 	};
+	println!("Waiting for sync to complete");
 	for (_, service) in network.full_nodes.iter().skip(1) {
 		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 	}
