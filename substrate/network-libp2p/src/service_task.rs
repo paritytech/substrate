@@ -316,12 +316,6 @@ impl Service {
 		self.swarm.listeners()
 	}
 
-	/// Returns an iterator to our known external addresses.
-	#[inline]
-	pub fn external_addresses(&self) -> impl Iterator<Item = &Multiaddr> {
-		self.swarm.external_addresses()
-	}
-
 	/// Returns the peer id of the local node.
 	#[inline]
 	pub fn peer_id(&self) -> &PeerId {
