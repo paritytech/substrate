@@ -62,9 +62,8 @@ pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
 pub use client::{
 	new_in_mem,
-	BlockBody, BlockStatus, BlockOrigin, BlockchainEventStream, BlockchainEvents,
-	Client, ClientInfo, ChainHead,
-	ImportResult, JustifiedHeader,
+	BlockBody, BlockStatus, BlockOrigin, ImportNotifications, FinalityNotifications, BlockchainEvents,
+	Client, ClientInfo, ChainHead, ImportResult, JustifiedHeader,
 };
 pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;

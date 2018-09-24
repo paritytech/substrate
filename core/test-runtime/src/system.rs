@@ -207,7 +207,7 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("0c22599e15fb5e052c84f79a2aab179ba6bb238218fd86bdd4a74ebcc87adfcd").into(),
+			state_root: hex!("3d6f3663e052a7d325d3ac6cdbd3cd4033132f5bfe5852d51d4e42e7021ee69b").into(),
 			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 			digest: Digest { logs: vec![], },
 		};
@@ -236,7 +236,7 @@ mod tests {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
 				state_root: hex!("0425393fd07e2a806cfd7e990ee91dc92fe6bba34eab2bf45d5be7d67e24d467").into(),
-				extrinsics_root: hex!("83fd59e8fe7cee53d7421713a09fe0abae1aec5f4db94fe5193737b12195f013").into(),
+				extrinsics_root: hex!("4e689a607609f69df099af82577ae6c5969c44f1afe33a43cd7af926eba42272").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
