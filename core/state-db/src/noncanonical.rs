@@ -103,7 +103,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			trace!(target: "state-db", "Finished reading uncanonicalized journal, {} entries", total);
 		}
 		Ok(NonCanonicalOverlay {
-			last_canonicalized: last_canonicalized,
+			last_canonicalized,
 			levels,
 			parents,
 			last_canonicalized_overlay: Default::default(),
