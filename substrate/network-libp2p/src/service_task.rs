@@ -857,7 +857,13 @@ impl Service {
 					Ok(Async::Ready(Some(KadQueryEvent::PeersReported(list)))) =>
 						self.add_discovered_peers(list),
 					// We don't actually care about the results
-					Ok(Async::Ready(Some(KadQueryEvent::Finished(_out)))) => break,
+					Ok(Async::Ready(Some(KadQueryEvent::Finished(_out)))) => {
+						if _out.is_empty() {
+							warn!(target: "sub-libp2p", "Random Kademlia request has yielded \
+								empty results");
+						}
+						break
+					},
 					Ok(Async::Ready(None)) => break,
 					Ok(Async::NotReady) => {
 						self.kad_queries.push(query);
