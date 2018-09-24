@@ -89,7 +89,7 @@ pub fn key_changes_proof<S: Storage<H>, H: Hasher>(
 
 /// Check key changes proog and return changes of the key at given blocks range.
 /// `max` is the number of best known block.
-pub fn key_changes_proof_check<S: Storage<H>, H: 'static + Hasher>(
+pub fn key_changes_proof_check<S: Storage<H>, H: Hasher>(
 	config: &Configuration,
 	roots_storage: &S, // TODO: use RootsStorage is only used to gather root
 	proof: Vec<Vec<u8>>,

@@ -22,7 +22,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use hash_db::{self, Hasher};
 use heapsize::HeapSizeOf;
-use trie::{TrieDB, Trie, MemoryDB, DBValue, HashDB, TrieError};
+use trie::{TrieDB, Trie, MemoryDB, DBValue, TrieError};
 use changes_trie::Storage as ChangesTrieStorage;
 
 /// Patricia trie-based storage trait.
@@ -109,14 +109,14 @@ pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 }
 
 impl<'a,
-	S: TrieBackendStorage<H>,
-	H: Hasher
+	S: 'a + TrieBackendStorage<H>,
+	H: 'a + Hasher
 > hash_db::AsHashDB<H, DBValue>
 	for Ephemeral<'a, S, H>
 	where H::Out: HeapSizeOf
 {
-	fn as_hash_db(&self) -> &HashDB<H> { self }
-	fn as_hash_db_mut(&mut self) -> &mut HashDB<H> { self }
+	fn as_hash_db<'b>(&'b self) -> &'b (hash_db::HashDB<H, DBValue> + 'b) { self }
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (hash_db::HashDB<H, DBValue> + 'b) { self }
 }
 
 impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
@@ -190,7 +190,7 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<Storage<H>> {
 // This implementation is used by test storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Ok(HashDB::<H>::get(self, key).clone())
+		Ok(<Self as hash_db::HashDB<H, DBValue>>::get(self, key))
 	}
 }
 
