@@ -18,7 +18,7 @@
 
 use std::collections::HashMap;
 use hash_db::Hasher;
-use primitives::trie::DBValue;
+use trie::DBValue;
 use heapsize::HeapSizeOf;
 use trie::MemoryDB;
 use parking_lot::RwLock;

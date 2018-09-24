@@ -207,8 +207,8 @@ impl<
 		let new_header = <system::Module<System>>::finalise();
 
 		// check digest. uncomment next two lines to figure out next digest hash for tests.
-//		runtime_io::print(&header.digest().encode()[..]);
-//		runtime_io::print(&new_header.digest().encode()[..]);
+		runtime_io::print(&header.digest().encode()[..]);
+		runtime_io::print(&new_header.digest().encode()[..]);
 		assert!(header.digest() == new_header.digest());
 
 		// check storage root.
@@ -346,8 +346,8 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("d1d3da2b1efb1a6ef740b8cdef52e4cf3c6dade6f8a360969fd7ef0034c53b54").into(),
-					extrinsics_root: hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into(),
+					state_root: hex!("d9e26179ed13b3df01e71ad0bf622d56f2066a63e04762a83c0ae9deeb4da1d0").into(),
+					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],
@@ -364,7 +364,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: [0u8; 32].into(),
-					extrinsics_root: hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into(),
+					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],
@@ -380,7 +380,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("d1d3da2b1efb1a6ef740b8cdef52e4cf3c6dade6f8a360969fd7ef0034c53b54").into(),
+					state_root: hex!("d9e26179ed13b3df01e71ad0bf622d56f2066a63e04762a83c0ae9deeb4da1d0").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

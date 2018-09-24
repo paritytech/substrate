@@ -385,7 +385,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn new_test(keep_blocks: u32) -> Self {
 		use utils::NUM_COLUMNS;
 
-		let db = Arc::new(::kvdb_memory_db::create(NUM_COLUMNS));
+		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
 
 		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(keep_blocks), 0).expect("failed to create test-db")
 	}
@@ -935,7 +935,7 @@ mod tests {
 
 		let prepare_changes = |changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let mut changes_root = H256::default();
-			let mut changes_trie_update = MemoryDB::<Blake2Hasher>::new();
+			let mut changes_trie_update = MemoryDB::<Blake2Hasher>::default();	// TODO: use new() to be more correct 
 			{
 				let mut trie = TrieDBMut::<Blake2Hasher>::new(
 					&mut changes_trie_update,

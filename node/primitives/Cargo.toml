@@ -6,8 +6,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 serde = { version = "1.0", default_features = false }
 serde_derive = { version = "1.0", optional = true }
-parity-codec = { version = "2.0", default_features = false }
-parity-codec-derive = { version = "~1.0", default_features = false }
+parity-codec = { version = "~2.0.1", default_features = false }
+parity-codec-derive = { version = "~2.0.1", default_features = false }
 substrate-primitives = { path = "../../core/primitives", default_features = false }
 sr-std = { path = "../../core/sr-std", default_features = false }
 sr-primitives = { path = "../../core/sr-primitives", default_features = false }

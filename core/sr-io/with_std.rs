@@ -33,7 +33,6 @@ pub use primitives::{Blake2Hasher};
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
-use codec::{Encode, Compact};
 use primitives::hexdisplay::HexDisplay;
 use primitives::H256;
 use hash_db::Hasher;

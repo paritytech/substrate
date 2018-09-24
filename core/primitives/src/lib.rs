@@ -62,9 +62,6 @@ extern crate core;
 extern crate wasmi;
 extern crate hash_db;
 extern crate hash256_std_hasher;
-pub extern crate substrate_trie as trie;
-#[cfg(feature = "std")]
-extern crate trie_db;
 #[cfg(feature = "std")]
 extern crate elastic_array;
 

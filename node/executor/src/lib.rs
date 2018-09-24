@@ -24,7 +24,7 @@ extern crate substrate_state_machine as state_machine;
 extern crate sr_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate node_primitives;
-extern crate trie_root;
+extern crate substrate_trie as trie;
 
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate sr_primitives as runtime_primitives;
@@ -259,7 +259,7 @@ mod tests {
 		changes_root: Option<Hash>,
 		extrinsics: Vec<CheckedExtrinsic>
 	) -> (Vec<u8>, Hash) {
-		use trie_root::ordered_trie_root;
+		use trie::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
@@ -286,12 +286,12 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("8c276aaee09396d7630285caccb6e90d5e910da6590794b88f2a4178dcb1bbd4").into()
+				hex!("bbfe47c5310929d10712e58dd74f99ed27d0e504b4c46b5430e81503a436beb8").into()
 			} else {
-				hex!("dc725478bd4650be5ca4d096b77f5115301bdc889c7c341490ad0e06f17aa3f5").into()
+				hex!("f3309ec5639678337805d8f16fac2b37e3663d3bc21f6c21e375377eab3388a6").into()
 			},
 			if support_changes_trie {
-				Some(hex!("8ddfae3e9a7c5a3443d10978d84fe13fc032f485f45db383b5f6c72942d08cd1").into())
+				Some(hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into())
 			} else {
 				None
 			},
@@ -312,7 +312,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("703efd5294ae5677c3c975593c64796cce27b471f27936c0cf31fda0a55ede19").into(),
+			hex!("e312f8e2111124c57448050aed74c625382ed222f48ab55ada41afacd0a65fa6").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -335,7 +335,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("ea9955f8c3d48761b6e712dc73bdf933e0884c88d06a5cb0fd70b28e91852948").into(),
+			hex!("c33272caf0136a427f59bfcdd60cb17e0cc632756b9017b4415bb2f4cb19dcc7").into(),
 			None,
 			vec![
 				CheckedExtrinsic {

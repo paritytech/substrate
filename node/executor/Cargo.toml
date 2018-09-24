@@ -12,6 +12,7 @@ sr-io = { path = "../../core/sr-io" }
 substrate-state-machine = { path = "../../core/state-machine" }
 substrate-executor = { path = "../../core/executor" }
 substrate-primitives = { path = "../../core/primitives" }
+substrate-trie = { path = "../../core/trie" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 
