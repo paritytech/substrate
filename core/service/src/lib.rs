@@ -178,12 +178,14 @@ impl<Components> Service<Components>
 
 		{
 			// block notifications
-			let network = network.clone();
+			let network = Arc::downgrade(&network);
 			let txpool = transaction_pool.clone();
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
-					network.on_block_imported(notification.hash, &notification.header);
+					if let Some(network) = network.upgrade() {
+						network.on_block_imported(notification.hash, &notification.header);
+					}
 					txpool.cull(&BlockId::hash(notification.hash))
 						.map_err(|e| warn!("Error removing extrinsics: {:?}", e))?;
 					Ok(())
@@ -195,11 +197,13 @@ impl<Components> Service<Components>
 
 		{
 			// extrinsic notifications
-			let network = network.clone();
+			let network = Arc::downgrade(&network);
 			let events = transaction_pool.import_notification_stream()
 				// TODO [ToDr] Consider throttling?
 				.for_each(move |_| {
-					network.trigger_repropagate();
+					if let Some(network) = network.upgrade() {
+						network.trigger_repropagate();
+					}
 					Ok(())
 				})
 				.select(exit.clone())

@@ -252,6 +252,11 @@ mod tests {
 		service_test::sync::<Factory, _>(chain_spec::integration_test_config(), block_factory);
 	}
 
+	#[test]
+	fn test_consensus() {
+		service_test::consensus::<Factory>(chain_spec::integration_test_config(), vec!["Alice".into(), "Bob".into()]);
+	}
+
 	fn justify(header: &Header, authorities: &[Arc<ed25519::Pair>]) -> bft::UncheckedJustification<Hash> {
 		let hash = header.hash();
 		bft::UncheckedJustification::new(
