@@ -270,6 +270,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 
 #[cfg(test)]
 mod tests {
+	use std::io;
 	use super::NonCanonicalOverlay;
 	use {ChangeSet};
 	use primitives::H256;
@@ -303,8 +304,8 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay.insert(&h1, 2, &H256::default(), ChangeSet::default());
-		overlay.insert(&h2, 1, &h1, ChangeSet::default());
+		overlay.insert::<io::Error>(&h1, 2, &H256::default(), ChangeSet::default()).unwrap();
+		overlay.insert::<io::Error>(&h2, 1, &h1, ChangeSet::default()).unwrap();
 	}
 
 	#[test]
@@ -314,8 +315,8 @@ mod tests {
 		let h2 = H256::random();
 		let db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default());
-		overlay.insert(&h2, 3, &h1, ChangeSet::default());
+		overlay.insert::<io::Error>(&h1, 1, &H256::default(), ChangeSet::default()).unwrap();
+		overlay.insert::<io::Error>(&h2, 3, &h1, ChangeSet::default()).unwrap();
 	}
 
 	#[test]
@@ -325,8 +326,8 @@ mod tests {
 		let h1 = H256::random();
 		let h2 = H256::random();
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default());
-		overlay.insert(&h2, 2, &H256::default(), ChangeSet::default());
+		overlay.insert::<io::Error>(&h1, 1, &H256::default(), ChangeSet::default()).unwrap();
+		overlay.insert::<io::Error>(&h2, 2, &H256::default(), ChangeSet::default()).unwrap();
 	}
 
 	#[test]
@@ -336,7 +337,7 @@ mod tests {
 		let h2 = H256::random();
 		let db = make_db(&[]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		overlay.insert(&h1, 1, &H256::default(), ChangeSet::default());
+		overlay.insert::<io::Error>(&h1, 1, &H256::default(), ChangeSet::default()).unwrap();
 		overlay.canonicalize(&h2);
 	}
 
@@ -346,7 +347,7 @@ mod tests {
 		let mut db = make_db(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset = make_changeset(&[3, 4], &[2]);
-		let insertion = overlay.insert(&h1, 1, &H256::default(), changeset.clone());
+		let insertion = overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset.clone()).unwrap();
 		assert_eq!(insertion.data.inserted.len(), 0);
 		assert_eq!(insertion.data.deleted.len(), 0);
 		assert_eq!(insertion.meta.inserted.len(), 2);
@@ -367,8 +368,8 @@ mod tests {
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2])));
-		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])));
+		db.commit(&overlay.insert::<io::Error>(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
 		assert_eq!(db.meta.len(), 3);
 
 		let overlay2 = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
@@ -383,8 +384,8 @@ mod tests {
 		let h2 = H256::random();
 		let mut db = make_db(&[1, 2]);
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2])));
-		db.commit(&overlay.insert(&h2, 11, &h1, make_changeset(&[5], &[3])));
+		db.commit(&overlay.insert::<io::Error>(&h1, 10, &H256::default(), make_changeset(&[3, 4], &[2])).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h2, 11, &h1, make_changeset(&[5], &[3])).unwrap());
 		db.commit(&overlay.canonicalize(&h1));
 		assert_eq!(overlay.levels.len(), 1);
 
@@ -402,9 +403,9 @@ mod tests {
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
 		let changeset1 = make_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
-		db.commit(&overlay.insert(&h1, 1, &H256::default(), changeset1));
+		db.commit(&overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset1).unwrap());
 		assert!(contains(&overlay, 5));
-		db.commit(&overlay.insert(&h2, 2, &h1, changeset2));
+		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset2).unwrap());
 		assert!(contains(&overlay, 7));
 		assert!(contains(&overlay, 5));
 		assert_eq!(overlay.levels.len(), 2);
@@ -453,21 +454,21 @@ mod tests {
 		let (h_2_1_1, c_2_1_1) = (H256::random(), make_changeset(&[211], &[]));
 
 		let mut overlay = NonCanonicalOverlay::<H256, H256>::new(&db).unwrap();
-		db.commit(&overlay.insert(&h_1, 1, &H256::default(), c_1));
+		db.commit(&overlay.insert::<io::Error>(&h_1, 1, &H256::default(), c_1).unwrap());
 
-		db.commit(&overlay.insert(&h_1_1, 2, &h_1, c_1_1));
-		db.commit(&overlay.insert(&h_1_2, 2, &h_1, c_1_2));
+		db.commit(&overlay.insert::<io::Error>(&h_1_1, 2, &h_1, c_1_1).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_1_2, 2, &h_1, c_1_2).unwrap());
 
-		db.commit(&overlay.insert(&h_2, 1, &H256::default(), c_2));
+		db.commit(&overlay.insert::<io::Error>(&h_2, 1, &H256::default(), c_2).unwrap());
 
-		db.commit(&overlay.insert(&h_2_1, 2, &h_2, c_2_1));
-		db.commit(&overlay.insert(&h_2_2, 2, &h_2, c_2_2));
+		db.commit(&overlay.insert::<io::Error>(&h_2_1, 2, &h_2, c_2_1).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_2_2, 2, &h_2, c_2_2).unwrap());
 
-		db.commit(&overlay.insert(&h_1_1_1, 3, &h_1_1, c_1_1_1));
-		db.commit(&overlay.insert(&h_1_2_1, 3, &h_1_2, c_1_2_1));
-		db.commit(&overlay.insert(&h_1_2_2, 3, &h_1_2, c_1_2_2));
-		db.commit(&overlay.insert(&h_1_2_3, 3, &h_1_2, c_1_2_3));
-		db.commit(&overlay.insert(&h_2_1_1, 3, &h_2_1, c_2_1_1));
+		db.commit(&overlay.insert::<io::Error>(&h_1_1_1, 3, &h_1_1, c_1_1_1).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_1_2_1, 3, &h_1_2, c_1_2_1).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_1_2_2, 3, &h_1_2, c_1_2_2).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_1_2_3, 3, &h_1_2, c_1_2_3).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h_2_1_1, 3, &h_2_1, c_2_1_1).unwrap());
 
 		assert!(contains(&overlay, 2));
 		assert!(contains(&overlay, 11));
@@ -526,8 +527,8 @@ mod tests {
 		assert!(overlay.revert_one().is_none());
 		let changeset1 = make_changeset(&[5, 6], &[2]);
 		let changeset2 = make_changeset(&[7, 8], &[5, 3]);
-		db.commit(&overlay.insert(&h1, 1, &H256::default(), changeset1));
-		db.commit(&overlay.insert(&h2, 2, &h1, changeset2));
+		db.commit(&overlay.insert::<io::Error>(&h1, 1, &H256::default(), changeset1).unwrap());
+		db.commit(&overlay.insert::<io::Error>(&h2, 2, &h1, changeset2).unwrap());
 		assert!(contains(&overlay, 7));
 		db.commit(&overlay.revert_one().unwrap());
 		assert_eq!(overlay.parents.len(), 1);
