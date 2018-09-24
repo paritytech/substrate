@@ -420,7 +420,7 @@ impl<Block: BlockT> Backend<Block> {
 
 		Ok(Backend {
 			storage: Arc::new(storage_db),
-			tries_change_storage: tries_change_storage,
+			tries_change_storage,
 			blockchain,
 			canonicalization_delay,
 		})

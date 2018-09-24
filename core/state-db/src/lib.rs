@@ -174,7 +174,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		Ok(StateDbSync {
 			mode,
 			non_canonical,
-			pruning: pruning,
+			pruning,
 			pinned: Default::default(),
 		})
 	}
