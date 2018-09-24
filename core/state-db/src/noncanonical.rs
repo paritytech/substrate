@@ -20,6 +20,7 @@
 //! Last canonicalized overlay is kept in memory until next call to `canonicalize` or
 //! `clear_overlay`
 
+use std::fmt;
 use std::collections::{HashMap, VecDeque};
 use super::{Error, DBValue, ChangeSet, CommitSet, MetaDb, Hash, to_meta_key};
 use codec::{Decode, Encode};
@@ -111,20 +112,29 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 	}
 
 	/// Insert a new block into the overlay. If inserted on the second level or lover expects parent to be present in the window.
-	pub fn insert(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
+	pub fn insert<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		let mut commit = CommitSet::default();
 		if self.levels.is_empty() && self.last_canonicalized.is_none() {
+			if number < 1 {
+				return Err(Error::NonCanonical);
+			}
 			// assume that parent was canonicalized
 			let last_canonicalized = (parent_hash.clone(), number - 1);
 			commit.meta.inserted.push((to_meta_key(LAST_CANONICAL, &()), last_canonicalized.encode()));
 			self.last_canonicalized = Some(last_canonicalized);
 		} else if self.last_canonicalized.is_some() {
-			assert!(number >= self.front_block_number() && number < (self.front_block_number() + self.levels.len() as u64 + 1));
+			if number < self.front_block_number() || number >= self.front_block_number() + self.levels.len() as u64 + 1 {
+				return Err(Error::NonCanonical);
+			}
 			// check for valid parent if inserting on second level or higher
 			if number == self.front_block_number() {
-				assert!(self.last_canonicalized.as_ref().map_or(false, |&(ref h, n)| h == parent_hash && n == number - 1));
+				if !self.last_canonicalized.as_ref().map_or(false, |&(ref h, n)| h == parent_hash && n == number - 1) {
+					return Err(Error::NonCanonical);
+				}
 			} else {
-				assert!(self.parents.contains_key(&parent_hash));
+				if !self.parents.contains_key(&parent_hash) {
+					return Err(Error::NonCanonical);
+				}
 			}
 		}
 		let level = if self.levels.is_empty() || number == self.front_block_number() + self.levels.len() as u64 {
@@ -156,7 +166,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 		trace!(target: "state-db", "Inserted uncanonicalized changeset {}.{} ({} inserted, {} deleted)", number, index, journal_record.inserted.len(), journal_record.deleted.len());
 		let journal_record = journal_record.encode();
 		commit.meta.inserted.push((journal_key, journal_record));
-		commit
+		Ok(commit)
 	}
 
 	fn discard(

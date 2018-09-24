@@ -80,6 +80,8 @@ pub enum Error<E: fmt::Debug> {
 	Db(E),
 	/// `Codec` decoding error.
 	Decoding,
+	/// NonCanonical error.
+	NonCanonical
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
@@ -87,6 +89,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 		match self {
 			Error::Db(e) => e.fmt(f),
 			Error::Decoding => write!(f, "Error decoding slicable value"),
+			Error::NonCanonical => write!(f, "Error canonicaling"),
 		}
 	}
 }
@@ -179,21 +182,21 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		})
 	}
 
-	pub fn insert_block(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> CommitSet<Key> {
+	pub fn insert_block<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		if number == 0 {
-			return CommitSet {
+			return Ok(CommitSet {
 				data: changeset,
 				meta: Default::default(),
-			}
+			})
 		}
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
 				// write changes immediately
-				CommitSet {
+				Ok(CommitSet {
 					data: changeset,
 					meta: Default::default(),
-				}
+				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
 				self.non_canonical.insert(hash, number, parent_hash, changeset)
@@ -297,7 +300,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Add a new non-canonical block.
-	pub fn insert_block(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
+	pub fn insert_block<E: fmt::Debug>(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().insert_block(hash, number, parent_hash, changeset)
 	}
 
