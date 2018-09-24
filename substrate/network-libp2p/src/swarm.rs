@@ -475,19 +475,17 @@ impl<TUserData> Swarm<TUserData>
 			}
 		};
 
-		if let Some(address) = peer.multiaddr() {
-			trace!(target: "sub-libp2p", "Responding to identify request from {:?}", requester);
-			responder.respond(
-				self.local_public_key.clone(),
-				self.listening_addrs.clone(),
-				&address,
-			);
-		} else {
-			// TODO: we have the problem that we don't know the address of the remote instantly
-			// even though we could ; making this properly requires a lot of changes in libp2p
-			debug!(target: "sub-libp2p", "Ignoring identify request from {:?} because we its \
-				address is not known yet", requester);
-		}
+		let observed_addr = match peer.endpoint() {
+			&ConnectedPoint::Dialer { ref address } => address,
+			&ConnectedPoint::Listener { ref send_back_addr, .. } => send_back_addr,
+		};
+
+		trace!(target: "sub-libp2p", "Responding to identify request from {:?}", requester);
+		responder.respond(
+			self.local_public_key.clone(),
+			self.listening_addrs.clone(),
+			&observed_addr,
+		);
 	}
 
 	/// Processes an event received by the swarm.
