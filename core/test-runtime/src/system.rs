@@ -260,8 +260,8 @@ mod tests {
 			header: Header {
 				parent_hash: b.header.hash(),
 				number: 2,
-				state_root: hex!("e32dd1d84d9133ca48078d2d83f2b0db19f9d47229ba98bf5ced0e9f86fac2c7").into(),
-				extrinsics_root: hex!("5d2d0a93201744f0df878c33b07da40cd38e24ac2358cc2811ea640835c31b68").into(),
+				state_root: hex!("2c822d948bb68d7f7a1976d4f827a276a95a3ba1c4c15dbfab3bafbeb85f2b4d").into(),
+				extrinsics_root: hex!("009268a854b21f339c53d3c7a6619a27f564703311d91f11f61573a7fed5ca1c").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
