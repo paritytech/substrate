@@ -67,7 +67,7 @@ use utils::{Meta, db_err, meta_keys, open_database, read_db, read_id, read_meta}
 use state_db::StateDb;
 pub use state_db::PruningMode;
 
-const FINALIZATION_WINDOW: u64 = 32;
+const CANONICALIZATION_DELAY: u64 = 258;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher, RlpCodec>;
@@ -94,7 +94,7 @@ pub fn new_client<E, S, Block>(
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
 {
-	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
+	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategy)?)
 }
@@ -369,17 +369,17 @@ pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	tries_change_storage: DbChangesTrieStorage<Block>,
 	blockchain: BlockchainDb<Block>,
-	pruning_window: u64,
+	canonicalization_delay: u64,
 }
 
 impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, pruning_window: u64) -> Result<Self, client::error::Error> {
+	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
 		let db = open_database(&config, "full")?;
 
-		Backend::from_kvdb(db as Arc<_>, config.pruning, pruning_window)
+		Backend::from_kvdb(db as Arc<_>, config.pruning, canonicalization_delay)
 	}
 
 	#[cfg(test)]
@@ -395,7 +395,7 @@ impl<Block: BlockT> Backend<Block> {
 		).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, pruning_window: u64) -> Result<Self, client::error::Error> {
+	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
 		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
@@ -412,7 +412,7 @@ impl<Block: BlockT> Backend<Block> {
 			storage: Arc::new(storage_db),
 			tries_change_storage: tries_change_storage,
 			blockchain,
-			pruning_window,
+			canonicalization_delay,
 		})
 	}
 
@@ -426,8 +426,8 @@ impl<Block: BlockT> Backend<Block> {
 		-> Result<(), client::error::Error>
 	{
 		let number_u64 = number.as_();
-		if number_u64 > self.pruning_window {
-			let new_canonical = number_u64 - self.pruning_window;
+		if number_u64 > self.canonicalization_delay {
+			let new_canonical = number_u64 - self.canonicalization_delay;
 
 			if new_canonical <= self.storage.state_db.best_canonical() {
 				return Ok(())
