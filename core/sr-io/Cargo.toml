@@ -13,20 +13,19 @@ environmental = { version = "~1.0", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }
 substrate-primitives = { path = "../primitives", default_features = false }
 parity-codec = { version = "2.0", default_features = false }
-triehash = { version = "0.2", optional = true }
-hashdb = { version = "0.2", default_features = false }
-rlp = { version = "0.2", optional = true, default_features = false }
+trie-root = { git = "https://github.com/paritytech/trie", optional = true }
+hash-db = { git = "https://github.com/paritytech/trie", default_features = false }
 
 [features]
 default = ["std"]
 std = [
 	"environmental",
 	"substrate-state-machine",
-	"triehash",
 	"substrate-primitives/std",
 	"parity-codec/std",
+	"hash-db/std",
 	"sr-std/std",
-	"rlp"
+	"trie-root"
 ]
 nightly = []
 strict = []

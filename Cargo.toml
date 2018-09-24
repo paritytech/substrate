@@ -17,8 +17,6 @@ ctrlc = { version = "3.0", features = ["termination"] }
 [build-dependencies]
 vergen = "0.1"
 
-
-
 [workspace]
 members = [
 	"core/bft",
@@ -58,6 +56,7 @@ members = [
 	"core/state-machine",
 	"core/test-runtime",
 	"core/telemetry",
+	"core/trie",
 	"core/keystore",
 	"node/cli",
 	"node/api",

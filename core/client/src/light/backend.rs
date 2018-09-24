@@ -32,8 +32,8 @@ use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as Client
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::fetcher::{Fetcher, RemoteReadRequest};
 use patricia_trie::NodeCodec;
-use hashdb::Hasher;
-use memorydb::MemoryDB;
+use hash_db::Hasher;
+use memory_db::MemoryDB;
 use heapsize::HeapSizeOf;
 
 /// Light client backend.

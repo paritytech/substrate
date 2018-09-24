@@ -22,9 +22,9 @@ use state_machine::{self, OverlayedChanges, Ext,
 	CodeExecutor, ExecutionManager, native_when_possible};
 use executor::{RuntimeVersion, RuntimeInfo};
 use patricia_trie::NodeCodec;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use rlp::Encodable;
-use memorydb::MemoryDB;
+use memory_db::MemoryDB;
 use codec::Decode;
 use primitives::{Blake2Hasher, RlpCodec};
 use primitives::storage::well_known_keys;

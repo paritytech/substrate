@@ -250,14 +250,14 @@ version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
-name = "memorydb"
+name = "memory-db"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "plain_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256_std_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -344,7 +344,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "patricia-trie"
+name = "trie-db"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
@@ -356,7 +356,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "plain_hasher"
+name = "hash256-std-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
@@ -607,8 +607,8 @@ dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "patricia-trie 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "plain_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-db 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256_std_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "ring 0.12.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -633,7 +633,7 @@ dependencies = [
  "memorydb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "patricia-trie 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "trie-db 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rlp 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 0.1.0",
  "triehash 0.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -674,7 +674,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "triehash"
+name = trie-root
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
@@ -802,8 +802,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum parity-wasm 0.31.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e1c91199d14bd5b78ecade323d4a891d094799749c1b9e82d9c590c2e2849a40"
 "checksum parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)" = "149d8f5b97f3c1133e3cfcd8886449959e856b557ff281e292b733d7c69e005e"
 "checksum parking_lot_core 0.2.14 (registry+https://github.com/rust-lang/crates.io-index)" = "4db1a8ccf734a7bce794cc19b3df06ed87ab2f3907036b693c68f56b4d4537fa"
-"checksum patricia-trie 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "fa27fc4a972a03d64e5170d7facd2c84c6ed425b38ce62ad98dcfee2f7845b3b"
-"checksum plain_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "95fa6386b1d34aaf0adb9b7dd2885dbe7c34190e6263785e5a7ec2b19044a90f"
+"checksum trie-db 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "fa27fc4a972a03d64e5170d7facd2c84c6ed425b38ce62ad98dcfee2f7845b3b"
+"checksum hash256_std_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "95fa6386b1d34aaf0adb9b7dd2885dbe7c34190e6263785e5a7ec2b19044a90f"
 "checksum proc-macro-hack 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "2c725b36c99df7af7bf9324e9c999b9e37d92c8f8caf106d82e1d7953218d2d8"
 "checksum proc-macro-hack-impl 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "2b753ad9ed99dd8efeaa7d2fb8453c8f6bc3e54b97966d35f1bc77ca6865254a"
 "checksum proc-macro2 0.4.4 (registry+https://github.com/rust-lang/crates.io-index)" = "1fa93823f53cfd0f5ac117b189aed6cfdfb2cfc0a9d82e956dd7927595ed7d46"

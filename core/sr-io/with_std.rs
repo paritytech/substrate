@@ -21,8 +21,8 @@ extern crate environmental;
 extern crate substrate_primitives as primitives;
 
 extern crate substrate_state_machine;
-extern crate triehash;
-extern crate hashdb;
+extern crate trie_root;
+extern crate hash_db;
 extern crate rlp;
 
 #[doc(hidden)]
@@ -36,7 +36,7 @@ pub use primitives::{Blake2Hasher, RlpCodec};
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 use primitives::H256;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use rlp::Encodable;
 
 // TODO: use the real error, not NoError.
@@ -117,7 +117,7 @@ where
 	H: Hasher,
 	H::Out: Encodable + Ord,
 {
-	triehash::ordered_trie_root::<H, _, _>(serialised_values.iter().map(|s| s.to_vec()))
+	trie_root::ordered_trie_root::<H, _, _>(serialised_values.iter().map(|s| s.to_vec()))
 }
 
 /// A trie root formed from the iterated items.
@@ -129,7 +129,7 @@ where
 	H: Hasher,
 	<H as Hasher>::Out: Encodable + Ord,
 {
-	triehash::trie_root::<H, _, _, _>(input)
+	trie_root::trie_root::<H, _, _, _>(input)
 }
 
 /// A trie root formed from the enumerated items.
@@ -140,7 +140,7 @@ where
 	H: Hasher,
 	<H as Hasher>::Out: Encodable + Ord,
 {
-	triehash::ordered_trie_root::<H, _, _>(input)
+	trie_root::ordered_trie_root::<H, _, _>(input)
 }
 
 /// Verify a ed25519 signature.

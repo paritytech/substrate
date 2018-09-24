@@ -26,9 +26,9 @@ extern crate hex_literal;
 #[macro_use]
 extern crate log;
 
-extern crate hashdb;
-extern crate memorydb;
-extern crate triehash;
+extern crate hash_db;
+extern crate memory_db;
+extern crate trie_root;
 extern crate patricia_trie;
 
 extern crate byteorder;
@@ -39,7 +39,7 @@ extern crate substrate_primitives as primitives;
 extern crate parity_codec as codec;
 
 use std::fmt;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
 use heapsize::HeapSizeOf;
@@ -205,7 +205,7 @@ pub fn execute<H, C, B, T, Exec>(
 	method: &str,
 	call_data: &[u8],
 	strategy: ExecutionStrategy,
-) -> Result<(Vec<u8>, B::Transaction, Option<memorydb::MemoryDB<H>>), Box<Error>>
+) -> Result<(Vec<u8>, B::Transaction, Option<memory_db::MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	C: NodeCodec<H>,
@@ -248,7 +248,7 @@ pub fn execute_using_consensus_failure_handler<H, C, B, T, Exec, Handler>(
 	method: &str,
 	call_data: &[u8],
 	manager: ExecutionManager<Handler>,
-) -> Result<(Vec<u8>, B::Transaction, Option<memorydb::MemoryDB<H>>), Box<Error>>
+) -> Result<(Vec<u8>, B::Transaction, Option<memory_db::MemoryDB<H>>), Box<Error>>
 where
 	H: Hasher,
 	C: NodeCodec<H>,

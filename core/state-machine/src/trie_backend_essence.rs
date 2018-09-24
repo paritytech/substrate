@@ -21,9 +21,9 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
-use hashdb::{Hasher, DBValue, AsHashDB, HashDB};
+use hash_db::{Hasher, DBValue, AsHashDB, HashDB};
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
+use memory_db::MemoryDB;
 use patricia_trie::{TrieDB, TrieError, Trie, NodeCodec};
 use changes_trie::Storage as ChangesTrieStorage;
 
@@ -113,8 +113,8 @@ pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 }
 
 impl<'a, S: TrieBackendStorage<H>, H: Hasher> AsHashDB<H> for Ephemeral<'a, S, H> where H::Out: HeapSizeOf {
-	fn as_hashdb(&self) -> &HashDB<H> { self }
-	fn as_hashdb_mut(&mut self) -> &mut HashDB<H> { self }
+	fn as_hash_db(&self) -> &HashDB<H> { self }
+	fn as_hash_db_mut(&mut self) -> &mut HashDB<H> { self }
 }
 
 impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {

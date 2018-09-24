@@ -24,8 +24,8 @@ use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
 use patricia_trie::NodeCodec;
-use hashdb::Hasher;
-use memorydb::MemoryDB;
+use hash_db::Hasher;
+use memory_db::MemoryDB;
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
 pub trait BlockImportOperation<Block, H, C>

@@ -27,7 +27,7 @@ use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	execution_proof_check, ExecutionManager};
 use primitives::H256;
 use patricia_trie::NodeCodec;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use rlp::Encodable;
 
 use blockchain::Backend as ChainBackend;
@@ -37,7 +37,7 @@ use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
 use codec::Decode;
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
+use memory_db::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.

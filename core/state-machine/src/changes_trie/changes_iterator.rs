@@ -20,9 +20,9 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use codec::{Decode, Encode};
-use hashdb::{HashDB, Hasher};
+use hash_db::{HashDB, Hasher};
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
+use memory_db::MemoryDB;
 use patricia_trie::{NodeCodec, Recorder};
 use changes_trie::{Configuration, Storage};
 use changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};

@@ -103,7 +103,7 @@ pub trait NativeExecutionDispatch: Send + Sync {
 
 	/// Dispatch a method and input data to be executed natively. Returns `Some` result or `None`
 	/// if the `method` is unknown. Panics if there's an unrecoverable error.
-	// fn dispatch<H: hashdb::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
+	// fn dispatch<H: hash_db::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 	fn dispatch(ext: &mut Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
 	/// Get native runtime version.

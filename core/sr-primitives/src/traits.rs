@@ -252,7 +252,7 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 		Encode::using_encoded(s, Self::hash)
 	}
 
-	/// Produce the patricia-trie root of a mapping from indices to byte slices.
+	/// Produce the trie-db root of a mapping from indices to byte slices.
 	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output;
 
 	/// Iterator-based version of `enumerated_trie_root`.

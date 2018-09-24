@@ -41,7 +41,7 @@ mod storage;
 pub use self::storage::InMemoryStorage;
 pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_proof_check};
 
-use hashdb::{DBValue, Hasher};
+use hash_db::{DBValue, Hasher};
 use heapsize::HeapSizeOf;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
@@ -83,7 +83,7 @@ pub fn compute_changes_trie_root<'a, B: Backend<H, C>, S: Storage<H>, H: Hasher,
 	let transaction = input_pairs.into_iter()
 		.map(Into::into)
 		.collect::<Vec<_>>();
-	let root = ::triehash::trie_root::<H, _, _, _>(transaction.iter().map(|(k, v)| (&*k, &*v)));
+	let root = ::trie_root::trie_root::<H, _, _, _>(transaction.iter().map(|(k, v)| (&*k, &*v)));
 
 	Some((root, transaction))
 }

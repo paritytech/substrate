@@ -25,7 +25,7 @@ use {backend, error, Client, CallExecutor};
 use runtime_primitives::{ApplyResult, ApplyOutcome};
 use patricia_trie::NodeCodec;
 use primitives::{Blake2Hasher, RlpCodec};
-use hashdb::Hasher;
+use hash_db::Hasher;
 use rlp::Encodable;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.

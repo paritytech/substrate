@@ -77,7 +77,7 @@ impl<Block> LightStorage<Block>
 	pub(crate) fn new_test() -> Self {
 		use utils::NUM_COLUMNS;
 
-		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
+		let db = Arc::new(::kvdb_memory_db::create(NUM_COLUMNS));
 
 		Self::from_kvdb(db as Arc<_>).expect("failed to create test-db")
 	}

@@ -33,12 +33,12 @@ extern crate substrate_state_machine as state_machine;
 extern crate fnv;
 extern crate futures;
 extern crate parking_lot;
-extern crate triehash;
+extern crate trie_root;
 extern crate patricia_trie;
-extern crate hashdb;
+extern crate hash_db;
 extern crate rlp;
 extern crate heapsize;
-extern crate memorydb;
+extern crate memory_db;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;

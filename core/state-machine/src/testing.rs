@@ -18,11 +18,11 @@
 
 use std::collections::HashMap;
 use std::iter::FromIterator;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
-use triehash::trie_root;
+use trie_root::trie_root;
 use backend::InMemory;
 use changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage};
 use primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG;

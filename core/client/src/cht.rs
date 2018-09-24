@@ -23,11 +23,11 @@
 //! root has. A correct proof implies that the claimed block is identical to the one
 //! we discarded.
 
-use hashdb;
+use hash_db;
 use heapsize::HeapSizeOf;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
-use triehash;
+use trie_root;
 
 use primitives::H256;
 use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
@@ -69,12 +69,12 @@ pub fn compute_root<Header, Hasher, I>(
 	where
 		Header: HeaderT,
 		Header::Hash: From<Hasher::Out>,
-		Hasher: hashdb::Hasher,
+		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + Encodable,
 		I: IntoIterator<Item=Option<Header::Hash>>,
 {
 	build_pairs::<Header, I>(cht_size, cht_num, hashes)
-		.map(|pairs| triehash::trie_root::<Hasher, _, _, _>(pairs).into())
+		.map(|pairs| trie_root::trie_root::<Hasher, _, _, _>(pairs).into())
 }
 
 /// Build CHT-based header proof.
@@ -86,7 +86,7 @@ pub fn build_proof<Header, Hasher, Codec, I>(
 ) -> Option<Vec<Vec<u8>>>
 	where
 		Header: HeaderT,
-		Hasher: hashdb::Hasher,
+		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + Encodable + HeapSizeOf,
 		Codec: NodeCodec<Hasher>,
 		I: IntoIterator<Item=Option<Header::Hash>>,
@@ -114,7 +114,7 @@ pub fn check_proof<Header, Hasher, Codec>(
 	where
 		Header: HeaderT,
 		Header::Hash: From<H256>,
-		Hasher: hashdb::Hasher,
+		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + Encodable + HeapSizeOf + From<Header::Hash>,
 		Codec: NodeCodec<Hasher>,
 {

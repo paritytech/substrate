@@ -31,9 +31,9 @@ use blockchain::{self, BlockStatus};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::InMemoryChangesTrieStorage;
 use patricia_trie::NodeCodec;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
+use memory_db::MemoryDB;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,

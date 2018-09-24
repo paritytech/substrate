@@ -18,7 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use codec::Decode;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use patricia_trie::NodeCodec;
 use backend::Backend;

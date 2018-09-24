@@ -50,7 +50,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "plain_hasher"
+name = "hash256-std-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
@@ -152,7 +152,7 @@ dependencies = [
  "hashdb 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "plain_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "hash256_std_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rustc-hex 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.27 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-std 0.1.0",
@@ -193,7 +193,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum nodrop 0.1.12 (registry+https://github.com/rust-lang/crates.io-index)" = "9a2228dca57108069a5262f2ed8bd2e82496d2e074a06d1ccc7ce1687b6ae0a2"
 "checksum parity-codec 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "48db1d9442469191a590498ab734a85d98848873267d3e93b37b03538399bd2c"
 "checksum parity-codec-derive 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1eda64d782c342261aea4ca047a609f9bd92d5f9dafabe6b5a396caf5c7b8827"
-"checksum plain_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "95fa6386b1d34aaf0adb9b7dd2885dbe7c34190e6263785e5a7ec2b19044a90f"
+"checksum hash256_std_hasher 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "95fa6386b1d34aaf0adb9b7dd2885dbe7c34190e6263785e5a7ec2b19044a90f"
 "checksum proc-macro2 0.4.9 (registry+https://github.com/rust-lang/crates.io-index)" = "cccdc7557a98fe98453030f077df7f3a042052fae465bb61d2c2c41435cfd9b6"
 "checksum quote 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)" = "3372dc35766b36a99ce2352bd1b6ea0137c38d215cc0c8780bf6de6df7842ba9"
 "checksum rustc-hex 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d2b03280c2813907a030785570c577fb27d3deec8da4c18566751ade94de0ace"

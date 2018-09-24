@@ -19,7 +19,7 @@
 use futures::IntoFuture;
 
 use primitives::H256;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
 use heapsize::HeapSizeOf;

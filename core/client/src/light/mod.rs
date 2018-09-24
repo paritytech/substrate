@@ -34,7 +34,7 @@ use light::backend::Backend;
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::RemoteCallExecutor;
 use light::fetcher::{Fetcher, LightDataChecker};
-use hashdb::Hasher;
+use hash_db::Hasher;
 use patricia_trie::NodeCodec;
 
 /// Create an instance of light client blockchain backend.

@@ -17,9 +17,9 @@
 //! Proving state machine backend.
 
 use std::cell::RefCell;
-use hashdb::{Hasher, HashDB};
+use hash_db::{Hasher, HashDB};
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
+use memory_db::MemoryDB;
 use patricia_trie::{TrieDB, Trie, Recorder, NodeCodec};
 use rlp::Encodable;
 use trie_backend::TrieBackend;

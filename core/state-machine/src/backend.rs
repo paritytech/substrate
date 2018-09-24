@@ -20,8 +20,8 @@ use std::{error, fmt};
 use std::cmp::Ord;
 use std::collections::HashMap;
 use std::marker::PhantomData;
-use hashdb::Hasher;
-use memorydb::MemoryDB;
+use hash_db::Hasher;
+use memory_db::MemoryDB;
 use rlp::Encodable;
 use trie_backend::TrieBackend;
 use trie_backend_essence::TrieBackendStorage;
@@ -166,7 +166,7 @@ impl<H: Hasher, C: NodeCodec<H>> Backend<H, C> for InMemory<H, C> where H::Out: 
 		let existing_pairs = self.inner.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = ::triehash::trie_root::<H, _, _, _>(existing_pairs.chain(transaction.iter().cloned())
+		let root = ::trie_root::trie_root::<H, _, _, _>(existing_pairs.chain(transaction.iter().cloned())
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))

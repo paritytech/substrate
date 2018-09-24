@@ -24,7 +24,7 @@ extern crate substrate_state_machine as state_machine;
 extern crate sr_io as runtime_io;
 extern crate substrate_primitives as primitives;
 extern crate node_primitives;
-extern crate triehash;
+extern crate trie_root;
 
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate sr_primitives as runtime_primitives;
@@ -259,7 +259,7 @@ mod tests {
 		changes_root: Option<Hash>,
 		extrinsics: Vec<CheckedExtrinsic>
 	) -> (Vec<u8>, Hash) {
-		use triehash::ordered_trie_root;
+		use trie_root::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
 		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();

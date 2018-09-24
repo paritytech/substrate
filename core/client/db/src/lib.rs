@@ -21,8 +21,8 @@
 extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
 extern crate kvdb;
-extern crate hashdb;
-extern crate memorydb;
+extern crate hash_db;
+extern crate memory_db;
 extern crate parking_lot;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
@@ -50,9 +50,9 @@ use std::path::PathBuf;
 use std::io;
 
 use codec::{Decode, Encode};
-use hashdb::Hasher;
+use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
-use memorydb::MemoryDB;
+use memory_db::MemoryDB;
 use parking_lot::RwLock;
 use primitives::{H256, AuthorityId, Blake2Hasher, RlpCodec};
 use runtime_primitives::generic::BlockId;
@@ -365,7 +365,7 @@ impl<Block: BlockT> Backend<Block> {
 	fn new_test(keep_blocks: u32) -> Self {
 		use utils::NUM_COLUMNS;
 
-		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
+		let db = Arc::new(::kvdb_memory_db::create(NUM_COLUMNS));
 
 		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(keep_blocks), 0).expect("failed to create test-db")
 	}
@@ -553,7 +553,7 @@ where Block: BlockT {}
 
 #[cfg(test)]
 mod tests {
-	use hashdb::HashDB;
+	use hash_db::HashDB;
 	use super::*;
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;

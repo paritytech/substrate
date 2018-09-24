@@ -17,9 +17,9 @@
 //! Changes trie storage utilities.
 
 use std::collections::HashMap;
-use hashdb::{Hasher, HashDB, DBValue};
+use hash_db::{Hasher, HashDB, DBValue};
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
+use memory_db::MemoryDB;
 use parking_lot::RwLock;
 use changes_trie::Storage;
 use trie_backend_essence::TrieBackendStorage;
