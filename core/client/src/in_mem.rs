@@ -221,6 +221,7 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 			best_hash: storage.best_hash,
 			best_number: storage.best_number,
 			genesis_hash: storage.genesis_hash,
+			finalized_hash: storage.finalized_hash,
 		})
 	}
 

@@ -18,7 +18,7 @@
 
 use client::{self, Client};
 use keyring::Keyring;
-use runtime_primitives::StorageMap;
+use runtime_primitives::{generic::BlockId, StorageMap};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use executor::NativeExecutor;
 use runtime;
@@ -30,8 +30,11 @@ pub trait TestClient {
 	/// Crates new client instance for tests.
 	fn new_for_tests() -> Self;
 
-	/// Justify and import block to the chain. Instant finality.
+	/// Justify and import block to the chain. No finality.
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()>;
+
+	/// Finalize a block.
+	fn finalize_block(&self, id: BlockId<runtime::Block>) -> client::error::Result<()>;
 
 	/// Returns hash of the genesis block.
 	fn genesis_hash(&self) -> runtime::Hash;
@@ -45,9 +48,13 @@ impl TestClient for Client<Backend, Executor, runtime::Block> {
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
 		let justification = fake_justify(&block.header);
 		let justified = self.check_justification(block.header, justification)?;
-		self.import_block(origin, justified, Some(block.extrinsics), true)?;
+		self.import_block(origin, justified, Some(block.extrinsics), false)?;
 
 		Ok(())
+	}
+
+	fn finalize_block(&self, id: BlockId<runtime::Block>) -> client::error::Result<()> {
+		self.finalize_block(id, true)
 	}
 
 	fn genesis_hash(&self) -> runtime::Hash {

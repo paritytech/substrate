@@ -77,11 +77,13 @@ pub enum ImportResult<E> {
 #[derive(Debug)]
 pub struct Info<Block: BlockT> {
 	/// Best block hash.
-	pub best_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
+	pub best_hash: Block::Hash,
 	/// Best block number.
 	pub best_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	/// Genesis block hash.
-	pub genesis_hash: <<Block as BlockT>::Header as HeaderT>::Hash,
+	pub genesis_hash: Block::Hash,
+	/// The head of the finalized chain.
+	pub finalized_hash: Block::Hash,
 }
 
 /// Block status.
@@ -91,4 +93,130 @@ pub enum BlockStatus {
 	InChain,
 	/// Not in the queue or the blockchain.
 	Unknown,
+}
+
+/// An entry in a tree route.
+#[derive(Debug)]
+pub struct RouteEntry<Block: BlockT> {
+	/// The number of the block.
+	pub number: <Block::Header as HeaderT>::Number,
+	/// The hash of the block.
+	pub hash: Block::Hash,
+}
+
+/// A tree-route from one block to another in the chain.
+///
+/// All blocks prior to the pivot in the deque is the reverse-order unique ancestry
+/// of the first block, the block at the pivot index is the common ancestor,
+/// and all blocks after the pivot is the ancestry of the second block, in
+/// order.
+///
+/// The ancestry sets will include the given blocks, and thus the tree-route is
+/// never empty.
+///
+/// ```ignore
+/// Tree route from R1 to E2. Retracted is [R1, R2, R3], Common is C, enacted [E1, E2]
+///   <- R3 <- R2 <- R1
+///  /
+/// C
+///  \-> E1 -> E2
+/// ```
+///
+/// ```ignore
+/// Tree route from C to E2. Retracted empty. Common is C, enacted [E1, E2]
+/// C -> E1 -> E2
+/// ```
+#[derive(Debug)]
+pub struct TreeRoute<Block: BlockT> {
+	route: Vec<RouteEntry<Block>>,
+	pivot: usize,
+}
+
+impl<Block: BlockT> TreeRoute<Block> {
+	/// Get a slice of all retracted blocks in reverse order (towards common ancestor)
+	pub fn retracted(&self) -> &[RouteEntry<Block>] {
+		&self.route[..self.pivot]
+	}
+
+	/// Get the common ancestor block. This might be one of the two blocks of the
+	/// route.
+	pub fn common_block(&self) -> &RouteEntry<Block> {
+		self.route.get(self.pivot).expect("tree-routes are computed between blocks; \
+			which are included in the route; \
+			thus it is never empty; qed")
+	}
+
+	/// Get a slice of enacted blocks (descendents of the common ancestor)
+	pub fn enacted(&self) -> &[RouteEntry<Block>] {
+		&self.route[self.pivot + 1 ..]
+	}
+}
+
+/// Compute a tree-route between two blocks. See tree-route docs for more details.
+pub fn tree_route<Block: BlockT, Backend: HeaderBackend<Block>>(
+	backend: &Backend,
+	from: BlockId<Block>,
+	to: BlockId<Block>,
+) -> Result<TreeRoute<Block>> {
+	use runtime_primitives::traits::Header;
+
+	let load_header = |id: BlockId<Block>| {
+		match backend.header(id) {
+			Ok(Some(hdr)) => Ok(hdr),
+			Ok(None) => Err(ErrorKind::UnknownBlock(format!("Unknown block {:?}", id)).into()),
+			Err(e) => Err(e),
+		}
+	};
+
+	let mut from = load_header(from)?;
+	let mut to = load_header(to)?;
+
+	let mut from_branch = Vec::new();
+	let mut to_branch = Vec::new();
+
+	while to.number() > from.number() {
+		to_branch.push(RouteEntry {
+			number: to.number().clone(),
+			hash: to.hash(),
+		});
+
+		to = load_header(BlockId::Hash(*to.parent_hash()))?;
+	}
+
+	while from.number() > to.number() {
+		from_branch.push(RouteEntry {
+			number: from.number().clone(),
+			hash: from.hash(),
+		});
+		from = load_header(BlockId::Hash(*from.parent_hash()))?;
+	}
+
+	// numbers are equal now. walk backwards until the block is the same
+
+	while to != from {
+		to_branch.push(RouteEntry {
+			number: to.number().clone(),
+			hash: to.hash(),
+		});
+		to = load_header(BlockId::Hash(*to.parent_hash()))?;
+
+		from_branch.push(RouteEntry {
+			number: from.number().clone(),
+			hash: from.hash(),
+		});
+		from = load_header(BlockId::Hash(*from.parent_hash()))?;
+	}
+
+	// add the pivot block. and append the reversed to-branch (note that it's reverse order originalls)
+	let pivot = from_branch.len();
+	from_branch.push(RouteEntry {
+		number: to.number().clone(),
+		hash: to.hash(),
+	});
+	from_branch.extend(to_branch.into_iter().rev());
+
+	Ok(TreeRoute {
+		route: from_branch,
+		pivot,
+	})
 }
