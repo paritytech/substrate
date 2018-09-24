@@ -383,12 +383,16 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	#[cfg(test)]
-	fn new_test(keep_blocks: u32) -> Self {
+	fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		use utils::NUM_COLUMNS;
 
 		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
 
-		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(keep_blocks), 0).expect("failed to create test-db")
+		Backend::from_kvdb(
+			db as Arc<_>,
+			PruningMode::keep_blocks(keep_blocks),
+			canonicalization_delay,
+		).expect("failed to create test-db")
 	}
 
 	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, pruning_window: u64) -> Result<Self, client::error::Error> {
@@ -412,31 +416,25 @@ impl<Block: BlockT> Backend<Block> {
 		})
 	}
 
-	// write stuff to a transaction after a new block is finalized.
-	// this manages state pruning. Fails if called with a block which
-	// was not a child of the last finalized block.
-	fn note_finalized(
+	// performs state pruning after importning a non-finalized block.
+	fn state_pruning_non_finalized(
 		&self,
 		transaction: &mut DBTransaction,
-		f_header: &Block::Header,
-		f_hash: Block::Hash,
-	) -> Result<(), client::error::Error> {
-		let meta = self.blockchain.meta.read();
-		let f_num = f_header.number().clone();
-		if &meta.finalized_hash != f_header.parent_hash() {
-			return Err(::client::error::ErrorKind::NonSequentialFinalization(
-				format!("Last finalized {:?} not parent of {:?}",
-					meta.finalized_hash, f_hash),
-			).into())
-		}
-		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
-
-		let number_u64 = f_num.as_();
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+	)
+		-> Result<(), client::error::Error>
+	{
+		let number_u64 = number.as_();
 		if number_u64 > self.pruning_window {
 			let new_canonical = number_u64 - self.pruning_window;
 
+			if new_canonical <= self.storage.state_db.best_canonical() {
+				return Ok(())
+			}
+
 			let hash = if new_canonical == number_u64 {
-				f_hash
+				hash
 			} else {
 				read_id::<Block>(
 					&*self.blockchain.db,
@@ -450,6 +448,34 @@ impl<Block: BlockT> Backend<Block> {
 			let commit = self.storage.state_db.canonicalize_block(&hash);
 			apply_state_commit(transaction, commit);
 		};
+
+		Ok(())
+	}
+
+	// write stuff to a transaction after a new block is finalized.
+	// this manages state pruning. Fails if called with a block which
+	// was not a child of the last finalized block.
+	fn note_finalized(
+		&self,
+		transaction: &mut DBTransaction,
+		f_header: &Block::Header,
+		f_hash: Block::Hash,
+	) -> Result<(), client::error::Error> {
+		let meta = self.blockchain.meta.read();
+		let f_num = f_header.number().clone();
+
+		if f_num.as_() > self.storage.state_db.best_canonical() {
+			if &meta.finalized_hash != f_header.parent_hash() {
+				return Err(::client::error::ErrorKind::NonSequentialFinalization(
+					format!("Last finalized {:?} not parent of {:?}",
+						meta.finalized_hash, f_hash),
+				).into())
+			}
+			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
+
+			let commit = self.storage.state_db.canonicalize_block(&f_hash);
+			apply_state_commit(transaction, commit);
+		}
 
 		Ok(())
 	}
@@ -579,6 +605,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.note_finalized(&mut transaction, &pending_block.header, hash)?;
+			} else {
+				// prune states at blocks which are old enough, regardless of finality.
+				self.state_pruning_non_finalized(&mut transaction, hash, *pending_block.header.number())?
 			}
 
 			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number,
@@ -742,7 +771,7 @@ mod tests {
 
 	#[test]
 	fn block_hash_inserted_correctly() {
-		let db = Backend::<Block>::new_test(1);
+		let db = Backend::<Block>::new_test(1, 0);
 		for i in 0..10 {
 			assert!(db.blockchain().hash(i).unwrap().is_none());
 
@@ -781,7 +810,7 @@ mod tests {
 
 	#[test]
 	fn set_state_data() {
-		let db = Backend::<Block>::new_test(2);
+		let db = Backend::<Block>::new_test(2, 0);
 		let hash = {
 			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
 			let mut header = Header {
@@ -862,7 +891,7 @@ mod tests {
 	#[test]
 	fn delete_only_when_negative_rc() {
 		let key;
-		let backend = Backend::<Block>::new_test(0);
+		let backend = Backend::<Block>::new_test(0, 0);
 
 		let hash = {
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default())).unwrap();
@@ -961,8 +990,7 @@ mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			// block not yet finalized, so state not pruned.
-			assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_some());
+			assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
 		}
 
 		backend.finalize_block(BlockId::Number(1)).unwrap();
@@ -972,7 +1000,7 @@ mod tests {
 
 	#[test]
 	fn changes_trie_storage_works() {
-		let backend = Backend::<Block>::new_test(1000);
+		let backend = Backend::<Block>::new_test(1000, 100);
 
 		let check_changes = |backend: &Backend<Block>, block: u64, changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let (changes_root, mut changes_trie_update) = prepare_changes(changes);
@@ -1002,7 +1030,7 @@ mod tests {
 
 	#[test]
 	fn tree_route_works() {
-		let backend = Backend::<Block>::new_test(1000);
+		let backend = Backend::<Block>::new_test(1000, 100);
 		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
 
 		// fork from genesis: 3 prong.
