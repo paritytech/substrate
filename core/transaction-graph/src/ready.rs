@@ -71,7 +71,12 @@ struct ReadyTx<Hash> {
 	pub requires_offset: usize,
 }
 
-const HASH_READY: &str = "Every hash is in ready map; qed";
+const HASH_READY: &str = r#"
+Every time transaction is imported its hash is placed in `ready` map and tags in `provided_tags`;
+Every time transaction is removed from the queue we remove the hash from `ready` map and from `provided_tags`;
+Hence every hash retrieved from `provided_tags` is always present in `ready`;
+qed
+"#;
 
 #[derive(Debug)]
 pub struct ReadyTransactions<Hash: hash::Hash + Eq> {
