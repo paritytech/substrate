@@ -16,7 +16,7 @@
 
 use fnv::FnvHashMap;
 use parking_lot::Mutex;
-use libp2p::core::{nodes::swarm::ConnectedPoint, Endpoint, Multiaddr, PeerId as PeerstorePeerId};
+use libp2p::core::{nodes::swarm::ConnectedPoint, Multiaddr, PeerId as PeerstorePeerId};
 use {PacketId, SessionInfo, TimerToken};
 use service_task::ServiceEvent;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
@@ -66,19 +66,14 @@ struct PeerInfos {
 	/// List of open custom protocols, and their version.
 	protocols: Vec<(ProtocolId, u8)>,
 
-	/// Note that it is theoretically possible that we dial the remote at the
-	/// same time they dial us, in which case the protocols may be dispatched
-	/// between both connections, and in which case the value here will be racy.
-	endpoint: Endpoint,
+	/// How we are connected to the remote.
+	endpoint: ConnectedPoint,
 
 	/// Latest known ping duration.
 	ping: Option<Duration>,
 
 	/// The client version of the remote, or `None` if not known.
 	client_version: Option<String>,
-
-	/// The multiaddresses of the remote, or `None` if not known.
-	remote_address: Option<Multiaddr>,
 
 	/// The local multiaddress used to communicate with the remote, or `None`
 	/// if not known.
@@ -358,17 +353,12 @@ fn init_thread(
 
 		match event {
 			ServiceEvent::NewNode { node_index, peer_id, endpoint } => {
-				let remote_address = match endpoint {
-					ConnectedPoint::Dialer { ref address } => Some(address.clone()),
-					ConnectedPoint::Listener { .. } => None,
-				};
 				peers.lock().insert(node_index, PeerInfos {
 					id: peer_id,
 					protocols: Vec::new(),
-					endpoint: endpoint.into(),
+					endpoint,
 					ping: None,
 					client_version: None,
-					remote_address,
 					local_address: None,	// TODO: fill
 				});
 			},
@@ -404,10 +394,6 @@ fn init_thread(
 				peers.lock().get_mut(&node_index)
 					.expect("peers is kept in sync with the state in the service")
 					.client_version = Some(client_version),
-			ServiceEvent::NodeAddress { node_index, address } =>
-				peers.lock().get_mut(&node_index)
-					.expect("peers is kept in sync with the state in the service")
-					.remote_address = Some(address),
 			ServiceEvent::OpenedCustomProtocol { node_index, protocol, version } => {
 				peers.lock().get_mut(&node_index)
 					.expect("peers is kept in sync with the state in the service")
@@ -499,7 +485,7 @@ impl NetworkContext for NetworkContextImpl {
 				info!(target: "sub-libp2p",
 					"Peer {:?} ({:?} {}) reported by client: {}",
 					info.id,
-					info.remote_address,
+					info.endpoint,
 					client_version,
 					reason
 				);
@@ -563,8 +549,8 @@ impl NetworkContext for NetworkContextImpl {
 			capabilities: Vec::new(),		// TODO: list of supported protocols ; hard
 			peer_capabilities: Vec::new(),	// TODO: difference with `peer_capabilities`?
 			ping: info.ping,
-			originated: info.endpoint == Endpoint::Dialer,
-			remote_address: info.remote_address.as_ref().map(|a| a.to_string()).unwrap_or_default(),
+			originated: if let ConnectedPoint::Dialer { .. } = info.endpoint { true } else { false },
+			remote_address: String::new(),		// TODO:
 			local_address: info.local_address.as_ref().map(|a| a.to_string())
 				.unwrap_or(String::new()),
 		})

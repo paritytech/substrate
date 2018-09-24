@@ -71,8 +71,8 @@ where TUserData: Clone + Send + Sync + 'static
 	type Handler = SubstrateNodeHandler<Substream<Muxer>, TUserData>;
 
 	#[inline]
-	fn new_handler(&self) -> Self::Handler {
-		SubstrateNodeHandler::new(self.0.clone())
+	fn new_handler(&self, addr: ConnectedPoint) -> Self::Handler {
+		SubstrateNodeHandler::new(self.0.clone(), addr)
 	}
 }
 
@@ -124,14 +124,6 @@ pub enum SwarmEvent {
 
 	/// Report the duration of the ping for the given node.
 	PingDuration(NodeIndex, Duration),
-
-	/// Report the address of a node if it was not previously known.
-	NodeAddress {
-		/// Index of the node.
-		node_index: NodeIndex,
-		/// Address of the node.
-		address: Multiaddr,
-	},
 
 	/// Report information about the node.
 	NodeInfos {
@@ -599,11 +591,12 @@ impl<TUserData> Swarm<TUserData>
 				if let Some(event) = self.handle_node_event(peer_id, event) {
 					return Some(event);
 				},
-			Libp2pSwarmEvent::IncomingConnection { listen_addr } =>
-				trace!(target: "sub-libp2p", "Incoming connection on listener {}", listen_addr),
-			Libp2pSwarmEvent::IncomingConnectionError { listen_addr, error } =>
-				trace!(target: "sub-libp2p", "Incoming connection on listener {} errored: {:?}",
-					listen_addr, error),
+			Libp2pSwarmEvent::IncomingConnection { listen_addr, send_back_addr } =>
+				trace!(target: "sub-libp2p", "Incoming connection with {} on listener {}",
+					send_back_addr, listen_addr),
+			Libp2pSwarmEvent::IncomingConnectionError { listen_addr, send_back_addr, error } =>
+				trace!(target: "sub-libp2p", "Incoming connection with {} on listener {} \
+					errored: {:?}", send_back_addr, listen_addr, error),
 		}
 
 		None
@@ -641,24 +634,6 @@ impl<TUserData> Swarm<TUserData>
 			SubstrateOutEvent::PingSuccess(ping) => {
 				trace!(target: "sub-libp2p", "Pong from {:?} in {:?}", peer_id, ping);
 				Some(SwarmEvent::PingDuration(node_index, ping))
-			},
-			SubstrateOutEvent::Multiaddr(Ok(address)) => {
-				trace!(target: "sub-libp2p", "Determined the multiaddr of {:?} => {}",
-					peer_id, address);
-				if let Some(&node_index) = self.node_by_peer.get(&peer_id) {
-					Some(SwarmEvent::NodeAddress {
-						node_index,
-						address,
-					})
-				} else {
-					error!(target: "sub-libp2p", "Logic error: no index for {:?}", peer_id);
-					None
-				}
-			},
-			SubstrateOutEvent::Multiaddr(Err(err)) => {
-				trace!(target: "sub-libp2p", "Error when determining the multiaddr of {:?} => {:?}",
-					peer_id, err);
-				None
 			},
 			SubstrateOutEvent::Identified { info, observed_addr } => {
 				self.add_observed_addr(&peer_id, &observed_addr);

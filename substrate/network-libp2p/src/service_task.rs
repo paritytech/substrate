@@ -196,14 +196,6 @@ pub enum ServiceEvent {
 	/// Report the duration of the ping for the given node.
 	PingDuration(NodeIndex, Duration),
 
-	/// Report the address of a node if it was not previously known.
-	NodeAddress {
-		/// Index of the node.
-		node_index: NodeIndex,
-		/// Address of the node.
-		address: Multiaddr,
-	},
-
 	/// Report information about the node.
 	NodeInfos {
 		/// Index of the node.
@@ -619,10 +611,10 @@ impl Service {
 		}
 
 		match endpoint {
-			ConnectedPoint::Listener { ref listen_addr } => {
+			ConnectedPoint::Listener { ref listen_addr, ref send_back_addr } => {
 				if self.num_ingoing_connections() < self.max_incoming_connections {
-					debug!(target: "sub-libp2p", "Connected to {:?} on listener {}",
-						peer_id, listen_addr);
+					debug!(target: "sub-libp2p", "Connected to {:?} through {} on listener {}",
+						peer_id, send_back_addr, listen_addr);
 				} else {
 					info!(target: "sub-libp2p", "Rejected incoming peer {:?} because we are full", peer_id);
 					assert_eq!(self.swarm.drop_node(node_index), Ok(Vec::new()));
@@ -708,12 +700,6 @@ impl Service {
 				self.topology.report_failed_to_connect(&address);
 				self.connect_to_nodes();
 				None
-			},
-			SwarmEvent::NodeAddress { node_index, address } => {
-				Some(ServiceEvent::NodeAddress {
-					node_index,
-					address,
-				})
 			},
 			SwarmEvent::UnresponsiveNode { node_index } => {
 				let closed_custom_protocols = self.swarm.drop_node(node_index)

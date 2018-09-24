@@ -16,9 +16,10 @@
 
 use bytes::Bytes;
 use custom_proto::{RegisteredProtocols, RegisteredProtocolOutput};
-use futures::{prelude::*, future, task};
+use futures::{prelude::*, task};
 use libp2p::core::{ConnectionUpgrade, Endpoint, PeerId, PublicKey, upgrade};
 use libp2p::core::nodes::handled_node::{NodeHandler, NodeHandlerEndpoint, NodeHandlerEvent};
+use libp2p::core::nodes::swarm::ConnectedPoint;
 use libp2p::kad::{KadConnecConfig, KadFindNodeRespond, KadIncomingRequest, KadConnecController};
 use libp2p::{identify, ping};
 use parking_lot::Mutex;
@@ -53,6 +54,9 @@ pub struct SubstrateNodeHandler<TSubstream, TUserData> {
 	/// Substreams open for "custom" protocols (eg. dot).
 	custom_protocols_substreams: Vec<RegisteredProtocolOutput<TUserData>>,
 
+	/// Address of the node.
+	address: Multiaddr,
+
 	/// Substream open for Kademlia, if any.
 	kademlia_substream: Option<(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>)>,
 	/// If true, we need to send back a `KadOpen` event on the stream (if Kademlia is open).
@@ -86,9 +90,6 @@ pub struct SubstrateNodeHandler<TSubstream, TUserData> {
 	/// Number of outbound substreams the outside should open for us.
 	num_out_user_must_open: usize,
 
-	/// The `Multiaddr` event to produce.
-	multiaddr_event: Option<Result<Multiaddr, IoError>>,
-
 	/// The node has started its shutdown process.
 	is_shutting_down: bool,
 
@@ -118,9 +119,6 @@ pub enum SubstrateOutEvent<TSubstream> {
 
 	/// The node has successfully responded to a ping.
 	PingSuccess(Duration),
-
-	/// The multiaddress of the node is now known.
-	Multiaddr(Result<Multiaddr, IoError>),
 
 	/// Opened a custom protocol with the remote.
 	CustomProtocolOpen {
@@ -266,14 +264,20 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
 	/// Creates a new node handler.
 	#[inline]
-	pub fn new(registered_custom: Arc<RegisteredProtocols<TUserData>>) -> Self {
+	pub fn new(registered_custom: Arc<RegisteredProtocols<TUserData>>, endpoint: ConnectedPoint) -> Self {
 		let registered_custom_len = registered_custom.len();
 		let queued_dial_upgrades = registered_custom.0
 			.iter()
 			.map(|proto| UpgradePurpose::Custom(proto.id()))
 			.collect();
 
+		let address = match endpoint {
+			ConnectedPoint::Dialer { address } => address.clone(),
+			ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr.clone(),
+		};
+
 		SubstrateNodeHandler {
+			address,
 			custom_protocols_substreams: Vec::with_capacity(registered_custom_len),
 			kademlia_substream: None,
 			need_report_kad_open: false,
@@ -288,7 +292,6 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			next_identify: Interval::new(Instant::now() + DELAY_TO_FIRST_IDENTIFY, PERIOD_IDENTIFY),
 			queued_dial_upgrades,
 			num_out_user_must_open: registered_custom_len,
-			multiaddr_event: None,
 			is_shutting_down: false,
 			to_notify: None,
 		}
@@ -307,9 +310,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		// For listeners, propose all the possible upgrades.
 		if endpoint == NodeHandlerEndpoint::Listener {
 			let listener_upgrade = listener_upgrade!(self);
-			// TODO: shouldn't be future::empty() ; requires a change in libp2p
-			let upgrade = upgrade::apply(substream, listener_upgrade, Endpoint::Listener, future::empty())
-				.map(|(out, _)| out);
+			let upgrade = upgrade::apply(substream, listener_upgrade, Endpoint::Listener, &self.address);
 			self.upgrades_in_progress_listen.push(Box::new(upgrade) as Box<_>);
 			// Since we pushed to `upgrades_in_progress_listen`, we have to notify the task.
 			if let Some(task) = self.to_notify.take() {
@@ -342,30 +343,26 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					return;
 				};
 
-				// TODO: shouldn't be future::empty() ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, future::empty())
-					.map(|(out, _)| out);
+				// TODO: shouldn't be &self.address ; requires a change in libp2p
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Kad => {
 				let wanted = upgrade::map(KadConnecConfig::new(), move |(c, s)| FinalUpgrade::Kad(c, s));
-				// TODO: shouldn't be future::empty() ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, future::empty::<Multiaddr, IoError>())
-					.map(|(out, _)| out);
+				// TODO: shouldn't be &self.address ; requires a change in libp2p
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Identify => {
 				let wanted = upgrade::map(identify::IdentifyProtocolConfig, move |i| FinalUpgrade::from(i));
-				// TODO: shouldn't be future::empty() ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, future::empty())
-					.map(|(out, _)| out);
+				// TODO: shouldn't be &self.address ; requires a change in libp2p
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Ping => {
 				let wanted = upgrade::map(ping::Ping::default(), move |p| FinalUpgrade::from(p));
-				// TODO: shouldn't be future::empty() ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, future::empty::<Multiaddr, IoError>())
-					.map(|(out, _): (FinalUpgrade<TSubstream, TUserData>, _)| out);
+				// TODO: shouldn't be &self.address ; requires a change in libp2p
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 		};
@@ -382,14 +379,6 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 
 	#[inline]
 	fn inject_outbound_closed(&mut self, _: Self::OutboundOpenInfo) {
-	}
-
-	#[inline]
-	fn inject_multiaddr(&mut self, multiaddr: Result<Multiaddr, IoError>) {
-		self.multiaddr_event = Some(multiaddr);
-		if let Some(to_notify) = self.to_notify.take() {
-			to_notify.notify();
-		}
 	}
 
 	fn inject_event(&mut self, event: Self::InEvent) {
@@ -415,11 +404,6 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	fn poll(&mut self) -> Poll<Option<NodeHandlerEvent<Self::OutboundOpenInfo, Self::OutEvent>>, IoError> {
 		if self.is_shutting_down {
 			return Ok(Async::Ready(None));
-		}
-
-		if let Some(multiaddr_event) = self.multiaddr_event.take() {
-			let event = SubstrateOutEvent::Multiaddr(multiaddr_event);
-			return Ok(Async::Ready(Some(NodeHandlerEvent::Custom(event))));
 		}
 
 		match self.poll_upgrades_in_progress()? {
@@ -527,7 +511,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	/// Returns the names of the protocols that we supporitt.
 	fn supported_protocol_names(&self) -> Vec<String> {
 		let list = listener_upgrade!(self);
-		ConnectionUpgrade::<TSubstream, future::Empty<Multiaddr, IoError>>::protocol_names(&list)
+		ConnectionUpgrade::<TSubstream>::protocol_names(&list)
 			.filter_map(|(n, _)| String::from_utf8(n.to_vec()).ok())
 			.collect()
 	}
