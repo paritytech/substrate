@@ -31,7 +31,7 @@ use trie_backend_essence::{TrieBackendEssence};
 
 /// Return changes of given key at given blocks range.
 /// `max` is the number of best known block.
-pub fn key_changes<S: Storage<H>, H: Hasher + 'static>(
+pub fn key_changes<S: Storage<H>, H: Hasher>(
 	config: &Configuration,
 	storage: &S,
 	begin: u64,
@@ -56,7 +56,7 @@ pub fn key_changes<S: Storage<H>, H: Hasher + 'static>(
 
 /// Returns proof of changes of given key at given blocks range.
 /// `max` is the number of best known block.
-pub fn key_changes_proof<S: Storage<H>, H: Hasher + 'static>(
+pub fn key_changes_proof<S: Storage<H>, H: Hasher>(
 	config: &Configuration,
 	storage: &S,
 	begin: u64,
@@ -239,7 +239,7 @@ struct DrilldownIterator<'a, RS: 'a + Storage<H>, S: 'a + Storage<H>, H: Hasher>
 	essence: DrilldownIteratorEssence<'a, RS, S, H>,
 }
 
-impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher + 'static> Iterator
+impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> Iterator
 	for DrilldownIterator<'a, RS, S, H>
 	where H::Out: HeapSizeOf
 {
@@ -268,7 +268,7 @@ impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> ProvingDrilldownIterator
 	}
 }
 
-impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher + 'static> Iterator for ProvingDrilldownIterator<'a, RS, S, H> where H::Out: HeapSizeOf {
+impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> Iterator for ProvingDrilldownIterator<'a, RS, S, H> where H::Out: HeapSizeOf {
 	type Item = Result<(u64, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {

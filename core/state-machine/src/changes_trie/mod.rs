@@ -67,7 +67,7 @@ pub type Configuration = primitives::ChangesTrieConfiguration;
 
 /// Compute the changes trie root and transaction for given block.
 /// Returns None if there's no data to perform computation.
-pub fn compute_changes_trie_root<'a, B: Backend<H>, S: Storage<H>, H: Hasher + 'static>(
+pub fn compute_changes_trie_root<'a, B: Backend<H>, S: Storage<H>, H: Hasher>(
 	backend: &B,
 	storage: Option<&'a S>,
 	changes: &OverlayedChanges,

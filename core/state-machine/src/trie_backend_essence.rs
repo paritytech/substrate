@@ -37,7 +37,7 @@ pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	root: H::Out,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackendEssence<S, H> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: HeapSizeOf {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackendEssence {
@@ -108,12 +108,18 @@ pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	overlay: &'a mut MemoryDB<H>,
 }
 
-impl<'a, S: TrieBackendStorage<H>, H: Hasher + 'static> hash_db::AsHashDB<H, DBValue> for Ephemeral<'a, S, H> where H::Out: HeapSizeOf {
+impl<'a,
+	S: TrieBackendStorage<H>,
+	H: Hasher
+> hash_db::AsHashDB<H, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
 	fn as_hash_db(&self) -> &HashDB<H> { self }
 	fn as_hash_db_mut(&mut self) -> &mut HashDB<H> { self }
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
 	pub fn new(storage: &'a S, overlay: &'a mut MemoryDB<H>) -> Self {
 		Ephemeral {
 			storage,
@@ -122,18 +128,24 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
 	}
 }
 
-impl<'a, S: TrieBackendStorage<H>, H: Hasher + 'static> hash_db::HashDB<H, DBValue> for Ephemeral<'a, S, H> where H::Out: HeapSizeOf {
+impl<'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: Hasher
+> hash_db::HashDB<H, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
 	fn keys(&self) -> HashMap<H::Out, i32> {
 		self.overlay.keys() // TODO: iterate backing
 	}
 
-	fn get(&self, key: &H::Out) -> Option<&DBValue> {
+	fn get(&self, key: &H::Out) -> Option<DBValue> {
 		match self.overlay.raw(key) {
 			Some((val, i)) => {
 				if i <= 0 {
 					None
 				} else {
-					Some(val)
+					Some(val.clone())
 				}
 			}
 			None => match self.storage.get(&key) {

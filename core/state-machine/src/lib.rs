@@ -205,7 +205,7 @@ pub fn execute<H, B, T, Exec>(
 	strategy: ExecutionStrategy,
 ) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
@@ -247,7 +247,7 @@ pub fn execute_using_consensus_failure_handler<H, B, T, Exec, Handler>(
 	manager: ExecutionManager<Handler>,
 ) -> Result<(Vec<u8>, B::Transaction, Option<MemoryDB<H>>), Box<Error>>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	Exec: CodeExecutor<H>,
 	B: Backend<H>,
 	T: ChangesTrieStorage<H>,
@@ -357,7 +357,7 @@ pub fn prove_execution<B, H, Exec>(
 ) -> Result<(Vec<u8>, Vec<Vec<u8>>), Box<Error>>
 where
 	B: Backend<H>,
-	H: Hasher + 'static,
+	H: Hasher,
 	Exec: CodeExecutor<H>,
 
 	H::Out: Ord + HeapSizeOf,
@@ -388,7 +388,7 @@ pub fn execution_proof_check<H, Exec>(
 	call_data: &[u8],
 ) -> Result<Vec<u8>, Box<Error>>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	Exec: CodeExecutor<H>,
 	H::Out: Ord + HeapSizeOf,
 {
@@ -404,7 +404,7 @@ pub fn prove_read<B, H>(
 ) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
 where
 	B: Backend<H>,
-	H: Hasher + 'static,
+	H: Hasher,
 
 	H::Out: Ord + HeapSizeOf
 {
@@ -422,7 +422,7 @@ pub fn read_proof_check<H>(
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>, Box<Error>>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 
 	H::Out: Ord + HeapSizeOf
 {

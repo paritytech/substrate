@@ -83,7 +83,7 @@ where
 
 impl<'a, H, B, T> Ext<'a, H, B, T>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,
@@ -148,7 +148,7 @@ where
 
 impl<'a, B: 'a, T: 'a, H> Externalities<H> for Ext<'a, H, B, T>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
 	H::Out: Ord + HeapSizeOf,

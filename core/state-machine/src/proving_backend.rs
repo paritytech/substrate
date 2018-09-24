@@ -35,7 +35,7 @@ pub struct ProvingBackendEssence<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hash
 impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 	where
 		S: TrieBackendStorage<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: HeapSizeOf,
 	
 {
@@ -84,8 +84,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> ProvingBackend<S, H> {
 impl<S, H> Backend<H> for ProvingBackend<S, H>
 	where
 		S: TrieBackendStorage<H>,
-		H: Hasher + 'static,
-	
+		H: Hasher,
 		H::Out: Ord + HeapSizeOf,
 {
 	type Error = String;
@@ -125,7 +124,7 @@ pub fn create_proof_check_backend<H>(
 	proof: Vec<Vec<u8>>
 ) -> Result<TrieBackend<MemoryDB<H>, H>, Box<Error>>
 where
-	H: Hasher + 'static,
+	H: Hasher,
 	H::Out: HeapSizeOf,
 {
 	let mut db = MemoryDB::default();	// TODO: use new for correctness

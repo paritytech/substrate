@@ -18,7 +18,7 @@
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use substrate_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, MemoryDB};
+use trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, MemoryDB};
 use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use {Backend};
 
@@ -27,7 +27,7 @@ pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
 	essence: TrieBackendEssence<S, H>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackend<S, H> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: HeapSizeOf {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
@@ -53,7 +53,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher + 'static> TrieBackend<S, H> where H::O
 
 impl super::Error for String {}
 
-impl<S: TrieBackendStorage<H>, H: Hasher + 'static> Backend<H> for TrieBackend<S, H> where
+impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	H::Out: Ord + HeapSizeOf,
 {
 	type Error = String;
@@ -132,7 +132,7 @@ pub mod tests {
 
 	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<Blake2Hasher>::new();
+		let mut mdb = MemoryDB::<Blake2Hasher>::default();	// TODO: use new() to be more correct
 		{
 			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(b"key", b"value").expect("insert failed");
@@ -169,7 +169,7 @@ pub mod tests {
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
 		assert!(TrieBackend::<MemoryDB<Blake2Hasher>, Blake2Hasher>::new(
-			MemoryDB::new(),
+			MemoryDB::default(),	// TODO: use new() to be more correct
 			Default::default(),
 		).pairs().is_empty());
 	}

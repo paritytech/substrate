@@ -43,7 +43,7 @@ pub fn prepare_input<'a, B, S, H>(
 		B: Backend<H>,
 		S: Storage<H>,
 		&'a S: TrieBackendStorage<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: HeapSizeOf,
 {
 	let (storage, config) = match (storage, changes.changes_trie_config.as_ref()) {
@@ -110,7 +110,7 @@ fn prepare_digest_input<'a, S, H>(
 	where
 		S: Storage<H>,
 		&'a S: TrieBackendStorage<H>,
-		H: Hasher + 'static,
+		H: Hasher,
 		H::Out: HeapSizeOf,
 {
 	let mut digest_map = BTreeMap::<Vec<u8>, BTreeSet<u64>>::new();

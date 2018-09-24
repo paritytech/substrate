@@ -113,7 +113,7 @@ impl<H> PartialEq for InMemory<H> {
 	}
 }
 
-impl<H: Hasher + 'static> InMemory<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> InMemory<H> where H::Out: HeapSizeOf {
 	/// Copy the state, with applied updates
 	pub fn update(&self, changes: <Self as Backend<H>>::Transaction) -> Self {
 		let mut inner: HashMap<_, _> = self.inner.clone();
@@ -139,7 +139,7 @@ impl<H> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 
 impl super::Error for Void {}
 
-impl<H: Hasher + 'static> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
+impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 	type Error = Void;
 	type Transaction = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 	type TrieBackendStorage = MemoryDB<H>;

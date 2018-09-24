@@ -97,7 +97,7 @@ impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where
 	}
 }
 
-impl<H: Hasher + 'static> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
+impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.inner.get(key).map(|x| x.to_vec())
 	}

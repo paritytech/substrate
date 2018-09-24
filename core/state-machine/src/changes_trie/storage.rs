@@ -100,7 +100,7 @@ impl<H: 'static + Hasher> Storage<H> for InMemoryStorage<H> where H::Out: HeapSi
 	}
 
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Ok(HashDB::<H>::get(&self.data.read().mdb, key).cloned())
+		Ok(HashDB::<H>::get(&self.data.read().mdb, key))
 	}
 }
 
