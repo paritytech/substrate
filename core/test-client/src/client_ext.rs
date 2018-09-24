@@ -30,7 +30,7 @@ pub trait TestClient {
 	/// Crates new client instance for tests.
 	fn new_for_tests() -> Self;
 
-	/// Justify and import block to the chain.
+	/// Justify and import block to the chain. Instant finality.
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()>;
 
 	/// Returns hash of the genesis block.
@@ -45,7 +45,7 @@ impl TestClient for Client<Backend, Executor, runtime::Block> {
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
 		let justification = fake_justify(&block.header);
 		let justified = self.check_justification(block.header, justification)?;
-		self.import_block(origin, justified, Some(block.extrinsics))?;
+		self.import_block(origin, justified, Some(block.extrinsics), true)?;
 
 		Ok(())
 	}

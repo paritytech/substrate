@@ -15,19 +15,19 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // tag::description[]
-//! State database maintenance. Handles finalization and pruning in the database. The input to
+//! State database maintenance. Handles canonicalization and pruning in the database. The input to
 //! this module is a `ChangeSet` which is basically a list of key-value pairs (trie nodes) that
 //! were added or deleted during block execution.
 //!
-//! # Finalization.
-//! Finalization window tracks a tree of blocks identified by header hash. The in-memory
+//! # Canonicalization.
+//! Canonicalization window tracks a tree of blocks identified by header hash. The in-memory
 //! overlay allows to get any node that was was inserted in any any of the blocks within the window.
 //! The tree is journaled to the backing database and rebuilt on startup.
-//! Finalization function select one root from the top of the tree and discards all other roots and
+//! Canonicalization function select one root from the top of the tree and discards all other roots and
 //! their subtrees.
 //!
 //! # Pruning.
-//! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each finalization until pruning
+//! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until pruning
 //! constraints are satisfied.
 //!
 // end::description[]
@@ -38,7 +38,7 @@ extern crate parking_lot;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 
-mod unfinalized;
+mod noncanonical;
 mod pruning;
 #[cfg(test)] mod test;
 
@@ -46,7 +46,7 @@ use std::fmt;
 use parking_lot::RwLock;
 use codec::Codec;
 use std::collections::HashSet;
-use unfinalized::UnfinalizedOverlay;
+use noncanonical::NonCanonicalOverlay;
 use pruning::RefWindow;
 
 /// Database value type.
@@ -113,7 +113,7 @@ pub struct CommitSet<H: Hash> {
 /// Pruning constraints. If none are specified pruning is
 #[derive(Default, Debug, Clone)]
 pub struct Constraints {
-	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only unfinalized states.
+	/// Maximum blocks. Defaults to 0 when unspecified, effectively keeping only non-canonical states.
 	pub max_blocks: Option<u32>,
 	/// Maximum memory in the pruning overlay.
 	pub max_mem: Option<usize>,
@@ -124,9 +124,9 @@ pub struct Constraints {
 pub enum PruningMode {
 	/// Maintain a pruning window.
 	Constrained(Constraints),
-	/// No pruning. Finalization is a no-op.
+	/// No pruning. Canonicalization is a no-op.
 	ArchiveAll,
-	/// Finalization discards unfinalized nodes. All the finalized nodes are kept in the DB.
+	/// Canonicalization discards non-canonical nodes. All the canonical nodes are kept in the DB.
 	ArchiveCanonical,
 }
 
@@ -154,7 +154,7 @@ fn to_meta_key<S: Codec>(suffix: &[u8], data: &S) -> Vec<u8> {
 
 struct StateDbSync<BlockHash: Hash, Key: Hash> {
 	mode: PruningMode,
-	unfinalized: UnfinalizedOverlay<BlockHash, Key>,
+	non_canonical: NonCanonicalOverlay<BlockHash, Key>,
 	pruning: Option<RefWindow<BlockHash, Key>>,
 	pinned: HashSet<BlockHash>,
 }
@@ -162,7 +162,7 @@ struct StateDbSync<BlockHash: Hash, Key: Hash> {
 impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	pub fn new<D: MetaDb>(mode: PruningMode, db: &D) -> Result<StateDbSync<BlockHash, Key>, Error<D::Error>> {
 		trace!("StateDb settings: {:?}", mode);
-		let unfinalized: UnfinalizedOverlay<BlockHash, Key> = UnfinalizedOverlay::new(db)?;
+		let non_canonical: NonCanonicalOverlay<BlockHash, Key> = NonCanonicalOverlay::new(db)?;
 		let pruning: Option<RefWindow<BlockHash, Key>> = match mode {
 			PruningMode::Constrained(Constraints {
 				max_mem: Some(_),
@@ -173,7 +173,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		};
 		Ok(StateDbSync {
 			mode,
-			unfinalized,
+			non_canonical,
 			pruning: pruning,
 			pinned: Default::default(),
 		})
@@ -196,36 +196,36 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				}
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
-				self.unfinalized.insert(hash, number, parent_hash, changeset)
+				self.non_canonical.insert(hash, number, parent_hash, changeset)
 			}
 		}
 	}
 
-	pub fn finalize_block(&mut self, hash: &BlockHash) -> CommitSet<Key> {
-		// clear the temporary overlay from the previous finalization.
-		self.unfinalized.clear_overlay();
+	pub fn canonicalize_block(&mut self, hash: &BlockHash) -> CommitSet<Key> {
+		// clear the temporary overlay from the previous canonicalization.
+		self.non_canonical.clear_overlay();
 		let mut commit = match self.mode {
 			PruningMode::ArchiveAll => {
 				CommitSet::default()
 			},
 			PruningMode::ArchiveCanonical => {
-				let mut commit = self.unfinalized.finalize(hash);
+				let mut commit = self.non_canonical.canonicalize(hash);
 				commit.data.deleted.clear();
 				commit
 			},
 			PruningMode::Constrained(_) => {
-				self.unfinalized.finalize(hash)
+				self.non_canonical.canonicalize(hash)
 			},
 		};
 		if let Some(ref mut pruning) = self.pruning {
-			pruning.note_finalized(hash, &mut commit);
+			pruning.note_canonical(hash, &mut commit);
 		}
 		self.prune(&mut commit);
 		commit
 	}
 
-	pub fn best_finalized(&self) -> u64 {
-		return self.unfinalized.last_finalized_block_number()
+	pub fn best_canonical(&self) -> u64 {
+		return self.non_canonical.last_canonicalized_block_number()
 	}
 
 	pub fn is_pruned(&self, number: u64) -> bool {
@@ -252,7 +252,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		}
 	}
 
-	/// Revert all unfinalized blocks with the best block number.
+	/// Revert all non-canonical blocks with the best block number.
 	/// Returns a database commit or `None` if not possible.
 	/// For archive an empty commit set is returned.
 	pub fn revert_one(&mut self) -> Option<CommitSet<Key>> {
@@ -261,7 +261,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 				Some(CommitSet::default())
 			},
 			PruningMode::ArchiveCanonical | PruningMode::Constrained(_) => {
-				self.unfinalized.revert_one()
+				self.non_canonical.revert_one()
 			},
 		}
 	}
@@ -275,7 +275,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 	}
 
 	pub fn get<D: HashDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>> {
-		if let Some(value) = self.unfinalized.get(key) {
+		if let Some(value) = self.non_canonical.get(key) {
 			return Ok(Some(value));
 		}
 		db.get(key).map_err(|e| Error::Db(e))
@@ -296,14 +296,14 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		})
 	}
 
-	/// Add a new unfinalized block.
+	/// Add a new non-canonical block.
 	pub fn insert_block(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
 		self.db.write().insert_block(hash, number, parent_hash, changeset)
 	}
 
 	/// Finalize a previously inserted block.
-	pub fn finalize_block(&self, hash: &BlockHash) -> CommitSet<Key> {
-		self.db.write().finalize_block(hash)
+	pub fn canonicalize_block(&self, hash: &BlockHash) -> CommitSet<Key> {
+		self.db.write().canonicalize_block(hash)
 	}
 
 	/// Prevents pruning of specified block and its descendants.
@@ -316,12 +316,12 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 		self.db.write().unpin(hash)
 	}
 
-	/// Get a value from unfinalized/pruning overlay or the backing DB.
+	/// Get a value from non-canonical/pruning overlay or the backing DB.
 	pub fn get<D: HashDb<Hash=Key>>(&self, key: &Key, db: &D) -> Result<Option<DBValue>, Error<D::Error>> {
 		self.db.read().get(key, db)
 	}
 
-	/// Revert all unfinalized blocks with the best block number.
+	/// Revert all non-canonical blocks with the best block number.
 	/// Returns a database commit or `None` if not possible.
 	/// For archive an empty commit set is returned.
 	pub fn revert_one(&self) -> Option<CommitSet<Key>> {
@@ -329,8 +329,8 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Returns last finalized block number.
-	pub fn best_finalized(&self) -> u64 {
-		return self.db.read().best_finalized()
+	pub fn best_canonical(&self) -> u64 {
+		return self.db.read().best_canonical()
 	}
 
 	/// Check if block is pruned away.
@@ -353,10 +353,10 @@ mod tests {
 		db.commit(&state_db.insert_block(&H256::from(21), 2, &H256::from(1), make_changeset(&[21], &[921, 1])));
 		db.commit(&state_db.insert_block(&H256::from(22), 2, &H256::from(1), make_changeset(&[22], &[922])));
 		db.commit(&state_db.insert_block(&H256::from(3), 3, &H256::from(21), make_changeset(&[3], &[93])));
-		db.commit(&state_db.finalize_block(&H256::from(1)));
+		db.commit(&state_db.canonicalize_block(&H256::from(1)));
 		db.commit(&state_db.insert_block(&H256::from(4), 4, &H256::from(3), make_changeset(&[4], &[94])));
-		db.commit(&state_db.finalize_block(&H256::from(21)));
-		db.commit(&state_db.finalize_block(&H256::from(3)));
+		db.commit(&state_db.canonicalize_block(&H256::from(21)));
+		db.commit(&state_db.canonicalize_block(&H256::from(3)));
 
 		(db, state_db)
 	}

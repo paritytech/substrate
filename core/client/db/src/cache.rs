@@ -27,12 +27,13 @@ use codec::{Codec, Encode, Decode};
 use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, As, NumberFor};
-use utils::{COLUMN_META, BlockKey, db_err, meta_keys, read_id, db_key_to_number, number_to_db_key};
+use utils::{COLUMN_META, BlockLookupKey, db_err, meta_keys, lookup_key_to_number, number_to_lookup_key};
 
 /// Database-backed cache of blockchain data.
 pub struct DbCache<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	block_index_column: Option<u32>,
+	header_column: Option<u32>,
 	authorities_at: DbCacheList<Block, Vec<AuthorityId>>,
 }
 
@@ -45,16 +46,19 @@ impl<Block> DbCache<Block>
 	pub fn new(
 		db: Arc<KeyValueDB>,
 		block_index_column: Option<u32>,
+		header_column: Option<u32>,
 		authorities_column: Option<u32>
 	) -> ClientResult<Self> {
 		Ok(DbCache {
 			db: db.clone(),
 			block_index_column,
+			header_column,
 			authorities_at: DbCacheList::new(db, meta_keys::BEST_AUTHORITIES, authorities_column)?,
 		})
 	}
 
 	/// Get authorities_cache.
+	#[allow(unused)]
 	pub fn authorities_at_cache(&self) -> &DbCacheList<Block, Vec<AuthorityId>> {
 		&self.authorities_at
 	}
@@ -66,10 +70,27 @@ impl<Block> BlockchainCache<Block> for DbCache<Block>
 		NumberFor<Block>: As<u64>,
 {
 	fn authorities_at(&self, at: BlockId<Block>) -> Option<Vec<AuthorityId>> {
-		let authorities_at = read_id(&*self.db, self.block_index_column, at).and_then(|at| match at {
-			Some(at) => self.authorities_at.value_at_key(at),
-			None => Ok(None),
-		});
+		use runtime_primitives::traits::Header as HeaderT;
+
+		let number = match at {
+			BlockId::Number(n) => Ok(number_to_lookup_key(n)),
+			BlockId::Hash(h) => {
+				let maybe_header = ::utils::read_header::<Block>(
+					&*self.db,
+					self.block_index_column,
+					self.header_column,
+					BlockId::Hash(h),
+				);
+
+				match maybe_header {
+					Ok(Some(hdr)) => Ok(number_to_lookup_key(*hdr.number())),
+					Ok(None) => return None, // no such block.
+					Err(e) => Err(e),
+				}
+			}
+		};
+
+		let authorities_at = number.and_then(|at| self.authorities_at.value_at_key(at));
 
 		match authorities_at {
 			Ok(authorities) => authorities,
@@ -128,7 +149,7 @@ impl<Block, T> DbCacheList<Block, T>
 			.map_err(db_err)
 			.and_then(|block| match block {
 				Some(block) => {
-					let valid_from = db_key_to_number(&block)?;
+					let valid_from = lookup_key_to_number(&block)?;
 					read_storage_entry::<Block, T>(&*db, column, valid_from)
 						.map(|entry| Some(Entry {
 							valid_from,
@@ -155,6 +176,7 @@ impl<Block, T> DbCacheList<Block, T>
 
 	/// Commits the new best pending value to the database. Returns Some if best entry must
 	/// be updated after transaction is committed.
+	#[allow(unused)]
 	pub fn commit_best_entry(
 		&self,
 		transaction: &mut DBTransaction,
@@ -174,7 +196,7 @@ impl<Block, T> DbCacheList<Block, T>
 			return None;
 		}
 
-		let valid_from_key = number_to_db_key(valid_from);
+		let valid_from_key = number_to_lookup_key(valid_from);
 		transaction.put(COLUMN_META, self.meta_key, &valid_from_key);
 		transaction.put(self.column, &valid_from_key, &StorageEntry {
 			prev_valid_from: best_entry.map(|b| b.valid_from),
@@ -189,12 +211,14 @@ impl<Block, T> DbCacheList<Block, T>
 
 	/// Updates the best in-memory cache entry. Must be called after transaction with changes
 	/// from commit_best_entry has been committed.
+	#[allow(unused)]
 	pub fn update_best_entry(&self, best_entry: Option<Entry<NumberFor<Block>, T>>) {
 		*self.best_entry.write() = best_entry;
 	}
 
 	/// Prune all entries from the beginning up to the block (including entry at the number). Returns
 	/// the number of pruned entries. Pruning never deletes the latest entry in the cache.
+	#[allow(unused)]
 	pub fn prune_entries(
 		&self,
 		transaction: &mut DBTransaction,
@@ -228,7 +252,7 @@ impl<Block, T> DbCacheList<Block, T>
 				.expect("referenced entry exists; entry_to_remove is a reference to the entry; qed");
 
 			if current_entry != last_entry_to_keep {
-				transaction.delete(self.column, &number_to_db_key(current_entry));
+				transaction.delete(self.column, &number_to_lookup_key(current_entry));
 				pruned += 1;
 			}
 			entry_to_remove = entry.prev_valid_from;
@@ -237,15 +261,15 @@ impl<Block, T> DbCacheList<Block, T>
 		let mut entry = read_storage_entry::<Block, T>(&*self.db, self.column, last_entry_to_keep)?
 			.expect("last_entry_to_keep >= first_entry_to_remove; that means that we're leaving this entry in the db; qed");
 		entry.prev_valid_from = None;
-		transaction.put(self.column, &number_to_db_key(last_entry_to_keep), &entry.encode());
+		transaction.put(self.column, &number_to_lookup_key(last_entry_to_keep), &entry.encode());
 
 		Ok(pruned)
 	}
 
 	/// Reads the cached value, actual at given block. Returns None if the value was not cached
 	/// or if it has been pruned.
-	fn value_at_key(&self, key: BlockKey) -> ClientResult<Option<T>> {
-		let at = db_key_to_number::<NumberFor<Block>>(&key)?;
+	fn value_at_key(&self, key: BlockLookupKey) -> ClientResult<Option<T>> {
+		let at = lookup_key_to_number::<NumberFor<Block>>(&key)?;
 		let best_valid_from = match self.best_entry() {
 			// there are entries in cache
 			Some(best_entry) => {
@@ -291,7 +315,7 @@ fn read_storage_entry<Block, T>(
 		NumberFor<Block>: As<u64>,
 		T: Codec,
 {
-	db.get(column, &number_to_db_key(number))
+	db.get(column, &number_to_lookup_key(number))
 		.and_then(|entry| match entry {
 			Some(entry) => Ok(StorageEntry::<NumberFor<Block>, T>::decode(&mut &entry[..])),
 			None => Ok(None),
@@ -324,6 +348,7 @@ mod tests {
 	}
 
 	#[test]
+	#[ignore] // TODO: unignore when cache reinstated.
 	fn best_authorities_are_updated() {
 		let db = LightStorage::new_test();
 		let authorities_at: Vec<(usize, Option<Entry<u64, Vec<AuthorityId>>>)> = vec![

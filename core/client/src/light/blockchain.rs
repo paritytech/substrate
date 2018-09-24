@@ -25,6 +25,7 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
+use backend::NewBlockState;
 use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
 use cht;
@@ -33,13 +34,19 @@ use light::fetcher::{Fetcher, RemoteHeaderRequest};
 
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
-	/// Store new header.
+	/// Store new header. Should refuse to revert any finalized blocks.
 	fn import_header(
 		&self,
-		is_new_best: bool,
 		header: Block::Header,
-		authorities: Option<Vec<AuthorityId>>
+		authorities: Option<Vec<AuthorityId>>,
+		state: NewBlockState,
 	) -> ClientResult<()>;
+
+	/// Mark historic header as finalized.
+	fn finalize_header(&self, block: BlockId<Block>) -> ClientResult<()>;
+
+	/// Get last finalized header.
+	fn last_finalized(&self) -> ClientResult<Block::Hash>;
 
 	/// Get CHT root for given block. Fails if the block is not pruned (not a part of any CHT).
 	fn cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash>;
@@ -134,6 +141,10 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 
 	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification<Block::Hash>>> {
 		Ok(None)
+	}
+
+	fn last_finalized(&self) -> ClientResult<Block::Hash> {
+		self.storage.last_finalized()
 	}
 
 	fn cache(&self) -> Option<&BlockchainCache<Block>> {

@@ -18,7 +18,6 @@
 
 use futures::IntoFuture;
 
-use primitives::H256;
 use hash_db::Hasher;
 use patricia_trie::NodeCodec;
 use rlp::Encodable;
@@ -134,11 +133,10 @@ impl<E, H, C> LightDataChecker<E, H, C> {
 impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 	where
 		Block: BlockT,
-		Block::Hash: Into<H::Out> + From<H256>,
 		E: CodeExecutor<H>,
 		H: Hasher,
 		C: NodeCodec<H> + Sync + Send,
-		H::Out: Ord + Encodable + HeapSizeOf + From<Block::Hash> + From<H256>,
+		H::Out: Ord + Encodable + HeapSizeOf,
 {
 	fn check_header_proof(
 		&self,
@@ -162,8 +160,9 @@ impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 		request: &RemoteReadRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>> {
-		let local_state_root = request.header.state_root().clone();
-		read_proof_check::<H, C>(local_state_root.into(), remote_proof, &request.key).map_err(Into::into)
+		let mut root: H::Out = Default::default();
+		root.as_mut().copy_from_slice(request.header.state_root().as_ref());
+		read_proof_check::<H, C>(root, remote_proof, &request.key).map_err(Into::into)
 	}
 
 	fn check_execution_proof(
@@ -230,7 +229,13 @@ pub mod tests {
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
-		local_storage.insert(remote_block_hash, remote_block_header.clone(), None, None, true);
+		local_storage.insert(
+			remote_block_hash,
+			remote_block_header.clone(),
+			None,
+			None,
+			::backend::NewBlockState::Final,
+		);
 		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = LightDataChecker::new(local_executor);
 		(local_checker, remote_block_header, remote_read_proof, authorities_len)
