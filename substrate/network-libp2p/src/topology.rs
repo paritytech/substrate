@@ -25,6 +25,9 @@ use std::time::{Duration, Instant, SystemTime};
 
 /// For each address we're connected to, a period of this duration increases the score by 1.
 const CONNEC_DURATION_PER_SCORE: Duration = Duration::from_secs(10);
+/// Maximum number of addresses for a given peer. If there are more than this number of addresses,
+/// the ones with a lower score will be removed.
+const MAX_ADDRESSES_PER_PEER: usize = 10;
 /// Maximum value for the score.
 const MAX_SCORE: u32 = 100;
 /// When we successfully connect to a node, raises its score to the given minimum value.
@@ -297,12 +300,22 @@ impl NetTopology {
 			);
 		}
 
-		for (addr, connectable) in addrs {
+		'addrs_inserter: for (addr, connectable) in addrs {
 			let initial_score = if connectable {
 				DISCOVERY_INITIAL_SCORE_CONNECTABLE
 			} else {
 				DISCOVERY_INITIAL_SCORE
 			};
+
+			// Enforce `MAX_ADDRESSES_PER_PEER` before inserting, or skip this entry.
+			while peer.addrs.len() >= MAX_ADDRESSES_PER_PEER {
+				let pos = peer.addrs.iter().position(|addr| addr.score() <= initial_score);
+				if let Some(pos) = pos {
+					let _ = peer.addrs.remove(pos);
+				} else {
+					continue 'addrs_inserter;
+				}
+			}
 
 			peer.addrs.push(Addr {
 				addr,
