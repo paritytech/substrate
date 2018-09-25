@@ -43,13 +43,9 @@ use service::{
 	Roles,
 	FactoryExtrinsic,
 };
-<<<<<<< HEAD
-use network::{NetworkConfiguration, NonReservedPeerMode, Secret, AddrComponent, SyncProvider, ManageNetwork};
-=======
 use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
 use client::{BlockOrigin, JustifiedHeader};
 use sr_primitives::traits::As;
->>>>>>> 21e6f360... Sync test
 
 struct TestNet<F: ServiceFactory> {
 	runtime: Runtime,
@@ -76,7 +72,15 @@ fn node_private_key_string(index: u32) -> String {
 	format!("N{}", index)
 }
 
-fn node_config<F: ServiceFactory> (index: u32, spec: &FactoryChainSpec<F>, role: Roles, key_seed: Option<String>, root: &TempDir) -> FactoryFullConfiguration<F> {
+fn node_config<F: ServiceFactory> (
+	index: u32,
+	spec: &FactoryChainSpec<F>,
+	role: Roles,
+	key_seed: Option<String>,
+	base_port: u16,
+	root: &TempDir,
+) -> FactoryFullConfiguration<F>
+{
 	let root = root.path().join(format!("node-{}", index));
 	let mut keys = Vec::new();
 	if let Some(seed) = key_seed {
@@ -87,8 +91,8 @@ fn node_config<F: ServiceFactory> (index: u32, spec: &FactoryChainSpec<F>, role:
 		config_path: Some(root.join("network").to_str().unwrap().into()),
 		net_config_path: Some(root.join("network").to_str().unwrap().into()),
 		listen_addresses: vec! [
-			iter::once(AddrComponent::IP4(Ipv4Addr::new(127, 0, 0, 1)))
-				.chain(iter::once(AddrComponent::TCP(30400 + index as u16)))
+			iter::once(Protocol::Ip4(Ipv4Addr::new(127, 0, 0, 1)))
+				.chain(iter::once(Protocol::Tcp(base_port + index as u16)))
 				.collect()
 		],
 		public_addresses: vec![],
@@ -123,22 +127,22 @@ fn node_config<F: ServiceFactory> (index: u32, spec: &FactoryChainSpec<F>, role:
 }
 
 impl<F: ServiceFactory> TestNet<F> {
-	fn new(temp: &TempDir, spec: FactoryChainSpec<F>, full: u32, light: u32, authorities: Vec<String>) -> TestNet<F> {
+	fn new(temp: &TempDir, spec: FactoryChainSpec<F>, full: u32, light: u32, authorities: Vec<String>, base_port: u16) -> TestNet<F> {
 		::env_logger::init().ok();
 		let runtime = Runtime::new().expect("Error creating tokio runtime");
 		let authority_nodes = authorities.iter().enumerate().map(|(index, key)| (index as u32,
-			F::new_full(node_config::<F>(index as u32, &spec, Roles::AUTHORITY, Some(key.clone()), &temp), runtime.executor())
+			F::new_full(node_config::<F>(index as u32, &spec, Roles::AUTHORITY, Some(key.clone()), base_port, &temp), runtime.executor())
 				.expect("Error creating test node service"))
 		).collect();
 
 		let authorities = authorities.len() as u32;
 		let full_nodes = (authorities..full + authorities).map(|index| (index,
-			F::new_full(node_config::<F>(index, &spec, Roles::FULL, None, &temp), runtime.executor())
+			F::new_full(node_config::<F>(index, &spec, Roles::FULL, None, base_port, &temp), runtime.executor())
 				.expect("Error creating test node service"))
 		).collect();
 
 		let light_nodes = (full + authorities..full + authorities + light).map(|index| (index,
-			F::new_light(node_config::<F>(index, &spec, Roles::LIGHT, None, &temp), runtime.executor())
+			F::new_light(node_config::<F>(index, &spec, Roles::LIGHT, None, base_port, &temp), runtime.executor())
 				.expect("Error creating test node service"))
 		).collect();
 
@@ -157,7 +161,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 		println!("Checking star topology");
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		{
-			let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, vec![]);
+			let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, vec![], 30400);
 			let first_address = network.full_nodes[0].1.network().node_id().unwrap();
 			for (_, service) in network.full_nodes.iter().skip(1) {
 				service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
@@ -172,7 +176,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 		println!("Checking linked topology");
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		{
-			let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES as u32, 0, vec![]);
+			let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES as u32, 0, vec![], 30400);
 			let mut address = network.full_nodes[0].1.network().node_id().unwrap();
 			for (_, service) in network.full_nodes.iter().skip(1) {
 				service.network().add_reserved_peer(address.clone()).expect("Error adding reserved peer");
@@ -195,7 +199,7 @@ where
 	const NUM_BLOCKS: usize = 2048;
 	println!("Checking block sync");
 	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
-	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, vec![]);
+	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, vec![], 30500);
 	let first_address = {
 		let first_service = &network.full_nodes[0].1;
 		for i in 0 .. NUM_BLOCKS {
@@ -207,6 +211,7 @@ where
 		}
 		first_service.network().node_id().unwrap()
 	};
+	println!("Running sync");
 	for (_, service) in network.full_nodes.iter().skip(1) {
 		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 	}
@@ -223,7 +228,7 @@ where
 	const NUM_BLOCKS: u64 = 6;
 	println!("Checking consensus");
 	let temp = TempDir::new("substrate-conensus-test").expect("Error creating test dir");
-	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, authorities);
+	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, authorities, 30600);
 	let first_address = network.authority_nodes[0].1.network().node_id().unwrap();
 	for (_, service) in network.full_nodes.iter() {
 		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
