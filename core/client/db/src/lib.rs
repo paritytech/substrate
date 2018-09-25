@@ -416,8 +416,8 @@ impl<Block: BlockT> Backend<Block> {
 		})
 	}
 
-	// performs state pruning after importning a non-finalized block.
-	fn state_pruning_non_finalized(
+	// performs forced canonicaliziation with a delay after importning a non-finalized block.
+	fn force_delayed_canonicalize(
 		&self,
 		transaction: &mut DBTransaction,
 		hash: Block::Hash,
@@ -453,7 +453,7 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	// write stuff to a transaction after a new block is finalized.
-	// this manages state pruning. Fails if called with a block which
+	// this canonicalizes finalized blocks. Fails if called with a block which
 	// was not a child of the last finalized block.
 	fn note_finalized(
 		&self,
@@ -606,8 +606,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 				// TODO: ensure best chain contains this block.
 				self.note_finalized(&mut transaction, &pending_block.header, hash)?;
 			} else {
-				// prune states at blocks which are old enough, regardless of finality.
-				self.state_pruning_non_finalized(&mut transaction, hash, *pending_block.header.number())?
+				// canonicalize blocks which are old enough, regardless of finality.
+				self.force_delayed_canonicalize(&mut transaction, hash, *pending_block.header.number())?
 			}
 
 			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number,
