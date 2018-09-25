@@ -16,17 +16,15 @@
 
 use std::collections::BTreeSet;
 use std::cmp::{Ord, Ordering};
-use kvdb::KeyValueDB;
+use kvdb::{KeyValueDB, DBTransaction};
 use runtime_primitives::traits::SimpleArithmetic;
-use codec::Decode;
+use codec::{Encode, Decode};
 use error;
-
-// TODO [snd] put prefix here
 
 /// helper wrapper type to keep a list of block hashes ordered
 /// by `number` descending in a `BTreeSet` which allows faster and simpler
 /// insertion and removal than keeping them in a list.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct LeafSetItem<H, N> {
 	hash: H,
 	number: N,
@@ -57,14 +55,14 @@ impl<H, N> Eq for LeafSetItem<H, N> where N: PartialEq {}
 /// list of leaf hashes ordered by number (descending).
 /// stored in memory for fast access.
 /// this allows very fast checking and modification of active leaves.
-#[derive(Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LeafSet<H, N> {
 	storage: BTreeSet<LeafSetItem<H, N>>,
 }
 
 impl<H, N> LeafSet<H, N> where
-	H: Clone + Decode,
-	N: Clone + SimpleArithmetic + Decode,
+	H: Clone + Decode + Encode,
+	N: Clone + SimpleArithmetic + Decode + Encode,
 {
 	/// Construct a new, blank leaf set.
 	pub fn new() -> Self {
@@ -94,9 +92,8 @@ impl<H, N> LeafSet<H, N> where
 
 	/// update the leaf list on import.
 	pub fn import(&mut self, hash: H, number: N, parent_hash: H) {
-		// genesis block has no parent to remove
+		// avoid underflow for genesis.
 		if number != N::zero() {
-			// remove parent
 			self.storage.remove(&LeafSetItem {
 				hash: parent_hash,
 				number: number.clone() - N::one(),
@@ -121,5 +118,61 @@ impl<H, N> LeafSet<H, N> where
 	/// ordered by their block number descending.
 	pub fn hashes(&self) -> Vec<H> {
 		self.storage.iter().map(|item| item.hash.clone()).collect()
+	}
+
+	/// Write the leaf list to the database transaction.
+	pub fn write(&self, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8]) {
+		let mut buf = prefix.to_vec();
+		for &LeafSetItem { ref hash, ref number } in &self.storage {
+			hash.using_encoded(|s| buf.extend(s));
+			tx.put_vec(column, &buf[..], number.encode());
+			buf.truncate(prefix.len()); // reuse allocation.
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn it_works() {
+		let mut set = LeafSet::new();
+		set.import(0u32, 0u32, 0u32);
+
+		set.import(1_1, 1, 0);
+		set.import(2_1, 2, 1_1);
+		set.import(3_1, 3, 2_1);
+
+		assert!(set.storage.contains(&LeafSetItem { hash: 3_1, number: 3 }));
+		assert!(!set.storage.contains(&LeafSetItem { hash: 2_1, number: 2 }));
+		assert!(!set.storage.contains(&LeafSetItem { hash: 1_1, number: 1 }));
+		assert!(!set.storage.contains(&LeafSetItem { hash: 0, number: 0 }));
+
+		set.import(2_2, 2, 1_1);
+
+		assert!(set.storage.contains(&LeafSetItem { hash: 3_1, number: 3 }));
+		assert!(set.storage.contains(&LeafSetItem { hash: 2_2, number: 2 }));
+	}
+
+	#[test]
+	fn flush_to_disk() {
+		const PREFIX: &[u8] = b"abcdefg";
+		let db = ::kvdb_memorydb::create(0);
+
+		let mut set = LeafSet::new();
+		set.import(0u32, 0u32, 0u32);
+
+		set.import(1_1, 1, 0);
+		set.import(2_1, 2, 1_1);
+		set.import(3_1, 3, 2_1);
+
+		let mut tx = DBTransaction::new();
+
+		set.write(&mut tx, None, PREFIX);
+		db.write(tx).unwrap();
+
+		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();
+		assert_eq!(set, set2);
 	}
 }

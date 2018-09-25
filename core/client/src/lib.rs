@@ -45,6 +45,7 @@ extern crate kvdb;
 #[macro_use] extern crate log;
 #[cfg_attr(test, macro_use)] extern crate substrate_executor as executor;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
+#[cfg(test)] extern crate kvdb_memorydb;
 
 pub mod error;
 pub mod blockchain;

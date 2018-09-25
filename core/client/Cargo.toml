@@ -30,3 +30,4 @@ kvdb = "0.1"
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }
+kvdb-memorydb = "0.1"
