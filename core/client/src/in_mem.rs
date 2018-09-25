@@ -161,20 +161,52 @@ impl<Block: BlockT> Blockchain<Block> {
 		justification: Option<Justification<Block::Hash>>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
-	) {
+	) -> ::error::Result<()> {
 		let number = header.number().clone();
+
+		let best_tree_route = match new_state.is_best() {
+			false => None,
+			true => {
+				let best_hash = self.storage.read().best_hash;
+				if &best_hash == header.parent_hash() {
+					None
+				} else {
+					println!("Tree route from {:?} to {:?}", best_hash, header.parent_hash());
+					let route = ::blockchain::tree_route(
+						self,
+						BlockId::Hash(best_hash),
+						BlockId::Hash(*header.parent_hash())
+					)?;
+					Some(route)
+				}
+			}
+		};
 
 		let mut storage = self.storage.write();
 
 		storage.leaves.import(hash.clone(), number.clone(), header.parent_hash().clone());
 
-		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
-		storage.hashes.insert(number, hash.clone());
-
 		if new_state.is_best() {
+			if let Some(tree_route) = best_tree_route {
+				// apply retraction and enaction when reorganizing up to parent hash
+				let enacted = tree_route.enacted();
+
+				for entry in enacted {
+					storage.hashes.insert(entry.number, entry.hash);
+				}
+
+				for entry in tree_route.retracted().iter().skip(enacted.len()) {
+					storage.hashes.remove(&entry.number);
+				}
+			}
+
 			storage.best_hash = hash.clone();
 			storage.best_number = number.clone();
 		}
+
+		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
+		storage.hashes.insert(number, hash.clone());
+
 		if let NewBlockState::Final = new_state {
 			storage.finalized_hash = hash;
 		}
@@ -183,6 +215,7 @@ impl<Block: BlockT> Blockchain<Block> {
 			storage.genesis_hash = hash;
 		}
 
+		Ok(())
 	}
 
 	/// Compare this blockchain with another in-mem blockchain
@@ -218,6 +251,7 @@ impl<Block: BlockT> Blockchain<Block> {
 
 impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
+		println!("Getting header {:?}", id);
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash).map(|b| b.header().clone())
 		}))
@@ -289,7 +323,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 	) -> error::Result<()> {
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		self.insert(hash, header, None, None, state);
+		self.insert(hash, header, None, None, state)?;
 		if state.is_best() {
 			self.cache.insert(parent_hash, authorities);
 		}
@@ -450,7 +484,7 @@ where
 				}
 			}
 
-			self.blockchain.insert(hash, header, justification, body, pending_block.state);
+			self.blockchain.insert(hash, header, justification, body, pending_block.state)?;
 			// dumb implementation - store value for each block
 			if pending_block.state.is_best() {
 				self.blockchain.cache.insert(parent_hash, operation.pending_authorities);
