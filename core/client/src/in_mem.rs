@@ -166,7 +166,7 @@ impl<Block: BlockT> Blockchain<Block> {
 
 		let mut storage = self.storage.write();
 
-		storage.leaves.update(hash.clone(), number.clone(), header.parent_hash().clone());
+		storage.leaves.import(hash.clone(), number.clone(), header.parent_hash().clone());
 
 		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
 		storage.hashes.insert(number, hash.clone());

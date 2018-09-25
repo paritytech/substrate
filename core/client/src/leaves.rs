@@ -74,7 +74,8 @@ impl<H, N> LeafSet<H, N> where
 		Ok(Self { storage })
 	}
 
-	pub fn update(&mut self, hash: H, number: N, parent_hash: H) {
+	/// updating the leave list on import
+	pub fn import(&mut self, hash: H, number: N, parent_hash: H) {
 		// genesis block has no parent to remove
 		if number != N::zero() {
 			// remove parent
@@ -85,6 +86,17 @@ impl<H, N> LeafSet<H, N> where
 		}
 
 		self.storage.insert(LeafSetItem { hash, number });
+	}
+
+	/// currently since revert only affects the canonical chain
+	/// we assume that parent has no further children
+	/// and we add it as leaf again
+	pub fn revert(&mut self, hash: H, number: N, parent_hash: H) {
+		self.storage.insert(LeafSetItem {
+			hash: parent_hash,
+			number: number.clone() - N::one(),
+		});
+		self.storage.remove(&LeafSetItem { hash, number });
 	}
 
 	/// returns an iterator over all hashes in the leaf set

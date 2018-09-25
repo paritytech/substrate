@@ -66,8 +66,10 @@ use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue, ExecutionStrategy};
 use utils::{Meta, db_err, meta_keys, open_database, read_db, read_id, read_meta};
+use client::LeafSet;
 use state_db::StateDb;
 pub use state_db::PruningMode;
+use client::blockchain::Backend as BlockchainBackendT;
 
 const FINALIZATION_WINDOW: u64 = 32;
 
@@ -133,7 +135,8 @@ impl<'a> state_db::MetaDb for StateMetaDb<'a> {
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<KeyValueDB>,
-	meta: RwLock<Meta<<Block::Header as HeaderT>::Number, Block::Hash>>,
+	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
+	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -141,6 +144,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
 		Ok(BlockchainDb {
 			db,
+			leaves: RwLock::new(LeafSet::new()),
 			meta: RwLock::new(meta)
 		})
 	}
@@ -243,7 +247,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 	}
 
 	fn leaves(&self) -> Result<Vec<Block::Hash>, client::error::Error> {
-		unimplemented!()
+		Ok(self.leaves.read().hashes())
 	}
 }
 
@@ -592,11 +596,14 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 
 			self.storage.db.write(transaction).map_err(db_err)?;
 			self.blockchain.update_meta(
-				hash,
-				number,
+				hash.clone(),
+				number.clone(),
 				pending_block.leaf_state.is_best(),
 				finalized,
 			);
+
+			let parent_hash = *pending_block.header.parent_hash();
+			self.blockchain.leaves.write().import(hash, number, parent_hash);
 		}
 		Ok(())
 	}
@@ -634,14 +641,15 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 					apply_state_commit(&mut transaction, commit);
 					let removed = best.clone();
 					best -= As::sa(1);
-					let hash = self.blockchain.hash(best)?.ok_or_else(
+					let header = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::ErrorKind::UnknownBlock(
-							format!("Error reverting to {}. Block hash not found.", best)))?;
+							format!("Error reverting to {}. Block header not found.", best)))?;
 
-					transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
+					transaction.put(columns::META, meta_keys::BEST_BLOCK, header.hash().as_ref());
 					transaction.delete(columns::HASH_LOOKUP, &::utils::number_to_lookup_key(removed));
 					self.storage.db.write(transaction).map_err(db_err)?;
-					self.blockchain.update_meta(hash, best, true, false);
+					self.blockchain.update_meta(header.hash().clone(), best.clone(), true, false);
+					self.blockchain.leaves.write().revert(header.hash().clone(), header.number().clone(), header.parent_hash().clone());
 				}
 				None => return Ok(As::sa(c))
 			}
@@ -818,7 +826,7 @@ mod tests {
 
 			op.reset_storage(storage.iter().cloned()).unwrap();
 			op.set_block_data(
-				header,
+				header.clone(),
 				Some(vec![]),
 				None,
 				NewBlockState::Best,
