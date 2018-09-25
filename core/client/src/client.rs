@@ -23,7 +23,7 @@ use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
 use runtime_primitives::BuildStorage;
-use primitives::{Blake2Hasher, RlpCodec, H256};
+use primitives::{Blake2Hasher, H256};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use codec::{Encode, Decode};
@@ -183,7 +183,7 @@ impl<Block: BlockT> JustifiedHeader<Block> {
 pub fn new_in_mem<E, Block, S>(
 	executor: E,
 	genesis_storage: S,
-) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher, RlpCodec>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher, RlpCodec>, E>, Block>>
+) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>, Block>>
 	where
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
@@ -196,8 +196,8 @@ pub fn new_in_mem<E, Block, S>(
 }
 
 impl<B, E, Block> Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
@@ -311,20 +311,20 @@ impl<B, E, Block> Client<B, E, Block> where
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
 		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)).unwrap_or_default());
-		let proof = cht::build_proof::<Block::Header, Blake2Hasher, RlpCodec, _>(cht_size, cht_num, block_num, headers)
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _>(cht_size, cht_num, block_num, headers)
 			.ok_or_else(proof_error)?;
 		Ok((header, proof))
 	}
 
 	/// Create a new block, built on the head of the chain.
-	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>>
+	pub fn new_block(&self) -> error::Result<block_builder::BlockBuilder<B, E, Block, Blake2Hasher>>
 	where E: Clone
 	{
 		block_builder::BlockBuilder::new(self)
 	}
 
 	/// Create a new block, built on top of `parent`.
-	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>>
+	pub fn new_block_at(&self, parent: &BlockId<Block>) -> error::Result<block_builder::BlockBuilder<B, E, Block, Blake2Hasher>>
 	where E: Clone
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
@@ -726,8 +726,8 @@ impl<B, E, Block> Client<B, E, Block> where
 }
 
 impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone,
 	Block: BlockT,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
@@ -737,8 +737,8 @@ impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
 }
 
 impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone,
 	Block: BlockT,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
@@ -750,8 +750,8 @@ impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
 
 impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
-		E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CallExecutor<Block, Blake2Hasher>,
 		Block: BlockT,
 {
 	fn import_block(
@@ -779,8 +779,8 @@ impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
 
 impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
-		E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CallExecutor<Block, Blake2Hasher>,
 		Block: BlockT,
 {
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
@@ -802,7 +802,7 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 where
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
+	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT,
 {
 	/// Get block import event stream.
@@ -826,8 +826,8 @@ where
 
 impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 where
-	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
@@ -837,8 +837,8 @@ where
 
 impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 	where
-		B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
-		E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
+		B: backend::Backend<Block, Blake2Hasher>,
+		E: CallExecutor<Block, Blake2Hasher>,
 		Block: BlockT,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {

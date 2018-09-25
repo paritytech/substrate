@@ -23,7 +23,7 @@ pub mod fetcher;
 
 use std::sync::Arc;
 
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 use runtime_primitives::BuildStorage;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{CodeExecutor, ExecutionStrategy};
@@ -34,8 +34,7 @@ use light::backend::Backend;
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::RemoteCallExecutor;
 use light::fetcher::{Fetcher, LightDataChecker};
-use hashdb::Hasher;
-use patricia_trie::NodeCodec;
+use hash_db::Hasher;
 
 /// Create an instance of light client blockchain backend.
 pub fn new_light_blockchain<B: BlockT, S: BlockchainStorage<B>, F>(storage: S) -> Arc<Blockchain<S, F>> {
@@ -53,7 +52,7 @@ pub fn new_light<B, S, F, GS>(
 	backend: Arc<Backend<S, F>>,
 	fetcher: Arc<F>,
 	genesis_storage: GS,
-) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F, Blake2Hasher, RlpCodec>, B>>
+) -> ClientResult<Client<Backend<S, F>, RemoteCallExecutor<Blockchain<S, F>, F, Blake2Hasher>, B>>
 	where
 		B: BlockT,
 		S: BlockchainStorage<B>,
@@ -65,13 +64,13 @@ pub fn new_light<B, S, F, GS>(
 }
 
 /// Create an instance of fetch data checker.
-pub fn new_fetch_checker<E, H, C>(
+pub fn new_fetch_checker<E, H>(
 	executor: E,
-) -> LightDataChecker<E, H, C>
+) -> LightDataChecker<E, H>
 	where
 		E: CodeExecutor<H>,
 		H: Hasher,
-		C: NodeCodec<H>,
+	
 {
 	LightDataChecker::new(executor)
 }

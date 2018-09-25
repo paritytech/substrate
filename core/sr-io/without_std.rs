@@ -16,7 +16,7 @@
 
 
 extern crate substrate_primitives as primitives;
-extern crate hashdb;
+extern crate hash_db;
 
 #[doc(hidden)]
 pub extern crate sr_std as rstd;
@@ -26,7 +26,7 @@ pub extern crate parity_codec as codec;
 
 use core::intrinsics;
 use rstd::vec::Vec;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use primitives::Blake2Hasher;
 pub use rstd::{mem, slice};
 

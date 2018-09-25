@@ -16,12 +16,12 @@
 
 //! Polkadot Blake2b Hasher implementation
 
-use hashdb::Hasher;
-use plain_hasher::PlainHasher;
+use hash_db::Hasher;
+use hash256_std_hasher::Hash256StdHasher;
 use hash::H256;
 
 pub mod blake2 {
-	use super::{Hasher, PlainHasher, H256};
+	use super::{Hasher, Hash256StdHasher, H256};
 	#[cfg(feature = "std")]
 	use hashing::blake2_256;
 
@@ -44,7 +44,7 @@ pub mod blake2 {
 
 	impl Hasher for Blake2Hasher {
 		type Out = H256;
-		type StdHasher = PlainHasher;
+		type StdHasher = Hash256StdHasher;
 		const LENGTH: usize = 32;
 		fn hash(x: &[u8]) -> Self::Out {
 			blake2_256(x).into()

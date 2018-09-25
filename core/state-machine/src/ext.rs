@@ -20,10 +20,8 @@ use std::{error, fmt, cmp::Ord};
 use backend::Backend;
 use changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root};
 use {Externalities, OverlayedChanges};
-use hashdb::Hasher;
-use memorydb::MemoryDB;
-use rlp::Encodable;
-use patricia_trie::{NodeCodec, TrieDBMut, TrieMut};
+use hash_db::Hasher;
+use substrate_trie::{MemoryDB, TrieDBMut, TrieMut};
 use heapsize::HeapSizeOf;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &'static str = "Externalities not allowed to fail within runtime";
@@ -58,11 +56,11 @@ impl<B: error::Error, E: error::Error> error::Error for Error<B, E> {
 }
 
 /// Wraps a read-only backend, call executor, and current overlayed changes.
-pub struct Ext<'a, H, C, B, T>
+pub struct Ext<'a, H, B, T>
 where
 	H: Hasher,
-	C: NodeCodec<H>,
-	B: 'a + Backend<H, C>,
+
+	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
 {
 	/// The overlayed changes to write to.
@@ -83,13 +81,12 @@ where
 	changes_trie_transaction: Option<(u64, MemoryDB<H>, H::Out)>,
 }
 
-impl<'a, H, C, B, T> Ext<'a, H, C, B, T>
+impl<'a, H, B, T> Ext<'a, H, B, T>
 where
 	H: Hasher,
-	C: NodeCodec<H>,
-	B: 'a + Backend<H, C>,
+	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
-	H::Out: Ord + Encodable + HeapSizeOf,
+	H::Out: Ord + HeapSizeOf,
 {
 	/// Create a new `Ext` from overlayed changes and read-only backend
 	pub fn new(overlay: &'a mut OverlayedChanges, backend: &'a B, changes_trie_storage: Option<&'a T>) -> Self {
@@ -128,11 +125,11 @@ where
 }
 
 #[cfg(test)]
-impl<'a, H, C, B, T> Ext<'a, H, C, B, T>
+impl<'a, H, B, T> Ext<'a, H, B, T>
 where
 	H: Hasher,
-	C: NodeCodec<H>,
-	B: 'a + Backend<H,C>,
+
+	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
 {
 	pub fn storage_pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -149,13 +146,12 @@ where
 	}
 }
 
-impl<'a, B: 'a, T: 'a, H, C> Externalities<H> for Ext<'a, H, C, B, T>
+impl<'a, B: 'a, T: 'a, H> Externalities<H> for Ext<'a, H, B, T>
 where
 	H: Hasher,
-	C: NodeCodec<H>,
-	B: 'a + Backend<H, C>,
+	B: 'a + Backend<H>,
 	T: 'a + ChangesTrieStorage<H>,
-	H::Out: Ord + Encodable + HeapSizeOf,
+	H::Out: Ord + HeapSizeOf,
 {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.overlay.storage(key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
@@ -201,7 +197,7 @@ where
 	}
 
 	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> {
-		let root_and_tx = compute_changes_trie_root::<_, T, H, C>(
+		let root_and_tx = compute_changes_trie_root::<_, T, H>(
 			self.backend,
 			self.changes_trie_storage.clone(),
 			self.overlay,
@@ -209,9 +205,9 @@ where
 		);
 		let root_and_tx = root_and_tx.map(|(root, changes)| {
 			let mut calculated_root = Default::default();
-			let mut mdb = MemoryDB::new();
+			let mut mdb = MemoryDB::default();	// TODO: use new for correctness
 			{
-				let mut trie = TrieDBMut::<H, C>::new(&mut mdb, &mut calculated_root);
+				let mut trie = TrieDBMut::<H>::new(&mut mdb, &mut calculated_root);
 				for (key, value) in changes {
 					trie.insert(&key, &value).expect(EXT_NOT_ALLOWED_TO_FAIL);
 				}
@@ -228,7 +224,7 @@ where
 #[cfg(test)]
 mod tests {
 	use codec::Encode;
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use backend::InMemory;
 	use changes_trie::{Configuration as ChangesTrieConfiguration,
@@ -236,9 +232,9 @@ mod tests {
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 
-	type TestBackend = InMemory<Blake2Hasher, RlpCodec>;
+	type TestBackend = InMemory<Blake2Hasher>;
 	type TestChangesTrieStorage = InMemoryChangesTrieStorage<Blake2Hasher>;
-	type TestExt<'a> = Ext<'a, Blake2Hasher, RlpCodec, TestBackend, TestChangesTrieStorage>;
+	type TestExt<'a> = Ext<'a, Blake2Hasher, TestBackend, TestChangesTrieStorage>;
 
 	fn prepare_overlay_with_changes() -> OverlayedChanges {
 		OverlayedChanges {
@@ -285,7 +281,7 @@ mod tests {
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
 		assert_eq!(ext.storage_changes_root(100),
-			Some(hex!("62d1aacd26ef215f0d846f96d468cfcf445a20ed792cb43b3ed2e285fac7aced").into()));
+			Some(hex!("5b829920b9c8d554a19ee2a1ba593c4f2ee6fc32822d083e04236d693e8358d5").into()));
 	}
 
 	#[test]
@@ -296,6 +292,6 @@ mod tests {
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
 		assert_eq!(ext.storage_changes_root(100),
-			Some(hex!("16776812bae4843437f7ec9f054f78ea8305e966da41b718cd6b847e95480d5c").into()));
+			Some(hex!("bcf494e41e29a15c9ae5caa053fe3cb8b446ee3e02a254efbdec7a19235b76e4").into()));
 	}
 }

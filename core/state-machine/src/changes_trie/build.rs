@@ -18,9 +18,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use codec::Decode;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use patricia_trie::NodeCodec;
 use backend::Backend;
 use overlayed_changes::OverlayedChanges;
 use trie_backend_essence::{TrieBackendStorage, TrieBackendEssence};
@@ -34,19 +33,18 @@ use changes_trie::{Configuration, Storage};
 /// required data.
 /// Returns Ok(None) data required to prepare input pairs is not collected
 /// or storage is not provided.
-pub fn prepare_input<'a, B, S, H, C>(
+pub fn prepare_input<'a, B, S, H>(
 	backend: &B,
 	storage: Option<&'a S>,
 	changes: &OverlayedChanges,
 	block: u64,
 ) -> Result<Option<Vec<InputPair>>, String>
 	where
-		B: Backend<H, C>,
+		B: Backend<H>,
 		S: Storage<H>,
 		&'a S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: HeapSizeOf,
-		C: NodeCodec<H>,
 {
 	let (storage, config) = match (storage, changes.changes_trie_config.as_ref()) {
 		(Some(storage), Some(config)) => (storage, config),
@@ -58,7 +56,7 @@ pub fn prepare_input<'a, B, S, H, C>(
 		backend,
 		block,
 		changes)?);
-	input.extend(prepare_digest_input::<_, H, C>(
+	input.extend(prepare_digest_input::<_, H>(
 		block,
 		config,
 		storage)?);
@@ -67,15 +65,15 @@ pub fn prepare_input<'a, B, S, H, C>(
 }
 
 /// Prepare ExtrinsicIndex input pairs.
-fn prepare_extrinsics_input<B, H, C>(
+fn prepare_extrinsics_input<B, H>(
 	backend: &B,
 	block: u64,
 	changes: &OverlayedChanges,
 ) -> Result<impl Iterator<Item=InputPair>, String>
 	where
-		B: Backend<H, C>,
+		B: Backend<H>,
 		H: Hasher,
-		C: NodeCodec<H>,
+	
 {
 	let mut extrinsic_map = BTreeMap::<Vec<u8>, BTreeSet<u32>>::new();
 	for (key, val) in changes.prospective.iter().chain(changes.committed.iter()) {
@@ -104,7 +102,7 @@ fn prepare_extrinsics_input<B, H, C>(
 }
 
 /// Prepare DigestIndex input pairs.
-fn prepare_digest_input<'a, S, H, C>(
+fn prepare_digest_input<'a, S, H>(
 	block: u64,
 	config: &Configuration,
 	storage: &'a S
@@ -114,13 +112,12 @@ fn prepare_digest_input<'a, S, H, C>(
 		&'a S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: HeapSizeOf,
-		C: NodeCodec<H>,
 {
 	let mut digest_map = BTreeMap::<Vec<u8>, BTreeSet<u64>>::new();
 	for digest_build_block in digest_build_iterator(config, block) {
 		let trie_root = storage.root(digest_build_block)?;
 		let trie_root = trie_root.ok_or_else(|| format!("No changes trie root for block {}", digest_build_block))?;
-		let trie_storage = TrieBackendEssence::<_, H, C>::new(storage, trie_root);
+		let trie_storage = TrieBackendEssence::<_, H>::new(storage, trie_root);
 
 		let extrinsic_prefix = ExtrinsicIndex::key_neutral_prefix(digest_build_block);
 		trie_storage.for_keys_with_prefix(&extrinsic_prefix, |key|
@@ -147,15 +144,15 @@ fn prepare_digest_input<'a, S, H, C>(
 #[cfg(test)]
 mod test {
 	use codec::Encode;
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::Blake2Hasher;
 	use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 	use backend::InMemory;
 	use changes_trie::storage::InMemoryStorage;
 	use overlayed_changes::OverlayedValue;
 	use super::*;
 
-	fn prepare_for_build() -> (InMemory<Blake2Hasher, RlpCodec>, InMemoryStorage<Blake2Hasher>, OverlayedChanges) {
-		let backend: InMemory<_, _> = vec![
+	fn prepare_for_build() -> (InMemory<Blake2Hasher>, InMemoryStorage<Blake2Hasher>, OverlayedChanges) {
+		let backend: InMemory<_> = vec![
 			(vec![100], vec![255]),
 			(vec![101], vec![255]),
 			(vec![102], vec![255]),
@@ -163,7 +160,7 @@ mod test {
 			(vec![104], vec![255]),
 			(vec![105], vec![255]),
 		].into_iter().collect::<::std::collections::HashMap<_, _>>().into();
-		let storage = InMemoryStorage::with_inputs::<RlpCodec>(vec![
+		let storage = InMemoryStorage::with_inputs(vec![
 			(1, vec![
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![100] }, vec![1, 3]),
 				InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 1, key: vec![101] }, vec![0, 2]),
@@ -231,7 +228,7 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_non_digest_block() {
 		let (backend, storage, changes) = prepare_for_build();
-		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes, 5).unwrap();
+		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, 5).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 5, key: vec![101] }, vec![1]),
@@ -242,7 +239,7 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l1() {
 		let (backend, storage, changes) = prepare_for_build();
-		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes, 4).unwrap();
+		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, 4).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
@@ -258,7 +255,7 @@ mod test {
 	#[test]
 	fn build_changes_trie_nodes_on_digest_block_l2() {
 		let (backend, storage, changes) = prepare_for_build();
-		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes, 16).unwrap();
+		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, 16).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 16, key: vec![101] }, vec![1]),
@@ -282,7 +279,7 @@ mod test {
 			extrinsics: Some(vec![1].into_iter().collect())
 		});
 
-		let changes_trie_nodes = prepare_input::<_, _, _, RlpCodec>(&backend, Some(&storage), &changes, 4).unwrap();
+		let changes_trie_nodes = prepare_input(&backend, Some(&storage), &changes, 4).unwrap();
 		assert_eq!(changes_trie_nodes, Some(vec![
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![100] }, vec![0, 2, 3]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),

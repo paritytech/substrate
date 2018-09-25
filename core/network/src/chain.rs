@@ -21,7 +21,7 @@ use client::error::Error;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
@@ -64,8 +64,8 @@ pub trait Client<Block: BlockT>: Send + Sync {
 }
 
 impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 	Block: BlockT,
 {
 	fn import(

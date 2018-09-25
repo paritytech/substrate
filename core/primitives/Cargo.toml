@@ -18,9 +18,8 @@ rlp = { version = "0.2.4", optional = true }
 twox-hash = { version = "1.1.0", optional = true }
 byteorder = { version = "1.1", default_features = false }
 wasmi = { version = "0.4", optional = true }
-hashdb = { version = "0.2.1", default_features = false }
-patricia-trie = { version = "0.2.1", optional = true }
-plain_hasher = { version = "0.2", default_features = false }
+hash-db = { git = "https://github.com/paritytech/trie", default_features = false }
+hash256-std-hasher = { git = "https://github.com/paritytech/trie", default_features = false }
 ring = { version = "0.12", optional = true }
 untrusted = { version = "0.5", optional = true }
 hex-literal = { version = "0.1", optional = true }
@@ -41,6 +40,8 @@ std = [
 	"fixed-hash/heapsizeof",
 	"fixed-hash/libc",
 	"parity-codec/std",
+	"hash256-std-hasher/std",
+	"hash-db/std",
 	"sr-std/std",
 	"serde/std",
 	"rustc-hex/std",
@@ -52,7 +53,5 @@ std = [
 	"base58",
 	"serde_derive",
 	"byteorder/std",
-	"patricia-trie",
-	"rlp",
 	"elastic-array",
 ]
