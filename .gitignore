@@ -11,6 +11,7 @@ pwasm-alloc/Cargo.lock
 pwasm-libc/Cargo.lock
 node/runtime/wasm/target/
 **/._*
+**/.criterion/
 .vscode
 polkadot.*
 .DS_Store

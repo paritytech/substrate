@@ -22,7 +22,7 @@
 use std::sync::Arc;
 use keyring::Keyring;
 use client::BlockOrigin;
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::Blake2Hasher;
 use ::TestClient;
 use runtime_primitives::traits::Block as BlockT;
 use backend;
@@ -33,7 +33,7 @@ use runtime_primitives::generic::BlockId;
 
 /// helper to test the `leaves` implementation for various backends
 pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
-	B: backend::LocalBackend<runtime::Block, Blake2Hasher, RlpCodec>,
+	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5
@@ -146,7 +146,7 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 
 
 pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
-	B: backend::LocalBackend<runtime::Block, Blake2Hasher, RlpCodec>,
+	B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
 	// block tree:
 	// G -> A1 -> A2 -> A3 -> A4 -> A5

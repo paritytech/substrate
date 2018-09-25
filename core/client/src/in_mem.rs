@@ -30,11 +30,10 @@ use runtime_primitives::bft::Justification;
 use blockchain::{self, BlockStatus, HeaderBackend};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::InMemoryChangesTrieStorage;
-use patricia_trie::NodeCodec;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
 use leaves::LeafSet;
+use trie::MemoryDB;
 
 struct PendingBlock<B: BlockT> {
 	block: StoredBlock<B>,
@@ -347,22 +346,22 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 }
 
 /// In-memory operation.
-pub struct BlockImportOperation<Block: BlockT, H: Hasher, C: NodeCodec<H>> {
+pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	pending_block: Option<PendingBlock<Block>>,
 	pending_authorities: Option<Vec<AuthorityId>>,
-	old_state: InMemory<H, C>,
-	new_state: Option<InMemory<H, C>>,
+	old_state: InMemory<H>,
+	new_state: Option<InMemory<H>>,
 	changes_trie_update: Option<MemoryDB<H>>,
 }
 
-impl<Block, H, C> backend::BlockImportOperation<Block, H, C> for BlockImportOperation<Block, H, C>
+impl<Block, H> backend::BlockImportOperation<Block, H> for BlockImportOperation<Block, H>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>,
+
 	H::Out: HeapSizeOf,
 {
-	type State = InMemory<H, C>;
+	type State = InMemory<H>;
 
 	fn state(&self) -> error::Result<Option<&Self::State>> {
 		Ok(Some(&self.old_state))
@@ -387,7 +386,7 @@ where
 		self.pending_authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, update: <InMemory<H, C> as StateBackend<H, C>>::Transaction) -> error::Result<()> {
+	fn update_storage(&mut self, update: <InMemory<H> as StateBackend<H>>::Transaction) -> error::Result<()> {
 		self.new_state = Some(self.old_state.update(update));
 		Ok(())
 	}
@@ -404,27 +403,27 @@ where
 }
 
 /// In-memory backend. Keeps all states and blocks in memory. Useful for testing.
-pub struct Backend<Block, H, C>
+pub struct Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>,
+
 	H::Out: HeapSizeOf + From<Block::Hash>,
 {
-	states: RwLock<HashMap<Block::Hash, InMemory<H, C>>>,
+	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
 	changes_trie_storage: InMemoryChangesTrieStorage<H>,
 	blockchain: Blockchain<Block>,
 }
 
-impl<Block, H, C> Backend<Block, H, C>
+impl<Block, H> Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>,
+
 	H::Out: HeapSizeOf + From<Block::Hash>,
 {
 	/// Create a new instance of in-mem backend.
-	pub fn new() -> Backend<Block, H, C> {
+	pub fn new() -> Backend<Block, H> {
 		Backend {
 			states: RwLock::new(HashMap::new()),
 			changes_trie_storage: InMemoryChangesTrieStorage::new(),
@@ -433,16 +432,15 @@ where
 	}
 }
 
-impl<Block, H, C> backend::Backend<Block, H, C> for Backend<Block, H, C>
+impl<Block, H> backend::Backend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher,
 	H::Out: HeapSizeOf + From<Block::Hash>,
-	C: NodeCodec<H> + Send + Sync,
 {
-	type BlockImportOperation = BlockImportOperation<Block, H, C>;
+	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
-	type State = InMemory<H, C>;
+	type State = InMemory<H>;
 	type ChangesTrieStorage = InMemoryChangesTrieStorage<H>;
 
 	fn begin_operation(&self, block: BlockId<Block>) -> error::Result<Self::BlockImportOperation> {
@@ -514,12 +512,11 @@ where
 	}
 }
 
-impl<Block, H, C> backend::LocalBackend<Block, H, C> for Backend<Block, H, C>
+impl<Block, H> backend::LocalBackend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher,
 	H::Out: HeapSizeOf + From<Block::Hash>,
-	C: NodeCodec<H> + Send + Sync,
 {}
 
 impl<Block: BlockT> Cache<Block> {
@@ -552,9 +549,9 @@ pub fn cache_authorities_at<Block: BlockT>(
 mod tests {
 	use std::sync::Arc;
 	use test_client;
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::Blake2Hasher;
 
-	type TestBackend = test_client::client::in_mem::Backend<test_client::runtime::Block, Blake2Hasher, RlpCodec>;
+	type TestBackend = test_client::client::in_mem::Backend<test_client::runtime::Block, Blake2Hasher>;
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {

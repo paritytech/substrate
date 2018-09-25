@@ -35,8 +35,6 @@ extern crate parity_codec_derive;
 extern crate rustc_hex;
 extern crate byteorder;
 extern crate parity_codec as codec;
-#[cfg(feature = "std")]
-extern crate rlp;
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -62,10 +60,8 @@ extern crate serde_derive;
 extern crate core;
 #[cfg(feature = "std")]
 extern crate wasmi;
-extern crate hashdb;
-extern crate plain_hasher;
-#[cfg(feature = "std")]
-extern crate patricia_trie;
+extern crate hash_db;
+extern crate hash256_std_hasher;
 #[cfg(feature = "std")]
 extern crate elastic_array;
 
@@ -110,8 +106,6 @@ pub mod sandbox;
 pub mod storage;
 pub mod uint;
 mod authority_id;
-#[cfg(feature = "std")]
-mod rlp_codec;
 mod changes_trie;
 
 #[cfg(test)]
@@ -125,9 +119,6 @@ pub use changes_trie::ChangesTrieConfiguration;
 // Switch back to Blake after PoC-3 is out
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;
-
-#[cfg(feature = "std")]
-pub use self::rlp_codec::RlpCodec;
 
 /// A 512-bit value interpreted as a signature.
 pub type Signature = hash::H512;

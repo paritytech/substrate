@@ -16,22 +16,18 @@
 
 //! Trie-based state machine backend.
 
-use hashdb::Hasher;
+use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
-use rlp::Encodable;
-use patricia_trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, NodeCodec};
+use trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, MemoryDB};
 use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use {Backend};
 
-pub use hashdb::DBValue;
-
 /// Patricia trie-based backend. Transaction type is an overlay of changes to commit.
-pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> {
-	essence: TrieBackendEssence<S, H, C>,
+pub struct TrieBackend<S: TrieBackendStorage<H>, H: Hasher> {
+	essence: TrieBackendEssence<S, H>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackend<S, H, C> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackend<S, H> where H::Out: HeapSizeOf {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackend {
@@ -40,7 +36,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackend<S, H, C> 
 	}
 
 	/// Get backend essence reference.
-	pub fn essence(&self) -> &TrieBackendEssence<S, H, C> {
+	pub fn essence(&self) -> &TrieBackendEssence<S, H> {
 		&self.essence
 	}
 
@@ -57,9 +53,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackend<S, H, C> 
 
 impl super::Error for String {}
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for TrieBackend<S, H, C>
-	where
-		H::Out: Ord + Encodable + HeapSizeOf,
+impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
+	H::Out: Ord + HeapSizeOf,
 {
 	type Error = String;
 	type Transaction = MemoryDB<H>;
@@ -74,11 +69,11 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for Tri
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
-		let mut read_overlay = MemoryDB::new();
+		let mut read_overlay = MemoryDB::default();	// TODO: use new for correctness
 		let eph = Ephemeral::new(self.essence.backend_storage(), &mut read_overlay);
 
-		let collect_all = || -> Result<_, Box<TrieError<H::Out, C::Error>>> {
-			let trie = TrieDB::<H, C>::new(&eph, self.essence.root())?;
+		let collect_all = || -> Result<_, Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(&eph, self.essence.root())?;
 			let mut v = Vec::new();
 			for x in trie.iter()? {
 				let (key, value) = x?;
@@ -108,7 +103,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for Tri
 				&mut write_overlay,
 			);
 
-			let mut trie = TrieDBMut::<H, C>::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
+			let mut trie = TrieDBMut::<H>::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
 			for (key, change) in delta {
 				let result = match change {
 					Some(val) => trie.insert(&key, &val),
@@ -124,7 +119,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for Tri
 		(root, write_overlay)
 	}
 
-	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		Some(self)
 	}
 }
@@ -132,14 +127,14 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> Backend<H, C> for Tri
 #[cfg(test)]
 pub mod tests {
 	use std::collections::HashSet;
-	use primitives::{Blake2Hasher, RlpCodec, H256};
+	use primitives::{Blake2Hasher, H256};
 	use super::*;
 
 	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {
 		let mut root = H256::default();
-		let mut mdb = MemoryDB::<Blake2Hasher>::new();
+		let mut mdb = MemoryDB::<Blake2Hasher>::default();	// TODO: use new() to be more correct
 		{
-			let mut trie = TrieDBMut::<_, RlpCodec>::new(&mut mdb, &mut root);
+			let mut trie = TrieDBMut::new(&mut mdb, &mut root);
 			trie.insert(b"key", b"value").expect("insert failed");
 			trie.insert(b"value1", &[42]).expect("insert failed");
 			trie.insert(b"value2", &[24]).expect("insert failed");
@@ -151,7 +146,7 @@ pub mod tests {
 		(mdb, root)
 	}
 
-	pub(crate) fn test_trie() -> TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher, RlpCodec> {
+	pub(crate) fn test_trie() -> TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher> {
 		let (mdb, root) = test_db();
 		TrieBackend::new(mdb, root)
 	}
@@ -173,8 +168,8 @@ pub mod tests {
 
 	#[test]
 	fn pairs_are_empty_on_empty_storage() {
-		assert!(TrieBackend::<MemoryDB<Blake2Hasher>, Blake2Hasher, RlpCodec>::new(
-			MemoryDB::new(),
+		assert!(TrieBackend::<MemoryDB<Blake2Hasher>, Blake2Hasher>::new(
+			MemoryDB::default(),	// TODO: use new() to be more correct
 			Default::default(),
 		).pairs().is_empty());
 	}

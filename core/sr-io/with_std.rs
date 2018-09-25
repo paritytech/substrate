@@ -21,23 +21,21 @@ extern crate environmental;
 extern crate substrate_primitives as primitives;
 
 extern crate substrate_state_machine;
-extern crate triehash;
-extern crate hashdb;
-extern crate rlp;
+extern crate substrate_trie as trie;
+extern crate hash_db;
 
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
 // re-export hashing functions.
 pub use primitives::{blake2_256, twox_128, twox_256, ed25519};
 
-pub use primitives::{Blake2Hasher, RlpCodec};
+pub use primitives::{Blake2Hasher};
 // Switch to this after PoC-3
 // pub use primitives::BlakeHasher;
 pub use substrate_state_machine::{Externalities, TestExternalities};
 use primitives::hexdisplay::HexDisplay;
 use primitives::H256;
-use hashdb::Hasher;
-use rlp::Encodable;
+use hash_db::Hasher;
 
 // TODO: use the real error, not NoError.
 
@@ -112,12 +110,12 @@ pub fn storage_changes_root(block: u64) -> Option<H256> {
 }
 
 /// A trie root formed from the enumerated items.
-pub fn enumerated_trie_root<H>(serialised_values: &[&[u8]]) -> H::Out
+pub fn enumerated_trie_root<H>(input: &[&[u8]]) -> H::Out
 where
 	H: Hasher,
-	H::Out: Encodable + Ord,
+	H::Out: Ord,
 {
-	triehash::ordered_trie_root::<H, _, _>(serialised_values.iter().map(|s| s.to_vec()))
+	trie::ordered_trie_root::<H, _, _>(input.iter())
 }
 
 /// A trie root formed from the iterated items.
@@ -127,20 +125,20 @@ where
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
 	H: Hasher,
-	<H as Hasher>::Out: Encodable + Ord,
+	<H as Hasher>::Out: Ord,
 {
-	triehash::trie_root::<H, _, _, _>(input)
+	trie::trie_root::<H, _, _, _>(input)
 }
 
 /// A trie root formed from the enumerated items.
 pub fn ordered_trie_root<H, I, A>(input: I) -> H::Out
 where
-	I: IntoIterator<Item = A>,
+	I: IntoIterator<Item = A> + Iterator<Item = A>,
 	A: AsRef<[u8]>,
 	H: Hasher,
-	<H as Hasher>::Out: Encodable + Ord,
+	<H as Hasher>::Out: Ord,
 {
-	triehash::ordered_trie_root::<H, _, _>(input)
+	trie::ordered_trie_root::<H, _, _>(input)
 }
 
 /// Verify a ed25519 signature.
@@ -217,7 +215,7 @@ mod std_tests {
 
 	#[test]
 	fn storage_works() {
-		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::default();
+		let mut t = TestExternalities::<Blake2Hasher>::default();
 		assert!(with_externalities(&mut t, || {
 			assert_eq!(storage(b"hello"), None);
 			set_storage(b"hello", b"world");
@@ -238,7 +236,7 @@ mod std_tests {
 
 	#[test]
 	fn read_storage_works() {
-		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
+		let mut t = TestExternalities::<Blake2Hasher>::new(map![
 			b":test".to_vec() => b"\x0b\0\0\0Hello world".to_vec()
 		]);
 
@@ -254,7 +252,7 @@ mod std_tests {
 
 	#[test]
 	fn clear_prefix_works() {
-		let mut t = TestExternalities::<Blake2Hasher, RlpCodec>::new(map![
+		let mut t = TestExternalities::<Blake2Hasher>::new(map![
 			b":a".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abcd".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),
 			b":abc".to_vec() => b"\x0b\0\0\0Hello world".to_vec(),

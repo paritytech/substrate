@@ -27,7 +27,7 @@ extern crate substrate_primitives as primitives;
 extern crate srml_support as runtime_support;
 extern crate sr_primitives as runtime_primitives;
 #[macro_use] extern crate substrate_executor as executor;
-extern crate hashdb;
+extern crate hash_db;
 
 pub extern crate substrate_client as client;
 pub extern crate substrate_keyring as keyring;
@@ -45,7 +45,7 @@ pub use client::blockchain;
 pub use client::backend;
 pub use executor::NativeExecutor;
 
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::Blake2Hasher;
 use runtime_primitives::StorageMap;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use keyring::Keyring;
@@ -61,7 +61,7 @@ mod local_executor {
 pub use local_executor::LocalExecutor;
 
 /// Test client database backend.
-pub type Backend = client::in_mem::Backend<runtime::Block, Blake2Hasher, RlpCodec>;
+pub type Backend = client::in_mem::Backend<runtime::Block, Blake2Hasher>;
 
 /// Test client executor.
 pub type Executor = client::LocalCallExecutor<
@@ -78,7 +78,7 @@ pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
 /// This is useful for testing backend implementations.
 pub fn new_with_backend<B>(backend: Arc<B>) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block>
 	where
-		B: backend::LocalBackend<runtime::Block, Blake2Hasher, RlpCodec>,
+		B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
 	let executor = NativeExecutor::new();
 	client::new_with_backend(backend, executor, genesis_storage()).unwrap()

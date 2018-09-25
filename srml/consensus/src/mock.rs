@@ -20,7 +20,7 @@
 
 use primitives::{BuildStorage, testing::{Digest, DigestItem, Header}};
 use runtime_io;
-use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
+use substrate_primitives::{H256, Blake2Hasher};
 use {GenesisConfig, Trait, Module, system};
 
 impl_outer_origin!{
@@ -49,7 +49,7 @@ impl system::Trait for Test {
 	type Log = DigestItem;
 }
 
-pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	t.extend(GenesisConfig::<Test>{
 		code: vec![],

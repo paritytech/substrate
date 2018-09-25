@@ -21,10 +21,6 @@ use serde::{Serialize, Serializer, Deserialize, Deserializer};
 
 #[cfg(feature = "std")]
 use bytes;
-#[cfg(feature = "std")]
-use core::cmp;
-#[cfg(feature = "std")]
-use rlp::{Rlp, RlpStream, DecoderError};
 
 macro_rules! impl_rest {
 	($name: ident, $len: expr) => {
@@ -53,29 +49,6 @@ macro_rules! impl_rest {
 				<[u8; $len] as ::codec::Decode>::decode(input).map($name)
 			}
 		}
-
-		#[cfg(feature = "std")]
-		impl ::rlp::Encodable for $name {
-			fn rlp_append(&self, s: &mut RlpStream) {
-				s.encoder().encode_value(self);
-			}
-		}
-
-		#[cfg(feature = "std")]
-		impl ::rlp::Decodable for $name {
-			fn decode(rlp: &Rlp) -> Result<Self, DecoderError> {
-				rlp.decoder().decode_value(|bytes| match bytes.len().cmp(&$len) {
-					cmp::Ordering::Less => Err(DecoderError::RlpIsTooShort),
-					cmp::Ordering::Greater => Err(DecoderError::RlpIsTooBig),
-					cmp::Ordering::Equal => {
-						let mut t = [0u8; $len];
-						t.copy_from_slice(bytes);
-						Ok($name(t))
-					}
-				})
-			}
-		}
-
 	}
 }
 
@@ -90,26 +63,6 @@ impl_rest!(H512, 64);
 mod tests {
 	use super::*;
 	use substrate_serializer as ser;
-	use rlp::{Encodable, RlpStream};
-
-	#[test]
-	fn test_hash_is_encodable() {
-		let h = H160::from(21);
-		let mut s = RlpStream::new();
-		h.rlp_append(&mut s);
-		assert_eq!(s.drain().into_vec(), &[148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 21]);
-	}
-
-	#[test]
-	fn test_hash_is_decodable() {
-		let data = vec![148, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 123];
-		let res = ::rlp::decode::<H160>(&data);
-		assert!(res.is_ok());
-		assert_eq!(res.unwrap(), H160::from(123));
-
-		let res = ::rlp::decode::<H256>(&data);
-		assert!(res.is_err());
-	}
 
 	#[test]
 	fn test_h160() {
