@@ -98,18 +98,17 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 	// // B2 -> C3
 	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
-	// TODO [snd] fix that this fails with Error(ApplyExtinsicFailed(Stale)
-	// builder.push_transfer(Transfer {
-	//	from: Keyring::Alice.to_raw_public().into(),
-	//	to: Keyring::Ferdie.to_raw_public().into(),
-	//	amount: 1,
-	//	nonce: 0,
-	// }).unwrap();
-	// let c3 = builder.bake().unwrap();
-	// client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
-	// assert_eq!(
-	//	backend.blockchain().leaves().unwrap(),
-	//	vec![a5.hash(), b4.hash(), c3.hash()]);
+	builder.push_transfer(Transfer {
+		from: Keyring::Alice.to_raw_public().into(),
+		to: Keyring::Ferdie.to_raw_public().into(),
+		amount: 1,
+		nonce: 1,
+	}).unwrap();
+	let c3 = builder.bake().unwrap();
+	client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
+	assert_eq!(
+		backend.blockchain().leaves().unwrap(),
+		vec![a5.hash(), b4.hash(), c3.hash()]);
 
 	// A1 -> D2
 	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
@@ -124,7 +123,7 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 	client.justify_and_import(BlockOrigin::Own, d2.clone()).unwrap();
 	assert_eq!(
 		backend.blockchain().leaves().unwrap(),
-		vec![a5.hash(), b4.hash(), d2.hash()]);
+		vec![a5.hash(), b4.hash(), c3.hash(), d2.hash()]);
 }
 
 
@@ -181,15 +180,14 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 	// // B2 -> C3
 	let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
 	// this push is required as otherwise C3 has the same hash as B3 and won't get imported
-	// TODO [snd] fix that this fails with Error(ApplyExtinsicFailed(Stale)
-	// builder.push_transfer(Transfer {
-	//	from: Keyring::Alice.to_raw_public().into(),
-	//	to: Keyring::Ferdie.to_raw_public().into(),
-	//	amount: 1,
-	//	nonce: 0,
-	// }).unwrap();
-	// let c3 = builder.bake().unwrap();
-	// client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
+	builder.push_transfer(Transfer {
+		from: Keyring::Alice.to_raw_public().into(),
+		to: Keyring::Ferdie.to_raw_public().into(),
+		amount: 1,
+		nonce: 1,
+	}).unwrap();
+	let c3 = builder.bake().unwrap();
+	client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
 
 	// A1 -> D2
 	let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();

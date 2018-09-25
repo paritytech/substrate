@@ -1158,15 +1158,14 @@ mod tests {
 		// // B2 -> C3
 		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
 		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
-		// TODO [snd] fix that this fails with Error(ApplyExtinsicFailed(Stale)
-		// builder.push_transfer(Transfer {
-		//	from: Keyring::Alice.to_raw_public().into(),
-		//	to: Keyring::Ferdie.to_raw_public().into(),
-		//	amount: 1,
-		//	nonce: 0,
-		// }).unwrap();
-		// let c3 = builder.bake().unwrap();
-		// client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 1,
+			nonce: 1,
+		}).unwrap();
+		let c3 = builder.bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
 
 		// A1 -> D2
 		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
@@ -1198,8 +1197,7 @@ mod tests {
 		assert_eq!(b4.hash(), client.best_containing(b3.hash(), None).unwrap().unwrap());
 		assert_eq!(b4.hash(), client.best_containing(b4.hash(), None).unwrap().unwrap());
 
-		// TODO [snd] activate
-		// assert_eq!(c3.hash(), client.best_containing(c3.hash(), None).unwrap().unwrap());
+		assert_eq!(c3.hash(), client.best_containing(c3.hash(), None).unwrap().unwrap());
 
 		assert_eq!(d2.hash(), client.best_containing(d2.hash(), None).unwrap().unwrap());
 
@@ -1217,8 +1215,7 @@ mod tests {
 		assert_eq!(b4.hash(), client.best_containing(b3.hash(), Some(5)).unwrap().unwrap());
 		assert_eq!(b4.hash(), client.best_containing(b4.hash(), Some(5)).unwrap().unwrap());
 
-		// TODO [snd] activate
-		// assert_eq!(c3.hash(), client.best_containing(c3.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(c3.hash(), client.best_containing(c3.hash(), Some(5)).unwrap().unwrap());
 
 		assert_eq!(d2.hash(), client.best_containing(d2.hash(), Some(5)).unwrap().unwrap());
 
@@ -1236,8 +1233,7 @@ mod tests {
 		assert_eq!(b4.hash(), client.best_containing(b3.hash(), Some(4)).unwrap().unwrap());
 		assert_eq!(b4.hash(), client.best_containing(b4.hash(), Some(4)).unwrap().unwrap());
 
-		// TODO [snd] activate
-		// assert_eq!(c3.hash(), client.best_containing(c3.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(c3.hash(), client.best_containing(c3.hash(), Some(4)).unwrap().unwrap());
 
 		assert_eq!(d2.hash(), client.best_containing(d2.hash(), Some(4)).unwrap().unwrap());
 
@@ -1255,8 +1251,7 @@ mod tests {
 		assert_eq!(b3.hash(), client.best_containing(b3.hash(), Some(3)).unwrap().unwrap());
 		assert_eq!(None, client.best_containing(b4.hash(), Some(3)).unwrap());
 
-		// TODO [snd] activate
-		// assert_eq!(c3.hash(), client.best_containing(c3.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(c3.hash(), client.best_containing(c3.hash(), Some(3)).unwrap().unwrap());
 
 		assert_eq!(d2.hash(), client.best_containing(d2.hash(), Some(3)).unwrap().unwrap());
 
@@ -1274,8 +1269,7 @@ mod tests {
 		assert_eq!(None, client.best_containing(b3.hash(), Some(2)).unwrap());
 		assert_eq!(None, client.best_containing(b4.hash(), Some(2)).unwrap());
 
-		// TODO [snd] activate
-		// assert_eq!(None, client.best_containing(c3.hash(), Some(2)).unwrap());
+		assert_eq!(None, client.best_containing(c3.hash(), Some(2)).unwrap());
 
 		assert_eq!(d2.hash(), client.best_containing(d2.hash(), Some(2)).unwrap().unwrap());
 
@@ -1293,8 +1287,7 @@ mod tests {
 		assert_eq!(None, client.best_containing(b3.hash(), Some(1)).unwrap());
 		assert_eq!(None, client.best_containing(b4.hash(), Some(1)).unwrap());
 
-		// TODO [snd] activate
-		// assert_eq!(None, client.best_containing(c3.hash(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(c3.hash(), Some(1)).unwrap());
 
 		assert_eq!(None, client.best_containing(d2.hash(), Some(1)).unwrap());
 
@@ -1311,8 +1304,7 @@ mod tests {
 		assert_eq!(None, client.best_containing(b3.hash(), Some(0)).unwrap());
 		assert_eq!(None, client.best_containing(b4.hash(), Some(0)).unwrap());
 
-		// TODO [snd] activate
-		// assert_eq!(None, client.best_containing(c3.hash().clone(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(c3.hash().clone(), Some(0)).unwrap());
 
 		assert_eq!(None, client.best_containing(d2.hash().clone(), Some(0)).unwrap());
 	}
