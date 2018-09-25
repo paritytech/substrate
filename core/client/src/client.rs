@@ -772,9 +772,10 @@ impl<B, E, Block> Client<B, E, Block> where
 
 			let info = self.backend.blockchain().info()?;
 
-			let is_target_in_best_chain = self.backend.blockchain().hash(*target_header.number())?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))? == target_hash;
+			let canon_hash = self.backend.blockchain().hash(*target_header.number())?
+				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
 
-			if is_target_in_best_chain {
+			if canon_hash == target_hash {
 				if let Some(max_number) = maybe_max_number {
 					// something has to guarantee that max_number is in chain
 					return Ok(Some(self.backend.blockchain().hash(max_number)?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", max_number)))?));
@@ -803,7 +804,8 @@ impl<B, E, Block> Client<B, E, Block> where
 			if let Some(max_number) = maybe_max_number {
 				loop {
 					// TODO [snd] this should be a panic
-					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
+					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
+						.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
 					if current_header.number() <= &max_number {
 						best_hash = current_header.hash();
@@ -822,7 +824,8 @@ impl<B, E, Block> Client<B, E, Block> where
 				}
 
 				// TODO [snd] this should be a panic
-				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
+				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
+					.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
 
 				// stop search in this chain once we go below the target's block number
 				if current_header.number() < target_header.number() {
@@ -1107,6 +1110,11 @@ mod tests {
 
 	#[test]
 	fn best_containing_with_multiple_forks() {
+		// NOTE: we use the version of the trait from `test_client`
+		// because that is actually different than the version linked to
+		// in the test facade crate.
+		use test_client::blockchain::Backend as BlockchainBackendT;
+
 		// block tree:
 		// G -> A1 -> A2 -> A3 -> A4 -> A5
 		//      A1 -> B2 -> B3 -> B4
@@ -1181,7 +1189,13 @@ mod tests {
 		assert_eq!(client.info().unwrap().chain.best_hash, a5.hash());
 
 		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+		let leaves = BlockchainBackendT::leaves(client.backend().blockchain()).unwrap();
 
+		assert!(leaves.contains(&a5.hash()));
+		assert!(leaves.contains(&b4.hash()));
+		assert!(leaves.contains(&c3.hash()));
+		assert!(leaves.contains(&d2.hash()));
+		assert_eq!(leaves.len(), 4);
 
 		// search without restriction
 

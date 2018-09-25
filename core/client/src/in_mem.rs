@@ -163,7 +163,6 @@ impl<Block: BlockT> Blockchain<Block> {
 		new_state: NewBlockState,
 	) -> ::error::Result<()> {
 		let number = header.number().clone();
-
 		let best_tree_route = match new_state.is_best() {
 			false => None,
 			true => {
@@ -171,7 +170,6 @@ impl<Block: BlockT> Blockchain<Block> {
 				if &best_hash == header.parent_hash() {
 					None
 				} else {
-					println!("Tree route from {:?} to {:?}", best_hash, header.parent_hash());
 					let route = ::blockchain::tree_route(
 						self,
 						BlockId::Hash(best_hash),
@@ -202,10 +200,10 @@ impl<Block: BlockT> Blockchain<Block> {
 
 			storage.best_hash = hash.clone();
 			storage.best_number = number.clone();
+			storage.hashes.insert(number, hash.clone());
 		}
 
 		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
-		storage.hashes.insert(number, hash.clone());
 
 		if let NewBlockState::Final = new_state {
 			storage.finalized_hash = hash;
@@ -251,7 +249,6 @@ impl<Block: BlockT> Blockchain<Block> {
 
 impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<<Block as BlockT>::Header>> {
-		println!("Getting header {:?}", id);
 		Ok(self.id(id).and_then(|hash| {
 			self.storage.read().blocks.get(&hash).map(|b| b.header().clone())
 		}))
