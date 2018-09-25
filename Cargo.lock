@@ -3201,6 +3201,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-transaction-graph"
+version = "0.1.0"
+dependencies = [
+ "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+]
+
+[[package]]
 name = "substrate-transaction-pool"
 version = "0.1.0"
 dependencies = [
