@@ -51,7 +51,6 @@ pub use core::borrow;
 pub use core::cell;
 pub use core::clone;
 pub use core::cmp;
-pub use core::fmt;
 pub use core::hash;
 pub use core::intrinsics;
 pub use core::iter;

@@ -36,14 +36,15 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_serializer as serializer;
 extern crate substrate_state_machine as state_machine;
 extern crate sr_version as runtime_version;
+extern crate substrate_trie as trie;
 
 extern crate serde;
 extern crate wasmi;
 extern crate byteorder;
-extern crate triehash;
+extern crate trie_root;
 extern crate parking_lot;
 extern crate twox_hash;
-extern crate hashdb;
+extern crate hash_db;
 
 #[macro_use] extern crate log;
 

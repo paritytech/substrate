@@ -20,10 +20,9 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use codec::{Decode, Encode};
-use hashdb::{HashDB, Hasher};
+use hash_db::{HashDB, Hasher};
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
-use patricia_trie::{NodeCodec, Recorder};
+use substrate_trie::{Recorder, MemoryDB};
 use changes_trie::{Configuration, Storage};
 use changes_trie::input::{DigestIndex, ExtrinsicIndex, DigestIndexValue, ExtrinsicIndexValue};
 use changes_trie::storage::{TrieBackendAdapter, InMemoryStorage};
@@ -32,7 +31,7 @@ use trie_backend_essence::{TrieBackendEssence};
 
 /// Return changes of given key at given blocks range.
 /// `max` is the number of best known block.
-pub fn key_changes<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
+pub fn key_changes<S: Storage<H>, H: Hasher>(
 	config: &Configuration,
 	storage: &S,
 	begin: u64,
@@ -52,13 +51,12 @@ pub fn key_changes<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 
 			_hasher: ::std::marker::PhantomData::<H>::default(),
 		},
-		_codec: ::std::marker::PhantomData::<C>::default(),
 	}.collect()
 }
 
 /// Returns proof of changes of given key at given blocks range.
 /// `max` is the number of best known block.
-pub fn key_changes_proof<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
+pub fn key_changes_proof<S: Storage<H>, H: Hasher>(
 	config: &Configuration,
 	storage: &S,
 	begin: u64,
@@ -79,7 +77,6 @@ pub fn key_changes_proof<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 			_hasher: ::std::marker::PhantomData::<H>::default(),
 		},
 		proof_recorder: Default::default(),
-		_codec: ::std::marker::PhantomData::<C>::default(),
 	};
 
 	// iterate to collect proof
@@ -92,7 +89,7 @@ pub fn key_changes_proof<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 
 /// Check key changes proog and return changes of the key at given blocks range.
 /// `max` is the number of best known block.
-pub fn key_changes_proof_check<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
+pub fn key_changes_proof_check<S: Storage<H>, H: Hasher>(
 	config: &Configuration,
 	roots_storage: &S, // TODO: use RootsStorage is only used to gather root
 	proof: Vec<Vec<u8>>,
@@ -101,7 +98,7 @@ pub fn key_changes_proof_check<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 	max: u64,
 	key: &[u8]
 ) -> Result<Vec<(u64, u32)>, String> where H::Out: HeapSizeOf {
-	let mut proof_db = MemoryDB::<H>::new();
+	let mut proof_db = MemoryDB::<H>::default();	// TODO: use new for correctness
 	for item in proof {
 		proof_db.insert(&item);
 	}
@@ -119,7 +116,6 @@ pub fn key_changes_proof_check<S: Storage<H>, H: Hasher, C: NodeCodec<H>>(
 
 			_hasher: ::std::marker::PhantomData::<H>::default(),
 		},
-		_codec: ::std::marker::PhantomData::<C>::default(),
 	}.collect()
 }
 
@@ -239,28 +235,29 @@ impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> DrilldownIteratorEssence
 }
 
 /// Exploring drilldown operator.
-struct DrilldownIterator<'a, RS: 'a + Storage<H>, S: 'a + Storage<H>, H: Hasher, C: NodeCodec<H>> {
+struct DrilldownIterator<'a, RS: 'a + Storage<H>, S: 'a + Storage<H>, H: Hasher> {
 	essence: DrilldownIteratorEssence<'a, RS, S, H>,
-	_codec: ::std::marker::PhantomData<C>,
 }
 
-impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher, C: NodeCodec<H>> Iterator for DrilldownIterator<'a, RS, S, H, C> where H::Out: HeapSizeOf {
+impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> Iterator
+	for DrilldownIterator<'a, RS, S, H>
+	where H::Out: HeapSizeOf
+{
 	type Item = Result<(u64, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		self.essence.next(|storage, root, key|
-			TrieBackendEssence::<_, H, C>::new(TrieBackendAdapter::new(storage), root).storage(key))
+			TrieBackendEssence::<_, H>::new(TrieBackendAdapter::new(storage), root).storage(key))
 	}
 }
 
 /// Proving drilldown iterator.
-struct ProvingDrilldownIterator<'a, RS: 'a + Storage<H>, S: 'a + Storage<H>, H: Hasher, C: NodeCodec<H>> {
+struct ProvingDrilldownIterator<'a, RS: 'a + Storage<H>, S: 'a + Storage<H>, H: Hasher> {
 	essence: DrilldownIteratorEssence<'a, RS, S, H>,
 	proof_recorder: RefCell<Recorder<H::Out>>,
-	_codec: ::std::marker::PhantomData<C>,
 }
 
-impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher, C: NodeCodec<H>> ProvingDrilldownIterator<'a, RS, S, H, C> {
+impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> ProvingDrilldownIterator<'a, RS, S, H> {
 	/// Consume the iterator, extracting the gathered proof in lexicographical order
 	/// by value.
 	pub fn extract_proof(self) -> Vec<Vec<u8>> {
@@ -271,14 +268,14 @@ impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher, C: NodeCodec<H>> Proving
 	}
 }
 
-impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher, C: NodeCodec<H>> Iterator for ProvingDrilldownIterator<'a, RS, S, H, C> where H::Out: HeapSizeOf {
+impl<'a, RS: 'a + Storage<H>, S: Storage<H>, H: Hasher> Iterator for ProvingDrilldownIterator<'a, RS, S, H> where H::Out: HeapSizeOf {
 	type Item = Result<(u64, u32), String>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let proof_recorder = &mut *self.proof_recorder.try_borrow_mut()
 			.expect("only fails when already borrowed; storage() is non-reentrant; qed");
 		self.essence.next(|storage, root, key|
-			ProvingBackendEssence::<_, H, C> {
+			ProvingBackendEssence::<_, H> {
 				backend: &TrieBackendEssence::new(TrieBackendAdapter::new(storage), root),
 				proof_recorder,
 			}.storage(key))
@@ -356,14 +353,14 @@ fn lower_bound_max_digest(
 
 #[cfg(test)]
 mod tests {
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::Blake2Hasher;
 	use changes_trie::input::InputPair;
 	use changes_trie::storage::InMemoryStorage;
 	use super::*;
 
 	fn prepare_for_drilldown() -> (Configuration, InMemoryStorage<Blake2Hasher>) {
 		let config = Configuration { digest_interval: 4, digest_levels: 2 };
-		let backend = InMemoryStorage::with_inputs::<RlpCodec>(vec![
+		let backend = InMemoryStorage::with_inputs(vec![
 			// digest: 1..4 => [(3, 0)]
 			(1, vec![]),
 			(2, vec![]),
@@ -403,7 +400,7 @@ mod tests {
 	#[test]
 	fn drilldown_iterator_works() {
 		let (config, storage) = prepare_for_drilldown();
-		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
+		let drilldown_result = key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
 			&config, &storage, 0, 100, 1000, &[42]);
 
 		assert_eq!(drilldown_result, Ok(vec![(8, 2), (8, 1), (6, 3), (3, 0)]));
@@ -414,16 +411,16 @@ mod tests {
 		let (config, storage) = prepare_for_drilldown();
 		storage.clear_storage();
 
-		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
+		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
 			&config, &storage, 0, 100, 1000, &[42]).is_err());
 	}
 
 	#[test]
 	fn drilldown_iterator_fails_when_range_is_invalid() {
 		let (config, storage) = prepare_for_drilldown();
-		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
+		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
 			&config, &storage, 0, 100, 50, &[42]).is_err());
-		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
+		assert!(key_changes::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
 			&config, &storage, 20, 10, 100, &[42]).is_err());
 	}
 
@@ -434,7 +431,7 @@ mod tests {
 
 		// create drilldown iterator that records all trie nodes during drilldown
 		let (remote_config, remote_storage) = prepare_for_drilldown();
-		let remote_proof = key_changes_proof::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
+		let remote_proof = key_changes_proof::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
 			&remote_config, &remote_storage,
 			0, 100, 1000, &[42]).unwrap();
 
@@ -443,7 +440,7 @@ mod tests {
 		// create drilldown iterator that works the same, but only depends on trie
 		let (local_config, local_storage) = prepare_for_drilldown();
 		local_storage.clear_storage();
-		let local_result = key_changes_proof_check::<InMemoryStorage<Blake2Hasher>, Blake2Hasher, RlpCodec>(
+		let local_result = key_changes_proof_check::<InMemoryStorage<Blake2Hasher>, Blake2Hasher>(
 			&local_config, &local_storage, remote_proof,
 			0, 100, 1000, &[42]);
 

@@ -50,7 +50,7 @@ mod tests {
 	use test_client;
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
-	use primitives::{Blake2Hasher, RlpCodec, ed25519::{Public, Pair}};
+	use primitives::{Blake2Hasher, ed25519::{Public, Pair}};
 
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
@@ -59,13 +59,13 @@ mod tests {
 	}
 
 	fn construct_block(
-		backend: &InMemory<Blake2Hasher, RlpCodec>,
+		backend: &InMemory<Blake2Hasher>,
 		number: BlockNumber,
 		parent_hash: Hash,
 		state_root: Hash,
 		txs: Vec<Transfer>
 	) -> (Vec<u8>, Hash) {
-		use triehash::ordered_trie_root;
+		use trie::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
 			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.0)).unwrap())
@@ -124,7 +124,7 @@ mod tests {
 		(vec![].and(&Block { header, extrinsics: transactions }), hash)
 	}
 
-	fn block1(genesis_hash: Hash, backend: &InMemory<Blake2Hasher, RlpCodec>) -> (Vec<u8>, Hash) {
+	fn block1(genesis_hash: Hash, backend: &InMemory<Blake2Hasher>) -> (Vec<u8>, Hash) {
 		construct_block(
 			backend,
 			1,
