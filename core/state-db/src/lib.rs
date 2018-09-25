@@ -81,7 +81,7 @@ pub enum Error<E: fmt::Debug> {
 	/// `Codec` decoding error.
 	Decoding,
 	/// NonCanonical error.
-	NonCanonical
+	NonCanonical,
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
@@ -89,7 +89,7 @@ impl<E: fmt::Debug> fmt::Debug for Error<E> {
 		match self {
 			Error::Db(e) => e.fmt(f),
 			Error::Decoding => write!(f, "Error decoding slicable value"),
-			Error::NonCanonical => write!(f, "Error canonicaling"),
+			Error::NonCanonical => write!(f, "Error processing non-canonical data"),
 		}
 	}
 }

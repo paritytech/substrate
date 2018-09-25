@@ -131,10 +131,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				if !self.last_canonicalized.as_ref().map_or(false, |&(ref h, n)| h == parent_hash && n == number - 1) {
 					return Err(Error::NonCanonical);
 				}
-			} else {
-				if !self.parents.contains_key(&parent_hash) {
-					return Err(Error::NonCanonical);
-				}
+			} else if !self.parents.contains_key(&parent_hash) {
+				return Err(Error::NonCanonical);
 			}
 		}
 		let level = if self.levels.is_empty() || number == self.front_block_number() + self.levels.len() as u64 {
