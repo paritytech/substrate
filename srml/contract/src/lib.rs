@@ -59,6 +59,9 @@ extern crate serde_derive;
 #[cfg(feature = "std")]
 extern crate serde;
 
+#[macro_use]
+extern crate parity_codec_derive;
+
 extern crate parity_wasm;
 extern crate pwasm_utils;
 
@@ -116,6 +119,9 @@ pub trait Trait: balances::Trait {
 
 	// As<u32> is needed for wasm-utils
 	type Gas: Parameter + Default + Codec + SimpleArithmetic + Copy + As<Self::Balance> + As<u64> + As<u32>;
+
+	/// The overarching event type.
+	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }
 
 pub trait ContractAddressFor<AccountId: Sized> {
@@ -169,6 +175,17 @@ decl_module! {
 	}
 }
 
+decl_event! {
+	pub enum Event<T>
+	where
+		<T as balances::Trait>::Balance,
+		<T as system::Trait>::AccountId
+	{
+		/// Transfer happened `from` -> `to` with given `value` as part of a `message-call` or `create`.
+		Transfer(AccountId, AccountId, Balance),
+	}
+}
+
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
 		/// The fee required to create a contract. At least as big as staking's ReclaimRebate.
@@ -206,6 +223,11 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 }
 
 impl<T: Trait> Module<T> {
+	/// Deposit one of this module's events.
+	fn deposit_event(event: Event<T>) {
+		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	}
+
 	/// Make a call to a specified account, optionally transferring some balance.
 	fn call(
 		origin: <T as system::Trait>::Origin,
@@ -226,6 +248,7 @@ impl<T: Trait> Module<T> {
 			self_account: origin.clone(),
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
+			events: Vec::new(),
 		};
 
 		let mut output_data = Vec::new();
@@ -234,6 +257,9 @@ impl<T: Trait> Module<T> {
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
 			account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+
+			// Then deposit all events produced.
+			ctx.events.into_iter().for_each(Self::deposit_event);
 		}
 
 		// Refund cost of the unused gas.
@@ -273,12 +299,16 @@ impl<T: Trait> Module<T> {
 			self_account: origin.clone(),
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
+			events: Vec::new(),
 		};
 		let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
 
 		if let Ok(_) = result {
 			// Commit all changes that made it thus far into the persistant storage.
 			account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+
+			// Then deposit all events produced.
+			ctx.events.into_iter().for_each(Self::deposit_event);
 		}
 
 		// Refund cost of the unused gas.

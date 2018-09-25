@@ -174,6 +174,7 @@ impl treasury::Trait for Runtime {
 impl contract::Trait for Runtime {
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
+	type Event = Event;
 }
 
 impl DigestItem for Log {
@@ -208,7 +209,7 @@ construct_runtime!(
 		CouncilVoting: council_voting::{Module, Call, Storage, Event<T>},
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		Treasury: treasury,
-		Contract: contract::{Module, Call, Config},
+		Contract: contract::{Module, Call, Config, Event<T>},
 	}
 );
 
