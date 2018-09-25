@@ -22,7 +22,6 @@ use runtime_primitives::{generic::BlockId, StorageMap};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use executor::NativeExecutor;
 use primitives::{Blake2Hasher, RlpCodec};
->>>>>>> replace KeccakHasher with Blake2Hasher
 use runtime;
 use bft;
 
