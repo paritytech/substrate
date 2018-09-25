@@ -67,7 +67,7 @@ use utils::{Meta, db_err, meta_keys, open_database, read_db, read_id, read_meta}
 use state_db::StateDb;
 pub use state_db::PruningMode;
 
-const CANONICALIZATION_DELAY: u64 = 258;
+const CANONICALIZATION_DELAY: u64 = 256;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher, RlpCodec>;
