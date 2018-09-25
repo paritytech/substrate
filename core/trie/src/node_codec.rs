@@ -99,7 +99,6 @@ impl<H: Hasher> trie_db::NodeCodec<H> for NodeCodec<H> {
 	fn leaf_node(partial: &[u8], value: &[u8]) -> Vec<u8> {
 		let mut output = partial_to_key(partial, LEAF_NODE_OFFSET, LEAF_NODE_BIG);
 		value.encode_to(&mut output);
-//		println!("leaf_node: {:#x?}", output);
 		output
 	}
 
@@ -112,7 +111,6 @@ impl<H: Hasher> trie_db::NodeCodec<H> for NodeCodec<H> {
 			ChildReference::Inline(inline_data, len) =>
 				(&AsRef::<[u8]>::as_ref(&inline_data)[..len]).encode_to(&mut output),
 		};
-//		println!("ext_node: {:#x?}", output);
 		output
 	}
 
@@ -138,7 +136,6 @@ impl<H: Hasher> trie_db::NodeCodec<H> for NodeCodec<H> {
 			None => false,
 		}));
 		output[0..3].copy_from_slice(&prefix[..]);
-//		println!("branch_node: {:#x?}", output);
 		output
 	}
 }
