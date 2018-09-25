@@ -245,10 +245,10 @@ mod test {
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![103] }, vec![0, 1]),
 
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![100] }, vec![1]),
+			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![100] }, vec![1, 3]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1]),
+			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
 		]));
 	}
 
@@ -285,10 +285,10 @@ mod test {
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::ExtrinsicIndex(ExtrinsicIndex { block: 4, key: vec![103] }, vec![0, 1]),
 
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![100] }, vec![1]),
+			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![100] }, vec![1, 3]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![101] }, vec![1]),
 			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![102] }, vec![2]),
-			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1]),
+			InputPair::DigestIndex(DigestIndex { block: 4, key: vec![105] }, vec![1, 3]),
 		]));
 	}
 }
