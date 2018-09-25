@@ -52,6 +52,12 @@ impl<H, N> PartialEq for LeafSetItem<H, N> where N: PartialEq {
 
 impl<H, N> Eq for LeafSetItem<H, N> where N: PartialEq {}
 
+/// A displaced leaf after import.
+pub struct DisplacedLeaf<H, N> {
+	new_hash: H,
+	displaced: LeafSetItem<H, N>,
+}
+
 /// list of leaf hashes ordered by number (descending).
 /// stored in memory for fast access.
 /// this allows very fast checking and modification of active leaves.
@@ -90,17 +96,37 @@ impl<H, N> LeafSet<H, N> where
 		Ok(Self { storage })
 	}
 
-	/// update the leaf list on import.
-	pub fn import(&mut self, hash: H, number: N, parent_hash: H) {
+	/// update the leaf list on import. returns a displaced leaf if there was one.
+	pub fn import(&mut self, hash: H, number: N, parent_hash: H) -> Option<DisplacedLeaf<H, N>> {
 		// avoid underflow for genesis.
-		if number != N::zero() {
-			self.storage.remove(&LeafSetItem {
+		let displaced = if number != N::zero() {
+			let displaced = LeafSetItem {
 				hash: parent_hash,
 				number: number.clone() - N::one(),
-			});
-		}
+			};
+			let was_displaced = self.storage.remove(&displaced);
+
+			if was_displaced {
+				Some(DisplacedLeaf {
+					new_hash: hash.clone(),
+					displaced,
+				})
+			} else {
+				None
+			}
+		} else {
+			None
+		};
 
 		self.storage.insert(LeafSetItem { hash, number });
+		displaced
+	}
+
+	/// Undo an import operation, with a displaced leaf.
+	pub fn undo(&mut self, displaced: DisplacedLeaf<H, N>) {
+		let new_number = displaced.displaced.number.clone() + N::one();
+		self.storage.remove(&LeafSetItem { hash: displaced.new_hash, number: new_number });
+		self.storage.insert(displaced.displaced);
 	}
 
 	/// currently since revert only affects the canonical chain
@@ -121,7 +147,7 @@ impl<H, N> LeafSet<H, N> where
 	}
 
 	/// Write the leaf list to the database transaction.
-	pub fn write(&self, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8]) {
+	pub fn prepare_transaction(&self, tx: &mut DBTransaction, column: Option<u32>, prefix: &[u8]) {
 		let mut buf = prefix.to_vec();
 		for &LeafSetItem { ref hash, ref number } in &self.storage {
 			hash.using_encoded(|s| buf.extend(s));
@@ -169,7 +195,7 @@ mod tests {
 
 		let mut tx = DBTransaction::new();
 
-		set.write(&mut tx, None, PREFIX);
+		set.prepare_transaction(&mut tx, None, PREFIX);
 		db.write(tx).unwrap();
 
 		let set2 = LeafSet::read_from_db(&db, None, PREFIX).unwrap();

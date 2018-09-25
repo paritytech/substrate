@@ -141,9 +141,10 @@ pub struct BlockchainDb<Block: BlockT> {
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
+		let leaves = LeafSet::read_from_db(&*db, columns::HEADER, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
-			leaves: RwLock::new(LeafSet::new()),
+			leaves: RwLock::new(leaves),
 			meta: RwLock::new(meta)
 		})
 	}
@@ -507,6 +508,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 		let mut transaction = DBTransaction::new();
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
+			let parent_hash = *pending_block.header.parent_hash();
 			let number = pending_block.header.number().clone();
 
 			transaction.put(columns::HEADER, hash.as_ref(), &pending_block.header.encode());
@@ -522,7 +524,6 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 
 				// cannot find tree route with empty DB.
 				if meta.best_hash != Default::default() {
-					let parent_hash = *pending_block.header.parent_hash();
 					let tree_route = ::client::blockchain::tree_route(
 						&self.blockchain,
 						BlockId::Hash(meta.best_hash),
@@ -593,16 +594,28 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher, RlpCodec> for Backend<
 			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number,
 				pending_block.leaf_state.is_best());
 
-			self.storage.db.write(transaction).map_err(db_err)?;
+			{
+				let mut leaves = self.blockchain.leaves.write();
+				let displaced_leaf = leaves.import(hash, number, parent_hash);
+				leaves.prepare_transaction(&mut transaction, columns::HEADER, meta_keys::LEAF_PREFIX);
+
+				let write_result = self.storage.db.write(transaction).map_err(db_err);
+				if let Err(e) = write_result {
+					// revert leaves set update, if there was one.
+					if let Some(displaced_leaf) = displaced_leaf {
+						leaves.undo(displaced_leaf);
+					}
+					return Err(e);
+				}
+				drop(leaves);
+			}
+
 			self.blockchain.update_meta(
 				hash.clone(),
 				number.clone(),
 				pending_block.leaf_state.is_best(),
 				finalized,
 			);
-
-			let parent_hash = *pending_block.header.parent_hash();
-			self.blockchain.leaves.write().import(hash, number, parent_hash);
 		}
 		Ok(())
 	}
