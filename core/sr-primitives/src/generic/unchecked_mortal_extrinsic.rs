@@ -141,27 +141,19 @@ where
 	Call: Encode,
 {
 	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		// 1 byte version id.
-		match self.signature.as_ref() {
-			Some(s) => {
-				v.push(TRANSACTION_VERSION | 0b1000_0000);
-				s.encode_to(&mut v);
+		super::encode_with_vec_prefix::<Self, _>(|mut v| {
+			// 1 byte version id.
+			match self.signature.as_ref() {
+				Some(s) => {
+					v.push(TRANSACTION_VERSION | 0b1000_0000);
+					s.encode_to(&mut v);
+				}
+				None => {
+					v.push(TRANSACTION_VERSION & 0b0111_1111);
+				}
 			}
-			None => {
-				v.push(TRANSACTION_VERSION & 0b0111_1111);
-			}
-		}
-		self.function.encode_to(&mut v);
-
-		// need to prefix with the total length to ensure it's binary comptible with
-		// Vec<u8>.
-		let mut length: Vec<()> = Vec::new();
-		length.resize(v.len(), ());
-		length.using_encoded(|s| { v.splice(0..0, s.iter().cloned()); });
-
-		v
+			self.function.encode_to(&mut v);
+		})
 	}
 }
 

@@ -123,18 +123,10 @@ where
 	Call: Encode,
 {
 	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		self.signature.encode_to(&mut v);
-		self.function.encode_to(&mut v);
-
-		// need to prefix with the total length to ensure it's binary comptible with
-		// Vec<u8>.
-		let mut length: Vec<()> = Vec::new();
-		length.resize(v.len(), ());
-		length.using_encoded(|s| { v.splice(0..0, s.iter().cloned()); });
-
-		v
+		super::encode_with_vec_prefix::<Self, _>(|v| {
+			self.signature.encode_to(v);
+			self.function.encode_to(v);
+		})
 	}
 }
 
