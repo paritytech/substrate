@@ -16,6 +16,15 @@
 
 // tag::description[]
 //! Client backend that uses RocksDB database as storage.
+//!
+//! # Canonicality vs. Finality
+//!
+//! Finality indicates that a block will not be reverted, according to the consensus algorithm,
+//! while canonicality indicates that the block may be reverted, but we will be unable to do so,
+//! having discarded heavy state that will allow a chain reorganization.
+//!
+//! Finality implies canonicality but not vice-versa.
+//!
 // end::description[]
 
 extern crate substrate_client as client;
@@ -68,7 +77,7 @@ use utils::{Meta, db_err, meta_keys, open_database, read_db, read_id, read_meta}
 use state_db::StateDb;
 pub use state_db::PruningMode;
 
-const FINALIZATION_WINDOW: u64 = 32;
+const CANONICALIZATION_DELAY: u64 = 256;
 
 /// DB-backed patricia trie state, transaction type is an overlay of changes to commit.
 pub type DbState = state_machine::TrieBackend<Arc<state_machine::Storage<Blake2Hasher>>, Blake2Hasher>;
@@ -95,7 +104,7 @@ pub fn new_client<E, S, Block>(
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
 {
-	let backend = Arc::new(Backend::new(settings, FINALIZATION_WINDOW)?);
+	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
 	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategy)?)
 }
@@ -370,29 +379,33 @@ pub struct Backend<Block: BlockT> {
 	storage: Arc<StorageDb<Block>>,
 	tries_change_storage: DbChangesTrieStorage<Block>,
 	blockchain: BlockchainDb<Block>,
-	pruning_window: u64,
+	canonicalization_delay: u64,
 }
 
 impl<Block: BlockT> Backend<Block> {
 	/// Create a new instance of database backend.
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
-	pub fn new(config: DatabaseSettings, pruning_window: u64) -> Result<Self, client::error::Error> {
+	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
 		let db = open_database(&config, "full")?;
 
-		Backend::from_kvdb(db as Arc<_>, config.pruning, pruning_window)
+		Backend::from_kvdb(db as Arc<_>, config.pruning, canonicalization_delay)
 	}
 
 	#[cfg(test)]
-	fn new_test(keep_blocks: u32) -> Self {
+	fn new_test(keep_blocks: u32, canonicalization_delay: u64) -> Self {
 		use utils::NUM_COLUMNS;
 
 		let db = Arc::new(::kvdb_memorydb::create(NUM_COLUMNS));
 
-		Backend::from_kvdb(db as Arc<_>, PruningMode::keep_blocks(keep_blocks), 0).expect("failed to create test-db")
+		Backend::from_kvdb(
+			db as Arc<_>,
+			PruningMode::keep_blocks(keep_blocks),
+			canonicalization_delay,
+		).expect("failed to create test-db")
 	}
 
-	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, pruning_window: u64) -> Result<Self, client::error::Error> {
+	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
 		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
@@ -409,35 +422,29 @@ impl<Block: BlockT> Backend<Block> {
 			storage: Arc::new(storage_db),
 			tries_change_storage: tries_change_storage,
 			blockchain,
-			pruning_window,
+			canonicalization_delay,
 		})
 	}
 
-	// write stuff to a transaction after a new block is finalized.
-	// this manages state pruning. Fails if called with a block which
-	// was not a child of the last finalized block.
-	fn note_finalized(
+	// performs forced canonicaliziation with a delay after importning a non-finalized block.
+	fn force_delayed_canonicalize(
 		&self,
 		transaction: &mut DBTransaction,
-		f_header: &Block::Header,
-		f_hash: Block::Hash,
-	) -> Result<(), client::error::Error> {
-		let meta = self.blockchain.meta.read();
-		let f_num = f_header.number().clone();
-		if &meta.finalized_hash != f_header.parent_hash() {
-			return Err(::client::error::ErrorKind::NonSequentialFinalization(
-				format!("Last finalized {:?} not parent of {:?}",
-					meta.finalized_hash, f_hash),
-			).into())
-		}
-		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
+		hash: Block::Hash,
+		number: NumberFor<Block>,
+	)
+		-> Result<(), client::error::Error>
+	{
+		let number_u64 = number.as_();
+		if number_u64 > self.canonicalization_delay {
+			let new_canonical = number_u64 - self.canonicalization_delay;
 
-		let number_u64 = f_num.as_();
-		if number_u64 > self.pruning_window {
-			let new_canonical = number_u64 - self.pruning_window;
+			if new_canonical <= self.storage.state_db.best_canonical() {
+				return Ok(())
+			}
 
 			let hash = if new_canonical == number_u64 {
-				f_hash
+				hash
 			} else {
 				read_id::<Block>(
 					&*self.blockchain.db,
@@ -451,6 +458,34 @@ impl<Block: BlockT> Backend<Block> {
 			let commit = self.storage.state_db.canonicalize_block(&hash);
 			apply_state_commit(transaction, commit);
 		};
+
+		Ok(())
+	}
+
+	// write stuff to a transaction after a new block is finalized.
+	// this canonicalizes finalized blocks. Fails if called with a block which
+	// was not a child of the last finalized block.
+	fn note_finalized(
+		&self,
+		transaction: &mut DBTransaction,
+		f_header: &Block::Header,
+		f_hash: Block::Hash,
+	) -> Result<(), client::error::Error> {
+		let meta = self.blockchain.meta.read();
+		let f_num = f_header.number().clone();
+
+		if f_num.as_() > self.storage.state_db.best_canonical() {
+			if &meta.finalized_hash != f_header.parent_hash() {
+				return Err(::client::error::ErrorKind::NonSequentialFinalization(
+					format!("Last finalized {:?} not parent of {:?}",
+						meta.finalized_hash, f_hash),
+				).into())
+			}
+			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
+
+			let commit = self.storage.state_db.canonicalize_block(&f_hash);
+			apply_state_commit(transaction, commit);
+		}
 
 		Ok(())
 	}
@@ -580,6 +615,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			if finalized {
 				// TODO: ensure best chain contains this block.
 				self.note_finalized(&mut transaction, &pending_block.header, hash)?;
+			} else {
+				// canonicalize blocks which are old enough, regardless of finality.
+				self.force_delayed_canonicalize(&mut transaction, hash, *pending_block.header.number())?
 			}
 
 			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number,
@@ -743,7 +781,7 @@ mod tests {
 
 	#[test]
 	fn block_hash_inserted_correctly() {
-		let db = Backend::<Block>::new_test(1);
+		let db = Backend::<Block>::new_test(1, 0);
 		for i in 0..10 {
 			assert!(db.blockchain().hash(i).unwrap().is_none());
 
@@ -782,7 +820,7 @@ mod tests {
 
 	#[test]
 	fn set_state_data() {
-		let db = Backend::<Block>::new_test(2);
+		let db = Backend::<Block>::new_test(2, 0);
 		let hash = {
 			let mut op = db.begin_operation(BlockId::Hash(Default::default())).unwrap();
 			let mut header = Header {
@@ -863,7 +901,7 @@ mod tests {
 	#[test]
 	fn delete_only_when_negative_rc() {
 		let key;
-		let backend = Backend::<Block>::new_test(0);
+		let backend = Backend::<Block>::new_test(0, 0);
 
 		let hash = {
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default())).unwrap();
@@ -962,8 +1000,7 @@ mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			// block not yet finalized, so state not pruned.
-			assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_some());
+			assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
 		}
 
 		backend.finalize_block(BlockId::Number(1)).unwrap();
@@ -973,7 +1010,7 @@ mod tests {
 
 	#[test]
 	fn changes_trie_storage_works() {
-		let backend = Backend::<Block>::new_test(1000);
+		let backend = Backend::<Block>::new_test(1000, 100);
 
 		let check_changes = |backend: &Backend<Block>, block: u64, changes: Vec<(Vec<u8>, Vec<u8>)>| {
 			let (changes_root, mut changes_trie_update) = prepare_changes(changes);
@@ -1003,7 +1040,7 @@ mod tests {
 
 	#[test]
 	fn tree_route_works() {
-		let backend = Backend::<Block>::new_test(1000);
+		let backend = Backend::<Block>::new_test(1000, 100);
 		let block0 = insert_header(&backend, 0, Default::default(), Vec::new(), Default::default());
 
 		// fork from genesis: 3 prong.
