@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Generates trie root.
-//!
-//! This module should be used to generate trie root hash.
+//! Substrate-format Base-16 Modified Merkle Patricia Tree (Trie).
 
 // TODO: no_std
 
@@ -40,24 +38,33 @@ mod node_codec;
 mod trie_stream;
 
 use hash_db::Hasher;
+/// Our `NodeCodec`-specific error.
 pub use error::Error;
+/// The Substrate format implementation of `TrieStream`.
 pub use trie_stream::TrieStream;
+/// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
+/// Various re-exports from the `trie-db` crate.
 pub use trie_db::{Trie, TrieMut, DBValue, Recorder};
 
+/// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
+/// As in `hash_db`, but less generic, trait exposed.
 pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
 impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
+/// As in `hash_db`, but less generic, trait exposed.
 pub type HashDB<H> = hash_db::HashDB<H, trie_db::DBValue>;
+/// As in `memory_db`, but less generic, trait exposed.
 pub type MemoryDB<H> = memory_db::MemoryDB<H, trie_db::DBValue>;
+
+/// Persistent trie database read-access interface for the a given hasher.
 pub type TrieDB<'a, H> = trie_db::TrieDB<'a, H, NodeCodec<H>>;
+/// Persistent trie database write-access interface for the a given hasher.
 pub type TrieDBMut<'a, H> = trie_db::TrieDBMut<'a, H, NodeCodec<H>>;
-pub type FatDB<'a, H> = trie_db::FatDB<'a, H, NodeCodec<H>>;
-pub type FatDBMut<'a, H> = trie_db::FatDBMut<'a, H, NodeCodec<H>>;
-pub type SecTrieDB<'a, H> = trie_db::SecTrieDB<'a, H, NodeCodec<H>>;
-pub type SecTrieDBMut<'a, H> = trie_db::SecTrieDBMut<'a, H, NodeCodec<H>>;
+/// Querying interface, as in `trie_db` but less generic.
 pub type Lookup<'a, H, Q> = trie_db::Lookup<'a, H, NodeCodec<H>, Q>;
 
+/// Determine a trie root given its ordered contents, closed form.
 pub fn trie_root<H: Hasher, I, A, B>(input: I) -> H::Out where
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
@@ -66,6 +73,7 @@ pub fn trie_root<H: Hasher, I, A, B>(input: I) -> H::Out where
 	trie_root::trie_root::<H, TrieStream, _, _, _>(input)
 }
 
+/// Determine a trie root node's data given its ordered contents, closed form.
 pub fn unhashed_trie<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
@@ -74,7 +82,8 @@ pub fn unhashed_trie<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 	trie_root::unhashed_trie::<H, TrieStream, _, _, _>(input)
 }
 
-/// A trie root formed from the enumerated items.
+/// A trie root formed from the items, with keys attached according to their
+/// compact-encoded index (using `parity-codec` crate).
 pub fn ordered_trie_root<H: Hasher, I, A>(input: I) -> H::Out
 where
 	I: IntoIterator<Item = A> + Iterator<Item = A>,
