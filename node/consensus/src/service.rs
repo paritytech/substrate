@@ -78,6 +78,7 @@ impl Service {
 		transaction_pool: Arc<TransactionPool<A>>,
 		thread_pool: ThreadPoolHandle,
 		key: ed25519::Pair,
+		block_delay: u64,
 	) -> Service
 		where
 			A: Api + Send + Sync + 'static,
@@ -99,6 +100,7 @@ impl Service {
 				network,
 				handle: thread_pool.clone(),
 				offline: Arc::new(RwLock::new(OfflineTracker::new())),
+				force_delay: block_delay,
 			};
 			let bft_service = Arc::new(BftService::new(client.clone(), key, factory));
 

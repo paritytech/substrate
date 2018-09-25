@@ -106,6 +106,8 @@ pub struct ProposerFactory<N, P>
 	pub handle: TaskExecutor,
 	/// Offline-tracker.
 	pub offline: SharedOfflineTracker,
+	/// Force delay in evaluation this long.
+	pub force_delay: u64,
 }
 
 impl<N, P> bft::Environment<Block> for ProposerFactory<N, P>
@@ -125,9 +127,6 @@ impl<N, P> bft::Environment<Block> for ProposerFactory<N, P>
 		sign_with: Arc<ed25519::Pair>,
 	) -> Result<(Self::Proposer, Self::Input, Self::Output), Error> {
 		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
-
-		// force delay in evaluation this long.
-		const FORCE_DELAY: Timestamp = 5;
 
 		let parent_hash = parent_header.hash().into();
 
@@ -159,7 +158,7 @@ impl<N, P> bft::Environment<Block> for ProposerFactory<N, P>
 			transaction_pool: self.transaction_pool.clone(),
 			offline: self.offline.clone(),
 			validators,
-			minimum_timestamp: current_timestamp() + FORCE_DELAY,
+			minimum_timestamp: current_timestamp() + self.force_delay,
 		};
 
 		Ok((proposer, input, output))

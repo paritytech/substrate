@@ -11,6 +11,7 @@ log = "0.3"
 slog = "^2"
 tokio = "0.1.7"
 hex-literal = "0.1"
+parity-codec = { version = "2.0" }
 node-api = { path = "../api" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }

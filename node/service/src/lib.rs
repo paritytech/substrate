@@ -29,6 +29,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_client as client;
 extern crate substrate_service as service;
+extern crate parity_codec as codec;
 extern crate tokio;
 #[cfg(test)]
 extern crate substrate_service_test as service_test;
@@ -49,16 +50,16 @@ extern crate rhododendron;
 pub mod chain_spec;
 
 use std::sync::Arc;
-
+use codec::Decode;
 use transaction_pool::TransactionPool;
 use node_api::Api;
-use node_primitives::{Block, Hash};
-use node_runtime::GenesisConfig;
+use node_primitives::{Block, Hash, Timestamp};
+use node_runtime::{GenesisConfig, BlockPeriod, StorageValue, Runtime};
 use client::Client;
 use node_network::{Protocol as DemoProtocol, consensus::ConsensusNetwork};
 use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
-use primitives::{Blake2Hasher};
+use primitives::{Blake2Hasher, storage::StorageKey, twox_128};
 
 pub use service::{Roles, PruningMode, TransactionPoolOptions, ServiceFactory,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
@@ -158,6 +159,12 @@ impl service::ServiceFactory for Factory {
 			let client = service.client();
 
 			let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
+			let block_delay = client.storage(&client.best_block_id()?, &StorageKey(twox_128(BlockPeriod::<Runtime>::key()).to_vec()))?
+				.and_then(|data| Timestamp::decode(&mut data.0.as_slice()))
+				.unwrap_or_else(|| {
+					warn!("Block period is missing in the storage.");
+					5
+				});
 			Some(consensus::Service::new(
 					client.clone(),
 					client.clone(),
@@ -165,6 +172,7 @@ impl service::ServiceFactory for Factory {
 					service.transaction_pool(),
 					executor,
 					key,
+					block_delay,
 					))
 		} else {
 			None
