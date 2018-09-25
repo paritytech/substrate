@@ -27,7 +27,7 @@ use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
@@ -107,8 +107,8 @@ impl<B, E, Block: BlockT> State<B, E, Block> {
 
 impl<B, E, Block> State<B, E, Block> where
 	Block: BlockT,
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
+	B: client::backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
 {
 	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
 		::helpers::unwrap_or_else(|| Ok(self.client.info()?.chain.best_hash), hash)
@@ -117,8 +117,8 @@ impl<B, E, Block> State<B, E, Block> where
 
 impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 

@@ -18,9 +18,7 @@
 
 use futures::IntoFuture;
 
-use hashdb::Hasher;
-use patricia_trie::NodeCodec;
-use rlp::Encodable;
+use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{CodeExecutor, read_proof_check};
@@ -115,28 +113,26 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<E, H, C> {
+pub struct LightDataChecker<E, H> {
 	executor: E,
 	_hasher: PhantomData<H>,
-	_codec: PhantomData<C>,
 }
 
-impl<E, H, C> LightDataChecker<E, H, C> {
+impl<E, H> LightDataChecker<E, H> {
 	/// Create new light data checker.
 	pub fn new(executor: E) -> Self {
 		Self {
-			executor, _hasher: PhantomData, _codec: PhantomData
+			executor, _hasher: PhantomData
 		}
 	}
 }
 
-impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
+impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 	where
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		C: NodeCodec<H> + Sync + Send,
-		H::Out: Ord + Encodable + HeapSizeOf,
+		H::Out: Ord + HeapSizeOf,
 {
 	fn check_header_proof(
 		&self,
@@ -147,7 +143,7 @@ impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 		let remote_header = remote_header.ok_or_else(||
 			ClientError::from(ClientErrorKind::InvalidHeaderProof))?;
 		let remote_header_hash = remote_header.hash();
-		cht::check_proof::<Block::Header, H, C>(
+		cht::check_proof::<Block::Header, H>(
 			request.cht_root,
 			request.block,
 			remote_header_hash,
@@ -162,7 +158,7 @@ impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 	) -> ClientResult<Option<Vec<u8>>> {
 		let mut root: H::Out = Default::default();
 		root.as_mut().copy_from_slice(request.header.state_root().as_ref());
-		read_proof_check::<H, C>(root, remote_proof, &request.key).map_err(Into::into)
+		read_proof_check::<H>(root, remote_proof, &request.key).map_err(Into::into)
 	}
 
 	fn check_execution_proof(
@@ -170,7 +166,7 @@ impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<CallResult> {
-		check_execution_proof::<_, _, H, C>(&self.executor, request, remote_proof)
+		check_execution_proof::<_, _, H>(&self.executor, request, remote_proof)
 	}
 }
 
@@ -186,7 +182,7 @@ pub mod tests {
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys;
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
@@ -213,7 +209,7 @@ pub mod tests {
 	}
 
 	fn prepare_for_read_proof_check() -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, RlpCodec>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher>,
 		Header, Vec<Vec<u8>>, usize)
 	{
 		// prepare remote client
@@ -242,7 +238,7 @@ pub mod tests {
 	}
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, RlpCodec>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher>,
 		Hash, Header, Vec<Vec<u8>>)
 	{
 		// prepare remote client

@@ -25,9 +25,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use state_machine::{Backend as StateBackend, CodeExecutor, OverlayedChanges,
 	execution_proof_check, ExecutionManager};
-use patricia_trie::NodeCodec;
-use hashdb::Hasher;
-use rlp::Encodable;
+use hash_db::Hasher;
 
 use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
@@ -36,43 +34,41 @@ use light::fetcher::{Fetcher, RemoteCallRequest};
 use executor::RuntimeVersion;
 use codec::Decode;
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
+use trie::MemoryDB;
 
 /// Call executor that executes methods on remote node, querying execution proof
 /// and checking proof by re-executing locally.
-pub struct RemoteCallExecutor<B, F, H, C> {
+pub struct RemoteCallExecutor<B, F, H> {
 	blockchain: Arc<B>,
 	fetcher: Arc<F>,
 	_hasher: PhantomData<H>,
-	_codec: PhantomData<C>,
 }
 
-impl<B, F, H, C> Clone for RemoteCallExecutor<B, F, H, C> {
+impl<B, F, H> Clone for RemoteCallExecutor<B, F, H> {
 	fn clone(&self) -> Self {
 		RemoteCallExecutor {
 			blockchain: self.blockchain.clone(),
 			fetcher: self.fetcher.clone(),
 			_hasher: Default::default(),
-			_codec: Default::default(),
 		}
 	}
 }
 
-impl<B, F, H, C> RemoteCallExecutor<B, F, H, C> {
+impl<B, F, H> RemoteCallExecutor<B, F, H> {
 	/// Creates new instance of remote call executor.
 	pub fn new(blockchain: Arc<B>, fetcher: Arc<F>) -> Self {
-		RemoteCallExecutor { blockchain, fetcher, _hasher: PhantomData, _codec: PhantomData }
+		RemoteCallExecutor { blockchain, fetcher, _hasher: PhantomData }
 	}
 }
 
-impl<B, F, Block, H, C> CallExecutor<Block, H, C> for RemoteCallExecutor<B, F, H, C>
+impl<B, F, Block, H> CallExecutor<Block, H> for RemoteCallExecutor<B, F, H>
 where
 	Block: BlockT,
 	B: ChainBackend<Block>,
 	F: Fetcher<Block>,
 	H: Hasher,
-	H::Out: Ord + Encodable,
-	C: NodeCodec<H>
+	H::Out: Ord,
+
 {
 	type Error = ClientError;
 
@@ -100,7 +96,7 @@ where
 	}
 
 	fn call_at_state<
-		S: StateBackend<H, C>,
+		S: StateBackend<H>,
 		FF: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>
 	>(&self,
 		_state: &S,
@@ -112,7 +108,7 @@ where
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn prove_at_state<S: StateBackend<H, C>>(
+	fn prove_at_state<S: StateBackend<H>>(
 		&self,
 		_state: S,
 		_changes: &mut OverlayedChanges,
@@ -128,7 +124,7 @@ where
 }
 
 /// Check remote execution proof using given backend.
-pub fn check_execution_proof<Header, E, H, C>(
+pub fn check_execution_proof<Header, E, H>(
 	executor: &E,
 	request: &RemoteCallRequest<Header>,
 	remote_proof: Vec<Vec<u8>>
@@ -137,15 +133,15 @@ pub fn check_execution_proof<Header, E, H, C>(
 		Header: HeaderT,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		H::Out: Ord + Encodable + HeapSizeOf,
-		C: NodeCodec<H>,
+		H::Out: Ord + HeapSizeOf,
+	
 {
 	let local_state_root = request.header.state_root();
 	let mut root: H::Out = Default::default();
 	root.as_mut().copy_from_slice(local_state_root.as_ref());
 
 	let mut changes = OverlayedChanges::default();
-	let local_result = execution_proof_check::<H, C, _>(
+	let local_result = execution_proof_check::<H, _>(
 		root,
 		remote_proof,
 		&mut changes,
@@ -161,7 +157,6 @@ mod tests {
 	use test_client;
 	use executor::NativeExecutionDispatch;
 	use super::*;
-	use primitives::RlpCodec;
 
 	#[test]
 	fn execution_proof_is_generated_and_checked() {
@@ -176,7 +171,7 @@ mod tests {
 
 		// check remote execution proof locally
 		let local_executor = test_client::LocalExecutor::new();
-		check_execution_proof::<_, _, _, RlpCodec>(&local_executor, &RemoteCallRequest {
+		check_execution_proof(&local_executor, &RemoteCallRequest {
 			block: test_client::runtime::Hash::default(),
 			header: test_client::runtime::Header {
 				state_root: remote_block_storage_root.into(),

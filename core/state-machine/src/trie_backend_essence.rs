@@ -18,13 +18,11 @@
 //! from storage.
 
 use std::collections::HashMap;
-use std::marker::PhantomData;
 use std::ops::Deref;
 use std::sync::Arc;
-use hashdb::{Hasher, DBValue, AsHashDB, HashDB};
+use hash_db::{self, Hasher};
 use heapsize::HeapSizeOf;
-use memorydb::MemoryDB;
-use patricia_trie::{TrieDB, TrieError, Trie, NodeCodec};
+use trie::{TrieDB, Trie, MemoryDB, DBValue, TrieError};
 use changes_trie::Storage as ChangesTrieStorage;
 
 /// Patricia trie-based storage trait.
@@ -34,19 +32,17 @@ pub trait Storage<H: Hasher>: Send + Sync {
 }
 
 /// Patricia trie-based pairs storage essence.
-pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> {
+pub struct TrieBackendEssence<S: TrieBackendStorage<H>, H: Hasher> {
 	storage: S,
 	root: H::Out,
-	_codec: PhantomData<C>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackendEssence<S, H, C> where H::Out: HeapSizeOf {
+impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out: HeapSizeOf {
 	/// Create new trie-based backend.
 	pub fn new(storage: S, root: H::Out) -> Self {
 		TrieBackendEssence {
 			storage,
 			root,
-			_codec: Default::default(),
 		}
 	}
 
@@ -70,7 +66,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackendEssence<S,
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		TrieDB::<H, C>::new(&eph, &self.root).map_err(map_e)?
+		TrieDB::<H>::new(&eph, &self.root).map_err(map_e)?
 			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
 	}
 
@@ -82,8 +78,8 @@ impl<S: TrieBackendStorage<H>, H: Hasher, C: NodeCodec<H>> TrieBackendEssence<S,
 			overlay: &mut read_overlay,
 		};
 
-		let mut iter = move || -> Result<(), Box<TrieError<H::Out, C::Error>>> {
-			let trie = TrieDB::<H, C>::new(&eph, &self.root)?;
+		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
+			let trie = TrieDB::<H>::new(&eph, &self.root)?;
 			let mut iter = trie.iter()?;
 
 			iter.seek(prefix)?;
@@ -112,12 +108,18 @@ pub(crate) struct Ephemeral<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
 	overlay: &'a mut MemoryDB<H>,
 }
 
-impl<'a, S: TrieBackendStorage<H>, H: Hasher> AsHashDB<H> for Ephemeral<'a, S, H> where H::Out: HeapSizeOf {
-	fn as_hashdb(&self) -> &HashDB<H> { self }
-	fn as_hashdb_mut(&mut self) -> &mut HashDB<H> { self }
+impl<'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: 'a + Hasher
+> hash_db::AsHashDB<H, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
+	fn as_hash_db<'b>(&'b self) -> &'b (hash_db::HashDB<H, DBValue> + 'b) { self }
+	fn as_hash_db_mut<'b>(&'b mut self) -> &'b mut (hash_db::HashDB<H, DBValue> + 'b) { self }
 }
 
-impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
+impl<'a, S: TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
 	pub fn new(storage: &'a S, overlay: &'a mut MemoryDB<H>) -> Self {
 		Ephemeral {
 			storage,
@@ -126,7 +128,13 @@ impl<'a, S: 'a + TrieBackendStorage<H>, H: Hasher> Ephemeral<'a, S, H> {
 	}
 }
 
-impl<'a, S: TrieBackendStorage<H>, H: Hasher> HashDB<H> for Ephemeral<'a, S, H> where H::Out: HeapSizeOf {
+impl<'a,
+	S: 'a + TrieBackendStorage<H>,
+	H: Hasher
+> hash_db::HashDB<H, DBValue>
+	for Ephemeral<'a, S, H>
+	where H::Out: HeapSizeOf
+{
 	fn keys(&self) -> HashMap<H::Out, i32> {
 		self.overlay.keys() // TODO: iterate backing
 	}
@@ -137,7 +145,7 @@ impl<'a, S: TrieBackendStorage<H>, H: Hasher> HashDB<H> for Ephemeral<'a, S, H> 
 				if i <= 0 {
 					None
 				} else {
-					Some(val)
+					Some(val.clone())
 				}
 			}
 			None => match self.storage.get(&key) {
@@ -182,7 +190,7 @@ impl<H: Hasher> TrieBackendStorage<H> for Arc<Storage<H>> {
 // This implementation is used by test storage trie clients.
 impl<H: Hasher> TrieBackendStorage<H> for MemoryDB<H> {
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String> {
-		Ok(HashDB::<H>::get(self, key))
+		Ok(<Self as hash_db::HashDB<H, DBValue>>::get(self, key))
 	}
 }
 

@@ -23,9 +23,8 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
-use patricia_trie::NodeCodec;
-use hashdb::Hasher;
-use memorydb::MemoryDB;
+use hash_db::Hasher;
+use trie::MemoryDB;
 
 /// State of a new block.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,14 +48,14 @@ impl NewBlockState {
 }
 
 /// Block insertion operation. Keeps hold if the inserted block state and data.
-pub trait BlockImportOperation<Block, H, C>
+pub trait BlockImportOperation<Block, H>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>,
+
 {
 	/// Associated state backend type.
-	type State: StateBackend<H, C>;
+	type State: StateBackend<H>;
 
 	/// Returns pending state. Returns None for backends with locally-unavailable state data.
 	fn state(&self) -> error::Result<Option<&Self::State>>;
@@ -73,7 +72,7 @@ where
 	/// has been used to check justification of this block).
 	fn update_authorities(&mut self, authorities: Vec<AuthorityId>);
 	/// Inject storage data into the database.
-	fn update_storage(&mut self, update: <Self::State as StateBackend<H, C>>::Transaction) -> error::Result<()>;
+	fn update_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 	/// Inject changes trie data into the database.
@@ -88,18 +87,18 @@ where
 ///
 /// The same applies for live `BlockImportOperation`s: while an import operation building on a parent `P`
 /// is alive, the state for `P` should not be pruned.
-pub trait Backend<Block, H, C>: Send + Sync
+pub trait Backend<Block, H>: Send + Sync
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>,
+
 {
 	/// Associated block insertion operation type.
-	type BlockImportOperation: BlockImportOperation<Block, H, C>;
+	type BlockImportOperation: BlockImportOperation<Block, H>;
 	/// Associated blockchain backend type.
 	type Blockchain: ::blockchain::Backend<Block>;
 	/// Associated state backend type.
-	type State: StateBackend<H, C>;
+	type State: StateBackend<H>;
 	/// Changes trie storage.
 	type ChangesTrieStorage: StateChangesTrieStorage<H>;
 
@@ -123,17 +122,17 @@ where
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.
-pub trait LocalBackend<Block, H, C>: Backend<Block, H, C>
+pub trait LocalBackend<Block, H>: Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>,
+
 {}
 
 /// Mark for all Backend implementations, that are fetching required state data from remote nodes.
-pub trait RemoteBackend<Block, H, C>: Backend<Block, H, C>
+pub trait RemoteBackend<Block, H>: Backend<Block, H>
 where
 	Block: BlockT,
 	H: Hasher,
-	C: NodeCodec<H>,
+
 {}

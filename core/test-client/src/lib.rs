@@ -27,7 +27,7 @@ extern crate substrate_primitives as primitives;
 extern crate srml_support as runtime_support;
 extern crate sr_primitives as runtime_primitives;
 #[macro_use] extern crate substrate_executor as executor;
-extern crate hashdb;
+extern crate hash_db;
 
 pub extern crate substrate_client as client;
 pub extern crate substrate_keyring as keyring;
@@ -39,7 +39,7 @@ mod block_builder_ext;
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
 
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 
 mod local_executor {
 	#![allow(missing_docs)]
@@ -52,7 +52,7 @@ mod local_executor {
 pub use local_executor::LocalExecutor;
 
 /// Test client database backend.
-pub type Backend = client::in_mem::Backend<runtime::Block, Blake2Hasher, RlpCodec>;
+pub type Backend = client::in_mem::Backend<runtime::Block, Blake2Hasher>;
 
 /// Test client executor.
 pub type Executor = client::LocalCallExecutor<

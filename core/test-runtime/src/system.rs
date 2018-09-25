@@ -181,10 +181,10 @@ mod tests {
 	use codec::{Joiner, KeyedVec};
 	use keyring::Keyring;
 	use ::{Header, Digest, Extrinsic, Transfer};
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys;
 
-	fn new_test_ext() -> TestExternalities<Blake2Hasher, RlpCodec> {
+	fn new_test_ext() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
 			twox_128(b"latest").to_vec() => vec![69u8; 32],
 			twox_128(well_known_keys::AUTHORITY_COUNT).to_vec() => vec![].and(&3u32),
@@ -207,8 +207,8 @@ mod tests {
 		let h = Header {
 			parent_hash: [69u8; 32].into(),
 			number: 1,
-			state_root: hex!("0c22599e15fb5e052c84f79a2aab179ba6bb238218fd86bdd4a74ebcc87adfcd").into(),
-			extrinsics_root: hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into(),
+			state_root: hex!("3d6f3663e052a7d325d3ac6cdbd3cd4033132f5bfe5852d51d4e42e7021ee69b").into(),
+			extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 			digest: Digest { logs: vec![], },
 		};
 
@@ -235,8 +235,8 @@ mod tests {
 			header: Header {
 				parent_hash: [69u8; 32].into(),
 				number: 1,
-				state_root: hex!("0425393fd07e2a806cfd7e990ee91dc92fe6bba34eab2bf45d5be7d67e24d467").into(),
-				extrinsics_root: hex!("83fd59e8fe7cee53d7421713a09fe0abae1aec5f4db94fe5193737b12195f013").into(),
+				state_root: hex!("c3d2cc317b5897af4c7f65d76b028971ce9fad745678732ff6d42301b4245a9c").into(),
+				extrinsics_root: hex!("4e689a607609f69df099af82577ae6c5969c44f1afe33a43cd7af926eba42272").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![
@@ -260,8 +260,8 @@ mod tests {
 			header: Header {
 				parent_hash: b.header.hash(),
 				number: 2,
-				state_root: hex!("e32dd1d84d9133ca48078d2d83f2b0db19f9d47229ba98bf5ced0e9f86fac2c7").into(),
-				extrinsics_root: hex!("5d2d0a93201744f0df878c33b07da40cd38e24ac2358cc2811ea640835c31b68").into(),
+				state_root: hex!("2c822d948bb68d7f7a1976d4f827a276a95a3ba1c4c15dbfab3bafbeb85f2b4d").into(),
+				extrinsics_root: hex!("009268a854b21f339c53d3c7a6619a27f564703311d91f11f61573a7fed5ca1c").into(),
 				digest: Digest { logs: vec![], },
 			},
 			extrinsics: vec![

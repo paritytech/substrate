@@ -21,12 +21,10 @@ use runtime_primitives::traits::Block as BlockT;
 use state_machine::{self, OverlayedChanges, Ext,
 	CodeExecutor, ExecutionManager, native_when_possible};
 use executor::{RuntimeVersion, RuntimeInfo};
-use patricia_trie::NodeCodec;
-use hashdb::Hasher;
-use rlp::Encodable;
-use memorydb::MemoryDB;
+use hash_db::Hasher;
+use trie::MemoryDB;
 use codec::Decode;
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 use primitives::storage::well_known_keys;
 
 use backend;
@@ -42,12 +40,12 @@ pub struct CallResult {
 }
 
 /// Method call executor.
-pub trait CallExecutor<B, H, C>
+pub trait CallExecutor<B, H>
 where
 	B: BlockT,
 	H: Hasher,
-	H::Out: Ord + Encodable,
-	C: NodeCodec<H>,
+	H::Out: Ord,
+
 {
 	/// Externalities error type.
 	type Error: state_machine::Error;
@@ -70,7 +68,7 @@ where
 	///
 	/// No changes are made.
 	fn call_at_state<
-		S: state_machine::Backend<H, C>,
+		S: state_machine::Backend<H>,
 		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
 	>(&self,
 		state: &S,
@@ -83,7 +81,7 @@ where
 	/// Execute a call to a contract on top of given state, gathering execution proof.
 	///
 	/// No changes are made.
-	fn prove_at_state<S: state_machine::Backend<H, C>>(&self,
+	fn prove_at_state<S: state_machine::Backend<H>>(&self,
 		state: S,
 		overlay: &mut OverlayedChanges,
 		method: &str,
@@ -117,9 +115,9 @@ impl<B, E> Clone for LocalCallExecutor<B, E> where E: Clone {
 	}
 }
 
-impl<B, E, Block> CallExecutor<Block, Blake2Hasher, RlpCodec> for LocalCallExecutor<B, E>
+impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 where
-	B: backend::LocalBackend<Block, Blake2Hasher, RlpCodec>,
+	B: backend::LocalBackend<Block, Blake2Hasher>,
 	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 	Block: BlockT,
 {
@@ -160,7 +158,7 @@ where
 	}
 
 	fn call_at_state<
-		S: state_machine::Backend<Blake2Hasher, RlpCodec>,
+		S: state_machine::Backend<Blake2Hasher>,
 		F: FnOnce(Result<Vec<u8>, Self::Error>, Result<Vec<u8>, Self::Error>) -> Result<Vec<u8>, Self::Error>,
 	>(&self,
 		state: &S,
@@ -180,7 +178,7 @@ where
 		).map_err(Into::into)
 	}
 
-	fn prove_at_state<S: state_machine::Backend<Blake2Hasher, RlpCodec>>(&self,
+	fn prove_at_state<S: state_machine::Backend<Blake2Hasher>>(&self,
 		state: S,
 		changes: &mut OverlayedChanges,
 		method: &str,

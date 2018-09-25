@@ -23,20 +23,18 @@ use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, 
 use runtime_primitives::generic::BlockId;
 use {backend, error, Client, CallExecutor};
 use runtime_primitives::{ApplyResult, ApplyOutcome};
-use patricia_trie::NodeCodec;
-use primitives::{Blake2Hasher, RlpCodec};
-use hashdb::Hasher;
-use rlp::Encodable;
+use primitives::{Blake2Hasher};
+use hash_db::Hasher;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<B, E, Block, H, C>
+pub struct BlockBuilder<B, E, Block, H>
 where
-	B: backend::Backend<Block, H, C>,
-	E: CallExecutor<Block, H, C> + Clone,
+	B: backend::Backend<Block, H>,
+	E: CallExecutor<Block, H> + Clone,
 	Block: BlockT,
 	H: Hasher,
-	H::Out: Encodable + Ord,
-	C: NodeCodec<H>,
+	H::Out: Ord,
+
 {
 	header: <Block as BlockT>::Header,
 	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
@@ -45,10 +43,10 @@ where
 	changes: state_machine::OverlayedChanges,
 }
 
-impl<B, E, Block> BlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>
+impl<B, E, Block> BlockBuilder<B, E, Block, Blake2Hasher>
 where
-	B: backend::Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Clone,
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone,
 	Block: BlockT,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.

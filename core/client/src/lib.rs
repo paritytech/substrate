@@ -20,6 +20,7 @@
 #![recursion_limit="128"]
 
 extern crate substrate_bft as bft;
+extern crate substrate_trie as trie;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate sr_io as runtime_io;
@@ -33,12 +34,12 @@ extern crate substrate_state_machine as state_machine;
 extern crate fnv;
 extern crate futures;
 extern crate parking_lot;
-extern crate triehash;
-extern crate patricia_trie;
-extern crate hashdb;
+extern crate trie_root;
+extern crate trie_db;
+extern crate hash_db;
 extern crate rlp;
 extern crate heapsize;
-extern crate memorydb;
+extern crate memory_db;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
@@ -62,8 +63,7 @@ pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
 pub use client::{
 	new_in_mem,
 	BlockBody, BlockStatus, BlockOrigin, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	Client, ClientInfo, ChainHead,
-	ImportResult, JustifiedHeader,
+	Client, ClientInfo, ChainHead, ImportResult, JustifiedHeader,
 };
 pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;

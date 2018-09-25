@@ -14,5 +14,5 @@ substrate-primitives = { path = "../primitives" }
 srml-support = { path = "../../srml/support" }
 substrate-test-runtime = { path = "../test-runtime" }
 sr-primitives = { path = "../sr-primitives" }
-hashdb = "0.2.1"
+hash-db = { git = "https://github.com/paritytech/trie" }
 

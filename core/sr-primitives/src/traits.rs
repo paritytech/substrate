@@ -252,12 +252,12 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 		Encode::using_encoded(s, Self::hash)
 	}
 
-	/// Produce the patricia-trie root of a mapping from indices to byte slices.
+	/// Produce the trie-db root of a mapping from indices to byte slices.
 	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output;
 
 	/// Iterator-based version of `enumerated_trie_root`.
 	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
+		I: IntoIterator<Item = A> + Iterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output;
 
@@ -296,7 +296,7 @@ impl Hash for BlakeTwo256 {
 		runtime_io::trie_root::<Blake2Hasher, _, _, _>(input).into()
 	}
 	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
+		I: IntoIterator<Item = A> + Iterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output {
 		runtime_io::ordered_trie_root::<Blake2Hasher, _, _>(input).into()
