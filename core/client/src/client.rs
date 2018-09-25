@@ -205,7 +205,7 @@ pub fn new_with_backend<B, E, Block, S>(
 		S: BuildStorage,
 		Block: BlockT,
 		H256: From<Block::Hash>,
-		B: backend::LocalBackend<Block, KeccakHasher, RlpCodec>
+		B: backend::LocalBackend<Block, Blake2Hasher, RlpCodec>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), code_executor);
 	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible)
