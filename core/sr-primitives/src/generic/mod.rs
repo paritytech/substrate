@@ -37,9 +37,10 @@ pub use self::block::{Block, SignedBlock, BlockId};
 pub use self::digest::{Digest, DigestItem, DigestItemRef};
 
 use codec::Encode;
+use rstd::prelude::*;
 
 fn encode_with_vec_prefix<T: Encode, F: Fn(&mut Vec<u8>)>(encoder: F) -> Vec<u8> {
-	let size = ::std::mem::size_of::<T>();
+	let size = ::rstd::mem::size_of::<T>();
 	let reserve = match size {
 		0...0b00111111 => 1,
 		0...0b00111111_11111111 => 2,

@@ -141,18 +141,18 @@ where
 	Call: Encode,
 {
 	fn encode(&self) -> Vec<u8> {
-		super::encode_with_vec_prefix::<Self, _>(|mut v| {
+		super::encode_with_vec_prefix::<Self, _>(|v| {
 			// 1 byte version id.
 			match self.signature.as_ref() {
 				Some(s) => {
 					v.push(TRANSACTION_VERSION | 0b1000_0000);
-					s.encode_to(&mut v);
+					s.encode_to(v);
 				}
 				None => {
 					v.push(TRANSACTION_VERSION & 0b0111_1111);
 				}
 			}
-			self.function.encode_to(&mut v);
+			self.function.encode_to(v);
 		})
 	}
 }
