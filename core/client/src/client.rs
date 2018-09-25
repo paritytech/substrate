@@ -358,13 +358,17 @@ impl<B, E, Block> Client<B, E, Block> where
 		);
 		self.state_at(&parent).and_then(|state| {
 			let mut overlay = Default::default();
-			let execution_manager = || ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
-				warn!("   Function {:?}", function);
-				warn!("   Native result {:?}", native_result);
-				warn!("   Wasm result {:?}", wasm_result);
-				wasm_result
-			});
+			let execution_manager = || match self.execution_strategy {
+				ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+				ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+				ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+					warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
+					warn!("   Function {:?}", function);
+					warn!("   Native result {:?}", native_result);
+					warn!("   Wasm result {:?}", wasm_result);
+					wasm_result
+				}),
+			};
 			self.executor().call_at_state(
 				&state,
 				&mut overlay,

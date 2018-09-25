@@ -119,7 +119,7 @@ fn node_config<F: ServiceFactory> (
 		chain_spec: (*spec).clone(),
 		custom: Default::default(),
 		name: format!("Node {}", index),
-		execution_strategy: ExecutionStrategy::Both,
+		execution_strategy: ExecutionStrategy::NativeWhenPossible,
 		rpc_http: None,
 		rpc_ws: None,
 		telemetry_url: None,
@@ -156,7 +156,7 @@ impl<F: ServiceFactory> TestNet<F> {
 }
 
 pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
-	const NUM_NODES: u32 = 3;
+	const NUM_NODES: u32 = 10;
 	{
 		println!("Checking star topology");
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
@@ -195,8 +195,8 @@ where
 	F: ServiceFactory,
 	B: Fn(&F::FullService) -> (JustifiedHeader<F::Block>, Option<Vec<FactoryExtrinsic<F>>>),
 {
-	const NUM_NODES: u32 = 3;
-	const NUM_BLOCKS: usize = 2048;
+	const NUM_NODES: u32 = 10;
+	const NUM_BLOCKS: usize = 512;
 	println!("Checking block sync");
 	let temp = TempDir::new("substrate-sync-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, vec![], 30500);
@@ -216,7 +216,7 @@ where
 		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service| {
-		service.client().info().unwrap().chain.best_number == As::sa(2048)
+		service.client().info().unwrap().chain.best_number == As::sa(NUM_BLOCKS as u64)
 	});
 }
 
@@ -224,8 +224,8 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 where
 	F: ServiceFactory,
 {
-	const NUM_NODES: u32 = 3;
-	const NUM_BLOCKS: u64 = 6;
+	const NUM_NODES: u32 = 10;
+	const NUM_BLOCKS: u64 = 200;
 	println!("Checking consensus");
 	let temp = TempDir::new("substrate-conensus-test").expect("Error creating test dir");
 	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, authorities, 30600);
