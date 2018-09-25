@@ -69,7 +69,6 @@ use utils::{Meta, db_err, meta_keys, open_database, read_db, read_id, read_meta}
 use client::LeafSet;
 use state_db::StateDb;
 pub use state_db::PruningMode;
-use client::blockchain::Backend as BlockchainBackendT;
 
 const FINALIZATION_WINDOW: u64 = 32;
 
@@ -697,12 +696,7 @@ mod tests {
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use runtime_primitives::testing::{Header, Block as RawBlock};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieStorage};
-	use test_client::runtime::Transfer;
-	use test_client::{runtime as test_runtime, BlockBuilderExt};
-	use keyring::Keyring;
-	use test_client::{self, TestClient};
-	use client::blockchain::Backend as BlockchainBackendT;
-	use test_client::client::BlockOrigin;
+	use test_client;
 
 	type Block = RawBlock<u64>;
 

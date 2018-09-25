@@ -1,5 +1,23 @@
-/// tests that should hold for all implementations of certain traits.
-/// to test implementations without duplication.
+// Copyright 2018 Parity Technologies (UK) Ltd.
+// This file is part of Substrate.
+
+// Substrate is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+
+// Substrate is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+
+// You should have received a copy of the GNU General Public License
+// along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
+
+//! tests that should hold for all implementations of certain traits.
+//! to test implementations without duplication.
+
+#![allow(missing_docs)]
 
 use std::sync::Arc;
 use keyring::Keyring;
@@ -7,7 +25,7 @@ use client::BlockOrigin;
 use primitives::{Blake2Hasher, RlpCodec};
 use ::TestClient;
 use runtime_primitives::traits::Block as BlockT;
-use backend::{self, Backend as ClientBackendT};
+use backend;
 use blockchain::{Backend as BlockChainBackendT, HeaderBackend};
 use ::BlockBuilderExt;
 use runtime::{self, Transfer};

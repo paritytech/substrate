@@ -967,7 +967,6 @@ mod tests {
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::Transfer;
-	use test_client::blockchain::HeaderBackend;
 
 	#[test]
 	fn client_initialises_from_genesis_ok() {
