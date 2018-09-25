@@ -103,9 +103,9 @@ where
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
-		// will be a prefix of u32, which has the total number of bytes following (we don't need
+		// will be a prefix of vector length (we don't need
 		// to use this).
-		let _length_do_not_remove_me_see_above: u32 = Decode::decode(input)?;
+		let _length_do_not_remove_me_see_above: Vec<()> = Decode::decode(input)?;
 
 		Some(UncheckedExtrinsic {
 			signature: Decode::decode(input)?,
@@ -123,19 +123,10 @@ where
 	Call: Encode,
 {
 	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		// need to prefix with the total length as u32 to ensure it's binary comptible with
-		// Vec<u8>. we'll make room for it here, then overwrite once we know the length.
-		v.extend(&[0u8; 4]);
-
-		self.signature.encode_to(&mut v);
-		self.function.encode_to(&mut v);
-
-		let length = (v.len() - 4) as u32;
-		length.using_encoded(|s| v[0..4].copy_from_slice(s));
-
-		v
+		super::encode_with_vec_prefix::<Self, _>(|v| {
+			self.signature.encode_to(v);
+			self.function.encode_to(v);
+		})
 	}
 }
 
@@ -148,5 +139,22 @@ impl<Address, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Address,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2)), self.function)
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use codec::{Decode, Encode};
+	use super::UncheckedExtrinsic;
+
+	#[test]
+	fn encoding_matches_vec() {
+		type Extrinsic = UncheckedExtrinsic<u32, u32, u32, u32>;
+		let ex = Extrinsic::new_unsigned(42);
+		let encoded = ex.encode();
+		let decoded = Extrinsic::decode(&mut encoded.as_slice()).unwrap();
+		assert_eq!(decoded, ex);
+		let as_vec: Vec<u8> = Decode::decode(&mut encoded.as_slice()).unwrap();
+		assert_eq!(as_vec.encode(), encoded);
 	}
 }
