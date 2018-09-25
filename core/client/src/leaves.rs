@@ -1,7 +1,8 @@
 use std::collections::BTreeSet;
 use std::cmp::{Ord, Ordering};
 use kvdb::{KeyValueDB, DBTransaction};
-use runtime_primitives::traits::{SimpleArithmetic, Decode};
+use runtime_primitives::traits::SimpleArithmetic;
+use codec::Decode;
 use error;
 
 // TODO [snd] put prefix here
