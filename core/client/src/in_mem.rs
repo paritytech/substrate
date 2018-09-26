@@ -32,6 +32,7 @@ use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::InMemoryChangesTrieStorage;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
+use leaves::LeafSet;
 use trie::MemoryDB;
 
 struct PendingBlock<B: BlockT> {
@@ -69,7 +70,7 @@ impl<B: BlockT> StoredBlock<B> {
 	fn extrinsics(&self) -> Option<&[B::Extrinsic]> {
 		match *self {
 			StoredBlock::Header(_, _) => None,
-			StoredBlock::Full(ref b, _) => Some(b.extrinsics())
+			StoredBlock::Full(ref b, _) => Some(b.extrinsics()),
 		}
 	}
 
@@ -93,6 +94,7 @@ struct BlockchainStorage<Block: BlockT> {
 	finalized_hash: Block::Hash,
 	genesis_hash: Block::Hash,
 	cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
+	leaves: LeafSet<Block::Hash, NumberFor<Block>>,
 }
 
 /// In-memory blockchain. Supports concurrent reads.
@@ -139,6 +141,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				finalized_hash: Default::default(),
 				genesis_hash: Default::default(),
 				cht_roots: HashMap::new(),
+				leaves: LeafSet::new(),
 			}));
 		Blockchain {
 			storage: storage.clone(),
@@ -157,16 +160,50 @@ impl<Block: BlockT> Blockchain<Block> {
 		justification: Option<Justification<Block::Hash>>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
-	) {
+	) -> ::error::Result<()> {
 		let number = header.number().clone();
+		let best_tree_route = match new_state.is_best() {
+			false => None,
+			true => {
+				let best_hash = self.storage.read().best_hash;
+				if &best_hash == header.parent_hash() {
+					None
+				} else {
+					let route = ::blockchain::tree_route(
+						self,
+						BlockId::Hash(best_hash),
+						BlockId::Hash(*header.parent_hash()),
+					)?;
+					Some(route)
+				}
+			}
+		};
+
 		let mut storage = self.storage.write();
-		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
-		storage.hashes.insert(number, hash.clone());
+
+		storage.leaves.import(hash.clone(), number.clone(), header.parent_hash().clone());
 
 		if new_state.is_best() {
+			if let Some(tree_route) = best_tree_route {
+				// apply retraction and enaction when reorganizing up to parent hash
+				let enacted = tree_route.enacted();
+
+				for entry in enacted {
+					storage.hashes.insert(entry.number, entry.hash);
+				}
+
+				for entry in tree_route.retracted().iter().skip(enacted.len()) {
+					storage.hashes.remove(&entry.number);
+				}
+			}
+
 			storage.best_hash = hash.clone();
 			storage.best_number = number.clone();
+			storage.hashes.insert(number, hash.clone());
 		}
+
+		storage.blocks.insert(hash.clone(), StoredBlock::new(header, body, justification));
+
 		if let NewBlockState::Final = new_state {
 			storage.finalized_hash = hash;
 		}
@@ -174,6 +211,8 @@ impl<Block: BlockT> Blockchain<Block> {
 		if number == Zero::zero() {
 			storage.genesis_hash = hash;
 		}
+
+		Ok(())
 	}
 
 	/// Compare this blockchain with another in-mem blockchain
@@ -262,6 +301,10 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 	fn cache(&self) -> Option<&blockchain::Cache<Block>> {
 		Some(&self.cache)
 	}
+
+	fn leaves(&self) -> error::Result<Vec<Block::Hash>> {
+		Ok(self.storage.read().leaves.hashes())
+	}
 }
 
 impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
@@ -276,7 +319,7 @@ impl<Block: BlockT> light::blockchain::Storage<Block> for Blockchain<Block>
 	) -> error::Result<()> {
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
-		self.insert(hash, header, None, None, state);
+		self.insert(hash, header, None, None, state)?;
 		if state.is_best() {
 			self.cache.insert(parent_hash, authorities);
 		}
@@ -436,7 +479,7 @@ where
 				}
 			}
 
-			self.blockchain.insert(hash, header, justification, body, pending_block.state);
+			self.blockchain.insert(hash, header, justification, body, pending_block.state)?;
 			// dumb implementation - store value for each block
 			if pending_block.state.is_best() {
 				self.blockchain.cache.insert(parent_hash, operation.pending_authorities);
@@ -500,4 +543,27 @@ pub fn cache_authorities_at<Block: BlockT>(
 	authorities: Option<Vec<AuthorityId>>
 ) {
 	blockchain.cache.insert(at, authorities);
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+	use test_client;
+	use primitives::Blake2Hasher;
+
+	type TestBackend = test_client::client::in_mem::Backend<test_client::runtime::Block, Blake2Hasher>;
+
+	#[test]
+	fn test_leaves_with_complex_block_tree() {
+		let backend = Arc::new(TestBackend::new());
+
+		test_client::trait_tests::test_leaves_for_backend(backend);
+	}
+
+	#[test]
+	fn test_blockchain_query_by_number_gets_canonical() {
+		let backend = Arc::new(TestBackend::new());
+
+		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+	}
 }

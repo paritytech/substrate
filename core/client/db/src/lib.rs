@@ -48,6 +48,9 @@ extern crate log;
 extern crate parity_codec_derive;
 
 #[cfg(test)]
+extern crate substrate_test_client as test_client;
+
+#[cfg(test)]
 extern crate kvdb_memorydb;
 
 pub mod light;
@@ -74,6 +77,7 @@ use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
 use state_machine::{CodeExecutor, DBValue, ExecutionStrategy};
 use utils::{Meta, db_err, meta_keys, open_database, read_db, read_id, read_meta};
+use client::LeafSet;
 use state_db::StateDb;
 pub use state_db::PruningMode;
 
@@ -141,15 +145,18 @@ impl<'a> state_db::MetaDb for StateMetaDb<'a> {
 /// Block database
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<KeyValueDB>,
-	meta: RwLock<Meta<<Block::Header as HeaderT>::Number, Block::Hash>>,
+	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
+	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
 		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
+		let leaves = LeafSet::read_from_db(&*db, columns::HEADER, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
-			meta: RwLock::new(meta)
+			leaves: RwLock::new(leaves),
+			meta: RwLock::new(meta),
 		})
 	}
 
@@ -248,6 +255,10 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 
 	fn cache(&self) -> Option<&client::blockchain::Cache<Block>> {
 		None
+	}
+
+	fn leaves(&self) -> Result<Vec<Block::Hash>, client::error::Error> {
+		Ok(self.leaves.read().hashes())
 	}
 }
 
@@ -534,6 +545,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		let mut transaction = DBTransaction::new();
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
+			let parent_hash = *pending_block.header.parent_hash();
 			let number = pending_block.header.number().clone();
 
 			transaction.put(columns::HEADER, hash.as_ref(), &pending_block.header.encode());
@@ -549,7 +561,6 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 
 				// cannot find tree route with empty DB.
 				if meta.best_hash != Default::default() {
-					let parent_hash = *pending_block.header.parent_hash();
 					let tree_route = ::client::blockchain::tree_route(
 						&self.blockchain,
 						BlockId::Hash(meta.best_hash),
@@ -624,10 +635,25 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			debug!(target: "db", "DB Commit {:?} ({}), best = {}", hash, number,
 				pending_block.leaf_state.is_best());
 
-			self.storage.db.write(transaction).map_err(db_err)?;
+			{
+				let mut leaves = self.blockchain.leaves.write();
+				let displaced_leaf = leaves.import(hash, number, parent_hash);
+				leaves.prepare_transaction(&mut transaction, columns::HEADER, meta_keys::LEAF_PREFIX);
+
+				let write_result = self.storage.db.write(transaction).map_err(db_err);
+				if let Err(e) = write_result {
+					// revert leaves set update, if there was one.
+					if let Some(displaced_leaf) = displaced_leaf {
+						leaves.undo(displaced_leaf);
+					}
+					return Err(e);
+				}
+				drop(leaves);
+			}
+
 			self.blockchain.update_meta(
-				hash,
-				number,
+				hash.clone(),
+				number.clone(),
 				pending_block.leaf_state.is_best(),
 				finalized,
 			);
@@ -668,14 +694,15 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					apply_state_commit(&mut transaction, commit);
 					let removed = best.clone();
 					best -= As::sa(1);
-					let hash = self.blockchain.hash(best)?.ok_or_else(
+					let header = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::ErrorKind::UnknownBlock(
-							format!("Error reverting to {}. Block hash not found.", best)))?;
+							format!("Error reverting to {}. Block header not found.", best)))?;
 
-					transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
+					transaction.put(columns::META, meta_keys::BEST_BLOCK, header.hash().as_ref());
 					transaction.delete(columns::HASH_LOOKUP, &::utils::number_to_lookup_key(removed));
 					self.storage.db.write(transaction).map_err(db_err)?;
-					self.blockchain.update_meta(hash, best, true, false);
+					self.blockchain.update_meta(header.hash().clone(), best.clone(), true, false);
+					self.blockchain.leaves.write().revert(header.hash().clone(), header.number().clone(), header.parent_hash().clone());
 				}
 				None => return Ok(As::sa(c))
 			}
@@ -723,6 +750,7 @@ mod tests {
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use runtime_primitives::testing::{Header, Block as RawBlock};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieStorage};
+	use test_client;
 
 	type Block = RawBlock<u64>;
 
@@ -846,7 +874,7 @@ mod tests {
 
 			op.reset_storage(storage.iter().cloned()).unwrap();
 			op.set_block_data(
-				header,
+				header.clone(),
 				Some(vec![]),
 				None,
 				NewBlockState::Best,
@@ -1100,5 +1128,19 @@ mod tests {
 			assert!(tree_route.retracted().is_empty());
 			assert!(tree_route.enacted().is_empty());
 		}
+	}
+
+	#[test]
+	fn test_leaves_with_complex_block_tree() {
+		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20));
+
+		test_client::trait_tests::test_leaves_for_backend(backend);
+	}
+
+	#[test]
+	fn test_blockchain_query_by_number_gets_canonical() {
+		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20));
+
+		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
 	}
 }

@@ -48,6 +48,8 @@ pub mod meta_keys {
 	pub const BEST_AUTHORITIES: &[u8; 4] = b"auth";
 	/// Genesis block hash.
 	pub const GENESIS_HASH: &[u8; 3] = b"gen";
+	/// Leaves prefix list key.
+	pub const LEAF_PREFIX: &[u8; 4] = b"leaf";
 }
 
 /// Database metadata.

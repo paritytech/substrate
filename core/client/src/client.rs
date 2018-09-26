@@ -57,7 +57,7 @@ pub struct Client<B, E, Block> where Block: BlockT {
 	execution_strategy: ExecutionStrategy,
 }
 
-/// A source of blockchain evenets.
+/// A source of blockchain events.
 pub trait BlockchainEvents<Block: BlockT> {
 	/// Get block import event stream. Not guaranteed to be fired for every
 	/// imported block.
@@ -190,9 +190,25 @@ pub fn new_in_mem<E, Block, S>(
 		Block: BlockT,
 		H256: From<Block::Hash>,
 {
-	let backend = Arc::new(in_mem::Backend::new());
-	let executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
+	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
+}
+
+/// Create a client with the explicitely provided backend.
+/// This is useful for testing backend implementations.
+pub fn new_with_backend<B, E, Block, S>(
+	backend: Arc<B>,
+	executor: E,
+	build_genesis_storage: S,
+) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block>>
+	where
+		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+		S: BuildStorage,
+		Block: BlockT,
+		H256: From<Block::Hash>,
+		B: backend::LocalBackend<Block, Blake2Hasher>
+{
+	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
+	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible)
 }
 
 impl<B, E, Block> Client<B, E, Block> where
@@ -723,6 +739,105 @@ impl<B, E, Block> Client<B, E, Block> where
 		let info = self.backend.blockchain().info().map_err(|e| error::Error::from_blockchain(Box::new(e)))?;
 		Ok(self.header(&BlockId::Hash(info.best_hash))?.expect("Best block header must always exist"))
 	}
+
+	/// Get the most recent block hash of the best (longest) chains
+	/// that contain block with the given `target_hash`.
+	/// If `maybe_max_block_number` is `Some(max_block_number)`
+	/// the search is limited to block `numbers <= max_block_number`.
+	/// in other words as if there were no blocks greater `max_block_number`.
+	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
+	/// Returns `Ok(None)` if `target_hash` is not found in search space.
+	/// TODO [snd] write down time complexity
+	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>) -> error::Result<Option<Block::Hash>> {
+		let target_header = {
+			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
+				Some(x) => x,
+				// target not in blockchain
+				None => { return Ok(None); },
+			}
+		};
+
+		if let Some(max_number) = maybe_max_number {
+			// target outside search range
+			if target_header.number() > &max_number {
+				return Ok(None);
+			}
+		}
+
+		let (leaves, best_already_checked) = {
+			// ensure no blocks are imported during this code block.
+			// an import could trigger a reorg which could change the canonical chain.
+			// we depend on the canonical chain staying the same during this code block.
+			let _import_lock = self.import_lock.lock();
+
+			let info = self.backend.blockchain().info()?;
+
+			let canon_hash = self.backend.blockchain().hash(*target_header.number())?
+				.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", target_header.number())))?;
+
+			if canon_hash == target_hash {
+				if let Some(max_number) = maybe_max_number {
+					// something has to guarantee that max_number is in chain
+					return Ok(Some(self.backend.blockchain().hash(max_number)?.ok_or_else(|| error::Error::from(format!("failed to get hash for block number {}", max_number)))?));
+				} else {
+					return Ok(Some(info.best_hash));
+				}
+			}
+			(self.backend.blockchain().leaves()?, info.best_hash)
+		};
+
+		// for each chain. longest chain first. shortest last
+		for leaf_hash in leaves {
+			// ignore canonical chain which we already checked above
+			if leaf_hash == best_already_checked {
+				continue;
+			}
+
+			// start at the leaf
+			let mut current_hash = leaf_hash;
+
+			// if search is not restricted then the leaf is the best
+			let mut best_hash = leaf_hash;
+
+			// go backwards entering the search space
+			// waiting until we are <= max_number
+			if let Some(max_number) = maybe_max_number {
+				loop {
+					// TODO [snd] this should be a panic
+					let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
+						.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
+
+					if current_header.number() <= &max_number {
+						best_hash = current_header.hash();
+						break;
+					}
+
+					current_hash = *current_header.parent_hash();
+				}
+			}
+
+			// go backwards through the chain (via parent links)
+			loop {
+				// until we find target
+				if current_hash == target_hash {
+					return Ok(Some(best_hash));
+				}
+
+				// TODO [snd] this should be a panic
+				let current_header = self.backend.blockchain().header(BlockId::Hash(current_hash.clone()))?
+					.ok_or_else(|| error::Error::from(format!("failed to get header for hash {}", current_hash)))?;
+
+				// stop search in this chain once we go below the target's block number
+				if current_header.number() < target_header.number() {
+					break;
+				}
+
+				current_hash = *current_header.parent_hash();
+			}
+		}
+
+		unreachable!("this is a bug. `target_hash` is in blockchain but wasn't found following all leaves backwards");
+	}
 }
 
 impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
@@ -945,5 +1060,265 @@ mod tests {
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
 		assert_eq!(client.body(&BlockId::Number(1)).unwrap().unwrap().len(), 1)
+	}
+
+	#[test]
+	fn best_containing_with_genesis_block() {
+		// block tree:
+		// G
+
+		let client = test_client::new();
+
+		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+
+		assert_eq!(genesis_hash.clone(), client.best_containing(genesis_hash.clone(), None).unwrap().unwrap());
+	}
+
+	#[test]
+	fn best_containing_with_hash_not_found() {
+		// block tree:
+		// G
+
+		let client = test_client::new();
+
+		let uninserted_block = client.new_block().unwrap().bake().unwrap();
+
+		assert_eq!(None, client.best_containing(uninserted_block.hash().clone(), None).unwrap());
+	}
+
+	#[test]
+	fn best_containing_with_single_chain_3_blocks() {
+		// block tree:
+		// G -> A1 -> A2
+
+		let client = test_client::new();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		// A1 -> A2
+		let a2 = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+
+		assert_eq!(a2.hash(), client.best_containing(genesis_hash, None).unwrap().unwrap());
+		assert_eq!(a2.hash(), client.best_containing(a1.hash(), None).unwrap().unwrap());
+		assert_eq!(a2.hash(), client.best_containing(a2.hash(), None).unwrap().unwrap());
+	}
+
+	#[test]
+	fn best_containing_with_multiple_forks() {
+		// NOTE: we use the version of the trait from `test_client`
+		// because that is actually different than the version linked to
+		// in the test facade crate.
+		use test_client::blockchain::Backend as BlockchainBackendT;
+
+		// block tree:
+		// G -> A1 -> A2 -> A3 -> A4 -> A5
+		//      A1 -> B2 -> B3 -> B4
+		//	          B2 -> C3
+		//	    A1 -> D2
+		let client = test_client::new();
+
+		// G -> A1
+		let a1 = client.new_block().unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a1.clone()).unwrap();
+
+		// A1 -> A2
+		let a2 = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a2.clone()).unwrap();
+
+		// A2 -> A3
+		let a3 = client.new_block_at(&BlockId::Hash(a2.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a3.clone()).unwrap();
+
+		// A3 -> A4
+		let a4 = client.new_block_at(&BlockId::Hash(a3.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a4.clone()).unwrap();
+
+		// A4 -> A5
+		let a5 = client.new_block_at(&BlockId::Hash(a4.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, a5.clone()).unwrap();
+
+		// A1 -> B2
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		// this push is required as otherwise B2 has the same hash as A2 and won't get imported
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 41,
+			nonce: 0,
+		}).unwrap();
+		let b2 = builder.bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, b2.clone()).unwrap();
+
+		// B2 -> B3
+		let b3 = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, b3.clone()).unwrap();
+
+		// B3 -> B4
+		let b4 = client.new_block_at(&BlockId::Hash(b3.hash())).unwrap().bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, b4.clone()).unwrap();
+
+		// // B2 -> C3
+		let mut builder = client.new_block_at(&BlockId::Hash(b2.hash())).unwrap();
+		// this push is required as otherwise C3 has the same hash as B3 and won't get imported
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 1,
+			nonce: 1,
+		}).unwrap();
+		let c3 = builder.bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, c3.clone()).unwrap();
+
+		// A1 -> D2
+		let mut builder = client.new_block_at(&BlockId::Hash(a1.hash())).unwrap();
+		// this push is required as otherwise D2 has the same hash as B2 and won't get imported
+		builder.push_transfer(Transfer {
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Keyring::Ferdie.to_raw_public().into(),
+			amount: 1,
+			nonce: 0,
+		}).unwrap();
+		let d2 = builder.bake().unwrap();
+		client.justify_and_import(BlockOrigin::Own, d2.clone()).unwrap();
+
+		assert_eq!(client.info().unwrap().chain.best_hash, a5.hash());
+
+		let genesis_hash = client.info().unwrap().chain.genesis_hash;
+		let leaves = BlockchainBackendT::leaves(client.backend().blockchain()).unwrap();
+
+		assert!(leaves.contains(&a5.hash()));
+		assert!(leaves.contains(&b4.hash()));
+		assert!(leaves.contains(&c3.hash()));
+		assert!(leaves.contains(&d2.hash()));
+		assert_eq!(leaves.len(), 4);
+
+		// search without restriction
+
+		assert_eq!(a5.hash(), client.best_containing(genesis_hash, None).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a1.hash(), None).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a2.hash(), None).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a3.hash(), None).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a4.hash(), None).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a5.hash(), None).unwrap().unwrap());
+
+		assert_eq!(b4.hash(), client.best_containing(b2.hash(), None).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b3.hash(), None).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b4.hash(), None).unwrap().unwrap());
+
+		assert_eq!(c3.hash(), client.best_containing(c3.hash(), None).unwrap().unwrap());
+
+		assert_eq!(d2.hash(), client.best_containing(d2.hash(), None).unwrap().unwrap());
+
+
+		// search only blocks with number <= 5. equivalent to without restriction for this scenario
+
+		assert_eq!(a5.hash(), client.best_containing(genesis_hash, Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a1.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a2.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a3.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a4.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(a5.hash(), client.best_containing(a5.hash(), Some(5)).unwrap().unwrap());
+
+		assert_eq!(b4.hash(), client.best_containing(b2.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b3.hash(), Some(5)).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b4.hash(), Some(5)).unwrap().unwrap());
+
+		assert_eq!(c3.hash(), client.best_containing(c3.hash(), Some(5)).unwrap().unwrap());
+
+		assert_eq!(d2.hash(), client.best_containing(d2.hash(), Some(5)).unwrap().unwrap());
+
+
+		// search only blocks with number <= 4
+
+		assert_eq!(a4.hash(), client.best_containing(genesis_hash, Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a1.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a2.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a3.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(a4.hash(), client.best_containing(a4.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a5.hash(), Some(4)).unwrap());
+
+		assert_eq!(b4.hash(), client.best_containing(b2.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b3.hash(), Some(4)).unwrap().unwrap());
+		assert_eq!(b4.hash(), client.best_containing(b4.hash(), Some(4)).unwrap().unwrap());
+
+		assert_eq!(c3.hash(), client.best_containing(c3.hash(), Some(4)).unwrap().unwrap());
+
+		assert_eq!(d2.hash(), client.best_containing(d2.hash(), Some(4)).unwrap().unwrap());
+
+
+		// search only blocks with number <= 3
+
+		assert_eq!(a3.hash(), client.best_containing(genesis_hash, Some(3)).unwrap().unwrap());
+		assert_eq!(a3.hash(), client.best_containing(a1.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(a3.hash(), client.best_containing(a2.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(a3.hash(), client.best_containing(a3.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a4.hash(), Some(3)).unwrap());
+		assert_eq!(None, client.best_containing(a5.hash(), Some(3)).unwrap());
+
+		assert_eq!(b3.hash(), client.best_containing(b2.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(b3.hash(), client.best_containing(b3.hash(), Some(3)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(b4.hash(), Some(3)).unwrap());
+
+		assert_eq!(c3.hash(), client.best_containing(c3.hash(), Some(3)).unwrap().unwrap());
+
+		assert_eq!(d2.hash(), client.best_containing(d2.hash(), Some(3)).unwrap().unwrap());
+
+
+		// search only blocks with number <= 2
+
+		assert_eq!(a2.hash(), client.best_containing(genesis_hash, Some(2)).unwrap().unwrap());
+		assert_eq!(a2.hash(), client.best_containing(a1.hash(), Some(2)).unwrap().unwrap());
+		assert_eq!(a2.hash(), client.best_containing(a2.hash(), Some(2)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a3.hash(), Some(2)).unwrap());
+		assert_eq!(None, client.best_containing(a4.hash(), Some(2)).unwrap());
+		assert_eq!(None, client.best_containing(a5.hash(), Some(2)).unwrap());
+
+		assert_eq!(b2.hash(), client.best_containing(b2.hash(), Some(2)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(b3.hash(), Some(2)).unwrap());
+		assert_eq!(None, client.best_containing(b4.hash(), Some(2)).unwrap());
+
+		assert_eq!(None, client.best_containing(c3.hash(), Some(2)).unwrap());
+
+		assert_eq!(d2.hash(), client.best_containing(d2.hash(), Some(2)).unwrap().unwrap());
+
+
+		// search only blocks with number <= 1
+
+		assert_eq!(a1.hash(), client.best_containing(genesis_hash, Some(1)).unwrap().unwrap());
+		assert_eq!(a1.hash(), client.best_containing(a1.hash(), Some(1)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a2.hash(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(a3.hash(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(a4.hash(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(a5.hash(), Some(1)).unwrap());
+
+		assert_eq!(None, client.best_containing(b2.hash(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(b3.hash(), Some(1)).unwrap());
+		assert_eq!(None, client.best_containing(b4.hash(), Some(1)).unwrap());
+
+		assert_eq!(None, client.best_containing(c3.hash(), Some(1)).unwrap());
+
+		assert_eq!(None, client.best_containing(d2.hash(), Some(1)).unwrap());
+
+		// search only blocks with number <= 0
+
+		assert_eq!(genesis_hash, client.best_containing(genesis_hash, Some(0)).unwrap().unwrap());
+		assert_eq!(None, client.best_containing(a1.hash(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(a2.hash(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(a3.hash(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(a4.hash(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(a5.hash(), Some(0)).unwrap());
+
+		assert_eq!(None, client.best_containing(b2.hash(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(b3.hash(), Some(0)).unwrap());
+		assert_eq!(None, client.best_containing(b4.hash(), Some(0)).unwrap());
+
+		assert_eq!(None, client.best_containing(c3.hash().clone(), Some(0)).unwrap());
+
+		assert_eq!(None, client.best_containing(d2.hash().clone(), Some(0)).unwrap());
 	}
 }

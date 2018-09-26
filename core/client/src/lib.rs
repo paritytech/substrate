@@ -40,11 +40,13 @@ extern crate hash_db;
 extern crate rlp;
 extern crate heapsize;
 extern crate memory_db;
+extern crate kvdb;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
 #[cfg_attr(test, macro_use)] extern crate substrate_executor as executor;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
+#[cfg(test)] extern crate kvdb_memorydb;
 
 pub mod error;
 pub mod blockchain;
@@ -54,6 +56,7 @@ pub mod in_mem;
 pub mod genesis;
 pub mod block_builder;
 pub mod light;
+mod leaves;
 mod call_executor;
 mod client;
 mod notifications;
@@ -61,9 +64,11 @@ mod notifications;
 pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
 pub use client::{
+	new_with_backend,
 	new_in_mem,
 	BlockBody, BlockStatus, BlockOrigin, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	Client, ClientInfo, ChainHead, ImportResult, JustifiedHeader,
 };
 pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
+pub use leaves::LeafSet;

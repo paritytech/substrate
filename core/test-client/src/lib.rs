@@ -33,13 +33,22 @@ pub extern crate substrate_client as client;
 pub extern crate substrate_keyring as keyring;
 pub extern crate substrate_test_runtime as runtime;
 
-mod client_ext;
+pub mod client_ext;
+pub mod trait_tests;
 mod block_builder_ext;
+
+use std::sync::Arc;
 
 pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
+pub use client::blockchain;
+pub use client::backend;
+pub use executor::NativeExecutor;
 
-use primitives::{Blake2Hasher};
+use primitives::Blake2Hasher;
+use runtime_primitives::StorageMap;
+use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
+use keyring::Keyring;
 
 mod local_executor {
 	#![allow(missing_docs)]
@@ -62,5 +71,30 @@ pub type Executor = client::LocalCallExecutor<
 
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
-	TestClient::new_for_tests()
+	new_with_backend(Arc::new(Backend::new()))
+}
+
+/// Creates new client instance used for tests with an explicitely provided backend.
+/// This is useful for testing backend implementations.
+pub fn new_with_backend<B>(backend: Arc<B>) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block>
+	where
+		B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
+{
+	let executor = NativeExecutor::new();
+	client::new_with_backend(backend, executor, genesis_storage()).unwrap()
+}
+
+fn genesis_config() -> GenesisConfig {
+	GenesisConfig::new_simple(vec![
+		Keyring::Alice.to_raw_public().into(),
+		Keyring::Bob.to_raw_public().into(),
+		Keyring::Charlie.to_raw_public().into(),
+	], 1000)
+}
+
+fn genesis_storage() -> StorageMap {
+	let mut storage = genesis_config().genesis_map();
+	let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
+	storage.extend(additional_storage_with_genesis(&block));
+	storage
 }

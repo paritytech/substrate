@@ -150,4 +150,8 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 	fn cache(&self) -> Option<&BlockchainCache<Block>> {
 		self.storage.cache()
 	}
+
+	fn leaves(&self) -> ClientResult<Vec<Block::Hash>> {
+		unimplemented!()
+	}
 }

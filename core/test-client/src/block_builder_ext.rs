@@ -21,7 +21,6 @@ use client;
 use keyring;
 use runtime;
 
-use {Backend, Executor};
 use primitives::{Blake2Hasher};
 
 /// Extension trait for test block builder.
@@ -30,7 +29,11 @@ pub trait BlockBuilderExt {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 }
 
-impl BlockBuilderExt for client::block_builder::BlockBuilder<Backend, Executor, runtime::Block, Blake2Hasher> {
+impl<B, E> BlockBuilderExt for client::block_builder::BlockBuilder<B, E, runtime::Block, Blake2Hasher>
+    where
+        B: client::backend::Backend<runtime::Block, Blake2Hasher>,
+        E: client::CallExecutor<runtime::Block, Blake2Hasher> + Clone,
+{
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(sign_tx(transfer))
 	}
