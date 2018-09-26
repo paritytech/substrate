@@ -5,7 +5,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node networking protocol"
 
 [dependencies]
-node-api = { path = "../api" }
 node-consensus = { path = "../consensus" }
 node-primitives = { path = "../primitives" }
 substrate-bft = { path = "../../core/bft" }

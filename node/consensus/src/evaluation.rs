@@ -20,13 +20,11 @@ use super::MAX_TRANSACTIONS_SIZE;
 
 use codec::{Decode, Encode};
 use node_runtime::{Block as GenericBlock, CheckedBlock};
-use node_primitives::{Block, Hash, BlockNumber, Timestamp};
+use node_primitives::{Hash, BlockNumber, Timestamp};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
+
 
 error_chain! {
-	links {
-		Api(::node_api::Error, ::node_api::ErrorKind);
-	}
-
 	errors {
 		BadProposalFormat {
 			description("Proposal provided not a block."),
@@ -56,12 +54,16 @@ error_chain! {
 
 /// Attempt to evaluate a substrate block as a node block, returning error
 /// upon any initial validity checks failing.
-pub fn evaluate_initial(
+pub fn evaluate_initial<Block: BlockT, Hash>(
 	proposal: &Block,
 	now: Timestamp,
 	parent_hash: &Hash,
-	parent_number: BlockNumber,
-) -> Result<CheckedBlock> {
+	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
+) -> Result<CheckedBlock>
+where
+	Hash: PartialEq<<<GenericBlock as BlockT>::Header as HeaderT>::Hash>,
+	Hash: Into<self::Hash> + Clone,
+{
 	const MAX_TIMESTAMP_DRIFT: Timestamp = 60;
 
 	let encoded = Encode::encode(proposal);
@@ -77,12 +79,12 @@ pub fn evaluate_initial(
 		bail!(ErrorKind::ProposalTooLarge(transactions_size))
 	}
 
-	if proposal.header.parent_hash != *parent_hash {
-		bail!(ErrorKind::WrongParentHash(*parent_hash, proposal.header.parent_hash));
+	if *parent_hash != *proposal.header().parent_hash() {
+		bail!(ErrorKind::WrongParentHash((*parent_hash).clone().into(), proposal.header.parent_hash));
 	}
 
-	if proposal.header.number != parent_number + 1 {
-		bail!(ErrorKind::WrongNumber(parent_number + 1, proposal.header.number));
+	if parent_number.as_() + 1 != *proposal.header().number() {
+		bail!(ErrorKind::WrongNumber(parent_number.as_() + 1, proposal.header.number));
 	}
 
 	let block_timestamp = proposal.timestamp();
