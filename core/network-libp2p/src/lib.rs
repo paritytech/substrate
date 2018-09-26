@@ -54,8 +54,6 @@ use libp2p::PeerId;
 pub use connection_filter::{ConnectionFilter, ConnectionDirection};
 pub use error::{Error, ErrorKind, DisconnectReason};
 pub use libp2p::{Multiaddr, multiaddr::Protocol};
-pub use libp2p::{Multiaddr, multiaddr::AddrComponent};
-pub use ethkey::Secret;
 pub use traits::*;
 
 pub type TimerToken = usize;

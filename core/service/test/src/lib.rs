@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -60,13 +60,13 @@ impl<F: ServiceFactory> TestNet<F> {
 	pub fn run_until_all_full<P: Send + Sync + Fn(u32, &F::FullService) -> bool + 'static>(&mut self, predicate: P) {
 		let full_nodes = self.full_nodes.clone();
 		let interval = Interval::new_interval(Duration::from_millis(100)).map_err(|_| ()).for_each(move |_| {
-	   		if full_nodes.iter().all(|&(ref id, ref service)| predicate(*id, service)) {
+			if full_nodes.iter().all(|&(ref id, ref service)| predicate(*id, service)) {
 				Err(())
 			} else {
 				Ok(())
 			}
 		});
-		self.runtime.block_on(interval).expect("Error running tokio runtime");
+		self.runtime.block_on(interval).ok();
 	}
 }
 
@@ -112,7 +112,7 @@ fn node_config<F: ServiceFactory> (
 		impl_version: "0.1",
 		impl_commit: "",
 		roles: role,
-		extrinsic_pool: Default::default(),
+		transaction_pool: Default::default(),
 		network: network_config,
 		keystore_path: root.join("key").to_str().unwrap().into(),
 		database_path: root.join("db").to_str().unwrap().into(),

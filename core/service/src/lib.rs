@@ -95,7 +95,7 @@ pub struct Service<Components: components::Components> {
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	_rpc_http: Option<rpc::HttpServer>,
-	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not Sync, but the service needs tp be.
+	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
 	_telemetry: Option<tel::Telemetry>,
 }
 
