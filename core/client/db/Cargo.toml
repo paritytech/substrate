@@ -22,3 +22,5 @@ substrate-trie = { path = "../../trie" }
 
 [dev-dependencies]
 kvdb-memorydb = "0.1"
+substrate-keyring = { path = "../../keyring" }
+substrate-test-client = { path = "../../test-client" }

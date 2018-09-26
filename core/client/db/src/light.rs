@@ -24,7 +24,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 use client::backend::NewBlockState;
 use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
-use client::cht;
+use client::{cht, LeafSet};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
@@ -53,6 +53,7 @@ pub(crate) const AUTHORITIES_ENTRIES_TO_KEEP: u64 = cht::SIZE;
 pub struct LightStorage<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	meta: RwLock<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>>,
+	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	_cache: DbCache<Block>,
 }
 
@@ -92,10 +93,12 @@ impl<Block> LightStorage<Block>
 			columns::AUTHORITIES
 		)?;
 		let meta = RwLock::new(read_meta::<Block>(&*db, columns::HEADER)?);
+		let leaves = RwLock::new(LeafSet::read_from_db(&*db, columns::HEADER, meta_keys::LEAF_PREFIX)?);
 
 		Ok(LightStorage {
 			db,
 			meta,
+			leaves,
 			_cache: cache,
 		})
 	}
@@ -239,6 +242,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		let hash = header.hash();
 		let number = *header.number();
+		let parent_hash = *header.parent_hash();
 
 		transaction.put(columns::HEADER, hash.as_ref(), &header.encode());
 		transaction.put(columns::HASH_LOOKUP, &number_to_lookup_key(number), hash.as_ref());
@@ -250,7 +254,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			{
 				let meta = self.meta.read();
 				if meta.best_hash != Default::default() {
-					let parent_hash = *header.parent_hash();
 					let tree_route = ::client::blockchain::tree_route(
 						self,
 						BlockId::Hash(meta.best_hash),
@@ -294,8 +297,20 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			self.note_finalized(&mut transaction, &header, hash)?;
 		}
 
-		debug!("Light DB Commit {:?} ({})", hash, number);
-		self.db.write(transaction).map_err(db_err)?;
+		{
+			let mut leaves = self.leaves.write();
+			let displaced_leaf = leaves.import(hash, number, parent_hash);
+
+			debug!("Light DB Commit {:?} ({})", hash, number);
+			let write_result = self.db.write(transaction).map_err(db_err);
+			if let Err(e) = write_result {
+				// revert leaves set update if there was one.
+				if let Some(displaced_leaf) = displaced_leaf {
+					leaves.undo(displaced_leaf);
+				}
+				return Err(e);
+			}
+		}
 		self.update_meta(hash, number, leaf_state.is_best(), finalized);
 
 		Ok(())
