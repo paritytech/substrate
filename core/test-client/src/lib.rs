@@ -36,7 +36,7 @@ pub extern crate substrate_test_runtime as runtime;
 mod client_ext;
 mod block_builder_ext;
 
-pub use client_ext::TestClient;
+pub use client_ext::{TestClient, fake_justify};
 pub use block_builder_ext::BlockBuilderExt;
 
 use primitives::{Blake2Hasher};

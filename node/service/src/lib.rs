@@ -33,8 +33,6 @@ extern crate parity_codec as codec;
 extern crate tokio;
 #[cfg(test)]
 extern crate substrate_service_test as service_test;
-#[cfg(test)]
-extern crate sr_primitives as runtime_primitives;
 
 #[macro_use]
 extern crate log;
@@ -45,7 +43,7 @@ extern crate parking_lot;
 #[cfg(test)]
 extern crate substrate_bft as bft;
 #[cfg(test)]
-extern crate rhododendron;
+extern crate substrate_test_client;
 
 pub mod chain_spec;
 
@@ -208,17 +206,15 @@ impl<C: Components> ::std::ops::Deref for Service<C> {
 
 #[cfg(test)]
 mod tests {
-	use std::time;
 	use std::sync::Arc;
 	use parking_lot::RwLock;
 	use {service, service_test, Factory, chain_spec};
 	use consensus::{self, OfflineTracker};
 	use primitives::ed25519;
-	use node_primitives::{BlockId, Header, Hash, Block};
-	use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
-	use node_api::Api;
-	use bft::{self, Proposer};
-	use rhododendron;
+	use node_primitives::Block;
+	use bft::{Proposer, Environment};
+	use node_network::consensus::ConsensusNetwork;
+	use substrate_test_client::fake_justify;
 
 	#[test]
 	fn test_connectivity() {
@@ -229,31 +225,24 @@ mod tests {
 	fn test_sync() {
 		let alice = Arc::new(ed25519::Pair::from_seed(b"Alice                           "));
 		let bob = Arc::new(ed25519::Pair::from_seed(b"Bob                             "));
-		let authorities = vec![alice.clone(), bob.clone()];
 		let validators = vec![alice.public().0.into(), bob.public().0.into()];
+		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
 		let offline = Arc::new(RwLock::new(OfflineTracker::new()));
+		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let parent_hash = service.client().info().unwrap().chain.best_hash;
-			let parent_number = service.client().info().unwrap().chain.best_number;
-			let parent_id = BlockId::hash(parent_hash);
-			let random_seed = service.client().random_seed(&parent_id).unwrap();
-			let random_seed = BlakeTwo256::hash(&*random_seed);
-			let timestamp = time::SystemTime::now().duration_since(time::UNIX_EPOCH).unwrap().as_secs();
-			let proposer = consensus::Proposer {
+			let parent_header = service.client().header(&service.client().best_block_id().unwrap()).unwrap().unwrap();
+			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
+			let proposer_factory = consensus::ProposerFactory {
 				client: service.client().clone(),
-				start: time::Instant::now(),
-				local_key: alice.clone(),
-				parent_hash,
-				parent_id: parent_id,
-				parent_number: parent_number,
-				random_seed,
 				transaction_pool: service.transaction_pool().clone(),
+				network: consensus_net,
 				offline: offline.clone(),
-				validators: validators.clone(),
-				minimum_timestamp: timestamp,
+				force_delay: 0,
+				handle: dummy_runtime.executor(),
 			};
+			let (proposer, _, _) = proposer_factory.init(&parent_header, &validators, alice.clone()).unwrap();
 			let block = proposer.propose().expect("Error making test block");
-			let justification = justify(&block.header, authorities.as_slice());
+			let justification = fake_justify::<Block>(&block.header, &keys);
 			let justification = service.client().check_justification(block.header, justification).unwrap();
 			(justification, Some(block.extrinsics))
 		};
@@ -265,23 +254,4 @@ mod tests {
 		service_test::consensus::<Factory>(chain_spec::integration_test_config(), vec!["Alice".into(), "Bob".into()]);
 	}
 
-	fn justify(header: &Header, authorities: &[Arc<ed25519::Pair>]) -> bft::UncheckedJustification<Hash> {
-		let hash = header.hash();
-		bft::UncheckedJustification::new(
-			hash,
-			authorities.iter().map(|key| {
-				let msg = bft::sign_message::<Block>(
-					rhododendron::Vote::Commit(1, hash).into(),
-					key,
-					header.parent_hash
-					);
-
-				match msg {
-					rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
-					_ => panic!("signing vote leads to signed vote"),
-				}
-			}).collect(),
-			1,
-		)
-	}
 }

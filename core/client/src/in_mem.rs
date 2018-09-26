@@ -91,6 +91,7 @@ struct BlockchainStorage<Block: BlockT> {
 	best_hash: Block::Hash,
 	best_number: NumberFor<Block>,
 	finalized_hash: Block::Hash,
+	finalized_number: NumberFor<Block>,
 	genesis_hash: Block::Hash,
 	cht_roots: HashMap<NumberFor<Block>, Block::Hash>,
 }
@@ -137,6 +138,7 @@ impl<Block: BlockT> Blockchain<Block> {
 				best_hash: Default::default(),
 				best_number: Zero::zero(),
 				finalized_hash: Default::default(),
+				finalized_number: Zero::zero(),
 				genesis_hash: Default::default(),
 				cht_roots: HashMap::new(),
 			}));
@@ -169,6 +171,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		}
 		if let NewBlockState::Final = new_state {
 			storage.finalized_hash = hash;
+			storage.finalized_number = number.clone();
 		}
 
 		if number == Zero::zero() {
@@ -221,6 +224,7 @@ impl<Block: BlockT> HeaderBackend<Block> for Blockchain<Block> {
 			best_number: storage.best_number,
 			genesis_hash: storage.genesis_hash,
 			finalized_hash: storage.finalized_hash,
+			finalized_number: storage.finalized_number,
 		})
 	}
 

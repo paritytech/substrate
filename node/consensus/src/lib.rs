@@ -107,7 +107,7 @@ pub struct ProposerFactory<N, P>
 	/// Offline-tracker.
 	pub offline: SharedOfflineTracker,
 	/// Force delay in evaluation this long.
-	pub force_delay: u64,
+	pub force_delay: Timestamp,
 }
 
 impl<N, P> bft::Environment<Block> for ProposerFactory<N, P>
@@ -167,17 +167,17 @@ impl<N, P> bft::Environment<Block> for ProposerFactory<N, P>
 
 /// The proposer logic.
 pub struct Proposer<C: Api + Send + Sync> {
-	pub client: Arc<C>,
-	pub start: Instant,
-	pub local_key: Arc<ed25519::Pair>,
-	pub parent_hash: Hash,
-	pub parent_id: BlockId,
-	pub parent_number: BlockNumber,
-	pub random_seed: Hash,
-	pub transaction_pool: Arc<TransactionPool<C>>,
-	pub offline: SharedOfflineTracker,
-	pub validators: Vec<AccountId>,
-	pub minimum_timestamp: u64,
+	client: Arc<C>,
+	start: Instant,
+	local_key: Arc<ed25519::Pair>,
+	parent_hash: Hash,
+	parent_id: BlockId,
+	parent_number: BlockNumber,
+	random_seed: Hash,
+	transaction_pool: Arc<TransactionPool<C>>,
+	offline: SharedOfflineTracker,
+	validators: Vec<AccountId>,
+	minimum_timestamp: u64,
 }
 
 impl<C: Api + Send + Sync> Proposer<C> {
