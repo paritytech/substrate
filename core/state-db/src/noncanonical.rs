@@ -103,7 +103,7 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 			trace!(target: "state-db", "Finished reading uncanonicalized journal, {} entries", total);
 		}
 		Ok(NonCanonicalOverlay {
-			last_canonicalized: last_canonicalized,
+			last_canonicalized,
 			levels,
 			parents,
 			last_canonicalized_overlay: Default::default(),
@@ -212,8 +212,8 @@ impl<BlockHash: Hash, Key: Hash> NonCanonicalOverlay<BlockHash, Key> {
 				commit.data.inserted = self.last_canonicalized_overlay.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
 				commit.data.deleted = overlay.deleted;
 			} else {
-				// TODO: borrow checker won't allow us to split out mutable refernces
-				// required for recursive processing. A more efficient implementaion
+				// TODO: borrow checker won't allow us to split out mutable references
+				// required for recursive processing. A more efficient implementation
 				// that does not require converting to vector is possible
 				let mut vec: Vec<_> = self.levels.drain(..).collect();
 				Self::discard(&mut vec, &mut self.parents, &mut discarded_journals, 0, &overlay.hash);

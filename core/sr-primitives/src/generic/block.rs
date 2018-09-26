@@ -52,7 +52,7 @@ impl<Block: BlockT> Copy for BlockId<Block> {}
 
 #[cfg(feature = "std")]
 impl<Block: BlockT> fmt::Display for BlockId<Block> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{:?}", self)
 	}
 }
