@@ -32,7 +32,6 @@ extern crate substrate_trie;
 
 extern crate byteorder;
 extern crate parking_lot;
-extern crate rlp;
 extern crate heapsize;
 extern crate substrate_primitives as primitives;
 extern crate parity_codec as codec;
