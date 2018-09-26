@@ -239,6 +239,6 @@ where
 		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service| {
-		service.client().info().unwrap().chain.best_number == As::sa(NUM_BLOCKS)
+		service.client().info().unwrap().chain.best_number >= As::sa(NUM_BLOCKS)
 	});
 }
