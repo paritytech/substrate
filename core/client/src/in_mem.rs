@@ -70,7 +70,7 @@ impl<B: BlockT> StoredBlock<B> {
 	fn extrinsics(&self) -> Option<&[B::Extrinsic]> {
 		match *self {
 			StoredBlock::Header(_, _) => None,
-			StoredBlock::Full(ref b, _) => Some(b.extrinsics())
+			StoredBlock::Full(ref b, _) => Some(b.extrinsics()),
 		}
 	}
 
@@ -172,7 +172,7 @@ impl<Block: BlockT> Blockchain<Block> {
 					let route = ::blockchain::tree_route(
 						self,
 						BlockId::Hash(best_hash),
-						BlockId::Hash(*header.parent_hash())
+						BlockId::Hash(*header.parent_hash()),
 					)?;
 					Some(route)
 				}

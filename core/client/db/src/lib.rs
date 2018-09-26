@@ -137,7 +137,7 @@ impl<'a> state_db::MetaDb for StateMetaDb<'a> {
 pub struct BlockchainDb<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
-	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>
+	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 }
 
 impl<Block: BlockT> BlockchainDb<Block> {
@@ -147,7 +147,7 @@ impl<Block: BlockT> BlockchainDb<Block> {
 		Ok(BlockchainDb {
 			db,
 			leaves: RwLock::new(leaves),
-			meta: RwLock::new(meta)
+			meta: RwLock::new(meta),
 		})
 	}
 
