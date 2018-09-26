@@ -25,15 +25,18 @@ use std::time::{Duration, Instant, SystemTime};
 
 /// For each address we're connected to, a period of this duration increases the score by 1.
 const CONNEC_DURATION_PER_SCORE: Duration = Duration::from_secs(10);
+/// Maximum number of addresses for a given peer. If there are more than this number of addresses,
+/// the ones with a lower score will be removed.
+const MAX_ADDRESSES_PER_PEER: usize = 10;
 /// Maximum value for the score.
 const MAX_SCORE: u32 = 100;
 /// When we successfully connect to a node, raises its score to the given minimum value.
 const CONNECTED_MINIMUM_SCORE: u32 = 20;
 /// Initial score that a node discovered through Kademlia receives, where we have a hint that the
 /// node is reachable.
-const KADEMLIA_DISCOVERY_INITIAL_SCORE_CONNECTABLE: u32 = 15;
+const DISCOVERY_INITIAL_SCORE_CONNECTABLE: u32 = 15;
 /// Initial score that a node discovered through Kademlia receives, without any hint.
-const KADEMLIA_DISCOVERY_INITIAL_SCORE: u32 = 10;
+const DISCOVERY_INITIAL_SCORE: u32 = 10;
 /// Score adjustement when we fail to connect to an address.
 const SCORE_DIFF_ON_FAILED_TO_CONNECT: i32 = -1;
 /// Default time-to-live for addresses discovered through Kademlia.
@@ -43,6 +46,8 @@ const KADEMLIA_DISCOVERY_EXPIRATION: Duration = Duration::from_secs(2 * 3600);
 const EXPIRATION_PUSH_BACK_CONNEC: Duration = Duration::from_secs(2 * 3600);
 /// Initial score that a bootstrap node receives when registered.
 const BOOTSTRAP_NODE_SCORE: u32 = 100;
+/// Score modifier to apply on a peer that has been determined to be useless.
+const USELESS_PEER_SCORE_CHANGE: i32 = -9;
 /// Time to live of a boostrap node. This only applies if you start the node later *without*
 /// that bootstrap node configured anymore.
 const BOOTSTRAP_NODE_EXPIRATION: Duration = Duration::from_secs(24 * 3600);
@@ -110,6 +115,12 @@ impl NetTopology {
 		serialize(BufWriter::with_capacity(1024 * 1024, file), &self.store)
 	}
 
+	/// Returns the number of peers in the topology.
+	#[inline]
+	pub fn num_peers(&self) -> usize {
+		self.store.len()
+	}
+
 	/// Perform a cleanup pass, removing all obsolete addresses and peers.
 	///
 	/// This should be done from time to time.
@@ -123,10 +134,10 @@ impl NetTopology {
 		});
 	}
 
-	/// Returns the known potential addresses of a peer, ordered by score.
+	/// Returns the known potential addresses of a peer, ordered by score. Excludes backed-off
+	/// addresses.
 	///
 	/// The boolean associated to each address indicates whether we're connected to it.
-	// TODO: filter out backed off ones?
 	pub fn addrs_of_peer(&self, peer: &PeerId) -> impl Iterator<Item = (&Multiaddr, bool)> {
 		let peer = if let Some(peer) = self.store.get(peer) {
 			peer
@@ -135,10 +146,12 @@ impl NetTopology {
 			return Vec::new().into_iter();
 		};
 
-		let now = SystemTime::now();
+		let now_st = SystemTime::now();
+		let now_is = Instant::now();
+
 		let mut list = peer.addrs.iter().filter_map(move |addr| {
 			let (score, connected) = addr.score_and_is_connected();
-			if (addr.expires >= now && score > 0) || connected {
+			if (addr.expires >= now_st && score > 0 && addr.back_off_until < now_is) || connected {
 				Some((score, connected, &addr.addr))
 			} else {
 				None
@@ -164,18 +177,29 @@ impl NetTopology {
 		let mut instant = now + Duration::from_secs(3600);
 		let mut addrs_out = Vec::new();
 
-		for (peer, info) in &self.store {
+		let mut peer_addrs = Vec::new();
+
+		'peer_loop: for (peer, info) in &self.store {
+			peer_addrs.clear();
+
 			for addr in &info.addrs {
 				let (score, is_connected) = addr.score_and_is_connected();
+				if is_connected {
+					continue 'peer_loop;
+				}
 				if score == 0 || addr.expires < now_systime {
 					continue;
 				}
-				if !is_connected && addr.back_off_until > now {
+				if addr.back_off_until > now {
 					instant = cmp::min(instant, addr.back_off_until);
 					continue;
 				}
 
-				addrs_out.push(((peer, &addr.addr), score));
+				peer_addrs.push(((peer, &addr.addr), score));
+			}
+
+			for val in peer_addrs.drain(..) {
+				addrs_out.push(val);
 			}
 		}
 
@@ -218,48 +242,80 @@ impl NetTopology {
 		}
 	}
 
-	/// Adds an address discovered through the Kademlia DHT.
+	/// Adds addresses that a node says it is listening on.
 	///
-	/// This address is not necessarily valid and should expire after a TTL.
-	///
-	/// If `connectable` is true, that means we have some sort of hint that this node can
-	/// be reached.
-	pub fn add_kademlia_discovered_addr(
+	/// The addresses are most likely to be valid.
+	#[inline]
+	pub fn add_self_reported_listen_addrs<I>(
 		&mut self,
 		peer_id: &PeerId,
-		addr: Multiaddr,
-		connectable: bool
-	) {
+		addrs: I,
+	) where I: Iterator<Item = Multiaddr> {
+		self.add_discovered_addrs(peer_id, addrs.map(|a| (a, true)))
+	}
+
+	/// Adds addresses discovered through the Kademlia DHT.
+	///
+	/// The addresses are not necessarily valid and should expire after a TTL.
+	///
+	/// For each address, incorporates a boolean. If true, that means we have some sort of hint
+	/// that this address can be reached.
+	#[inline]
+	pub fn add_kademlia_discovered_addrs<I>(
+		&mut self,
+		peer_id: &PeerId,
+		addrs: I,
+	) where I: Iterator<Item = (Multiaddr, bool)> {
+		self.add_discovered_addrs(peer_id, addrs)
+	}
+
+	/// Inner implementaiton of the `add_*_discovered_addrs`.
+	fn add_discovered_addrs<I>(
+		&mut self,
+		peer_id: &PeerId,
+		addrs: I,
+	) where I: Iterator<Item = (Multiaddr, bool)> {
+		let mut addrs: Vec<_> = addrs.collect();
 		let now_systime = SystemTime::now();
 		let now = Instant::now();
 
 		let peer = peer_access(&mut self.store, peer_id);
 
-		let mut found = false;
 		peer.addrs.retain(|a| {
 			if a.expires < now_systime && !a.is_connected() {
 				return false;
 			}
-			if a.addr == addr {
-				found = true;
+			if let Some(pos) = addrs.iter().position(|&(ref addr, _)| addr == &a.addr) {
+				addrs.remove(pos);
 			}
 			true
 		});
 
-		if !found {
+		if !addrs.is_empty() {
 			trace!(
 				target: "sub-libp2p",
-				"Peer store: adding address {} for {:?} (connectable hint: {:?})",
-				addr,
+				"Peer store: adding addresses {:?} for {:?}",
+				addrs,
 				peer_id,
-				connectable
 			);
+		}
 
+		'addrs_inserter: for (addr, connectable) in addrs {
 			let initial_score = if connectable {
-				KADEMLIA_DISCOVERY_INITIAL_SCORE_CONNECTABLE
+				DISCOVERY_INITIAL_SCORE_CONNECTABLE
 			} else {
-				KADEMLIA_DISCOVERY_INITIAL_SCORE
+				DISCOVERY_INITIAL_SCORE
 			};
+
+			// Enforce `MAX_ADDRESSES_PER_PEER` before inserting, or skip this entry.
+			while peer.addrs.len() >= MAX_ADDRESSES_PER_PEER {
+				let pos = peer.addrs.iter().position(|addr| addr.score() <= initial_score);
+				if let Some(pos) = pos {
+					let _ = peer.addrs.remove(pos);
+				} else {
+					continue 'addrs_inserter;
+				}
+			}
 
 			peer.addrs.push(Addr {
 				addr,
@@ -325,7 +381,11 @@ impl NetTopology {
 	/// If we were indeed connected to this addr, then we can find out which peer ID it is.
 	pub fn report_disconnected(&mut self, addr: &Multiaddr, reason: DisconnectReason) {
 		let score_diff = match reason {
-			DisconnectReason::ClosedGracefully => -1,
+			DisconnectReason::NoSlot => -1,
+			DisconnectReason::FoundBetterAddr => -5,
+			DisconnectReason::RemoteClosed => -5,
+			DisconnectReason::Useless => -5,
+			DisconnectReason::Banned => -5,
 		};
 
 		for info in self.store.values_mut() {
@@ -354,8 +414,22 @@ impl NetTopology {
 			for a in info.addrs.iter_mut() {
 				if &a.addr == addr {
 					a.adjust_score(SCORE_DIFF_ON_FAILED_TO_CONNECT);
+					trace!(target: "sub-libp2p", "Back off for {} = {:?}", addr, a.next_back_off);
 					a.back_off_until = Instant::now() + a.next_back_off;
 					a.next_back_off = cmp::min(a.next_back_off * FAIL_BACKOFF_MULTIPLIER, MAX_BACKOFF);
+				}
+			}
+		}
+	}
+
+	/// Indicates the peer store that the given peer is useless.
+	///
+	/// This decreases the scores of the addresses of that peer.
+	pub fn report_useless(&mut self, peer: &PeerId) {
+		for (peer_in_store, info_in_store) in self.store.iter_mut() {
+			if peer == peer_in_store {
+				for addr in info_in_store.addrs.iter_mut() {
+					addr.adjust_score(USELESS_PEER_SCORE_CHANGE);
 				}
 			}
 		}
@@ -363,9 +437,19 @@ impl NetTopology {
 }
 
 /// Reason why we disconnected from a peer.
+#[derive(Debug)]
 pub enum DisconnectReason {
-	/// The disconnection was graceful.
-	ClosedGracefully,
+	/// No slot available locally anymore for this peer.
+	NoSlot,
+	/// A better way to connect to this peer has been found, therefore we disconnect from
+	/// the old one.
+	FoundBetterAddr,
+	/// The remote closed the connection.
+	RemoteClosed,
+	/// This node is considered useless for our needs. This includes time outs.
+	Useless,
+	/// The peer has been banned.
+	Banned,
 }
 
 fn peer_access<'a>(store: &'a mut FnvHashMap<PeerId, PeerInfo>, peer: &PeerId) -> &'a mut PeerInfo {
