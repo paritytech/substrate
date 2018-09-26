@@ -58,7 +58,7 @@ error_chain! {
 			display("Current state of blockchain has invalid authorities set"),
 		}
 
-		/// Cound not get runtime version.
+		/// Could not get runtime version.
 		VersionInvalid {
 			description("Runtime version error"),
 			display("On-chain runtime does not specify version"),
