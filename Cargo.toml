@@ -60,7 +60,6 @@ members = [
 	"core/trie",
 	"core/keystore",
 	"node/cli",
-	"node/api",
 	"node/consensus",
 	"node/executor",
 	"node/network",

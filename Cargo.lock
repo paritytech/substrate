@@ -1587,18 +1587,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "node-api"
-version = "0.1.0"
-dependencies = [
- "node-primitives 0.1.0",
- "node-runtime 0.1.0",
- "sr-primitives 0.1.0",
- "substrate-client 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
-]
-
-[[package]]
 name = "node-cli"
 version = "0.1.0"
 dependencies = [
@@ -1617,7 +1605,6 @@ dependencies = [
  "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-api 0.1.0",
  "node-primitives 0.1.0",
  "node-runtime 0.1.0",
  "node-transaction-pool 0.1.0",
@@ -1625,6 +1612,7 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
+ "srml-system 0.1.0",
  "substrate-bft 0.1.0",
  "substrate-client 0.1.0",
  "substrate-keyring 0.1.0",
@@ -1664,7 +1652,6 @@ version = "0.1.0"
 dependencies = [
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-api 0.1.0",
  "node-consensus 0.1.0",
  "node-primitives 0.1.0",
  "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1729,7 +1716,6 @@ dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-api 0.1.0",
  "node-consensus 0.1.0",
  "node-executor 0.1.0",
  "node-network 0.1.0",
@@ -1753,7 +1739,6 @@ version = "0.1.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-api 0.1.0",
  "node-primitives 0.1.0",
  "node-runtime 0.1.0",
  "parity-codec 2.0.1 (registry+https://github.com/rust-lang/crates.io-index)",

@@ -7,7 +7,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 log = "0.3.0"
 error-chain = "0.12"
 parking_lot = "0.4"
-node-api = { path = "../api" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 substrate-client = { path = "../../core/client" }

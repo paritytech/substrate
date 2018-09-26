@@ -11,7 +11,6 @@ error-chain = "0.12"
 log = "0.3"
 exit-future = "0.1"
 rhododendron = "0.3"
-node-api = { path = "../api" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 node-transaction-pool = { path = "../transaction-pool" }
@@ -20,6 +19,7 @@ parity-codec = { version = "2.0" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-client = { path = "../../core/client" }
 sr-primitives = { path = "../../core/sr-primitives" }
+srml-system = { path = "../../srml/system" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../core/keyring" }
