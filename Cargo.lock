@@ -1587,18 +1587,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "node-api"
-version = "0.1.0"
-dependencies = [
- "node-primitives 0.1.0",
- "node-runtime 0.1.0",
- "sr-primitives 0.1.0",
- "substrate-client 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
-]
-
-[[package]]
 name = "node-cli"
 version = "0.1.0"
 dependencies = [
@@ -1617,7 +1605,6 @@ dependencies = [
  "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-api 0.1.0",
  "node-primitives 0.1.0",
  "node-runtime 0.1.0",
  "node-transaction-pool 0.1.0",
@@ -1729,7 +1716,6 @@ dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.0.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-api 0.1.0",
  "node-consensus 0.1.0",
  "node-executor 0.1.0",
  "node-network 0.1.0",
