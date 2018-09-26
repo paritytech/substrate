@@ -22,7 +22,7 @@ use bft;
 use substrate_primitives::ed25519;
 use substrate_network::{self as net, generic_message as msg};
 use substrate_network::consensus_gossip::ConsensusMessage;
-use node_consensus::{Client as ClientApi, Network};
+use node_consensus::{AuthoringApi, Network};
 use node_primitives::{Block, Hash, SessionKey};
 use rhododendron;
 
@@ -247,7 +247,7 @@ impl<P> Clone for ConsensusNetwork<P> {
 }
 
 /// A long-lived network which can create parachain statement and BFT message routing processes on demand.
-impl<P: ClientApi + Send + Sync + 'static> Network for ConsensusNetwork<P> {
+impl<P: AuthoringApi + Send + Sync + 'static> Network for ConsensusNetwork<P> {
 	/// The input stream of BFT messages. Should never logically conclude.
 	type Input = InputAdapter;
 	/// The output sink of BFT messages. Messages sent here should eventually pass to all

@@ -43,7 +43,7 @@ use transaction_pool::TransactionPool;
 use node_primitives::{Block, Hash};
 use node_runtime::GenesisConfig;
 use client::Client;
-use consensus::Client as ConsensusApi;
+use consensus::AuthoringApi;
 use node_network::{Protocol as DemoProtocol, consensus::ConsensusNetwork};
 use transaction_pool::Client as TPApi;
 use tokio::runtime::TaskExecutor;
@@ -63,7 +63,7 @@ pub type NetworkService = network::Service<Block, <Factory as service::ServiceFa
 /// A collection of type to generalise specific components over full / light client.
 pub trait Components: service::Components {
 	/// Demo API.
-	type Api: 'static + ConsensusApi + TPApi + Send + Sync;
+	type Api: 'static + AuthoringApi + TPApi + Send + Sync;
 	/// Client backend.
 	type Backend: 'static + client::backend::Backend<Block, Blake2Hasher>;
 	/// Client executor.

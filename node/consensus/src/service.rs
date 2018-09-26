@@ -35,7 +35,7 @@ use tokio::runtime::TaskExecutor as ThreadPoolHandle;
 use tokio::runtime::current_thread::Runtime as LocalRuntime;
 use tokio::timer::Interval;
 
-use super::{Network, ProposerFactory, Client};
+use super::{Network, ProposerFactory, AuthoringApi};
 use error;
 
 const TIMER_DELAY_MS: u64 = 5000;
@@ -81,15 +81,15 @@ impl Service {
 		key: ed25519::Pair,
 	) -> Service
 		where
-			A: Client + TPClient<Block = <A as Client>::Block> + 'static,
-			C: BlockchainEvents<<A as Client>::Block>
-				+ ChainHead<<A as Client>::Block>
-				+ BlockBody<<A as Client>::Block>,
-			C: bft::BlockImport<<A as Client>::Block>
-				+ bft::Authorities<<A as Client>::Block> + Send + Sync + 'static,
-			primitives::H256: From<<<A as Client>::Block as BlockT>::Hash>,
-			<<A as Client>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,
-			N: Network<Block = <A as Client>::Block> + Send + 'static,
+			A: AuthoringApi + TPClient<Block = <A as AuthoringApi>::Block> + 'static,
+			C: BlockchainEvents<<A as AuthoringApi>::Block>
+				+ ChainHead<<A as AuthoringApi>::Block>
+				+ BlockBody<<A as AuthoringApi>::Block>,
+			C: bft::BlockImport<<A as AuthoringApi>::Block>
+				+ bft::Authorities<<A as AuthoringApi>::Block> + Send + Sync + 'static,
+			primitives::H256: From<<<A as AuthoringApi>::Block as BlockT>::Hash>,
+			<<A as AuthoringApi>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,
+			N: Network<Block = <A as AuthoringApi>::Block> + Send + 'static,
 	{
 		use parking_lot::RwLock;
 		use super::OfflineTracker;

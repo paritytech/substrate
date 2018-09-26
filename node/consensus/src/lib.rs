@@ -4,6 +4,7 @@
 
 // Substrate is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
+
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
@@ -87,7 +88,7 @@ pub trait BlockBuilder<Block: BlockT> {
 }
 
 /// Local client abstraction for the consensus.
-pub trait Client: Send + Sync {
+pub trait AuthoringApi: Send + Sync {
 	/// The block used for this API type.
 	type Block: BlockT;
 	/// The block builder for this API type.
@@ -128,7 +129,7 @@ impl<B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<B,
 	}
 }
 
-impl<B, E, Block> Client for SubstrateClient<B, E, Block> where
+impl<B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT,
@@ -198,7 +199,7 @@ pub trait Network {
 
 /// Proposer factory.
 pub struct ProposerFactory<N, C> where
-	C: Client + TPClient,
+	C: AuthoringApi + TPClient,
 {
 	/// The client instance.
 	pub client: Arc<C>,
@@ -212,10 +213,10 @@ pub struct ProposerFactory<N, C> where
 	pub offline: SharedOfflineTracker,
 }
 
-impl<N, C> bft::Environment<<C as Client>::Block> for ProposerFactory<N, C> where
-	N: Network<Block=<C as Client>::Block>,
-	C: Client + TPClient<Block=<C as Client>::Block>,
-	<<C as Client>::Block as BlockT>::Hash:
+impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C> where
+	N: Network<Block=<C as AuthoringApi>::Block>,
+	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
+	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
 {
 	type Proposer = Proposer<C>;
@@ -225,7 +226,7 @@ impl<N, C> bft::Environment<<C as Client>::Block> for ProposerFactory<N, C> wher
 
 	fn init(
 		&self,
-		parent_header: &<<C as Client>::Block as BlockT>::Header,
+		parent_header: &<<C as AuthoringApi>::Block as BlockT>::Header,
 		authorities: &[AuthorityId],
 		sign_with: Arc<ed25519::Pair>,
 	) -> Result<(Self::Proposer, Self::Input, Self::Output)> {
@@ -236,7 +237,7 @@ impl<N, C> bft::Environment<<C as Client>::Block> for ProposerFactory<N, C> wher
 
 		let id = BlockId::hash(parent_hash);
 		let random_seed = self.client.random_seed(&id)?;
-		let random_seed = <<<C as Client>::Block as BlockT>::Header as HeaderT>::Hashing::hash(random_seed.as_ref());
+		let random_seed = <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Hashing::hash(random_seed.as_ref());
 
 		let validators = self.client.validators(&id)?;
 		self.offline.write().note_new_block(&validators[..]);
@@ -270,21 +271,21 @@ impl<N, C> bft::Environment<<C as Client>::Block> for ProposerFactory<N, C> wher
 }
 
 /// The proposer logic.
-pub struct Proposer<C: Client + TPClient> {
+pub struct Proposer<C: AuthoringApi + TPClient> {
 	client: Arc<C>,
 	start: Instant,
 	local_key: Arc<ed25519::Pair>,
-	parent_hash: <<C as Client>::Block as BlockT>::Hash,
-	parent_id: BlockId<<C as Client>::Block>,
-	parent_number: <<<C as Client>::Block as BlockT>::Header as HeaderT>::Number,
-	random_seed: <<C as Client>::Block as BlockT>::Hash,
+	parent_hash: <<C as AuthoringApi>::Block as BlockT>::Hash,
+	parent_id: BlockId<<C as AuthoringApi>::Block>,
+	parent_number: <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Number,
+	random_seed: <<C as AuthoringApi>::Block as BlockT>::Hash,
 	transaction_pool: Arc<TransactionPool<C>>,
 	offline: SharedOfflineTracker,
 	validators: Vec<AccountId>,
 	minimum_timestamp: u64,
 }
 
-impl<C: Client + TPClient> Proposer<C> {
+impl<C: AuthoringApi + TPClient> Proposer<C> {
 	fn primary_index(&self, round_number: usize, len: usize) -> usize {
 		use primitives::uint::U256;
 
@@ -295,16 +296,16 @@ impl<C: Client + TPClient> Proposer<C> {
 	}
 }
 
-impl<C> bft::Proposer<<C as Client>::Block> for Proposer<C> where
-	C: Client + TPClient<Block=<C as Client>::Block>,
-	<<C as Client>::Block as BlockT>::Hash:
+impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
+	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
+	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
 {
-	type Create = Result<<C as Client>::Block>;
+	type Create = Result<<C as AuthoringApi>::Block>;
 	type Error = Error;
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
-	fn propose(&self) -> Result<<C as Client>::Block> {
+	fn propose(&self) -> Result<<C as AuthoringApi>::Block> {
 		use runtime_primitives::traits::BlakeTwo256;
 
 		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
@@ -362,7 +363,7 @@ impl<C> bft::Proposer<<C as Client>::Block> for Proposer<C> where
 
 		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
 			  block.header().number(),
-			  <<C as Client>::Block as BlockT>::Hash::from(block.header().hash()),
+			  <<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
 			  block.header().parent_hash(),
 			  block.extrinsics().iter()
 			  .map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
@@ -383,7 +384,7 @@ impl<C> bft::Proposer<<C as Client>::Block> for Proposer<C> where
 		Ok(substrate_block)
 	}
 
-	fn evaluate(&self, unchecked_proposal: &<C as Client>::Block) -> Self::Evaluate {
+	fn evaluate(&self, unchecked_proposal: &<C as AuthoringApi>::Block) -> Self::Evaluate {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
 		let current_timestamp = current_timestamp();
@@ -461,7 +462,7 @@ impl<C> bft::Proposer<<C as Client>::Block> for Proposer<C> where
 		proposer
 	}
 
-	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<<<C as Client>::Block as BlockT>::Hash>)>) {
+	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>) {
 		use rhododendron::Misbehavior as GenericMisbehavior;
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
@@ -472,7 +473,7 @@ impl<C> bft::Proposer<<C as Client>::Block> for Proposer<C> where
 				.filter(|tx| tx.verified.sender == local_id)
 				.last()
 				.map(|tx| Ok(tx.verified.index()))
-				.unwrap_or_else(|| Client::index(self.client.as_ref(), &self.parent_id, local_id))
+				.unwrap_or_else(|| AuthoringApi::index(self.client.as_ref(), &self.parent_id, local_id))
 			);
 
 			match cur_index {
@@ -511,8 +512,8 @@ impl<C> bft::Proposer<<C as Client>::Block> for Proposer<C> where
 				signature: Some((node_runtime::RawAddress::Id(local_id), signature, payload.0, Era::immortal())),
 				function: payload.1,
 			};
-			let uxt: <<C as Client>::Block as BlockT>::Extrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
-			let hash = BlockId::<<C as Client>::Block>::hash(self.parent_hash);
+			let uxt: <<C as AuthoringApi>::Block as BlockT>::Extrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
+			let hash = BlockId::<<C as AuthoringApi>::Block>::hash(self.parent_hash);
 			self.transaction_pool.submit_one(&hash, uxt)
 				.expect("locally signed extrinsic is valid; qed");
 		}
