@@ -21,7 +21,6 @@
 use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
-use std::ops::Add;
 
 use bft::{self, BftService};
 use client::{BlockchainEvents, ChainHead, BlockBody};
@@ -88,8 +87,6 @@ impl Service {
 				+ BlockBody<<A as Client>::Block>,
 			C: bft::BlockImport<<A as Client>::Block>
 				+ bft::Authorities<<A as Client>::Block> + Send + Sync + 'static,
-			<<<A as Client>::Block as BlockT>::Header as HeaderT>::Number:
-	Add<u64, Output=<<<A as Client>::Block as BlockT>::Header as HeaderT>::Number> + PartialEq<u64> + Into<u64>,
 			primitives::H256: From<<<A as Client>::Block as BlockT>::Hash>,
 			<<A as Client>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,
 			N: Network<Block = <A as Client>::Block> + Send + 'static,

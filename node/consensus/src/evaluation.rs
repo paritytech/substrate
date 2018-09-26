@@ -21,9 +21,8 @@ use super::MAX_TRANSACTIONS_SIZE;
 use codec::{Decode, Encode};
 use node_runtime::{Block as GenericBlock, CheckedBlock};
 use node_primitives::{Hash, BlockNumber, Timestamp};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
 
-use std::ops::Add;
 
 error_chain! {
 	errors {
@@ -62,9 +61,6 @@ pub fn evaluate_initial<Block: BlockT, Hash>(
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 ) -> Result<CheckedBlock>
 where
-	<<Block as BlockT>::Header as HeaderT>::Number: Add<u64, Output=<<Block as BlockT>::Header as HeaderT>::Number>,
-	<<Block as BlockT>::Header as HeaderT>::Number: PartialEq<u64>,
-	<<Block as BlockT>::Header as HeaderT>::Number: Into<u64>,
 	Hash: PartialEq<<<GenericBlock as BlockT>::Header as HeaderT>::Hash>,
 	Hash: Into<self::Hash> + Clone,
 {
@@ -87,8 +83,8 @@ where
 		bail!(ErrorKind::WrongParentHash((*parent_hash).clone().into(), proposal.header.parent_hash));
 	}
 
-	if parent_number + 1 != *proposal.header().number() {
-		bail!(ErrorKind::WrongNumber((parent_number + 1).into(), proposal.header.number));
+	if parent_number.as_() + 1 != *proposal.header().number() {
+		bail!(ErrorKind::WrongNumber(parent_number.as_() + 1, proposal.header.number));
 	}
 
 	let block_timestamp = proposal.timestamp();

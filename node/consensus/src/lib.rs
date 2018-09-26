@@ -45,14 +45,13 @@ extern crate substrate_keyring;
 
 use std::sync::Arc;
 use std::time::{self, Duration, Instant};
-use std::ops::Add;
 
 use client::{Client as SubstrateClient, CallExecutor};
 use codec::{Decode, Encode};
 use node_primitives::{AccountId, Timestamp, SessionKey, InherentData};
 use node_runtime::Runtime;
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As};
 use runtime_primitives::generic::{BlockId, Era};
 use srml_system::Trait as SystemT;
 use transaction_pool::{TransactionPool, Client as TPClient};
@@ -216,10 +215,6 @@ pub struct ProposerFactory<N, C> where
 impl<N, C> bft::Environment<<C as Client>::Block> for ProposerFactory<N, C> where
 	N: Network<Block=<C as Client>::Block>,
 	C: Client + TPClient<Block=<C as Client>::Block>,
-	<<<C as Client>::Block as BlockT>::Header as HeaderT>::Number:
-		Add<u64, Output=<<<C as Client>::Block as BlockT>::Header as HeaderT>::Number>
-		+ PartialEq<u64>
-		+ Into<u64>,
 	<<C as Client>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
 {
@@ -302,10 +297,6 @@ impl<C: Client + TPClient> Proposer<C> {
 
 impl<C> bft::Proposer<<C as Client>::Block> for Proposer<C> where
 	C: Client + TPClient<Block=<C as Client>::Block>,
-	<<<C as Client>::Block as BlockT>::Header as HeaderT>::Number:
-		Add<u64, Output=<<<C as Client>::Block as BlockT>::Header as HeaderT>::Number>
-		+ PartialEq<u64>
-		+ Into<u64>,
 	<<C as Client>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
 {
@@ -314,8 +305,7 @@ impl<C> bft::Proposer<<C as Client>::Block> for Proposer<C> where
 	type Evaluate = Box<Future<Item=bool, Error=Error>>;
 
 	fn propose(&self) -> Result<<C as Client>::Block> {
-		use runtime_primitives::traits::{Hash as HashT, BlakeTwo256};
-		use node_primitives::InherentData;
+		use runtime_primitives::traits::BlakeTwo256;
 
 		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
 
@@ -501,7 +491,7 @@ impl<C> bft::Proposer<<C as Client>::Block> for Proposer<C> where
 		for (target, misbehavior) in misbehavior {
 			let report = MisbehaviorReport {
 				parent_hash: self.parent_hash.into(),
-				parent_number: self.parent_number.into(),
+				parent_number: self.parent_number.as_(),
 				target,
 				misbehavior: match misbehavior {
 					GenericMisbehavior::ProposeOutOfTurn(_, _, _) => continue,
