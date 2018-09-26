@@ -599,15 +599,14 @@ impl Service {
 		}
 
 		// Reject non-reserved nodes if we're in reserved mode.
-		if self.reserved_only {
-			if !self.reserved_peers.contains(&peer_id) {
-				debug!(target: "sub-libp2p", "Rejected non-reserved peer {:?}", peer_id);
-				assert_eq!(self.swarm.drop_node(node_index), Ok(Vec::new()));
-				if let ConnectedPoint::Dialer { ref address } = endpoint {
-					self.topology.report_failed_to_connect(address);
-				}
-				return None;
+		let is_reserved = self.reserved_peers.contains(&peer_id);
+		if self.reserved_only && !is_reserved {
+			debug!(target: "sub-libp2p", "Rejected non-reserved peer {:?}", peer_id);
+			assert_eq!(self.swarm.drop_node(node_index), Ok(Vec::new()));
+			if let ConnectedPoint::Dialer { ref address } = endpoint {
+				self.topology.report_failed_to_connect(address);
 			}
+			return None;
 		}
 
 		// Reject connections from disabled peers.
@@ -624,7 +623,7 @@ impl Service {
 
 		match endpoint {
 			ConnectedPoint::Listener { ref listen_addr, ref send_back_addr } => {
-				if self.num_ingoing_connections() < self.max_incoming_connections {
+				if is_reserved || self.num_ingoing_connections() < self.max_incoming_connections {
 					debug!(target: "sub-libp2p", "Connected to {:?} through {} on listener {}",
 						peer_id, send_back_addr, listen_addr);
 				} else {
@@ -634,7 +633,7 @@ impl Service {
 				}
 			},
 			ConnectedPoint::Dialer { ref address } => {
-				if self.num_outgoing_connections() < self.max_outgoing_connections {
+				if is_reserved || self.num_outgoing_connections() < self.max_outgoing_connections {
 					debug!(target: "sub-libp2p", "Connected to {:?} through {}", peer_id, address);
 					self.topology.report_connected(address, &peer_id);
 					self.nodes_addresses.insert(node_index, address.clone());
