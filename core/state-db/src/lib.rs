@@ -21,9 +21,9 @@
 //!
 //! # Canonicalization.
 //! Canonicalization window tracks a tree of blocks identified by header hash. The in-memory
-//! overlay allows to get any node that was was inserted in any any of the blocks within the window.
+//! overlay allows to get any node that was inserted in any of the blocks within the window.
 //! The tree is journaled to the backing database and rebuilt on startup.
-//! Canonicalization function select one root from the top of the tree and discards all other roots and
+//! Canonicalization function selects one root from the top of the tree and discards all other roots and
 //! their subtrees.
 //!
 //! # Pruning.
@@ -80,13 +80,16 @@ pub enum Error<E: fmt::Debug> {
 	Db(E),
 	/// `Codec` decoding error.
 	Decoding,
+	/// NonCanonical error.
+	NonCanonical,
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Error::Db(e) => e.fmt(f),
 			Error::Decoding => write!(f, "Error decoding slicable value"),
+			Error::NonCanonical => write!(f, "Error processing non-canonical data"),
 		}
 	}
 }
@@ -174,26 +177,26 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		Ok(StateDbSync {
 			mode,
 			non_canonical,
-			pruning: pruning,
+			pruning,
 			pinned: Default::default(),
 		})
 	}
 
-	pub fn insert_block(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> CommitSet<Key> {
+	pub fn insert_block<E: fmt::Debug>(&mut self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, mut changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		if number == 0 {
-			return CommitSet {
+			return Ok(CommitSet {
 				data: changeset,
 				meta: Default::default(),
-			}
+			})
 		}
 		match self.mode {
 			PruningMode::ArchiveAll => {
 				changeset.deleted.clear();
 				// write changes immediately
-				CommitSet {
+				Ok(CommitSet {
 					data: changeset,
 					meta: Default::default(),
-				}
+				})
 			},
 			PruningMode::Constrained(_) | PruningMode::ArchiveCanonical => {
 				self.non_canonical.insert(hash, number, parent_hash, changeset)
@@ -297,7 +300,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 	}
 
 	/// Add a new non-canonical block.
-	pub fn insert_block(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> CommitSet<Key> {
+	pub fn insert_block<E: fmt::Debug>(&self, hash: &BlockHash, number: u64, parent_hash: &BlockHash, changeset: ChangeSet<Key>) -> Result<CommitSet<Key>, Error<E>> {
 		self.db.write().insert_block(hash, number, parent_hash, changeset)
 	}
 
@@ -341,6 +344,7 @@ impl<BlockHash: Hash, Key: Hash> StateDb<BlockHash, Key> {
 
 #[cfg(test)]
 mod tests {
+	use std::io;
 	use primitives::H256;
 	use {StateDb, PruningMode, Constraints};
 	use test::{make_db, make_changeset, TestDb};
@@ -349,12 +353,12 @@ mod tests {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
 		let state_db = StateDb::new(settings, &db).unwrap();
 
-		db.commit(&state_db.insert_block(&H256::from(1), 1, &H256::from(0), make_changeset(&[1], &[91])));
-		db.commit(&state_db.insert_block(&H256::from(21), 2, &H256::from(1), make_changeset(&[21], &[921, 1])));
-		db.commit(&state_db.insert_block(&H256::from(22), 2, &H256::from(1), make_changeset(&[22], &[922])));
-		db.commit(&state_db.insert_block(&H256::from(3), 3, &H256::from(21), make_changeset(&[3], &[93])));
+		db.commit(&state_db.insert_block::<io::Error>(&H256::from(1), 1, &H256::from(0), make_changeset(&[1], &[91])).unwrap());
+		db.commit(&state_db.insert_block::<io::Error>(&H256::from(21), 2, &H256::from(1), make_changeset(&[21], &[921, 1])).unwrap());
+		db.commit(&state_db.insert_block::<io::Error>(&H256::from(22), 2, &H256::from(1), make_changeset(&[22], &[922])).unwrap());
+		db.commit(&state_db.insert_block::<io::Error>(&H256::from(3), 3, &H256::from(21), make_changeset(&[3], &[93])).unwrap());
 		db.commit(&state_db.canonicalize_block(&H256::from(1)));
-		db.commit(&state_db.insert_block(&H256::from(4), 4, &H256::from(3), make_changeset(&[4], &[94])));
+		db.commit(&state_db.insert_block::<io::Error>(&H256::from(4), 4, &H256::from(3), make_changeset(&[4], &[94])).unwrap());
 		db.commit(&state_db.canonicalize_block(&H256::from(21)));
 		db.commit(&state_db.canonicalize_block(&H256::from(3)));
 

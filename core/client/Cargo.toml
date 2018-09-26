@@ -25,7 +25,9 @@ substrate-trie = { path = "../trie" }
 substrate-telemetry = { path = "../telemetry" }
 hash-db = { git = "https://github.com/paritytech/trie" }
 trie-db = { git = "https://github.com/paritytech/trie" }
+kvdb = "0.1"
 memory-db = { git = "https://github.com/paritytech/trie" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }
+kvdb-memorydb = "0.1"
