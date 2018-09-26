@@ -24,7 +24,6 @@ extern crate substrate_bft as bft;
 extern crate substrate_network;
 extern crate substrate_primitives;
 
-extern crate node_api;
 extern crate node_consensus;
 extern crate node_primitives;
 
@@ -114,4 +113,3 @@ impl Specialization<Block> for Protocol {
 	fn on_block_imported(&mut self, _ctx: &mut Context<Block>, _hash: Hash, _header: &Header) {
 	}
 }
-

@@ -18,7 +18,6 @@
 
 //! Substrate service. Specialized wrapper over substrate service.
 
-extern crate node_api;
 extern crate node_primitives;
 extern crate node_runtime;
 extern crate node_executor;
@@ -41,11 +40,12 @@ pub mod chain_spec;
 use std::sync::Arc;
 
 use transaction_pool::TransactionPool;
-use node_api::Api;
 use node_primitives::{Block, Hash};
 use node_runtime::GenesisConfig;
 use client::Client;
+use consensus::AuthoringApi;
 use node_network::{Protocol as DemoProtocol, consensus::ConsensusNetwork};
+use transaction_pool::Client as TPApi;
 use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
 use primitives::{Blake2Hasher};
@@ -63,7 +63,7 @@ pub type NetworkService = network::Service<Block, <Factory as service::ServiceFa
 /// A collection of type to generalise specific components over full / light client.
 pub trait Components: service::Components {
 	/// Demo API.
-	type Api: 'static + Api + Send + Sync;
+	type Api: 'static + AuthoringApi + TPApi + Send + Sync;
 	/// Client backend.
 	type Backend: 'static + client::backend::Backend<Block, Blake2Hasher>;
 	/// Client executor.
