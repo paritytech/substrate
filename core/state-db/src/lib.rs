@@ -21,9 +21,9 @@
 //!
 //! # Canonicalization.
 //! Canonicalization window tracks a tree of blocks identified by header hash. The in-memory
-//! overlay allows to get any node that was was inserted in any any of the blocks within the window.
+//! overlay allows to get any node that was inserted in any of the blocks within the window.
 //! The tree is journaled to the backing database and rebuilt on startup.
-//! Canonicalization function select one root from the top of the tree and discards all other roots and
+//! Canonicalization function selects one root from the top of the tree and discards all other roots and
 //! their subtrees.
 //!
 //! # Pruning.
@@ -83,7 +83,7 @@ pub enum Error<E: fmt::Debug> {
 }
 
 impl<E: fmt::Debug> fmt::Debug for Error<E> {
-	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		match self {
 			Error::Db(e) => e.fmt(f),
 			Error::Decoding => write!(f, "Error decoding slicable value"),
@@ -174,7 +174,7 @@ impl<BlockHash: Hash, Key: Hash> StateDbSync<BlockHash, Key> {
 		Ok(StateDbSync {
 			mode,
 			non_canonical,
-			pruning: pruning,
+			pruning,
 			pinned: Default::default(),
 		})
 	}
