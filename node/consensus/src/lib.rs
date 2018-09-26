@@ -51,7 +51,7 @@ use client::{Client as SubstrateClient, CallExecutor};
 use codec::{Decode, Encode};
 use node_primitives::{AccountId, Timestamp, SessionKey, InherentData};
 use node_runtime::Runtime;
-use primitives::{AuthorityId, ed25519, Blake2Hasher, RlpCodec};
+use primitives::{AuthorityId, ed25519, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use runtime_primitives::generic::{BlockId, Era};
 use srml_system::Trait as SystemT;
@@ -115,9 +115,9 @@ pub trait Client: Send + Sync {
 	fn evaluate_block(&self, at: &BlockId<Self::Block>, block: Self::Block) -> Result<bool>;
 }
 
-impl<B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<B, E, Block, Blake2Hasher, RlpCodec> where
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + Clone + 'static,
+impl<B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<B, E, Block, Blake2Hasher> where
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<()> {
@@ -130,12 +130,12 @@ impl<B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<B,
 }
 
 impl<B, E, Block> Client for SubstrateClient<B, E, Block> where
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + Clone + 'static,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT,
 {
 	type Block = Block;
-	type BlockBuilder = client::block_builder::BlockBuilder<B, E, Block, Blake2Hasher, RlpCodec>;
+	type BlockBuilder = client::block_builder::BlockBuilder<B, E, Block, Blake2Hasher>;
 
 	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Self::Block as BlockT>::Hash> {
 		self.call_api_at(at, "random_seed", &()).map_err(Into::into)

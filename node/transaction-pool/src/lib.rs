@@ -45,7 +45,7 @@ use client::{Client as SubstrateClient, CallExecutor};
 use transaction_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
 use primitives::{AccountId, Hash, Index};
 use runtime::{Address, UncheckedExtrinsic};
-use substrate_primitives::{Blake2Hasher, RlpCodec};
+use substrate_primitives::{Blake2Hasher};
 use sr_primitives::generic::BlockId;
 use sr_primitives::traits::{
 	Bounded, Checkable, Block as BlockT, Hash as HashT, Header as HeaderT, BlakeTwo256, Lookup, CurrentHeight,
@@ -73,8 +73,8 @@ pub trait Client:
 }
 
 impl<B, E, Block> Client for SubstrateClient<B, E, Block> where
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + Clone + 'static,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT,
 {
 	type Block = Block;
