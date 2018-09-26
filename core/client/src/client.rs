@@ -346,11 +346,6 @@ impl<B, E, Block> Client<B, E, Block> where
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
 
-	/// Get the best block id.
-	pub fn best_block_id(&self) -> error::Result<BlockId<Block>> {
-		Ok(BlockId::Number(self.info()?.chain.best_number))
-	}
-
 	/// Set up the native execution environment to call into a native runtime code.
 	pub fn call_api<A, R>(&self, function: &'static str, args: &A) -> error::Result<R>
 		where A: Encode, R: Decode

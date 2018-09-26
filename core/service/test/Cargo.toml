@@ -9,6 +9,7 @@ tokio = "0.1.7"
 futures = "0.1"
 log = "0.3"
 env_logger = "0.4"
+fdlimit = "0.1"
 substrate-service = { path = "../../../core/service" }
 substrate-network = { path = "../../../core/network" }
 substrate-primitives = { path = "../../../core/primitives" }

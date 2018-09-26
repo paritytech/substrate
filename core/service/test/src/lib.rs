@@ -22,6 +22,7 @@ extern crate tempdir;
 extern crate tokio;
 extern crate futures;
 extern crate env_logger;
+extern crate fdlimit;
 extern crate substrate_service as service;
 extern crate substrate_network as network;
 extern crate substrate_primitives as primitives;
@@ -131,6 +132,7 @@ fn node_config<F: ServiceFactory> (
 impl<F: ServiceFactory> TestNet<F> {
 	fn new(temp: &TempDir, spec: FactoryChainSpec<F>, full: u32, light: u32, authorities: Vec<String>, base_port: u16) -> TestNet<F> {
 		::env_logger::init().ok();
+		::fdlimit::raise_fd_limit();
 		let runtime = Runtime::new().expect("Error creating tokio runtime");
 		let authority_nodes = authorities.iter().enumerate().map(|(index, key)| (index as u32,
 			F::new_full(node_config::<F>(index as u32, &spec, Roles::AUTHORITY, Some(key.clone()), base_port, &temp), runtime.executor())

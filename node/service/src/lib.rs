@@ -51,7 +51,7 @@ use std::sync::Arc;
 use codec::Decode;
 use transaction_pool::TransactionPool;
 use node_api::Api;
-use node_primitives::{Block, Hash, Timestamp};
+use node_primitives::{Block, Hash, Timestamp, BlockId};
 use node_runtime::{GenesisConfig, BlockPeriod, StorageValue, Runtime};
 use client::Client;
 use node_network::{Protocol as DemoProtocol, consensus::ConsensusNetwork};
@@ -157,7 +157,9 @@ impl service::ServiceFactory for Factory {
 			let client = service.client();
 
 			let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
-			let block_delay = client.storage(&client.best_block_id()?, &StorageKey(twox_128(BlockPeriod::<Runtime>::key()).to_vec()))?
+			let block_id = BlockId::number(client.info().unwrap().chain.best_number);
+			// TODO: this needs to be dynamically adjustable
+			let block_delay = client.storage(&block_id, &StorageKey(twox_128(BlockPeriod::<Runtime>::key()).to_vec()))?
 				.and_then(|data| Timestamp::decode(&mut data.0.as_slice()))
 				.unwrap_or_else(|| {
 					warn!("Block period is missing in the storage.");
@@ -215,6 +217,7 @@ mod tests {
 	use bft::{Proposer, Environment};
 	use node_network::consensus::ConsensusNetwork;
 	use substrate_test_client::fake_justify;
+	use node_primitives::BlockId;
 
 	#[test]
 	fn test_connectivity() {
@@ -230,7 +233,8 @@ mod tests {
 		let offline = Arc::new(RwLock::new(OfflineTracker::new()));
 		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
 		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let parent_header = service.client().header(&service.client().best_block_id().unwrap()).unwrap().unwrap();
+			let block_id = BlockId::number(service.client().info().unwrap().chain.best_number);
+			let parent_header = service.client().header(&block_id).unwrap().unwrap();
 			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
 			let proposer_factory = consensus::ProposerFactory {
 				client: service.client().clone(),
