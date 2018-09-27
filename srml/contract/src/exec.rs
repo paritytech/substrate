@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeOf, MaxDepth, ContractAddressFor, Module, Trait, Event, RawEvent};
+use super::{MaxDepth, ContractAddressFor, Module, Trait, Event, RawEvent};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use vm;
@@ -60,7 +60,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base call fee");
 		}
 
-		let dest_code = <CodeOf<T>>::get(&dest);
+		let dest_code = self.overlay.get_code(&dest);
 
 		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
@@ -124,8 +124,9 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		}
 
 		let dest = T::DetermineContractAddress::contract_address_for(init_code, data, &self.self_account);
-		if <CodeOf<T>>::exists(&dest) {
-			// TODO: Is it enough?
+
+		if !self.overlay.get_code(&dest).is_empty() {
+			// It should be enough to check only the code.
 			return Err("contract already exists");
 		}
 
