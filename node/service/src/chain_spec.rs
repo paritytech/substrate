@@ -123,10 +123,6 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 /// Staging testnet config.
 pub fn staging_testnet_config() -> ChainSpec<GenesisConfig> {
 	let boot_nodes = vec![
-        "/ip4/104.211.54.233/tcp/30333/p2p/QmRMGcQh69t8a8YwzHkofVo9SFr7ffggUwhAYjVSTChmrd".to_string(),
-        "/ip4/104.211.48.51/tcp/30333/p2p/QmWCnXrhM1in1qPqVT3rDXQEJHedAzbPDMimdjqy2P9fGn".to_string(),
-        "/ip4/104.211.48.247/tcp/30333/p2p/QmY33GW69TnTsdQWjAkxJR1GrWTdeV1PmzzcSmUay4HvAB".to_string(),
-        "/ip4/40.114.120.164/tcp/30333/p2p/QmWzYU5X1NpFrprD1YZF5Lcj9aE5WF4QEg5FpvQx5XGWG7".to_string()
 	];
 	ChainSpec::from_genesis(
 		"Staging Testnet",
