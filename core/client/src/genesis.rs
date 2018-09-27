@@ -52,7 +52,7 @@ mod tests {
 	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
 	use primitives::{Blake2Hasher, ed25519::{Public, Pair}};
 
-	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::native_version, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 
 	fn executor() -> ::executor::NativeExecutor<Executor> {
 		NativeExecutionDispatch::new()
