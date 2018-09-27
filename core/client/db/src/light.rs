@@ -92,8 +92,8 @@ impl<Block> LightStorage<Block>
 			columns::HEADER,
 			columns::AUTHORITIES
 		)?;
-		let meta = RwLock::new(read_meta::<Block>(&*db, columns::HEADER)?);
-		let leaves = RwLock::new(LeafSet::read_from_db(&*db, columns::HEADER, meta_keys::LEAF_PREFIX)?);
+		let meta = RwLock::new(read_meta::<Block>(&*db, columns::META)?);
+		let leaves = RwLock::new(LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?);
 
 		Ok(LightStorage {
 			db,
