@@ -166,7 +166,6 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		struct Container<G> {
 			#[serde(flatten)]
 			spec: ChainSpecFile,
-			#[serde(flatten)]
 			genesis: Genesis<G>,
 
 		};

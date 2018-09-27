@@ -138,6 +138,10 @@ subcommands:
             value_name: CHAIN_SPEC
             help: Specify the chain specification (one of krummelanke, dev, local or staging)
             takes_value: true
+        - dev:
+            long: dev
+            help: Specify the development chain
+            takes_value: false
   - export-blocks:
       about: Export blocks to a file
       args:
@@ -150,6 +154,10 @@ subcommands:
               value_name: CHAIN_SPEC
               help: Specify the chain specification.
               takes_value: true
+          - dev:
+              long: dev
+              help: Specify the development chain
+              takes_value: false
           - base-path:
               long: base-path
               short: d
@@ -182,6 +190,10 @@ subcommands:
               value_name: CHAIN_SPEC
               help: Specify the chain specification.
               takes_value: true
+          - dev:
+              long: dev
+              help: Specify the development chain
+              takes_value: false
           - base-path:
               long: base-path
               short: d
@@ -207,6 +219,10 @@ subcommands:
               value_name: CHAIN_SPEC
               help: Specify the chain specification.
               takes_value: true
+          - dev:
+              long: dev
+              help: Specify the development chain
+              takes_value: false
           - base-path:
               long: base-path
               short: d
@@ -221,6 +237,10 @@ subcommands:
               value_name: CHAIN_SPEC
               help: Specify the chain specification.
               takes_value: true
+          - dev:
+              long: dev
+              help: Specify the development chain
+              takes_value: false
           - base-path:
               long: base-path
               short: d
