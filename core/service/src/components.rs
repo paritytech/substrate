@@ -131,9 +131,6 @@ pub trait ServiceFactory: 'static {
 	/// Other configuration for service members.
 	type Configuration: Default;
 
-	/// Network protocol id.
-	const NETWORK_PROTOCOL_ID: network::ProtocolId;
-
 	//TODO: replace these with a constructor trait. that TransactionPool implements.
 	/// Extrinsic pool constructor for the full client.
 	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<FullClient<Self>>)
