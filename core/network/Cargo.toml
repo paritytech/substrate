@@ -8,7 +8,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [lib]
 
 [dependencies]
-log = "0.3"
+log = "0.4"
 parking_lot = "0.4"
 error-chain = "0.12"
 bitflags = "1.0"
