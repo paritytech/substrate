@@ -8,9 +8,9 @@ serde = "1.0"
 serde_derive = "1.0"
 error-chain = "0.12"
 futures = "0.1"
-log = "0.3"
+log = "0.4"
 parking_lot = "0.4"
-transaction-pool = "1.13.2"
+transaction-pool = "1.13.3"
 sr-primitives = { path = "../../core/sr-primitives" }
 
 [dev-dependencies]
