@@ -117,14 +117,14 @@ mod tests {
 	#[test]
 	fn panic_execution_with_foreign_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new(map![
-			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -138,14 +138,14 @@ mod tests {
 	#[test]
 	fn bad_extrinsic_with_native_equivalent_code_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new(map![
-			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -159,14 +159,14 @@ mod tests {
 	#[test]
 	fn successful_execution_with_native_equivalent_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new(map![
-			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -184,14 +184,14 @@ mod tests {
 	#[test]
 	fn successful_execution_with_foreign_code_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new(map![
-			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -286,9 +286,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("bbfe47c5310929d10712e58dd74f99ed27d0e504b4c46b5430e81503a436beb8").into()
+				hex!("60548dd56fae6f47e3c9fde94e3612f1386c88791799c44239b473b6ecfeae2b").into()
 			} else {
-				hex!("f3309ec5639678337805d8f16fac2b37e3663d3bc21f6c21e375377eab3388a6").into()
+				hex!("4bdc21d39b43830969d61b451c7e6c4c81270e824b1c0bc92b52f9994745403a").into()
 			},
 			if support_changes_trie {
 				Some(hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into())
@@ -312,7 +312,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("0f107d73773b84409de8a444dd0d39e6d90b18b3ce393b379a4f6bf34226aa0a").into(),
+			hex!("aad6a6c83ede7c2da40700cd4754aebd9b50ab07e9580899581e1d5ab9fc4095").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -335,7 +335,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("c33272caf0136a427f59bfcdd60cb17e0cc632756b9017b4415bb2f4cb19dcc7").into(),
+			hex!("9b508cc4088b08eb72edea6ae9b2873fe6d75a1292d25bf18d93b89f19e39e39").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -506,14 +506,14 @@ mod tests {
 	#[test]
 	fn panic_execution_gives_error() {
 		let mut t = TestExternalities::<Blake2Hasher>::new(map![
-			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 8],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![69u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![70u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
@@ -528,14 +528,14 @@ mod tests {
 	#[test]
 	fn successful_execution_gives_ok() {
 		let mut t = TestExternalities::<Blake2Hasher>::new(map![
-			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0],
-			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 8],
-			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 8],
+			twox_128(&<balances::FreeBalance<Runtime>>::key_for(alice())).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TotalIssuance<Runtime>>::key()).to_vec() => vec![111u8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+			twox_128(<balances::TransactionBaseFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransactionByteFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::ExistentialDeposit<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::CreationFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::TransferFee<Runtime>>::key()).to_vec() => vec![0u8; 16],
+			twox_128(<balances::NextEnumSet<Runtime>>::key()).to_vec() => vec![0u8; 16],
 			twox_128(&<system::BlockHash<Runtime>>::key_for(0)).to_vec() => vec![0u8; 32]
 		]);
 
