@@ -24,9 +24,8 @@ use service::ChainSpec;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
-pub fn testnet_config() -> Result<ChainSpec<GenesisConfig>, String> {
-	//ChainSpec::from_embedded(include_bytes!("../res/node.json"))
-	Ok(staging_testnet_config())
+pub fn bbq_birch_config() -> Result<ChainSpec<GenesisConfig>, String> {
+	ChainSpec::from_embedded(include_bytes!("../res/bbq-birch.json"))
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
