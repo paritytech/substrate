@@ -1,5 +1,5 @@
 [package]
-description = "Polkadot network protocol"
+description = "Substrate network protocol"
 name = "substrate-network"
 version = "0.1.0"
 license = "GPL-3.0"

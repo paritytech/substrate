@@ -38,7 +38,7 @@ mod tests;
 use self::error::Result;
 
 build_rpc_trait! {
-	/// Polkadot blockchain API
+	/// Substrate blockchain API
 	pub trait ChainApi<Hash, Header, Number, Extrinsic> {
 		type Metadata;
 

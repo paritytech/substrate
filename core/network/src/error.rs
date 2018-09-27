@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot service possible errors.
+//! Substrate service possible errors.
 
 use std::io::Error as IoError;
 use network_libp2p::Error as NetworkError;
