@@ -24,7 +24,6 @@ extern crate substrate_bft as bft;
 extern crate substrate_network;
 extern crate substrate_primitives;
 
-extern crate node_api;
 extern crate node_consensus;
 extern crate node_primitives;
 
@@ -43,9 +42,6 @@ use substrate_network::consensus_gossip::ConsensusGossip;
 use substrate_network::{message, generic_message};
 use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
-
-/// Demo protocol id.
-pub const PROTOCOL_ID: ::substrate_network::ProtocolId = *b"dot";
 
 type FullStatus = GenericFullStatus<Block>;
 
@@ -114,4 +110,3 @@ impl Specialization<Block> for Protocol {
 	fn on_block_imported(&mut self, _ctx: &mut Context<Block>, _hash: Hash, _header: &Header) {
 	}
 }
-

@@ -36,6 +36,8 @@ extern crate parity_codec as codec;
 
 #[cfg(feature = "std")]
 use std::fmt;
+#[cfg(feature = "std")]
+use std::collections::HashSet;
 
 #[cfg(feature = "std")]
 pub type VersionString = ::std::borrow::Cow<'static, str>;
@@ -129,14 +131,27 @@ impl RuntimeVersion {
 		self.authoring_version == other.authoring_version
 	}
 
-	/// Check if this version matches other version for authoring blocks.
-	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
-		self.authoring_version == other.authoring_version &&
-		self.spec_name == other.spec_name
-	}
-
 	/// Check if this version supports a particular API.
 	pub fn has_api(&self, api: ApiId, version: u32) -> bool {
 		self.apis.iter().any(|&(ref s, v)| &api == s && version == v)
+	}
+}
+
+#[cfg(feature = "std")]
+#[cfg_attr(feature = "std", derive(Debug))]
+pub struct NativeVersion {
+	/// Basic runtime version info.
+	pub runtime_version: RuntimeVersion,
+	/// Authoring runtimes that this native runtime supports.
+	pub can_author_with: HashSet<u32>,
+}
+
+#[cfg(feature = "std")]
+impl NativeVersion {
+	/// Check if this version matches other version for authoring blocks.
+	pub fn can_author_with(&self, other: &RuntimeVersion) -> bool {
+		self.runtime_version.spec_name == other.spec_name &&
+			(self.runtime_version.authoring_version == other.authoring_version ||
+			self.can_author_with.contains(&other.authoring_version))
 	}
 }

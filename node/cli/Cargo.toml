@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate node implementation in Rust."
 
 [dependencies]
-log = "0.3"
+log = "0.4"
 tokio = "0.1.7"
 exit-future = "0.1"
 substrate-cli = { path = "../../core/cli" }

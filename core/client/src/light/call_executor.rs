@@ -31,7 +31,7 @@ use blockchain::Backend as ChainBackend;
 use call_executor::{CallExecutor, CallResult};
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::fetcher::{Fetcher, RemoteCallRequest};
-use executor::RuntimeVersion;
+use executor::{RuntimeVersion, NativeVersion};
 use codec::Decode;
 use heapsize::HeapSizeOf;
 use trie::MemoryDB;
@@ -118,7 +118,7 @@ where
 		Err(ClientErrorKind::NotAvailableOnLightClient.into())
 	}
 
-	fn native_runtime_version(&self) -> Option<RuntimeVersion> {
+	fn native_runtime_version(&self) -> Option<&NativeVersion> {
 		None
 	}
 }

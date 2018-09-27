@@ -5,7 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 substrate-primitives = { path = "../primitives" }
-parity-crypto = { version = "0.1", default_features = false }
+parity-crypto = { version = "0.1", default-features = false }
 error-chain = "0.12"
 hex = "0.3"
 rand = "0.4"
