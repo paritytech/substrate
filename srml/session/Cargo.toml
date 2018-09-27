@@ -8,7 +8,6 @@ hex-literal = "0.1.0"
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default-features = false}
-substrate-keyring = { path = "../../core/keyring", optional = true }
 substrate-primitives = { path = "../../core/primitives", default-features = false }
 parity-codec = { version = "2.0", default-features = false }
 parity-codec-derive = { version = "2.0", default-features = false }
@@ -26,7 +25,6 @@ std = [
 	"serde/std",
 	"serde_derive",
 	"safe-mix/std",
-	"substrate-keyring",
 	"parity-codec/std",
 	"parity-codec-derive/std",
 	"substrate-primitives/std",

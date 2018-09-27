@@ -8,13 +8,11 @@ crunchy = "0.1"
 sr-std = { path = "../sr-std", default-features = false }
 parity-codec = { version = "2.0", default-features = false }
 parity-codec-derive = { version = "2.0", default-features = false }
-elastic-array = {version = "0.10", optional = true }
 fixed-hash = { version = "0.2.2", default-features = false }
 rustc-hex = { version = "2.0", default-features = false }
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
 uint = { version = "0.4.1", default-features = false }
-rlp = { version = "0.2.4", optional = true }
 twox-hash = { version = "1.1.0", optional = true }
 byteorder = { version = "1.1", default-features = false }
 wasmi = { version = "0.4", optional = true }
@@ -53,5 +51,4 @@ std = [
 	"base58",
 	"serde_derive",
 	"byteorder/std",
-	"elastic-array",
 ]

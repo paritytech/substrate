@@ -8,7 +8,6 @@ hex-literal = { version = "0.1.0", optional = true }
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
 parity-codec = { version = "2.0", default-features = false }
-substrate-primitives = { path = "../../core/primitives", default-features = false }
 substrate-metadata = { path = "../metadata", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
 sr-io = { path = "../../core/sr-io", default-features = false }
@@ -24,7 +23,6 @@ std = [
 	"hex-literal",
 	"serde/std",
 	"serde_derive",
-	"substrate-primitives/std",
 	"sr-io/std",
 	"parity-codec/std",
 	"sr-std/std",
