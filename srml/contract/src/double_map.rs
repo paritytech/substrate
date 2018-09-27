@@ -83,6 +83,11 @@ pub trait StorageDoubleMap {
 		unhashed::get(&full_key::<Self>(k1, k2)[..])
 	}
 
+	/// Returns `true` if value under the specified keys exists.
+	fn exists(k1: Self::Key1, k2: Self::Key2) -> bool {
+		unhashed::exists(&full_key::<Self>(k1, k2)[..])
+	}
+
 	/// Removes all entries that shares the `k1` as the first key.
 	fn remove_prefix(k1: Self::Key1) {
 		unhashed::kill_prefix(&first_part_of_key::<Self>(k1))
