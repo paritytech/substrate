@@ -207,8 +207,8 @@ impl<
 		let new_header = <system::Module<System>>::finalise();
 
 		// check digest. uncomment next two lines to figure out next digest hash for tests.
-		runtime_io::print(&header.digest().encode()[..]);
-		runtime_io::print(&new_header.digest().encode()[..]);
+//		runtime_io::print(&header.digest().encode()[..]);
+//		runtime_io::print(&new_header.digest().encode()[..]);
 		assert!(header.digest() == new_header.digest());
 
 		// check storage root.
