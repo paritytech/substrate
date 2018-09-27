@@ -170,9 +170,9 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 			for (_, service) in network.full_nodes.iter().skip(1) {
 				service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 			}
-			network.run_until_all_full(|_index, service| {
+			network.run_until_all_full(|_index, service|
 				service.network().status().num_peers == NUM_NODES as usize - 1
-			});
+			);
 		}
 		temp.close().expect("Error removing temp dir");
 	}

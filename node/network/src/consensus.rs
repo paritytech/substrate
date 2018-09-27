@@ -285,11 +285,10 @@ impl<P: AuthoringApi + Send + Sync + 'static> Network for ConsensusNetwork<P> {
 		});
 
 		match process_task {
-			Some(task) => {
+			Some(task) =>
 				if let Err(e) = Executor::spawn(&mut task_executor, Box::new(task)) {
 					debug!(target: "node-network", "Cannot spawn message processing: {:?}", e)
-				}
-			}
+				},
 			None => warn!(target: "node-network", "Cannot process incoming messages: network appears to be down"),
 		}
 
