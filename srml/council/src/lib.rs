@@ -29,11 +29,9 @@ extern crate serde_derive;
 #[macro_use]
 extern crate hex_literal;
 
-extern crate integer_sqrt;
 extern crate parity_codec as codec;
 #[macro_use] extern crate parity_codec_derive;
 extern crate substrate_primitives;
-#[cfg(feature = "std")] extern crate substrate_keyring as keyring;
 #[macro_use] extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[macro_use] extern crate srml_support;

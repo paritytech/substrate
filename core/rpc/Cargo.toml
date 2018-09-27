@@ -17,7 +17,6 @@ substrate-transaction-pool = { path = "../transaction-pool" }
 substrate-primitives = { path = "../primitives" }
 sr-primitives = { path = "../sr-primitives" }
 sr-version = { path = "../sr-version" }
-substrate-state-machine = { path = "../state-machine" }
 tokio = "0.1.7"
 serde_json = "1.0"
 

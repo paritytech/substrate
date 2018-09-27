@@ -8,7 +8,6 @@ error-chain = "0.12"
 fnv = "1.0"
 log = "0.4"
 parking_lot = "0.4"
-trie-root = { git = "https://github.com/paritytech/trie" }
 hex-literal = "0.1"
 futures = "0.1.17"
 slog = "^2"
@@ -17,17 +16,13 @@ substrate-bft = { path = "../bft" }
 parity-codec = "2.0"
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
-sr-io = { path = "../sr-io" }
 sr-primitives = { path = "../sr-primitives" }
 substrate-state-machine = { path = "../state-machine" }
 substrate-keyring = { path = "../keyring" }
 substrate-trie = { path = "../trie" }
 substrate-telemetry = { path = "../telemetry" }
 hash-db = { git = "https://github.com/paritytech/trie" }
-trie-db = { git = "https://github.com/paritytech/trie" }
-rlp = "0.2.4"
 kvdb = "0.1"
-memory-db = { git = "https://github.com/paritytech/trie" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }

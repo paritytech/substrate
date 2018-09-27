@@ -19,9 +19,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
@@ -35,10 +32,13 @@ extern crate sr_std as rstd;
 extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
-extern crate substrate_primitives;
-extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
 extern crate srml_system as system;
+
+#[cfg(test)]
+extern crate sr_io as runtime_io;
+#[cfg(test)]
+extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use rstd::{cmp, result};

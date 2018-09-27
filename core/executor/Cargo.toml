@@ -16,12 +16,9 @@ serde = "1.0"
 serde_derive = "1.0"
 wasmi = "0.4"
 byteorder = "1.1"
-trie-root = { git = "https://github.com/paritytech/trie" }
-twox-hash = "1.1.0"
 lazy_static = "1.0"
 parking_lot = "*"
 log = "0.4"
-hash-db = { git = "https://github.com/paritytech/trie" }
 
 [dev-dependencies]
 assert_matches = "1.1"

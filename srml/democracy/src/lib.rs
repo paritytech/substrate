@@ -18,10 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
+#[cfg(test)]
 extern crate substrate_primitives;
 
 #[cfg(feature = "std")]

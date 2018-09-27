@@ -25,19 +25,16 @@ extern crate parking_lot;
 extern crate fnv;
 extern crate futures;
 extern crate tokio;
-extern crate tokio_executor;
 extern crate tokio_io;
 extern crate tokio_timer;
 extern crate libc;
 #[macro_use]
 extern crate libp2p;
 extern crate rand;
-extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
 extern crate substrate_primitives as primitives;
-extern crate smallvec;
 extern crate bytes;
 extern crate unsigned_varint;
 

@@ -9,7 +9,6 @@ log = "0.4"
 kvdb = "0.1"
 kvdb-rocksdb = "0.1.3"
 hash-db = { git = "https://github.com/paritytech/trie" }
-memory-db = { git = "https://github.com/paritytech/trie" }
 substrate-primitives = { path = "../../primitives" }
 sr-primitives = { path = "../../sr-primitives" }
 substrate-client = { path = "../../client" }

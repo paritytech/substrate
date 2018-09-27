@@ -29,7 +29,6 @@ extern crate serde;
 
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
-extern crate substrate_primitives as primitives;
 extern crate substrate_metadata;
 
 extern crate mashup;
