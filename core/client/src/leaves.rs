@@ -82,6 +82,11 @@ impl<H, N> LeafSet<H, N> where
 		let mut storage = BTreeSet::new();
 
 		for (key, value) in db.iter_from_prefix(column, prefix) {
+			// rocksdb sometimes yields keys from `iter_from_prefix`
+			// that don't start with `prefix`. ignore them
+			if &key[..prefix.len()] != prefix {
+				continue;
+			}
 			let raw_hash = &mut &key[prefix.len()..];
 			let hash = match Decode::decode(raw_hash) {
 				Some(hash) => hash,
