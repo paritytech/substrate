@@ -27,6 +27,7 @@ use codec::{Codec, Encode};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
+pub use num_traits::ops::saturating::Saturating;
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr};
 
@@ -160,6 +161,7 @@ pub trait SimpleArithmetic:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
+	Saturating +
 	PartialOrd<Self> + Ord
 {}
 impl<T:
@@ -174,6 +176,7 @@ impl<T:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
+	Saturating +
 	PartialOrd<Self> + Ord
 > SimpleArithmetic for T {}
 

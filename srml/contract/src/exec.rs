@@ -32,12 +32,18 @@ pub struct CreateReceipt<T: Trait> {
 // TODO: Add logs.
 pub struct CallReceipt;
 
+pub struct SuicideNote<T: Trait> {
+	pub who: T::AccountId,
+	pub inherent: T::AccountId,
+}
+
 pub struct ExecutionContext<'a, T: Trait + 'a> {
 	// typically should be dest
 	pub self_account: T::AccountId,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub events: Vec<Event<T>>,
+	pub suicides: Vec<SuicideNote<T>>,
 }
 
 impl<'a, T: Trait> ExecutionContext<'a, T> {
@@ -62,7 +68,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 
 		let dest_code = <CodeOf<T>>::get(&dest);
 
-		let (change_set, events) = {
+		let (change_set, events, suicides) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 
 			let mut nested = ExecutionContext {
@@ -70,6 +76,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				self_account: dest.clone(),
 				depth: self.depth + 1,
 				events: Vec::new(),
+				suicides: Vec::new(),
 			};
 
 			if value > T::Balance::zero() {
@@ -97,11 +104,12 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				).map_err(|_| "vm execute returned error while call")?;
 			}
 
-			(nested.overlay.into_change_set(), nested.events)
+			(nested.overlay.into_change_set(), nested.events, nested.suicides)
 		};
 
 		self.overlay.commit(change_set);
 		self.events.extend(events);
+		self.suicides.extend(suicides);
 
 		Ok(CallReceipt)
 	}
@@ -125,11 +133,12 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 
 		let dest = T::DetermineContractAddress::contract_address_for(init_code, data, &self.self_account);
 		if <CodeOf<T>>::exists(&dest) {
-			// TODO: Is it enough?
-			return Err("contract already exists");
+			// TODO: This is not enough probably. We might want to ensure, there is no user-controlled account at that address
+			// or proof that cannot harm in any way.
+			return Err("determined address is already taken");
 		}
 
-		let (change_set, events) = {
+		let (change_set, events, suicides) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
 
 			let mut nested = ExecutionContext {
@@ -137,6 +146,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				self_account: dest.clone(),
 				depth: self.depth + 1,
 				events: Vec::new(),
+				suicides: Vec::new(),
 			};
 
 			if endowment > T::Balance::zero() {
@@ -164,11 +174,12 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			).map_err(|_| "vm execute returned error while create")?;
 
 			nested.overlay.set_code(&dest, contract_code);
-			(nested.overlay.into_change_set(), nested.events)
+			(nested.overlay.into_change_set(), nested.events, nested.suicides)
 		};
 
 		self.overlay.commit(change_set);
 		self.events.extend(events);
+		self.suicides.extend(suicides);
 
 		Ok(CreateReceipt {
 			address: dest,
@@ -286,5 +297,13 @@ impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
 			.call(caller, to.clone(), value, gas_meter, data, output_data)
 			.map_err(|_| ())
 			.map(|_| ())
+	}
+
+	fn suicide(&mut self, inherent: T::AccountId) {
+		let self_id = self.ctx.self_account.clone();
+		self.ctx.suicides.push(SuicideNote {
+			who: self_id,
+			inherent,
+		});
 	}
 }

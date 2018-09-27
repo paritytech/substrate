@@ -22,6 +22,7 @@ use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::prelude::*;
 use runtime_support::StorageMap;
+use runtime_primitives::traits::{As, Saturating};
 use {balances, system};
 
 pub struct ChangeEntry<T: Trait> {
@@ -177,4 +178,46 @@ impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 			}
 		}
 	}
+}
+
+// TODO: Perform clean up.
+// Introduce `storage` module and make `account_db`/`double_map` to be sub-modules of that module
+// and then move this function there (e.g. to the top level). Ideally move the decl_storage part there as well.
+
+/// Transfers all funds from `who` to `inherent` and makes sure all data associated
+/// to `who` is removed.
+pub fn commit_suicide<T: Trait>(who: &T::AccountId, inherent: &T::AccountId) {
+	let residue = balances::Module::<T>::free_balance(who);
+	let inherent_balance = balances::Module::<T>::free_balance(inherent);
+
+	// Increase inherent balance by the suicidee's residue.
+	let new_inherent_balance = inherent_balance.saturating_add(residue);
+	balances::Module::<T>::set_free_balance_creating(inherent, new_inherent_balance);
+
+	// Then nullify the balance of suicidee. This most probably will invoke `OnFreeBalanceZero`
+	// callback.
+	if let balances::UpdateBalanceOutcome::Updated =
+		balances::Module::<T>::set_free_balance(who, T::Balance::sa(0))
+	{
+		// That's weird, the account is not killed due draining all funds. This could happen if
+		// `existential_deposit` is set to zero. In that case let's purge account's data manually.
+		purge_account::<T>(who);
+	}
+
+	// TODO: manage total stake
+	// In most cases, total stake shouldn't be changed, since this is just a transfer (-v + v = 0). But we are using
+	// `saturating_add` so this property doesn't hold if we there is an overflow, so we need to increase
+	// the total stake by the added amount.
+	//
+	// But how to test that? To make such scenario possible, you have to have two accounts sum of which will overflow
+	// balance. But mere creation of such two accounts will overflow total_stake...
+}
+
+/// Removes all the storage associated with the specified account managed by
+/// the contract module.
+///
+/// Does nothing if called with an account which doesn't exists.
+pub fn purge_account<T: Trait>(who: &T::AccountId) {
+	<::CodeOf<T>>::remove(who);
+	<::StorageOf<T>>::remove_prefix(who.clone());
 }

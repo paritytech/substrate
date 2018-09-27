@@ -32,6 +32,9 @@ use Trait;
 enum SpecialTrap {
 	/// Signals that trap was generated in response to call `ext_return` host function.
 	Return,
+
+	/// Signals that trap was generated in response to call `ext_suicide` host function.
+	Suicide,
 }
 
 pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
@@ -79,8 +82,9 @@ pub(crate) fn to_execution_result<E: Ext>(
 	match (sandbox_err, runtime.special_trap) {
 		// No traps were generated. Proceed normally.
 		(None, None) => Ok(()),
-		// Special case. The trap was the result of the execution `return` host function.
-		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return)) => Ok(()),
+		// Special cases. The trap was the result of the execution `return`/`suicide` host functions.
+		(Some(sandbox::Error::Execution), Some(SpecialTrap::Return))
+		| (Some(sandbox::Error::Execution), Some(SpecialTrap::Suicide)) => Ok(()),
 		// Any other kind of a trap should result in a failure.
 		(Some(_), _) => Err(Error::Invoke),
 		// Any other case (such as special trap flag without actual trap) signifies
@@ -90,6 +94,9 @@ pub(crate) fn to_execution_result<E: Ext>(
 }
 
 // TODO: ext_balance, ext_address, ext_callvalue, etc.
+
+// TODO: Gas metering of externalities
+// TODO: Specifically, for the copying data.
 
 // Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns
 // a function set which can be imported by an executed contract.
@@ -285,7 +292,35 @@ define_env!(init_env, <E: Ext>,
 		}
 	},
 
+	// Add the current contract to the set of suicided contracts.
+	//
+	// At the finalization stage of the extrinsic execution, each contract from this set
+	// will transfer all it's balance to the designated `inherent` AND then delete
+	// all it's storage. However, it doesn't guarantee deletion of all associated data
+	// with the contract (i.e. it might not invoke the `OnFreeBalanceZero` if the existential
+	// balance is set to zero).
+	//
+	// This function doesn't return and finishes the execution of the contract immediately.
+	ext_suicide(ctx, inherent_ptr: u32, inherent_len: u32) => {
+		let mut inherent_buf = Vec::new();
+		inherent_buf.resize(inherent_len as usize, 0);
+		ctx.memory().get(inherent_ptr, &mut inherent_buf)?;
+		let inherent =
+			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &inherent_buf[..])
+				.ok_or_else(|| sandbox::HostError)?;
+
+		ctx.ext.suicide(inherent);
+
+		// The trap mechanism is used to immediately terminate the execution.
+		// This trap should be handled appropriately before returning the result
+		// to the user of this crate.
+		ctx.special_trap = Some(SpecialTrap::Suicide);
+		Err(sandbox::HostError)
+	},
+
 	// Save a data buffer as a result of the execution.
+	//
+	// This function doesn't return and finishes the execution of the contract immediately.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
 		let data_len_in_gas = <<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(data_len as u64);
 		let price = (ctx.config.return_data_per_byte_cost)
@@ -300,11 +335,10 @@ define_env!(init_env, <E: Ext>,
 		ctx.output_data.resize(data_len as usize, 0);
 		ctx.memory.get(data_ptr, &mut ctx.output_data)?;
 
-		ctx.special_trap = Some(SpecialTrap::Return);
-
 		// The trap mechanism is used to immediately terminate the execution.
 		// This trap should be handled appropriately before returning the result
 		// to the user of this crate.
+		ctx.special_trap = Some(SpecialTrap::Return);
 		Err(sandbox::HostError)
 	},
 

@@ -70,6 +70,8 @@ pub trait Ext {
 		data: &[u8],
 		output_data: &mut Vec<u8>,
 	) -> Result<(), ()>;
+
+	fn suicide(&mut self, inherent: AccountIdOf<Self::T>);
 }
 
 /// Error that can occur while preparing or executing wasm smart-contract.
@@ -209,11 +211,16 @@ mod tests {
 		data: Vec<u8>,
 		gas_left: u64,
 	}
+	#[derive(Debug, PartialEq, Eq)]
+	struct SuicideEntry {
+		inherent: u64,
+	}
 	#[derive(Default)]
 	pub struct MockExt {
 		storage: HashMap<Vec<u8>, Vec<u8>>,
 		creates: Vec<CreateEntry>,
 		transfers: Vec<TransferEntry>,
+		suicides: Vec<SuicideEntry>,
 		next_account_id: u64,
 	}
 	impl Ext for MockExt {
@@ -260,6 +267,11 @@ mod tests {
 			// Assume for now that it was just a plain transfer.
 			// TODO: Add tests for different call outcomes.
 			Ok(())
+		}
+		fn suicide(&mut self, inherent: u64) {
+			self.suicides.push(SuicideEntry {
+				inherent,
+			});
 		}
 	}
 
@@ -567,6 +579,46 @@ mod tests {
 		assert_eq!(
 			return_buf,
 			[0x22; 32].to_vec(),
+		);
+	}
+
+	const CODE_SUICIDE: &str = r#"
+(module
+	(import "env" "ext_suicide" (func $ext_suicide (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_suicide
+			(i32.const 4)
+			(i32.const 32)
+		)
+	)
+
+	;; Destination AccountId to transfer the funds after the suicide.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+)
+"#;
+
+	#[test]
+	fn suicide() {
+		let code_suicide = wabt::wat2wasm(CODE_SUICIDE).unwrap();
+
+		let mut mock_ext = MockExt::default();
+		execute(
+			&code_suicide,
+			&[],
+			&mut Vec::new(),
+			&mut mock_ext,
+			&::vm::Config::default(),
+			&mut GasMeter::with_limit(50_000, 1),
+		).unwrap();
+
+		assert_eq!(
+			mock_ext.suicides,
+			vec![SuicideEntry {
+				inherent: 9,
+			}],
 		);
 	}
 }
