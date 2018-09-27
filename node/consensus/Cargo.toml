@@ -8,7 +8,7 @@ futures = "0.1.17"
 parking_lot = "0.4"
 tokio = "0.1.7"
 error-chain = "0.12"
-log = "0.3"
+log = "0.4"
 exit-future = "0.1"
 rhododendron = "0.3"
 node-primitives = { path = "../primitives" }

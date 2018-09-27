@@ -36,11 +36,10 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+extern crate substrate_primitives as primitives;
 extern crate smallvec;
 extern crate bytes;
 extern crate unsigned_varint;
-
-extern crate ethereum_types;
 
 #[macro_use]
 extern crate error_chain;

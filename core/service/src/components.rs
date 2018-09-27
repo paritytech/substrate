@@ -140,9 +140,6 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Extended light service type.
 	type LightService: Deref<Target = Service<LightComponents<Self>>> + Send + Sync + 'static;
 
-	/// Network protocol id.
-	const NETWORK_PROTOCOL_ID: network::ProtocolId;
-
 	//TODO: replace these with a constructor trait. that TransactionPool implements.
 	/// Extrinsic pool constructor for the full client.
 	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<FullClient<Self>>)

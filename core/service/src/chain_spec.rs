@@ -86,6 +86,7 @@ struct ChainSpecFile {
 	pub id: String,
 	pub boot_nodes: Vec<String>,
 	pub telemetry_url: Option<String>,
+	pub protocol_id: Option<String>,
 }
 
 /// A configuration of a chain. Can be used to build a genesis block.
@@ -120,6 +121,10 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		self.spec.telemetry_url.as_ref().map(String::as_str)
 	}
 
+	pub fn protocol_id(&self) -> Option<&str> {
+		self.spec.protocol_id.as_ref().map(String::as_str)
+	}
+
 	/// Parse json content into a `ChainSpec`
 	pub fn from_embedded(json: &'static [u8]) -> Result<Self, String> {
 		let spec = json::from_slice(json).map_err(|e| format!("Error parsing spec file: {}", e))?;
@@ -145,7 +150,8 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		id: &str,
 		constructor: fn() -> G,
 		boot_nodes: Vec<String>,
-		telemetry_url: Option<&str>
+		telemetry_url: Option<&str>,
+		protocol_id: Option<&str>,
 	) -> Self
 	{
 		let spec = ChainSpecFile {
@@ -153,6 +159,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			id: id.to_owned(),
 			boot_nodes: boot_nodes,
 			telemetry_url: telemetry_url.map(str::to_owned),
+			protocol_id: protocol_id.map(str::to_owned),
 		};
 		ChainSpec {
 			spec,

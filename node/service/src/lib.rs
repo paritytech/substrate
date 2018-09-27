@@ -113,8 +113,6 @@ impl service::ServiceFactory for Factory {
 	type FullService = Service<service::FullComponents<Self>>;
 	type LightService = Service<service::LightComponents<Self>>;
 
-	const NETWORK_PROTOCOL_ID: network::ProtocolId = ::node_network::PROTOCOL_ID;
-
 	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<service::FullClient<Self>>)
 		-> Result<TransactionPool<service::FullClient<Self>>, Error>
 	{

@@ -31,11 +31,6 @@ use futures::{future, Future};
 
 use std::cell::RefCell;
 
-mod vergen {
-	#![allow(unused)]
-	include!(concat!(env!("OUT_DIR"), "/version.rs"));
-}
-
 // handles ctrl-c
 struct Exit;
 impl cli::IntoExit for Exit {
@@ -59,7 +54,7 @@ quick_main!(run);
 
 fn run() -> cli::error::Result<()> {
 	let version = VersionInfo {
-		commit: vergen::short_sha(),
+		commit: env!("VERGEN_SHA_SHORT"),
 		version: env!("CARGO_PKG_VERSION"),
 		executable_name: "substrate",
 		author: "Parity Team <admin@parity.io>",

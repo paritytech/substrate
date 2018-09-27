@@ -15,7 +15,7 @@ futures = "0.1"
 ctrlc = { version = "3.0", features = ["termination"] }
 
 [build-dependencies]
-vergen = "0.1"
+vergen = "2"
 
 [workspace]
 members = [
