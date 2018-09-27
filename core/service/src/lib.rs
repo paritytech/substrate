@@ -84,6 +84,8 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	ComponentExHash, ComponentExtrinsic,
 };
 
+const DEFAULT_PROTOCOL_ID: &'static str = "sup";
+
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
@@ -171,7 +173,15 @@ impl<Components> Service<Components>
 			specialization: network_protocol,
 		};
 
-		let network = network::Service::new(network_params, Components::Factory::NETWORK_PROTOCOL_ID)?;
+		let mut protocol_id = network::ProtocolId::default();
+		let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
+		if protocol_id_full.len() > protocol_id.len() {
+			warn!("Protocol ID truncated to {} chars", protocol_id.len());
+		}
+		let id_len = protocol_id_full.len().min(protocol_id.len());
+		&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
+
+		let network = network::Service::new(network_params, protocol_id)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
 		{
