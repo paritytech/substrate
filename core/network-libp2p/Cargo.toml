@@ -8,7 +8,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 bytes = "0.4"
-error-chain = { version = "0.12", default_features = false }
+error-chain = { version = "0.12", default-features = false }
 fnv = "1.0"
 futures = "0.1"
 libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "8111062f0177fd7423626f2db9560273644a4c4d", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
