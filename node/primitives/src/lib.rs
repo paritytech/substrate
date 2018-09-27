@@ -54,7 +54,7 @@ pub type AccountId = ::primitives::H256;
 pub type AccountIndex = u32;
 
 /// Balance of an account.
-pub type Balance = u64;
+pub type Balance = u128;
 
 /// The Ed25519 pub key of an session that belongs to an authority of the chain. This is
 /// exactly equivalent to what the substrate calls an "authority".

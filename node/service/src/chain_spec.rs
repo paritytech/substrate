@@ -24,9 +24,8 @@ use service::ChainSpec;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
-pub fn testnet_config() -> Result<ChainSpec<GenesisConfig>, String> {
-	//ChainSpec::from_embedded(include_bytes!("../res/node.json"))
-	Ok(staging_testnet_config())
+pub fn bbq_birch_config() -> Result<ChainSpec<GenesisConfig>, String> {
+	ChainSpec::from_embedded(include_bytes!("../res/bbq-birch.json"))
 }
 
 fn staging_testnet_config_genesis() -> GenesisConfig {
@@ -39,6 +38,15 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	let endowed_accounts = vec![
 		hex!["f295940fa750df68a686fcf4abd4111c8a9c5a5a5a83c4c8639c451a94a7adfd"].into(),
 	];
+	const MILLICENTS: u128 = 1_000_000_000;
+	const CENTS: u128 = 1_000 * MILLICENTS;	// assume this is worth about a cent.
+	const DOLLARS: u128 = 100 * CENTS;
+
+	const SECS_PER_BLOCK: u64 = 5;
+	const MINUTES: u64 = 60 / SECS_PER_BLOCK;
+	const HOURS: u64 = MINUTES * 60;
+	const DAYS: u64 = HOURS * 24;
+
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),	// TODO change
@@ -46,65 +54,65 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		}),
 		system: None,
 		balances: Some(BalancesConfig {
-			transaction_base_fee: 100,
-			transaction_byte_fee: 1,
-			existential_deposit: 500,
-			transfer_fee: 0,
-			creation_fee: 0,
-			reclaim_rebate: 0,
-			balances: endowed_accounts.iter().map(|&k|(k, 1u64 << 60)).collect(),
+			balances: endowed_accounts.iter().map(|&k|(k, 10_000_000 * DOLLARS)).collect(),
+			transaction_base_fee: 1 * CENTS,
+			transaction_byte_fee: 10 * MILLICENTS,
+			existential_deposit: 1 * DOLLARS,
+			transfer_fee: 1 * CENTS,
+			creation_fee: 1 * CENTS,
+			reclaim_rebate: 1 * CENTS,
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
-			session_length: 60,	// that's 5 minutes per session.
+			session_length: 5 * MINUTES
 		}),
 		staking: Some(StakingConfig {
 			current_era: 0,
 			intentions: initial_authorities.iter().cloned().map(Into::into).collect(),
-			offline_slash: Perbill::from_millionths(1000),
-			session_reward: Perbill::from_billionths(60),
+			offline_slash: Perbill::from_billionths(1_000_000),
+			session_reward: Perbill::from_billionths(2_065),
 			current_offline_slash: 0,
 			current_session_reward: 0,
-			validator_count: 12,
-			sessions_per_era: 12,	// 1 hour per era
-			bonding_duration: 24 * 60 * 12,	// 1 day per bond.
+			validator_count: 7,
+			sessions_per_era: 12,
+			bonding_duration: 1 * DAYS,
 			offline_slash_grace: 4,
 			minimum_validator_count: 4,
 		}),
 		democracy: Some(DemocracyConfig {
-			launch_period: 12 * 60 * 24,	// 1 day per public referendum
-			voting_period: 12 * 60 * 24 * 3,	// 3 days to discuss & vote on an active referendum
-			minimum_deposit: 5000,	// 12000 as the minimum deposit for a referendum
+			launch_period: 5 * MINUTES,	// 1 day per public referendum
+			voting_period: 5 * MINUTES,	// 3 days to discuss & vote on an active referendum
+			minimum_deposit: 50 * DOLLARS,	// 12000 as the minimum deposit for a referendum
 		}),
 		council: Some(CouncilConfig {
 			active_council: vec![],
-			candidacy_bond: 5000,	// 5000 to become a council candidate
-			voter_bond: 1000,		// 1000 down to vote for a candidate
-			present_slash_per_voter: 1,	// slash by 1 per voter for an invalid presentation.
-			carry_count: 6,		// carry over the 6 runners-up to the next council election
-			presentation_duration: 12 * 60 * 24,	// one day for presenting winners.
-			approval_voting_period: 12 * 60 * 24 * 2,	// two days period between possible council elections.
-			term_duration: 12 * 60 * 24 * 24,	// 24 day term duration for the council.
-			desired_seats: 0, // start with no council: we'll raise this once the stake has been dispersed a bit.
-			inactive_grace_period: 1,	// one addition vote should go by before an inactive voter can be reaped.
+			candidacy_bond: 10 * DOLLARS,
+			voter_bond: 1 * DOLLARS,
+			present_slash_per_voter: 1 * CENTS,
+			carry_count: 6,
+			presentation_duration: 1 * DAYS,
+			approval_voting_period: 2 * DAYS,
+			term_duration: 28 * DAYS,
+			desired_seats: 0,
+			inactive_grace_period: 1,	// one additional vote should go by before an inactive voter can be reaped.
 
-			cooloff_period: 12 * 60 * 24 * 4, // 4 day cooling off period if council member vetoes a proposal.
-			voting_period: 12 * 60 * 24, // 1 day voting period for council members.
+			cooloff_period: 4 * DAYS,
+			voting_period: 1 * DAYS,
 		}),
 		timestamp: Some(TimestampConfig {
-			period: 5,					// 5 second block time.
+			period: SECS_PER_BLOCK,
 		}),
 		treasury: Some(TreasuryConfig {
 			proposal_bond: Permill::from_percent(5),
-			proposal_bond_minimum: 1_000_000,
-			spend_period: 12 * 60 * 24,
+			proposal_bond_minimum: 1 * DOLLARS,
+			spend_period: 1 * DAYS,
 			burn: Permill::from_percent(50),
 		}),
 		contract: Some(ContractConfig {
-			contract_fee: 21,
-			call_base_fee: 135,
-			create_base_fee: 175,
-			gas_price: 1,
+			contract_fee: 1 * CENTS,
+			call_base_fee: 1000,
+			create_base_fee: 1000,
+			gas_price: 1 * MILLICENTS,
 			max_depth: 1024,
 			block_gas_limit: 10_000_000,
 		}),
@@ -113,7 +121,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 
 /// Staging testnet config.
 pub fn staging_testnet_config() -> ChainSpec<GenesisConfig> {
-	let boot_nodes = vec![];
+	let boot_nodes = vec![
+	];
 	ChainSpec::from_genesis(
 		"Staging Testnet",
 		"staging_testnet",
@@ -146,7 +155,7 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-			balances: endowed_accounts.iter().map(|&k|(k, (1u64 << 60))).collect(),
+			balances: endowed_accounts.iter().map(|&k|(k, (1 << 60))).collect(),
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
