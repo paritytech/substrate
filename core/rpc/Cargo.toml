@@ -8,7 +8,7 @@ error-chain = "0.12"
 jsonrpc-core = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-macros = { git="https://github.com/paritytech/jsonrpc.git" }
 jsonrpc-pubsub = { git="https://github.com/paritytech/jsonrpc.git" }
-log = "0.3"
+log = "0.4"
 parking_lot = "0.4"
 parity-codec = { version = "2.0" }
 substrate-client = { path = "../client" }

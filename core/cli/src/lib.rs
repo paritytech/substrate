@@ -506,12 +506,12 @@ fn default_base_path() -> PathBuf {
 fn init_logger(pattern: &str) {
 	use ansi_term::Colour;
 
-	let mut builder = env_logger::LogBuilder::new();
+	let mut builder = env_logger::Builder::new();
 	// Disable info logging by default for some modules:
-	builder.filter(Some("ws"), log::LogLevelFilter::Warn);
-	builder.filter(Some("hyper"), log::LogLevelFilter::Warn);
+	builder.filter(Some("ws"), log::LevelFilter::Warn);
+	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	// Enable info for others.
-	builder.filter(None, log::LogLevelFilter::Info);
+	builder.filter(None, log::LevelFilter::Info);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		builder.parse(&lvl);
@@ -521,10 +521,10 @@ fn init_logger(pattern: &str) {
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 
-	let format = move |record: &log::LogRecord| {
+	builder.format(move |buf, record| {
 		let timestamp = time::strftime("%Y-%m-%d %H:%M:%S", &time::now()).expect("Error formatting log timestamp");
 
-		let mut output = if log::max_log_level() <= log::LogLevelFilter::Info {
+		let mut output = if log::max_level() <= log::LevelFilter::Info {
 			format!("{} {}", Colour::Black.bold().paint(timestamp), record.args())
 		} else {
 			let name = ::std::thread::current().name().map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
@@ -535,15 +535,14 @@ fn init_logger(pattern: &str) {
 			output = kill_color(output.as_ref());
 		}
 
-		if !isatty && record.level() <= log::LogLevel::Info && atty::is(atty::Stream::Stdout) {
+		if !isatty && record.level() <= log::Level::Info && atty::is(atty::Stream::Stdout) {
 			// duplicate INFO/WARN output to console
 			println!("{}", output);
 		}
-		output
-	};
-	builder.format(format);
+		write!(buf, "{}", output)
+	});
 
-	builder.init().expect("Logger initialized only once.");
+	builder.init();
 }
 
 fn kill_color(s: &str) -> String {
