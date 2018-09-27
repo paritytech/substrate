@@ -1708,6 +1708,7 @@ dependencies = [
  "sr-io 0.1.0",
  "substrate-bft 0.1.0",
  "substrate-client 0.1.0",
+ "substrate-keyring 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-service 0.3.0",

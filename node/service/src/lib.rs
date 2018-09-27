@@ -43,6 +43,8 @@ extern crate parking_lot;
 extern crate substrate_bft as bft;
 #[cfg(test)]
 extern crate substrate_test_client;
+#[cfg(test)]
+extern crate substrate_keyring as keyring;
 
 pub mod chain_spec;
 
@@ -216,6 +218,7 @@ mod tests {
 	use node_network::consensus::ConsensusNetwork;
 	use substrate_test_client::fake_justify;
 	use node_primitives::BlockId;
+	use keyring::Keyring;
 
 	#[test]
 	fn test_connectivity() {
@@ -224,8 +227,8 @@ mod tests {
 
 	#[test]
 	fn test_sync() {
-		let alice = Arc::new(ed25519::Pair::from_seed(b"Alice                           "));
-		let bob = Arc::new(ed25519::Pair::from_seed(b"Bob                             "));
+		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
+		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
 		let validators = vec![alice.public().0.into(), bob.public().0.into()];
 		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
 		let offline = Arc::new(RwLock::new(OfflineTracker::new()));
