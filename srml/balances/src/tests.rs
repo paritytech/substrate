@@ -471,3 +471,19 @@ fn account_removal_on_free_too_low() {
 		},
 	);
 }
+
+#[test]
+fn transfer_overflow_isnt_exploitable() {
+	with_externalities(
+		&mut ExtBuilder::default().creation_fee(50).build(),
+		|| {
+			// Craft a value that will overflow if summed with `creation_fee`.
+			let evil_value = u64::max_value() - 49;
+
+			assert_err!(
+				Balances::transfer(Some(1).into(), 5.into(), evil_value),
+				"got overflow after adding a fee to value"
+			);
+		}
+	);
+}

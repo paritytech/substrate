@@ -287,7 +287,10 @@ impl<T: Trait> Module<T> {
 		let to_balance = Self::free_balance(&dest);
 		let would_create = to_balance.is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
-		let liability = value + fee;
+		let liability = match value.checked_add(&fee) {
+			Some(l) => l,
+			None => return Err("got overflow after adding a fee to value"),
+		};
 
 		let new_from_balance = match from_balance.checked_sub(&liability) {
 			Some(b) => b,
