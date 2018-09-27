@@ -36,14 +36,15 @@ impl AuthorityId {
 #[cfg(feature = "std")]
 impl ::std::fmt::Display for AuthorityId {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{}", ::hexdisplay::HexDisplay::from(&self.0))
+		write!(f, "{}", ::ed25519::Public(self.0).to_ss58check())
 	}
 }
 
 #[cfg(feature = "std")]
 impl ::std::fmt::Debug for AuthorityId {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		write!(f, "{}", ::hexdisplay::HexDisplay::from(&self.0))
+		let h = format!("{}", ::hexdisplay::HexDisplay::from(&self.0));
+		write!(f, "{} ({}…{})", ::ed25519::Public(self.0).to_ss58check(), &h[0..8], &h[60..])
 	}
 }
 
