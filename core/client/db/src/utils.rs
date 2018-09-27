@@ -100,14 +100,14 @@ pub fn db_err(err: io::Error) -> client::error::Error {
 }
 
 /// Open RocksDB database.
-pub fn open_database(config: &DatabaseSettings, db_type: &str) -> client::error::Result<Arc<KeyValueDB>> {
+pub fn open_database(config: &DatabaseSettings, col_meta: Option<u32>, db_type: &str) -> client::error::Result<Arc<KeyValueDB>> {
 	let mut db_config = DatabaseConfig::with_columns(Some(NUM_COLUMNS));
 	db_config.memory_budget = config.cache_size;
 	let path = config.path.to_str().ok_or_else(|| client::error::ErrorKind::Backend("Invalid database path".into()))?;
 	let db = Database::open(&db_config, &path).map_err(db_err)?;
 
 	// check database type
-	match db.get(COLUMN_META, meta_keys::TYPE).map_err(db_err)? {
+	match db.get(col_meta, meta_keys::TYPE).map_err(db_err)? {
 		Some(stored_type) => {
 			if db_type.as_bytes() != &*stored_type {
 				return Err(client::error::ErrorKind::Backend(
@@ -116,7 +116,7 @@ pub fn open_database(config: &DatabaseSettings, db_type: &str) -> client::error:
 		},
 		None => {
 			let mut transaction = DBTransaction::new();
-			transaction.put(COLUMN_META, meta_keys::TYPE, db_type.as_bytes());
+			transaction.put(col_meta, meta_keys::TYPE, db_type.as_bytes());
 			db.write(transaction).map_err(db_err)?;
 		},
 	}
@@ -175,14 +175,14 @@ pub fn read_header<Block: BlockT>(
 }
 
 /// Read meta from the database.
-pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<
+pub fn read_meta<Block>(db: &KeyValueDB, col_meta: Option<u32>, col_header: Option<u32>) -> Result<
 	Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
 	client::error::Error,
 >
 	where
 		Block: BlockT,
 {
-	let genesis_hash: Block::Hash = match db.get(COLUMN_META, meta_keys::GENESIS_HASH).map_err(db_err)? {
+	let genesis_hash: Block::Hash = match db.get(col_meta, meta_keys::GENESIS_HASH).map_err(db_err)? {
 		Some(h) => match Decode::decode(&mut &h[..]) {
 			Some(h) => h,
 			None => return Err(client::error::ErrorKind::Backend("Error decoding genesis hash".into()).into()),
@@ -197,7 +197,7 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_header: Option<u32>) -> Result<
 	};
 
 	let load_meta_block = |desc, key| -> Result<_, client::error::Error> {
-		if let Some(Some(header)) = db.get(COLUMN_META, key).and_then(|id|
+		if let Some(Some(header)) = db.get(col_meta, key).and_then(|id|
 			match id {
 				Some(id) => db.get(col_header, &id).map(|h| h.map(|b| Block::Header::decode(&mut &b[..]))),
 				None => Ok(None),

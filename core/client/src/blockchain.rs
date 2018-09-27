@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot blockchain trait
+//! Substrate blockchain trait
 
 use primitives::AuthorityId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};

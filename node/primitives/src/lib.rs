@@ -22,9 +22,6 @@
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
@@ -34,7 +31,6 @@ extern crate parity_codec_derive;
 extern crate sr_std as rstd;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_primitives as primitives;
-extern crate parity_codec as codec;
 
 use rstd::prelude::*;
 use runtime_primitives::generic;

@@ -24,10 +24,8 @@ extern crate rhododendron;
 extern crate substrate_bft as bft;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
-extern crate srml_support as runtime_support;
 extern crate sr_primitives as runtime_primitives;
 #[macro_use] extern crate substrate_executor as executor;
-extern crate hash_db;
 
 pub extern crate substrate_client as client;
 pub extern crate substrate_keyring as keyring;

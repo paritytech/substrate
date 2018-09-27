@@ -110,11 +110,11 @@ args:
   - telemetry:
       short: t
       long: telemetry
-      help: Should connect to the Polkadot telemetry server (telemetry is off by default on local chains)
+      help: Should connect to the Substrate telemetry server (telemetry is off by default on local chains)
       takes_value: false
   - no-telemetry:
       long: no-telemetry
-      help: Should not connect to the Polkadot telemetry server (telemetry is on by default on global chains)
+      help: Should not connect to the Substrate telemetry server (telemetry is on by default on global chains)
       takes_value: false
   - telemetry-url:
       long: telemetry-url

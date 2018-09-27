@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // tag::description[]
-//! Shareable Polkadot types.
+//! Shareable Substrate types.
 // end::description[]
 
 #![warn(missing_docs)]
@@ -62,8 +62,6 @@ extern crate core;
 extern crate wasmi;
 extern crate hash_db;
 extern crate hash256_std_hasher;
-#[cfg(feature = "std")]
-extern crate elastic_array;
 
 extern crate sr_std as rstd;
 

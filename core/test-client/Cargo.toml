@@ -11,8 +11,6 @@ parity-codec = "2.0"
 substrate-executor = { path = "../executor" }
 substrate-keyring = { path = "../../core/keyring" }
 substrate-primitives = { path = "../primitives" }
-srml-support = { path = "../../srml/support" }
 substrate-test-runtime = { path = "../test-runtime" }
 sr-primitives = { path = "../sr-primitives" }
-hash-db = { git = "https://github.com/paritytech/trie" }
 

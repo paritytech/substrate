@@ -502,7 +502,7 @@ fn default_base_path() -> PathBuf {
 	use app_dirs::{AppInfo, AppDataType};
 
 	let app_info = AppInfo {
-		name: "Polkadot",
+		name: "Substrate",
 		author: "Parity Technologies",
 	};
 
@@ -548,7 +548,7 @@ fn init_logger(pattern: &str) {
 			// duplicate INFO/WARN output to console
 			println!("{}", output);
 		}
-		write!(buf, "{}", output)
+		writeln!(buf, "{}", output)
 	});
 
 	builder.init();

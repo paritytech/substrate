@@ -31,7 +31,6 @@ extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
 extern crate kvdb;
 extern crate hash_db;
-extern crate memory_db;
 extern crate parking_lot;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;
@@ -115,7 +114,7 @@ pub fn new_client<E, S, Block>(
 }
 
 mod columns {
-	pub const META: Option<u32> = Some(0);
+	pub const META: Option<u32> = ::utils::COLUMN_META;
 	pub const STATE: Option<u32> = Some(1);
 	pub const STATE_META: Option<u32> = Some(2);
 	pub const HASH_LOOKUP: Option<u32> = Some(3);
@@ -152,8 +151,8 @@ pub struct BlockchainDb<Block: BlockT> {
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
-		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
-		let leaves = LeafSet::read_from_db(&*db, columns::HEADER, meta_keys::LEAF_PREFIX)?;
+		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
+		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
 			leaves: RwLock::new(leaves),
@@ -400,7 +399,7 @@ impl<Block: BlockT> Backend<Block> {
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
-		let db = open_database(&config, "full")?;
+		let db = open_database(&config, columns::META, "full")?;
 
 		Backend::from_kvdb(db as Arc<_>, config.pruning, canonicalization_delay)
 	}
@@ -640,7 +639,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			{
 				let mut leaves = self.blockchain.leaves.write();
 				let displaced_leaf = leaves.import(hash, number, parent_hash);
-				leaves.prepare_transaction(&mut transaction, columns::HEADER, meta_keys::LEAF_PREFIX);
+				leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
 
 				let write_result = self.storage.db.write(transaction).map_err(db_err);
 				if let Err(e) = write_result {

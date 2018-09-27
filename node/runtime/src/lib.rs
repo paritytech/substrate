@@ -33,10 +33,6 @@ extern crate sr_primitives as runtime_primitives;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-extern crate parity_codec as codec;
 extern crate substrate_primitives;
 
 #[macro_use]

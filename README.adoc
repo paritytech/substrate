@@ -1,5 +1,5 @@
 = Substrate
-:Author: Polkadot developers
+:Author: Substrate developers
 :Revision: 0.2.0
 :toc:
 :sectnums:

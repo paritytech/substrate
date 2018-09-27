@@ -21,7 +21,6 @@ extern crate substrate_primitives;
 extern crate sr_primitives;
 extern crate node_runtime as runtime;
 extern crate node_primitives as primitives;
-extern crate parking_lot;
 
 #[cfg(test)]
 extern crate substrate_keyring;
