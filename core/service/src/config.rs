@@ -56,8 +56,10 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub custom: C,
 	/// Node name.
 	pub name: String,
-	/// Execution strategy.
-	pub execution_strategy: ExecutionStrategy,
+	/// Block execution strategy.
+	pub block_execution_strategy: ExecutionStrategy,
+	/// Runtime API execution strategy.
+	pub api_execution_strategy: ExecutionStrategy,
 	/// RPC over HTTP binding address. `None` if disabled.
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
@@ -83,7 +85,8 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			keys: Default::default(),
 			custom: Default::default(),
 			pruning: PruningMode::default(),
-			execution_strategy: ExecutionStrategy::Both,
+			block_execution_strategy: ExecutionStrategy::Both,
+			api_execution_strategy: ExecutionStrategy::Both,
 			rpc_http: None,
 			rpc_ws: None,
 			telemetry_url: None,

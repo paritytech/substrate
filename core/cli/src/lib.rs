@@ -261,18 +261,18 @@ where
 
 	let role =
 		if matches.is_present("light") {
-			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
-			config.execution_strategy = service::ExecutionStrategy::Both;
+			config.block_execution_strategy = service::ExecutionStrategy::Both;
 			service::Roles::AUTHORITY
 		} else {
-			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::FULL
 		};
 
 	if let Some(s) = matches.value_of("execution") {
-		config.execution_strategy = match s {
+		config.block_execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
 			"native" => service::ExecutionStrategy::NativeWhenPossible,
 			"wasm" => service::ExecutionStrategy::AlwaysWasm,
@@ -400,11 +400,20 @@ fn import_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesi
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 
 	if let Some(s) = matches.value_of("execution") {
-		config.execution_strategy = match s {
+		config.block_execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
 			"native" => service::ExecutionStrategy::NativeWhenPossible,
 			"wasm" => service::ExecutionStrategy::AlwaysWasm,
-			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+			_ => return Err(error::ErrorKind::Input("Invalid block execution mode specified".to_owned()).into()),
+		};
+	}
+
+	if let Some(s) = matches.value_of("api-execution") {
+		config.api_execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid API execution mode specified".to_owned()).into()),
 		};
 	}
 

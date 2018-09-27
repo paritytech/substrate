@@ -214,7 +214,13 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
-		Ok((Arc::new(client_db::new_client(db_settings, executor, &config.chain_spec, config.execution_strategy)?), None))
+		Ok((Arc::new(client_db::new_client(
+			db_settings,
+			executor,
+			&config.chain_spec,
+			config.block_execution_strategy,
+			config.api_execution_strategy,
+		)?), None))
 	}
 
 	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)

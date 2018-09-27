@@ -101,7 +101,8 @@ pub fn new_client<E, S, Block>(
 	settings: DatabaseSettings,
 	executor: E,
 	genesis_storage: S,
-	execution_strategy: ExecutionStrategy,
+	block_execution_strategy: ExecutionStrategy,
+	api_execution_strategy: ExecutionStrategy,
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
 	where
 		Block: BlockT,
@@ -110,7 +111,7 @@ pub fn new_client<E, S, Block>(
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
-	Ok(client::Client::new(backend, executor, genesis_storage, execution_strategy)?)
+	Ok(client::Client::new(backend, executor, genesis_storage, block_execution_strategy, api_execution_strategy)?)
 }
 
 mod columns {
