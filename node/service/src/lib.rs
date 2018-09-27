@@ -166,14 +166,14 @@ impl service::ServiceFactory for Factory {
 					5
 				});
 			Some(consensus::Service::new(
-					client.clone(),
-					client.clone(),
-					consensus_net,
-					service.transaction_pool(),
-					executor,
-					key,
-					block_delay,
-					))
+				client.clone(),
+				client.clone(),
+				consensus_net,
+				service.transaction_pool(),
+				executor,
+				key,
+				block_delay,
+			))
 		} else {
 			None
 		};
