@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot service components.
+//! Substrate service components.
 
 use std::fmt;
 use std::sync::Arc;

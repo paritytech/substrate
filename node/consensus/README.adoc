@@ -1,5 +1,5 @@
 
-= Polkadot Consensus
+= Substrate Consensus
 
 placeholder
 //TODO Write content :)

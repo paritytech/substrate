@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot state API.
+//! Substrate state API.
 
 use std::{
 	collections::HashMap,
@@ -44,7 +44,7 @@ mod tests;
 use self::error::Result;
 
 build_rpc_trait! {
-	/// Polkadot state API
+	/// Substrate state API
 	pub trait StateApi<Hash> {
 		type Metadata;
 

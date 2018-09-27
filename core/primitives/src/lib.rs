@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // tag::description[]
-//! Shareable Polkadot types.
+//! Shareable Substrate types.
 // end::description[]
 
 #![warn(missing_docs)]

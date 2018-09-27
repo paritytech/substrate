@@ -493,7 +493,7 @@ fn default_base_path() -> PathBuf {
 	use app_dirs::{AppInfo, AppDataType};
 
 	let app_info = AppInfo {
-		name: "Polkadot",
+		name: "Substrate",
 		author: "Parity Technologies",
 	};
 

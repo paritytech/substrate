@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot Blake2b Hasher implementation
+//! Substrate Blake2b Hasher implementation
 
 use hash_db::Hasher;
 use hash256_std_hasher::Hash256StdHasher;
