@@ -23,7 +23,7 @@ use std::time::Duration;
 use TimerToken;
 use libp2p::{multiaddr::Protocol, Multiaddr};
 use error::Error;
-use ethereum_types::H512;
+use primitives::hash::H512;
 
 /// Protocol handler level packet id
 pub type PacketId = u8;
