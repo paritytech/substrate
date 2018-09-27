@@ -113,7 +113,7 @@ pub fn new_client<E, S, Block>(
 }
 
 mod columns {
-	pub const META: Option<u32> = Some(0);
+	pub const META: Option<u32> = ::utils::COLUMN_META;
 	pub const STATE: Option<u32> = Some(1);
 	pub const STATE_META: Option<u32> = Some(2);
 	pub const HASH_LOOKUP: Option<u32> = Some(3);
