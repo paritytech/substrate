@@ -151,8 +151,8 @@ pub struct BlockchainDb<Block: BlockT> {
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
-		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
-		let leaves = LeafSet::read_from_db(&*db, columns::HEADER, meta_keys::LEAF_PREFIX)?;
+		let meta = read_meta::<Block>(&*db, columns::META)?;
+		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
 			leaves: RwLock::new(leaves),
@@ -638,7 +638,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			{
 				let mut leaves = self.blockchain.leaves.write();
 				let displaced_leaf = leaves.import(hash, number, parent_hash);
-				leaves.prepare_transaction(&mut transaction, columns::HEADER, meta_keys::LEAF_PREFIX);
+				leaves.prepare_transaction(&mut transaction, columns::META, meta_keys::LEAF_PREFIX);
 
 				let write_result = self.storage.db.write(transaction).map_err(db_err);
 				if let Err(e) = write_result {
