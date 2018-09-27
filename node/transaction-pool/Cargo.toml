@@ -10,7 +10,7 @@ parking_lot = "0.4"
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 substrate-client = { path = "../../core/client" }
-parity-codec = { version = "2.0" }
+parity-codec = "2.0"
 substrate-keyring = { path = "../../core/keyring" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-primitives = { path = "../../core/primitives" }
