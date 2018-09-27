@@ -185,9 +185,13 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 /// (transfering endowment), specified by `contract_create` flag,
 /// or because of a transfer via `call`.
 ///
-/// Note, that the fee is denominated in `T::Balance` units, but
+/// NOTE: that the fee is denominated in `T::Balance` units, but
 /// charged in `T::Gas` from the provided `gas_meter`. This means
 /// that the actual amount charged might differ.
+///
+/// NOTE: that we allow for draining all funds of the contract so it
+/// can go below existential deposit, essentially giving a contract
+/// the chance to give up it's life.
 fn transfer<'a, T: Trait>(
 	gas_meter: &mut GasMeter<T>,
 	contract_create: bool,
@@ -212,6 +216,7 @@ fn transfer<'a, T: Trait>(
 		return Err("not enough gas to pay transfer fee");
 	}
 
+	// We allow balance to go below the existential deposit here:
 	let from_balance = ctx.overlay.get_balance(transactor);
 	let new_from_balance = match from_balance.checked_sub(&value) {
 		Some(b) => b,
