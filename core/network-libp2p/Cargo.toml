@@ -14,7 +14,7 @@ futures = "0.1"
 libp2p = { git = "https://github.com/tomaka/libp2p-rs", rev = "8111062f0177fd7423626f2db9560273644a4c4d", default-features = false, features = ["libp2p-secio", "libp2p-secio-secp256k1"] }
 parking_lot = "0.5"
 libc = "0.2"
-log = "0.3"
+log = "0.4"
 rand = "0.5.0"
 serde = "1.0.70"
 serde_derive = "1.0.70"

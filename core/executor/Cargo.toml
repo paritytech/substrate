@@ -20,7 +20,7 @@ trie-root = { git = "https://github.com/paritytech/trie" }
 twox-hash = "1.1.0"
 lazy_static = "1.0"
 parking_lot = "*"
-log = "0.3"
+log = "0.4"
 hash-db = { git = "https://github.com/paritytech/trie" }
 
 [dev-dependencies]

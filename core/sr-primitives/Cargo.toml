@@ -13,7 +13,7 @@ parity-codec-derive = { version = "~1.0", default_features = false }
 substrate-primitives = { path = "../primitives", default_features = false }
 sr-std = { path = "../sr-std", default_features = false }
 sr-io = { path = "../sr-io", default_features = false }
-log = {version = "0.3", optional = true }
+log = {version = "0.4", optional = true }
 
 [dev-dependencies]
 serde_json = "1.0"
