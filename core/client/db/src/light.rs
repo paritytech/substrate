@@ -33,7 +33,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
 	Zero, One, As, NumberFor};
 use cache::DbCache;
-use utils::{meta_keys, Meta, db_err, number_to_lookup_key, open_database,
+use utils::{COLUMN_META, meta_keys, Meta, db_err, number_to_lookup_key, open_database,
 	read_db, read_id, read_meta};
 use DatabaseSettings;
 
@@ -71,7 +71,7 @@ impl<Block> LightStorage<Block>
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		let db = open_database(&config, "light")?;
+		let db = open_database(&config, columns::META, "light")?;
 
 		Self::from_kvdb(db as Arc<_>)
 	}
@@ -92,7 +92,7 @@ impl<Block> LightStorage<Block>
 			columns::HEADER,
 			columns::AUTHORITIES
 		)?;
-		let meta = RwLock::new(read_meta::<Block>(&*db, columns::META)?);
+		let meta = RwLock::new(read_meta::<Block>(&*db, columns::META, columns::HEADER)?);
 		let leaves = RwLock::new(LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?);
 
 		Ok(LightStorage {

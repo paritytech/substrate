@@ -150,7 +150,7 @@ pub struct BlockchainDb<Block: BlockT> {
 
 impl<Block: BlockT> BlockchainDb<Block> {
 	fn new(db: Arc<KeyValueDB>) -> Result<Self, client::error::Error> {
-		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
+		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
 		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		Ok(BlockchainDb {
 			db,
@@ -397,7 +397,7 @@ impl<Block: BlockT> Backend<Block> {
 	///
 	/// The pruning window is how old a block must be before the state is pruned.
 	pub fn new(config: DatabaseSettings, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
-		let db = open_database(&config, "full")?;
+		let db = open_database(&config, columns::META, "full")?;
 
 		Backend::from_kvdb(db as Arc<_>, config.pruning, canonicalization_delay)
 	}
