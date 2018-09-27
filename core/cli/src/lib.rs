@@ -539,7 +539,7 @@ fn init_logger(pattern: &str) {
 			// duplicate INFO/WARN output to console
 			println!("{}", output);
 		}
-		write!(buf, "{}", output)
+		writeln!(buf, "{}", output)
 	});
 
 	builder.init();
