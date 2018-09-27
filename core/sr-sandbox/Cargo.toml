@@ -12,7 +12,7 @@ wasmi = { version = "0.4", optional = true }
 substrate-primitives = { path = "../primitives", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
 sr-io = { path = "../sr-io", default-features = false }
-parity-codec = { version = "~2.0.1", default-features = false }
+parity-codec = { version = "2.0", default-features = false }
 
 [dev-dependencies]
 wabt = "0.4"
