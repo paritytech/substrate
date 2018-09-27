@@ -37,7 +37,6 @@ extern crate parking_lot;
 extern crate trie_root;
 extern crate trie_db;
 extern crate hash_db;
-extern crate rlp;
 extern crate heapsize;
 extern crate memory_db;
 extern crate kvdb;
