@@ -20,7 +20,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block as BlockT;
 use state_machine::{self, OverlayedChanges, Ext,
 	CodeExecutor, ExecutionManager, native_when_possible};
-use executor::{RuntimeVersion, RuntimeInfo};
+use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use codec::Decode;
@@ -89,7 +89,7 @@ where
 	) -> Result<(Vec<u8>, Vec<Vec<u8>>), error::Error>;
 
 	/// Get runtime version if supported.
-	fn native_runtime_version(&self) -> Option<RuntimeVersion>;
+	fn native_runtime_version(&self) -> Option<&NativeVersion>;
 }
 
 /// Call executor that executes methods locally, querying all required
@@ -194,7 +194,7 @@ where
 		.map_err(Into::into)
 	}
 
-	fn native_runtime_version(&self) -> Option<RuntimeVersion> {
-		<E as RuntimeInfo>::NATIVE_VERSION
+	fn native_runtime_version(&self) -> Option<&NativeVersion> {
+		Some(self.executor.native_version())
 	}
 }

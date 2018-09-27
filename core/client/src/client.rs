@@ -905,8 +905,8 @@ impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
 		let native_version: Result<_, bft::Error> = self.executor.native_runtime_version()
 			.ok_or_else(|| bft::ErrorKind::NativeRuntimeMissing.into());
 		let native_version = native_version?;
-		if !on_chain_version.can_author_with(&native_version) {
-			return Err(bft::ErrorKind::IncompatibleAuthoringRuntime(on_chain_version, native_version).into())
+		if !native_version.can_author_with(&on_chain_version) {
+			return Err(bft::ErrorKind::IncompatibleAuthoringRuntime(on_chain_version, native_version.runtime_version.clone()).into())
 		}
 		self.authorities_at(at).map_err(|_| {
 			let descriptor = format!("{:?}", at);

@@ -8,10 +8,10 @@ build = "build.rs"
 rustc_version = "0.2"
 
 [dependencies]
-sr-std = { path = "../sr-std", default_features = false }
-substrate-primitives = { path = "../primitives", default_features = false }
-parity-codec = { version = "2.0", default_features = false }
-hash-db = { git = "https://github.com/paritytech/trie", default_features = false }
+sr-std = { path = "../sr-std", default-features = false }
+substrate-primitives = { path = "../primitives", default-features = false }
+parity-codec = { version = "2.0", default-features = false }
+hash-db = { git = "https://github.com/paritytech/trie", default-features = false }
 
 environmental = { version = "~1.0", optional = true }
 substrate-state-machine = { path = "../state-machine", optional = true }

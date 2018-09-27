@@ -18,7 +18,7 @@ use error::{Error, ErrorKind, Result};
 use state_machine::{CodeExecutor, Externalities};
 use wasm_executor::WasmExecutor;
 use wasmi::Module as WasmModule;
-use runtime_version::RuntimeVersion;
+use runtime_version::{NativeVersion, RuntimeVersion};
 use std::collections::HashMap;
 use codec::Decode;
 use primitives::hashing::blake2_256;
@@ -106,13 +106,11 @@ pub trait NativeExecutionDispatch: Send + Sync {
 	// fn dispatch<H: hash_db::Hasher>(ext: &mut Externalities<H>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 	fn dispatch(ext: &mut Externalities<Blake2Hasher>, method: &str, data: &[u8]) -> Result<Vec<u8>>;
 
-	/// Get native runtime version.
-	const VERSION: RuntimeVersion;
+	/// Provide native runtime version.
+	fn native_version() -> NativeVersion;
 
 	/// Construct corresponding `NativeExecutor`
-	fn new() -> NativeExecutor<Self> where Self: Sized {
-		NativeExecutor::new()
-	}
+	fn new() -> NativeExecutor<Self> where Self: Sized;
 }
 
 /// A generic `CodeExecutor` implementation that uses a delegate to determine wasm code equivalence
@@ -123,6 +121,8 @@ pub struct NativeExecutor<D: NativeExecutionDispatch> {
 	_dummy: ::std::marker::PhantomData<D>,
 	/// The fallback executor in case native isn't available.
 	fallback: WasmExecutor,
+	/// Native runtime version info.
+	native_version: NativeVersion,
 }
 
 impl<D: NativeExecutionDispatch> NativeExecutor<D> {
@@ -131,6 +131,7 @@ impl<D: NativeExecutionDispatch> NativeExecutor<D> {
 		NativeExecutor {
 			_dummy: Default::default(),
 			fallback: WasmExecutor::new(),
+			native_version: D::native_version(),
 		}
 	}
 }
@@ -140,12 +141,15 @@ impl<D: NativeExecutionDispatch> Clone for NativeExecutor<D> {
 		NativeExecutor {
 			_dummy: Default::default(),
 			fallback: self.fallback.clone(),
+			native_version: D::native_version(),
 		}
 	}
 }
 
 impl<D: NativeExecutionDispatch> RuntimeInfo for NativeExecutor<D> {
-	const NATIVE_VERSION: Option<RuntimeVersion> = Some(D::VERSION);
+	fn native_version(&self) -> &NativeVersion {
+		&self.native_version
+	}
 
 	fn runtime_version<E: Externalities<Blake2Hasher>>(
 		&self,
@@ -174,16 +178,16 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 			Ok((module, onchain_version)) => (module, onchain_version),
 			Err(_) => return (Err(ErrorKind::InvalidCode(code.into()).into()), false),
 		};
-		match (use_native, onchain_version.as_ref().map_or(false, |v| v.can_call_with(&D::VERSION))) {
+		match (use_native, onchain_version.as_ref().map_or(false, |v| v.can_call_with(&self.native_version.runtime_version))) {
 			(_, false) => {
-				trace!(target: "executor", "Request for native execution failed (native: {}, chain: {})", D::VERSION, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
+				trace!(target: "executor", "Request for native execution failed (native: {}, chain: {})", self.native_version.runtime_version, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
 				(self.fallback.call_in_wasm_module(ext, heap_pages, module, method, data), false)
 			}
 			(false, _) => {
 				(self.fallback.call_in_wasm_module(ext, heap_pages, module, method, data), false)
 			}
 			_ => {
-				trace!(target: "executor", "Request for native execution succeeded (native: {}, chain: {})", D::VERSION, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
+				trace!(target: "executor", "Request for native execution succeeded (native: {}, chain: {})", self.native_version.runtime_version, onchain_version.as_ref().map_or_else(||"<None>".into(), |v| format!("{}", v)));
 				(D::dispatch(ext, method, data), true)
 			}
 		}
@@ -205,7 +209,6 @@ macro_rules! native_executor_instance {
 		// TODO: this is not so great – I think I should go back to have dispatch take a type param and modify this macro to accept a type param and then pass it in from the test-client instead
 		use primitives::Blake2Hasher as _Blake2Hasher;
 		impl $crate::NativeExecutionDispatch for $name {
-			const VERSION: $crate::RuntimeVersion = $version;
 			fn native_equivalent() -> &'static [u8] {
 				// WARNING!!! This assumes that the runtime was built *before* the main project. Until we
 				// get a proper build script, this must be strictly adhered to or things will go wrong.
@@ -214,6 +217,10 @@ macro_rules! native_executor_instance {
 			fn dispatch(ext: &mut $crate::Externalities<_Blake2Hasher>, method: &str, data: &[u8]) -> $crate::error::Result<Vec<u8>> {
 				$crate::with_native_environment(ext, move || $dispatcher(method, data))?
 					.ok_or_else(|| $crate::error::ErrorKind::MethodNotFound(method.to_owned()).into())
+			}
+
+			fn native_version() -> $crate::NativeVersion {
+				$version()
 			}
 
 			fn new() -> $crate::NativeExecutor<$name> {

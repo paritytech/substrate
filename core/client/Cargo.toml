@@ -6,7 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 error-chain = "0.12"
 fnv = "1.0"
-log = "0.3"
+log = "0.4"
 parking_lot = "0.4"
 trie-root = { git = "https://github.com/paritytech/trie" }
 hex-literal = "0.1"
@@ -14,7 +14,7 @@ futures = "0.1.17"
 slog = "^2"
 heapsize = "0.4"
 substrate-bft = { path = "../bft" }
-parity-codec = { version = "2.0" }
+parity-codec = "2.0"
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
 sr-io = { path = "../sr-io" }

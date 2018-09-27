@@ -21,7 +21,6 @@ extern crate substrate_primitives;
 extern crate sr_primitives;
 extern crate node_runtime as runtime;
 extern crate node_primitives as primitives;
-extern crate node_api;
 extern crate parking_lot;
 
 #[cfg(test)]
@@ -42,11 +41,16 @@ use std::{
 };
 
 use codec::{Decode, Encode};
+use client::{Client as SubstrateClient, CallExecutor};
 use transaction_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
-use node_api::Api;
-use primitives::{AccountId, BlockId, Block, Hash, Index, BlockNumber};
+use primitives::{AccountId, Hash, Index};
 use runtime::{Address, UncheckedExtrinsic};
-use sr_primitives::traits::{Bounded, Checkable, Hash as HashT, BlakeTwo256, Lookup, CurrentHeight, BlockNumberToHash};
+use substrate_primitives::{Blake2Hasher};
+use sr_primitives::generic::BlockId;
+use sr_primitives::traits::{
+	Bounded, Checkable, Block as BlockT, Hash as HashT, Header as HeaderT, BlakeTwo256, Lookup, CurrentHeight,
+	BlockNumberToHash
+};
 
 pub use transaction_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};
@@ -54,8 +58,38 @@ pub use error::{Error, ErrorKind, Result};
 /// Maximal size of a single encoded extrinsic.
 const MAX_TRANSACTION_SIZE: usize = 4 * 1024 * 1024;
 
+/// Local client abstraction for the transaction-pool.
+pub trait Client:
+	Send
+	+ Sync
+	+ CurrentHeight<BlockNumber=<<<Self as Client>::Block as BlockT>::Header as HeaderT>::Number>
+	+ BlockNumberToHash<BlockNumber=<<<Self as Client>::Block as BlockT>::Header as HeaderT>::Number, Hash=<<Self as Client>::Block as BlockT>::Hash> {
+	/// The block used for this API type.
+	type Block: BlockT;
+	/// Get the nonce (né index) of an account at a block.
+	fn index(&self, at: &BlockId<Self::Block>, account: AccountId) -> Result<u64>;
+	/// Get the account id of an address at a block.
+	fn lookup(&self, at: &BlockId<Self::Block>, address: Address) -> Result<Option<AccountId>>;
+}
+
+impl<B, E, Block> Client for SubstrateClient<B, E, Block> where
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	Block: BlockT,
+{
+	type Block = Block;
+
+	fn index(&self, at: &BlockId<Block>, account: AccountId) -> Result<u64> {
+		self.call_api_at(at, "account_nonce", &account).map_err(Into::into)
+	}
+
+	fn lookup(&self, at: &BlockId<Block>, address: Address) -> Result<Option<AccountId>> {
+		self.call_api_at(at, "lookup_address", &address).map_err(Into::into)
+	}
+}
+
 /// Type alias for the transaction pool.
-pub type TransactionPool<A> = transaction_pool::Pool<ChainApi<A>>;
+pub type TransactionPool<C> = transaction_pool::Pool<ChainApi<C>>;
 
 /// A verified transaction which should be includable and non-inherent.
 #[derive(Clone, Debug)]
@@ -104,15 +138,13 @@ impl transaction_pool::VerifiedTransaction for VerifiedTransaction {
 }
 
 /// The transaction pool logic.
-pub struct ChainApi<A> {
-	api: Arc<A>,
+pub struct ChainApi<C: Client> {
+	api: Arc<C>,
 }
 
-impl<A> ChainApi<A> where
-	A: Api,
-{
+impl<C: Client> ChainApi<C> {
 	/// Create a new instance.
-	pub fn new(api: Arc<A>) -> Self {
+	pub fn new(api: Arc<C>) -> Self {
 		ChainApi {
 			api,
 		}
@@ -123,20 +155,20 @@ impl<A> ChainApi<A> where
 ///
 /// This is due for removal when #721 lands
 pub struct LocalContext<'a, A: 'a>(&'a Arc<A>);
-impl<'a, A: 'a + Api> CurrentHeight for LocalContext<'a, A> {
-	type BlockNumber = BlockNumber;
-	fn current_height(&self) -> BlockNumber {
+impl<'a, C: 'a + Client> CurrentHeight for LocalContext<'a, C> {
+	type BlockNumber = <C as CurrentHeight>::BlockNumber;
+	fn current_height(&self) -> Self::BlockNumber {
 		self.0.current_height()
 	}
 }
-impl<'a, A: 'a + Api> BlockNumberToHash for LocalContext<'a, A> {
-	type BlockNumber = BlockNumber;
-	type Hash = Hash;
-	fn block_number_to_hash(&self, n: BlockNumber) -> Option<Hash> {
+impl<'a, C: 'a + Client> BlockNumberToHash for LocalContext<'a, C> {
+	type BlockNumber = <C as BlockNumberToHash>::BlockNumber;
+	type Hash = <C as BlockNumberToHash>::Hash;
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
 		self.0.block_number_to_hash(n)
 	}
 }
-impl<'a, A: 'a + Api> Lookup for LocalContext<'a, A> {
+impl<'a, C: 'a + Client> Lookup for LocalContext<'a, C> {
 	type Source = Address;
 	type Target = AccountId;
 	fn lookup(&self, a: Address) -> ::std::result::Result<AccountId, &'static str> {
@@ -144,10 +176,8 @@ impl<'a, A: 'a + Api> Lookup for LocalContext<'a, A> {
 	}
 }
 
-impl<A> transaction_pool::ChainApi for ChainApi<A> where
-	A: Api + Send + Sync,
-{
-	type Block = Block;
+impl<C: Client> transaction_pool::ChainApi for ChainApi<C> {
+	type Block = C::Block;
 	type Hash = Hash;
 	type Sender = AccountId;
 	type VEx = VerifiedTransaction;
@@ -156,7 +186,7 @@ impl<A> transaction_pool::ChainApi for ChainApi<A> where
 	type Score = u64;
 	type Event = ();
 
-	fn verify_transaction(&self, _at: &BlockId, xt: &ExtrinsicFor<Self>) -> Result<Self::VEx> {
+	fn verify_transaction(&self, _at: &BlockId<Self::Block>, xt: &ExtrinsicFor<Self>) -> Result<Self::VEx> {
 		let encoded = xt.encode();
 		let uxt = UncheckedExtrinsic::decode(&mut encoded.as_slice()).ok_or_else(|| ErrorKind::InvalidExtrinsicFormat)?;
 		if !uxt.is_signed() {
@@ -191,7 +221,7 @@ impl<A> transaction_pool::ChainApi for ChainApi<A> where
 		HashMap::default()
 	}
 
-	fn is_ready(&self, at: &BlockId, known_nonces: &mut Self::Ready, xt: &VerifiedFor<Self>) -> Readiness {
+	fn is_ready(&self, at: &BlockId<Self::Block>, known_nonces: &mut Self::Ready, xt: &VerifiedFor<Self>) -> Readiness {
 		let sender = xt.verified.sender().clone();
 		trace!(target: "transaction-pool", "Checking readiness of {} (from {})", xt.verified.hash, sender);
 
@@ -249,4 +279,3 @@ impl<A> transaction_pool::ChainApi for ChainApi<A> where
 		Choice::RejectNew
 	}
 }
-
