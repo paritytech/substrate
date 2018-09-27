@@ -8,7 +8,7 @@
 	  "/ip4/40.114.120.164/tcp/30333/p2p/QmYV2Dv6ZfHkxHtQgYMGPTkNbtaSHUb4r8CsP4Pp2PDTNs"
 	],
 	"telemetryUrl": "wss://telemetry.polkadot.io/submit/",
-	"protocodeId": "bbq",
+	"protocolId": "bbq",
 	"genesis": {
 	  "raw": {
 		"0x53d1471b684c8a776c80353e5981c960": "0x00407a10f35a00000000000000000000",
