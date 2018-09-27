@@ -82,6 +82,7 @@ impl<H, N> LeafSet<H, N> where
 		let mut storage = BTreeSet::new();
 
 		for (key, value) in db.iter_from_prefix(column, prefix) {
+			if !key.starts_with(prefix) { break }
 			let raw_hash = &mut &key[prefix.len()..];
 			let hash = match Decode::decode(raw_hash) {
 				Some(hash) => hash,
