@@ -5,13 +5,10 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
 
 [dependencies]
-byteorder = "1.1"
-hex-literal = "0.1.0"
 log = "0.4"
 parking_lot = "0.4"
 heapsize = "0.4"
 hash-db = { git = "https://github.com/paritytech/trie" }
-memory-db = { git = "https://github.com/paritytech/trie" }
 trie-db = { git = "https://github.com/paritytech/trie" }
 trie-root = { git = "https://github.com/paritytech/trie" }
 substrate-trie = { path = "../trie" }

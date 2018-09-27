@@ -31,7 +31,6 @@ extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
 extern crate kvdb;
 extern crate hash_db;
-extern crate memory_db;
 extern crate parking_lot;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_primitives as primitives;

@@ -19,12 +19,7 @@
 
 extern crate node_runtime;
 #[macro_use] extern crate substrate_executor;
-extern crate parity_codec as codec;
-extern crate substrate_state_machine as state_machine;
-extern crate sr_io as runtime_io;
 extern crate substrate_primitives as primitives;
-extern crate node_primitives;
-extern crate substrate_trie as trie;
 
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate sr_primitives as runtime_primitives;

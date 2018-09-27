@@ -11,7 +11,6 @@ rustc_version = "0.2"
 wasmi = { version = "0.4", optional = true }
 substrate-primitives = { path = "../primitives", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
-sr-io = { path = "../sr-io", default-features = false }
 parity-codec = { version = "2.0", default-features = false }
 
 [dev-dependencies]
@@ -25,7 +24,6 @@ std = [
 	"substrate-primitives/std",
 	"sr-std/std",
 	"parity-codec/std",
-	"sr-io/std",
 ]
 nightly = []
 strict = []

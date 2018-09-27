@@ -23,7 +23,6 @@ extern crate parity_crypto as crypto;
 extern crate subtle;
 extern crate rand;
 extern crate serde_json;
-extern crate serde;
 extern crate hex;
 
 #[macro_use]
