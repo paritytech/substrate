@@ -5,6 +5,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 description = "Substrate State Machine"
 
 [dependencies]
+hex-literal = "0.1.0"
 log = "0.4"
 parking_lot = "0.4"
 heapsize = "0.4"

@@ -45,6 +45,8 @@ extern crate serde_derive;
 
 #[cfg(test)]
 extern crate substrate_primitives;
+#[cfg(test)]
+extern crate sr_io as runtime_io;
 extern crate sr_primitives as runtime_primitives;
 extern crate srml_system as system;
 extern crate srml_consensus as consensus;

@@ -18,6 +18,9 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg(test)]
+extern crate substrate_primitives;
+
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;

@@ -43,6 +43,13 @@ extern crate srml_consensus as consensus;
 extern crate srml_session as session;
 extern crate srml_system as system;
 
+#[cfg(test)]
+extern crate substrate_primitives;
+#[cfg(test)]
+extern crate sr_io as runtime_io;
+#[cfg(test)]
+extern crate srml_timestamp as timestamp;
+
 use rstd::prelude::*;
 use rstd::cmp;
 use runtime_support::{Parameter, StorageValue, StorageMap};

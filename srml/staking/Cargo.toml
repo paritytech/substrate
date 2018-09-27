@@ -11,13 +11,16 @@ safe-mix = { version = "1.0", default-features = false}
 parity-codec = { version = "2.0", default-features = false }
 parity-codec-derive = { version = "2.0", default-features = false }
 substrate-keyring = { path = "../../core/keyring", optional = true }
+substrate-primitives = { path = "../../core/primitives", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
+sr-io = { path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 srml-balances = { path = "../balances", default-features = false }
 srml-consensus = { path = "../consensus", default-features = false }
 srml-system = { path = "../system", default-features = false }
 srml-session = { path = "../session", default-features = false }
+srml-timestamp = { path = "../timestamp", default-features = false }
 
 [features]
 default = ["std"]
@@ -28,10 +31,13 @@ std = [
 	"substrate-keyring",
 	"parity-codec/std",
 	"parity-codec-derive/std",
+	"substrate-primitives/std",
 	"sr-std/std",
+	"sr-io/std",
 	"srml-support/std",
 	"sr-primitives/std",
 	"srml-balances/std",
 	"srml-session/std",
 	"srml-system/std",
+	"srml-timestamp/std"
 ]

@@ -20,6 +20,10 @@
 
 #![warn(missing_docs)]
 
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
+
 #[macro_use]
 extern crate log;
 

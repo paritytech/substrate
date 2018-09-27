@@ -78,6 +78,9 @@ extern crate srml_support as runtime_support;
 extern crate sr_primitives as runtime_primitives;
 
 #[cfg(test)]
+extern crate substrate_primitives;
+
+#[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
 

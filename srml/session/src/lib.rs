@@ -32,6 +32,10 @@ extern crate srml_support as runtime_support;
 #[macro_use]
 extern crate parity_codec_derive;
 
+#[cfg(test)]
+extern crate substrate_primitives;
+#[cfg(test)]
+extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
 extern crate sr_primitives as primitives;
 extern crate srml_consensus as consensus;

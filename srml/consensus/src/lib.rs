@@ -37,6 +37,9 @@ extern crate parity_codec as codec;
 extern crate srml_system as system;
 extern crate substrate_primitives;
 
+#[cfg(test)]
+extern crate sr_io as runtime_io;
+
 use rstd::prelude::*;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;

@@ -35,6 +35,11 @@ extern crate parity_codec as codec;
 extern crate sr_primitives as primitives;
 extern crate srml_system as system;
 
+#[cfg(test)]
+extern crate sr_io as runtime_io;
+#[cfg(test)]
+extern crate substrate_primitives;
+
 use rstd::prelude::*;
 use rstd::{cmp, result};
 use codec::{Encode, Decode, Codec, Input, Output};
