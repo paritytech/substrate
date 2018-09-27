@@ -33,7 +33,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
 	Zero, One, As, NumberFor};
 use cache::DbCache;
-use utils::{COLUMN_META, meta_keys, Meta, db_err, number_to_lookup_key, open_database,
+use utils::{meta_keys, Meta, db_err, number_to_lookup_key, open_database,
 	read_db, read_id, read_meta};
 use DatabaseSettings;
 
