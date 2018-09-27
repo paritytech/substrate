@@ -1132,7 +1132,6 @@ mod tests {
 
 	#[test]
 	fn test_leaves_with_complex_block_tree() {
-
 		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
 		test_client::trait_tests::test_leaves_for_backend(backend);
 	}
