@@ -22,7 +22,6 @@ substrate-keyring = { path = "../keyring" }
 substrate-trie = { path = "../trie" }
 substrate-telemetry = { path = "../telemetry" }
 hash-db = { git = "https://github.com/paritytech/trie" }
-trie-db = { git = "https://github.com/paritytech/trie" }
 kvdb = "0.1"
 
 [dev-dependencies]
