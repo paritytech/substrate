@@ -69,6 +69,8 @@ use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
+#[cfg(any(feature = "std", test))]
+use version::NativeVersion;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -93,6 +95,15 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 0,
 	apis: apis_vec!([(INHERENT, 1), (VALIDATX, 1)]),
 };
+
+/// Native version.
+#[cfg(any(feature = "std", test))]
+pub fn native_version() -> NativeVersion {
+	NativeVersion {
+		runtime_version: VERSION,
+		can_author_with: Default::default(),
+	}
+}
 
 impl system::Trait for Runtime {
 	type Origin = Origin;
