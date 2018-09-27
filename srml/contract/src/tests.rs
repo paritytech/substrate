@@ -830,3 +830,51 @@ fn input_data() {
 		},
 	);
 }
+
+const CODE_SUICIDE: &str = r#"
+(module
+	(import "env" "ext_suicide" (func $ext_suicide (param i32 i32)))
+	(import "env" "memory" (memory 1 1))
+
+	(func (export "call")
+		(call $ext_suicide
+			(i32.const 4)
+			(i32.const 32)
+		)
+	)
+
+	;; Destination AccountId to transfer the funds after the suicide.
+	;; Represented by u64 (8 bytes long) in little endian.
+	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+)
+"#;
+
+#[test]
+fn suicide() {
+	const CONTRACT_SHOULD_SUICIDE_TO: u64 = 9;
+
+	let code_suicide = wabt::wat2wasm(CODE_SUICIDE).unwrap();
+	with_externalities(
+		&mut ExtBuilder::default().build(),
+		|| {
+			<CodeOf<Test>>::insert(1, code_suicide.to_vec());
+
+			Balances::set_free_balance(&0, 100_000_000);
+			Balances::increase_total_stake_by(100_000_000);
+
+			Balances::set_free_balance(&1, 1000);
+			Balances::increase_total_stake_by(1000);
+			<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
+
+			Balances::set_free_balance(&CONTRACT_SHOULD_SUICIDE_TO, 5);
+			Balances::increase_total_stake_by(5);
+
+			assert_ok!(Contract::call(Origin::signed(0), 1, 0, 50_000, vec![]));
+
+			assert!(!<CodeOf<Test>>::exists(1));
+			assert!(!<StorageOf<Test>>::exists(1, b"foo".to_vec()));
+			assert_eq!(Balances::free_balance(&1), 0);
+			assert_eq!(Balances::free_balance(&CONTRACT_SHOULD_SUICIDE_TO), 1005);
+		},
+	);
+}

@@ -103,14 +103,13 @@ mod tests;
 pub use genesis_config::GenesisConfig;
 use exec::ExecutionContext;
 use account_db::{AccountDb, OverlayAccountDb};
-use double_map::StorageDoubleMap;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use codec::Codec;
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic, OnFinalise};
 use runtime_support::dispatch::Result;
-use runtime_support::{Parameter, StorageMap, StorageValue};
+use runtime_support::{Parameter, StorageValue};
 use system::ensure_signed;
 
 pub trait Trait: balances::Trait {
@@ -249,6 +248,7 @@ impl<T: Trait> Module<T> {
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 			events: Vec::new(),
+			suicides: Vec::new(),
 		};
 
 		let mut output_data = Vec::new();
@@ -260,6 +260,14 @@ impl<T: Trait> Module<T> {
 
 			// Then deposit all events produced.
 			ctx.events.into_iter().for_each(Self::deposit_event);
+
+			// Perform suicides.
+			//
+			// NOTE: this should go after the commit to the storage, since the storage changes
+			// can overwrite these transfers.
+			ctx.suicides.into_iter().for_each(|note| {
+				account_db::commit_suicide::<T>(&note.who, &note.inherent);
+			});
 		}
 
 		// Refund cost of the unused gas.
@@ -300,6 +308,7 @@ impl<T: Trait> Module<T> {
 			depth: 0,
 			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
 			events: Vec::new(),
+			suicides: Vec::new(),
 		};
 		let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
 
@@ -309,6 +318,14 @@ impl<T: Trait> Module<T> {
 
 			// Then deposit all events produced.
 			ctx.events.into_iter().for_each(Self::deposit_event);
+
+			// Perform suicides.
+			//
+			// NOTE: this should go after the commit to the storage, since the storage changes
+			// can overwrite these transfers.
+			ctx.suicides.into_iter().for_each(|note| {
+				account_db::commit_suicide::<T>(&note.who, &note.inherent);
+			});
 		}
 
 		// Refund cost of the unused gas.
@@ -323,8 +340,9 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
-		<CodeOf<T>>::remove(who);
-		<StorageOf<T>>::remove_prefix(who.clone());
+		// When account's balance reached zero, then that account is dead (see balances module)
+		// and we need to clean all data associated with that account.
+		account_db::purge_account::<T>(who);
 	}
 }
 
