@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Transaction pool errors.
+
 use sr_primitives::transaction_validity::TransactionPriority as Priority;
 
 error_chain! {

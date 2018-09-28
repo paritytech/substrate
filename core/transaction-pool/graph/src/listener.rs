@@ -17,7 +17,6 @@
 
 use std::{
 	collections::HashMap,
-	fmt,
 	hash,
 	sync::Arc,
 };
