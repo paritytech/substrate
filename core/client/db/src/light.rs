@@ -180,15 +180,12 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 }
 
 impl<Block: BlockT> LightStorage<Block> {
-	// note that a block is finalized. ensure that best chain contains the finalized
-	// block number first.
 	fn note_finalized(
 		&self,
 		transaction: &mut DBTransaction,
 		header: &Block::Header,
 		hash: Block::Hash,
 	) -> ClientResult<()> {
-		// TODO: ensure this doesn't conflict with old finalized block.
 		let meta = self.meta.read();
 		if &meta.finalized_hash != header.parent_hash() {
 			return Err(::client::error::ErrorKind::NonSequentialFinalization(
@@ -248,8 +245,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		transaction.put(columns::HEADER, hash.as_ref(), &header.encode());
 
 		if leaf_state.is_best() {
-			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
-
 			// handle reorg.
 			{
 				let meta = self.meta.read();
@@ -284,6 +279,9 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 					}
 				}
 			}
+
+			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
+			transaction.put(columns::HASH_LOOKUP, &number_to_lookup_key(number), hash.as_ref());
 		}
 
 		let finalized = match leaf_state {
@@ -507,7 +505,7 @@ pub(crate) mod tests {
 		let db = LightStorage::new_test();
 
 		// insert genesis block header (never pruned)
-		let mut prev_hash = insert_block(&db, &Default::default(), 0, None);
+		let mut prev_hash = insert_final_block(&db, &Default::default(), 0, None);
 
 		// insert SIZE blocks && ensure that nothing is pruned
 		for number in 0..cht::SIZE {
@@ -554,7 +552,7 @@ pub(crate) mod tests {
 		let db = LightStorage::new_test();
 
 		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
-		let mut prev_hash = insert_block(&db, &Default::default(), 0, None);
+		let mut prev_hash = insert_final_block(&db, &Default::default(), 0, None);
 		for i in 1..1 + cht::SIZE + cht::SIZE + 1 {
 			prev_hash = insert_block(&db, &prev_hash, i as u64, None);
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();

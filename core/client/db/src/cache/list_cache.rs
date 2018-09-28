@@ -42,7 +42,7 @@
 use std::collections::BTreeSet;
 
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
-use runtime_primitives::traits::{Block as BlockT, NumberFor, As};
+use runtime_primitives::traits::{Block as BlockT, NumberFor, As, Zero};
 
 use cache::{CacheItemT, ComplexBlockId};
 use cache::list_entry::{Entry, StorageEntry};
@@ -174,8 +174,11 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 		value: Option<T>,
 		is_final: bool,
 	) -> ClientResult<Option<CommitOperation<Block, T>>> {
+		// this guarantee is currently provided by LightStorage && we're relying on it here
+		debug_assert!(!is_final || self.best_finalized_block.hash == parent.hash);
+
 		// we do not store any values behind finalized
-		if self.best_finalized_block.number >= block.number {
+		if block.number != Zero::zero() && self.best_finalized_block.number >= block.number {
 			return Ok(None);
 		}
 
@@ -927,7 +930,7 @@ pub mod tests {
 		assert_eq!(*tx.updated_meta(), Some(Metadata { finalized: Some(correct_id(2)), unfinalized: vec![correct_id(3)] }));
 
 		// when inserting finalized entry AND there are no previous finalzed entries
-		let cache = ListCache::new(DummyStorage::new(), 1024, correct_id(0));
+		let cache = ListCache::new(DummyStorage::new(), 1024, correct_id(2));
 		let mut tx = DummyTransaction::new();
 		assert_eq!(cache.on_block_insert(&mut tx, correct_id(2), correct_id(3), Some(3), true).unwrap(),
 			Some(CommitOperation::BlockFinalized(correct_id(3), Some(Entry { valid_from: correct_id(3), value: Some(3) }), Default::default())));
