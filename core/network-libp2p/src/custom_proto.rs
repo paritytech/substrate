@@ -30,7 +30,7 @@ use ProtocolId;
 /// Note that "a single protocol" here refers to `par` for example. However
 /// each protocol can have multiple different versions for networking purposes.
 #[derive(Clone)]
-pub struct RegisteredProtocol<T> {
+pub struct RegisteredProtocol<TUserData> {
 	/// Id of the protocol for API purposes.
 	id: ProtocolId,
 	/// Base name of the protocol as advertised on the network.
@@ -41,37 +41,39 @@ pub struct RegisteredProtocol<T> {
 	/// The packet count is used to filter out invalid messages.
 	supported_versions: Vec<(u8, u8)>,
 	/// Custom data.
-	custom_data: T,
+	custom_data: TUserData,
 }
 
-impl<T> RegisteredProtocol<T> {
+impl<TUserData> RegisteredProtocol<TUserData> {
 	/// Creates a new `RegisteredProtocol`. The `custom_data` parameter will be
 	/// passed inside the `RegisteredProtocolOutput`.
-	pub fn new(custom_data: T, protocol: ProtocolId, versions: &[(u8, u8)])
+	pub fn new(custom_data: TUserData, protocol: ProtocolId, versions: &[(u8, u8)])
 		-> Self {
-		let mut proto_name = Bytes::from_static(b"/substrate/");
-		proto_name.extend_from_slice(&protocol);
-		proto_name.extend_from_slice(b"/");
+		let mut base_name = Bytes::from_static(b"/substrate/");
+		base_name.extend_from_slice(&protocol);
+		base_name.extend_from_slice(b"/");
 
 		RegisteredProtocol {
-			base_name: proto_name,
+			base_name,
 			id: protocol,
 			supported_versions: {
 				let mut tmp: Vec<_> = versions.iter().rev().cloned().collect();
 				tmp.sort_unstable_by(|a, b| b.1.cmp(&a.1));
 				tmp
 			},
-			custom_data: custom_data,
+			custom_data,
 		}
 	}
 
 	/// Returns the ID of the protocol.
+	#[inline]
 	pub fn id(&self) -> ProtocolId {
 		self.id
 	}
 
 	/// Returns the custom data that was passed to `new`.
-	pub fn custom_data(&self) -> &T {
+	#[inline]
+	pub fn custom_data(&self) -> &TUserData {
 		&self.custom_data
 	}
 }
@@ -279,9 +281,9 @@ where TSubstream: AsyncRead + AsyncWrite,
 
 // Connection upgrade for all the protocols contained in it.
 #[derive(Clone)]
-pub struct RegisteredProtocols<T>(pub Vec<RegisteredProtocol<T>>);
+pub struct RegisteredProtocols<TUserData>(pub Vec<RegisteredProtocol<TUserData>>);
 
-impl<T> RegisteredProtocols<T> {
+impl<TUserData> RegisteredProtocols<TUserData> {
 	/// Returns the number of protocols.
 	#[inline]
 	pub fn len(&self) -> usize {
@@ -290,7 +292,7 @@ impl<T> RegisteredProtocols<T> {
 
 	/// Finds a protocol in the list by its id.
 	pub fn find_protocol(&self, protocol: ProtocolId)
-		-> Option<&RegisteredProtocol<T>> {
+		-> Option<&RegisteredProtocol<TUserData>> {
 		self.0.iter().find(|p| p.id == protocol)
 	}
 
@@ -300,7 +302,7 @@ impl<T> RegisteredProtocols<T> {
 	}
 }
 
-impl<T> Default for RegisteredProtocols<T> {
+impl<TUserData> Default for RegisteredProtocols<TUserData> {
 	fn default() -> Self {
 		RegisteredProtocols(Vec::new())
 	}
