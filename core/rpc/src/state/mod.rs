@@ -33,7 +33,6 @@ use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header};
 use tokio::runtime::TaskExecutor;
-use serde_json;
 
 use subscriptions::Subscriptions;
 
@@ -66,7 +65,7 @@ build_rpc_trait! {
 
 		/// Returns the runtime metadata as JSON.
 		#[rpc(name = "state_getMetadata")]
-		fn metadata(&self, Trailing<Hash>) -> Result<serde_json::Value>;
+		fn metadata(&self, Trailing<Hash>) -> Result<Vec<u8>>;
 
 		/// Query historical storage entries (by key) starting from a block given as the second parameter.
 		///
@@ -143,10 +142,9 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
-	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<serde_json::Value> {
+	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<Vec<u8>> {
 		let block = self.unwrap_or_best(block)?;
-		let metadata = self.client.metadata(&BlockId::Hash(block))?;
-		serde_json::to_value(metadata).map_err(Into::into)
+		self.client.metadata(&BlockId::Hash(block)).map_err(Into::into)
 	}
 
 	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
