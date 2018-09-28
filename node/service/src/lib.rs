@@ -28,29 +28,40 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_network as network;
 extern crate substrate_client as client;
 extern crate substrate_service as service;
+extern crate parity_codec as codec;
 extern crate tokio;
+#[cfg(test)]
+extern crate substrate_service_test as service_test;
 
 #[macro_use]
 extern crate log;
 #[macro_use]
 extern crate hex_literal;
+#[cfg(test)]
+extern crate parking_lot;
+#[cfg(test)]
+extern crate substrate_bft as bft;
+#[cfg(test)]
+extern crate substrate_test_client;
+#[cfg(test)]
+extern crate substrate_keyring as keyring;
 
 pub mod chain_spec;
 
 use std::sync::Arc;
-
+use codec::Decode;
 use transaction_pool::TransactionPool;
-use node_primitives::{Block, Hash};
-use node_runtime::GenesisConfig;
+use node_primitives::{Block, Hash, Timestamp, BlockId};
+use node_runtime::{GenesisConfig, BlockPeriod, StorageValue, Runtime};
 use client::Client;
 use consensus::AuthoringApi;
 use node_network::{Protocol as DemoProtocol, consensus::ConsensusNetwork};
 use transaction_pool::Client as TPApi;
 use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
-use primitives::{Blake2Hasher};
+use primitives::{Blake2Hasher, storage::StorageKey, twox_128};
 
-pub use service::{Roles, PruningMode, TransactionPoolOptions,
+pub use service::{Roles, PruningMode, TransactionPoolOptions, ServiceFactory,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 pub use client::ExecutionStrategy;
 
@@ -101,6 +112,8 @@ impl service::ServiceFactory for Factory {
 	type LightTransactionPoolApi = transaction_pool::ChainApi<service::LightClient<Self>>;
 	type Genesis = GenesisConfig;
 	type Configuration = CustomConfiguration;
+	type FullService = Service<service::FullComponents<Self>>;
+	type LightService = Service<service::LightComponents<Self>>;
 
 	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<service::FullClient<Self>>)
 		-> Result<TransactionPool<service::FullClient<Self>>, Error>
@@ -119,80 +132,63 @@ impl service::ServiceFactory for Factory {
 	{
 		Ok(DemoProtocol::new())
 	}
+
+	fn new_light(config: Configuration, executor: TaskExecutor)
+		-> Result<Service<LightComponents<Factory>>, Error>
+	{
+		let service = service::Service::<LightComponents<Factory>>::new(config, executor.clone())?;
+		Ok(Service {
+			inner: service,
+			_consensus: None,
+		})
+	}
+
+	fn new_full(config: Configuration, executor: TaskExecutor)
+		-> Result<Service<FullComponents<Factory>>, Error>
+	{
+		let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
+		let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
+		// Spin consensus service if configured
+		let consensus = if is_validator {
+			// Load the first available key
+			let key = service.keystore().load(&service.keystore().contents()?[0], "")?;
+			info!("Using authority key {}", key.public());
+
+			let client = service.client();
+
+			let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
+			let block_id = BlockId::number(client.info().unwrap().chain.best_number);
+			// TODO: this needs to be dynamically adjustable
+			let block_delay = client.storage(&block_id, &StorageKey(twox_128(BlockPeriod::<Runtime>::key()).to_vec()))?
+				.and_then(|data| Timestamp::decode(&mut data.0.as_slice()))
+				.unwrap_or_else(|| {
+					warn!("Block period is missing in the storage.");
+					5
+				});
+			Some(consensus::Service::new(
+				client.clone(),
+				client.clone(),
+				consensus_net,
+				service.transaction_pool(),
+				executor,
+				key,
+				block_delay,
+			))
+		} else {
+			None
+		};
+
+		Ok(Service {
+			inner: service,
+			_consensus: consensus,
+		})
+	}
 }
 
 /// Demo service.
 pub struct Service<C: Components> {
 	inner: service::Service<C>,
-	client: Arc<ComponentClient<C>>,
-	network: Arc<NetworkService>,
-	api: Arc<<C as Components>::Api>,
 	_consensus: Option<consensus::Service>,
-}
-
-impl <C: Components> Service<C> {
-	pub fn client(&self) -> Arc<ComponentClient<C>> {
-		self.client.clone()
-	}
-
-	pub fn network(&self) -> Arc<NetworkService> {
-		self.network.clone()
-	}
-
-	pub fn api(&self) -> Arc<<C as Components>::Api> {
-		self.api.clone()
-	}
-}
-
-/// Creates light client and register protocol with the network service
-pub fn new_light(config: Configuration, executor: TaskExecutor)
-	-> Result<Service<LightComponents<Factory>>, Error>
-{
-	let service = service::Service::<LightComponents<Factory>>::new(config, executor.clone())?;
-	let api = service.client();
-	Ok(Service {
-		client: service.client(),
-		network: service.network(),
-		api: api,
-		inner: service,
-		_consensus: None,
-	})
-}
-
-/// Creates full client and register protocol with the network service
-pub fn new_full(config: Configuration, executor: TaskExecutor)
-	-> Result<Service<FullComponents<Factory>>, Error>
-{
-	let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
-	let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
-	// Spin consensus service if configured
-	let consensus = if is_validator {
-		// Load the first available key
-		let key = service.keystore().load(&service.keystore().contents()?[0], "")?;
-		info!("Using authority key {}", key.public());
-
-		let client = service.client();
-
-		let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
-		Some(consensus::Service::new(
-			client.clone(),
-			client.clone(),
-			consensus_net,
-			service.transaction_pool(),
-			executor,
-			key,
-		))
-	} else {
-		None
-	};
-
-	Ok(Service {
-		client: service.client(),
-		network: service.network(),
-		api: service.client(),
-		inner: service,
-		_consensus: consensus,
-	})
 }
 
 /// Creates bare client without any networking.
@@ -208,4 +204,59 @@ impl<C: Components> ::std::ops::Deref for Service<C> {
 	fn deref(&self) -> &Self::Target {
 		&self.inner
 	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::sync::Arc;
+	use parking_lot::RwLock;
+	use {service, service_test, Factory, chain_spec};
+	use consensus::{self, OfflineTracker};
+	use primitives::ed25519;
+	use node_primitives::Block;
+	use bft::{Proposer, Environment};
+	use node_network::consensus::ConsensusNetwork;
+	use substrate_test_client::fake_justify;
+	use node_primitives::BlockId;
+	use keyring::Keyring;
+
+	#[test]
+	fn test_connectivity() {
+		service_test::connectivity::<Factory>(chain_spec::integration_test_config());
+	}
+
+	#[test]
+	fn test_sync() {
+		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
+		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
+		let validators = vec![alice.public().0.into(), bob.public().0.into()];
+		let keys: Vec<&ed25519::Pair> = vec![&*alice, &*bob];
+		let offline = Arc::new(RwLock::new(OfflineTracker::new()));
+		let dummy_runtime = ::tokio::runtime::Runtime::new().unwrap();
+		let block_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
+			let block_id = BlockId::number(service.client().info().unwrap().chain.best_number);
+			let parent_header = service.client().header(&block_id).unwrap().unwrap();
+			let consensus_net = ConsensusNetwork::new(service.network(), service.client().clone());
+			let proposer_factory = consensus::ProposerFactory {
+				client: service.client().clone(),
+				transaction_pool: service.transaction_pool().clone(),
+				network: consensus_net,
+				offline: offline.clone(),
+				force_delay: 0,
+				handle: dummy_runtime.executor(),
+			};
+			let (proposer, _, _) = proposer_factory.init(&parent_header, &validators, alice.clone()).unwrap();
+			let block = proposer.propose().expect("Error making test block");
+			let justification = fake_justify::<Block>(&block.header, &keys);
+			let justification = service.client().check_justification(block.header, justification).unwrap();
+			(justification, Some(block.extrinsics))
+		};
+		service_test::sync::<Factory, _>(chain_spec::integration_test_config(), block_factory);
+	}
+
+	#[test]
+	fn test_consensus() {
+		service_test::consensus::<Factory>(chain_spec::integration_test_config(), vec!["Alice".into(), "Bob".into()]);
+	}
+
 }
