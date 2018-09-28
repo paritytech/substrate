@@ -77,7 +77,7 @@ impl<T> RegisteredProtocol<T> {
 }
 
 /// Output of a `RegisteredProtocol` upgrade.
-pub struct RegisteredProtocolSubstream<TSubstream, TUserData> {
+pub struct RegisteredProtocolSubstream<TSubstream> {
 	/// Buffer of packets to send.
 	send_queue: VecDeque<Bytes>,
 	/// If true, we should call `poll_complete` on the inner sink.
@@ -86,12 +86,8 @@ pub struct RegisteredProtocolSubstream<TSubstream, TUserData> {
 	inner: stream::Fuse<Framed<TSubstream, UviBytes<Bytes>>>,
 	/// Maximum packet id.
 	packet_count: u8,
-	/// Data passed to `RegisteredProtocol::new`.
-	custom_data: TUserData,
 	/// Id of the protocol.
 	protocol_id: ProtocolId,
-	/// Endpoint of the connection.
-	endpoint: Endpoint,
 	/// Version of the protocol that was negotiated.
 	protocol_version: u8,
 	/// Task to notify when something is changed and we need to be polled.
@@ -107,7 +103,7 @@ pub struct Packet {
 	pub data: Bytes,
 }
 
-impl<TSubstream, TUserData> RegisteredProtocolSubstream<TSubstream, TUserData> {
+impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	/// Returns the protocol id.
 	#[inline]
 	pub fn protocol_id(&self) -> ProtocolId {
@@ -138,7 +134,7 @@ impl<TSubstream, TUserData> RegisteredProtocolSubstream<TSubstream, TUserData> {
 	}
 }
 
-impl<TSubstream, TUserData> Stream for RegisteredProtocolSubstream<TSubstream, TUserData>
+impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite,
 {
 	type Item = Packet;
@@ -222,7 +218,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 		}).collect::<Vec<_>>().into_iter()
 	}
 
-	type Output = RegisteredProtocolSubstream<TSubstream, TUserData>;
+	type Output = RegisteredProtocolSubstream<TSubstream>;
 	type Future = future::FutureResult<Self::Output, IoError>;
 
 	#[allow(deprecated)]
@@ -230,7 +226,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 		self,
 		socket: TSubstream,
 		protocol_version: Self::UpgradeIdentifier,
-		endpoint: Endpoint,
+		_: Endpoint,
 		_: &Multiaddr
 	) -> Self::Future {
 		let packet_count = self.supported_versions
@@ -247,9 +243,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 			requires_poll_complete: false,
 			inner: framed.fuse(),
 			packet_count,
-			custom_data: self.custom_data.clone(),
 			protocol_id: self.id,
-			endpoint,
 			protocol_version,
 			to_notify: None,
 		})

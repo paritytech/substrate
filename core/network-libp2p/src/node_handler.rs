@@ -52,7 +52,7 @@ pub struct SubstrateNodeHandler<TSubstream, TUserData> {
 	/// List of registered custom protocols.
 	registered_custom: Arc<RegisteredProtocols<TUserData>>,
 	/// Substreams open for "custom" protocols (eg. dot).
-	custom_protocols_substreams: Vec<RegisteredProtocolSubstream<TSubstream, TUserData>>,
+	custom_protocols_substreams: Vec<RegisteredProtocolSubstream<TSubstream>>,
 
 	/// Address of the node.
 	address: Multiaddr,
@@ -81,10 +81,10 @@ pub struct SubstrateNodeHandler<TSubstream, TUserData> {
 	next_identify: Interval,
 
 	/// Substreams being upgraded on the listening side.
-	upgrades_in_progress_listen: Vec<Box<Future<Item = FinalUpgrade<TSubstream, TUserData>, Error = IoError> + Send>>,
+	upgrades_in_progress_listen: Vec<Box<Future<Item = FinalUpgrade<TSubstream>, Error = IoError> + Send>>,
 	/// Substreams being upgraded on the dialing side. Contrary to `upgrades_in_progress_listen`,
 	/// these have a known purpose.
-	upgrades_in_progress_dial: Vec<(UpgradePurpose, Box<Future<Item = FinalUpgrade<TSubstream, TUserData>, Error = IoError> + Send>)>,
+	upgrades_in_progress_dial: Vec<(UpgradePurpose, Box<Future<Item = FinalUpgrade<TSubstream>, Error = IoError> + Send>)>,
 	/// The substreams we want to open.
 	queued_dial_upgrades: Vec<UpgradePurpose>,
 	/// Number of outbound substreams the outside should open for us.
@@ -515,7 +515,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	/// Optionally produces an event to dispatch.
 	fn inject_fully_negotiated(
 		&mut self,
-		upgrade: FinalUpgrade<TSubstream, TUserData>
+		upgrade: FinalUpgrade<TSubstream>
 	) -> Option<SubstrateOutEvent<TSubstream>> {
 		match upgrade {
 			FinalUpgrade::IdentifyListener(sender) =>
@@ -845,16 +845,16 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 }
 
 /// Enum of all the possible protocols our service handles.
-enum FinalUpgrade<TSubstream, TUserData> {
+enum FinalUpgrade<TSubstream> {
 	Kad(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>),
 	IdentifyListener(identify::IdentifySender<TSubstream>),
 	IdentifyDialer(identify::IdentifyInfo, Multiaddr),
 	PingDialer(ping::PingDialer<TSubstream, Instant>),
 	PingListener(ping::PingListener<TSubstream>),
-	Custom(RegisteredProtocolSubstream<TSubstream, TUserData>),
+	Custom(RegisteredProtocolSubstream<TSubstream>),
 }
 
-impl<TSubstream, TUserData> From<ping::PingOutput<TSubstream, Instant>> for FinalUpgrade<TSubstream, TUserData> {
+impl<TSubstream> From<ping::PingOutput<TSubstream, Instant>> for FinalUpgrade<TSubstream> {
 	fn from(out: ping::PingOutput<TSubstream, Instant>) -> Self {
 		match out {
 			ping::PingOutput::Ponger(ponger) => FinalUpgrade::PingListener(ponger),
@@ -863,7 +863,7 @@ impl<TSubstream, TUserData> From<ping::PingOutput<TSubstream, Instant>> for Fina
 	}
 }
 
-impl<TSubstream, TUserData> From<identify::IdentifyOutput<TSubstream>> for FinalUpgrade<TSubstream, TUserData> {
+impl<TSubstream> From<identify::IdentifyOutput<TSubstream>> for FinalUpgrade<TSubstream> {
 	fn from(out: identify::IdentifyOutput<TSubstream>) -> Self {
 		match out {
 			identify::IdentifyOutput::RemoteInfo { info, observed_addr } =>
