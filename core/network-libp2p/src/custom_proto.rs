@@ -145,6 +145,12 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 		message.extend_from_slice(&data);
 		self.send_queue.push_back(message);
 
+		// If the length of the queue goes over a certain arbitrary threshold, we print a warning.
+		if self.send_queue.len() >= 128 {
+			warn!(target: "sub-libp2p", "Queue of packets to send over substream is pretty \
+				large: {}", self.send_queue.len());
+		}
+
 		if let Some(task) = self.to_notify.take() {
 			task.notify();
 		}
