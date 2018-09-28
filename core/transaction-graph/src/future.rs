@@ -23,7 +23,7 @@ use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
 
-use pool::Transaction;
+use base_pool::Transaction;
 
 /// Transaction with partially satisfied dependencies.
 #[derive(Debug)]

@@ -25,8 +25,6 @@ use transaction_pool::{
 	IntoPoolError,
 	ChainApi as PoolChainApi,
 	watcher::Status,
-	VerifiedTransaction,
-	AllExtrinsics,
 	ExHash,
 	ExtrinsicFor,
 };
@@ -60,7 +58,7 @@ build_rpc_trait! {
 		/// Returns all pending extrinsics, potentially grouped by sender.
 		#[rpc(name = "author_pendingExtrinsics")]
 		fn pending_extrinsics(&self) -> Result<PendingExtrinsics>;
-	
+
 		#[pubsub(name = "author_extrinsicUpdate")] {
 			/// Submit an extrinsic to watch.
 			#[rpc(name = "author_submitAndWatchExtrinsic")]
@@ -120,7 +118,6 @@ impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author
 				.map(Into::into)
 				.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
 			)
-			.map(|ex| ex.hash().clone())
 	}
 
 	fn pending_extrinsics(&self) -> Result<AllExtrinsics<P>> {

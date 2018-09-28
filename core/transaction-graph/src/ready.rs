@@ -28,7 +28,7 @@ use sr_primitives::transaction_validity::{
 
 use error;
 use future::WaitingTransaction;
-use pool::{BlockNumber, Transaction};
+use base_pool::{BlockNumber, Transaction};
 
 #[derive(Debug)]
 pub struct TransactionRef<Hash, Ex> {

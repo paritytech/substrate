@@ -1,3 +1,4 @@
+
 // Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
@@ -22,7 +23,7 @@ use std::{
 };
 
 use watcher;
-use runtime_primitives::traits;
+use sr_primitives::traits;
 
 /// Extrinsic pool default listener.
 pub struct Listener<H: hash::Hash + Eq> {

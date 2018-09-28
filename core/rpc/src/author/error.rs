@@ -24,7 +24,7 @@ use errors;
 
 error_chain! {
 	links {
-		Pool(transaction_pool::Error, transaction_pool::ErrorKind) #[doc = "Pool error"];
+		Pool(transaction_pool::error::Error, transaction_pool::error::ErrorKind) #[doc = "Pool error"];
 		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
 	}
 	errors {

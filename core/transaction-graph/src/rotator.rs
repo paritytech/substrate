@@ -27,6 +27,9 @@ use std::{
 };
 use parking_lot::RwLock;
 
+use base_pool::Transaction;
+use pool::TxData;
+
 /// Expected size of the banned extrinsics cache.
 const EXPECTED_SIZE: usize = 2048;
 
@@ -73,6 +76,21 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 		}
 	}
 
+
+	/// Bans extrinsic if it's stale.
+	///
+	/// Returns `true` if extrinsic is stale and got banned.
+	pub fn ban_if_stale<Ex>(&self, now: &Instant, xt: &Transaction<Hash, TxData<Ex>>) -> bool where
+		Hash: fmt::Debug + fmt::LowerHex,
+	{
+		if &xt.data.valid_till > now {
+			return false;
+		}
+
+		self.ban(now, &[xt.hash.clone()]);
+		true
+	}
+
 	/// Removes timed bans.
 	pub fn clear_timeouts(&self, now: &Instant) {
 		let mut banned = self.banned_until.write();
@@ -84,8 +102,9 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use pool::tests::VerifiedTransaction;
-	use test_client::runtime::Hash;
+
+	type Hash = u64;
+	type Ex = ();
 
 	fn rotator() -> PoolRotator<Hash> {
 		PoolRotator {
@@ -94,16 +113,18 @@ mod tests {
 		}
 	}
 
-	fn tx() -> (Hash, Verified<u64, VerifiedTransaction>) {
-		let hash = 5.into();
-		let tx = Verified {
-			original: 5,
-			verified: VerifiedTransaction {
-				hash,
-				sender: Default::default(),
-				nonce: Default::default(),
+	fn tx() -> (Hash, Transaction<Hash, TxData<Ex>>) {
+		let hash = 5u64;
+		let tx = Transaction {
+			data: TxData {
+				raw: (),
+				valid_till: Instant::now(),
 			},
-			valid_till: Instant::now(),
+			hash: hash.clone(),
+			priority: 5,
+			longevity: 3,
+			requires: vec![],
+			provides: vec![],
 		};
 
 		(hash, tx)
@@ -158,16 +179,18 @@ mod tests {
 	#[test]
 	fn should_garbage_collect() {
 		// given
-		fn tx_with(i: u64, time: Instant) -> Verified<u64, VerifiedTransaction> {
-			let hash = i.into();
-			Verified {
-				original: i,
-				verified: VerifiedTransaction {
-					hash,
-					sender: Default::default(),
-					nonce: Default::default(),
+		fn tx_with(i: u64, time: Instant) -> Transaction<Hash, TxData<Ex>> {
+			let hash = i;
+			Transaction {
+				data: TxData {
+					raw: (),
+					valid_till: time,
 				},
-				valid_till: time,
+				hash,
+				priority: 5,
+				longevity: 3,
+				requires: vec![],
+				provides: vec![],
 			}
 		}
 

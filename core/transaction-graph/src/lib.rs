@@ -14,6 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Generic Transaction Pool
 //!
 //! The pool is based on dependency graph between transactions
@@ -25,21 +26,29 @@
 //! - [ ] Longevity handling (remove obsolete transactions periodically)
 //! - [ ] Banning / Future-rotation (once rejected (as invalid) should not be accepted for some time)
 //! - [ ] Multi-threading (getting ready transactions should not block the pool)
+// end::description[]
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
+extern crate futures;
+extern crate parking_lot;
 extern crate sr_primitives;
 
-#[macro_use]
-extern crate error_chain;
+#[macro_use] extern crate error_chain;
+#[macro_use] extern crate log;
+#[macro_use] extern crate serde_derive;
 
-#[macro_use]
-extern crate log;
-
-pub mod error;
 mod future;
+mod listener;
 mod pool;
 mod ready;
+mod rotator;
 
-pub use self::pool::{Transaction, Pool};
+pub mod base_pool;
+pub mod error;
+pub mod watcher;
+
+pub use self::error::IntoPoolError;
+pub use self::base_pool::Transaction;
+pub use self::pool::{Pool, ChainApi, EventStream, ExtrinsicFor, ExHash};
