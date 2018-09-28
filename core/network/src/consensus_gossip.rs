@@ -20,6 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use std::time::{Instant, Duration};
+use rand;
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
@@ -32,6 +33,7 @@ const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
 
 struct PeerConsensus<H> {
 	known_messages: HashSet<H>,
+	is_authority: bool,
 }
 
 /// Consensus messages.
@@ -75,9 +77,9 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Handle new connected peer.
 	pub fn new_peer(&mut self, protocol: &mut Context<B>, who: NodeIndex, roles: Roles) {
-		if roles.intersects(Roles::AUTHORITY | Roles::FULL) {
+		if roles.intersects(Roles::AUTHORITY) {
 			trace!(target:"gossip", "Registering {:?} {}", roles, who);
-			// Send out all known messages.
+			// Send out all known messages to authorities.
 			// TODO: limit by size
 			let mut known_messages = HashSet::new();
 			for entry in self.messages.iter() {
@@ -91,15 +93,25 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			}
 			self.peers.insert(who, PeerConsensus {
 				known_messages,
+				is_authority: true,
+			});
+		}
+		else if roles.intersects(Roles::FULL) {
+			self.peers.insert(who, PeerConsensus {
+				known_messages: HashSet::new(),
+				is_authority: false,
 			});
 		}
 	}
 
 	fn propagate(&mut self, protocol: &mut Context<B>, message: message::Message<B>, hash: B::Hash) {
+		let len = self.peers.len() as f64;
 		for (id, ref mut peer) in self.peers.iter_mut() {
-			if peer.known_messages.insert(hash.clone()) {
-				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
-				protocol.send_message(*id, message.clone());
+			if peer.is_authority || rand::random::<f64>() < (len.sqrt() / len) {
+				if peer.known_messages.insert(hash.clone()) {
+					trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
+					protocol.send_message(*id, message.clone());
+				}
 			}
 		}
 	}

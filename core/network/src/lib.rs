@@ -31,6 +31,7 @@ extern crate substrate_network_libp2p as network_libp2p;
 extern crate parity_codec as codec;
 extern crate futures;
 extern crate rustc_hex;
+extern crate rand;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate error_chain;
