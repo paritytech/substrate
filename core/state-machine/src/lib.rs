@@ -268,15 +268,15 @@ where
 	// proof-of-execution on light clients. And the proof is recorded by the backend which
 	// is created after OverlayedChanges
 
-	let init_overlay = |overlay: &mut OverlayedChanges| {
+	let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
 		let changes_trie_config = try_read_overlay_value(
 			overlay,
 			backend,
 			well_known_keys::CHANGES_TRIE_CONFIG
 		)?;
-		set_changes_trie_config(overlay, changes_trie_config)
+		set_changes_trie_config(overlay, changes_trie_config, final_check)
 	};
-	init_overlay(overlay)?;
+	init_overlay(overlay, false)?;
 
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
@@ -340,7 +340,7 @@ where
 
 	// ensure that changes trie config has not been changed
 	if result.is_ok() {
-		init_overlay(overlay)?;
+		init_overlay(overlay, true)?;
 	}
 
 	result.map_err(|e| Box::new(e) as _)
@@ -438,22 +438,23 @@ where
 
 /// Sets overlayed changes' changes trie configuration. Returns error if configuration
 /// differs from previous OR config decode has failed.
-pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>) -> Result<(), Box<Error>> {
+pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>, final_check: bool) -> Result<(), Box<Error>> {
 	let config = match config {
 		Some(v) => Some(changes_trie::Configuration::decode(&mut &v[..])
 			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<Error>)?),
 		None => None,
 	};
 
-	let is_different_config = match config {
-		Some(config) => overlay.set_changes_trie_config(config),
-		None => overlay.changes_trie_config.is_some(),
-	};
-
-	match is_different_config {
-		true => Err(Box::new("Changes trie configuration change is not supported".to_owned())),
-		false => Ok(()),
+	if final_check && overlay.changes_trie_config.is_some() != config.is_some() {
+		return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
 	}
+
+	if let Some(config) = config {
+		if !overlay.set_changes_trie_config(config) {
+			return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
+		}
+	}
+	Ok(())
 }
 
 /// Reads storage value from overlay or from the backend.
