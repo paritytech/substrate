@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeOf, MaxDepth, ContractAddressFor, Module, Trait};
+use super::{MaxDepth, ContractAddressFor, Module, Trait, Event, RawEvent};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use vm;
@@ -37,6 +37,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a> {
 	pub self_account: T::AccountId,
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
+	pub events: Vec<Event<T>>,
 }
 
 impl<'a, T: Trait> ExecutionContext<'a, T> {
@@ -59,10 +60,17 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base call fee");
 		}
 
-		let dest_code = <CodeOf<T>>::get(&dest);
+		let dest_code = self.overlay.get_code(&dest);
 
-		let change_set = {
+		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
+
+			let mut nested = ExecutionContext {
+				overlay: overlay,
+				self_account: dest.clone(),
+				depth: self.depth + 1,
+				events: Vec::new(),
+			};
 
 			if value > T::Balance::zero() {
 				transfer(
@@ -71,15 +79,9 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 					&self.self_account,
 					&dest,
 					value,
-					&mut overlay,
+					&mut nested,
 				)?;
 			}
-
-			let mut nested = ExecutionContext {
-				overlay: overlay,
-				self_account: dest.clone(),
-				depth: self.depth + 1,
-			};
 
 			if !dest_code.is_empty() {
 				vm::execute(
@@ -95,10 +97,11 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				).map_err(|_| "vm execute returned error while call")?;
 			}
 
-			nested.overlay.into_change_set()
+			(nested.overlay.into_change_set(), nested.events)
 		};
 
 		self.overlay.commit(change_set);
+		self.events.extend(events);
 
 		Ok(CallReceipt)
 	}
@@ -121,13 +124,21 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		}
 
 		let dest = T::DetermineContractAddress::contract_address_for(init_code, data, &self.self_account);
-		if <CodeOf<T>>::exists(&dest) {
-			// TODO: Is it enough?
+
+		if !self.overlay.get_code(&dest).is_empty() {
+			// It should be enough to check only the code.
 			return Err("contract already exists");
 		}
 
-		let change_set = {
+		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
+
+			let mut nested = ExecutionContext {
+				overlay: overlay,
+				self_account: dest.clone(),
+				depth: self.depth + 1,
+				events: Vec::new(),
+			};
 
 			if endowment > T::Balance::zero() {
 				transfer(
@@ -136,15 +147,9 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 					&self.self_account,
 					&dest,
 					endowment,
-					&mut overlay,
+					&mut nested,
 				)?;
 			}
-
-			let mut nested = ExecutionContext {
-				overlay: overlay,
-				self_account: dest.clone(),
-				depth: self.depth + 1,
-			};
 
 			let mut contract_code = Vec::new();
 			vm::execute(
@@ -160,10 +165,11 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			).map_err(|_| "vm execute returned error while create")?;
 
 			nested.overlay.set_code(&dest, contract_code);
-			nested.overlay.into_change_set()
+			(nested.overlay.into_change_set(), nested.events)
 		};
 
 		self.overlay.commit(change_set);
+		self.events.extend(events);
 
 		Ok(CreateReceipt {
 			address: dest,
@@ -180,18 +186,22 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 /// (transfering endowment), specified by `contract_create` flag,
 /// or because of a transfer via `call`.
 ///
-/// Note, that the fee is denominated in `T::Balance` units, but
+/// NOTE: that the fee is denominated in `T::Balance` units, but
 /// charged in `T::Gas` from the provided `gas_meter`. This means
 /// that the actual amount charged might differ.
-fn transfer<T: Trait>(
+///
+/// NOTE: that we allow for draining all funds of the contract so it
+/// can go below existential deposit, essentially giving a contract
+/// the chance to give up it's life.
+fn transfer<'a, T: Trait>(
 	gas_meter: &mut GasMeter<T>,
 	contract_create: bool,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
 	value: T::Balance,
-	overlay: &mut OverlayAccountDb<T>,
+	ctx: &mut ExecutionContext<'a, T>,
 ) -> Result<(), &'static str> {
-	let would_create = overlay.get_balance(dest).is_zero();
+	let would_create = ctx.overlay.get_balance(dest).is_zero();
 
 	let fee: T::Balance = if contract_create {
 		<Module<T>>::contract_fee()
@@ -207,7 +217,8 @@ fn transfer<T: Trait>(
 		return Err("not enough gas to pay transfer fee");
 	}
 
-	let from_balance = overlay.get_balance(transactor);
+	// We allow balance to go below the existential deposit here:
+	let from_balance = ctx.overlay.get_balance(transactor);
 	let new_from_balance = match from_balance.checked_sub(&value) {
 		Some(b) => b,
 		None => return Err("balance too low to send value"),
@@ -217,15 +228,16 @@ fn transfer<T: Trait>(
 	}
 	<T as balances::Trait>::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
 
-	let to_balance = overlay.get_balance(dest);
+	let to_balance = ctx.overlay.get_balance(dest);
 	let new_to_balance = match to_balance.checked_add(&value) {
 		Some(b) => b,
 		None => return Err("destination balance too high to receive value"),
 	};
 
 	if transactor != dest {
-		overlay.set_balance(transactor, new_from_balance);
-		overlay.set_balance(dest, new_to_balance);
+		ctx.overlay.set_balance(transactor, new_from_balance);
+		ctx.overlay.set_balance(dest, new_to_balance);
+		ctx.events.push(RawEvent::Transfer(transactor.clone(), dest.clone(), value));
 	}
 
 	Ok(())

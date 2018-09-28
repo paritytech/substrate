@@ -15,9 +15,7 @@ futures = "0.1"
 ctrlc = { version = "3.0", features = ["termination"] }
 
 [build-dependencies]
-vergen = "0.1"
-
-
+vergen = "2"
 
 [workspace]
 members = [
@@ -26,7 +24,6 @@ members = [
 	"core/client",
 	"core/client/db",
 	"core/executor",
-	"core/transaction-pool",
 	"core/keyring",
 	"core/misbehavior-check",
 	"core/network",
@@ -37,6 +34,8 @@ members = [
 	"core/sr-sandbox",
 	"core/sr-std",
 	"core/sr-version",
+	"core/transaction-graph",
+	"core/transaction-pool",
 	"srml/support",
 	"srml/balances",
 	"srml/consensus",
@@ -54,13 +53,14 @@ members = [
 	"srml/treasury",
 	"core/serializer",
 	"core/service",
+	"core/service/test",
 	"core/state-db",
 	"core/state-machine",
 	"core/test-runtime",
 	"core/telemetry",
+	"core/trie",
 	"core/keystore",
 	"node/cli",
-	"node/api",
 	"node/consensus",
 	"node/executor",
 	"node/network",

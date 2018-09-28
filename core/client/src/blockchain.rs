@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot blockchain trait
+//! Substrate blockchain trait
 
 use primitives::AuthorityId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -53,6 +53,11 @@ pub trait Backend<Block: BlockT>: HeaderBackend<Block> {
 
 	/// Returns data cache reference, if it is enabled on this backend.
 	fn cache(&self) -> Option<&Cache<Block>>;
+
+	/// Returns hashes of all blocks that are leaves of the block tree.
+	/// in other words, that have no children, are chain heads.
+	/// Results must be ordered best (longest, heighest) chain first.
+	fn leaves(&self) -> Result<Vec<Block::Hash>>;
 }
 
 /// Blockchain optional data cache.
@@ -84,6 +89,8 @@ pub struct Info<Block: BlockT> {
 	pub genesis_hash: Block::Hash,
 	/// The head of the finalized chain.
 	pub finalized_hash: Block::Hash,
+	/// Last finalized block number.
+	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
 }
 
 /// Block status.

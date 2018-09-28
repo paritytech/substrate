@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot client possible errors.
+//! Substrate client possible errors.
 
 use std;
 use state_machine;
@@ -58,7 +58,7 @@ error_chain! {
 			display("Current state of blockchain has invalid authorities set"),
 		}
 
-		/// Cound not get runtime version.
+		/// Could not get runtime version.
 		VersionInvalid {
 			description("Runtime version error"),
 			display("On-chain runtime does not specify version"),

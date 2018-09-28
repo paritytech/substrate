@@ -36,16 +36,14 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_serializer as serializer;
 extern crate substrate_state_machine as state_machine;
 extern crate sr_version as runtime_version;
+extern crate substrate_trie as trie;
 
-extern crate serde;
 extern crate wasmi;
 extern crate byteorder;
-extern crate triehash;
 extern crate parking_lot;
-extern crate twox_hash;
-extern crate hashdb;
 
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 
 #[macro_use]
 extern crate lazy_static;
@@ -74,14 +72,14 @@ pub mod error;
 pub use wasm_executor::WasmExecutor;
 pub use native_executor::{with_native_environment, NativeExecutor, NativeExecutionDispatch};
 pub use state_machine::Externalities;
-pub use runtime_version::RuntimeVersion;
+pub use runtime_version::{RuntimeVersion, NativeVersion};
 pub use codec::Codec;
 use primitives::Blake2Hasher;
 
 /// Provides runtime information.
 pub trait RuntimeInfo {
-	/// Native runtime information if any.
-	const NATIVE_VERSION: Option<RuntimeVersion>;
+	/// Native runtime information.
+	fn native_version(&self) -> &NativeVersion;
 
 	/// Extract RuntimeVersion of given :code block
 	fn runtime_version<E: Externalities<Blake2Hasher>> (

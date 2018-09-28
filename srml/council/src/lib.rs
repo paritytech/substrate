@@ -29,11 +29,9 @@ extern crate serde_derive;
 #[macro_use]
 extern crate hex_literal;
 
-extern crate integer_sqrt;
 extern crate parity_codec as codec;
 #[macro_use] extern crate parity_codec_derive;
 extern crate substrate_primitives;
-#[cfg(feature = "std")] extern crate substrate_keyring as keyring;
 #[macro_use] extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[macro_use] extern crate srml_support;
@@ -131,7 +129,7 @@ mod tests {
 	pub use primitives::BuildStorage;
 	pub use primitives::traits::{BlakeTwo256};
 	pub use primitives::testing::{Digest, DigestItem, Header};
-	pub use substrate_primitives::{Blake2Hasher, RlpCodec};
+	pub use substrate_primitives::{Blake2Hasher};
 	pub use {seats, motions, voting};
 
 	impl_outer_origin! {
@@ -191,7 +189,7 @@ mod tests {
 		type Event = Event;
 	}
 
-	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+	pub fn new_test_ext(with_council: bool) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],

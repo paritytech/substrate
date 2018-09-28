@@ -113,9 +113,9 @@ where
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
 		// with substrate's generic `Vec<u8>` type. Basically this just means accepting that there
-		// will be a prefix of u32, which has the total number of bytes following (we don't need
+		// will be a prefix of vector length (we don't need
 		// to use this).
-		let _length_do_not_remove_me_see_above: u32 = Decode::decode(input)?;
+		let _length_do_not_remove_me_see_above: Vec<()> = Decode::decode(input)?;
 
 		let version = input.read_byte()?;
 
@@ -141,28 +141,19 @@ where
 	Call: Encode,
 {
 	fn encode(&self) -> Vec<u8> {
-		let mut v = Vec::new();
-
-		// need to prefix with the total length as u32 to ensure it's binary comptible with
-		// Vec<u8>. we'll make room for it here, then overwrite once we know the length.
-		v.extend(&[0u8; 4]);
-
-		// 1 byte version id.
-		match self.signature.as_ref() {
-			Some(s) => {
-				v.push(TRANSACTION_VERSION | 0b1000_0000);
-				s.encode_to(&mut v);
+		super::encode_with_vec_prefix::<Self, _>(|v| {
+			// 1 byte version id.
+			match self.signature.as_ref() {
+				Some(s) => {
+					v.push(TRANSACTION_VERSION | 0b1000_0000);
+					s.encode_to(v);
+				}
+				None => {
+					v.push(TRANSACTION_VERSION & 0b0111_1111);
+				}
 			}
-			None => {
-				v.push(TRANSACTION_VERSION & 0b0111_1111);
-			}
-		}
-		self.function.encode_to(&mut v);
-
-		let length = (v.len() - 4) as u32;
-		length.using_encoded(|s| v[0..4].copy_from_slice(s));
-
-		v
+			self.function.encode_to(v);
+		})
 	}
 }
 
@@ -274,5 +265,15 @@ mod tests {
 		let ux = Ex::new_signed(0, DUMMY_FUNCTION, DUMMY_ACCOUNTID, TestSig(DUMMY_ACCOUNTID, (DUMMY_ACCOUNTID, DUMMY_FUNCTION, Era::mortal(32, 43), 43u64).encode()), Era::mortal(32, 43));
 		assert!(ux.is_signed());
 		assert_eq!(<Ex as Checkable<TestContext>>::check(ux, &TestContext), Err("bad signature in extrinsic"));
+	}
+
+	#[test]
+	fn encoding_matches_vec() {
+		let ex = Ex::new_unsigned(DUMMY_FUNCTION);
+		let encoded = ex.encode();
+		let decoded = Ex::decode(&mut encoded.as_slice()).unwrap();
+		assert_eq!(decoded, ex);
+		let as_vec: Vec<u8> = Decode::decode(&mut encoded.as_slice()).unwrap();
+		assert_eq!(as_vec.encode(), encoded);
 	}
 }

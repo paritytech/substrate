@@ -37,14 +37,17 @@ extern crate sr_std as rstd;
 extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
-extern crate substrate_primitives;
-extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
 extern crate srml_balances as balances;
 extern crate srml_consensus as consensus;
-extern crate sr_sandbox as sandbox;
 extern crate srml_session as session;
 extern crate srml_system as system;
+
+#[cfg(test)]
+extern crate substrate_primitives;
+#[cfg(test)]
+extern crate sr_io as runtime_io;
+#[cfg(test)]
 extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
@@ -428,6 +431,9 @@ impl<T: Trait> Module<T> {
 	/// Get the reward for the session, assuming it ends with this block.
 	fn this_session_reward(actual_elapsed: T::Moment) -> T::Balance {
 		let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
+		if ideal_elapsed.is_zero() {
+			return Self::current_session_reward();
+		}
 		let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
 		Self::current_session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64)
 	}

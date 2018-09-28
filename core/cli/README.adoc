@@ -8,6 +8,6 @@ include::Cargo.toml[lines=2..5]
 ----
 
 .Description
-Polkadot CLI library
+Substrate CLI library
 
 include::doc/shell-completion.adoc[]

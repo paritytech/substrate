@@ -22,7 +22,6 @@
 
 pub extern crate substrate_rpc as apis;
 
-extern crate jsonrpc_core as rpc;
 extern crate jsonrpc_http_server as http;
 extern crate jsonrpc_pubsub as pubsub;
 extern crate jsonrpc_ws_server as ws;

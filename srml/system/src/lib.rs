@@ -28,9 +28,6 @@ extern crate sr_std as rstd;
 extern crate srml_support as runtime_support;
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
@@ -53,7 +50,7 @@ use safe_mix::TripletMix;
 use codec::Encode;
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::{twox_128, TestExternalities, Blake2Hasher, RlpCodec};
+use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
 
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::ChangesTrieConfiguration;
@@ -311,7 +308,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn externalities() -> TestExternalities<Blake2Hasher, RlpCodec> {
+	pub fn externalities() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
@@ -484,7 +481,7 @@ mod tests {
 
 	type System = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		GenesisConfig::<Test>::default().build_storage().unwrap().into()
 	}
 

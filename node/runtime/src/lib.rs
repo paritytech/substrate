@@ -33,10 +33,6 @@ extern crate sr_primitives as runtime_primitives;
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-extern crate parity_codec as codec;
 extern crate substrate_primitives;
 
 #[macro_use]
@@ -69,12 +65,16 @@ use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
 use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
+#[cfg(any(feature = "std", test))]
+use version::NativeVersion;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
 pub use consensus::Call as ConsensusCall;
 pub use timestamp::Call as TimestampCall;
 pub use runtime_primitives::{Permill, Perbill};
+pub use timestamp::BlockPeriod;
+pub use srml_support::StorageValue;
 #[cfg(any(feature = "std", test))]
 pub use checked_block::CheckedBlock;
 
@@ -93,6 +93,15 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	impl_version: 0,
 	apis: apis_vec!([(INHERENT, 1), (VALIDATX, 1)]),
 };
+
+/// Native version.
+#[cfg(any(feature = "std", test))]
+pub fn native_version() -> NativeVersion {
+	NativeVersion {
+		runtime_version: VERSION,
+		can_author_with: Default::default(),
+	}
+}
 
 impl system::Trait for Runtime {
 	type Origin = Origin;
@@ -174,6 +183,7 @@ impl treasury::Trait for Runtime {
 impl contract::Trait for Runtime {
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
+	type Event = Event;
 }
 
 impl DigestItem for Log {
@@ -208,7 +218,7 @@ construct_runtime!(
 		CouncilVoting: council_voting::{Module, Call, Storage, Event<T>},
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		Treasury: treasury,
-		Contract: contract::{Module, Call, Config},
+		Contract: contract::{Module, Call, Config, Event<T>},
 	}
 );
 

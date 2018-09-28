@@ -18,25 +18,22 @@
 
 use std::collections::HashMap;
 use std::iter::FromIterator;
-use hashdb::Hasher;
+use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use patricia_trie::NodeCodec;
-use rlp::Encodable;
-use triehash::trie_root;
+use trie::trie_root;
 use backend::InMemory;
 use changes_trie::{compute_changes_trie_root, InMemoryStorage as ChangesTrieInMemoryStorage};
 use primitives::storage::well_known_keys::CHANGES_TRIE_CONFIG;
 use super::{Externalities, OverlayedChanges};
 
 /// Simple HashMap-based Externalities impl.
-pub struct TestExternalities<H: Hasher, C: NodeCodec<H>> where H::Out: HeapSizeOf {
+pub struct TestExternalities<H: Hasher> where H::Out: HeapSizeOf {
 	inner: HashMap<Vec<u8>, Vec<u8>>,
 	changes_trie_storage: ChangesTrieInMemoryStorage<H>,
 	changes: OverlayedChanges,
-	_codec: ::std::marker::PhantomData<C>,
 }
 
-impl<H: Hasher, C: NodeCodec<H>> TestExternalities<H, C> where H::Out: HeapSizeOf {
+impl<H: Hasher> TestExternalities<H> where H::Out: HeapSizeOf {
 	/// Create a new instance of `TestExternalities`
 	pub fn new(inner: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		let mut overlay = OverlayedChanges::default();
@@ -49,7 +46,6 @@ impl<H: Hasher, C: NodeCodec<H>> TestExternalities<H, C> where H::Out: HeapSizeO
 			inner,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: overlay,
-			_codec: Default::default(),
 		}
 	}
 
@@ -59,19 +55,19 @@ impl<H: Hasher, C: NodeCodec<H>> TestExternalities<H, C> where H::Out: HeapSizeO
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> ::std::fmt::Debug for TestExternalities<H, C> where H::Out: HeapSizeOf {
+impl<H: Hasher> ::std::fmt::Debug for TestExternalities<H> where H::Out: HeapSizeOf {
 	fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
 		write!(f, "{:?}", self.inner)
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> PartialEq for TestExternalities<H, C> where H::Out: HeapSizeOf {
-	fn eq(&self, other: &TestExternalities<H, C>) -> bool {
+impl<H: Hasher> PartialEq for TestExternalities<H> where H::Out: HeapSizeOf {
+	fn eq(&self, other: &TestExternalities<H>) -> bool {
 		self.inner.eq(&other.inner)
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H, C> where H::Out: HeapSizeOf {
+impl<H: Hasher> FromIterator<(Vec<u8>, Vec<u8>)> for TestExternalities<H> where H::Out: HeapSizeOf {
 	fn from_iter<I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>>(iter: I) -> Self {
 		let mut t = Self::new(Default::default());
 		for i in iter {
@@ -81,28 +77,27 @@ impl<H: Hasher, C: NodeCodec<H>> FromIterator<(Vec<u8>, Vec<u8>)> for TestExtern
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> Default for TestExternalities<H, C> where H::Out: HeapSizeOf {
+impl<H: Hasher> Default for TestExternalities<H> where H::Out: HeapSizeOf {
 	fn default() -> Self { Self::new(Default::default()) }
 }
 
-impl<H: Hasher, C: NodeCodec<H>> From<TestExternalities<H, C>> for HashMap<Vec<u8>, Vec<u8>> where H::Out: HeapSizeOf {
-	fn from(tex: TestExternalities<H, C>) -> Self {
+impl<H: Hasher> From<TestExternalities<H>> for HashMap<Vec<u8>, Vec<u8>> where H::Out: HeapSizeOf {
+	fn from(tex: TestExternalities<H>) -> Self {
 		tex.inner.into()
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H, C> where H::Out: HeapSizeOf {
+impl<H: Hasher> From< HashMap<Vec<u8>, Vec<u8>> > for TestExternalities<H> where H::Out: HeapSizeOf {
 	fn from(hashmap: HashMap<Vec<u8>, Vec<u8>>) -> Self {
 		TestExternalities {
 			inner: hashmap,
 			changes_trie_storage: ChangesTrieInMemoryStorage::new(),
 			changes: Default::default(),
-			_codec: ::std::marker::PhantomData::<C>::default(),
 		}
 	}
 }
 
-impl<H: Hasher, C: NodeCodec<H>> Externalities<H> for TestExternalities<H, C> where H::Out: Ord + Encodable + HeapSizeOf {
+impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + HeapSizeOf {
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>> {
 		self.inner.get(key).map(|x| x.to_vec())
 	}
@@ -127,7 +122,7 @@ impl<H: Hasher, C: NodeCodec<H>> Externalities<H> for TestExternalities<H, C> wh
 	}
 
 	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> {
-		compute_changes_trie_root::<_, _, H, C>(
+		compute_changes_trie_root::<_, _, H>(
 			&InMemory::default(),
 			Some(&self.changes_trie_storage),
 			&self.changes,
@@ -139,15 +134,15 @@ impl<H: Hasher, C: NodeCodec<H>> Externalities<H> for TestExternalities<H, C> wh
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use primitives::{Blake2Hasher, RlpCodec, H256};
+	use primitives::{Blake2Hasher, H256};
 
 	#[test]
 	fn commit_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher, RlpCodec>::default();
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		ext.set_storage(b"doe".to_vec(), b"reindeer".to_vec());
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
-		const ROOT: [u8; 32] = hex!("6ca394ff9b13d6690a51dea30b1b5c43108e52944d30b9095227c49bae03ff8b");
+		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
 		assert_eq!(ext.storage_root(), H256(ROOT));
 	}
 }

@@ -19,9 +19,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
@@ -35,10 +32,13 @@ extern crate sr_std as rstd;
 extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
-extern crate substrate_primitives;
-extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
 extern crate srml_system as system;
+
+#[cfg(test)]
+extern crate sr_io as runtime_io;
+#[cfg(test)]
+extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use rstd::{cmp, result};
@@ -287,7 +287,10 @@ impl<T: Trait> Module<T> {
 		let to_balance = Self::free_balance(&dest);
 		let would_create = to_balance.is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
-		let liability = value + fee;
+		let liability = match value.checked_add(&fee) {
+			Some(l) => l,
+			None => return Err("got overflow after adding a fee to value"),
+		};
 
 		let new_from_balance = match from_balance.checked_sub(&liability) {
 			Some(b) => b,

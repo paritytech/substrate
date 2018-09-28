@@ -20,15 +20,25 @@ use runtime_primitives::testing::{Digest, DigestItem, H256, Header};
 use runtime_primitives::traits::{BlakeTwo256};
 use runtime_primitives::BuildStorage;
 use runtime_support::StorageMap;
-use substrate_primitives::{Blake2Hasher, RlpCodec};
+use substrate_primitives::{Blake2Hasher};
+use system::{Phase, EventRecord};
 use wabt;
 use {
 	runtime_io, balances, system, CodeOf, ContractAddressFor,
-	GenesisConfig, Module, StorageOf, Trait,
+	GenesisConfig, Module, StorageOf, Trait, RawEvent,
 };
 
 impl_outer_origin! {
 	pub enum Origin for Test {}
+}
+
+mod contract {
+	pub use super::super::*;
+}
+impl_outer_event! {
+	pub enum MetaEvent for Test {
+		balances<T>, contract<T>,
+	}
 }
 
 #[derive(Clone, Eq, PartialEq)]
@@ -42,7 +52,7 @@ impl system::Trait for Test {
 	type Digest = Digest;
 	type AccountId = u64;
 	type Header = Header;
-	type Event = ();
+	type Event = MetaEvent;
 	type Log = DigestItem;
 }
 impl balances::Trait for Test {
@@ -50,15 +60,17 @@ impl balances::Trait for Test {
 	type AccountIndex = u64;
 	type OnFreeBalanceZero = Contract;
 	type EnsureAccountLiquid = ();
-	type Event = ();
+	type Event = MetaEvent;
 }
 impl Trait for Test {
 	type Gas = u64;
 	type DetermineContractAddress = DummyContractAddressFor;
+	type Event = MetaEvent;
 }
 
 type Balances = balances::Module<Test>;
 type Contract = Module<Test>;
+type System = system::Module<Test>;
 
 pub struct DummyContractAddressFor;
 impl ContractAddressFor<u64> for DummyContractAddressFor {
@@ -106,7 +118,7 @@ impl ExtBuilder {
 		self.creation_fee = creation_fee;
 		self
 	}
-	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default()
 			.build_storage()
 			.unwrap();
@@ -205,6 +217,61 @@ fn contract_transfer() {
 			Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO),
 			CONTRACT_SHOULD_TRANSFER_VALUE,
 		);
+
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::balances(
+					balances::RawEvent::NewAccount(
+						CONTRACT_SHOULD_TRANSFER_TO,
+						0,
+						balances::NewAccountOutcome::NoHint
+					)
+				),
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(RawEvent::Transfer(0, 1, 3)),
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(RawEvent::Transfer(1, CONTRACT_SHOULD_TRANSFER_TO, 6)),
+			},
+		]);
+	});
+}
+
+#[test]
+fn contract_transfer_to_death() {
+	const CONTRACT_SHOULD_TRANSFER_VALUE: u64 = 6;
+
+	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+	with_externalities(&mut ExtBuilder::default().existential_deposit(5).build(), || {
+		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+
+		Balances::set_free_balance(&1, 6);
+		Balances::increase_total_stake_by(6);
+		<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
+
+		assert_ok!(Contract::call(Origin::signed(0), 1, 0, 100_000, Vec::new()));
+
+		assert_eq!(
+			Balances::free_balance(&0),
+			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 135 - base gas fee for call (by transaction)
+			// 2 * 135 - base gas fee for call (by the contract)
+			100_000_000 - (2 * 10) - (2 * 135) - (2 * 135),
+		);
+
+		assert!(!<CodeOf<Test>>::exists(1));
+		assert!(!<StorageOf<Test>>::exists(1, b"foo".to_vec()));
+		assert_eq!(Balances::free_balance(&1), 0);
+
+		assert_eq!(Balances::free_balance(&9), CONTRACT_SHOULD_TRANSFER_VALUE);
 	});
 }
 
@@ -316,6 +383,13 @@ fn contract_transfer_oog() {
 		assert_eq!(Balances::free_balance(&1), 14);
 		// But `ext_call` should not.
 		assert_eq!(Balances::free_balance(&CONTRACT_SHOULD_TRANSFER_TO), 0);
+
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(RawEvent::Transfer(0, 1, 3)),
+			},
+		]);
 	});
 }
 
@@ -464,6 +538,27 @@ fn contract_create() {
 		assert_eq!(Balances::free_balance(&1), 8);
 		assert_eq!(Balances::free_balance(&derived_address), 3);
 
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::balances(
+					balances::RawEvent::NewAccount(
+						derived_address,
+						0,
+						balances::NewAccountOutcome::NoHint
+					)
+				),
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(RawEvent::Transfer(0, 1, 11)),
+			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(RawEvent::Transfer(1, 2, 3)),
+			},
+		]);
+
 		// Initiate transfer to the newly created contract.
 		assert_ok!(Contract::call(Origin::signed(0), derived_address, 22, 100_000, Vec::new()));
 
@@ -516,6 +611,13 @@ fn top_level_create() {
 		assert_eq!(Balances::free_balance(&derived_address), 30 + 11);
 
 		assert_eq!(<CodeOf<Test>>::get(&derived_address), code_transfer);
+
+		assert_eq!(System::events(), vec![
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(RawEvent::Transfer(0, derived_address, 11)),
+			},
+		]);
 	});
 }
 
@@ -643,6 +745,8 @@ fn top_level_call_refunds_even_if_fails() {
 		);
 
 		assert_eq!(Balances::free_balance(&0), 100_000_000 - (4 * 3) - (4 * 135));
+
+		assert_eq!(System::events(), vec![]);
 	});
 }
 

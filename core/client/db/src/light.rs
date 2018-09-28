@@ -24,7 +24,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 use client::backend::NewBlockState;
 use client::blockchain::{BlockStatus, Cache as BlockchainCache,
 	HeaderBackend as BlockchainHeaderBackend, Info as BlockchainInfo};
-use client::cht;
+use client::{cht, LeafSet};
 use client::error::{ErrorKind as ClientErrorKind, Result as ClientResult};
 use client::light::blockchain::Storage as LightBlockchainStorage;
 use codec::{Decode, Encode};
@@ -46,9 +46,11 @@ pub(crate) mod columns {
 }
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
+/// Locks order: meta, leaves, cache.
 pub struct LightStorage<Block: BlockT> {
 	db: Arc<KeyValueDB>,
 	meta: RwLock<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>>,
+	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	cache: DbCacheSync<Block>,
 }
 
@@ -66,7 +68,7 @@ impl<Block> LightStorage<Block>
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		let db = open_database(&config, "light")?;
+		let db = open_database(&config, columns::META, "light")?;
 
 		Self::from_kvdb(db as Arc<_>)
 	}
@@ -81,7 +83,8 @@ impl<Block> LightStorage<Block>
 	}
 
 	fn from_kvdb(db: Arc<KeyValueDB>) -> ClientResult<Self> {
-		let meta = read_meta::<Block>(&*db, columns::HEADER)?;
+		let meta = read_meta::<Block>(&*db, columns::META, columns::HEADER)?;
+		let leaves = LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?;
 		let cache = DbCache::new(
 			db.clone(),
 			columns::HASH_LOOKUP,
@@ -94,6 +97,7 @@ impl<Block> LightStorage<Block>
 			db,
 			meta: RwLock::new(meta),
 			cache: DbCacheSync(RwLock::new(cache)),
+			leaves: RwLock::new(leaves),
 		})
 	}
 
@@ -143,6 +147,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
+			finalized_number: meta.finalized_number,
 		})
 	}
 
@@ -238,71 +243,86 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		let hash = header.hash();
 		let number = *header.number();
+		let parent_hash = *header.parent_hash();
 
 		transaction.put(columns::HEADER, hash.as_ref(), &header.encode());
+
+		if leaf_state.is_best() {
+			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
+
+			// handle reorg.
+			{
+				let meta = self.meta.read();
+				if meta.best_hash != Default::default() {
+					let tree_route = ::client::blockchain::tree_route(
+						self,
+						BlockId::Hash(meta.best_hash),
+						BlockId::Hash(parent_hash),
+					)?;
+
+					// update block number to hash lookup entries.
+					for retracted in tree_route.retracted() {
+						if retracted.hash == meta.finalized_hash {
+							// TODO: can we recover here?
+							warn!("Safety failure: reverting finalized block {:?}",
+								(&retracted.number, &retracted.hash));
+						}
+
+						transaction.delete(
+							columns::HASH_LOOKUP,
+							&::utils::number_to_lookup_key(retracted.number)
+						);
+					}
+
+					for enacted in tree_route.enacted() {
+						let hash: &Block::Hash = &enacted.hash;
+						transaction.put(
+							columns::HASH_LOOKUP,
+							&::utils::number_to_lookup_key(enacted.number),
+							hash.as_ref(),
+						)
+					}
+				}
+			}
+		}
 
 		let finalized = match leaf_state {
 			NewBlockState::Final => true,
 			_ => false,
 		};
-		if leaf_state.is_best() {
-			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
 
-			// handle reorg.
-			let meta = self.meta.read();
-			if meta.best_hash != Default::default() {
-				let parent_hash = *header.parent_hash();
-				let tree_route = ::client::blockchain::tree_route(
-					self,
-					BlockId::Hash(meta.best_hash),
-					BlockId::Hash(parent_hash),
-				)?;
-
-				// update block number to hash lookup entries.
-				for retracted in tree_route.retracted() {
-					if retracted.hash == meta.finalized_hash {
-						// TODO: can we recover here?
-						warn!("Safety failure: reverting finalized block {:?}",
-							(&retracted.number, &retracted.hash));
-					}
-
-					transaction.delete(
-						columns::HASH_LOOKUP,
-						&::utils::number_to_lookup_key(retracted.number)
-					);
-				}
-
-				for enacted in tree_route.enacted() {
-					let hash: &Block::Hash = &enacted.hash;
-					transaction.put(
-						columns::HASH_LOOKUP,
-						&::utils::number_to_lookup_key(enacted.number),
-						hash.as_ref(),
-					)
-				}
-			}
-
-			transaction.put(columns::HASH_LOOKUP, &number_to_lookup_key(number), hash.as_ref());
-
-			if finalized {
-				self.note_finalized(&mut transaction, &header, hash)?;
-			}
+		if finalized {
+			self.note_finalized(&mut transaction, &header, hash)?;
 		}
 
-		let mut cache = self.cache.0.write();
-		let cache_ops = cache.transaction(&mut transaction)
-			.on_block_insert(
-				ComplexBlockId::new(*header.parent_hash(), if number == Zero::zero() { Zero::zero() } else { number - One::one() }),
-				ComplexBlockId::new(hash, number),
-				authorities,
-				finalized,
-			)?
-			.into_ops();
+		{
+			let mut leaves = self.leaves.write();
+			let displaced_leaf = leaves.import(hash, number, parent_hash);
 
-		debug!("Light DB Commit {:?} ({})", hash, number);
-		self.db.write(transaction).map_err(db_err)?;
+			let mut cache = self.cache.0.write();
+			let cache_ops = cache.transaction(&mut transaction)
+				.on_block_insert(
+					ComplexBlockId::new(*header.parent_hash(), if number == Zero::zero() { Zero::zero() } else { number - One::one() }),
+					ComplexBlockId::new(hash, number),
+					authorities,
+					finalized,
+				)?
+				.into_ops();
+
+			debug!("Light DB Commit {:?} ({})", hash, number);
+			let write_result = self.db.write(transaction).map_err(db_err);
+			if let Err(e) = write_result {
+				// revert leaves set update if there was one.
+				if let Some(displaced_leaf) = displaced_leaf {
+					leaves.undo(displaced_leaf);
+				}
+				return Err(e);
+			}
+
+			cache.commit(cache_ops);
+		}
+
 		self.update_meta(hash, number, leaf_state.is_best(), finalized);
-		cache.commit(cache_ops);
 
 		Ok(())
 	}
@@ -323,18 +343,20 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			// TODO: ensure best chain contains this block.
 			let hash = header.hash();
 			let number = *header.number();
-			let mut cache = self.cache.0.write();
-			let cache_ops = cache.transaction(&mut transaction)
-				.on_block_finalize(
-					ComplexBlockId::new(*header.parent_hash(), if number == Zero::zero() { Zero::zero() } else { number - One::one() }),
-					ComplexBlockId::new(hash, number)
-				)?
-				.into_ops();
-
 			self.note_finalized(&mut transaction, &header, hash.clone())?;
-			self.db.write(transaction).map_err(db_err)?;
+			{
+				let mut cache = self.cache.0.write();
+				let cache_ops = cache.transaction(&mut transaction)
+					.on_block_finalize(
+						ComplexBlockId::new(*header.parent_hash(), if number == Zero::zero() { Zero::zero() } else { number - One::one() }),
+						ComplexBlockId::new(hash, number)
+					)?
+					.into_ops();
+
+				self.db.write(transaction).map_err(db_err)?;
+				cache.commit(cache_ops);
+			}
 			self.update_meta(hash, header.number().clone(), false, true);
-			cache.commit(cache_ops);
 
 			Ok(())
 		} else {
