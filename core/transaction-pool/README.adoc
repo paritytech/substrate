@@ -1,5 +1,5 @@
 
-= extrinsic-pool
+= transaction-pool
 
 .Summary
 [source, toml]

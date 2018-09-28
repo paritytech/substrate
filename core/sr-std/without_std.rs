@@ -47,12 +47,10 @@ mod __impl {
 pub use alloc::boxed;
 pub use alloc::rc;
 pub use alloc::vec;
-pub use alloc::string;
 pub use core::borrow;
 pub use core::cell;
 pub use core::clone;
 pub use core::cmp;
-pub use core::fmt;
 pub use core::hash;
 pub use core::intrinsics;
 pub use core::iter;
@@ -63,6 +61,9 @@ pub use core::ops;
 pub use core::ptr;
 pub use core::slice;
 pub use core::result;
+// We are trying to avoid certain things here, such as `core::string`
+// (if you need `String` you most probably doing something wrong, since
+// runtime doesn't require anything human readable).
 
 pub mod collections {
 	pub use alloc::collections::btree_map;

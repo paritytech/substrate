@@ -40,7 +40,7 @@ impl<AccountId, AccountIndex> fmt::Display for Address<AccountId, AccountIndex> 
 	AccountId: Member,
 	AccountIndex: Member,
 {
-	fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
 		write!(f, "{:?}", self)
 	}
 }

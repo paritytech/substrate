@@ -137,7 +137,7 @@ impl<BlockHash: Hash, Key: Hash> RefWindow<BlockHash, Key> {
 	}
 
 	/// Add a change set to the window. Creates a journal record and pushes it to `commit`
-	pub fn note_finalized(&mut self, hash: &BlockHash, commit: &mut CommitSet<Key>) {
+	pub fn note_canonical(&mut self, hash: &BlockHash, commit: &mut CommitSet<Key>) {
 		trace!(target: "state-db", "Adding to pruning window: {:?} ({} inserted, {} deleted)", hash, commit.data.inserted.len(), commit.data.deleted.len());
 		let inserted = commit.data.inserted.iter().map(|(k, _)| k.clone()).collect();
 		let deleted = ::std::mem::replace(&mut commit.data.deleted, Vec::new());
@@ -192,7 +192,7 @@ mod tests {
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
 		let mut commit = make_commit(&[4, 5], &[1, 3]);
 		let h = H256::random();
-		pruning.note_finalized(&h, &mut commit);
+		pruning.note_canonical(&h, &mut commit);
 		db.commit(&commit);
 		assert!(commit.data.deleted.is_empty());
 		assert_eq!(pruning.death_rows.len(), 1);
@@ -214,10 +214,10 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
 		let mut commit = make_commit(&[4], &[1]);
-		pruning.note_finalized(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
 		let mut commit = make_commit(&[5], &[2]);
-		pruning.note_finalized(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3, 4, 5])));
 
@@ -239,13 +239,13 @@ mod tests {
 		let mut db = make_db(&[1, 2, 3]);
 		let mut pruning: RefWindow<H256, H256> = RefWindow::new(&db).unwrap();
 		let mut commit = make_commit(&[], &[2]);
-		pruning.note_finalized(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
 		let mut commit = make_commit(&[2], &[]);
-		pruning.note_finalized(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
 		let mut commit = make_commit(&[], &[2]);
-		pruning.note_finalized(&H256::random(), &mut commit);
+		pruning.note_canonical(&H256::random(), &mut commit);
 		db.commit(&commit);
 		assert!(db.data_eq(&make_db(&[1, 2, 3])));
 

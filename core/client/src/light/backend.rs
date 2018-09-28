@@ -26,14 +26,13 @@ use runtime_primitives::{bft::Justification, generic::BlockId};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
 
-use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend};
+use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::fetcher::{Fetcher, RemoteReadRequest};
-use patricia_trie::NodeCodec;
-use hashdb::Hasher;
-use memorydb::MemoryDB;
+use hash_db::Hasher;
+use trie::MemoryDB;
 use heapsize::HeapSizeOf;
 
 /// Light client backend.
@@ -43,9 +42,9 @@ pub struct Backend<S, F> {
 
 /// Light block (header and justification) import operation.
 pub struct ImportOperation<Block: BlockT, S, F> {
-	is_new_best: bool,
 	header: Option<Block::Header>,
 	authorities: Option<Vec<AuthorityId>>,
+	leaf_state: NewBlockState,
 	_phantom: ::std::marker::PhantomData<(S, F)>,
 }
 
@@ -69,12 +68,12 @@ impl<S, F> Backend<S, F> {
 	}
 }
 
-impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
+impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher,
-	C: NodeCodec<H>,
+
 	H::Out: HeapSizeOf,
 {
 	type BlockImportOperation = ImportOperation<Block, S, F>;
@@ -84,16 +83,24 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 
 	fn begin_operation(&self, _block: BlockId<Block>) -> ClientResult<Self::BlockImportOperation> {
 		Ok(ImportOperation {
-			is_new_best: false,
 			header: None,
 			authorities: None,
+			leaf_state: NewBlockState::Normal,
 			_phantom: Default::default(),
 		})
 	}
 
 	fn commit_operation(&self, operation: Self::BlockImportOperation) -> ClientResult<()> {
 		let header = operation.header.expect("commit is called after set_block_data; set_block_data sets header; qed");
-		self.blockchain.storage().import_header(operation.is_new_best, header, operation.authorities)
+		self.blockchain.storage().import_header(
+			header,
+			operation.authorities,
+			operation.leaf_state,
+		)
+	}
+
+	fn finalize_block(&self, block: BlockId<Block>) -> ClientResult<()> {
+		self.blockchain.storage().finalize_header(block)
 	}
 
 	fn blockchain(&self) -> &Blockchain<S, F> {
@@ -123,23 +130,23 @@ impl<S, F, Block, H, C> ClientBackend<Block, H, C> for Backend<S, F> where
 	}
 }
 
-impl<S, F, Block, H, C> RemoteBackend<Block, H, C> for Backend<S, F>
+impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F>
 where
 	Block: BlockT,
 	S: BlockchainStorage<Block>,
 	F: Fetcher<Block>,
 	H: Hasher,
 	H::Out: HeapSizeOf,
-	C: NodeCodec<H>,
+
 {}
 
-impl<S, F, Block, H, C> BlockImportOperation<Block, H, C> for ImportOperation<Block, S, F>
+impl<S, F, Block, H> BlockImportOperation<Block, H> for ImportOperation<Block, S, F>
 where
 	Block: BlockT,
 	F: Fetcher<Block>,
 	S: BlockchainStorage<Block>,
 	H: Hasher,
-	C: NodeCodec<H>,
+
 {
 	type State = OnDemandState<Block, S, F>;
 
@@ -153,9 +160,9 @@ where
 		header: Block::Header,
 		_body: Option<Vec<Block::Extrinsic>>,
 		_justification: Option<Justification<Block::Hash>>,
-		is_new_best: bool
+		state: NewBlockState,
 	) -> ClientResult<()> {
-		self.is_new_best = is_new_best;
+		self.leaf_state = state;
 		self.header = Some(header);
 		Ok(())
 	}
@@ -164,7 +171,7 @@ where
 		self.authorities = Some(authorities);
 	}
 
-	fn update_storage(&mut self, _update: <Self::State as StateBackend<H, C>>::Transaction) -> ClientResult<()> {
+	fn update_storage(&mut self, _update: <Self::State as StateBackend<H>>::Transaction) -> ClientResult<()> {
 		// we're not storing anything locally => ignore changes
 		Ok(())
 	}
@@ -180,13 +187,13 @@ where
 	}
 }
 
-impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
+impl<Block, S, F, H> StateBackend<H> for OnDemandState<Block, S, F>
 	where
 		Block: BlockT,
 		S: BlockchainStorage<Block>,
 		F: Fetcher<Block>,
 		H: Hasher,
-		C: NodeCodec<H>,
+	
 {
 	type Error = ClientError;
 	type Transaction = ();
@@ -226,7 +233,7 @@ impl<Block, S, F, H, C> StateBackend<H, C> for OnDemandState<Block, S, F>
 		Vec::new()
 	}
 
-	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H, C>> {
+	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}
 }

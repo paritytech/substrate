@@ -1,5 +1,5 @@
 [package]
-name = "substrate-extrinsic-pool"
+name = "substrate-transaction-pool"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
@@ -8,12 +8,12 @@ serde = "1.0"
 serde_derive = "1.0"
 error-chain = "0.12"
 futures = "0.1"
-log = "0.3"
+log = "0.4"
 parking_lot = "0.4"
-transaction-pool = "1.13.2"
+transaction-pool = "1.13.3"
 sr-primitives = { path = "../../core/sr-primitives" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../../core/test-client" }
 substrate-keyring = { path = "../../core/keyring" }
-parity-codec = { version = "1.1" }
+parity-codec = "2.0"

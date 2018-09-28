@@ -72,7 +72,7 @@ impl<T> RegisteredProtocol<T> {
 	/// passed inside the `RegisteredProtocolOutput`.
 	pub fn new(custom_data: T, protocol: ProtocolId, versions: &[(u8, u8)])
 		-> Self {
-		let mut proto_name = Bytes::from_static(b"/core/");
+		let mut proto_name = Bytes::from_static(b"/substrate/");
 		proto_name.extend_from_slice(&protocol);
 		proto_name.extend_from_slice(b"/");
 
@@ -100,9 +100,8 @@ impl<T> RegisteredProtocol<T> {
 }
 
 // `Maf` is short for `MultiaddressFuture`
-impl<T, C, Maf> ConnectionUpgrade<C, Maf> for RegisteredProtocol<T>
+impl<T, C> ConnectionUpgrade<C> for RegisteredProtocol<T>
 where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
-	Maf: Future<Item = Multiaddr, Error = IoError> + Send + 'static,		// TODO: 'static :(
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
 	type UpgradeIdentifier = u8;		// Protocol version
@@ -119,8 +118,7 @@ where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
 	}
 
 	type Output = RegisteredProtocolOutput<T>;
-	type MultiaddrFuture = Maf;
-	type Future = future::FutureResult<(Self::Output, Self::MultiaddrFuture), IoError>;
+	type Future = future::FutureResult<Self::Output, IoError>;
 
 	#[allow(deprecated)]
 	fn upgrade(
@@ -128,7 +126,7 @@ where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
 		socket: C,
 		protocol_version: Self::UpgradeIdentifier,
 		endpoint: Endpoint,
-		remote_addr: Maf
+		_: &Multiaddr
 	) -> Self::Future {
 		let packet_count = self.supported_versions
 			.iter()
@@ -224,7 +222,7 @@ where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
 			incoming: Box::new(incoming),
 		};
 
-		future::ok((out, remote_addr))
+		future::ok(out)
 	}
 }
 
@@ -233,6 +231,12 @@ where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
 pub struct RegisteredProtocols<T>(pub Vec<RegisteredProtocol<T>>);
 
 impl<T> RegisteredProtocols<T> {
+	/// Returns the number of protocols.
+	#[inline]
+	pub fn len(&self) -> usize {
+		self.0.len()
+	}
+
 	/// Finds a protocol in the list by its id.
 	pub fn find_protocol(&self, protocol: ProtocolId)
 		-> Option<&RegisteredProtocol<T>> {
@@ -251,27 +255,24 @@ impl<T> Default for RegisteredProtocols<T> {
 	}
 }
 
-impl<T, C, Maf> ConnectionUpgrade<C, Maf> for RegisteredProtocols<T>
+impl<T, C> ConnectionUpgrade<C> for RegisteredProtocols<T>
 where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
-	Maf: Future<Item = Multiaddr, Error = IoError> + Send + 'static,		// TODO: 'static :(
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
 	type UpgradeIdentifier = (usize,
-		<RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::UpgradeIdentifier);
+		<RegisteredProtocol<T> as ConnectionUpgrade<C>>::UpgradeIdentifier);
 
 	fn protocol_names(&self) -> Self::NamesIter {
 		// We concat the lists of `RegisteredProtocol::protocol_names` for
 		// each protocol.
 		self.0.iter().enumerate().flat_map(|(n, proto)|
-			ConnectionUpgrade::<C, Maf>::protocol_names(proto)
+			ConnectionUpgrade::<C>::protocol_names(proto)
 				.map(move |(name, id)| (name, (n, id)))
 		).collect::<Vec<_>>().into_iter()
 	}
 
-	type Output = <RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::Output;
-	type MultiaddrFuture = <RegisteredProtocol<T> as
-		ConnectionUpgrade<C, Maf>>::MultiaddrFuture;
-	type Future = <RegisteredProtocol<T> as ConnectionUpgrade<C, Maf>>::Future;
+	type Output = <RegisteredProtocol<T> as ConnectionUpgrade<C>>::Output;
+	type Future = <RegisteredProtocol<T> as ConnectionUpgrade<C>>::Future;
 
 	#[inline]
 	fn upgrade(
@@ -279,7 +280,7 @@ where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
 		socket: C,
 		upgrade_identifier: Self::UpgradeIdentifier,
 		endpoint: Endpoint,
-		remote_addr: Maf
+		remote_addr: &Multiaddr
 	) -> Self::Future {
 		let (protocol_index, inner_proto_id) = upgrade_identifier;
 		self.0.into_iter()

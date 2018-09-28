@@ -25,6 +25,7 @@ extern crate futures;
 extern crate exit_future;
 extern crate serde;
 extern crate serde_json;
+extern crate parking_lot;
 extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
@@ -33,7 +34,7 @@ extern crate substrate_executor;
 extern crate substrate_client as client;
 extern crate substrate_client_db as client_db;
 extern crate parity_codec as codec;
-extern crate substrate_extrinsic_pool as extrinsic_pool;
+extern crate substrate_transaction_pool as transaction_pool;
 extern crate substrate_rpc;
 extern crate substrate_rpc_servers as rpc;
 extern crate target_info;
@@ -61,6 +62,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::collections::HashMap;
 use futures::prelude::*;
+use parking_lot::Mutex;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
@@ -73,7 +75,7 @@ use codec::{Encode, Decode};
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::ChainSpec;
-pub use extrinsic_pool::{Pool as ExtrinsicPool, Options as ExtrinsicPoolOptions, ChainApi, VerifiedTransaction, IntoPoolError};
+pub use transaction_pool::{Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, VerifiedTransaction, IntoPoolError};
 pub use client::ExecutionStrategy;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
@@ -81,19 +83,21 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic,
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
 };
+
+const DEFAULT_PROTOCOL_ID: &'static str = "sup";
 
 /// Substrate service.
 pub struct Service<Components: components::Components> {
 	client: Arc<ComponentClient<Components>>,
 	network: Option<Arc<components::NetworkService<Components::Factory>>>,
-	extrinsic_pool: Arc<ExtrinsicPool<Components::ExtrinsicPoolApi>>,
+	transaction_pool: Arc<TransactionPool<Components::TransactionPoolApi>>,
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	_rpc_http: Option<rpc::HttpServer>,
-	_rpc_ws: Option<rpc::WsServer>,
+	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
 	_telemetry: Option<tel::Telemetry>,
 }
 
@@ -150,12 +154,12 @@ impl<Components> Service<Components>
 		telemetry!("node.start"; "height" => best_header.number().as_(), "best" => ?best_header.hash());
 
 		let network_protocol = <Components::Factory>::build_network_protocol(&config)?;
-		let extrinsic_pool = Arc::new(
-			Components::build_extrinsic_pool(config.extrinsic_pool, client.clone())?
+		let transaction_pool = Arc::new(
+			Components::build_transaction_pool(config.transaction_pool, client.clone())?
 		);
-		let extrinsic_pool_adapter = ExtrinsicPoolAdapter::<Components> {
+		let transaction_pool_adapter = TransactionPoolAdapter::<Components> {
 			imports_external_transactions: !config.roles == Roles::LIGHT,
-			pool: extrinsic_pool.clone(),
+			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 };
 
@@ -167,21 +171,31 @@ impl<Components> Service<Components>
 			chain: client.clone(),
 			on_demand: on_demand.clone()
 				.map(|d| d as Arc<network::OnDemandService<ComponentBlock<Components>>>),
-			transaction_pool: Arc::new(extrinsic_pool_adapter),
+			transaction_pool: Arc::new(transaction_pool_adapter),
 			specialization: network_protocol,
 		};
 
-		let network = network::Service::new(network_params, Components::Factory::NETWORK_PROTOCOL_ID)?;
+		let mut protocol_id = network::ProtocolId::default();
+		let protocol_id_full = config.chain_spec.protocol_id().unwrap_or(DEFAULT_PROTOCOL_ID).as_bytes();
+		if protocol_id_full.len() > protocol_id.len() {
+			warn!("Protocol ID truncated to {} chars", protocol_id.len());
+		}
+		let id_len = protocol_id_full.len().min(protocol_id.len());
+		&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
+
+		let network = network::Service::new(network_params, protocol_id)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
 		{
 			// block notifications
-			let network = network.clone();
-			let txpool = extrinsic_pool.clone();
+			let network = Arc::downgrade(&network);
+			let txpool = transaction_pool.clone();
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
-					network.on_block_imported(notification.hash, &notification.header);
+					if let Some(network) = network.upgrade() {
+						network.on_block_imported(notification.hash, &notification.header);
+					}
 					txpool.cull(&BlockId::hash(notification.hash))
 						.map_err(|e| warn!("Error removing extrinsics: {:?}", e))?;
 					Ok(())
@@ -193,11 +207,13 @@ impl<Components> Service<Components>
 
 		{
 			// extrinsic notifications
-			let network = network.clone();
-			let events = extrinsic_pool.import_notification_stream()
+			let network = Arc::downgrade(&network);
+			let events = transaction_pool.import_notification_stream()
 				// TODO [ToDr] Consider throttling?
 				.for_each(move |_| {
-					network.trigger_repropagate();
+					if let Some(network) = network.upgrade() {
+						network.trigger_repropagate();
+					}
 					Ok(())
 				})
 				.select(exit.clone())
@@ -218,7 +234,7 @@ impl<Components> Service<Components>
 				let client = client.clone();
 				let chain = rpc::apis::chain::Chain::new(client.clone(), task_executor.clone());
 				let state = rpc::apis::state::State::new(client.clone(), task_executor.clone());
-				let author = rpc::apis::author::Author::new(client.clone(), extrinsic_pool.clone(), task_executor.clone());
+				let author = rpc::apis::author::Author::new(client.clone(), transaction_pool.clone(), task_executor.clone());
 				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _, _>(
 					state,
 					chain,
@@ -262,12 +278,12 @@ impl<Components> Service<Components>
 		Ok(Service {
 			client: client,
 			network: Some(network),
-			extrinsic_pool: extrinsic_pool,
+			transaction_pool: transaction_pool,
 			signal: Some(signal),
 			keystore: keystore,
 			exit,
 			_rpc_http: rpc_http,
-			_rpc_ws: rpc_ws,
+			_rpc_ws: rpc_ws.map(Mutex::new),
 			_telemetry: telemetry,
 		})
 	}
@@ -283,8 +299,8 @@ impl<Components> Service<Components>
 	}
 
 	/// Get shared extrinsic pool instance.
-	pub fn extrinsic_pool(&self) -> Arc<ExtrinsicPool<Components::ExtrinsicPoolApi>> {
-		self.extrinsic_pool.clone()
+	pub fn transaction_pool(&self) -> Arc<TransactionPool<Components::TransactionPoolApi>> {
+		self.transaction_pool.clone()
 	}
 
 	/// Get shared keystore.
@@ -350,13 +366,13 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 }
 
 /// Transaction pool adapter.
-pub struct ExtrinsicPoolAdapter<C: Components> {
+pub struct TransactionPoolAdapter<C: Components> {
 	imports_external_transactions: bool,
-	pool: Arc<ExtrinsicPool<C::ExtrinsicPoolApi>>,
+	pool: Arc<TransactionPool<C::TransactionPoolApi>>,
 	client: Arc<ComponentClient<C>>,
 }
 
-impl<C: Components> ExtrinsicPoolAdapter<C> {
+impl<C: Components> TransactionPoolAdapter<C> {
 	fn best_block_id(&self) -> Option<BlockId<ComponentBlock<C>>> {
 		self.client.info()
 			.map(|info| BlockId::hash(info.chain.best_hash))
@@ -367,7 +383,7 @@ impl<C: Components> ExtrinsicPoolAdapter<C> {
 	}
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for ExtrinsicPoolAdapter<C> {
+impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
 		let best_block_id = match self.best_block_id() {
 			Some(id) => id,
@@ -398,7 +414,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 				Ok(xt) => Some(*xt.hash()),
 				Err(e) => match e.into_pool_error() {
 					Ok(e) => match e.kind() {
-						extrinsic_pool::ErrorKind::AlreadyImported(hash) =>
+						transaction_pool::ErrorKind::AlreadyImported(hash) =>
 							Some(::std::str::FromStr::from_str(&hash).map_err(|_| {})
 								.expect("Hash string is always valid")),
 						_ => {

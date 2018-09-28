@@ -58,7 +58,7 @@ pub mod error;
 pub mod informant;
 mod panic_hook;
 
-use network_libp2p::AddrComponent;
+use network_libp2p::Protocol;
 use runtime_primitives::traits::As;
 use service::{
 	ServiceFactory, FactoryFullConfiguration, RuntimeGenesis,
@@ -261,18 +261,18 @@ where
 
 	let role =
 		if matches.is_present("light") {
-			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::LIGHT
 		} else if matches.is_present("validator") || matches.is_present("dev") {
-			config.execution_strategy = service::ExecutionStrategy::Both;
+			config.block_execution_strategy = service::ExecutionStrategy::Both;
 			service::Roles::AUTHORITY
 		} else {
-			config.execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
+			config.block_execution_strategy = service::ExecutionStrategy::NativeWhenPossible;
 			service::Roles::FULL
 		};
 
 	if let Some(s) = matches.value_of("execution") {
-		config.execution_strategy = match s {
+		config.block_execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
 			"native" => service::ExecutionStrategy::NativeWhenPossible,
 			"wasm" => service::ExecutionStrategy::AlwaysWasm,
@@ -305,8 +305,8 @@ where
 				None => 30333,
 			};
 			config.network.listen_addresses = vec![
-				iter::once(AddrComponent::IP4(Ipv4Addr::new(0, 0, 0, 0)))
-					.chain(iter::once(AddrComponent::TCP(port)))
+				iter::once(Protocol::Ip4(Ipv4Addr::new(0, 0, 0, 0)))
+					.chain(iter::once(Protocol::Tcp(port)))
 					.collect()
 			];
 		}
@@ -400,11 +400,20 @@ fn import_blocks<F, E>(matches: &clap::ArgMatches, spec: ChainSpec<FactoryGenesi
 	config.database_path = db_path(&base_path, config.chain_spec.id()).to_string_lossy().into();
 
 	if let Some(s) = matches.value_of("execution") {
-		config.execution_strategy = match s {
+		config.block_execution_strategy = match s {
 			"both" => service::ExecutionStrategy::Both,
 			"native" => service::ExecutionStrategy::NativeWhenPossible,
 			"wasm" => service::ExecutionStrategy::AlwaysWasm,
-			_ => return Err(error::ErrorKind::Input("Invalid execution mode specified".to_owned()).into()),
+			_ => return Err(error::ErrorKind::Input("Invalid block execution mode specified".to_owned()).into()),
+		};
+	}
+
+	if let Some(s) = matches.value_of("api-execution") {
+		config.api_execution_strategy = match s {
+			"both" => service::ExecutionStrategy::Both,
+			"native" => service::ExecutionStrategy::NativeWhenPossible,
+			"wasm" => service::ExecutionStrategy::AlwaysWasm,
+			_ => return Err(error::ErrorKind::Input("Invalid API execution mode specified".to_owned()).into()),
 		};
 	}
 
@@ -493,7 +502,7 @@ fn default_base_path() -> PathBuf {
 	use app_dirs::{AppInfo, AppDataType};
 
 	let app_info = AppInfo {
-		name: "Polkadot",
+		name: "Substrate",
 		author: "Parity Technologies",
 	};
 
@@ -506,12 +515,12 @@ fn default_base_path() -> PathBuf {
 fn init_logger(pattern: &str) {
 	use ansi_term::Colour;
 
-	let mut builder = env_logger::LogBuilder::new();
+	let mut builder = env_logger::Builder::new();
 	// Disable info logging by default for some modules:
-	builder.filter(Some("ws"), log::LogLevelFilter::Warn);
-	builder.filter(Some("hyper"), log::LogLevelFilter::Warn);
+	builder.filter(Some("ws"), log::LevelFilter::Warn);
+	builder.filter(Some("hyper"), log::LevelFilter::Warn);
 	// Enable info for others.
-	builder.filter(None, log::LogLevelFilter::Info);
+	builder.filter(None, log::LevelFilter::Info);
 
 	if let Ok(lvl) = std::env::var("RUST_LOG") {
 		builder.parse(&lvl);
@@ -521,10 +530,10 @@ fn init_logger(pattern: &str) {
 	let isatty = atty::is(atty::Stream::Stderr);
 	let enable_color = isatty;
 
-	let format = move |record: &log::LogRecord| {
+	builder.format(move |buf, record| {
 		let timestamp = time::strftime("%Y-%m-%d %H:%M:%S", &time::now()).expect("Error formatting log timestamp");
 
-		let mut output = if log::max_log_level() <= log::LogLevelFilter::Info {
+		let mut output = if log::max_level() <= log::LevelFilter::Info {
 			format!("{} {}", Colour::Black.bold().paint(timestamp), record.args())
 		} else {
 			let name = ::std::thread::current().name().map_or_else(Default::default, |x| format!("{}", Colour::Blue.bold().paint(x)));
@@ -535,15 +544,14 @@ fn init_logger(pattern: &str) {
 			output = kill_color(output.as_ref());
 		}
 
-		if !isatty && record.level() <= log::LogLevel::Info && atty::is(atty::Stream::Stdout) {
+		if !isatty && record.level() <= log::Level::Info && atty::is(atty::Stream::Stdout) {
 			// duplicate INFO/WARN output to console
 			println!("{}", output);
 		}
-		output
-	};
-	builder.format(format);
+		writeln!(buf, "{}", output)
+	});
 
-	builder.init().expect("Logger initialized only once.");
+	builder.init();
 }
 
 fn kill_color(s: &str) -> String {

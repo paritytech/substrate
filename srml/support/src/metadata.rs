@@ -14,38 +14,30 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use alloc;
-pub use substrate_metadata::JsonMetadata;
+pub use substrate_metadata::{
+	DecodeDifferent, FnEncode, RuntimeMetadata, RuntimeModuleMetadata
+};
 
-/// Make Box available on `std` and `no_std`.
-pub type Box<T> = alloc::boxed::Box<T>;
-/// Make Vec available on `std` and `no_std`.
-pub type Vec<T> = alloc::vec::Vec<T>;
-
-/// Implements the json metadata support for the given runtime and all its modules.
+/// Implements the metadata support for the given runtime and all its modules.
 ///
 /// Example:
 /// ```compile_fail
-/// impl_json_metadata!(for RUNTIME_NAME with modules MODULE0, MODULE2, MODULE3 with Storage);
+/// impl_runtime_metadata!(for RUNTIME_NAME with modules MODULE0, MODULE2, MODULE3 with Storage);
 /// ```
 ///
 /// In this example, just `MODULE3` implements the `Storage` trait.
 #[macro_export]
-macro_rules! impl_json_metadata {
+macro_rules! impl_runtime_metadata {
 	(
 		for $runtime:ident with modules
 		$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn json_metadata() -> $crate::metadata::Vec<$crate::metadata::JsonMetadata> {
-				let events = Self::outer_event_json_metadata();
-				__impl_json_metadata!($runtime;
-					$crate::metadata::JsonMetadata::Events {
-						name: events.0,
-						events: events.1,
-					};
-					$( $rest )*
-				)
+			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
+				$crate::metadata::RuntimeMetadata {
+					outer_event: Self::outer_event_metadata(),
+					modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+				}
 			}
 		}
 	}
@@ -53,31 +45,23 @@ macro_rules! impl_json_metadata {
 
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __impl_json_metadata {
+macro_rules! __runtime_modules_to_metadata {
 	(
 		$runtime: ident;
 		$( $metadata:expr ),*;
 		$mod:ident::$module:ident,
 		$( $rest:tt )*
 	) => {
-		__impl_json_metadata!(
+		__runtime_modules_to_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::JsonMetadata::Module {
-				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod)
+			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
+				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
+				module: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode($mod::$module::<$runtime>::metadata)
+				),
+				storage: None,
 			};
 			$( $rest )*
-		)
-	};
-	(
-		$runtime: ident;
-		$( $metadata:expr ),*;
-		$mod:ident::$module:ident
-	) => {
-		__impl_json_metadata!(
-			$runtime;
-			$( $metadata, )* $crate::metadata::JsonMetadata::Module {
-				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod)
-			};
 		)
 	};
 	(
@@ -86,33 +70,25 @@ macro_rules! __impl_json_metadata {
 		$mod:ident::$module:ident with Storage,
 		$( $rest:tt )*
 	) => {
-		__impl_json_metadata!(
+		__runtime_modules_to_metadata!(
 			$runtime;
-			$( $metadata, )* $crate::metadata::JsonMetadata::ModuleWithStorage {
-				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod),
-				storage: $mod::$module::<$runtime>::store_json_metadata()
+			$( $metadata, )* $crate::metadata::RuntimeModuleMetadata {
+				prefix: $crate::metadata::DecodeDifferent::Encode(stringify!($mod)),
+				module: $crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode($mod::$module::<$runtime>::metadata)
+				),
+				storage: Some($crate::metadata::DecodeDifferent::Encode(
+					$crate::metadata::FnEncode($mod::$module::<$runtime>::store_metadata)
+				)),
 			};
 			$( $rest )*
-		)
-	};
-	(
-		$runtime: ident;
-		$( $metadata:expr ),*;
-		$mod:ident::$module:ident with Storage
-	) => {
-		__impl_json_metadata!(
-			$runtime;
-			$( $metadata, )* $crate::metadata::JsonMetadata::ModuleWithStorage {
-				module: $mod::$module::<$runtime>::json_metadata(), prefix: stringify!($mod),
-				storage: $mod::$module::<$runtime>::store_json_metadata()
-			};
 		)
 	};
 	(
 		$runtime:ident;
 		$( $metadata:expr ),*;
 	) => {
-		<[_]>::into_vec($crate::metadata::Box::new([ $( $metadata ),* ]))
+		$crate::metadata::DecodeDifferent::Encode(&[ $( $metadata ),* ])
 	};
 }
 
@@ -121,9 +97,11 @@ macro_rules! __impl_json_metadata {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use serde;
-	use serde_json;
-	use substrate_metadata::JsonMetadataDecodable;
+	use substrate_metadata::{
+		EventMetadata, OuterEventMetadata, RuntimeModuleMetadata, CallMetadata, ModuleMetadata,
+		StorageFunctionModifier, StorageFunctionType, FunctionMetadata, FunctionArgumentMetadata,
+		StorageMetadata, StorageFunctionMetadata,
+	};
 	use codec::{Decode, Encode};
 
 	mod system {
@@ -219,79 +197,110 @@ mod tests {
 		type Origin = u32;
 	}
 
-	fn system_event_json() -> &'static str {
-		r#"{ "SystemEvent": { "params": null, "description": [ ] } }"#
-	}
-
-	fn event_module_event_json() -> &'static str {
-		r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ " Hi, I am a comment." ] } }"#
-	}
-
-	fn event_module2_event_json() -> &'static str {
-		r#"{ "TestEvent": { "params": [ "Balance" ], "description": [ ] } }"#
-	}
-
-	impl_json_metadata!(
+	impl_runtime_metadata!(
 		for TestRuntime with modules
 			event_module::Module,
-			event_module2::ModuleWithStorage with Storage
+			event_module2::ModuleWithStorage with Storage,
 	);
 
-	const EXPECTED_METADATA: &[JsonMetadata] = &[
-		JsonMetadata::Events {
-			name: "TestEvent",
-			events: &[
-				("system", system_event_json),
-				("event_module", event_module_event_json),
-				("event_module2", event_module2_event_json),
-			]
+	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata {
+		outer_event: OuterEventMetadata {
+			name: DecodeDifferent::Encode("TestEvent"),
+			events: DecodeDifferent::Encode(&[
+				(
+					"system",
+					FnEncode(|| &[
+						EventMetadata {
+							name: DecodeDifferent::Encode("SystemEvent"),
+							arguments: DecodeDifferent::Encode(&[]),
+							documentation: DecodeDifferent::Encode(&[]),
+						}
+					])
+				),
+				(
+					"event_module",
+					FnEncode(|| &[
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["Balance"]),
+							documentation: DecodeDifferent::Encode(&[" Hi, I am a comment."])
+						}
+					])
+				),
+				(
+					"event_module2",
+					FnEncode(|| &[
+						EventMetadata {
+							name: DecodeDifferent::Encode("TestEvent"),
+							arguments: DecodeDifferent::Encode(&["Balance"]),
+							documentation: DecodeDifferent::Encode(&[])
+						}
+					])
+				)
+			]),
 		},
-		JsonMetadata::Module {
-			module: concat!(
-				r#"{ "name": "Module", "call": "#,
-					r#"{ "name": "Call", "functions": "#,
-						r#"{ "0": { "name": "aux_0", "params": [ "#,
-							r#"{ "name": "origin", "type": "T::Origin" } ], "#,
-							r#""description": [ ] } } } }"#
-			),
-			prefix: "event_module"
-		},
-		JsonMetadata::ModuleWithStorage {
-			module: r#"{ "name": "ModuleWithStorage", "call": { "name": "Call", "functions": { } } }"#,
-			prefix: "event_module2",
-			storage: concat!(
-				r#"{ "prefix": "TestStorage", "items": { "#,
-					r#""StorageMethod": { "description": [ ], "modifier": null, "type": "u32" }"#,
-				r#" } }"#
-			)
-		}
-	];
+		modules: DecodeDifferent::Encode(&[
+			RuntimeModuleMetadata {
+				prefix: DecodeDifferent::Encode("event_module"),
+				module: DecodeDifferent::Encode(FnEncode(||
+					ModuleMetadata {
+					 name: DecodeDifferent::Encode("Module"),
+					 call: CallMetadata {
+						 name: DecodeDifferent::Encode("Call"),
+						 functions: DecodeDifferent::Encode(&[
+							 FunctionMetadata {
+								 id: 0,
+								 name: DecodeDifferent::Encode("aux_0"),
+								 arguments: DecodeDifferent::Encode(&[
+									 FunctionArgumentMetadata {
+										 name: DecodeDifferent::Encode("origin"),
+										 ty: DecodeDifferent::Encode("T::Origin"),
+									 }
+								 ]),
+								 documentation: DecodeDifferent::Encode(&[]),
+							 }
+						 ])
+					 }
+					}
+				)),
+				storage: None,
+			},
+			RuntimeModuleMetadata {
+				prefix: DecodeDifferent::Encode("event_module2"),
+				module: DecodeDifferent::Encode(FnEncode(||
+					ModuleMetadata {
+					 name: DecodeDifferent::Encode("ModuleWithStorage"),
+					 call: CallMetadata {
+						 name: DecodeDifferent::Encode("Call"),
+						 functions: DecodeDifferent::Encode(&[])
+					 }
+					}
+				)),
+				storage: Some(DecodeDifferent::Encode(FnEncode(||
+					StorageMetadata {
+					   prefix: DecodeDifferent::Encode("TestStorage"),
+					   functions: DecodeDifferent::Encode(&[
+						   StorageFunctionMetadata {
+							   name: DecodeDifferent::Encode("StorageMethod"),
+							   modifier: StorageFunctionModifier::None,
+							   ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
+							   documentation: DecodeDifferent::Encode(&[]),
+						   }
+					   ])
+					}
+				))),
+			}
+		])
+	};
 
 	#[test]
-	fn runtime_json_metadata() {
-		let metadata = TestRuntime::json_metadata();
-		assert_eq!(EXPECTED_METADATA, &metadata[..]);
-	}
+	fn runtime_metadata() {
+		let metadata = TestRuntime::metadata();
+		assert_eq!(EXPECTED_METADATA, metadata);
 
-	#[test]
-	fn json_metadata_encode_and_decode() {
-		let metadata = TestRuntime::json_metadata();
 		let metadata_encoded = metadata.encode();
-		let metadata_decoded = Vec::<JsonMetadataDecodable>::decode(&mut &metadata_encoded[..]);
+		let metadata_decoded = RuntimeMetadata::decode(&mut &metadata_encoded[..]);
 
-		assert_eq!(&metadata_decoded.unwrap()[..], &metadata[..]);
-	}
-
-	#[test]
-	fn into_json_string_is_valid_json() {
-		let metadata = TestRuntime::json_metadata();
-		let metadata_encoded = metadata.encode();
-		let metadata_decoded = Vec::<JsonMetadataDecodable>::decode(&mut &metadata_encoded[..]);
-
-		for mdata in metadata_decoded.unwrap().into_iter() {
-			let json = mdata.into_json_string();
-			let _: serde::de::IgnoredAny =
-				serde_json::from_str(&json.1).expect(&format!("Is valid json syntax: {}", json.1));
-		}
+		assert_eq!(metadata, metadata_decoded.unwrap());
 	}
 }

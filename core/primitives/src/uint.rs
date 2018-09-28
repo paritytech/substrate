@@ -43,12 +43,33 @@ macro_rules! impl_serde {
 	}
 }
 
+macro_rules! impl_codec {
+	($name: ident, $len: expr) => {
+		impl ::codec::Encode for $name {
+			fn using_encoded<R, F: FnOnce(&[u8]) -> R>(&self, f: F) -> R {
+				let mut bytes = [0u8; $len * 8];
+				self.to_little_endian(&mut bytes);
+				bytes.using_encoded(f)
+			}
+		}
+
+		impl ::codec::Decode for $name {
+			fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
+				<[u8; $len * 8] as ::codec::Decode>::decode(input)
+					.map(|b| $name::from_little_endian(&b))
+			}
+		}
+	}
+}
+
 construct_uint!(U256, 4);
 impl_serde!(U256, 4);
+impl_codec!(U256, 4);
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use codec::{Encode, Decode};
 	use substrate_serializer as ser;
 
 	macro_rules! test {
@@ -85,6 +106,31 @@ mod tests {
 	}
 
 	test!(U256, test_u256);
+
+	#[test]
+	fn test_u256_codec() {
+		let res1 = vec![120, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 0, 0,
+						0, 0, 0, 0, 0, 0, 0, 0];
+		let res2 = vec![0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+						0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+						0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+						0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+
+		assert_eq!(
+			U256::from(120).encode(),
+			res1);
+		assert_eq!(
+			U256::max_value().encode(),
+			res2);
+		assert_eq!(
+			U256::decode(&mut &res1[..]),
+			Some(U256::from(120)));
+		assert_eq!(
+			U256::decode(&mut &res2[..]),
+			Some(U256::max_value()));
+	}
 
 	#[test]
 	fn test_large_values() {

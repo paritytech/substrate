@@ -25,9 +25,6 @@ extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
@@ -59,6 +56,8 @@ use runtime_primitives::traits::{BlindCheckable, BlakeTwo256};
 use runtime_primitives::Ed25519Signature;
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
+#[cfg(any(feature = "std", test))]
+use runtime_version::NativeVersion;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
@@ -72,6 +71,15 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 
 fn version() -> RuntimeVersion {
 	VERSION
+}
+
+/// Native version.
+#[cfg(any(feature = "std", test))]
+pub fn native_version() -> NativeVersion {
+	NativeVersion {
+		runtime_version: VERSION,
+		can_author_with: Default::default(),
+	}
 }
 
 /// Calls in transactions.
@@ -141,21 +149,10 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 	}
 }
 
-fn test_event_json() -> &'static str {
-	"hallo"
-}
-
 pub mod api {
 	use system;
 	impl_stubs!(
 		version => |()| super::version(),
-		json_metadata => |()| {
-			let mut vec = ::runtime_support::metadata::Vec::new();
-			vec.push(::runtime_support::metadata::JsonMetadata::Events {
-				name: "Test", events: &[ ("event", super::test_event_json) ]
-			});
-			vec
-		},
 		authorities => |()| system::authorities(),
 		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),

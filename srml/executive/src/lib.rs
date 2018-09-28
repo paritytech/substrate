@@ -18,8 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
 #[cfg(test)]
 #[macro_use]
 extern crate serde_derive;
@@ -76,23 +74,22 @@ mod internal {
 pub struct Executive<
 	System,
 	Block,
-	Lookup,
+	Context,
 	Payment,
 	Finalisation,
->(PhantomData<(System, Block, Lookup, Payment, Finalisation)>);
+>(PhantomData<(System, Block, Context, Payment, Finalisation)>);
 
 impl<
-	Address,
+	Context: Default,
 	System: system::Trait,
 	Block: traits::Block<Header=System::Header, Hash=System::Hash>,
-	Lookup: traits::Lookup<Source=Address, Target=System::AccountId>,
 	Payment: MakePayment<System::AccountId>,
 	Finalisation: OnFinalise<System::BlockNumber>,
-> Executive<System, Block, Lookup, Payment, Finalisation> where
-	Block::Extrinsic: Checkable<fn(Address) -> Result<System::AccountId, &'static str>> + Codec,
-	<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
-	<<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<fn(Address) -> Result<System::AccountId, &'static str>>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
+> Executive<System, Block, Context, Payment, Finalisation> where
+	Block::Extrinsic: Checkable<Context> + Codec,
+	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
+	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
 {
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
@@ -177,13 +174,13 @@ impl<
 	/// Actually apply an extrinsic given its `encoded_len`; this doesn't note its hash.
 	fn apply_extrinsic_no_note_with_len(uxt: Block::Extrinsic, encoded_len: usize) -> result::Result<internal::ApplyOutcome, internal::ApplyError> {
 		// Verify the signature is good.
-		let xt = uxt.check_with(Lookup::lookup).map_err(internal::ApplyError::BadSignature)?;
+		let xt = uxt.check(&Default::default()).map_err(internal::ApplyError::BadSignature)?;
 
-		if let Some(sender) = xt.sender() {
+		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// check index
 			let expected_index = <system::Module<System>>::account_nonce(sender);
-			if xt.index() != &expected_index { return Err(
-				if xt.index() < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
+			if index != &expected_index { return Err(
+				if index < &expected_index { internal::ApplyError::Stale } else { internal::ApplyError::Future }
 			) }
 
 			// pay any fees.
@@ -207,7 +204,9 @@ impl<
 		// remove temporaries.
 		let new_header = <system::Module<System>>::finalise();
 
-		// check digest
+		// check digest. uncomment next two lines to figure out next digest hash for tests.
+//		runtime_io::print(&header.digest().encode()[..]);
+//		runtime_io::print(&new_header.digest().encode()[..]);
 		assert!(header.digest() == new_header.digest());
 
 		// check storage root.
@@ -223,7 +222,7 @@ impl<
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.encode().len();
 		
-		let xt = match uxt.check_with(Lookup::lookup) {
+		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
 			// An unknown account index implies that the transaction may yet become valid.
@@ -233,7 +232,7 @@ impl<
 			Err(_) => return TransactionValidity::Invalid,
 		};
 
-		if let Some(sender) = xt.sender() {
+		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
 			// pay any fees.
 			if Payment::make_payment(sender, encoded_len).is_err() {
 				return TransactionValidity::Invalid
@@ -241,20 +240,20 @@ impl<
 
 			// check index
 			let mut expected_index = <system::Module<System>>::account_nonce(sender);
-			if xt.index() < &expected_index {
+			if index < &expected_index {
 				return TransactionValidity::Invalid
 			}
-			if *xt.index() > expected_index + As::sa(256) {
+			if *index > expected_index + As::sa(256) {
 				return TransactionValidity::Unknown
 			}
 
 			let mut deps = Vec::new();
-			while expected_index < *xt.index() {
+			while expected_index < *index {
 				deps.push((sender, expected_index).encode());
 				expected_index = expected_index + One::one();
 			}
 			
-			TransactionValidity::Valid(encoded_len as TransactionPriority, deps, vec![(sender, *xt.index()).encode()], TransactionLongevity::max_value())
+			TransactionValidity::Valid(encoded_len as TransactionPriority, deps, vec![(sender, *index).encode()], TransactionLongevity::max_value())
 		} else {
 			return TransactionValidity::Invalid
 		}
@@ -266,20 +265,11 @@ mod tests {
 	use super::*;
 	use balances::Call;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
+	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
-	use primitives::traits::{Header as HeaderT, BlakeTwo256, Lookup};
+	use primitives::traits::{Header as HeaderT, BlakeTwo256};
 	use primitives::testing::{Digest, DigestItem, Header, Block};
 	use system;
-
-	struct NullLookup;
-	impl Lookup for NullLookup {
-		type Source = u64;
-		type Target = u64;
-		fn lookup(s: Self::Source) -> Result<Self::Target, &'static str> {
-			Ok(s)
-		}
-	}
 
 	impl_outer_origin! {
 		pub enum Origin for Runtime {
@@ -316,7 +306,7 @@ mod tests {
 	}
 
 	type TestXt = primitives::testing::TestXt<Call<Runtime>>;
-	type Executive = super::Executive<Runtime, Block<TestXt>, NullLookup, balances::Module<Runtime>, ()>;
+	type Executive = super::Executive<Runtime, Block<TestXt>, balances::ChainContext<Runtime>, balances::Module<Runtime>, ()>;
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
@@ -331,7 +321,7 @@ mod tests {
 			reclaim_rebate: 0,
 		}.build_storage().unwrap());
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69));
-		let mut t = runtime_io::TestExternalities::<Blake2Hasher, RlpCodec>::new(t);
+		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(),
 				[69u8; 32].into(), Digest::default()));
@@ -341,7 +331,7 @@ mod tests {
 		});
 	}
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
 		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap());
 		t.into()
@@ -354,8 +344,8 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("d1d3da2b1efb1a6ef740b8cdef52e4cf3c6dade6f8a360969fd7ef0034c53b54").into(),
-					extrinsics_root: hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into(),
+					state_root: hex!("d9e26179ed13b3df01e71ad0bf622d56f2066a63e04762a83c0ae9deeb4da1d0").into(),
+					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],
@@ -372,7 +362,7 @@ mod tests {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
 					state_root: [0u8; 32].into(),
-					extrinsics_root: hex!("45b0cfc220ceec5b7c1c62c4d4193d38e4eba48e8815729ce75f9c0ab0e4c1c0").into(),
+					extrinsics_root: hex!("03170a2e7597b7b7e3d84c05391d139a62b157e78786d8c082f29dcf4c111314").into(),
 					digest: Digest { logs: vec![], },
 				},
 				extrinsics: vec![],
@@ -388,7 +378,7 @@ mod tests {
 				header: Header {
 					parent_hash: [69u8; 32].into(),
 					number: 1,
-					state_root: hex!("d1d3da2b1efb1a6ef740b8cdef52e4cf3c6dade6f8a360969fd7ef0034c53b54").into(),
+					state_root: hex!("d9e26179ed13b3df01e71ad0bf622d56f2066a63e04762a83c0ae9deeb4da1d0").into(),
 					extrinsics_root: [0u8; 32].into(),
 					digest: Digest { logs: vec![], },
 				},

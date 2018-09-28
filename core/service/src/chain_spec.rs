@@ -30,6 +30,16 @@ enum GenesisSource<G> {
 	Factory(fn() -> G),
 }
 
+impl<G: RuntimeGenesis> Clone for GenesisSource<G> {
+	fn clone(&self) -> Self {
+		match *self {
+			GenesisSource::File(ref path) => GenesisSource::File(path.clone()),
+			GenesisSource::Embedded(d) => GenesisSource::Embedded(d),
+			GenesisSource::Factory(f) => GenesisSource::Factory(f),
+		}
+	}
+}
+
 impl<G: RuntimeGenesis> GenesisSource<G> {
 	fn resolve(&self) -> Result<Genesis<G>, String> {
 		#[derive(Serialize, Deserialize)]
@@ -69,19 +79,29 @@ enum Genesis<G> {
 	Raw(HashMap<StorageKey, StorageData>),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ChainSpecFile {
 	pub name: String,
 	pub id: String,
 	pub boot_nodes: Vec<String>,
 	pub telemetry_url: Option<String>,
+	pub protocol_id: Option<String>,
 }
 
 /// A configuration of a chain. Can be used to build a genesis block.
 pub struct ChainSpec<G: RuntimeGenesis> {
 	spec: ChainSpecFile,
 	genesis: GenesisSource<G>,
+}
+
+impl<G: RuntimeGenesis> Clone for ChainSpec<G> {
+	fn clone(&self) -> Self {
+		ChainSpec {
+			spec: self.spec.clone(),
+			genesis: self.genesis.clone(),
+		}
+	}
 }
 
 impl<G: RuntimeGenesis> ChainSpec<G> {
@@ -99,6 +119,10 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 
 	pub fn telemetry_url(&self) -> Option<&str> {
 		self.spec.telemetry_url.as_ref().map(String::as_str)
+	}
+
+	pub fn protocol_id(&self) -> Option<&str> {
+		self.spec.protocol_id.as_ref().map(String::as_str)
 	}
 
 	/// Parse json content into a `ChainSpec`
@@ -126,7 +150,8 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		id: &str,
 		constructor: fn() -> G,
 		boot_nodes: Vec<String>,
-		telemetry_url: Option<&str>
+		telemetry_url: Option<&str>,
+		protocol_id: Option<&str>,
 	) -> Self
 	{
 		let spec = ChainSpecFile {
@@ -134,6 +159,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			id: id.to_owned(),
 			boot_nodes: boot_nodes,
 			telemetry_url: telemetry_url.map(str::to_owned),
+			protocol_id: protocol_id.map(str::to_owned),
 		};
 		ChainSpec {
 			spec,
@@ -147,7 +173,6 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		struct Container<G> {
 			#[serde(flatten)]
 			spec: ChainSpecFile,
-			#[serde(flatten)]
 			genesis: Genesis<G>,
 
 		};

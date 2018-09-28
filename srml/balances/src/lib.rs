@@ -19,9 +19,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
@@ -35,10 +32,13 @@ extern crate sr_std as rstd;
 extern crate parity_codec_derive;
 
 extern crate parity_codec as codec;
-extern crate substrate_primitives;
-extern crate sr_io as runtime_io;
 extern crate sr_primitives as primitives;
 extern crate srml_system as system;
+
+#[cfg(test)]
+extern crate sr_io as runtime_io;
+#[cfg(test)]
+extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use rstd::{cmp, result};
@@ -46,7 +46,7 @@ use codec::{Encode, Decode, Codec, Input, Output};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
-	As, Lookup, Member, CheckedAdd, CheckedSub};
+	As, Lookup, Member, CheckedAdd, CheckedSub, CurrentHeight, BlockNumberToHash};
 use address::Address as RawAddress;
 use system::ensure_signed;
 
@@ -287,7 +287,10 @@ impl<T: Trait> Module<T> {
 		let to_balance = Self::free_balance(&dest);
 		let would_create = to_balance.is_zero();
 		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
-		let liability = value + fee;
+		let liability = match value.checked_add(&fee) {
+			Some(l) => l,
+			None => return Err("got overflow after adding a fee to value"),
+		};
 
 		let new_from_balance = match from_balance.checked_sub(&liability) {
 			Some(b) => b,
@@ -630,6 +633,13 @@ impl<T: Trait> Module<T> {
 			<TotalIssuance<T>>::put(v);
 		}
 	}
+
+	pub fn lookup(a: address::Address<T::AccountId, T::AccountIndex>) -> result::Result<T::AccountId, &'static str> {
+		match a {
+			address::Address::Id(i) => Ok(i),
+			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
+		}
+	}
 }
 
 impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
@@ -637,14 +647,33 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	}
 }
 
-impl<T: Trait> Lookup for Module<T> {
+pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
+impl<T> Default for ChainContext<T> {
+	fn default() -> Self {
+		ChainContext(::rstd::marker::PhantomData)
+	}
+}
+
+impl<T: Trait> Lookup for ChainContext<T> {
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
-	fn lookup(a: Self::Source) -> result::Result<Self::Target, &'static str> {
-		match a {
-			address::Address::Id(i) => Ok(i),
-			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
-		}
+	fn lookup(&self, a: Self::Source) -> result::Result<Self::Target, &'static str> {
+		<Module<T>>::lookup(a)
+	}
+}
+
+impl<T: Trait> CurrentHeight for ChainContext<T> {
+	type BlockNumber = T::BlockNumber;
+	fn current_height(&self) -> Self::BlockNumber {
+		<system::Module<T>>::block_number()
+	}
+}
+
+impl<T: Trait> BlockNumberToHash for ChainContext<T> {
+	type BlockNumber = T::BlockNumber;
+	type Hash = T::Hash;
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
+		Some(<system::Module<T>>::block_hash(n))
 	}
 }
 

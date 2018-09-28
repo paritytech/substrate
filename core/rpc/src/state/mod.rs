@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot state API.
+//! Substrate state API.
 
 use std::{
 	collections::HashMap,
@@ -27,7 +27,7 @@ use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
@@ -44,7 +44,7 @@ mod tests;
 use self::error::Result;
 
 build_rpc_trait! {
-	/// Polkadot state API
+	/// Substrate state API
 	pub trait StateApi<Hash> {
 		type Metadata;
 
@@ -107,8 +107,8 @@ impl<B, E, Block: BlockT> State<B, E, Block> {
 
 impl<B, E, Block> State<B, E, Block> where
 	Block: BlockT,
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec>,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec>,
+	B: client::backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
 {
 	fn unwrap_or_best(&self, hash: Trailing<Block::Hash>) -> Result<Block::Hash> {
 		::helpers::unwrap_or_else(|| Ok(self.client.info()?.chain.best_hash), hash)
@@ -117,8 +117,8 @@ impl<B, E, Block> State<B, E, Block> where
 
 impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 	Block: BlockT + 'static,
-	B: client::backend::Backend<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher, RlpCodec> + Send + Sync + 'static,
+	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 {
 	type Metadata = ::metadata::Metadata;
 
@@ -145,8 +145,8 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 
 	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<serde_json::Value> {
 		let block = self.unwrap_or_best(block)?;
-		let metadata = self.client.json_metadata(&BlockId::Hash(block))?;
-		serde_json::from_str(&metadata).map_err(Into::into)
+		let metadata = self.client.metadata(&BlockId::Hash(block))?;
+		serde_json::to_value(metadata).map_err(Into::into)
 	}
 
 	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {

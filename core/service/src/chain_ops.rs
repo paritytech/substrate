@@ -102,8 +102,9 @@ pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut 
 		}
 		match SignedBlock::decode(&mut input) {
 			Some(block) => {
+				// TODO: non-instant finality.
 				let header = client.check_justification(block.block.header, block.justification.into())?;
-				client.import_block(BlockOrigin::File, header, Some(block.block.extrinsics))?;
+				client.import_block(BlockOrigin::File, header, Some(block.block.extrinsics), true)?;
 			},
 			None => {
 				warn!("Error reading block data.");

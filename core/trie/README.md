@@ -1,0 +1,1 @@
+This crate provides utility functions to interact with Substrate's Modified Merkle Patricia tree ("trie").

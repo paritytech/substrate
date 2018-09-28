@@ -316,10 +316,10 @@ fn nominating_and_rewards_should_work() {
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Staking::current_era(), 2);
 		assert_eq!(Session::validators(), vec![3, 2]);
-		assert_eq!(Balances::total_balance(&1), 12);
+		assert_eq!(Balances::total_balance(&1), 16);
 		assert_eq!(Balances::total_balance(&2), 20);
-		assert_eq!(Balances::total_balance(&3), 40);
-		assert_eq!(Balances::total_balance(&4), 48);
+		assert_eq!(Balances::total_balance(&3), 60);
+		assert_eq!(Balances::total_balance(&4), 64);
 
 		System::set_block_number(3);
 		assert_ok!(Staking::stake(Origin::signed(4)));
@@ -327,17 +327,17 @@ fn nominating_and_rewards_should_work() {
 		assert_ok!(Staking::nominate(Origin::signed(3), 1.into()));
 		Session::check_rotate_session(System::block_number());
 		assert_eq!(Session::validators(), vec![1, 4]);
-		assert_eq!(Balances::total_balance(&1), 12);
-		assert_eq!(Balances::total_balance(&2), 30);
-		assert_eq!(Balances::total_balance(&3), 50);
-		assert_eq!(Balances::total_balance(&4), 48);
+		assert_eq!(Balances::total_balance(&1), 16);
+		assert_eq!(Balances::total_balance(&2), 40);
+		assert_eq!(Balances::total_balance(&3), 80);
+		assert_eq!(Balances::total_balance(&4), 64);
 
 		System::set_block_number(4);
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Balances::total_balance(&1), 13);
-		assert_eq!(Balances::total_balance(&2), 30);
-		assert_eq!(Balances::total_balance(&3), 58);
-		assert_eq!(Balances::total_balance(&4), 58);
+		assert_eq!(Balances::total_balance(&1), 26);
+		assert_eq!(Balances::total_balance(&2), 40);
+		assert_eq!(Balances::total_balance(&3), 133);
+		assert_eq!(Balances::total_balance(&4), 128);
 	});
 }
 
@@ -357,9 +357,9 @@ fn rewards_with_off_the_table_should_work() {
 		System::set_block_number(2);
 		assert_ok!(Staking::register_preferences(Origin::signed(1), Staking::intentions().into_iter().position(|i| i == 1).unwrap() as u32, ValidatorPrefs { unstake_threshold: 3, validator_payment: 4 }));
 		Session::check_rotate_session(System::block_number());
-		assert_eq!(Balances::total_balance(&1), 16);
-		assert_eq!(Balances::total_balance(&2), 24);
-		assert_eq!(Balances::total_balance(&3), 40);
+		assert_eq!(Balances::total_balance(&1), 22);
+		assert_eq!(Balances::total_balance(&2), 37);
+		assert_eq!(Balances::total_balance(&3), 60);
 	});
 }
 
@@ -393,10 +393,11 @@ fn nominating_slashes_should_work() {
 		System::set_extrinsic_index(1);
 		Staking::on_offline_validator(0);
 		Staking::on_offline_validator(1);
-		assert_eq!(Balances::total_balance(&1), 0);
-		assert_eq!(Balances::total_balance(&2), 20);
-		assert_eq!(Balances::total_balance(&3), 10);
-		assert_eq!(Balances::total_balance(&4), 30);
+		assert_eq!(Balances::total_balance(&1), 0);			//slashed
+		assert_eq!(Balances::total_balance(&2), 20);		//not slashed
+		assert_eq!(Balances::total_balance(&3), 10);		//slashed
+		assert_eq!(Balances::total_balance(&4), 30);		//slashed
+		// TODO: change slash % to something sensible.
 	});
 }
 

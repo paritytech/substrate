@@ -15,7 +15,7 @@ include::../../environmental/README.adoc[]
 
 include::../../core/executor/README.adoc[]
 
-include::../../core/extrinsic-pool/README.adoc[]
+include::../../core/transaction-pool/README.adoc[]
 
 include::../../core/keyring/README.adoc[]
 

@@ -17,14 +17,14 @@
 //! Authoring RPC module errors.
 
 use client;
-use extrinsic_pool;
+use transaction_pool;
 use rpc;
 
 use errors;
 
 error_chain! {
 	links {
-		Pool(extrinsic_pool::Error, extrinsic_pool::ErrorKind) #[doc = "Pool error"];
+		Pool(transaction_pool::Error, transaction_pool::ErrorKind) #[doc = "Pool error"];
 		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
 	}
 	errors {

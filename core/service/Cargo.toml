@@ -8,7 +8,7 @@ futures = "0.1.17"
 parking_lot = "0.4"
 error-chain = "0.12"
 lazy_static = "1.0"
-log = "0.3"
+log = "0.4"
 slog = "^2"
 tokio = "0.1.7"
 exit-future = "0.1"
@@ -23,9 +23,9 @@ substrate-primitives = { path = "../../core/primitives" }
 substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }
 substrate-client-db = { path = "../../core/client/db" }
-parity-codec = { version = "1.1" }
+parity-codec = "2.0"
 substrate-executor = { path = "../../core/executor" }
-substrate-extrinsic-pool = { path = "../../core/extrinsic-pool" }
+substrate-transaction-pool = { path = "../../core/transaction-pool" }
 substrate-rpc = { path = "../../core/rpc" }
 substrate-rpc-servers = { path = "../../core/rpc-servers" }
 substrate-telemetry = { path = "../../core/telemetry" }

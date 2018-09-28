@@ -60,7 +60,33 @@ pub trait Lookup {
 	/// Type to lookup into.
 	type Target;
 	/// Attempt a lookup.
-	fn lookup(s: Self::Source) -> result::Result<Self::Target, &'static str>;
+	fn lookup(&self, s: Self::Source) -> result::Result<Self::Target, &'static str>;
+}
+
+/// Get the "current" block number.
+pub trait CurrentHeight {
+	/// The type of the block number.
+	type BlockNumber;
+
+	/// Return the current block number. Not allowed to fail.
+	fn current_height(&self) -> Self::BlockNumber;
+}
+
+/// Translate a block number into a hash.
+pub trait BlockNumberToHash {
+	/// The type of the block number.
+	type BlockNumber: Zero;
+
+	/// The type of the hash.
+	type Hash;
+
+	/// Get the hash for a given block number, or `None` if unknown.
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash>;
+
+	/// Get the genesis block hash; this should always be known.
+	fn genesis_hash(&self) -> Self::Hash {
+		self.block_number_to_hash(Zero::zero()).expect("All blockchains must know their genesis block hash; qed")
+	}
 }
 
 /// Simple payment making trait, operating on a single generic `AccountId` type.
@@ -216,7 +242,7 @@ tuple_impl!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W,
 pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stupid bug in the Rust compiler believes derived
 																	// traits must be fulfilled by all type parameters.
 	/// The hash type produced.
-	type Output: Member + AsRef<[u8]>;
+	type Output: Member + AsRef<[u8]> + AsMut<[u8]>;
 
 	/// Produce the hash of some byte-slice.
 	fn hash(s: &[u8]) -> Self::Output;
@@ -226,12 +252,12 @@ pub trait Hash: 'static + MaybeSerializeDebug + Clone + Eq + PartialEq {	// Stup
 		Encode::using_encoded(s, Self::hash)
 	}
 
-	/// Produce the patricia-trie root of a mapping from indices to byte slices.
+	/// Produce the trie-db root of a mapping from indices to byte slices.
 	fn enumerated_trie_root(items: &[&[u8]]) -> Self::Output;
 
 	/// Iterator-based version of `enumerated_trie_root`.
 	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
+		I: IntoIterator<Item = A> + Iterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output;
 
@@ -270,7 +296,7 @@ impl Hash for BlakeTwo256 {
 		runtime_io::trie_root::<Blake2Hasher, _, _, _>(input).into()
 	}
 	fn ordered_trie_root<
-		I: IntoIterator<Item = A>,
+		I: IntoIterator<Item = A> + Iterator<Item = A>,
 		A: AsRef<[u8]>
 	>(input: I) -> Self::Output {
 		runtime_io::ordered_trie_root::<Blake2Hasher, _, _>(input).into()
@@ -347,7 +373,7 @@ impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'st
 /// You can also create a `new` one from those fields.
 pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
 	type Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Digest<Hash = Self::Hash>;
 
@@ -386,7 +412,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
 	type Extrinsic: Member + Codec;
 	type Header: Header<Hash=Self::Hash>;
-	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]>;
+	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
 	fn header(&self) -> &Self::Header;
 	fn extrinsics(&self) -> &[Self::Extrinsic];
@@ -407,10 +433,11 @@ pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
 /// Implement for pieces of information that require some additional context `Context` in order to be
 /// checked.
 pub trait Checkable<Context>: Sized {
-	/// Returned if `check_with` succeeds.
+	/// Returned if `check` succeeds.
 	type Checked;
 
-	fn check_with(self, context: Context) -> Result<Self::Checked, &'static str>;
+	/// Check self, given an instance of Context.
+	fn check(self, c: &Context) -> Result<Self::Checked, &'static str>;
 }
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
@@ -421,13 +448,14 @@ pub trait BlindCheckable: Sized {
 	/// Returned if `check` succeeds.
 	type Checked;
 
+	/// Check self.
 	fn check(self) -> Result<Self::Checked, &'static str>;
 }
 
-// Every `BlindCheckable` is also a `Checkable` for arbitrary `Context`.
+// Every `BlindCheckable` is also a `StaticCheckable` for arbitrary `Context`.
 impl<T: BlindCheckable, Context> Checkable<Context> for T {
 	type Checked = <Self as BlindCheckable>::Checked;
-	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> {
+	fn check(self, _c: &Context) -> Result<Self::Checked, &'static str> {
 		BlindCheckable::check(self)
 	}
 }
@@ -442,7 +470,7 @@ pub trait Applyable: Sized + Send + Sync {
 	type AccountId: Member + MaybeDisplay;
 	type Index: Member + MaybeDisplay + SimpleArithmetic;
 	type Call: Member;
-	fn index(&self) -> &Self::Index;
+	fn index(&self) -> Option<&Self::Index>;
 	fn sender(&self) -> Option<&Self::AccountId>;
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>);
 }

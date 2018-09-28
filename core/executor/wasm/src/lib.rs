@@ -81,6 +81,16 @@ impl_stubs!(
 		);
 		let ok = if let Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(0x1337))) = result { true } else { false };
 		[ok as u8].to_vec()
+	},
+	test_sandbox_instantiate NO_DECODE => |code: &[u8]| {
+		let env_builder = sandbox::EnvironmentDefinitionBuilder::new();
+		let code = match sandbox::Instance::new(code, &env_builder, &mut ()) {
+			Ok(_) => 0,
+			Err(sandbox::Error::Module) => 1,
+			Err(sandbox::Error::Execution) => 2,
+			Err(sandbox::Error::OutOfBounds) => 3,
+		};
+		[code].to_vec()
 	}
 );
 

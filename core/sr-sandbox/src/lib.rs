@@ -43,11 +43,11 @@
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
 
-extern crate parity_codec as codec;
-extern crate sr_io as runtime_io;
 #[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 extern crate substrate_primitives as primitives;
+#[cfg(not(feature = "std"))]
+extern crate parity_codec as codec;
 
 #[cfg(test)]
 extern crate wabt;
@@ -190,7 +190,12 @@ pub struct Instance<T> {
 }
 
 impl<T> Instance<T> {
-	/// Instantiate a module with the given [`EnvironmentDefinitionBuilder`].
+	/// Instantiate a module with the given [`EnvironmentDefinitionBuilder`]. It will
+	/// run the `start` function with the given `state`.
+	///
+	/// Returns `Err(Error::Module)` if this module can't be instantiated with the given
+	/// environment. If execution of `start` function generated a trap, then `Err(Error::Execution)` will
+	/// be returned.
 	///
 	/// [`EnvironmentDefinitionBuilder`]: struct.EnvironmentDefinitionBuilder.html
 	pub fn new(code: &[u8], env_def_builder: &EnvironmentDefinitionBuilder<T>, state: &mut T) -> Result<Instance<T>, Error> {

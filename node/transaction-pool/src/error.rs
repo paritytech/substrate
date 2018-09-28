@@ -14,15 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use extrinsic_pool;
-use node_api;
+use transaction_pool;
 use primitives::Hash;
 use runtime::{Address, UncheckedExtrinsic};
+use client;
 
 error_chain! {
 	links {
-		Pool(extrinsic_pool::Error, extrinsic_pool::ErrorKind);
-		Api(node_api::Error, node_api::ErrorKind);
+		Client(client::error::Error, client::error::ErrorKind);
+		Pool(transaction_pool::Error, transaction_pool::ErrorKind);
 	}
 	errors {
 		/// Unexpected extrinsic format submitted
@@ -63,10 +63,10 @@ error_chain! {
 	}
 }
 
-impl extrinsic_pool::IntoPoolError for Error {
-	fn into_pool_error(self) -> ::std::result::Result<extrinsic_pool::Error, Self> {
+impl transaction_pool::IntoPoolError for Error {
+	fn into_pool_error(self) -> ::std::result::Result<transaction_pool::Error, Self> {
 		match self {
-			Error(ErrorKind::Pool(e), c) => Ok(extrinsic_pool::Error(e, c)),
+			Error(ErrorKind::Pool(e), c) => Ok(transaction_pool::Error(e, c)),
 			e => Err(e),
 		}
 	}

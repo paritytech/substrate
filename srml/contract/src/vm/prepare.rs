@@ -138,7 +138,7 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 
 			let ext_func = env
 				.funcs
-				.get(import.field())
+				.get(import.field().as_bytes())
 				.ok_or_else(|| Error::Instantiate)?;
 			if !ext_func.func_type_matches(func_ty) {
 				return Err(Error::Instantiate);
@@ -231,7 +231,7 @@ mod tests {
 	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
 		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
 		let config = Config::<Test>::default();
-		let env = ::vm::env_def::init_env();
+		let env = ::vm::runtime::init_env();
 		prepare_contract::<MockExt>(wasm.as_ref(), &config, &env)
 	}
 

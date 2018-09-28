@@ -25,10 +25,9 @@ use traits::{self, Member, SimpleArithmetic, MaybeDisplay};
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct CheckedExtrinsic<AccountId, Index, Call> {
-	/// Who this purports to be from, if anyone (note this is not a signature).
-	pub signed: Option<AccountId>,
-	/// The number of extrinsics have come before from the same signer.
-	pub index: Index,
+	/// Who this purports to be from and the number of extrinsics have come before
+	/// from the same signer, if anyone (note this is not a signature).
+	pub signed: Option<(AccountId, Index)>,
 	/// The function that should be called.
 	pub function: Call,
 }
@@ -44,15 +43,15 @@ where
 	type AccountId = AccountId;
 	type Call = Call;
 
-	fn index(&self) -> &Self::Index {
-		&self.index
+	fn index(&self) -> Option<&Self::Index> {
+		self.signed.as_ref().map(|x| &x.1)
 	}
 
 	fn sender(&self) -> Option<&Self::AccountId> {
-		self.signed.as_ref()
+		self.signed.as_ref().map(|x| &x.0)
 	}
 
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
-		(self.function, self.signed)
+		(self.function, self.signed.map(|x| x.0))
 	}
 }

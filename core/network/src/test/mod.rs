@@ -26,7 +26,7 @@ use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
 use protocol::{Context, Protocol};
-use primitives::{Blake2Hasher, RlpCodec};
+use primitives::{Blake2Hasher};
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{NodeIndex, SessionInfo, Severity};
@@ -174,7 +174,7 @@ impl Peer {
 	}
 
 	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) 
-	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher, RlpCodec>) 
+	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>) 
 	{
 		for _ in 0 .. count {
 			let mut builder = self.client.new_block().unwrap();
@@ -246,7 +246,7 @@ impl TestNet {
 	pub fn add_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
-		let import_queue = Arc::new(SyncImportQueue);
+		let import_queue = Arc::new(SyncImportQueue(false));
 		let sync = Protocol::new(config.clone(), client.clone(), import_queue, None, tx_pool, DummySpecialization).unwrap();
 		self.peers.push(Arc::new(Peer {
 			sync: sync,

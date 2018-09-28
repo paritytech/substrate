@@ -19,10 +19,7 @@
 use std::marker::PhantomData;
 use futures::IntoFuture;
 
-use primitives::H256;
-use hashdb::Hasher;
-use patricia_trie::NodeCodec;
-use rlp::Encodable;
+use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use primitives::ChangesTrieConfiguration;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
@@ -152,29 +149,26 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<E, H, C> {
+pub struct LightDataChecker<E, H> {
 	executor: E,
 	_hasher: PhantomData<H>,
-	_codec: PhantomData<C>,
 }
 
-impl<E, H, C> LightDataChecker<E, H, C> {
+impl<E, H> LightDataChecker<E, H> {
 	/// Create new light data checker.
 	pub fn new(executor: E) -> Self {
 		Self {
-			executor, _hasher: PhantomData, _codec: PhantomData
+			executor, _hasher: PhantomData
 		}
 	}
 }
 
-impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
+impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 	where
 		Block: BlockT,
-		Block::Hash: Into<H::Out> + From<H256>,
 		E: CodeExecutor<H>,
 		H: Hasher,
-		C: NodeCodec<H> + Sync + Send,
-		H::Out: Ord + Encodable + HeapSizeOf + From<Block::Hash> + From<H256>,
+		H::Out: Ord + HeapSizeOf,
 {
 	fn check_header_proof(
 		&self,
@@ -185,7 +179,7 @@ impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 		let remote_header = remote_header.ok_or_else(||
 			ClientError::from(ClientErrorKind::InvalidHeaderProof))?;
 		let remote_header_hash = remote_header.hash();
-		cht::check_proof::<Block::Header, H, C>(
+		cht::check_proof::<Block::Header, H>(
 			request.cht_root,
 			request.block,
 			remote_header_hash,
@@ -198,8 +192,9 @@ impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 		request: &RemoteReadRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<Option<Vec<u8>>> {
-		let local_state_root = request.header.state_root().clone();
-		read_proof_check::<H, C>(local_state_root.into(), remote_proof, &request.key).map_err(Into::into)
+		let mut root: H::Out = Default::default();
+		root.as_mut().copy_from_slice(request.header.state_root().as_ref());
+		read_proof_check::<H>(root, remote_proof, &request.key).map_err(Into::into)
 	}
 
 	fn check_execution_proof(
@@ -207,7 +202,7 @@ impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<CallResult> {
-		check_execution_proof::<_, _, H, C>(&self.executor, request, remote_proof)
+		check_execution_proof::<_, _, H>(&self.executor, request, remote_proof)
 	}
 
 	fn check_changes_proof(
@@ -226,7 +221,7 @@ impl<E, Block, H, C> FetchChecker<Block> for LightDataChecker<E, H, C>
 		}
 
 		let first_number = request.first_block.0.as_();
-		key_changes_proof_check::<_, H, C>(
+		key_changes_proof_check::<_, H>(
 			&request.changes_trie_config,
 			&RootsStorage {
 				first: first_number,
@@ -251,14 +246,17 @@ struct RootsStorage<'a, Hash: 'a> {
 impl<'a, H, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Hash>
 	where
 		H: Hasher,
-		H::Out: From<Hash>,
-		Hash: 'a + Send + Sync + Clone,
+		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
 	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {
 		Ok(block.checked_sub(self.first)
 			.and_then(|index| self.roots.get(index as usize))
 			.cloned()
-			.map(Into::into))
+			.map(|root| {
+				let mut hasher_root: H::Out = Default::default();
+				hasher_root.as_mut().copy_from_slice(root.as_ref());
+				hasher_root
+			}))
 	}
 }
 
@@ -276,7 +274,7 @@ pub mod tests {
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys;
 	use runtime_primitives::generic::BlockId;
 	use state_machine::Backend;
@@ -308,7 +306,7 @@ pub mod tests {
 	}
 
 	fn prepare_for_read_proof_check() -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, RlpCodec>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher>,
 		Header, Vec<Vec<u8>>, usize)
 	{
 		// prepare remote client
@@ -324,14 +322,20 @@ pub mod tests {
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
-		local_storage.insert(remote_block_hash, remote_block_header.clone(), None, None, true);
+		local_storage.insert(
+			remote_block_hash,
+			remote_block_header.clone(),
+			None,
+			None,
+			::backend::NewBlockState::Final,
+		).unwrap();
 		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = LightDataChecker::new(local_executor);
 		(local_checker, remote_block_header, remote_read_proof, authorities_len)
 	}
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, RlpCodec>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher>,
 		Hash, Header, Vec<Vec<u8>>)
 	{
 		// prepare remote client
@@ -404,7 +408,7 @@ pub mod tests {
 	#[test]
 	fn changes_proof_is_generated_and_checked() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
-		let local_checker = LightDataChecker::<_, Blake2Hasher, RlpCodec>::new(
+		let local_checker = LightDataChecker::<_, Blake2Hasher>::new(
 			test_client::LocalExecutor::new());
 		let local_checker = &local_checker as &FetchChecker<Block>;
 		let max = remote_client.info().unwrap().chain.best_number;
@@ -446,7 +450,7 @@ pub mod tests {
 	#[test]
 	fn check_changes_proof_fails_if_proof_is_wrong() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
-		let local_checker = LightDataChecker::<_, Blake2Hasher, RlpCodec>::new(
+		let local_checker = LightDataChecker::<_, Blake2Hasher>::new(
 			test_client::LocalExecutor::new());
 		let local_checker = &local_checker as &FetchChecker<Block>;
 		let max = remote_client.info().unwrap().chain.best_number;

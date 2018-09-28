@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-parity-codec = { version = "1.1", default-features = false }
+parity-codec = { version = "2.0", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
 sr-io = { path = "../sr-io", default-features = false }

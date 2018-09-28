@@ -28,9 +28,6 @@ extern crate sr_std as rstd;
 extern crate srml_support as runtime_support;
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
@@ -44,7 +41,7 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
-	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As};
+	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash};
 use substrate_primitives::storage::well_known_keys;
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
@@ -53,7 +50,7 @@ use safe_mix::TripletMix;
 use codec::Encode;
 
 #[cfg(any(feature = "std", test))]
-use runtime_io::{twox_128, TestExternalities, Blake2Hasher, RlpCodec};
+use runtime_io::{twox_128, TestExternalities, Blake2Hasher};
 
 #[cfg(any(feature = "std", test))]
 use substrate_primitives::ChangesTrieConfiguration;
@@ -73,7 +70,7 @@ pub trait Trait: Eq + Clone {
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
 	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
-	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]>;
+	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
 	type Digest: Parameter + Member + Default + traits::Digest<Hash = Self::Hash>;
 	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
@@ -311,7 +308,7 @@ impl<T: Trait> Module<T> {
 
 	/// Get the basic externalities for this module, useful for tests.
 	#[cfg(any(feature = "std", test))]
-	pub fn externalities() -> TestExternalities<Blake2Hasher, RlpCodec> {
+	pub fn externalities() -> TestExternalities<Blake2Hasher> {
 		TestExternalities::new(map![
 			twox_128(&<BlockHash<T>>::key_for(T::BlockNumber::zero())).to_vec() => [69u8; 32].encode(),	// TODO: replace with Hash::default().encode
 			twox_128(<Number<T>>::key()).to_vec() => T::BlockNumber::one().encode(),
@@ -381,6 +378,21 @@ impl<T: Trait> Module<T> {
 		let extrinsics = (0..<ExtrinsicCount<T>>::get().unwrap_or_default()).map(<ExtrinsicData<T>>::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
+	}
+}
+
+impl<T: Trait> CurrentHeight for Module<T> {
+	type BlockNumber = T::BlockNumber;
+	fn current_height(&self) -> Self::BlockNumber {
+		<Module<T>>::block_number()
+	}
+}
+
+impl<T: Trait> BlockNumberToHash for Module<T> {
+	type BlockNumber = T::BlockNumber;
+	type Hash = T::Hash;
+	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
+		Some(<Module<T>>::block_hash(n))
 	}
 }
 
@@ -469,7 +481,7 @@ mod tests {
 
 	type System = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		GenesisConfig::<Test>::default().build_storage().unwrap().into()
 	}
 

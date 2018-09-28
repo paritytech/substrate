@@ -39,15 +39,14 @@ extern crate sr_std as rstd;
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-#[cfg(any(feature = "std", test))]
-extern crate sr_io as runtime_io;
-
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
 #[cfg(test)]
 extern crate substrate_primitives;
+#[cfg(test)]
+extern crate sr_io as runtime_io;
 extern crate sr_primitives as runtime_primitives;
 extern crate srml_system as system;
 extern crate srml_consensus as consensus;
@@ -112,7 +111,7 @@ impl<T: Trait> Module<T> {
 		);
 		assert!(
 			Self::now().is_zero() || now >= Self::now() + Self::block_period(),
-			"Timestamp but increment by at least <BlockPeriod> between sequential blocks"
+			"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
 		);
 		<Self as Store>::Now::put(now);
 		<Self as Store>::DidUpdate::put(true);
@@ -167,10 +166,10 @@ impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 
-	use runtime_io::{with_externalities, TestExternalities, RlpCodec};
+	use runtime_io::{with_externalities, TestExternalities};
 	use substrate_primitives::H256;
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256};
+	use runtime_primitives::traits::BlakeTwo256;
 	use runtime_primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {
@@ -208,7 +207,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
 
-		with_externalities(&mut TestExternalities::<_, RlpCodec>::new(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
@@ -221,7 +220,7 @@ mod tests {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
 
-		with_externalities(&mut TestExternalities::<_, RlpCodec>::new(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
 			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
@@ -229,12 +228,12 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Timestamp but increment by at least <BlockPeriod> between sequential blocks")]
+	#[should_panic(expected = "Timestamp must increment by at least <BlockPeriod> between sequential blocks")]
 	fn block_period_is_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
 
-		with_externalities(&mut TestExternalities::<_, RlpCodec>::new(t), || {
+		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
 			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
 		});

@@ -23,6 +23,10 @@ pub use rstd::result;
 #[cfg(feature = "std")]
 use serde;
 pub use codec::{Codec, Decode, Encode, Input, Output};
+pub use substrate_metadata::{
+	ModuleMetadata, FunctionMetadata, DecodeDifferent,
+	CallMetadata, FunctionArgumentMetadata
+};
 
 pub type Result = result::Result<(), &'static str>;
 
@@ -306,7 +310,7 @@ macro_rules! decl_module {
 				d.dispatch(origin)
 			}
 		}
-		__dispatch_impl_json_metadata! {
+		__dispatch_impl_metadata! {
 			$mod_type $trait_instance $trait_name $call_type $origin_type
 			{$( $(#[doc = $doc_attr])* fn $fn_name($from $(, $param_name : $param )*) -> $result; )*}
 		}
@@ -461,15 +465,17 @@ macro_rules! __impl_outer_dispatch_common {
 /// Implement the `json_metadata` function.
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __dispatch_impl_json_metadata {
+macro_rules! __dispatch_impl_metadata {
 	(
 		$mod_type:ident $trait_instance:ident $trait_name:ident
 		$($rest:tt)*
 	) => {
 		impl<$trait_instance: $trait_name> $mod_type<$trait_instance> {
-			pub fn json_metadata() -> &'static str {
-				concat!(r#"{ "name": ""#, stringify!($mod_type), r#"", "call": "#,
-					__call_to_json!($($rest)*), " }")
+			pub fn metadata() -> $crate::dispatch::ModuleMetadata {
+				$crate::dispatch::ModuleMetadata {
+					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($mod_type)),
+					call: __call_to_metadata!($($rest)*),
+				}
 			}
 		}
 	}
@@ -478,7 +484,7 @@ macro_rules! __dispatch_impl_json_metadata {
 /// Convert the list of calls into their JSON representation, joined by ",".
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __call_to_json {
+macro_rules! __call_to_metadata {
 	(
 		$call_type:ident $origin_type:ty
 			{$(
@@ -490,111 +496,111 @@ macro_rules! __call_to_json {
 				) -> $result:ty;
 			)*}
 	) => {
-		concat!(
-			r#"{ "name": ""#, stringify!($call_type),
-			r#"", "functions": {"#,
-			__functions_to_json!(""; 0; $origin_type; $(
+		$crate::dispatch::CallMetadata {
+			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
+			functions: __functions_to_metadata!(0; $origin_type;; $(
 				fn $fn_name($from $(, $param_name: $param )* ) -> $result;
-				__function_doc_to_json!(""; $($doc_attr)*);
-			)*), " } }"
-		)
+				$( $doc_attr ),*;
+			)*),
+		}
 	};
 }
 
-/// Convert a list of functions into their JSON representation, joined by ",".
+/// Convert a list of functions into a list of `FunctionMetadata` items.
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __functions_to_json {
+macro_rules! __functions_to_metadata{
 	// ROOT
 	(
-		$prefix_str:tt;
 		$fn_id:expr;
 		$origin_type:ty;
+		$( $function_metadata:expr ),*;
 		fn $fn_name:ident(root
 			$(
 				, $param_name:ident : $param:ty
 			)*
 		) -> $result:ty;
-		$fn_doc:expr;
-		$($rest:tt)*
+		$( $fn_doc:expr ),*;
+		$( $rest:tt )*
 	) => {
-			concat!($prefix_str, " ",
-				__function_to_json!(
-					fn $fn_name(
-						$( $param_name : $param ),*
-					) -> $result;
-					$fn_doc;
-					$fn_id;
-				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
-			)
+		__functions_to_metadata!(
+			$fn_id + 1; $origin_type;
+			$( $function_metadata, )* __function_to_metadata!(
+				fn $fn_name($( $param_name : $param ),*) -> $result; $( $fn_doc ),*; $fn_id;
+			);
+			$($rest)*
+		)
 	};
 	// NON ROOT
 	(
-		$prefix_str:tt;
 		$fn_id:expr;
 		$origin_type:ty;
+		$( $function_metadata:expr ),*;
 		fn $fn_name:ident(origin
 			$(
 				, $param_name:ident : $param:ty
 			)*
 		) -> $result:ty;
-		$fn_doc:expr;
+		$( $fn_doc:expr ),*;
 		$($rest:tt)*
 	) => {
-			concat!($prefix_str, " ",
-				__function_to_json!(
-					fn $fn_name(
-						origin: $origin_type
-						$(, $param_name : $param)*
-					) -> $result;
-					$fn_doc;
-					$fn_id;
-				), __functions_to_json!(","; $fn_id + 1; $origin_type; $($rest)*)
-			)
+		__functions_to_metadata!(
+			$fn_id + 1; $origin_type;
+			$( $function_metadata, )* __function_to_metadata!(
+				fn $fn_name(
+					origin: $origin_type
+					$( ,$param_name : $param )*
+				) -> $result; $( $fn_doc ),*; $fn_id;
+			);
+			$($rest)*
+		)
 	};
 	// BASE CASE
 	(
-		$prefix_str:tt;
 		$fn_id:expr;
-		$($origin_type:ty;)*
+		$origin_type:ty;
+		$( $function_metadata:expr ),*;
 	) => {
-		""
+		$crate::dispatch::DecodeDifferent::Encode(&[ $( $function_metadata ),* ])
 	}
 }
 
-/// Convert a function into its JSON representation.
+/// Convert a function into its metadata representation.
 #[macro_export]
 #[doc(hidden)]
-macro_rules! __function_to_json {
+macro_rules! __function_to_metadata {
 	(
 		fn $fn_name:ident(
-			$first_param_name:ident : $first_param:ty $(, $param_name:ident : $param:ty)*
+			$($param_name:ident : $param:ty),*
 		) -> $result:ty;
-		$fn_doc:tt;
+		$( $fn_doc:expr ),*;
 		$fn_id:expr;
 	) => {
-			concat!(
-				r#"""#, stringify!($fn_id), r#"""#,
-				r#": { "name": ""#, stringify!($fn_name),
-				r#"", "params": [ "#,
-				concat!(r#"{ "name": ""#, stringify!($first_param_name), r#"", "type": ""#, stringify!($first_param), r#"" }"# ),
+		$crate::dispatch::FunctionMetadata {
+			id: $fn_id,
+			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
+			arguments: $crate::dispatch::DecodeDifferent::Encode(&[
 				$(
-					concat!(r#", { "name": ""#, stringify!($param_name), r#"", "type": ""#, stringify!($param), r#"" }"# ),
-				)*
-				r#" ], "description": ["#, $fn_doc, " ] }"
-			)
+					$crate::dispatch::FunctionArgumentMetadata {
+						name: $crate::dispatch::DecodeDifferent::Encode(stringify!($param_name)),
+						ty: $crate::dispatch::DecodeDifferent::Encode(stringify!($param)),
+					}
+				),*
+			]),
+			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
+		}
 	};
 	(
 		fn $fn_name:ident() -> $result:ty;
-		$fn_doc:tt;
+		$( $fn_doc:expr ),*;
 		$fn_id:expr;
 	) => {
-			concat!(
-				r#"""#, stringify!($fn_id), r#"""#,
-				r#": { "name": ""#, stringify!($fn_name),
-				r#"", "params": [ "#,
-				r#" ], "description": ["#, $fn_doc, " ] }"
-			)
+		$crate::dispatch::FunctionMetadata {
+			id: $fn_id,
+			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
+			arguments: $crate::dispatch::DecodeDifferent::Encode(&[]),
+			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
+		}
 	};
 }
 
@@ -626,8 +632,6 @@ macro_rules! __function_doc_to_json {
 #[allow(dead_code)]
 mod tests {
 	use super::*;
-	use serde;
-	use serde_json;
 
 	pub trait Trait {
 		type Origin;
@@ -652,33 +656,78 @@ mod tests {
 		}
 	}
 
-	const EXPECTED_METADATA: &str = concat!(
-		r#"{ "name": "Module", "call": "#,
-			r#"{ "name": "Call", "functions": { "#,
-				r#""0": { "name": "aux_0", "params": [ "#,
-					r#"{ "name": "origin", "type": "T::Origin" }"#,
-				r#" ], "description": [ " Hi, this is a comment." ] }, "#,
-
-				r#""0 + 1": { "name": "aux_1", "params": [ "#,
-					r#"{ "name": "origin", "type": "T::Origin" }, "#,
-					r#"{ "name": "data", "type": "i32" }"#,
-				r#" ], "description": [ ] }, "#,
-
-				r#""0 + 1 + 1": { "name": "aux_2", "params": [ "#,
-					r#"{ "name": "origin", "type": "T::Origin" }, "#,
-					r#"{ "name": "data", "type": "i32" }, "#,
-					r#"{ "name": "data2", "type": "String" }"#,
-				r#" ], "description": [ ] }, "#,
-
-				r#""0 + 1 + 1 + 1": { "name": "aux_3", "params": [ "#,
-				r#" ], "description": [ ] }, "#,
-
-				r#""0 + 1 + 1 + 1 + 1": { "name": "aux_4", "params": [ "#,
-					r#"{ "name": "data", "type": "i32" }"#,
-				r#" ], "description": [ ] }"#,
-			r#" } }"#,
-		r#" }"#,
-	);
+	const EXPECTED_METADATA: ModuleMetadata = ModuleMetadata {
+		name: DecodeDifferent::Encode("Module"),
+		call: CallMetadata {
+			name: DecodeDifferent::Encode("Call"),
+			functions: DecodeDifferent::Encode(&[
+				FunctionMetadata {
+					id: 0,
+					name: DecodeDifferent::Encode("aux_0"),
+					arguments: DecodeDifferent::Encode(&[
+						FunctionArgumentMetadata {
+							name: DecodeDifferent::Encode("origin"),
+							ty: DecodeDifferent::Encode("T::Origin"),
+						}
+					]),
+					documentation: DecodeDifferent::Encode(&[
+						" Hi, this is a comment."
+					])
+				},
+				FunctionMetadata {
+					id: 1,
+					name: DecodeDifferent::Encode("aux_1"),
+					arguments: DecodeDifferent::Encode(&[
+						FunctionArgumentMetadata {
+							name: DecodeDifferent::Encode("origin"),
+							ty: DecodeDifferent::Encode("T::Origin"),
+						},
+						FunctionArgumentMetadata {
+							name: DecodeDifferent::Encode("data"),
+							ty: DecodeDifferent::Encode("i32"),
+						}
+					]),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				FunctionMetadata {
+					id: 2,
+					name: DecodeDifferent::Encode("aux_2"),
+					arguments: DecodeDifferent::Encode(&[
+						FunctionArgumentMetadata {
+							name: DecodeDifferent::Encode("origin"),
+							ty: DecodeDifferent::Encode("T::Origin"),
+						},
+						FunctionArgumentMetadata {
+							name: DecodeDifferent::Encode("data"),
+							ty: DecodeDifferent::Encode("i32"),
+						},
+						FunctionArgumentMetadata {
+							name: DecodeDifferent::Encode("data2"),
+							ty: DecodeDifferent::Encode("String"),
+						}
+					]),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				FunctionMetadata {
+					id: 3,
+					name: DecodeDifferent::Encode("aux_3"),
+					arguments: DecodeDifferent::Encode(&[]),
+					documentation: DecodeDifferent::Encode(&[]),
+				},
+				FunctionMetadata {
+					id: 4,
+					name: DecodeDifferent::Encode("aux_4"),
+					arguments: DecodeDifferent::Encode(&[
+						FunctionArgumentMetadata {
+							name: DecodeDifferent::Encode("data"),
+							ty: DecodeDifferent::Encode("i32"),
+						}
+					]),
+					documentation: DecodeDifferent::Encode(&[]),
+				}
+			]),
+		},
+	};
 
 	impl<T: Trait> Module<T> {
 		fn aux_0(_: T::Origin) -> Result {
@@ -710,9 +759,7 @@ mod tests {
 
 	#[test]
 	fn module_json_metadata() {
-		let metadata = Module::<TraitImpl>::json_metadata();
+		let metadata = Module::<TraitImpl>::metadata();
 		assert_eq!(EXPECTED_METADATA, metadata);
-		let _: serde::de::IgnoredAny =
-			serde_json::from_str(metadata).expect("Is valid json syntax");
 	}
 }

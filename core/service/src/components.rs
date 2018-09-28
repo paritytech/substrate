@@ -14,22 +14,24 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot service components.
+//! Substrate service components.
 
 use std::fmt;
 use std::sync::Arc;
 use std::marker::PhantomData;
+use std::ops::Deref;
 use serde::{Serialize, de::DeserializeOwned};
+use tokio::runtime::TaskExecutor;
 use chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client};
-use error;
+use {error, Service};
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use extrinsic_pool::{self, Options as ExtrinsicPoolOptions, Pool as ExtrinsicPool};
+use transaction_pool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
 use config::Configuration;
-use primitives::{Blake2Hasher, RlpCodec, H256};
+use primitives::{Blake2Hasher};
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -66,7 +68,6 @@ pub type LightExecutor<F> = client::light::call_executor::RemoteCallExecutor<
 	>,
 	network::OnDemand<<F as ServiceFactory>::Block, NetworkService<F>>,
 	Blake2Hasher,
-	RlpCodec,
 >;
 
 /// Full client type for a factory.
@@ -83,6 +84,9 @@ pub type FactoryGenesis<F> = <F as ServiceFactory>::Genesis;
 
 /// `Block` type for a factory.
 pub type FactoryBlock<F> = <F as ServiceFactory>::Block;
+
+/// `Extrinsic` type for a factory.
+pub type FactoryExtrinsic<F> = <<F as ServiceFactory>::Block as BlockT>::Extrinsic;
 
 /// `Number` type for a factory.
 pub type FactoryBlockNumber<F> = <<FactoryBlock<F> as BlockT>::Header as HeaderT>::Number;
@@ -101,20 +105,20 @@ pub type ComponentClient<C> = Client<
 pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
 
 /// Extrinsic hash type for `Components`
-pub type ComponentExHash<C> = <<C as Components>::ExtrinsicPoolApi as extrinsic_pool::ChainApi>::Hash;
+pub type ComponentExHash<C> = <<C as Components>::TransactionPoolApi as transaction_pool::ChainApi>::Hash;
 
 /// Extrinsic type.
 pub type ComponentExtrinsic<C> = <ComponentBlock<C> as BlockT>::Extrinsic;
 
 /// Extrinsic pool API type for `Components`.
-pub type PoolApi<C> = <C as Components>::ExtrinsicPoolApi;
+pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 
 /// A set of traits for the runtime genesis config.
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
 /// A collection of types and methods to build a service on top of the substrate service.
-pub trait ServiceFactory: 'static {
+pub trait ServiceFactory: 'static + Sized {
 	/// Block type.
 	type Block: BlockT;
 	/// Extrinsic hash type.
@@ -124,28 +128,36 @@ pub trait ServiceFactory: 'static {
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool backend type for the full client.
-	type FullExtrinsicPoolApi: extrinsic_pool::ChainApi<Hash=Self::ExtrinsicHash, Block=Self::Block> + Send + 'static;
+	type FullTransactionPoolApi: transaction_pool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + Send + 'static;
 	/// Extrinsic pool backend type for the light client.
-	type LightExtrinsicPoolApi: extrinsic_pool::ChainApi<Hash=Self::ExtrinsicHash, Block=Self::Block> + 'static;
+	type LightTransactionPoolApi: transaction_pool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + 'static;
 	/// Genesis configuration for the runtime.
 	type Genesis: RuntimeGenesis;
 	/// Other configuration for service members.
 	type Configuration: Default;
+	/// Extended full service type.
+	type FullService: Deref<Target = Service<FullComponents<Self>>> + Send + Sync + 'static;
+	/// Extended light service type.
+	type LightService: Deref<Target = Service<LightComponents<Self>>> + Send + Sync + 'static;
 
-	/// Network protocol id.
-	const NETWORK_PROTOCOL_ID: network::ProtocolId;
-
-	//TODO: replace these with a constructor trait. that ExtrinsicPool implements.
+	//TODO: replace these with a constructor trait. that TransactionPool implements.
 	/// Extrinsic pool constructor for the full client.
-	fn build_full_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<FullClient<Self>>)
-		-> Result<ExtrinsicPool<Self::FullExtrinsicPoolApi>, error::Error>;
+	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<FullClient<Self>>)
+		-> Result<TransactionPool<Self::FullTransactionPoolApi>, error::Error>;
 	/// Extrinsic pool constructor for the light client.
-	fn build_light_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<LightClient<Self>>)
-		-> Result<ExtrinsicPool<Self::LightExtrinsicPoolApi>, error::Error>;
+	fn build_light_transaction_pool(config: TransactionPoolOptions, client: Arc<LightClient<Self>>)
+		-> Result<TransactionPool<Self::LightTransactionPoolApi>, error::Error>;
 
 	/// Build network protocol.
 	fn build_network_protocol(config: &FactoryFullConfiguration<Self>)
 		-> Result<Self::NetworkProtocol, error::Error>;
+
+	/// Build full service.
+	fn new_full(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
+		-> Result<Self::FullService, error::Error>;
+	/// Build light service.
+	fn new_light(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
+		-> Result<Self::LightService, error::Error>;
 }
 
 /// A collection of types and function to generalise over full / light client type.
@@ -153,11 +165,14 @@ pub trait Components: 'static {
 	/// Associated service factory.
 	type Factory: ServiceFactory;
 	/// Client backend.
-	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, Blake2Hasher, RlpCodec>;
+	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, Blake2Hasher>;
 	/// Client executor.
-	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher, RlpCodec> + Send + Sync;
+	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync;
 	/// Extrinsic pool type.
-	type ExtrinsicPoolApi: 'static + extrinsic_pool::ChainApi<Hash=<Self::Factory as ServiceFactory>::ExtrinsicHash, Block=FactoryBlock<Self::Factory>>;
+	type TransactionPoolApi: 'static + transaction_pool::ChainApi<
+		Hash = <Self::Factory as ServiceFactory>::ExtrinsicHash,
+		Block = FactoryBlock<Self::Factory>
+	>;
 
 	/// Create client.
 	fn build_client(
@@ -170,8 +185,8 @@ pub trait Components: 'static {
 		), error::Error>;
 
 	/// Create extrinsic pool.
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>)
-		-> Result<ExtrinsicPool<Self::ExtrinsicPoolApi>, error::Error>;
+	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)
+		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>;
 }
 
 /// A struct that implement `Components` for the full client.
@@ -183,7 +198,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type Factory = Factory;
 	type Executor = FullExecutor<Factory>;
 	type Backend = FullBackend<Factory>;
-	type ExtrinsicPoolApi = <Factory as ServiceFactory>::FullExtrinsicPoolApi;
+	type TransactionPoolApi = <Factory as ServiceFactory>::FullTransactionPoolApi;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -199,13 +214,19 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 			path: config.database_path.as_str().into(),
 			pruning: config.pruning.clone(),
 		};
-		Ok((Arc::new(client_db::new_client(db_settings, executor, &config.chain_spec, config.execution_strategy)?), None))
+		Ok((Arc::new(client_db::new_client(
+			db_settings,
+			executor,
+			&config.chain_spec,
+			config.block_execution_strategy,
+			config.api_execution_strategy,
+		)?), None))
 	}
 
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>)
-		-> Result<ExtrinsicPool<Self::ExtrinsicPoolApi>, error::Error>
+	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)
+		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>
 	{
-		Factory::build_full_extrinsic_pool(config, client)
+		Factory::build_full_transaction_pool(config, client)
 	}
 }
 
@@ -214,15 +235,11 @@ pub struct LightComponents<Factory: ServiceFactory> {
 	_factory: PhantomData<Factory>,
 }
 
-impl<Factory: ServiceFactory> Components for LightComponents<Factory>
-	where
-		<<Factory as ServiceFactory>::Block as BlockT>::Hash: From<H256>,
-		H256: From<<<Factory as ServiceFactory>::Block as BlockT>::Hash>,
-{
+impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type Factory = Factory;
 	type Executor = LightExecutor<Factory>;
 	type Backend = LightBackend<Factory>;
-	type ExtrinsicPoolApi = <Factory as ServiceFactory>::LightExtrinsicPoolApi;
+	type TransactionPoolApi = <Factory as ServiceFactory>::LightTransactionPoolApi;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -241,16 +258,16 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory>
 		};
 		let db_storage = client_db::light::LightStorage::new(db_settings)?;
 		let light_blockchain = client::light::new_light_blockchain(db_storage);
-		let fetch_checker = Arc::new(client::light::new_fetch_checker::<_, Blake2Hasher, RlpCodec>(executor));
+		let fetch_checker = Arc::new(client::light::new_fetch_checker::<_, Blake2Hasher>(executor));
 		let fetcher = Arc::new(network::OnDemand::new(fetch_checker));
 		let client_backend = client::light::new_light_backend(light_blockchain, fetcher.clone());
 		let client = client::light::new_light(client_backend, fetcher.clone(), &config.chain_spec)?;
 		Ok((Arc::new(client), Some(fetcher)))
 	}
 
-	fn build_extrinsic_pool(config: ExtrinsicPoolOptions, client: Arc<ComponentClient<Self>>)
-		-> Result<ExtrinsicPool<Self::ExtrinsicPoolApi>, error::Error>
+	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)
+		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>
 	{
-		Factory::build_light_extrinsic_pool(config, client)
+		Factory::build_light_transaction_pool(config, client)
 	}
 }

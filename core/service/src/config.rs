@@ -17,7 +17,7 @@
 //! Service configuration.
 
 use std::net::SocketAddr;
-use extrinsic_pool;
+use transaction_pool;
 use chain_spec::ChainSpec;
 pub use client::ExecutionStrategy;
 pub use network::Roles;
@@ -28,6 +28,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use target_info::Target;
 
 /// Service configuration.
+#[derive(Clone)]
 pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Implementation name
 	pub impl_name: &'static str,
@@ -38,7 +39,7 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
-	pub extrinsic_pool: extrinsic_pool::Options,
+	pub transaction_pool: transaction_pool::Options,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to key files.
@@ -53,12 +54,12 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	pub chain_spec: ChainSpec<G>,
 	/// Custom configuration.
 	pub custom: C,
-	/// Telemetry server URL, optional - only `Some` if telemetry reporting is enabled
-	pub telemetry: Option<String>,
 	/// Node name.
 	pub name: String,
-	/// Execution strategy.
-	pub execution_strategy: ExecutionStrategy,
+	/// Block execution strategy.
+	pub block_execution_strategy: ExecutionStrategy,
+	/// Runtime API execution strategy.
+	pub api_execution_strategy: ExecutionStrategy,
 	/// RPC over HTTP binding address. `None` if disabled.
 	pub rpc_http: Option<SocketAddr>,
 	/// RPC over Websockets binding address. `None` if disabled.
@@ -77,15 +78,15 @@ impl<C: Default, G: Serialize + DeserializeOwned + BuildStorage> Configuration<C
 			chain_spec,
 			name: Default::default(),
 			roles: Roles::FULL,
-			extrinsic_pool: Default::default(),
+			transaction_pool: Default::default(),
 			network: Default::default(),
 			keystore_path: Default::default(),
 			database_path: Default::default(),
 			keys: Default::default(),
 			custom: Default::default(),
-			telemetry: Default::default(),
 			pruning: PruningMode::default(),
-			execution_strategy: ExecutionStrategy::Both,
+			block_execution_strategy: ExecutionStrategy::Both,
+			api_execution_strategy: ExecutionStrategy::Both,
 			rpc_http: None,
 			rpc_ws: None,
 			telemetry_url: None,

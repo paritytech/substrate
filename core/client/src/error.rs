@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot client possible errors.
+//! Substrate client possible errors.
 
 use std;
 use state_machine;
@@ -52,34 +52,16 @@ error_chain! {
 			display("Blockchain: {}", e),
 		}
 
-		/// Invalid state data.
-		AuthLenEmpty {
-			description("authority count state error"),
-			display("Current state of blockchain has no authority count value"),
+		/// Invalid authorities set received from the runtime.
+		InvalidAuthoritiesSet {
+			description("authorities set is invalid"),
+			display("Current state of blockchain has invalid authorities set"),
 		}
 
-		/// Invalid state data.
-		AuthEmpty(i: u32) {
-			description("authority value state error"),
-			display("Current state of blockchain has no authority value for index {}", i),
-		}
-
-		/// Invalid state data.
-		AuthLenInvalid {
-			description("authority count state error"),
-			display("Current state of blockchain has invalid authority count value"),
-		}
-
-		/// Cound not get runtime version.
+		/// Could not get runtime version.
 		VersionInvalid {
 			description("Runtime version error"),
 			display("On-chain runtime does not specify version"),
-		}
-
-		/// Invalid state data.
-		AuthInvalid(i: u32) {
-			description("authority value state error"),
-			display("Current state of blockchain has invalid authority value for index {}", i),
 		}
 
 		/// Bad justification for header.
@@ -98,12 +80,6 @@ error_chain! {
 		InvalidHeaderProof {
 			description("invalid header proof"),
 			display("Remote node has responded with invalid header proof"),
-		}
-
-		/// Invalid remote execution proof.
-		InvalidExecutionProof {
-			description("invalid execution proof"),
-			display("Remote node has responded with invalid execution proof"),
 		}
 
 		/// Remote fetch has been cancelled.
@@ -134,6 +110,18 @@ error_chain! {
 		ChangesTrieAccessFailed(e: String) {
 			description("invalid changes proof"),
 			display("Failed to check changes proof: {}", e),
+		}
+
+		/// Last finalized block not parent of current.
+		NonSequentialFinalization(s: String) {
+			description("Did not finalize blocks in sequential order."),
+			display("Did not finalize blocks in sequential order."),
+		}
+
+		/// Safety violation: new best block not descendent of last finalized.
+		NotInFinalizedChain {
+			description("Potential long-range attack: block not in finalized chain."),
+			display("Potential long-range attack: block not in finalized chain."),
 		}
 	}
 }

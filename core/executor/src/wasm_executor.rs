@@ -30,7 +30,7 @@ use primitives::{blake2_256, twox_128, twox_256, ed25519};
 use primitives::hexdisplay::HexDisplay;
 use primitives::sandbox as sandbox_primitives;
 use primitives::Blake2Hasher;
-use triehash::ordered_trie_root;
+use trie::ordered_trie_root;
 use sandbox;
 
 
@@ -344,7 +344,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			5
 		})
 	},
-	ext_sandbox_instantiate(dispatch_thunk_idx: usize, wasm_ptr: *const u8, wasm_len: usize, imports_ptr: *const u8, imports_len: usize, state: usize) -> u32 => {
+	ext_sandbox_instantiate(
+		dispatch_thunk_idx: usize,
+		wasm_ptr: *const u8,
+		wasm_len: usize,
+		imports_ptr: *const u8,
+		imports_len: usize,
+		state: usize
+	) -> u32 => {
 		let wasm = this.memory.get(wasm_ptr, wasm_len as usize).map_err(|_| UserError("Sandbox error"))?;
 		let raw_env_def = this.memory.get(imports_ptr, imports_len as usize).map_err(|_| UserError("Sandbox error"))?;
 
@@ -357,9 +364,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				.clone()
 		};
 
-		let instance_idx = sandbox::instantiate(this, dispatch_thunk, &wasm, &raw_env_def, state)?;
+		let instance_idx_or_err_code =
+			match sandbox::instantiate(this, dispatch_thunk, &wasm, &raw_env_def, state) {
+				Ok(instance_idx) => instance_idx,
+				Err(sandbox::InstantiationError::StartTrapped) => sandbox_primitives::ERR_EXECUTION,
+				Err(_) => sandbox_primitives::ERR_MODULE,
+			};
 
-		Ok(instance_idx as u32)
+		Ok(instance_idx_or_err_code as u32)
 	},
 	ext_sandbox_instance_teardown(instance_idx: u32) => {
 		this.sandbox_store.instance_teardown(instance_idx)?;
@@ -542,7 +554,6 @@ impl WasmExecutor {
 
 #[cfg(test)]
 mod tests {
-	use primitives::RlpCodec;
 	use super::*;
 	use codec::Encode;
 	use state_machine::TestExternalities;
@@ -556,7 +567,7 @@ mod tests {
 
 	#[test]
 	fn returning_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_empty_return", &[]).unwrap();
@@ -565,7 +576,7 @@ mod tests {
 
 	#[test]
 	fn panicking_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
 		let output = WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_panic", &[]);
@@ -577,7 +588,7 @@ mod tests {
 
 	#[test]
 	fn storage_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		ext.set_storage(b"foo".to_vec(), b"bar".to_vec());
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 
@@ -585,7 +596,7 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected = TestExternalities::<_, _>::new(map![
+		let expected = TestExternalities::new(map![
 			b"input".to_vec() => b"Hello world".to_vec(),
 			b"foo".to_vec() => b"bar".to_vec(),
 			b"baz".to_vec() => b"bar".to_vec()
@@ -595,7 +606,7 @@ mod tests {
 
 	#[test]
 	fn clear_prefix_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		ext.set_storage(b"aaa".to_vec(), b"1".to_vec());
 		ext.set_storage(b"aab".to_vec(), b"2".to_vec());
 		ext.set_storage(b"aba".to_vec(), b"3".to_vec());
@@ -608,7 +619,7 @@ mod tests {
 
 		assert_eq!(output, b"all ok!".to_vec());
 
-		let expected: TestExternalities<_, RlpCodec> = map![
+		let expected: TestExternalities<_> = map![
 			b"aaa".to_vec() => b"1".to_vec(),
 			b"aab".to_vec() => b"2".to_vec(),
 			b"bbb".to_vec() => b"5".to_vec()
@@ -618,7 +629,7 @@ mod tests {
 
 	#[test]
 	fn blake2_256_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_blake2_256", &[]).unwrap(),
@@ -632,7 +643,7 @@ mod tests {
 
 	#[test]
 	fn twox_256_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_256", &[]).unwrap(),
@@ -646,7 +657,7 @@ mod tests {
 
 	#[test]
 	fn twox_128_should_work() {
-		let mut ext = TestExternalities::<_, RlpCodec>::default();
+		let mut ext = TestExternalities::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_twox_128", &[]).unwrap(),
@@ -660,7 +671,7 @@ mod tests {
 
 	#[test]
 	fn ed25519_verify_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher, RlpCodec>::default();
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		let key = ed25519::Pair::from_seed(&blake2_256(b"test"));
 		let sig = key.sign(b"all ok!");
@@ -686,11 +697,11 @@ mod tests {
 
 	#[test]
 	fn enumerated_trie_root_should_work() {
-		let mut ext = TestExternalities::<Blake2Hasher, RlpCodec>::default();
+		let mut ext = TestExternalities::<Blake2Hasher>::default();
 		let test_code = include_bytes!("../wasm/target/wasm32-unknown-unknown/release/runtime_test.compact.wasm");
 		assert_eq!(
 			WasmExecutor::new().call(&mut ext, 8, &test_code[..], "test_enumerated_trie_root", &[]).unwrap(),
-			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()]).0.encode()
+			ordered_trie_root::<Blake2Hasher, _, _>(vec![b"zero".to_vec(), b"one".to_vec(), b"two".to_vec()].iter()).0.encode()
 		);
 	}
 

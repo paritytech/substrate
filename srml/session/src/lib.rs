@@ -20,17 +20,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
-
-#[cfg(any(feature = "std", test))]
-extern crate substrate_keyring as keyring;
-
-#[cfg(any(feature = "std", test))]
-extern crate substrate_primitives;
 
 #[cfg_attr(feature = "std", macro_use)]
 extern crate sr_std as rstd;
@@ -41,6 +32,9 @@ extern crate srml_support as runtime_support;
 #[macro_use]
 extern crate parity_codec_derive;
 
+#[cfg(test)]
+extern crate substrate_primitives;
+#[cfg(test)]
 extern crate sr_io as runtime_io;
 extern crate parity_codec as codec;
 extern crate sr_primitives as primitives;
@@ -138,7 +132,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	/// Set a new era length. Won't kick in until the next era change (at current length).
+	/// Set a new session length. Won't kick in until the next session change (at current length).
 	fn set_length(new: T::BlockNumber) -> Result {
 		<NextSessionLength<T>>::put(new);
 		Ok(())
@@ -193,7 +187,7 @@ impl<T: Trait> Module<T> {
 		<CurrentIndex<T>>::put(session_index);
 		<CurrentStart<T>>::put(now);
 
-		// Enact era length change.
+		// Enact session length change.
 		let len_changed = if let Some(next_len) = <NextSessionLength<T>>::take() {
 			<SessionLength<T>>::put(next_len);
 			true
@@ -278,7 +272,7 @@ impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
 mod tests {
 	use super::*;
 	use runtime_io::with_externalities;
-	use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
+	use substrate_primitives::{H256, Blake2Hasher};
 	use primitives::BuildStorage;
 	use primitives::traits::{Identity, BlakeTwo256};
 	use primitives::testing::{Digest, DigestItem, Header};
@@ -321,7 +315,7 @@ mod tests {
 	type Consensus = consensus::Module<Test>;
 	type Session = Module<Test>;
 
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],

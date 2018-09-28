@@ -29,7 +29,6 @@ pub use std::ops;
 pub use std::ptr;
 pub use std::rc;
 pub use std::slice;
-pub use std::string;
 pub use std::vec;
 pub use std::result;
 

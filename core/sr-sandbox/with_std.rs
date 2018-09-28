@@ -271,7 +271,7 @@ impl<T> Instance<T> {
 				state,
 				defined_host_functions: &defined_host_functions,
 			};
-			let instance = not_started_instance.run_start(&mut externals).map_err(|_| Error::Module)?;
+			let instance = not_started_instance.run_start(&mut externals).map_err(|_| Error::Execution)?;
 			instance
 		};
 

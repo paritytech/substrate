@@ -29,7 +29,6 @@ extern crate serde;
 
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
-extern crate substrate_primitives as primitives;
 extern crate substrate_metadata;
 
 extern crate mashup;
@@ -40,8 +39,6 @@ extern crate pretty_assertions;
 #[cfg(test)]
 #[macro_use]
 extern crate serde_derive;
-#[cfg(test)]
-extern crate serde_json;
 #[cfg(test)]
 #[macro_use]
 extern crate parity_codec_derive;
@@ -62,7 +59,7 @@ pub mod dispatch;
 pub mod storage;
 mod hashable;
 #[macro_use]
-mod event;
+pub mod event;
 #[macro_use]
 pub mod metadata;
 #[macro_use]

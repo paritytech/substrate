@@ -19,9 +19,9 @@
 #![cfg(test)]
 
 use primitives::BuildStorage;
-use primitives::traits::{Identity};
+use primitives::{Perbill, traits::Identity};
 use primitives::testing::{Digest, DigestItem, Header};
-use substrate_primitives::{H256, Blake2Hasher, RlpCodec};
+use substrate_primitives::{H256, Blake2Hasher};
 use runtime_io;
 use {GenesisConfig, Module, Trait, consensus, session, system, timestamp, balances};
 
@@ -78,7 +78,7 @@ pub fn new_test_ext(
 	current_era: u64,
 	monied: bool,
 	reward: u64
-) -> runtime_io::TestExternalities<Blake2Hasher, RlpCodec> {
+) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 	let balance_factor = if ext_deposit > 0 {
 		256
@@ -117,8 +117,10 @@ pub fn new_test_ext(
 		validator_count: 2,
 		minimum_validator_count: 0,
 		bonding_duration: sessions_per_era * session_length * 3,
-		session_reward: reward,
-		offline_slash: if monied { 20 } else { 0 },
+		session_reward: Perbill::from_millionths((1000000 * reward / balance_factor) as u32),
+		offline_slash: if monied { Perbill::from_percent(40) } else { Perbill::zero() },
+		current_session_reward: reward,
+		current_offline_slash: 20,
 		offline_slash_grace: 0,
 	}.build_storage().unwrap());
 	t.extend(timestamp::GenesisConfig::<Test>{

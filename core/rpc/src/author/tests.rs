@@ -18,7 +18,7 @@ use super::*;
 
 use std::{sync::Arc, result::Result};
 use codec::Encode;
-use extrinsic_pool::{VerifiedTransaction, scoring, Transaction, ChainApi, Error as PoolError,
+use transaction_pool::{VerifiedTransaction, scoring, Transaction, ChainApi, Error as PoolError,
 	Readiness, ExtrinsicFor, VerifiedFor};
 use test_client::runtime::{Block, Extrinsic, Transfer};
 use test_client;

@@ -23,11 +23,9 @@
 //! root has. A correct proof implies that the claimed block is identical to the one
 //! we discarded.
 
-use hashdb;
+use hash_db;
 use heapsize::HeapSizeOf;
-use patricia_trie::NodeCodec;
-use rlp::Encodable;
-use triehash;
+use trie;
 
 use primitives::H256;
 use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
@@ -65,20 +63,19 @@ pub fn compute_root<Header, Hasher, I>(
 	cht_size: u64,
 	cht_num: Header::Number,
 	hashes: I,
-) -> Option<Header::Hash>
+) -> Option<Hasher::Out>
 	where
 		Header: HeaderT,
-		Header::Hash: From<Hasher::Out>,
-		Hasher: hashdb::Hasher,
-		Hasher::Out: Ord + Encodable,
+		Hasher: hash_db::Hasher,
+		Hasher::Out: Ord,
 		I: IntoIterator<Item=Option<Header::Hash>>,
 {
 	build_pairs::<Header, I>(cht_size, cht_num, hashes)
-		.map(|pairs| triehash::trie_root::<Hasher, _, _, _>(pairs).into())
+		.map(|pairs| trie::trie_root::<Hasher, _, _, _>(pairs))
 }
 
 /// Build CHT-based header proof.
-pub fn build_proof<Header, Hasher, Codec, I>(
+pub fn build_proof<Header, Hasher, I>(
 	cht_size: u64,
 	cht_num: Header::Number,
 	block_num: Header::Number,
@@ -86,16 +83,15 @@ pub fn build_proof<Header, Hasher, Codec, I>(
 ) -> Option<Vec<Vec<u8>>>
 	where
 		Header: HeaderT,
-		Hasher: hashdb::Hasher,
-		Hasher::Out: Ord + Encodable + HeapSizeOf,
-		Codec: NodeCodec<Hasher>,
+		Hasher: hash_db::Hasher,
+		Hasher::Out: Ord + HeapSizeOf,
 		I: IntoIterator<Item=Option<Header::Hash>>,
 {
 	let transaction = build_pairs::<Header, I>(cht_size, cht_num, hashes)?
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
-	let storage = InMemoryState::<Hasher, Codec>::default().update(transaction);
+	let storage = InMemoryState::<Hasher>::default().update(transaction);
 	let (value, proof) = prove_read(storage, &encode_cht_key(block_num)).ok()?;
 	if value.is_none() {
 		None
@@ -105,7 +101,7 @@ pub fn build_proof<Header, Hasher, Codec, I>(
 }
 
 /// Check CHT-based header proof.
-pub fn check_proof<Header, Hasher, Codec>(
+pub fn check_proof<Header, Hasher>(
 	local_root: Header::Hash,
 	local_number: Header::Number,
 	remote_hash: Header::Hash,
@@ -113,17 +109,18 @@ pub fn check_proof<Header, Hasher, Codec>(
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,
-		Header::Hash: From<H256>,
-		Hasher: hashdb::Hasher,
-		Hasher::Out: Ord + Encodable + HeapSizeOf + From<Header::Hash>,
-		Codec: NodeCodec<Hasher>,
+		Header::Hash: AsRef<[u8]>,
+		Hasher: hash_db::Hasher,
+		Hasher::Out: Ord + HeapSizeOf,
 {
+	let mut root: Hasher::Out = Default::default();
+	root.as_mut().copy_from_slice(local_root.as_ref());
 	let local_cht_key = encode_cht_key(local_number);
-	let local_cht_value = read_proof_check::<Hasher, Codec>(local_root.into(), remote_proof,
+	let local_cht_value = read_proof_check::<Hasher>(root, remote_proof,
 		&local_cht_key).map_err(|e| ClientError::from(e))?;
 	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
-	let local_hash: Header::Hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
-	match local_hash == remote_hash {
+	let local_hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
+	match &local_hash[..] == remote_hash.as_ref() {
 		true => Ok(()),
 		false => Err(ClientErrorKind::InvalidHeaderProof.into()),
 	}
@@ -203,9 +200,9 @@ fn encode_cht_value<Hash: AsRef<[u8]>>(hash: Hash) -> Vec<u8> {
 }
 
 /// Convert CHT value into block header hash.
-pub fn decode_cht_value<Hash: From<H256>>(value: &[u8]) -> Option<Hash> {
+pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 	match value.len() {
-		32 => Some(H256::from_slice(&value[0..32]).into()),
+		32 => Some(H256::from_slice(&value[0..32])),
 		_ => None,
 	}
 	
@@ -213,7 +210,7 @@ pub fn decode_cht_value<Hash: From<H256>>(value: &[u8]) -> Option<Hash> {
 
 #[cfg(test)]
 mod tests {
-	use primitives::{Blake2Hasher, RlpCodec};
+	use primitives::{Blake2Hasher};
 	use test_client::runtime::Header;
 	use super::*;
 
@@ -262,13 +259,13 @@ mod tests {
 
 	#[test]
 	fn build_proof_fails_when_querying_wrong_block() {
-		assert!(build_proof::<Header, Blake2Hasher, RlpCodec, _>(
+		assert!(build_proof::<Header, Blake2Hasher, _>(
 			SIZE, 0, (SIZE * 1000) as u64, vec![Some(1.into()); SIZE as usize]).is_none());
 	}
 
 	#[test]
 	fn build_proof_works() {
-		assert!(build_proof::<Header, Blake2Hasher, RlpCodec, _>(
+		assert!(build_proof::<Header, Blake2Hasher, _>(
 			SIZE, 0, (SIZE / 2) as u64, vec![Some(1.into()); SIZE as usize]).is_some());
 	}
 }

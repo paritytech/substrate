@@ -123,7 +123,7 @@ pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 
 impl<Call: Codec + Sync + Send + Serialize, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
-	fn check_with(self, _: Context) -> Result<Self::Checked, &'static str> { Ok(self) }
+	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
 }
 impl<Call> Applyable for TestXt<Call> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Serialize + DeserializeOwned,
@@ -132,7 +132,7 @@ impl<Call> Applyable for TestXt<Call> where
 	type Index = u64;
 	type Call = Call;
 	fn sender(&self) -> Option<&u64> { self.0.as_ref() }
-	fn index(&self) -> &u64 { &self.1 }
+	fn index(&self) -> Option<&u64> { self.0.as_ref().map(|_| &self.1) }
 	fn deconstruct(self) -> (Self::Call, Option<Self::AccountId>) {
 		(self.2, self.0)
 	}
