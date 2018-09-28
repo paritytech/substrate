@@ -15,22 +15,24 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::{
-	collections::{BTreeMap, HashMap},
-	fmt,
+	collections::HashMap,
+	hash,
 	sync::Arc,
 	time,
 };
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
-use serde::{Serialize, de::DeserializeOwned};
-use txpool::{self, Scoring, Readiness};
 
-use error::IntoPoolError;
+use txpool;
 use listener::Listener;
 use rotator::PoolRotator;
 use watcher::Watcher;
 
-use runtime_primitives::{generic::BlockId, traits::Block as BlockT};
+use runtime_primitives::{
+	generic::BlockId,
+	traits,
+	transaction_validity::TransactionValidity,
+};
 
 /// Modification notification event stream type;
 pub type EventStream = mpsc::UnboundedReceiver<()>;
@@ -38,136 +40,24 @@ pub type EventStream = mpsc::UnboundedReceiver<()>;
 /// Extrinsic hash type for a pool.
 pub type ExHash<A> = <A as ChainApi>::Hash;
 /// Extrinsic type for a pool.
-pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as BlockT>::Extrinsic;
-/// Verified extrinsic data for `ChainApi`.
-pub type VerifiedFor<A> = Verified<ExtrinsicFor<A>, <A as ChainApi>::VEx>;
-/// A collection of all extrinsics.
-pub type AllExtrinsics<A> = BTreeMap<<<A as ChainApi>::VEx as txpool::VerifiedTransaction>::Sender, Vec<ExtrinsicFor<A>>>;
-
-/// Verified extrinsic struct. Wraps original extrinsic and verification info.
-#[derive(Debug)]
-pub struct Verified<Ex, VEx> {
-	/// Original extrinsic.
-	pub original: Ex,
-	/// Verification data.
-	pub verified: VEx,
-	/// Pool deadline, after it's reached we remove the extrinsic from the pool.
-	pub valid_till: time::Instant,
-}
-
-impl<Ex, VEx> txpool::VerifiedTransaction for Verified<Ex, VEx>
-where
-	Ex: fmt::Debug,
-	VEx: txpool::VerifiedTransaction,
-{
-	type Hash = <VEx as txpool::VerifiedTransaction>::Hash;
-	type Sender = <VEx as txpool::VerifiedTransaction>::Sender;
-
-	fn hash(&self) -> &Self::Hash {
-		self.verified.hash()
-	}
-
-	fn sender(&self) -> &Self::Sender {
-		self.verified.sender()
-	}
-
-	fn mem_usage(&self) -> usize {
-		// TODO: add `original` mem usage.
-		self.verified.mem_usage()
-	}
-}
+pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
 
 /// Concrete extrinsic validation and query logic.
 pub trait ChainApi: Send + Sync {
 	/// Block type.
-	type Block: BlockT;
-	/// Extrinsic hash type.
-	type Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Serialize + DeserializeOwned + ::std::str::FromStr + Send + Sync + Default + 'static;
-	/// Extrinsic sender type.
-	type Sender: ::std::hash::Hash + fmt::Debug + Serialize + DeserializeOwned + Eq + Clone + Send + Sync + Ord + Default;
-	/// Unchecked extrinsic type.
-	/// Verified extrinsic type.
-	type VEx: txpool::VerifiedTransaction<Hash=Self::Hash, Sender=Self::Sender> + Send + Sync + Clone;
-	/// Readiness evaluator
-	type Ready;
+	type Block: traits::Block;
+	/// Hash type
+	type Hash: hash::Hash + Eq + traits::Member;
 	/// Error type.
-	type Error: From<txpool::Error> + IntoPoolError;
-	/// Score type.
-	type Score: ::std::cmp::Ord + Clone + Default + fmt::Debug + Send + Send + Sync + fmt::LowerHex;
-	/// Custom scoring update event type.
-	type Event: ::std::fmt::Debug;
+	type Error: From<txpool::error::Error>;
+
 	/// Verify extrinsic at given block.
-	fn verify_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error>;
+	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error>;
 
-	/// Create new readiness evaluator.
-	fn ready(&self) -> Self::Ready;
+	/// Returns a block number given the block id.
+	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<u64, Self::Error>;
 
-	/// Check readiness for verified extrinsic at given block.
-	fn is_ready(&self, at: &BlockId<Self::Block>, context: &mut Self::Ready, xt: &VerifiedFor<Self>) -> Readiness;
-
-	/// Decides on ordering of `T`s from a particular sender.
-	fn compare(old: &VerifiedFor<Self>, other: &VerifiedFor<Self>) -> ::std::cmp::Ordering;
-
-	/// Decides how to deal with two transactions from a sender that seem to occupy the same slot in the queue.
-	fn choose(old: &VerifiedFor<Self>, new: &VerifiedFor<Self>) -> txpool::scoring::Choice;
-
-	/// Updates the transaction scores given a list of transactions and a change to previous scoring.
-	/// NOTE: you can safely assume that both slices have the same length.
-	/// (i.e. score at index `i` represents transaction at the same index)
-	fn update_scores(xts: &[txpool::Transaction<VerifiedFor<Self>>], scores: &mut [Self::Score], change: txpool::scoring::Change<Self::Event>);
-
-	/// Decides if `new` should push out `old` transaction from the pool.
-	///
-	/// NOTE returning `InsertNew` here can lead to some transactions being accepted above pool limits.
-	fn should_replace(old: &VerifiedFor<Self>, new: &VerifiedFor<Self>) -> txpool::scoring::Choice;
-}
-
-pub struct Ready<'a, 'b, B: 'a + ChainApi> {
-	api: &'a B,
-	at: &'b BlockId<B::Block>,
-	context: B::Ready,
-	rotator: &'a PoolRotator<B::Hash>,
-	now: time::Instant,
-}
-
-impl<'a, 'b, B: ChainApi> txpool::Ready<VerifiedFor<B>> for Ready<'a, 'b, B> {
-	fn is_ready(&mut self, xt: &VerifiedFor<B>) -> Readiness {
-		if self.rotator.ban_if_stale(&self.now, xt) {
-			debug!(target: "transaction-pool", "[{:?}] Banning as stale.", txpool::VerifiedTransaction::hash(xt));
-			return Readiness::Stale;
-		}
-
-		self.api.is_ready(self.at, &mut self.context, xt)
-	}
-}
-
-pub struct ScoringAdapter<T>(::std::marker::PhantomData<T>);
-
-impl<T> ::std::fmt::Debug for ScoringAdapter<T> {
-	fn fmt(&self, _f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-		Ok(())
-	}
-}
-
-impl<T: ChainApi> Scoring<VerifiedFor<T>> for ScoringAdapter<T> {
-	type Score = <T as ChainApi>::Score;
-	type Event = <T as ChainApi>::Event;
-
-	fn compare(&self, old: &VerifiedFor<T>, other: &VerifiedFor<T>) -> ::std::cmp::Ordering {
-		T::compare(old, other)
-	}
-
-	fn choose(&self, old: &VerifiedFor<T>, new: &VerifiedFor<T>) -> txpool::scoring::Choice {
-		T::choose(old, new)
-	}
-
-	fn update_scores(&self, xts: &[txpool::Transaction<VerifiedFor<T>>], scores: &mut [Self::Score], change: txpool::scoring::Change<Self::Event>) {
-		T::update_scores(xts, scores, change)
-	}
-
-	fn should_replace(&self, old: &VerifiedFor<T>, new: &VerifiedFor<T>) -> txpool::scoring::Choice {
-		T::should_replace(old, new)
-	}
+	fn hash(&self, uxt: &ExtrinsicFor<Self>) -> Self::Hash;
 }
 
 /// Maximum time the transaction will be kept in the pool.
@@ -175,37 +65,36 @@ impl<T: ChainApi> Scoring<VerifiedFor<T>> for ScoringAdapter<T> {
 /// Transactions that don't get included within the limit are removed from the pool.
 const POOL_TIME: time::Duration = time::Duration::from_secs(60 * 5);
 
+#[derive(Debug)]
+pub struct TxData<Ex> {
+	pub raw: Ex,
+	// TODO [ToDr] Should we use longevity instead?
+	pub valid_till: time::Instant,
+}
+
 /// Extrinsics pool.
 pub struct Pool<B: ChainApi> {
 	api: B,
+	listener: RwLock<Listener<ExHash<B>>>,
 	pool: RwLock<txpool::Pool<
-		VerifiedFor<B>,
-		ScoringAdapter<B>,
-		Listener<B::Hash>,
+		ExHash<B>,
+		TxData<ExtrinsicFor<B>>,
 	>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
-	rotator: PoolRotator<B::Hash>,
+	rotator: PoolRotator<ExHash<B>>,
 }
 
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
-	pub fn new(options: txpool::Options, api: B) -> Self {
+	/// TODO [ToDr] Options
+	pub fn new(api: B) -> Self {
 		Pool {
-			pool: RwLock::new(txpool::Pool::new(Listener::default(), ScoringAdapter::<B>(Default::default()), options)),
-			import_notification_sinks: Default::default(),
 			api,
+			listener: Default::default(),
+			pool: Default::default(),
+			import_notification_sinks: Default::default(),
 			rotator: Default::default(),
 		}
-	}
-
-	/// Imports a pre-verified extrinsic to the pool.
-	pub fn import(&self, xt: VerifiedFor<B>) -> Result<Arc<VerifiedFor<B>>, B::Error> {
-		let result = self.pool.write().import(xt)?;
-
-		self.import_notification_sinks.lock()
-			.retain(|sink| sink.unbounded_send(()).is_ok());
-
-		Ok(result)
 	}
 
 	/// Return an event stream of transactions imported to the pool.
@@ -216,173 +105,79 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Invoked when extrinsics are broadcasted.
-	pub fn on_broadcasted(&self, propagated: HashMap<B::Hash, Vec<String>>) {
+	pub fn on_broadcasted(&self, propagated: HashMap<ExHash<B>, Vec<String>>) {
+		let mut listener = self.listener.write();
 		for (hash, peers) in propagated.into_iter() {
-			self.pool.write().listener_mut().broadcasted(&hash, peers);
+			listener.broadcasted(&hash, peers);
 		}
 	}
 
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<Arc<VerifiedFor<B>>>, B::Error> where
+	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<ExHash<B>>, B::Error> where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
+		let block_number = self.api.block_id_to_number(at)?;
 		xts
 			.into_iter()
-			.map(|xt| {
-				match self.api.verify_transaction(at, &xt) {
-					Ok(ref verified) if self.rotator.is_banned(txpool::VerifiedTransaction::hash(verified)) => {
-						return (Err(txpool::Error::from("Temporarily Banned".to_owned()).into()), xt)
+			.map(|xt| -> Result<_, B::Error> {
+				let hash = self.api.hash(&xt);
+				if self.rotator.is_banned(&hash) {
+					let kind: txpool::error::ErrorKind = "Temporarily Banned".into();
+					return Err(kind.into())?;
+				}
+
+				match self.api.validate_transaction(at, &xt)? {
+					TransactionValidity::Valid(priority, requires, provides, longevity) => {
+						Ok(txpool::Transaction {
+							data: TxData {
+								raw: xt,
+								valid_till: time::Instant::now() + POOL_TIME,
+							},
+							hash,
+							priority,
+							requires,
+							provides,
+							longevity,
+						})
 					},
-					result => (result, xt),
+					TransactionValidity::Invalid => {
+						unimplemented!()
+					},
+					TransactionValidity::Unknown => {
+						unimplemented!()
+					},
 				}
 			})
-			.map(|(v, xt)| {
-				let xt = Verified {
-					original: xt,
-					verified: v?,
-					valid_till: time::Instant::now() + POOL_TIME,
-				};
-				Ok(self.pool.write().import(xt)?)
+			.map(|tx| {
+				let imported = self.pool.write().import(block_number, tx?)?;
+
+				self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
+
+				// notify listener
+
+				Ok(imported.hash().clone())
 			})
 			.collect()
 	}
 
 	/// Imports one unverified extrinsic to the pool
-	pub fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Arc<VerifiedFor<B>>, B::Error> {
+	pub fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
 		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed"))
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
-	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<B::Hash>, B::Error> {
+	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<ExHash<B>>, B::Error> {
 		let xt = self.submit_at(at, Some(xt))?.pop().expect("One extrinsic passed; one result returned; qed");
-		Ok(self.pool.write().listener_mut().create_watcher(xt))
+		Ok(self.listener.write().create_watcher(xt))
 	}
 
 	/// Remove from the pool.
-	pub fn remove(&self, hashes: &[B::Hash], is_valid: bool) -> Vec<Option<Arc<VerifiedFor<B>>>> {
-		let mut pool = self.pool.write();
-		let mut results = Vec::with_capacity(hashes.len());
-
+	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<Arc<txpool::Transaction<ExHash<B>, TxData<ExtrinsicFor<B>>>>> {
 		// temporarily ban invalid transactions
-		if !is_valid {
-			debug!(target: "transaction-pool", "Banning invalid transactions: {:?}", hashes);
-			self.rotator.ban(&time::Instant::now(), hashes);
-		}
+		debug!(target: "transaction-pool", "Banning invalid transactions: {:?}", hashes);
+		self.rotator.ban(&time::Instant::now(), hashes);
 
-		for hash in hashes {
-			results.push(pool.remove(hash, is_valid));
-		}
-
-		results
-	}
-
-	/// Cull transactions from the queue.
-	pub fn cull_from(
-		&self,
-		at: &BlockId<B::Block>,
-		senders: Option<&[<B::VEx as txpool::VerifiedTransaction>::Sender]>,
-	) -> usize
-	{
-		self.rotator.clear_timeouts(&time::Instant::now());
-		let ready = self.ready(at);
-		self.pool.write().cull(senders, ready)
-	}
-
-	/// Cull old transactions from the queue.
-	pub fn cull(&self, at: &BlockId<B::Block>) -> Result<usize, B::Error> {
-		Ok(self.cull_from(at, None))
-	}
-
-	/// Cull transactions from the queue and then compute the pending set.
-	pub fn cull_and_get_pending<F, T>(&self, at: &BlockId<B::Block>, f: F) -> Result<T, B::Error> where
-		F: FnOnce(txpool::PendingIterator<VerifiedFor<B>, Ready<B>, ScoringAdapter<B>, Listener<B::Hash>>) -> T,
-	{
-		self.cull_from(at, None);
-		Ok(self.pending(at, f))
-	}
-
-	/// Get the full status of the queue (including readiness)
-	pub fn status<R: txpool::Ready<VerifiedFor<B>>>(&self, ready: R) -> txpool::Status {
-		self.pool.read().status(ready)
-	}
-
-	/// Returns light status of the pool.
-	pub fn light_status(&self) -> txpool::LightStatus {
-		self.pool.read().light_status()
-	}
-
-	/// Removes all transactions from given sender
-	pub fn remove_sender(&self, sender: <B::VEx as txpool::VerifiedTransaction>::Sender) -> Vec<Arc<VerifiedFor<B>>> {
-		let mut pool = self.pool.write();
-		let pending = pool.pending_from_sender(|_: &VerifiedFor<B>| txpool::Readiness::Ready, &sender).collect();
-		// remove all transactions from this sender
-		pool.cull(Some(&[sender]), |_: &VerifiedFor<B>| txpool::Readiness::Stale);
-		pending
-	}
-
-	/// Retrieve the pending set. Be careful to not leak the pool `ReadGuard` to prevent deadlocks.
-	pub fn pending<F, T>(&self, at: &BlockId<B::Block>, f: F) -> T where
-		F: FnOnce(txpool::PendingIterator<VerifiedFor<B>, Ready<B>, ScoringAdapter<B>, Listener<B::Hash>>) -> T,
-	{
-		let ready = self.ready(at);
-		f(self.pool.read().pending(ready))
-	}
-
-	/// Retry to import all verified transactions from given sender.
-	pub fn retry_verification(&self, at: &BlockId<B::Block>, sender: <B::VEx as txpool::VerifiedTransaction>::Sender) -> Result<(), B::Error> {
-		let to_reverify = self.remove_sender(sender);
-		self.submit_at(at, to_reverify.into_iter().map(|ex| Arc::try_unwrap(ex).expect("Removed items have no references").original))?;
-		Ok(())
-	}
-
-	/// Reverify transaction that has been reported incorrect.
-	///
-	/// Returns `Ok(None)` in case the hash is missing, `Err(e)` in case of verification error and new transaction
-	/// reference otherwise.
-	///
-	/// TODO [ToDr] That method is currently unused, should be used together with BlockBuilder
-	/// when we detect that particular transaction has failed.
-	/// In such case we will attempt to remove or re-verify it.
-	pub fn reverify_transaction(&self, at: &BlockId<B::Block>, hash: B::Hash) -> Result<Option<Arc<VerifiedFor<B>>>, B::Error> {
-		let result = self.remove(&[hash], false).pop().expect("One hash passed; one result received; qed");
-		if let Some(ex) = result {
-			self.submit_one(at, Arc::try_unwrap(ex).expect("Removed items have no references").original).map(Some)
-		} else {
-			Ok(None)
-		}
-	}
-
-	/// Retrieve all transactions in the pool grouped by sender.
-	pub fn all(&self) -> AllExtrinsics<B> {
-		use txpool::VerifiedTransaction;
-		let pool = self.pool.read();
-		let all = pool.unordered_pending(AlwaysReady);
-		all.fold(Default::default(), |mut map: AllExtrinsics<B>, tx| {
-			// Map with `null` key is not serializable, so we fallback to default accountId.
-			map.entry(tx.verified.sender().clone())
-				.or_insert_with(Vec::new)
-				// use bytes type to make it serialize nicer.
-				.push(tx.original.clone());
-			map
-		})
-	}
-
-	fn ready<'a, 'b>(&'a self, at: &'b BlockId<B::Block>) -> Ready<'a, 'b, B> {
-		Ready {
-			api: &self.api,
-			rotator: &self.rotator,
-			context: self.api.ready(),
-			at,
-			now: time::Instant::now(),
-		}
-	}
-}
-
- /// A Readiness implementation that returns `Ready` for all transactions.
-pub struct AlwaysReady;
-impl<VEx> txpool::Ready<VEx> for AlwaysReady {
-	fn is_ready(&mut self, _tx: &VEx) -> txpool::Readiness {
-		txpool::Readiness::Ready
+		self.pool.write().remove_invalid(hashes)
 	}
 }
 
@@ -437,7 +232,7 @@ pub mod tests {
 		type Block = Block;
 		type Hash = Hash;
 		type Sender = AccountId;
-		type Error = txpool::Error;
+		type Error = txpool::error::Error;
 		type VEx = VerifiedTransaction;
 		type Ready = HashMap<AccountId, u64>;
 		type Score = u64;

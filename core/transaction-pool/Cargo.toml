@@ -10,8 +10,8 @@ error-chain = "0.12"
 futures = "0.1"
 log = "0.3"
 parking_lot = "0.4"
-transaction-pool = "1.13.2"
 sr-primitives = { path = "../../core/sr-primitives" }
+substrate-transaction-graph = { path = "../transaction-graph" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../../core/test-client" }

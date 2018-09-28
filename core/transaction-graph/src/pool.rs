@@ -53,6 +53,17 @@ pub enum Imported<Hash, Ex> {
 	}
 }
 
+impl<Hash, Ex> Imported<Hash, Ex> {
+	/// Returns the hash of imported transaction.
+	pub fn hash(&self) -> &Hash {
+		use self::Imported::*;
+		match *self {
+			Ready { ref hash, .. } => hash,
+			Future { ref hash, .. } => hash,
+		}
+	}
+}
+
 /// Status of pruning the queue.
 #[derive(Debug)]
 pub struct PruneStatus<Hash, Ex> {
@@ -92,10 +103,19 @@ pub struct Transaction<Hash, Extrinsic> {
 /// as-is for the second time will fail or produce unwanted results.
 /// Most likely it is required to revalidate them and recompute set of
 /// required tags.
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Pool<Hash: hash::Hash + Eq, Ex> {
 	future: FutureTransactions<Hash, Ex>,
 	ready: ReadyTransactions<Hash, Ex>,
+}
+
+impl<Hash: hash::Hash + Eq, Ex> Default for Pool<Hash, Ex> {
+	fn default() -> Self {
+		Pool {
+			future: Default::default(),
+			ready: Default::default(),
+		}
+	}
 }
 
 impl<Hash: hash::Hash + Member, Ex: ::std::fmt::Debug> Pool<Hash, Ex> {

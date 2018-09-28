@@ -37,7 +37,7 @@ extern crate error_chain;
 #[macro_use]
 extern crate log;
 
-mod error;
+pub mod error;
 mod future;
 mod pool;
 mod ready;

@@ -54,10 +54,19 @@ impl<H> Watcher<H> {
 }
 
 /// Sender part of the watcher. Exposed only for testing purposes.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Sender<H> {
 	receivers: Vec<mpsc::UnboundedSender<Status<H>>>,
 	finalised: bool,
+}
+
+impl<H> Default for Sender<H> {
+	fn default() -> Self {
+		Sender {
+			receivers: Default::default(),
+			finalised: false,
+		}
+	}
 }
 
 impl<H: Clone> Sender<H> {

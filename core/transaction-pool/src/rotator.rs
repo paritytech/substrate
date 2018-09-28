@@ -26,8 +26,6 @@ use std::{
 	time::{Duration, Instant},
 };
 use parking_lot::RwLock;
-use txpool::VerifiedTransaction;
-use Verified;
 
 /// Expected size of the banned extrinsics cache.
 const EXPECTED_SIZE: usize = 2048;
@@ -73,21 +71,6 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 				}
 			}
 		}
-	}
-
-	/// Bans extrinsic if it's stale.
-	///
-	/// Returns `true` if extrinsic is stale and got banned.
-	pub fn ban_if_stale<Ex, VEx>(&self, now: &Instant, xt: &Verified<Ex, VEx>) -> bool where
-		VEx: VerifiedTransaction<Hash=Hash>,
-		Hash: fmt::Debug + fmt::LowerHex,
-	{
-		if &xt.valid_till > now {
-			return false;
-		}
-
-		self.ban(now, &[xt.verified.hash().clone()]);
-		true
 	}
 
 	/// Removes timed bans.
