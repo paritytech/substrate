@@ -203,6 +203,10 @@ subcommands:
           - execution:
               long: execution
               value_name: STRATEGY
+              help: The means of execution used when executing blocks. Can be either wasm, native or both.
+          - api-execution:
+              long: api-execution
+              value_name: STRATEGY
               help: The means of execution used when calling into the runtime. Can be either wasm, native or both.
           - max-heap-pages:
               long: max-heap-pages

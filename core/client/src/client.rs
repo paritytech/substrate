@@ -54,7 +54,8 @@ pub struct Client<B, E, Block> where Block: BlockT {
 	finality_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<FinalityNotification<Block>>>>,
 	import_lock: Mutex<()>,
 	importing_block: RwLock<Option<Block::Hash>>, // holds the block hash currently being imported. TODO: replace this with block queue
-	execution_strategy: ExecutionStrategy,
+	block_execution_strategy: ExecutionStrategy,
+	api_execution_strategy: ExecutionStrategy,
 }
 
 /// A source of blockchain events.
@@ -208,7 +209,7 @@ pub fn new_with_backend<B, E, Block, S>(
 		B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
-	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible)
+	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
 }
 
 impl<B, E, Block> Client<B, E, Block> where
@@ -221,7 +222,8 @@ impl<B, E, Block> Client<B, E, Block> where
 		backend: Arc<B>,
 		executor: E,
 		build_genesis_storage: S,
-		execution_strategy: ExecutionStrategy,
+		block_execution_strategy: ExecutionStrategy,
+		api_execution_strategy: ExecutionStrategy,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
 			let genesis_storage = build_genesis_storage.build_storage()?;
@@ -245,7 +247,8 @@ impl<B, E, Block> Client<B, E, Block> where
 			finality_notification_sinks: Default::default(),
 			import_lock: Default::default(),
 			importing_block: Default::default(),
-			execution_strategy,
+			block_execution_strategy,
+			api_execution_strategy,
 		})
 	}
 
@@ -369,13 +372,17 @@ impl<B, E, Block> Client<B, E, Block> where
 		);
 		self.state_at(&parent).and_then(|state| {
 			let mut overlay = Default::default();
-			let execution_manager = || ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
-				warn!("   Function {:?}", function);
-				warn!("   Native result {:?}", native_result);
-				warn!("   Wasm result {:?}", wasm_result);
-				wasm_result
-			});
+			let execution_manager = || match self.api_execution_strategy {
+				ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+				ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+				ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+					warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
+					warn!("   Function {:?}", function);
+					warn!("   Native result {:?}", native_result);
+					warn!("   Wasm result {:?}", wasm_result);
+					wasm_result
+				}),
+			};
 			self.executor().call_at_state(
 				&state,
 				&mut overlay,
@@ -499,7 +506,7 @@ impl<B, E, Block> Client<B, E, Block> where
 					&mut overlay,
 					"execute_block",
 					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode(),
-					match (origin, self.execution_strategy) {
+					match (origin, self.block_execution_strategy) {
 						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
 							ExecutionManager::NativeWhenPossible,
 						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,

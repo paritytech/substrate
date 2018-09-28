@@ -11,6 +11,7 @@ log = "0.4"
 slog = "^2"
 tokio = "0.1.7"
 hex-literal = "0.1"
+parity-codec = { version = "2.0" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 node-executor = { path = "../executor" }
@@ -23,3 +24,10 @@ substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }
 substrate-service = { path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
+
+[dev-dependencies]
+substrate-service-test = { path = "../../core/service/test" }
+substrate-bft = { path = "../../core/bft" }
+substrate-test-client = { path = "../../core/test-client" }
+substrate-keyring = { path = "../../core/keyring" }
+rhododendron = "0.3"

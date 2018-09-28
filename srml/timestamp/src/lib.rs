@@ -111,7 +111,7 @@ impl<T: Trait> Module<T> {
 		);
 		assert!(
 			Self::now().is_zero() || now >= Self::now() + Self::block_period(),
-			"Timestamp but increment by at least <BlockPeriod> between sequential blocks"
+			"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
 		);
 		<Self as Store>::Now::put(now);
 		<Self as Store>::DidUpdate::put(true);
@@ -228,7 +228,7 @@ mod tests {
 	}
 
 	#[test]
-	#[should_panic(expected = "Timestamp but increment by at least <BlockPeriod> between sequential blocks")]
+	#[should_panic(expected = "Timestamp must increment by at least <BlockPeriod> between sequential blocks")]
 	fn block_period_is_enforced() {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());

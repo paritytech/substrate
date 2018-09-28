@@ -60,7 +60,7 @@ pub fn new_light<B, S, F, GS>(
 		GS: BuildStorage,
 {
 	let executor = RemoteCallExecutor::new(backend.blockchain().clone(), fetcher);
-	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible)
+	Client::new(backend, executor, genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
 }
 
 /// Create an instance of fetch data checker.

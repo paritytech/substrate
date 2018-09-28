@@ -154,6 +154,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
+			finalized_number: meta.finalized_number,
 		})
 	}
 

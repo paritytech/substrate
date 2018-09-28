@@ -35,14 +35,13 @@ pub mod client_ext;
 pub mod trait_tests;
 mod block_builder_ext;
 
-use std::sync::Arc;
-
-pub use client_ext::TestClient;
+pub use client_ext::{TestClient, fake_justify};
 pub use block_builder_ext::BlockBuilderExt;
 pub use client::blockchain;
 pub use client::backend;
 pub use executor::NativeExecutor;
 
+use std::sync::Arc;
 use primitives::Blake2Hasher;
 use runtime_primitives::StorageMap;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};

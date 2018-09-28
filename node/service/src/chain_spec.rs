@@ -234,7 +234,18 @@ fn local_testnet_genesis() -> GenesisConfig {
 	])
 }
 
+fn local_testnet_genesis_instant() -> GenesisConfig {
+	let mut genesis = local_testnet_genesis();
+	genesis.timestamp = Some(TimestampConfig { period: 0 });
+	genesis
+}
+
 /// Local testnet config (multivalidator Alice + Bob)
 pub fn local_testnet_config() -> ChainSpec<GenesisConfig> {
 	ChainSpec::from_genesis("Local Testnet", "local_testnet", local_testnet_genesis, vec![], None, None)
+}
+
+/// Local testnet config (multivalidator Alice + Bob)
+pub fn integration_test_config() -> ChainSpec<GenesisConfig> {
+	ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None)
 }

@@ -431,6 +431,9 @@ impl<T: Trait> Module<T> {
 	/// Get the reward for the session, assuming it ends with this block.
 	fn this_session_reward(actual_elapsed: T::Moment) -> T::Balance {
 		let ideal_elapsed = <session::Module<T>>::ideal_session_duration();
+		if ideal_elapsed.is_zero() {
+			return Self::current_session_reward();
+		}
 		let per65536: u64 = (T::Moment::sa(65536u64) * ideal_elapsed.clone() / actual_elapsed.max(ideal_elapsed)).as_();
 		Self::current_session_reward() * T::Balance::sa(per65536) / T::Balance::sa(65536u64)
 	}
