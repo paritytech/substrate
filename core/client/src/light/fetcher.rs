@@ -420,7 +420,8 @@ pub mod tests {
 
 			// 'fetch' changes proof from remote node
 			let (remote_max, remote_proof) = remote_client.key_changes_proof(
-				begin_hash, end_hash, max_hash, &key).unwrap();
+				begin_hash, end_hash, max_hash, &key
+			).unwrap();
 
 			// check proof on local client
 			let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
@@ -439,10 +440,8 @@ pub mod tests {
 			// ..and ensure that result is the same as on remote node
 			match local_result == expected_result {
 				true => (),
-				false => {
-					panic!(format!("Failed test {}: local = {:?}, expected = {:?}",
-						index, local_result, expected_result));
-				}
+				false => panic!(format!("Failed test {}: local = {:?}, expected = {:?}",
+					index, local_result, expected_result)),
 			}
 		}
 	}

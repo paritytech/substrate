@@ -243,7 +243,8 @@ impl<'a, RS: 'a + RootsStorage<H>, S: Storage<H>, H: Hasher> DrilldownIteratorEs
 						self.blocks.extend(blocks.into_iter()
 							.rev()
 							.filter(|b| level > 1 || (*b >= begin && *b <= end))
-							.map(|b| (b, level - 1)));
+							.map(|b| (b, level - 1))
+						);
 					}
 				}
 

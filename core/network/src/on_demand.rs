@@ -409,26 +409,26 @@ impl<B, E> OnDemandCore<B, E> where
 impl<Block: BlockT> Request<Block> {
 	pub fn message(&self) -> message::Message<Block> {
 		match self.data {
-			RequestData::RemoteHeader(ref data, _) => message::generic::Message::RemoteHeaderRequest(
-				message::RemoteHeaderRequest {
+			RequestData::RemoteHeader(ref data, _) =>
+				message::generic::Message::RemoteHeaderRequest(message::RemoteHeaderRequest {
 					id: self.id,
 					block: data.block,
 				}),
-			RequestData::RemoteRead(ref data, _) => message::generic::Message::RemoteReadRequest(
-				message::RemoteReadRequest {
+			RequestData::RemoteRead(ref data, _) =>
+				message::generic::Message::RemoteReadRequest(message::RemoteReadRequest {
 					id: self.id,
 					block: data.block,
 					key: data.key.clone(),
 				}),
-			RequestData::RemoteCall(ref data, _) => message::generic::Message::RemoteCallRequest(
-				message::RemoteCallRequest {
+			RequestData::RemoteCall(ref data, _) =>
+				message::generic::Message::RemoteCallRequest(message::RemoteCallRequest {
 					id: self.id,
 					block: data.block,
 					method: data.method.clone(),
 					data: data.call_data.clone(),
 				}),
-			RequestData::RemoteChanges(ref data, _) => message::generic::Message::RemoteChangesRequest(
-				message::RemoteChangesRequest {
+			RequestData::RemoteChanges(ref data, _) =>
+				message::generic::Message::RemoteChangesRequest(message::RemoteChangesRequest {
 					id: self.id,
 					first: data.first_block.1.clone(),
 					last: data.last_block.1.clone(),
