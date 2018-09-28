@@ -141,7 +141,7 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub config: ProtocolConfig,
 	/// Network layer configuration.
 	pub network_config: NetworkConfiguration,
-	/// Polkadot relay chain access point.
+	/// Substrate relay chain access point.
 	pub chain: Arc<Client<B>>,
 	/// On-demand service reference.
 	pub on_demand: Option<Arc<OnDemandService<B>>>,
@@ -151,7 +151,7 @@ pub struct Params<B: BlockT, S, H: ExHashT> {
 	pub specialization: S,
 }
 
-/// Polkadot network service. Handles network IO and manages connectivity.
+/// Substrate network service. Handles network IO and manages connectivity.
 pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
 	/// Network service
 	network: NetworkService,
@@ -184,7 +184,7 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 			Err(err) => {
 				match err.kind() {
 					ErrorKind::Io(ref e) if e.kind() == io::ErrorKind::AddrInUse =>
-						warn!("Network port is already in use, make sure that another instance of Polkadot client is not running or change the port using the --port option."),
+						warn!("Network port is already in use, make sure that another instance of Substrate client is not running or change the port using the --port option."),
 					_ => warn!("Error starting network: {}", err),
 				};
 				return Err(err.into())

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot Client data backend
+//! Substrate Client data backend
 
 use error;
 use primitives::AuthorityId;

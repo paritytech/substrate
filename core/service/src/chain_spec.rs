@@ -30,6 +30,16 @@ enum GenesisSource<G> {
 	Factory(fn() -> G),
 }
 
+impl<G: RuntimeGenesis> Clone for GenesisSource<G> {
+	fn clone(&self) -> Self {
+		match *self {
+			GenesisSource::File(ref path) => GenesisSource::File(path.clone()),
+			GenesisSource::Embedded(d) => GenesisSource::Embedded(d),
+			GenesisSource::Factory(f) => GenesisSource::Factory(f),
+		}
+	}
+}
+
 impl<G: RuntimeGenesis> GenesisSource<G> {
 	fn resolve(&self) -> Result<Genesis<G>, String> {
 		#[derive(Serialize, Deserialize)]
@@ -69,7 +79,7 @@ enum Genesis<G> {
 	Raw(HashMap<StorageKey, StorageData>),
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct ChainSpecFile {
 	pub name: String,
@@ -83,6 +93,15 @@ struct ChainSpecFile {
 pub struct ChainSpec<G: RuntimeGenesis> {
 	spec: ChainSpecFile,
 	genesis: GenesisSource<G>,
+}
+
+impl<G: RuntimeGenesis> Clone for ChainSpec<G> {
+	fn clone(&self) -> Self {
+		ChainSpec {
+			spec: self.spec.clone(),
+			genesis: self.genesis.clone(),
+		}
+	}
 }
 
 impl<G: RuntimeGenesis> ChainSpec<G> {

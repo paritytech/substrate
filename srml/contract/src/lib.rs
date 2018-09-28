@@ -56,9 +56,6 @@
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg(feature = "std")]
-extern crate serde;
-
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -79,6 +76,8 @@ extern crate srml_system as system;
 extern crate srml_support as runtime_support;
 
 extern crate sr_primitives as runtime_primitives;
+
+#[cfg(test)]
 extern crate substrate_primitives;
 
 #[cfg(test)]

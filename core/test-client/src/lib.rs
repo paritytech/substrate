@@ -24,10 +24,8 @@ extern crate rhododendron;
 extern crate substrate_bft as bft;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
-extern crate srml_support as runtime_support;
 extern crate sr_primitives as runtime_primitives;
 #[macro_use] extern crate substrate_executor as executor;
-extern crate hash_db;
 
 pub extern crate substrate_client as client;
 pub extern crate substrate_keyring as keyring;
@@ -37,14 +35,13 @@ pub mod client_ext;
 pub mod trait_tests;
 mod block_builder_ext;
 
-use std::sync::Arc;
-
-pub use client_ext::TestClient;
+pub use client_ext::{TestClient, fake_justify};
 pub use block_builder_ext::BlockBuilderExt;
 pub use client::blockchain;
 pub use client::backend;
 pub use executor::NativeExecutor;
 
+use std::sync::Arc;
 use primitives::Blake2Hasher;
 use runtime_primitives::StorageMap;
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
@@ -54,7 +51,7 @@ mod local_executor {
 	#![allow(missing_docs)]
 	use super::runtime;
 	// TODO: change the macro and pass in the `BlakeHasher` that dispatch needs from here instead
-	native_executor_instance!(pub LocalExecutor, runtime::api::dispatch, runtime::VERSION, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
+	native_executor_instance!(pub LocalExecutor, runtime::api::dispatch, runtime::native_version, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
 }
 
 /// Native executor used for tests.

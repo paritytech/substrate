@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot blockchain trait
+//! Substrate blockchain trait
 
 use primitives::AuthorityId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
@@ -89,6 +89,8 @@ pub struct Info<Block: BlockT> {
 	pub genesis_hash: Block::Hash,
 	/// The head of the finalized chain.
 	pub finalized_hash: Block::Hash,
+	/// Last finalized block number.
+	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
 }
 
 /// Block status.

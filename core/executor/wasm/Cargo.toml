@@ -7,9 +7,9 @@ authors = ["Parity Technologies <admin@parity.io>"]
 crate-type = ["cdylib"]
 
 [dependencies]
-sr-io = { path = "../../sr-io", version = "0.1", default_features = false }
-sr-sandbox = { path = "../../sr-sandbox", version = "0.1", default_features = false }
-substrate-primitives = { path = "../../primitives", default_features = false }
+sr-io = { path = "../../sr-io", version = "0.1", default-features = false }
+sr-sandbox = { path = "../../sr-sandbox", version = "0.1", default-features = false }
+substrate-primitives = { path = "../../primitives", default-features = false }
 
 [profile.release]
 panic = "abort"

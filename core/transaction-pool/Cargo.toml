@@ -6,7 +6,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 error-chain = "0.12"
 futures = "0.1"
-log = "0.3"
+log = "0.4"
 parking_lot = "0.4"
 sr-primitives = { path = "../../core/sr-primitives" }
 substrate-transaction-graph = { path = "./graph" }
@@ -14,4 +14,4 @@ substrate-transaction-graph = { path = "./graph" }
 [dev-dependencies]
 substrate-test-client = { path = "../../core/test-client" }
 substrate-keyring = { path = "../../core/keyring" }
-parity-codec = { version = "2.0" }
+parity-codec = "2.0"

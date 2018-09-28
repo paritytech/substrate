@@ -32,6 +32,7 @@ use futures::sync::mpsc;
 use std::sync::Arc;
 
 use tokio::runtime::TaskExecutor;
+use tokio::executor::Executor;
 
 use super::NetworkService;
 
@@ -260,7 +261,7 @@ impl<P: AuthoringApi + Send + Sync + 'static> Network for ConsensusNetwork<P> {
 		&self, validators: &[SessionKey],
 		local_id: SessionKey,
 		parent_hash: Hash,
-		task_executor: TaskExecutor
+		mut task_executor: TaskExecutor
 	) -> (Self::Input, Self::Output)
 	{
 		let sink = BftSink {
@@ -284,7 +285,10 @@ impl<P: AuthoringApi + Send + Sync + 'static> Network for ConsensusNetwork<P> {
 		});
 
 		match process_task {
-			Some(task) => task_executor.spawn(task),
+			Some(task) =>
+				if let Err(e) = Executor::spawn(&mut task_executor, Box::new(task)) {
+					debug!(target: "node-network", "Cannot spawn message processing: {:?}", e)
+				},
 			None => warn!(target: "node-network", "Cannot process incoming messages: network appears to be down"),
 		}
 
