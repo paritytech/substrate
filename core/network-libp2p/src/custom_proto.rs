@@ -14,16 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use bytes::{Bytes, BytesMut};
-use ProtocolId;
+use bytes::Bytes;
 use libp2p::core::{Multiaddr, ConnectionUpgrade, Endpoint};
-use PacketId;
+use libp2p::tokio_codec::Framed;
+use std::collections::VecDeque;
 use std::io::Error as IoError;
 use std::vec::IntoIter as VecIntoIter;
-use futures::{future, Future, stream, Stream, Sink};
-use futures::sync::mpsc;
+use futures::{prelude::*, future, stream, task};
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
+use ProtocolId;
 
 /// Connection upgrade for a single protocol.
 ///
@@ -42,29 +42,6 @@ pub struct RegisteredProtocol<T> {
 	supported_versions: Vec<(u8, u8)>,
 	/// Custom data.
 	custom_data: T,
-}
-
-/// Output of a `RegisteredProtocol` upgrade.
-pub struct RegisteredProtocolOutput<T> {
-	/// Data passed to `RegisteredProtocol::new`.
-	pub custom_data: T,
-
-	/// Id of the protocol.
-	pub protocol_id: ProtocolId,
-
-	/// Endpoint of the connection.
-	pub endpoint: Endpoint,
-
-	/// Version of the protocol that was negotiated.
-	pub protocol_version: u8,
-
-	/// Channel to sender outgoing messages to.
-	// TODO: consider assembling packet_id here
-	pub outgoing: mpsc::UnboundedSender<Bytes>,
-
-	/// Stream where incoming messages are received. The stream ends whenever
-	/// either side is closed.
-	pub incoming: Box<Stream<Item = (PacketId, Bytes), Error = IoError> + Send>,
 }
 
 impl<T> RegisteredProtocol<T> {
@@ -99,9 +76,137 @@ impl<T> RegisteredProtocol<T> {
 	}
 }
 
-// `Maf` is short for `MultiaddressFuture`
-impl<T, C> ConnectionUpgrade<C> for RegisteredProtocol<T>
-where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
+/// Output of a `RegisteredProtocol` upgrade.
+pub struct RegisteredProtocolSubstream<TSubstream, TUserData> {
+	/// Buffer of packets to send.
+	send_queue: VecDeque<Bytes>,
+	/// If true, we should call `poll_complete` on the inner sink.
+	requires_poll_complete: bool,
+	/// The underlying substream.
+	inner: stream::Fuse<Framed<TSubstream, UviBytes<Bytes>>>,
+	/// Maximum packet id.
+	packet_count: u8,
+	/// Data passed to `RegisteredProtocol::new`.
+	custom_data: TUserData,
+	/// Id of the protocol.
+	protocol_id: ProtocolId,
+	/// Endpoint of the connection.
+	endpoint: Endpoint,
+	/// Version of the protocol that was negotiated.
+	protocol_version: u8,
+	/// Task to notify when something is changed and we need to be polled.
+	to_notify: Option<task::Task>,
+}
+
+/// Packet of data that can be sent or received.
+#[derive(Debug, Clone)]
+pub struct Packet {
+	/// Identifier of the packet.
+	pub id: u8,
+	/// The raw data.
+	pub data: Bytes,
+}
+
+impl<TSubstream, TUserData> RegisteredProtocolSubstream<TSubstream, TUserData> {
+	/// Returns the protocol id.
+	#[inline]
+	pub fn protocol_id(&self) -> ProtocolId {
+		self.protocol_id
+	}
+
+	/// Returns the version of the protocol that was negotiated.
+	#[inline]
+	pub fn protocol_version(&self) -> u8 {
+		self.protocol_version
+	}
+
+	/// Sends a message to the substream.
+	pub fn send_message(&mut self, Packet { id: packet_id, data }: Packet) {
+		if packet_id >= self.packet_count {
+			error!(target: "sub-libp2p", "Tried to send a packet with an invalid ID {}", packet_id);
+			return;
+		}
+
+		let mut message = Bytes::with_capacity(1 + data.len());
+		message.extend_from_slice(&[packet_id]);
+		message.extend_from_slice(&data);
+		self.send_queue.push_back(message);
+
+		if let Some(task) = self.to_notify.take() {
+			task.notify();
+		}
+	}
+}
+
+impl<TSubstream, TUserData> Stream for RegisteredProtocolSubstream<TSubstream, TUserData>
+where TSubstream: AsyncRead + AsyncWrite,
+{
+	type Item = Packet;
+	type Error = IoError;
+
+	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+		// Flushing all the local data.
+		while let Some(packet) = self.send_queue.pop_front() {
+			match self.inner.start_send(packet)? {
+				AsyncSink::NotReady(packet) => {
+					self.send_queue.push_front(packet);
+					break;
+				},
+				AsyncSink::Ready => self.requires_poll_complete = true,
+			}
+		}
+
+		if self.requires_poll_complete {
+			match self.inner.poll_complete()? {
+				Async::Ready(()) => self.requires_poll_complete = false,
+				Async::NotReady => (),
+			}
+		}
+
+		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
+		loop {
+			match self.inner.poll()? {
+				Async::Ready(Some(mut data)) => {
+					// The `data` should be prefixed by the packet ID, therefore an empty packet
+					// is invalid.
+					if data.is_empty() {
+						debug!(target: "sub-libp2p", "ignoring incoming packet because it \
+							was empty");
+						continue;
+					}
+
+					let packet = {
+						let id = data[0];
+						let data = data.split_off(1);
+						Packet { id, data: data.freeze() }
+					};
+
+					if packet.id >= self.packet_count {
+						debug!(target: "sub-libp2p", "ignoring incoming packet \
+							because packet_id {} is too large", packet.id);
+						continue;
+					}
+
+					return Ok(Async::Ready(Some(packet)))
+				},
+				Async::Ready(None) =>
+					if !self.requires_poll_complete && self.send_queue.is_empty() {
+						return Ok(Async::Ready(None))
+					} else {
+						break
+					},
+				Async::NotReady => break,
+			}
+		}
+
+		self.to_notify = Some(task::current());
+		Ok(Async::NotReady)
+	}
+}
+
+impl<TSubstream, TUserData> ConnectionUpgrade<TSubstream> for RegisteredProtocol<TUserData>
+where TSubstream: AsyncRead + AsyncWrite,
+	  TUserData: Clone,
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
 	type UpgradeIdentifier = u8;		// Protocol version
@@ -117,13 +222,13 @@ where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
 		}).collect::<Vec<_>>().into_iter()
 	}
 
-	type Output = RegisteredProtocolOutput<T>;
+	type Output = RegisteredProtocolSubstream<TSubstream, TUserData>;
 	type Future = future::FutureResult<Self::Output, IoError>;
 
 	#[allow(deprecated)]
 	fn upgrade(
 		self,
-		socket: C,
+		socket: TSubstream,
 		protocol_version: Self::UpgradeIdentifier,
 		endpoint: Endpoint,
 		_: &Multiaddr
@@ -134,95 +239,20 @@ where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
 			.expect("negotiated protocol version that wasn't advertised ; \
 				programmer error")
 			.1;
+		
+		let framed = Framed::new(socket, UviBytes::default());
 
-		// This function is called whenever we successfully negotiated a
-		// protocol with a remote (both if initiated by us or by the remote)
-
-		// This channel is used to send outgoing packets to the custom_data
-		// for this open substream.
-		let (msg_tx, msg_rx) = mpsc::unbounded();
-
-		// Build the sink for outgoing network bytes, and the stream for
-		// incoming instructions. `stream` implements `Stream<Item = Message>`.
-		enum Message {
-			/// Received data from the network.
-			RecvSocket(BytesMut),
-			/// Data to send to the network.
-			/// The packet_id must already be inside the `Bytes`.
-			SendReq(Bytes),
-			/// The socket has been closed.
-			Finished,
-		}
-
-		let (sink, stream) = {
-			let framed = AsyncRead::framed(socket, UviBytes::default());
-			let msg_rx = msg_rx.map(Message::SendReq)
-				.map_err(|()| unreachable!("mpsc::UnboundedReceiver never errors"));
-			let (sink, stream) = framed.split();
-			let stream = stream.map(Message::RecvSocket)
-				.chain(stream::once(Ok(Message::Finished)));
-			(sink, msg_rx.select(stream))
-		};
-
-		let incoming = stream::unfold((sink, stream, false), move |(sink, stream, finished)| {
-			if finished {
-				return None
-			}
-
-			Some(stream
-				.into_future()
-				.map_err(|(err, _)| err)
-				.and_then(move |(message, stream)|
-					match message {
-						Some(Message::RecvSocket(mut data)) => {
-							// The `data` should be prefixed by the packet ID,
-							// therefore an empty packet is invalid.
-							if data.is_empty() {
-								debug!(target: "sub-libp2p", "ignoring incoming \
-									packet because it was empty");
-								let f = future::ok((None, (sink, stream, false)));
-								return future::Either::A(f)
-							}
-
-							let packet_id = data[0];
-							let data = data.split_off(1);
-
-							if packet_id >= packet_count {
-								debug!(target: "sub-libp2p", "ignoring incoming packet \
-									because packet_id {} is too large", packet_id);
-								let f = future::ok((None, (sink, stream, false)));
-								future::Either::A(f)
-							} else {
-								let out = Some((packet_id, data.freeze()));
-								let f = future::ok((out, (sink, stream, false)));
-								future::Either::A(f)
-							}
-						},
-
-						Some(Message::SendReq(data)) => {
-							let fut = sink.send(data)
-								.map(move |sink| (None, (sink, stream, false)));
-							future::Either::B(fut)
-						},
-
-						Some(Message::Finished) | None => {
-							let f = future::ok((None, (sink, stream, true)));
-							future::Either::A(f)
-						},
-					}
-				))
-		}).filter_map(|v| v);
-
-		let out = RegisteredProtocolOutput {
-			custom_data: self.custom_data,
+		future::ok(RegisteredProtocolSubstream {
+			send_queue: VecDeque::new(),
+			requires_poll_complete: false,
+			inner: framed.fuse(),
+			packet_count,
+			custom_data: self.custom_data.clone(),
 			protocol_id: self.id,
 			endpoint,
-			protocol_version: protocol_version,
-			outgoing: msg_tx,
-			incoming: Box::new(incoming),
-		};
-
-		future::ok(out)
+			protocol_version,
+			to_notify: None,
+		})
 	}
 }
 
@@ -255,29 +285,30 @@ impl<T> Default for RegisteredProtocols<T> {
 	}
 }
 
-impl<T, C> ConnectionUpgrade<C> for RegisteredProtocols<T>
-where C: AsyncRead + AsyncWrite + Send + 'static,		// TODO: 'static :-/
+impl<TSubstream, TUserData> ConnectionUpgrade<TSubstream> for RegisteredProtocols<TUserData>
+where TSubstream: AsyncRead + AsyncWrite,
+	  TUserData: Clone,
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
 	type UpgradeIdentifier = (usize,
-		<RegisteredProtocol<T> as ConnectionUpgrade<C>>::UpgradeIdentifier);
+		<RegisteredProtocol<TUserData> as ConnectionUpgrade<TSubstream>>::UpgradeIdentifier);
 
 	fn protocol_names(&self) -> Self::NamesIter {
 		// We concat the lists of `RegisteredProtocol::protocol_names` for
 		// each protocol.
 		self.0.iter().enumerate().flat_map(|(n, proto)|
-			ConnectionUpgrade::<C>::protocol_names(proto)
+			ConnectionUpgrade::<TSubstream>::protocol_names(proto)
 				.map(move |(name, id)| (name, (n, id)))
 		).collect::<Vec<_>>().into_iter()
 	}
 
-	type Output = <RegisteredProtocol<T> as ConnectionUpgrade<C>>::Output;
-	type Future = <RegisteredProtocol<T> as ConnectionUpgrade<C>>::Future;
+	type Output = <RegisteredProtocol<TUserData> as ConnectionUpgrade<TSubstream>>::Output;
+	type Future = <RegisteredProtocol<TUserData> as ConnectionUpgrade<TSubstream>>::Future;
 
 	#[inline]
 	fn upgrade(
 		self,
-		socket: C,
+		socket: TSubstream,
 		upgrade_identifier: Self::UpgradeIdentifier,
 		endpoint: Endpoint,
 		remote_addr: &Multiaddr
