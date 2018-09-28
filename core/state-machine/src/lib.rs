@@ -268,12 +268,15 @@ where
 	// proof-of-execution on light clients. And the proof is recorded by the backend which
 	// is created after OverlayedChanges
 
-	let changes_trie_config = try_read_overlay_value(
-		overlay,
-		backend,
-		well_known_keys::CHANGES_TRIE_CONFIG
-	)?;
-	set_changes_trie_config(overlay, changes_trie_config)?;
+	let init_overlay = |overlay: &mut OverlayedChanges| {
+		let changes_trie_config = try_read_overlay_value(
+			overlay,
+			backend,
+			well_known_keys::CHANGES_TRIE_CONFIG
+		)?;
+		set_changes_trie_config(overlay, changes_trie_config)
+	};
+	init_overlay(overlay)?;
 
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
@@ -334,6 +337,11 @@ where
 		};
 		result.map(move |out| (out, storage_delta, changes_delta))
 	};
+
+	// ensure that changes trie config has not been changed
+	if result.is_ok() {
+		init_overlay(overlay)?;
+	}
 
 	result.map_err(|e| Box::new(e) as _)
 }
@@ -436,13 +444,16 @@ pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Op
 			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<Error>)?),
 		None => None,
 	};
-	if let Some(config) = config {
-		if !overlay.set_changes_trie_config(config) {
-			return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
-		}
-	}
 
-	Ok(())
+	let is_different_config = match config {
+		Some(config) => overlay.set_changes_trie_config(config),
+		None => overlay.changes_trie_config.is_some(),
+	};
+
+	match is_different_config {
+		true => Err(Box::new("Changes trie configuration change is not supported".to_owned())),
+		false => Ok(()),
+	}
 }
 
 /// Reads storage value from overlay or from the backend.
@@ -463,13 +474,18 @@ where
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
+	use codec::Encode;
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
-	use super::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
+	use super::changes_trie::{
+		InMemoryStorage as InMemoryChangesTrieStorage,
+		Configuration as ChangesTrieConfig,
+	};
 	use primitives::{Blake2Hasher};
 
 	struct DummyCodeExecutor {
+		change_changes_trie_config: bool,
 		native_available: bool,
 		native_succeeds: bool,
 		fallback_succeeds: bool,
@@ -487,6 +503,13 @@ mod tests {
 			_data: &[u8],
 			use_native: bool
 		) -> (Result<Vec<u8>, Self::Error>, bool) {
+			if self.change_changes_trie_config {
+				ext.place_storage(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), Some(ChangesTrieConfig {
+					digest_interval: 777,
+					digest_levels: 333,
+				}.encode()));
+			}
+
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
 				(true, true, _) | (false, _, true) =>
@@ -511,6 +534,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
 			&DummyCodeExecutor {
+				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: true,
@@ -529,6 +553,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
 			&DummyCodeExecutor {
+				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: false,
@@ -547,6 +572,7 @@ mod tests {
 	#[test]
 	fn prove_execution_and_proof_check_works() {
 		let executor = DummyCodeExecutor {
+			change_changes_trie_config: false,
 			native_available: true,
 			native_succeeds: true,
 			fallback_succeeds: true,
@@ -621,5 +647,23 @@ mod tests {
  		// check that results are correct
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);
+	}
+
+	#[test]
+	fn cannot_change_changes_trie_config() {
+		assert!(execute(
+			&trie_backend::tests::test_trie(),
+			Some(&InMemoryChangesTrieStorage::new()),
+			&mut Default::default(),
+			&DummyCodeExecutor {
+				change_changes_trie_config: true,
+				native_available: false,
+				native_succeeds: true,
+				fallback_succeeds: true,
+			},
+			"test",
+			&[],
+			ExecutionStrategy::NativeWhenPossible
+		).is_err());
 	}
 }
