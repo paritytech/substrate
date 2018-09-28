@@ -396,6 +396,11 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	fn shutdown(&mut self) {
 		// TODO: close gracefully
 		self.is_shutting_down = true;
+
+		for custom_proto in &mut self.custom_protocols_substreams {
+			custom_proto.shutdown();
+		}
+
 		if let Some(to_notify) = self.to_notify.take() {
 			to_notify.notify();
 		}
@@ -403,6 +408,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 
 	fn poll(&mut self) -> Poll<Option<NodeHandlerEvent<Self::OutboundOpenInfo, Self::OutEvent>>, IoError> {
 		if self.is_shutting_down {
+			// TODO: finish only when everything is closed
 			return Ok(Async::Ready(None));
 		}
 

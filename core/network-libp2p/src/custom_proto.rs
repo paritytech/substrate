@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use bytes::Bytes;
+use bytes::{Bytes, BytesMut};
 use libp2p::core::{Multiaddr, ConnectionUpgrade, Endpoint};
 use libp2p::tokio_codec::Framed;
 use std::collections::VecDeque;
@@ -78,6 +78,8 @@ impl<T> RegisteredProtocol<T> {
 
 /// Output of a `RegisteredProtocol` upgrade.
 pub struct RegisteredProtocolSubstream<TSubstream> {
+	/// If true, we are in the process of closing the sink.
+	is_closing: bool,
 	/// Buffer of packets to send.
 	send_queue: VecDeque<Bytes>,
 	/// If true, we should call `poll_complete` on the inner sink.
@@ -116,6 +118,19 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 		self.protocol_version
 	}
 
+	/// Starts a graceful shutdown process on this substream.
+	///
+	/// Note that "graceful" means that we sent a closing message. We don't wait for any
+	/// confirmation from the remote.
+	///
+	/// After calling this, the stream is guaranteed to finish soon-ish.
+	pub fn shutdown(&mut self) {
+		self.is_closing = true;
+		if let Some(task) = self.to_notify.take() {
+			task.notify();
+		}
+	}
+
 	/// Sends a message to the substream.
 	pub fn send_message(&mut self, Packet { id: packet_id, data }: Packet) {
 		if packet_id >= self.packet_count {
@@ -132,6 +147,29 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 			task.notify();
 		}
 	}
+
+	/// Turns raw data into a packet and checks whether it is valid.
+	fn data_to_packet(&self, mut data: BytesMut) -> Result<Packet, ()> {
+		// The `data` should be prefixed by the packet ID, therefore an empty packet is invalid.
+		if data.is_empty() {
+			debug!(target: "sub-libp2p", "ignoring incoming packet because it was empty");
+			return Err(());
+		}
+
+		let packet = {
+			let id = data[0];
+			let data = data.split_off(1);
+			Packet { id, data: data.freeze() }
+		};
+
+		if packet.id >= self.packet_count {
+			debug!(target: "sub-libp2p", "ignoring incoming packet because packet_id {} is \
+				too large", packet.id);
+			return Err(())
+		}
+
+		Ok(packet)
+	}
 }
 
 impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
@@ -141,7 +179,12 @@ where TSubstream: AsyncRead + AsyncWrite,
 	type Error = IoError;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-		// Flushing all the local data.
+		// If we are closing, close as soon as the Sink is closed.
+		if self.is_closing {
+			return Ok(self.inner.close()?.map(|()| None));
+		}
+
+		// Flushing the local queue.
 		while let Some(packet) = self.send_queue.pop_front() {
 			match self.inner.start_send(packet)? {
 				AsyncSink::NotReady(packet) => {
@@ -152,6 +195,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 			}
 		}
 
+		// Flushing if necessary.
 		if self.requires_poll_complete {
 			match self.inner.poll_complete()? {
 				Async::Ready(()) => self.requires_poll_complete = false,
@@ -159,32 +203,14 @@ where TSubstream: AsyncRead + AsyncWrite,
 			}
 		}
 
+		// Receiving incoming packets.
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
 		loop {
 			match self.inner.poll()? {
-				Async::Ready(Some(mut data)) => {
-					// The `data` should be prefixed by the packet ID, therefore an empty packet
-					// is invalid.
-					if data.is_empty() {
-						debug!(target: "sub-libp2p", "ignoring incoming packet because it \
-							was empty");
-						continue;
-					}
-
-					let packet = {
-						let id = data[0];
-						let data = data.split_off(1);
-						Packet { id, data: data.freeze() }
-					};
-
-					if packet.id >= self.packet_count {
-						debug!(target: "sub-libp2p", "ignoring incoming packet \
-							because packet_id {} is too large", packet.id);
-						continue;
-					}
-
-					return Ok(Async::Ready(Some(packet)))
-				},
+				Async::Ready(Some(data)) =>
+					if let Ok(packet) = self.data_to_packet(data) {
+						return Ok(Async::Ready(Some(packet)))
+					},
 				Async::Ready(None) =>
 					if !self.requires_poll_complete && self.send_queue.is_empty() {
 						return Ok(Async::Ready(None))
@@ -239,6 +265,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 		let framed = Framed::new(socket, UviBytes::default());
 
 		future::ok(RegisteredProtocolSubstream {
+			is_closing: false,
 			send_queue: VecDeque::new(),
 			requires_poll_complete: false,
 			inner: framed.fuse(),
