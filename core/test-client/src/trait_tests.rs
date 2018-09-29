@@ -41,7 +41,7 @@ pub fn test_leaves_for_backend<B>(backend: Arc<B>) where
 	//			  B2 -> C3
 	//		A1 -> D2
 
-	let client = ::new_with_backend(backend.clone());
+	let client = ::new_with_backend(backend.clone(), false);
 
 	let genesis_hash = client.info().unwrap().chain.genesis_hash;
 
@@ -153,7 +153,7 @@ pub fn test_blockchain_query_by_number_gets_canonical<B>(backend: Arc<B>) where
 	//		A1 -> B2 -> B3 -> B4
 	//			  B2 -> C3
 	//		A1 -> D2
-	let client = ::new_with_backend(backend);
+	let client = ::new_with_backend(backend, false);
 
 	// G -> A1
 	let a1 = client.new_block().unwrap().bake().unwrap();

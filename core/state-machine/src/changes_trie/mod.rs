@@ -54,10 +54,13 @@ use trie::{DBValue, trie_root};
 pub const NO_EXTRINSIC_INDEX: u32 = 0xffffffff;
 
 /// Changes trie storage. Provides access to trie roots and trie nodes.
-pub trait Storage<H: Hasher>: Send + Sync {
+pub trait RootsStorage<H: Hasher>: Send + Sync {
 	/// Get changes trie root for given block.
 	fn root(&self, block: u64) -> Result<Option<H::Out>, String>;
+}
 
+/// Changes trie storage. Provides access to trie roots and trie nodes.
+pub trait Storage<H: Hasher>: RootsStorage<H> {
 	/// Get a trie node.
 	fn get(&self, key: &H::Out) -> Result<Option<DBValue>, String>;
 }

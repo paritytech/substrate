@@ -38,9 +38,9 @@ pub trait TestClient {
 }
 
 impl<B, E> TestClient for Client<B, E, runtime::Block>
-    where
-        B: client::backend::Backend<runtime::Block, Blake2Hasher>,
-        E: client::CallExecutor<runtime::Block, Blake2Hasher>
+	where
+		B: client::backend::Backend<runtime::Block, Blake2Hasher>,
+		E: client::CallExecutor<runtime::Block, Blake2Hasher>
 {
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
 		let authorities: [ed25519::Pair; 3] = [

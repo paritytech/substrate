@@ -100,6 +100,18 @@ error_chain! {
 			display("Error decoding call result of {}", method)
 		}
 
+		/// Changes tries are not supported.
+		ChangesTriesNotSupported {
+			description("changes tries are not supported"),
+			display("Changes tries are not supported by the runtime"),
+		}
+
+		/// Key changes query has failed.
+		ChangesTrieAccessFailed(e: String) {
+			description("invalid changes proof"),
+			display("Failed to check changes proof: {}", e),
+		}
+
 		/// Last finalized block not parent of current.
 		NonSequentialFinalization(s: String) {
 			description("Did not finalize blocks in sequential order."),
