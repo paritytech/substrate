@@ -1,0 +1,25 @@
+name: subkey
+author: "Parity Team <admin@parity.io>"
+about: A substrate key utility
+subcommands:
+  - restore:
+      about: Gets a SS58 public key from the provided seed phrase
+      args:
+        - seed:
+            index: 1
+            required: true
+            help: 32 bytes long seed phrase used to restore the public key. If the provided seed is shorter than that, then
+                  it will be right-padded with 0x20 bytes (ASCII space). If the provided seed is longer than
+                  32 bytes then seed will be truncated.
+  - vanity:
+      about: Generate vanity address
+      args:
+        - pattern:
+            index: 1
+            help: Desired pattern
+        - number:
+            short: n
+            long: number
+            help: Number of keys to generate
+            takes_value: true
+            default_value: "1"
