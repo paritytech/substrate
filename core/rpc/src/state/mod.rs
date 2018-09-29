@@ -63,9 +63,9 @@ build_rpc_trait! {
 		#[rpc(name = "state_getStorageSize", alias = ["state_getStorageSizeAt", ])]
 		fn storage_size(&self, StorageKey, Trailing<Hash>) -> Result<Option<u64>>;
 
-		/// Returns the runtime metadata as JSON.
+		/// Returns the runtime metadata as an opaque blob.
 		#[rpc(name = "state_getMetadata")]
-		fn metadata(&self, Trailing<Hash>) -> Result<Vec<u8>>;
+		fn metadata(&self, Trailing<Hash>) -> Result<Bytes>;
 
 		/// Query historical storage entries (by key) starting from a block given as the second parameter.
 		///
@@ -149,9 +149,9 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
-	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<Vec<u8>> {
+	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<Bytes> {
 		let block = self.unwrap_or_best(block)?;
-		self.client.metadata(&BlockId::Hash(block)).map_err(Into::into)
+		self.client.metadata(&BlockId::Hash(block)).map(Bytes).map_err(Into::into)
 	}
 
 	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {
