@@ -141,6 +141,14 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	[stxs.len() as u8].encode()
 }
 
+/// Changes trie configuration (optionally) used in tests.
+pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
+	primitives::ChangesTrieConfiguration {
+		digest_interval: 4,
+		digest_levels: 2,
+	}
+}
+
 pub mod api {
 	use system;
 	impl_stubs!(

@@ -363,7 +363,7 @@ pub struct DbChangesTrieStorage<Block: BlockT> {
 	_phantom: ::std::marker::PhantomData<Block>,
 }
 
-impl<Block: BlockT> state_machine::ChangesTrieStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
+impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
 	fn root(&self, block: u64) -> Result<Option<H256>, String> {
 		Ok(read_db::<Block>(&*self.db, columns::HASH_LOOKUP, columns::HEADER, BlockId::Number(As::sa(block)))
 			.map_err(|err| format!("{}", err))
@@ -378,7 +378,9 @@ impl<Block: BlockT> state_machine::ChangesTrieStorage<Blake2Hasher> for DbChange
 				.and_then(DigestItem::as_changes_trie_root)
 				.map(|root| H256::from_slice(root.as_ref()))))
 	}
+}
 
+impl<Block: BlockT> state_machine::ChangesTrieStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
 		self.db.get(columns::CHANGES_TRIE, &key[..])
 			.map_err(|err| format!("{}", err))
@@ -750,7 +752,7 @@ mod tests {
 	use client::backend::BlockImportOperation as Op;
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
 	use runtime_primitives::testing::{Header, Block as RawBlock};
-	use state_machine::{TrieMut, TrieDBMut, ChangesTrieStorage};
+	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
 	use test_client;
 
 	type Block = RawBlock<u64>;

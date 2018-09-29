@@ -16,13 +16,15 @@
 
 //! Light client data fetcher. Fetches requested data from remote full nodes.
 
+use std::marker::PhantomData;
 use futures::IntoFuture;
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
-use state_machine::{CodeExecutor, read_proof_check};
-use std::marker::PhantomData;
+use primitives::ChangesTrieConfiguration;
+use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
+use state_machine::{CodeExecutor, ChangesTrieRootsStorage, read_proof_check,
+	key_changes_proof_check};
 
 use call_executor::CallResult;
 use cht;
@@ -34,7 +36,7 @@ use light::call_executor::check_execution_proof;
 pub struct RemoteCallRequest<Header: HeaderT> {
 	/// Call at state of given block.
 	pub block: Header::Hash,
-	/// Head of block at which call is perormed.
+	/// Header of block at which call is performed.
 	pub header: Header,
 	/// Method to call.
 	pub method: String,
@@ -60,8 +62,30 @@ pub struct RemoteHeaderRequest<Header: HeaderT> {
 pub struct RemoteReadRequest<Header: HeaderT> {
 	/// Read at state of given block.
 	pub block: Header::Hash,
-	/// Head of block at which read is perormed.
+	/// Header of block at which read is performed.
 	pub header: Header,
+	/// Storage key to read.
+	pub key: Vec<u8>,
+	/// Number of times to retry request. None means that default RETRY_COUNT is used.
+	pub retry_count: Option<usize>,
+}
+
+/// Remote key changes read request.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RemoteChangesRequest<Header: HeaderT> {
+	/// Changes trie configuration.
+	pub changes_trie_config: ChangesTrieConfiguration,
+	/// Query changes from range of blocks, starting (and including) with this hash...
+	pub first_block: (Header::Number, Header::Hash),
+	/// ...ending (and including) with this hash. Should come after first_block and
+	/// be the part of the same fork.
+	pub last_block: (Header::Number, Header::Hash),
+	/// Only use digests from blocks up to this hash. Should be last_block OR come
+	/// after this block and be the part of the same fork.
+	pub max_block: (Header::Number, Header::Hash),
+	// TODO: get rid of this + preserve change_trie_roots when replacing headers with CHT!!!
+	/// Changes trie roots for the range of blocks [first_block..max_block].
+	pub tries_roots: Vec<Header::Hash>,
 	/// Storage key to read.
 	pub key: Vec<u8>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -77,6 +101,8 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	type RemoteReadResult: IntoFuture<Item=Option<Vec<u8>>, Error=ClientError>;
 	/// Remote call result future.
 	type RemoteCallResult: IntoFuture<Item=CallResult, Error=ClientError>;
+	/// Remote changes result future.
+	type RemoteChangesResult: IntoFuture<Item=Vec<(NumberFor<Block>, u32)>, Error=ClientError>;
 
 	/// Fetch remote header.
 	fn remote_header(&self, request: RemoteHeaderRequest<Block::Header>) -> Self::RemoteHeaderResult;
@@ -84,6 +110,9 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 	fn remote_read(&self, request: RemoteReadRequest<Block::Header>) -> Self::RemoteReadResult;
 	/// Fetch remote call result.
 	fn remote_call(&self, request: RemoteCallRequest<Block::Header>) -> Self::RemoteCallResult;
+	/// Fetch remote changes ((block number, extrinsic index)) where given key has been changed
+	/// at a given blocks range.
+	fn remote_changes(&self, request: RemoteChangesRequest<Block::Header>) -> Self::RemoteChangesResult;
 }
 
 /// Light client remote data checker.
@@ -110,6 +139,13 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 		request: &RemoteCallRequest<Block::Header>,
 		remote_proof: Vec<Vec<u8>>
 	) -> ClientResult<CallResult>;
+	/// Check remote changes query proof.
+	fn check_changes_proof(
+		&self,
+		request: &RemoteChangesRequest<Block::Header>,
+		remote_max: NumberFor<Block>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<Vec<(NumberFor<Block>, u32)>>;
 }
 
 /// Remote data checker.
@@ -168,6 +204,60 @@ impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 	) -> ClientResult<CallResult> {
 		check_execution_proof::<_, _, H>(&self.executor, request, remote_proof)
 	}
+
+	fn check_changes_proof(
+		&self,
+		request: &RemoteChangesRequest<Block::Header>,
+		remote_max: NumberFor<Block>,
+		remote_proof: Vec<Vec<u8>>
+	) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
+		// since we need roots of all changes tries for the range begin..max
+		// => remote node can't use max block greater that one that we have passed
+		if remote_max > request.max_block.0 || remote_max < request.last_block.0 {
+			return Err(ClientErrorKind::ChangesTrieAccessFailed(format!(
+				"Invalid max_block used by the remote node: {}. Local: {}..{}..{}",
+				remote_max, request.first_block.0, request.last_block.0, request.max_block.0,
+			)).into());
+		}
+
+		let first_number = request.first_block.0.as_();
+		key_changes_proof_check::<_, H>(
+			&request.changes_trie_config,
+			&RootsStorage {
+				first: first_number,
+				roots: &request.tries_roots,
+			},
+			remote_proof,
+			first_number,
+			request.last_block.0.as_(),
+			remote_max.as_(),
+			&request.key)
+		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
+		.map_err(|err| ClientErrorKind::ChangesTrieAccessFailed(err).into())
+	}
+}
+
+/// A view of HashMap<Number, Hash> as a changes trie roots storage.
+struct RootsStorage<'a, Hash: 'a> {
+	first: u64,
+	roots: &'a [Hash],
+}
+
+impl<'a, H, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Hash>
+	where
+		H: Hasher,
+		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
+{
+	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {
+		Ok(block.checked_sub(self.first)
+			.and_then(|index| self.roots.get(index as usize))
+			.cloned()
+			.map(|root| {
+				let mut hasher_root: H::Out = Default::default();
+				hasher_root.as_mut().copy_from_slice(root.as_ref());
+				hasher_root
+			}))
+	}
 }
 
 #[cfg(test)]
@@ -175,9 +265,11 @@ pub mod tests {
 	use futures::future::{ok, err, FutureResult};
 	use parking_lot::Mutex;
 	use call_executor::CallResult;
+	use client::tests::prepare_client_with_key_changes;
 	use executor::{self, NativeExecutionDispatch};
 	use error::Error as ClientError;
-	use test_client::{self, TestClient, runtime::{Hash, Block, Header}};
+	use test_client::{self, TestClient};
+	use test_client::runtime::{self, Hash, Block, Header};
 	use test_client::client::BlockOrigin;
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
@@ -194,6 +286,7 @@ pub mod tests {
 		type RemoteHeaderResult = FutureResult<Header, ClientError>;
 		type RemoteReadResult = FutureResult<Option<Vec<u8>>, ClientError>;
 		type RemoteCallResult = FutureResult<CallResult, ClientError>;
+		type RemoteChangesResult = FutureResult<Vec<(NumberFor<Block>, u32)>, ClientError>;
 
 		fn remote_header(&self, _request: RemoteHeaderRequest<Header>) -> Self::RemoteHeaderResult {
 			err("Not implemented on test node".into())
@@ -205,6 +298,10 @@ pub mod tests {
 
 		fn remote_call(&self, _request: RemoteCallRequest<Header>) -> Self::RemoteCallResult {
 			ok((*self.lock()).clone())
+		}
+
+		fn remote_changes(&self, _request: RemoteChangesRequest<Header>) -> Self::RemoteChangesResult {
+			err("Not implemented on test node".into())
 		}
 	}
 
@@ -231,7 +328,7 @@ pub mod tests {
 			None,
 			None,
 			::backend::NewBlockState::Final,
-		);
+		).unwrap();
 		let local_executor = test_client::LocalExecutor::new();
 		let local_checker = LightDataChecker::new(local_executor);
 		(local_checker, remote_block_header, remote_read_proof, authorities_len)
@@ -306,5 +403,81 @@ pub mod tests {
 			block: 1,
 			retry_count: None,
 		}, Some(remote_block_header.clone()), remote_header_proof).is_err());
+	}
+
+	#[test]
+	fn changes_proof_is_generated_and_checked() {
+		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
+		let local_checker = LightDataChecker::<_, Blake2Hasher>::new(
+			test_client::LocalExecutor::new());
+		let local_checker = &local_checker as &FetchChecker<Block>;
+		let max = remote_client.info().unwrap().chain.best_number;
+		let max_hash = remote_client.info().unwrap().chain.best_hash;
+
+		for (index, (begin, end, key, expected_result)) in test_cases.into_iter().enumerate() {
+			let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();
+			let end_hash = remote_client.block_hash(end).unwrap().unwrap();
+
+			// 'fetch' changes proof from remote node
+			let (remote_max, remote_proof) = remote_client.key_changes_proof(
+				begin_hash, end_hash, max_hash, &key
+			).unwrap();
+
+			// check proof on local client
+			let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
+			let request = RemoteChangesRequest::<Header> {
+				changes_trie_config: runtime::changes_trie_config(),
+				first_block: (begin, begin_hash),
+				last_block: (end, end_hash),
+				max_block: (max, max_hash),
+				tries_roots: local_roots_range,
+				key: key,
+				retry_count: None,
+			};
+			let local_result = local_checker.check_changes_proof(
+				&request, remote_max, remote_proof).unwrap();
+
+			// ..and ensure that result is the same as on remote node
+			match local_result == expected_result {
+				true => (),
+				false => panic!(format!("Failed test {}: local = {:?}, expected = {:?}",
+					index, local_result, expected_result)),
+			}
+		}
+	}
+
+	#[test]
+	fn check_changes_proof_fails_if_proof_is_wrong() {
+		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
+		let local_checker = LightDataChecker::<_, Blake2Hasher>::new(
+			test_client::LocalExecutor::new());
+		let local_checker = &local_checker as &FetchChecker<Block>;
+		let max = remote_client.info().unwrap().chain.best_number;
+		let max_hash = remote_client.info().unwrap().chain.best_hash;
+
+		let (begin, end, key, _) = test_cases[0].clone();
+		let begin_hash = remote_client.block_hash(begin).unwrap().unwrap();
+		let end_hash = remote_client.block_hash(end).unwrap().unwrap();
+
+		// 'fetch' changes proof from remote node
+		let (remote_max, mut remote_proof) = remote_client.key_changes_proof(
+			begin_hash, end_hash, max_hash, &key).unwrap();
+		let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
+		let request = RemoteChangesRequest::<Header> {
+			changes_trie_config: runtime::changes_trie_config(),
+			first_block: (begin, begin_hash),
+			last_block: (end, end_hash),
+			max_block: (max, max_hash),
+			tries_roots: local_roots_range.clone(),
+			key: key,
+			retry_count: None,
+		};
+
+		// check proof on local client using max from the future
+		assert!(local_checker.check_changes_proof(&request, remote_max + 1, remote_proof.clone()).is_err());
+
+		// check proof on local client using broken proof
+		remote_proof = local_roots_range.into_iter().map(|v| v.to_vec()).collect();
+		assert!(local_checker.check_changes_proof(&request, remote_max, remote_proof).is_err());
 	}
 }

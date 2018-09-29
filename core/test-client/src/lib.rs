@@ -68,29 +68,37 @@ pub type Executor = client::LocalCallExecutor<
 
 /// Creates new client instance used for tests.
 pub fn new() -> client::Client<Backend, Executor, runtime::Block> {
-	new_with_backend(Arc::new(Backend::new()))
+	new_with_backend(Arc::new(Backend::new()), false)
+}
+
+/// Creates new test client instance that suports changes trie creation.
+pub fn new_with_changes_trie() -> client::Client<Backend, Executor, runtime::Block> {
+	new_with_backend(Arc::new(Backend::new()), true)
 }
 
 /// Creates new client instance used for tests with an explicitely provided backend.
 /// This is useful for testing backend implementations.
-pub fn new_with_backend<B>(backend: Arc<B>) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block>
+pub fn new_with_backend<B>(
+	backend: Arc<B>,
+	support_changes_trie: bool
+) -> client::Client<B, client::LocalCallExecutor<B, executor::NativeExecutor<LocalExecutor>>, runtime::Block>
 	where
 		B: backend::LocalBackend<runtime::Block, Blake2Hasher>,
 {
 	let executor = NativeExecutor::new();
-	client::new_with_backend(backend, executor, genesis_storage()).unwrap()
+	client::new_with_backend(backend, executor, genesis_storage(support_changes_trie)).unwrap()
 }
 
-fn genesis_config() -> GenesisConfig {
-	GenesisConfig::new_simple(vec![
+fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
+	GenesisConfig::new(support_changes_trie, vec![
 		Keyring::Alice.to_raw_public().into(),
 		Keyring::Bob.to_raw_public().into(),
 		Keyring::Charlie.to_raw_public().into(),
 	], 1000)
 }
 
-fn genesis_storage() -> StorageMap {
-	let mut storage = genesis_config().genesis_map();
+fn genesis_storage(support_changes_trie: bool) -> StorageMap {
+	let mut storage = genesis_config(support_changes_trie).genesis_map();
 	let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
 	storage.extend(additional_storage_with_genesis(&block));
 	storage

@@ -56,6 +56,7 @@ pub use testing::TestExternalities;
 pub use ext::Ext;
 pub use backend::Backend;
 pub use changes_trie::{Storage as ChangesTrieStorage,
+	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
 	key_changes, key_changes_proof, key_changes_proof_check};
 pub use overlayed_changes::OverlayedChanges;
@@ -267,12 +268,15 @@ where
 	// proof-of-execution on light clients. And the proof is recorded by the backend which
 	// is created after OverlayedChanges
 
-	let changes_trie_config = try_read_overlay_value(
-		overlay,
-		backend,
-		well_known_keys::CHANGES_TRIE_CONFIG
-	)?;
-	set_changes_trie_config(overlay, changes_trie_config)?;
+	let init_overlay = |overlay: &mut OverlayedChanges, final_check: bool| {
+		let changes_trie_config = try_read_overlay_value(
+			overlay,
+			backend,
+			well_known_keys::CHANGES_TRIE_CONFIG
+		)?;
+		set_changes_trie_config(overlay, changes_trie_config, final_check)
+	};
+	init_overlay(overlay, false)?;
 
 	let result = {
 		let mut orig_prospective = overlay.prospective.clone();
@@ -333,6 +337,11 @@ where
 		};
 		result.map(move |out| (out, storage_delta, changes_delta))
 	};
+
+	// ensure that changes trie config has not been changed
+	if result.is_ok() {
+		init_overlay(overlay, true)?;
+	}
 
 	result.map_err(|e| Box::new(e) as _)
 }
@@ -429,18 +438,22 @@ where
 
 /// Sets overlayed changes' changes trie configuration. Returns error if configuration
 /// differs from previous OR config decode has failed.
-pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>) -> Result<(), Box<Error>> {
+pub(crate) fn set_changes_trie_config(overlay: &mut OverlayedChanges, config: Option<Vec<u8>>, final_check: bool) -> Result<(), Box<Error>> {
 	let config = match config {
 		Some(v) => Some(changes_trie::Configuration::decode(&mut &v[..])
 			.ok_or_else(|| Box::new("Failed to decode changes trie configuration".to_owned()) as Box<Error>)?),
 		None => None,
 	};
+
+	if final_check && overlay.changes_trie_config.is_some() != config.is_some() {
+		return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
+	}
+
 	if let Some(config) = config {
 		if !overlay.set_changes_trie_config(config) {
 			return Err(Box::new("Changes trie configuration change is not supported".to_owned()));
 		}
 	}
-
 	Ok(())
 }
 
@@ -462,13 +475,18 @@ where
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
+	use codec::Encode;
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
-	use super::changes_trie::InMemoryStorage as InMemoryChangesTrieStorage;
+	use super::changes_trie::{
+		InMemoryStorage as InMemoryChangesTrieStorage,
+		Configuration as ChangesTrieConfig,
+	};
 	use primitives::{Blake2Hasher};
 
 	struct DummyCodeExecutor {
+		change_changes_trie_config: bool,
 		native_available: bool,
 		native_succeeds: bool,
 		fallback_succeeds: bool,
@@ -486,6 +504,13 @@ mod tests {
 			_data: &[u8],
 			use_native: bool
 		) -> (Result<Vec<u8>, Self::Error>, bool) {
+			if self.change_changes_trie_config {
+				ext.place_storage(well_known_keys::CHANGES_TRIE_CONFIG.to_vec(), Some(ChangesTrieConfig {
+					digest_interval: 777,
+					digest_levels: 333,
+				}.encode()));
+			}
+
 			let using_native = use_native && self.native_available;
 			match (using_native, self.native_succeeds, self.fallback_succeeds) {
 				(true, true, _) | (false, _, true) =>
@@ -510,6 +535,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
 			&DummyCodeExecutor {
+				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: true,
@@ -528,6 +554,7 @@ mod tests {
 			Some(&InMemoryChangesTrieStorage::new()),
 			&mut Default::default(),
 			&DummyCodeExecutor {
+				change_changes_trie_config: false,
 				native_available: true,
 				native_succeeds: true,
 				fallback_succeeds: false,
@@ -546,6 +573,7 @@ mod tests {
 	#[test]
 	fn prove_execution_and_proof_check_works() {
 		let executor = DummyCodeExecutor {
+			change_changes_trie_config: false,
 			native_available: true,
 			native_succeeds: true,
 			fallback_succeeds: true,
@@ -620,5 +648,23 @@ mod tests {
  		// check that results are correct
 		assert_eq!(local_result1, Some(vec![24]));
 		assert_eq!(local_result2, false);
+	}
+
+	#[test]
+	fn cannot_change_changes_trie_config() {
+		assert!(execute(
+			&trie_backend::tests::test_trie(),
+			Some(&InMemoryChangesTrieStorage::new()),
+			&mut Default::default(),
+			&DummyCodeExecutor {
+				change_changes_trie_config: true,
+				native_available: false,
+				native_succeeds: true,
+				fallback_succeeds: true,
+			},
+			"test",
+			&[],
+			ExecutionStrategy::NativeWhenPossible
+		).is_err());
 	}
 }
