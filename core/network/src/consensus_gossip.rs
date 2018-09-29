@@ -216,9 +216,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 				false
 			}
 		});
-		if self.messages.len() != before {
-			trace!(target:"gossip", "Cleaned up {} stale messages", before - self.messages.len());
-		}
+		trace!(target:"gossip", "Cleaned up {} stale messages, {} left", before - self.messages.len(), self.messages.len());
 		for (_, ref mut peer) in self.peers.iter_mut() {
 			peer.known_messages.retain(|h| hashes.contains(h));
 		}
