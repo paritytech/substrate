@@ -148,6 +148,7 @@ impl Memory {
 
 pub struct EnvironmentDefinitionBuilder<T> {
 	env_def: sandbox_primitives::EnvironmentDefinition,
+	retained_memories: Vec<Memory>,
 	_marker: marker::PhantomData<T>,
 }
 
@@ -157,6 +158,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 			env_def: sandbox_primitives::EnvironmentDefinition {
 				entries: Vec::new(),
 			},
+			retained_memories: Vec::new(),
 			_marker: marker::PhantomData::<T>,
 		}
 	}
@@ -192,6 +194,9 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 		N1: Into<Vec<u8>>,
 		N2: Into<Vec<u8>>,
 	{
+		// We need to retain memory to keep it alive while the EnvironmentDefinitionBuilder alive.
+		self.retained_memories.push(mem.clone());
+
 		let mem = sandbox_primitives::ExternEntity::Memory(mem.handle.memory_idx as u32);
 		self.add_entry(module, field, mem);
 	}
@@ -199,6 +204,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 
 pub struct Instance<T> {
 	instance_idx: u32,
+	_retained_memories: Vec<Memory>,
 	_marker: marker::PhantomData<T>,
 }
 
@@ -265,8 +271,11 @@ impl<T> Instance<T> {
 			sandbox_primitives::ERR_EXECUTION => return Err(Error::Execution),
 			instance_idx => instance_idx,
 		};
+		// We need to retain memories to keep them alive while the Instance is alive.
+		let retained_memories = env_def_builder.retained_memories.clone();
 		Ok(Instance {
 			instance_idx,
+			_retained_memories: retained_memories,
 			_marker: marker::PhantomData::<T>,
 		})
 	}
