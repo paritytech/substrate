@@ -243,7 +243,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 
 		// changes trie configuration should never change => we can read it in advance
-		let changes_trie_config = backend.state_at(BlockId::Number(Zero::zero()))?
+		let changes_trie_config = backend.state_at(BlockId::Number(backend.blockchain().info()?.best_number))?
 			.storage(well_known_keys::CHANGES_TRIE_CONFIG)
 			.map_err(|e| error::Error::from_state(Box::new(e)))?
 			.and_then(|c| Decode::decode(&mut &*c));
