@@ -249,7 +249,7 @@ where
 	const NUM_NODES: u32 = 20;
 	const NUM_BLOCKS: u64 = 200;
 	let temp = TempDir::new("substrate-conensus-test").expect("Error creating test dir");
-	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES/2, 0, authorities, 30600);
+	let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES / 2, 0, authorities, 30600);
 	info!("Checking consensus");
 	let first_address = network.authority_nodes[0].1.network().node_id().unwrap();
 	for (_, service) in network.full_nodes.iter() {
@@ -259,10 +259,10 @@ where
 		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 	}
 	network.run_until_all_full(|_index, service| {
-		service.client().info().unwrap().chain.finalized_number >= As::sa(NUM_BLOCKS/2)
+		service.client().info().unwrap().chain.finalized_number >= As::sa(NUM_BLOCKS / 2)
 	});
 	info!("Adding more peers");
-	network.insert_nodes(&temp, NUM_NODES/2, 0, vec![]);
+	network.insert_nodes(&temp, NUM_NODES / 2, 0, vec![]);
 	for (_, service) in network.full_nodes.iter() {
 		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 	}
