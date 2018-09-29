@@ -206,9 +206,8 @@ where TSubstream: AsyncRead + AsyncWrite,
 
 		// Flushing if necessary.
 		if self.requires_poll_complete {
-			match self.inner.poll_complete()? {
-				Async::Ready(()) => self.requires_poll_complete = false,
-				Async::NotReady => (),
+			if let Async::Ready(()) = self.inner.poll_complete()? {
+				self.requires_poll_complete = false;
 			}
 		}
 
