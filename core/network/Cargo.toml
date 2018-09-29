@@ -15,6 +15,7 @@ bitflags = "1.0"
 futures = "0.1.17"
 linked-hash-map = "0.5"
 rustc-hex = "1.0"
+rand = "0.5"
 substrate-primitives = { path = "../../core/primitives" }
 substrate-client = { path = "../../core/client" }
 sr-primitives = { path = "../../core/sr-primitives" }
