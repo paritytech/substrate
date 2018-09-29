@@ -105,6 +105,7 @@ impl Specialization<Block> for Protocol {
 	}
 
 	fn maintain_peers(&mut self, _ctx: &mut Context<Block>) {
+		self.consensus_gossip.collect_garbage(None);
 	}
 
 	fn on_block_imported(&mut self, _ctx: &mut Context<Block>, _hash: Hash, _header: &Header) {
