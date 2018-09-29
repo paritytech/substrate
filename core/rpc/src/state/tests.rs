@@ -43,7 +43,7 @@ fn should_call_contract() {
 	let client = State::new(client, core.executor());
 
 	assert_matches!(
-		client.call("balanceOf".into(), vec![1,2,3], Some(genesis_hash).into()),
+		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
 		Err(Error(ErrorKind::Client(client::error::ErrorKind::Execution(_)), _))
 	)
 }
