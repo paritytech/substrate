@@ -21,7 +21,7 @@ use vm;
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
-use runtime_support::{StorageMap, StorageValue};
+use runtime_support::StorageValue;
 use balances::{self, EnsureAccountLiquid};
 
 // TODO: Add logs
