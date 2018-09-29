@@ -20,7 +20,7 @@
 use std::collections::{HashMap, HashSet};
 use futures::sync::mpsc;
 use std::time::{Instant, Duration};
-use rand;
+use rand::{self, Rng};
 use network_libp2p::NodeIndex;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
@@ -105,13 +105,28 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	fn propagate(&mut self, protocol: &mut Context<B>, message: message::Message<B>, hash: B::Hash) {
-		let len = self.peers.len() as f64;
+		let mut non_authorities: Vec<_> = self.peers.iter()
+			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&hash) { Some(*id) } else { None })
+			.collect();
+
+		rand::thread_rng().shuffle(&mut non_authorities);
+		let non_authorities: HashSet<_> = if non_authorities.is_empty() {
+			HashSet::new()
+		} else {
+			non_authorities[0..non_authorities.len().min(((non_authorities.len() as f64).sqrt() as usize).max(3))].iter().collect()
+		};
+
 		for (id, ref mut peer) in self.peers.iter_mut() {
-			if peer.is_authority || rand::random::<f64>() < (len.sqrt() / len) {
+			if peer.is_authority {
 				if peer.known_messages.insert(hash.clone()) {
-					trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
+					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
 					protocol.send_message(*id, message.clone());
 				}
+			}
+			else if non_authorities.contains(&id) {
+				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
+				peer.known_messages.insert(hash.clone());
+				protocol.send_message(*id, message.clone());
 			}
 		}
 	}
