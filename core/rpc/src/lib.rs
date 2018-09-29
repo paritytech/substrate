@@ -30,7 +30,6 @@ extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
 extern crate sr_version as runtime_version;
 extern crate tokio;
-extern crate serde_json;
 
 #[macro_use]
 extern crate error_chain;
