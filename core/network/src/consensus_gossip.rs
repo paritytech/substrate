@@ -123,12 +123,12 @@ where
 			if peer.is_authority {
 				if peer.known_messages.insert((topic.clone(), message_hash.clone())) {
 					let message = get_message();
-					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
+					debug!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
 					protocol.send_message(*id, Message::Consensus(topic, message));
 				}
 			} else if non_authorities.contains(&id) {
 				let message = get_message();
-				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
+				debug!(target:"gossip", "Propagating to {}: {:?}", id, message);
 				peer.known_messages.insert((topic.clone(), message_hash.clone()));
 				protocol.send_message(*id, Message::Consensus(topic, message));
 			}
@@ -220,12 +220,24 @@ where
 
 
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
+<<<<<<< HEAD
 			use std::collections::hash_map::Entry;
 			peer.known_messages.insert((topic, message_hash));
 			if let Entry::Occupied(mut entry) = self.live_message_sinks.entry(topic) {
 				debug!(target: "gossip", "Pushing consensus message to sink for {}.", topic);
 				if let Err(e) = entry.get().unbounded_send(message.clone()) {
 					trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
+=======
+			peer.known_messages.insert(hash);
+			if let Some((sink, parent_hash)) = self.message_sink.take() {
+				if parent == parent_hash {
+					debug!(target: "gossip", "Pushing relevant consensus message to sink.");
+					if let Err(e) = sink.unbounded_send(message.clone()) {
+						trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
+					} else {
+						debug!(target: "gossip", "Pushed message into sink: {}", message.clone());
+					}
+>>>>>>> Upgrade trace consensus gossip to debug and debug received proposal msgs
 				}
 
 				if entry.get().is_closed() {

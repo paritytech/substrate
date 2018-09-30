@@ -394,6 +394,12 @@ impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 			}
 		};
 
+		debug!(target: "bft", "Evaluating block proposal [number: {}; hash: {}; parent_hash: {}]",
+			unchecked_proposal.header().number(),
+			<<C as AuthoringApi>::Block as BlockT>::Hash::from(unchecked_proposal.header().hash()),
+			unchecked_proposal.header().parent_hash()
+		);
+
 		let vote_delays = {
 			// the duration until the given timestamp is current
 			let proposed_timestamp = ::std::cmp::max(self.minimum_timestamp, proposed_timestamp.unwrap_or(0));
