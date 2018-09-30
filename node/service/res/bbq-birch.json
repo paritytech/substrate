@@ -1,7 +1,6 @@
 {
 	"name": "BBQ Birch",
 	"id": "bbq-birch",
-	"bootNodes": [],
 	"telemetryUrl": "wss://telemetry.polkadot.io/submit/",
 	"protocolId": null,
 	"bootNodes": [
