@@ -120,9 +120,21 @@ fn execute_sandboxed(code: &[u8], args: &[sandbox::TypedValue]) -> Result<sandbo
 
 	let mut state = State { counter: 0 };
 
-	let mut env_builder = sandbox::EnvironmentDefinitionBuilder::new();
-	env_builder.add_host_func("env", "assert", env_assert);
-	env_builder.add_host_func("env", "inc_counter", env_inc_counter);
+	let env_builder = {
+		let mut env_builder = sandbox::EnvironmentDefinitionBuilder::new();
+		env_builder.add_host_func("env", "assert", env_assert);
+		env_builder.add_host_func("env", "inc_counter", env_inc_counter);
+		let memory = match sandbox::Memory::new(1, Some(16)) {
+			Ok(m) => m,
+			Err(_) => unreachable!("
+				Memory::new() can return Err only if parameters are borked; \
+				We passing params here explicitly and they're correct; \
+				Memory::new() can't return a Error qed"
+			),
+		};
+		env_builder.add_memory("env", "memory", memory.clone());
+		env_builder
+	};
 
 	let mut instance = sandbox::Instance::new(code, &env_builder, &mut state)?;
 	let result = instance.invoke(b"call", args, &mut state);
