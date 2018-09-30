@@ -19,6 +19,7 @@ node-consensus = { path = "../consensus" }
 node-network = { path = "../network" }
 node-transaction-pool = { path = "../transaction-pool" }
 sr-io = { path = "../../core/sr-io" }
+sr-primitives = { path = "../../core/sr-primitives" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }
