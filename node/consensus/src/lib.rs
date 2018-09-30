@@ -404,6 +404,12 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 			}
 		};
 
+		debug!(target: "bft", "Evaluating block proposal [number: {}; hash: {}; parent_hash: {}]",
+			proposal.header().number(),
+			<<C as AuthoringApi>::Block as BlockT>::Hash::from(proposal.header().hash()),
+			proposal.header().parent_hash()
+		);
+
 		let vote_delays = {
 			let now = Instant::now();
 

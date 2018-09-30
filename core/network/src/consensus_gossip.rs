@@ -119,12 +119,12 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.is_authority {
 				if peer.known_messages.insert(hash.clone()) {
-					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
+					debug!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
 					protocol.send_message(*id, message.clone());
 				}
 			}
 			else if non_authorities.contains(&id) {
-				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
+				debug!(target:"gossip", "Propagating to {}: {:?}", id, message);
 				peer.known_messages.insert(hash.clone());
 				protocol.send_message(*id, message.clone());
 			}
@@ -275,6 +275,8 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 					debug!(target: "gossip", "Pushing relevant consensus message to sink.");
 					if let Err(e) = sink.unbounded_send(message.clone()) {
 						trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
+					} else {
+						debug!(target: "gossip", "Pushed message into sink: {}", message.clone());
 					}
 				}
 
