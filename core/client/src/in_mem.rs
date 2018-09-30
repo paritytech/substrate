@@ -417,6 +417,7 @@ where
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
 	changes_trie_storage: InMemoryChangesTrieStorage<H>,
 	blockchain: Blockchain<Block>,
+	aux: RwLock<HashMap<Vec<u8>, Vec<u8>>>,
 }
 
 impl<Block, H> Backend<Block, H>
@@ -432,6 +433,7 @@ where
 			states: RwLock::new(HashMap::new()),
 			changes_trie_storage: InMemoryChangesTrieStorage::new(),
 			blockchain: Blockchain::new(),
+			aux: RwLock::new(HashMap::new()),
 		}
 	}
 }
@@ -513,6 +515,21 @@ where
 
 	fn revert(&self, _n: NumberFor<Block>) -> error::Result<NumberFor<Block>> {
 		Ok(As::sa(0))
+	}
+
+	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a (&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>(&self, insert: I, delete: D) -> error::Result<()> {
+		let mut aux = self.aux.write();
+		for (k, v) in insert {
+			aux.insert(k.to_vec(), v.to_vec());
+		}
+		for k in delete {
+			aux.remove(*k);
+		}
+		Ok(())
+	}
+
+	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>> {
+		Ok(self.aux.read().get(key).cloned())
 	}
 }
 
