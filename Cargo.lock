@@ -1611,6 +1611,7 @@ dependencies = [
  "sr-primitives 0.1.0",
  "srml-balances 0.1.0",
  "srml-consensus 0.1.0",
+ "srml-contract 0.1.0",
  "srml-session 0.1.0",
  "srml-staking 0.1.0",
  "srml-support 0.1.0",
@@ -1623,6 +1624,7 @@ dependencies = [
  "substrate-state-machine 0.1.0",
  "substrate-trie 0.4.0",
  "trie-root 0.9.0 (git+https://github.com/paritytech/trie)",
+ "wabt 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

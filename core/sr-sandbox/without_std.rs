@@ -16,6 +16,7 @@
 
 use rstd::prelude::*;
 use rstd::{slice, marker, mem};
+use rstd::rc::Rc;
 use codec::{Decode, Encode};
 use primitives::sandbox as sandbox_primitives;
 use super::{Error, TypedValue, ReturnValue, HostFuncType};
@@ -89,9 +90,23 @@ mod ffi {
 	}
 }
 
+struct MemoryHandle {
+	memory_idx: u32,
+}
+
+impl Drop for MemoryHandle {
+	fn drop(&mut self) {
+		unsafe {
+			ffi::ext_sandbox_memory_teardown(self.memory_idx);
+		}
+	}
+}
+
 #[derive(Clone)]
 pub struct Memory {
-	memory_idx: u32,
+	// Handle to memory instance is wrapped to add reference-counting semantics
+	// to `Memory`.
+	handle: Rc<MemoryHandle>,
 }
 
 impl Memory {
@@ -106,12 +121,14 @@ impl Memory {
 		};
 		match result {
 			sandbox_primitives::ERR_MODULE => Err(Error::Module),
-			memory_idx => Ok(Memory { memory_idx }),
+			memory_idx => Ok(Memory {
+				handle: Rc::new(MemoryHandle { memory_idx, }),
+			}),
 		}
 	}
 
 	pub fn get(&self, offset: u32, buf: &mut [u8]) -> Result<(), Error> {
-		let result = unsafe { ffi::ext_sandbox_memory_get(self.memory_idx, offset, buf.as_mut_ptr(), buf.len()) };
+		let result = unsafe { ffi::ext_sandbox_memory_get(self.handle.memory_idx, offset, buf.as_mut_ptr(), buf.len()) };
 		match result {
 			sandbox_primitives::ERR_OK => Ok(()),
 			sandbox_primitives::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
@@ -120,7 +137,7 @@ impl Memory {
 	}
 
 	pub fn set(&self, offset: u32, val: &[u8]) -> Result<(), Error> {
-		let result = unsafe { ffi::ext_sandbox_memory_set(self.memory_idx, offset, val.as_ptr(), val.len()) };
+		let result = unsafe { ffi::ext_sandbox_memory_set(self.handle.memory_idx, offset, val.as_ptr(), val.len()) };
 		match result {
 			sandbox_primitives::ERR_OK => Ok(()),
 			sandbox_primitives::ERR_OUT_OF_BOUNDS => Err(Error::OutOfBounds),
@@ -129,16 +146,9 @@ impl Memory {
 	}
 }
 
-impl Drop for Memory {
-	fn drop(&mut self) {
-		unsafe {
-			ffi::ext_sandbox_memory_teardown(self.memory_idx);
-		}
-	}
-}
-
 pub struct EnvironmentDefinitionBuilder<T> {
 	env_def: sandbox_primitives::EnvironmentDefinition,
+	retained_memories: Vec<Memory>,
 	_marker: marker::PhantomData<T>,
 }
 
@@ -148,6 +158,7 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 			env_def: sandbox_primitives::EnvironmentDefinition {
 				entries: Vec::new(),
 			},
+			retained_memories: Vec::new(),
 			_marker: marker::PhantomData::<T>,
 		}
 	}
@@ -183,13 +194,17 @@ impl<T> EnvironmentDefinitionBuilder<T> {
 		N1: Into<Vec<u8>>,
 		N2: Into<Vec<u8>>,
 	{
-		let mem = sandbox_primitives::ExternEntity::Memory(mem.memory_idx as u32);
+		// We need to retain memory to keep it alive while the EnvironmentDefinitionBuilder alive.
+		self.retained_memories.push(mem.clone());
+
+		let mem = sandbox_primitives::ExternEntity::Memory(mem.handle.memory_idx as u32);
 		self.add_entry(module, field, mem);
 	}
 }
 
 pub struct Instance<T> {
 	instance_idx: u32,
+	_retained_memories: Vec<Memory>,
 	_marker: marker::PhantomData<T>,
 }
 
@@ -256,8 +271,11 @@ impl<T> Instance<T> {
 			sandbox_primitives::ERR_EXECUTION => return Err(Error::Execution),
 			instance_idx => instance_idx,
 		};
+		// We need to retain memories to keep them alive while the Instance is alive.
+		let retained_memories = env_def_builder.retained_memories.clone();
 		Ok(Instance {
 			instance_idx,
+			_retained_memories: retained_memories,
 			_marker: marker::PhantomData::<T>,
 		})
 	}
