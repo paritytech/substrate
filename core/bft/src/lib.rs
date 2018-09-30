@@ -323,7 +323,7 @@ impl<B: Block, P: Proposer<B>> rhododendron::Context for BftInstance<B, P>
 		debug!(target: "bft", "Voting authorities: {:?}",
 			collect_pubkeys(accumulator.voters()));
 		debug!(target: "bft", "Round {} should end in at most {} seconds from now", next_round, round_timeout.as_secs());
-
+		debug!(target: "bfg", "Proposer: {}", self.proposer);
 		self.update_round_cache(next_round);
 
 		if let AdvanceRoundReason::Timeout = reason {
