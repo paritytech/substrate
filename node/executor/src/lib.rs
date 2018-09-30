@@ -31,12 +31,14 @@ extern crate substrate_primitives as primitives;
 #[cfg(test)] extern crate srml_consensus as consensus;
 #[cfg(test)] extern crate srml_timestamp as timestamp;
 #[cfg(test)] extern crate srml_treasury as treasury;
+#[cfg(test)] extern crate srml_contract as contract;
 #[cfg(test)] extern crate node_primitives;
 #[cfg(test)] extern crate parity_codec as codec;
 #[cfg(test)] extern crate sr_io as runtime_io;
 #[cfg(test)] extern crate substrate_trie as trie;
 #[cfg(test)] extern crate substrate_state_machine as state_machine;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
+#[cfg(test)] extern crate wabt;
 
 pub use substrate_executor::NativeExecutor;
 native_executor_instance!(pub Executor, node_runtime::api::dispatch, node_runtime::native_version, include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm"));
@@ -55,11 +57,13 @@ mod tests {
 	use node_primitives::{Hash, BlockNumber, AccountId};
 	use runtime_primitives::traits::{Header as HeaderT, Digest as DigestT};
 	use runtime_primitives::{generic, generic::Era, ApplyOutcome, ApplyError, ApplyResult, Perbill};
-	use {balances, staking, session, system, consensus, timestamp, treasury};
+	use {balances, staking, session, system, consensus, timestamp, treasury, contract};
+	use contract::ContractAddressFor;
 	use system::{EventRecord, Phase};
 	use node_runtime::{Header, Block, UncheckedExtrinsic, CheckedExtrinsic, Call, Runtime, Balances,
 		BuildStorage, GenesisConfig, BalancesConfig, SessionConfig, StakingConfig, System,
 		SystemConfig, Event, Log};
+	use wabt;
 
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
@@ -78,6 +82,10 @@ mod tests {
 
 	fn bob() -> AccountId {
 		AccountId::from(Keyring::Bob.to_raw_public())
+	}
+
+	fn charlie() -> AccountId {
+		AccountId::from(Keyring::Charlie.to_raw_public())
 	}
 
 	fn sign(xt: CheckedExtrinsic) -> UncheckedExtrinsic {
@@ -219,7 +227,10 @@ mod tests {
 				..Default::default()
 			}),
 			balances: Some(BalancesConfig {
-				balances: vec![(alice(), 111)],
+				balances: vec![
+					(alice(), 111),
+					(charlie(), 100_000_000),
+				],
 				transaction_base_fee: 1,
 				transaction_byte_fee: 0,
 				existential_deposit: 0,
@@ -286,9 +297,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("60548dd56fae6f47e3c9fde94e3612f1386c88791799c44239b473b6ecfeae2b").into()
+				hex!("9a7fe864529934ebb5915a855b0270f729803510bc12763c5c6fb87d3e231c17").into()
 			} else {
-				hex!("4bdc21d39b43830969d61b451c7e6c4c81270e824b1c0bc92b52f9994745403a").into()
+				hex!("ee335055cb0c93b108ceed0431129d93b11796ab88d89efe81a29e8c6a1f270f").into()
 			},
 			if support_changes_trie {
 				Some(hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into())
@@ -312,7 +323,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("aad6a6c83ede7c2da40700cd4754aebd9b50ab07e9580899581e1d5ab9fc4095").into(),
+			hex!("1db5d091b6efdf41dfd5294aa7a3ceb616fc1e0b95d3ee614f4d4af16e841195").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -335,7 +346,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("9b508cc4088b08eb72edea6ae9b2873fe6d75a1292d25bf18d93b89f19e39e39").into(),
+			hex!("6408d8740fbd31b234032678e9f91608fcccf83b0f900c63d52390dcbcd601a0").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -366,7 +377,7 @@ mod tests {
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
-					event: Event::balances(balances::RawEvent::NewAccount(bob(), 1, balances::NewAccountOutcome::NoHint))
+					event: Event::balances(balances::RawEvent::NewAccount(bob(), 2, balances::NewAccountOutcome::NoHint))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(1),
@@ -476,6 +487,174 @@ mod tests {
 		runtime_io::with_externalities(&mut t, || {
 			assert_eq!(Balances::total_balance(&alice()), 30);
 			assert_eq!(Balances::total_balance(&bob()), 78);
+		});
+	}
+
+	const CODE_TRANSFER: &str = r#"
+(module
+	;; ext_call(
+	;;    callee_ptr: u32,
+	;;    callee_len: u32,
+	;;    gas: u64,
+	;;    value_ptr: u32,
+	;;    value_len: u32,
+	;;    input_data_ptr: u32,
+	;;    input_data_len: u32
+	;; ) -> u32
+	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
+	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
+	(import "env" "memory" (memory 1 1))
+	(func (export "call")
+		(block $fail
+			;; fail if ext_input_size != 4
+			(br_if $fail
+				(i32.ne
+					(i32.const 4)
+					(call $ext_input_size)
+				)
+			)
+
+			(call $ext_input_copy
+				(i32.const 0)
+				(i32.const 0)
+				(i32.const 4)
+			)
+
+
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 0))
+					(i32.const 0)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 1))
+					(i32.const 1)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 2))
+					(i32.const 2)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 3))
+					(i32.const 3)
+				)
+			)
+
+			(drop
+				(call $ext_call
+					(i32.const 4)  ;; Pointer to "callee" address.
+					(i32.const 32)  ;; Length of "callee" address.
+					(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
+					(i32.const 36)  ;; Pointer to the buffer with value to transfer
+					(i32.const 16)   ;; Length of the buffer with value to transfer.
+					(i32.const 0)   ;; Pointer to input data buffer address
+					(i32.const 0)   ;; Length of input data buffer
+				)
+			)
+
+			(return)
+		)
+		unreachable
+	)
+	;; Destination AccountId to transfer the funds.
+	;; Represented by H256 (32 bytes long) in little endian.
+	(data (i32.const 4) "\09\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
+	;; Amount of value to transfer.
+	;; Represented by u128 (16 bytes long) in little endian.
+	(data (i32.const 36) "\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
+)
+"#;
+
+	/// Convert a byte slice to a string with hex values.
+	/// Convert a byte slice to a string with hex values.
+	///
+	/// Each value is preceeded with a `\` character.
+	fn escaped_bytestring(bytes: &[u8]) -> String {
+		use std::fmt::Write;
+		let mut result = String::new();
+		for b in bytes {
+			write!(result, "\\{:02x}", b).unwrap();
+		}
+		result
+	}
+
+	/// Create a constructor for the specified code.
+	///
+	/// When constructor is executed, it will call `ext_return` with code that
+	/// specified in `child_bytecode`.
+	fn code_ctor(child_bytecode: &[u8]) -> String {
+		format!(
+			r#"
+	(module
+		;; ext_return(data_ptr: u32, data_len: u32) -> !
+		(import "env" "ext_return" (func $ext_return (param i32 i32)))
+		(import "env" "memory" (memory 1 1))
+		(func (export "call")
+			(call $ext_return
+				(i32.const 4)
+				(i32.const {code_len})
+			)
+			;; ext_return is diverging, i.e. doesn't return.
+			unreachable
+		)
+		(data (i32.const 4) "{escaped_bytecode}")
+	)
+	"#,
+			escaped_bytecode = escaped_bytestring(child_bytecode),
+			code_len = child_bytecode.len(),
+		)
+	}
+
+	#[test]
+	fn deploying_wasm_contract_should_work() {
+		let mut t = new_test_ext(false);
+
+		let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+		let code_ctor_transfer = wabt::wat2wasm(&code_ctor(&code_transfer)).unwrap();
+
+		let addr = <Runtime as contract::Trait>::DetermineContractAddress::contract_address_for(
+			&code_ctor_transfer,
+			&[],
+			&charlie(),
+		);
+
+		let b = construct_block(
+			1,
+			GENESIS_HASH.into(),
+			hex!("062f87b5ba0e96e4a7dcc41afe56a2df7f65a975415a6c1b0e8e92c330124f8f").into(),
+			None,
+			vec![
+				CheckedExtrinsic {
+					signed: None,
+					function: Call::Timestamp(timestamp::Call::set(42)),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 0)),
+					function: Call::Contract(
+						contract::Call::create::<Runtime>(10, 10_000, code_ctor_transfer, Vec::new())
+					),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 1)),
+					function: Call::Contract(
+						contract::Call::call::<Runtime>(addr, 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
+					),
+				},
+			]
+		);
+
+		WasmExecutor::new().call(&mut t, 8, COMPACT_CODE, "execute_block", &b.0).unwrap();
+
+		runtime_io::with_externalities(&mut t, || {
+			// Verify that the contract constructor worked well and code of TRANSFER contract is actually deployed.
+			assert_eq!(&contract::CodeOf::<Runtime>::get(addr), &code_transfer);
 		});
 	}
 
