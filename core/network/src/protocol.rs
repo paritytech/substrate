@@ -472,6 +472,8 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			for t in extrinsics {
 				if let Some(hash) = self.transaction_pool.import(&t) {
 					peer.known_extrinsics.insert(hash);
+				} else {
+					trace!(target: "sync", "Extrinsic rejected");
 				}
 			}
 		}
