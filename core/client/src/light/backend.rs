@@ -128,6 +128,14 @@ impl<S, F, Block, H> ClientBackend<Block, H> for Backend<S, F> where
 	fn revert(&self, _n: NumberFor<Block>) -> ClientResult<NumberFor<Block>> {
 		unimplemented!()
 	}
+
+	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a (&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>(&self, _insert: I, _delete: D) -> ClientResult<()> {
+		unimplemented!()
+	}
+
+	fn get_aux(&self, _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		unimplemented!()
+	}
 }
 
 impl<S, F, Block, H> RemoteBackend<Block, H> for Backend<S, F>

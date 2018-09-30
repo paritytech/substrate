@@ -122,6 +122,7 @@ mod columns {
 	pub const BODY: Option<u32> = Some(5);
 	pub const JUSTIFICATION: Option<u32> = Some(6);
 	pub const CHANGES_TRIE: Option<u32> = Some(7);
+	pub const AUX: Option<u32> = Some(8);
 }
 
 struct PendingBlock<Block: BlockT> {
@@ -739,6 +740,24 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			_ => Err(client::error::ErrorKind::UnknownBlock(format!("{:?}", block)).into()),
 		}
 	}
+
+	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a (&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>
+		(&self, insert: I, delete: D) -> Result<(), client::error::Error>
+	{
+		let mut transaction = DBTransaction::new();
+		for (k, v) in insert {
+			transaction.put(columns::AUX, k, v);
+		}
+		for k in delete {
+			transaction.delete(columns::AUX, k);
+		}
+		self.storage.db.write(transaction).map_err(db_err)?;
+		Ok(())
+	}
+
+	fn get_aux(&self, key: &[u8]) -> Result<Option<Vec<u8>>, client::error::Error> {
+		Ok(self.storage.db.get(columns::AUX, key).map(|r| r.map(|v| v.to_vec())).map_err(db_err)?)
+	}
 }
 
 impl<Block> client::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
@@ -1143,5 +1162,15 @@ mod tests {
 	fn test_blockchain_query_by_number_gets_canonical() {
 		let backend: Arc<Backend<test_client::runtime::Block>> = Arc::new(Backend::new_test(20, 20));
 		test_client::trait_tests::test_blockchain_query_by_number_gets_canonical(backend);
+	}
+
+	#[test]
+	fn test_aux() {
+		let backend: Backend<test_client::runtime::Block> = Backend::new_test(0, 0);
+		assert!(backend.get_aux(b"test").unwrap().is_none());
+		backend.insert_aux(&[(&b"test"[..], &b"hello"[..])], &[]).unwrap();
+		assert_eq!(b"hello", &backend.get_aux(b"test").unwrap().unwrap()[..]);
+		backend.insert_aux(&[], &[&b"test"[..]]).unwrap();
+		assert!(backend.get_aux(b"test").unwrap().is_none());
 	}
 }
