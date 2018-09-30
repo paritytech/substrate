@@ -50,6 +50,8 @@ mod errors;
 mod helpers;
 mod subscriptions;
 
+pub use subscriptions::Subscriptions;
+
 pub mod author;
 pub mod chain;
 pub mod metadata;

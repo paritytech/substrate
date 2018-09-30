@@ -32,7 +32,6 @@ use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header};
-use tokio::runtime::TaskExecutor;
 
 use subscriptions::Subscriptions;
 
@@ -96,10 +95,10 @@ pub struct State<B, E, Block: BlockT> {
 
 impl<B, E, Block: BlockT> State<B, E, Block> {
 	/// Create new State API RPC handler.
-	pub fn new(client: Arc<Client<B, E, Block>>, executor: TaskExecutor) -> Self {
+	pub fn new(client: Arc<Client<B, E, Block>>, subscriptions: Subscriptions) -> Self {
 		Self {
 			client,
-			subscriptions: Subscriptions::new(executor),
+			subscriptions,
 		}
 	}
 }

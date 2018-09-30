@@ -26,7 +26,6 @@ use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use runtime_version::RuntimeVersion;
-use tokio::runtime::TaskExecutor;
 use primitives::{Blake2Hasher};
 
 use subscriptions::Subscriptions;
@@ -82,10 +81,10 @@ pub struct Chain<B, E, Block: BlockT> {
 
 impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client<B, E, Block>>, executor: TaskExecutor) -> Self {
+	pub fn new(client: Arc<Client<B, E, Block>>, subscriptions: Subscriptions) -> Self {
 		Self {
 			client,
-			subscriptions: Subscriptions::new(executor),
+			subscriptions,
 		}
 	}
 }
