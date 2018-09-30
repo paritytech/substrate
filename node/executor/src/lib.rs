@@ -502,26 +502,73 @@ mod tests {
 	;;    input_data_len: u32
 	;; ) -> u32
 	(import "env" "ext_call" (func $ext_call (param i32 i32 i64 i32 i32 i32 i32) (result i32)))
+	(import "env" "ext_input_size" (func $ext_input_size (result i32)))
+	(import "env" "ext_input_copy" (func $ext_input_copy (param i32 i32 i32)))
 	(import "env" "memory" (memory 1 1))
 	(func (export "call")
-		(drop
-			(call $ext_call
-				(i32.const 4)  ;; Pointer to "callee" address.
-				(i32.const 8)  ;; Length of "callee" address.
-				(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
-				(i32.const 12)  ;; Pointer to the buffer with value to transfer
-				(i32.const 8)   ;; Length of the buffer with value to transfer.
-				(i32.const 0)   ;; Pointer to input data buffer address
-				(i32.const 0)   ;; Length of input data buffer
+		(block $fail
+			;; fail if ext_input_size != 4
+			(br_if $fail
+				(i32.ne
+					(i32.const 4)
+					(call $ext_input_size)
+				)
 			)
+
+			(call $ext_input_copy
+				(i32.const 0)
+				(i32.const 0)
+				(i32.const 4)
+			)
+
+
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 0))
+					(i32.const 0)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 1))
+					(i32.const 1)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 2))
+					(i32.const 2)
+				)
+			)
+			(br_if $fail
+				(i32.ne
+					(i32.load8_u (i32.const 3))
+					(i32.const 3)
+				)
+			)
+
+			(drop
+				(call $ext_call
+					(i32.const 4)  ;; Pointer to "callee" address.
+					(i32.const 32)  ;; Length of "callee" address.
+					(i64.const 0)  ;; How much gas to devote for the execution. 0 = all.
+					(i32.const 36)  ;; Pointer to the buffer with value to transfer
+					(i32.const 16)   ;; Length of the buffer with value to transfer.
+					(i32.const 0)   ;; Pointer to input data buffer address
+					(i32.const 0)   ;; Length of input data buffer
+				)
+			)
+
+			(return)
 		)
+		unreachable
 	)
 	;; Destination AccountId to transfer the funds.
-	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 4) "\09\00\00\00\00\00\00\00")
+	;; Represented by H256 (32 bytes long) in little endian.
+	(data (i32.const 4) "\09\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
 	;; Amount of value to transfer.
-	;; Represented by u64 (8 bytes long) in little endian.
-	(data (i32.const 12) "\06\00\00\00\00\00\00\00")
+	;; Represented by u128 (16 bytes long) in little endian.
+	(data (i32.const 36) "\06\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00\00")
 )
 "#;
 
@@ -581,7 +628,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("13ab38486581c446f1391712ba98950b581420222a1835da84c1d005f443c57e").into(),
+			hex!("062f87b5ba0e96e4a7dcc41afe56a2df7f65a975415a6c1b0e8e92c330124f8f").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -592,6 +639,12 @@ mod tests {
 					signed: Some((charlie(), 0)),
 					function: Call::Contract(
 						contract::Call::create::<Runtime>(10, 10_000, code_ctor_transfer, Vec::new())
+					),
+				},
+				CheckedExtrinsic {
+					signed: Some((charlie(), 1)),
+					function: Call::Contract(
+						contract::Call::call::<Runtime>(addr, 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
 					),
 				},
 			]
