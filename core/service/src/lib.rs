@@ -416,7 +416,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 				Err(e) => match e.into_pool_error() {
 					Ok(e) => match e.kind() {
 						transaction_pool::ErrorKind::AlreadyImported(hash) =>
-							Some(::std::str::FromStr::from_str(&hash).map_err(|_| {})
+							Some(::std::str::FromStr::from_str(&hash[2..]).map_err(|_| {})
 								.expect("Hash string is always valid")),
 						_ => {
 							debug!("Error adding transaction to the pool: {:?}", e);
