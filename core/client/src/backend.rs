@@ -119,6 +119,10 @@ where
 	/// Attempts to revert the chain by `n` blocks. Returns the number of blocks that were
 	/// successfully reverted.
 	fn revert(&self, n: NumberFor<Block>) -> error::Result<NumberFor<Block>>;
+	/// Insert auxiliary data into key-value store.
+	fn insert_aux<'a, 'b: 'a, 'c: 'a, I: IntoIterator<Item=&'a(&'c [u8], &'c [u8])>, D: IntoIterator<Item=&'a &'b [u8]>>(&self, insert: I, delete: D) -> error::Result<()>;
+	/// Query auxiliary data from key-value store.
+	fn get_aux(&self, key: &[u8]) -> error::Result<Option<Vec<u8>>>;
 }
 
 /// Mark for all Backend implementations, that are making use of state data, stored locally.
