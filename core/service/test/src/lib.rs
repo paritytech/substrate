@@ -49,6 +49,7 @@ use service::{
 use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
 use client::{BlockOrigin, JustifiedHeader};
 use sr_primitives::traits::As;
+use sr_primitives::generic::BlockId;
 
 struct TestNet<F: ServiceFactory> {
 	runtime: Runtime,
@@ -212,10 +213,11 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 	}
 }
 
-pub fn sync<F, B>(spec: FactoryChainSpec<F>, block_factory: B)
+pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, block_factory: B, extrinsic_factory: E)
 where
 	F: ServiceFactory,
 	B: Fn(&F::FullService) -> (JustifiedHeader<F::Block>, Option<Vec<FactoryExtrinsic<F>>>),
+	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
 {
 	const NUM_NODES: u32 = 10;
 	const NUM_BLOCKS: usize = 512;
@@ -237,9 +239,16 @@ where
 	for (_, service) in network.full_nodes.iter().skip(1) {
 		service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 	}
-	network.run_until_all_full(|_index, service| {
+	network.run_until_all_full(|_index, service|
 		service.client().info().unwrap().chain.best_number == As::sa(NUM_BLOCKS as u64)
-	});
+	);
+	info!("Checking extrinsic propagation");
+	let first_service = network.full_nodes[0].1.clone();
+	let best_block = BlockId::number(first_service.client().info().unwrap().chain.best_number);
+	first_service.transaction_pool().submit_one(&best_block, extrinsic_factory(&first_service)).unwrap();
+	network.run_until_all_full(|_index, service|
+		service.transaction_pool().all().len() == 1
+	);
 }
 
 pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)

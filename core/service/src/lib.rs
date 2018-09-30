@@ -158,7 +158,7 @@ impl<Components> Service<Components>
 			Components::build_transaction_pool(config.transaction_pool, client.clone())?
 		);
 		let transaction_pool_adapter = TransactionPoolAdapter::<Components> {
-			imports_external_transactions: !config.roles == Roles::LIGHT,
+			imports_external_transactions: !(config.roles == Roles::LIGHT),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 };
@@ -404,6 +404,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
 		if !self.imports_external_transactions {
+			debug!("Transaction rejected");
 			return None;
 		}
 

@@ -45,7 +45,8 @@ extern crate substrate_bft as bft;
 extern crate substrate_test_client;
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
-
+#[cfg(test)]
+extern crate sr_primitives as runtime_primitives;
 pub mod chain_spec;
 
 use std::sync::Arc;
@@ -213,12 +214,18 @@ mod tests {
 	use {service, service_test, Factory, chain_spec};
 	use consensus::{self, OfflineTracker};
 	use primitives::ed25519;
+	use runtime_primitives::traits::BlockNumberToHash;
+	use runtime_primitives::generic::Era;
 	use node_primitives::Block;
 	use bft::{Proposer, Environment};
 	use node_network::consensus::ConsensusNetwork;
 	use substrate_test_client::fake_justify;
 	use node_primitives::BlockId;
 	use keyring::Keyring;
+	use node_runtime::{UncheckedExtrinsic, Call, BalancesCall};
+	use node_primitives::UncheckedExtrinsic as OpaqueExtrinsic;
+	use codec::{Decode, Encode};
+	use node_runtime::RawAddress;
 
 	#[test]
 	fn test_connectivity() {
@@ -251,7 +258,18 @@ mod tests {
 			let justification = service.client().check_justification(block.header, justification).unwrap();
 			(justification, Some(block.extrinsics))
 		};
-		service_test::sync::<Factory, _>(chain_spec::integration_test_config(), block_factory);
+		let extrinsic_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
+			let payload = (0, Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69)), Era::immortal(), service.client().genesis_hash());
+			let signature = alice.sign(&payload.encode()).into();
+			let id = alice.public().0.into();
+			let xt = UncheckedExtrinsic {
+				signature: Some((RawAddress::Id(id), signature, payload.0, Era::immortal())),
+				function: payload.1,
+			}.encode();
+			let v: Vec<u8> = Decode::decode(&mut xt.as_slice()).unwrap();
+			OpaqueExtrinsic(v)
+		};
+		service_test::sync::<Factory, _, _>(chain_spec::integration_test_config(), block_factory, extrinsic_factory);
 	}
 
 	#[test]
