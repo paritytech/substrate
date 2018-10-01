@@ -24,13 +24,16 @@ extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_primitives;
 extern crate tokio;
+extern crate parity_codec as codec;
 
 #[macro_use]
 extern crate log;
 
 use futures::prelude::*;
 use futures::stream::Fuse;
+use futures::sync::mpsc;
 use client::{Client, ImportNotifications, backend::Backend, CallExecutor};
+use codec::{Encode, Decode};
 use runtime_primitives::traits::{As, NumberFor, Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, AuthorityId, Blake2Hasher};
@@ -53,13 +56,35 @@ pub struct Config {
 	/// The expected duration for a message to be gossiped across the network.
 	pub gossip_duration: Duration,
 	/// The voters.
+	// TODO: make dynamic
 	pub voters: Vec<AuthorityId>,
-	/// The local ID.
-	pub local_id: Option<AuthorityId>,
+	/// The local signing key.
+	pub local_key: Option<Arc<ed25519::Pair>>,
+}
+
+/// Errors that can occur while voting in GRANDPA.
+pub enum Error {
+	/// An error within grandpa.
+	Grandpa(GrandpaError),
+	/// A network error.
+	Network(String),
+	/// A blockchain error.
+	Blockchain(String),
+	/// A timer failed to fire.
+	Timer(::tokio::timer::Error),
+}
+
+impl From<GrandpaError> for Error {
+	fn from(e: GrandpaError) -> Self {
+		Error::Grandpa(e)
+	}
 }
 
 /// A handle to the network. This is generally implemented by providing some
-pub trait Network {
+/// handle to a gossip service or similar.
+///
+/// Intended to be a lightweight handle such as an `Arc`.
+pub trait Network: Clone {
 	/// A stream of input messages for a topic.
 	type In: Stream<Item=Vec<u8>,Error=()>;
 
@@ -79,7 +104,7 @@ pub trait BlockStatus<Block: BlockT> {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<u32>, Error>;
 }
 
-impl<B, E, Block: BlockT> BlockStatus<Block> for Client<B, E, Block> where
+impl<B, E, Block: BlockT> BlockStatus<Block> for Arc<Client<B, E, Block>> where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	NumberFor<Block>: As<u32>,
@@ -224,16 +249,99 @@ impl<Block: BlockT, Status: BlockStatus<Block>, I> Stream for UntilImported<Bloc
 	}
 }
 
+// converts a message stream into a stream of signed messages.
+// the output stream checks signatures also.
+fn checked_message_stream<Block: BlockT, S>(inner: S, voters: Vec<AuthorityId>)
+	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
+	S: Stream<Item=Vec<u8>,Error=()>
+{
+	inner
+		.filter_map(|raw| {
+			let decoded = SignedMessage::<Block>::decode(&mut &raw[..]);
+			if decoded.is_none() {
+				debug!(target: "afg", "Skipping malformed message {:?}", raw);
+			}
+			decoded
+		})
+		.and_then(move |msg| {
+			// check signature.
+			if !voters.contains(&msg.id) {
+				debug!(target: "afg", "Skipping message from unknown voter {}", msg.id);
+				return Ok(None);
+			}
+
+			let as_public = ::ed25519::Public::from_raw(msg.id.0);
+			let encoded_raw = msg.message.encode();
+			if ::ed25519::verify_strong(&msg.signature, &encoded_raw, as_public) {
+				Ok(Some(msg))
+			} else {
+				debug!(target: "afg", "Skipping message with bad signature");
+				Ok(None)
+			}
+		})
+		.filter_map(|x| x)
+		.map_err(|()| Error::Network(format!("Failed to receive message on unbounded stream")))
+}
+
+fn outgoing_messages<Block: BlockT, N: Network>(
+	local_key: Option<Arc<ed25519::Pair>>,
+	voters: Vec<AuthorityId>,
+	round: u64,
+	network: N,
+) -> (
+	impl Stream<Item=SignedMessage<Block>,Error=Error>,
+	impl Sink<SinkItem=Message<Block>,SinkError=Error>,
+) {
+	let locals = local_key.and_then(|pair| {
+		let public = pair.public();
+		voters.iter().find(|id| id.0 == public.0).map(move |id| (pair, id.clone()))
+	});
+
+	let (tx, rx) = mpsc::unbounded();
+	let rx = rx
+		.map(move |msg: Message<Block>| {
+			// when locals exist. sign messages on import
+			if let Some((ref pair, local_id)) = locals {
+				let encoded = msg.encode();
+				let signature = pair.sign(&encoded[..]);
+				let signed = SignedMessage::<Block> {
+					message: msg,
+					signature,
+					id: local_id,
+				};
+
+				// forward to network.
+				network.send_message(round, signed.encode());
+				Some(signed)
+			} else {
+				None
+			}
+		})
+		.filter_map(|x| x)
+		.map_err(move |()| Error::Network(
+			format!("Failed to receive on unbounded receiver for round {}", round)
+		));
+
+	let tx = tx.sink_map_err(move |e| Error::Network(format!("Failed to broadcast message \
+		to network in round {}: {:?}", round, e)));
+
+	(rx, tx)
+}
+
 /// The environment we run GRANDPA in.
-pub struct Environment<B, E, Block: BlockT> {
+pub struct Environment<B, E, Block: BlockT, N: Network> {
 	inner: Arc<Client<B, E, Block>>,
 	gossip_duration: Duration,
 	config: Config,
+	network: N,
 }
 
-impl<Block: BlockT, B, E> grandpa::Chain<Block::Hash> for Environment<B, E, Block> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
+impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, Block, N> where
+	Block: 'static,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	N: Network + 'static,
+	N::In: 'static,
 	NumberFor<Block>: As<u32>,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -279,27 +387,12 @@ impl<Block: BlockT, B, E> grandpa::Chain<Block::Hash> for Environment<B, E, Bloc
 	}
 }
 
-/// Errors that can occur while voting in GRANDPA.
-pub enum Error {
-	/// An error within grandpa.
-	Grandpa(GrandpaError),
-	/// A network error.
-	Network(String),
-	/// A blockchain error.
-	Blockchain(String),
-	/// A timer failed to fire.
-	Timer(::tokio::timer::Error),
-}
-
-impl From<GrandpaError> for Error {
-	fn from(e: GrandpaError) -> Self {
-		Error::Grandpa(e)
-	}
-}
-
-impl<B, E, Block: BlockT> voter::Environment<Block::Hash> for Environment<B, E, Block> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
+impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, E, Block, N> where
+	Block: 'static,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	N: Network + 'static,
+	N::In: 'static,
 	NumberFor<Block>: As<u32>,
 {
     type Timer = Box<Future<Item = (), Error = Self::Error>>;
@@ -313,17 +406,43 @@ impl<B, E, Block: BlockT> voter::Environment<Block::Hash> for Environment<B, E, 
         &self,
         round: u64
     ) -> voter::RoundData<Self::Timer, Self::Id, Self::In, Self::Out> {
+		use client::BlockchainEvents;
 		use tokio::timer::Delay;
 
 		let now = Instant::now();
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
+
+		// TODO: dispatch this with `mpsc::spawn`.
+		let incoming = checked_message_stream::<Block, _>(
+			self.network.messages_for(round),
+			self.config.voters.clone(),
+		);
+
+		let (out_rx, outgoing) = outgoing_messages::<Block, _>(
+			self.config.local_key.clone(),
+			self.config.voters.clone(),
+			round,
+			self.network.clone(),
+		);
+
+		// schedule incoming messages from the network to be held until
+		// corresponding blocks are imported.
+		let incoming = UntilImported::new(
+			self.inner.import_notification_stream(),
+			self.inner.clone(),
+			incoming,
+		);
+
+		// join incoming network messages with locally originating ones.
+		let incoming = Box::new(incoming.select(out_rx));
+
 		voter::RoundData {
 			prevote_timer: Box::new(prevote_timer.map_err(Error::Timer)),
     		precommit_timer: Box::new(precommit_timer.map_err(Error::Timer)),
     		voters: HashMap::new(),
-    		incoming: unimplemented!(),
-    		outgoing: unimplemented!(),
+    		incoming,
+    		outgoing: Box::new(outgoing),
 		}
 	}
 
@@ -358,7 +477,7 @@ impl<B, E, Block: BlockT> voter::Environment<Block::Hash> for Environment<B, E, 
 	}
 }
 
-/// Run a GRANDPA voter as a task. This future should be executed in a tokio runtime.
+/// Run a GRANDPA voter as a task. The returned future should be executed in a tokio runtime.
 pub fn run_voter<B, E, Block: BlockT, N>(
 	config: Config,
 	client: Arc<Client<B, E, Block>>,
