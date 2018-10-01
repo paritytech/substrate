@@ -23,7 +23,6 @@ tokio = "0.1"
 tokio-io = "0.1"
 tokio-timer = "0.2"
 unsigned-varint = { version = "0.2.1", features = ["codec"] }
-substrate-primitives = { path = "../primitives" }
 
 [dev-dependencies]
 assert_matches = "1.2"

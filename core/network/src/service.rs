@@ -21,7 +21,7 @@ use std::time::Duration;
 use futures::sync::{oneshot, mpsc};
 use network_libp2p::{NetworkProtocolHandler, NetworkContext, NodeIndex, ProtocolId,
 NetworkConfiguration , NonReservedPeerMode, ErrorKind};
-use network_libp2p::{NetworkService};
+use network_libp2p::{NetworkService, PeerId};
 use io::NetSyncIo;
 use protocol::{Protocol, ProtocolContext, Context, ProtocolStatus, PeerInfo as ProtocolPeerInfo};
 use config::{ProtocolConfig};
@@ -122,7 +122,7 @@ struct ProtocolHandler<B: BlockT, S: Specialization<B>, H: ExHashT> {
 #[derive(Debug)]
 pub struct PeerInfo<B: BlockT> {
 	/// Public node id
-	pub id: Option<String>,
+	pub id: PeerId,
 	/// Node client ID
 	pub client_version: String,
 	/// Capabilities
@@ -264,7 +264,7 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> SyncProvider<B> for 
 				};
 
 				Some(PeerInfo {
-					id: session_info.id.map(|id| format!("{:x}", id)),
+					id: session_info.id,
 					client_version: session_info.client_version,
 					capabilities: session_info.peer_capabilities.into_iter().map(|c| c.to_string()).collect(),
 					remote_address: session_info.remote_address,

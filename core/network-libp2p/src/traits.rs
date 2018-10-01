@@ -21,9 +21,8 @@ use std::net::Ipv4Addr;
 use std::str;
 use std::time::Duration;
 use TimerToken;
-use libp2p::{multiaddr::Protocol, Multiaddr};
+use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
 use error::Error;
-use primitives::hash::H512;
 
 /// Protocol handler level packet id
 pub type PacketId = u8;
@@ -31,7 +30,7 @@ pub type PacketId = u8;
 pub type ProtocolId = [u8; 3];
 
 /// Node public key
-pub type NodeId = H512;
+pub type NodeId = PeerId;
 
 /// Local (temporary) peer session ID.
 pub type NodeIndex = usize;
@@ -43,7 +42,7 @@ pub type Secret = [u8; 32];
 #[derive(Debug, Clone)]
 pub struct SessionInfo {
 	/// Peer public key
-	pub id: Option<NodeId>,
+	pub id: NodeId,
 	/// Peer client ID
 	pub client_version: String,
 	/// Peer RLPx protocol version
