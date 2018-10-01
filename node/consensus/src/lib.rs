@@ -467,7 +467,7 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 	}
 
 	fn import_misbehavior(&self, misbehavior: Vec<(AuthorityId, bft::Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>) {
-		use rhododendron::Misbehavior as GenericMisbehavior;
+		use rhododendron::accumulator::Misbehavior as GenericMisbehavior;
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
 

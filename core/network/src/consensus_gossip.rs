@@ -274,7 +274,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 				if parent == parent_hash {
 					debug!(target: "gossip", "Pushing relevant consensus message to sink.");
 					if let Err(e) = sink.unbounded_send(message.clone()) {
-						trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
+						debug!(target:"gossip", "Error broadcasting message notification: {:?}", e);
 					} else {
 						debug!(target: "gossip", "Pushed message into sink: {:?}", message.clone());
 					}
