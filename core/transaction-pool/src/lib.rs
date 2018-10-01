@@ -42,7 +42,7 @@ mod pool;
 mod rotator;
 
 pub use listener::Listener;
-pub use pool::{Pool, ChainApi, EventStream, Verified, VerifiedFor, ExtrinsicFor, ExHash, AllExtrinsics};
+pub use pool::{Pool, ChainApi, EventStream, Verified, VerifiedFor, ExtrinsicFor, ExHash, AllExtrinsics, HashOf};
 pub use txpool::scoring;
 pub use txpool::{Error, ErrorKind};
 pub use error::IntoPoolError;

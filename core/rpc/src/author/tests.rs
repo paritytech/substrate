@@ -23,12 +23,12 @@ use transaction_pool::{VerifiedTransaction, scoring, Transaction, ChainApi, Erro
 use test_client::runtime::{Block, Extrinsic, Transfer};
 use test_client;
 use tokio::runtime;
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::{traits, generic::BlockId};
 
 #[derive(Clone, Debug)]
 pub struct Verified
 {
-	sender: u64, 
+	sender: u64,
 	hash: u64,
 }
 
@@ -53,17 +53,21 @@ impl ChainApi for TestApi {
 	type Event = ();
 	type Ready = ();
 
+	fn latest_hash(&self) -> <Block as traits::Block>::Hash {
+		1.into()
+	}
+
 	fn verify_transaction(&self, _at: &BlockId<Block>, uxt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error> {
 		Ok(Verified {
 			sender: uxt.transfer.from[31] as u64,
 			hash: uxt.transfer.nonce,
-		}) 
+		})
 	}
 
 	fn is_ready(&self, _at: &BlockId<Block>, _c: &mut Self::Ready, _xt: &VerifiedFor<Self>) -> Readiness {
 		Readiness::Ready
 	}
-	
+
 	fn ready(&self) -> Self::Ready { }
 
 	fn compare(old: &VerifiedFor<Self>, other: &VerifiedFor<Self>) -> ::std::cmp::Ordering {
