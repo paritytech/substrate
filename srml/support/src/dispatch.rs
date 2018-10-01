@@ -499,7 +499,7 @@ macro_rules! __call_to_metadata {
 		$crate::dispatch::CallMetadata {
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
 			functions: __functions_to_metadata!(0; $origin_type;; $(
-				fn $fn_name($from $(, $param_name: $param )* ) -> $result;
+				fn $fn_name( $( $param_name: $param ),* ) -> $result;
 				$( $doc_attr ),*;
 			)*),
 		}
@@ -510,15 +510,14 @@ macro_rules! __call_to_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __functions_to_metadata{
-	// ROOT
 	(
 		$fn_id:expr;
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
-		fn $fn_name:ident(root
+		fn $fn_name:ident(
 			$(
-				, $param_name:ident : $param:ty
-			)*
+				$param_name:ident : $param:ty
+			),*
 		) -> $result:ty;
 		$( $fn_doc:expr ),*;
 		$( $rest:tt )*
@@ -531,31 +530,6 @@ macro_rules! __functions_to_metadata{
 			$($rest)*
 		)
 	};
-	// NON ROOT
-	(
-		$fn_id:expr;
-		$origin_type:ty;
-		$( $function_metadata:expr ),*;
-		fn $fn_name:ident(origin
-			$(
-				, $param_name:ident : $param:ty
-			)*
-		) -> $result:ty;
-		$( $fn_doc:expr ),*;
-		$($rest:tt)*
-	) => {
-		__functions_to_metadata!(
-			$fn_id + 1; $origin_type;
-			$( $function_metadata, )* __function_to_metadata!(
-				fn $fn_name(
-					origin: $origin_type
-					$( ,$param_name : $param )*
-				) -> $result; $( $fn_doc ),*; $fn_id;
-			);
-			$($rest)*
-		)
-	};
-	// BASE CASE
 	(
 		$fn_id:expr;
 		$origin_type:ty;
@@ -587,18 +561,6 @@ macro_rules! __function_to_metadata {
 					}
 				),*
 			]),
-			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
-		}
-	};
-	(
-		fn $fn_name:ident() -> $result:ty;
-		$( $fn_doc:expr ),*;
-		$fn_id:expr;
-	) => {
-		$crate::dispatch::FunctionMetadata {
-			id: $fn_id,
-			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
-			arguments: $crate::dispatch::DecodeDifferent::Encode(&[]),
 			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
 		}
 	};
@@ -664,12 +626,7 @@ mod tests {
 				FunctionMetadata {
 					id: 0,
 					name: DecodeDifferent::Encode("aux_0"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("origin"),
-							ty: DecodeDifferent::Encode("T::Origin"),
-						}
-					]),
+					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[
 						" Hi, this is a comment."
 					])
@@ -678,10 +635,6 @@ mod tests {
 					id: 1,
 					name: DecodeDifferent::Encode("aux_1"),
 					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("origin"),
-							ty: DecodeDifferent::Encode("T::Origin"),
-						},
 						FunctionArgumentMetadata {
 							name: DecodeDifferent::Encode("data"),
 							ty: DecodeDifferent::Encode("i32"),
@@ -693,10 +646,6 @@ mod tests {
 					id: 2,
 					name: DecodeDifferent::Encode("aux_2"),
 					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("origin"),
-							ty: DecodeDifferent::Encode("T::Origin"),
-						},
 						FunctionArgumentMetadata {
 							name: DecodeDifferent::Encode("data"),
 							ty: DecodeDifferent::Encode("i32"),

@@ -99,7 +99,7 @@ mod tests {
 	use super::*;
 	use substrate_metadata::{
 		EventMetadata, OuterEventMetadata, RuntimeModuleMetadata, CallMetadata, ModuleMetadata,
-		StorageFunctionModifier, StorageFunctionType, FunctionMetadata, FunctionArgumentMetadata,
+		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
 		StorageMetadata, StorageFunctionMetadata,
 	};
 	use codec::{Decode, Encode};
@@ -251,12 +251,7 @@ mod tests {
 							 FunctionMetadata {
 								 id: 0,
 								 name: DecodeDifferent::Encode("aux_0"),
-								 arguments: DecodeDifferent::Encode(&[
-									 FunctionArgumentMetadata {
-										 name: DecodeDifferent::Encode("origin"),
-										 ty: DecodeDifferent::Encode("T::Origin"),
-									 }
-								 ]),
+								 arguments: DecodeDifferent::Encode(&[]),
 								 documentation: DecodeDifferent::Encode(&[]),
 							 }
 						 ])
