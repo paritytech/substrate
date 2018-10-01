@@ -500,10 +500,8 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.unzip();
 
 			if !to_send.is_empty() {
-				let node_id = io.peer_session_info(*who).map(|info| match info.id {
-					Some(id) => format!("{}@{:x}", info.remote_address, id),
-					None => info.remote_address.clone(),
-				});
+				let node_id = io.peer_session_info(*who)
+					.map(|info| format!("{}@{:?}", info.remote_address, info.id));
 
 				if let Some(id) = node_id {
 					for hash in hashes {

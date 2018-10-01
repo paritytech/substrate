@@ -552,7 +552,7 @@ impl NetworkContext for NetworkContextImpl {
 		};
 
 		Some(SessionInfo {
-			id: None,						// TODO: ???? what to do??? wrong format!
+			id: info.id.clone(),
 			client_version: info.client_version.clone().take().unwrap_or(String::new()),
 			protocol_version: From::from(protocol_version),
 			capabilities: Vec::new(),		// TODO: list of supported protocols ; hard
