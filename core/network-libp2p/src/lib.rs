@@ -34,7 +34,6 @@ extern crate rand;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
-extern crate substrate_primitives as primitives;
 extern crate bytes;
 extern crate unsigned_varint;
 
@@ -45,11 +44,9 @@ extern crate log;
 #[cfg(test)] #[macro_use]
 extern crate assert_matches;
 
-use libp2p::PeerId;
-
 pub use connection_filter::{ConnectionFilter, ConnectionDirection};
 pub use error::{Error, ErrorKind, DisconnectReason};
-pub use libp2p::{Multiaddr, multiaddr::Protocol};
+pub use libp2p::{Multiaddr, multiaddr::Protocol, PeerId};
 pub use traits::*;
 
 pub type TimerToken = usize;
