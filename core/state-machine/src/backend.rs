@@ -189,8 +189,7 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 	where
 		H: Hasher,
 		H::Out: HeapSizeOf,
-	
-		I: Iterator<Item=(Vec<u8>, Vec<u8>)>,
+		I: IntoIterator<Item=(Vec<u8>, Vec<u8>)>,
 {
 	let mut root = <H as Hasher>::Out::default();
 	{

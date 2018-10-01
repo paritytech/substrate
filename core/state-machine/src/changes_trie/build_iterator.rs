@@ -22,31 +22,12 @@ use changes_trie::Configuration;
 /// Returns iterator of OTHER blocks that are required for inclusion into
 /// changes trie of given block.
 pub fn digest_build_iterator(config: &Configuration, block: u64) -> DigestBuildIterator {
-	// digest is never built in these cases
-	if block == 0 || config.digest_interval <= 1 || config.digest_levels == 0 {
-		return DigestBuildIterator::empty();
-	}
-
-	// digest is built every digest_multiplier blocks
-	let mut digest_interval = config.digest_interval;
-	if block % digest_interval != 0 {
-		return DigestBuildIterator::empty();
-	}
-
-	// we have checked that the block is at least level1-digest
-	// => try to find highest digest level for inclusion
-	let mut current_level = 1u32;
-	let mut digest_step = 1u64;
-	while current_level < config.digest_levels {
-		let new_digest_interval = match digest_interval.checked_mul(config.digest_interval) {
-			Some(new_digest_interval) if block % new_digest_interval == 0 => new_digest_interval,
-			_ => break,
-		};
-
-		digest_step = digest_interval;
-		digest_interval = new_digest_interval;
-		current_level = current_level + 1;
-	}
+	// prepare digest build parameters
+	let (_, _, digest_step) = match config.digest_level_at_block(block) {
+		Some((current_level, digest_interval, digest_step)) =>
+			(current_level, digest_interval, digest_step),
+		None => return DigestBuildIterator::empty(),
+	};
 
 	DigestBuildIterator::new(block, config.digest_interval, digest_step)
 }

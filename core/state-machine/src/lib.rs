@@ -58,7 +58,8 @@ pub use backend::Backend;
 pub use changes_trie::{Storage as ChangesTrieStorage,
 	RootsStorage as ChangesTrieRootsStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
-	key_changes, key_changes_proof, key_changes_proof_check};
+	key_changes, key_changes_proof, key_changes_proof_check,
+	prune as prune_changes_tries};
 pub use overlayed_changes::OverlayedChanges;
 pub use trie_backend_essence::Storage;
 pub use trie_backend::TrieBackend;
