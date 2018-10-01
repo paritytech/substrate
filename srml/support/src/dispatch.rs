@@ -566,29 +566,6 @@ macro_rules! __function_to_metadata {
 	};
 }
 
-/// Convert a function documentation attribute into its JSON representation.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __function_doc_to_json {
-	(
-		$prefix_str:tt;
-		$doc_attr:tt
-		$($rest:tt)*
-	) => {
-			concat!(
-				$prefix_str, r#" ""#,
-				$doc_attr,
-				r#"""#,
-				__function_doc_to_json!(","; $($rest)*)
-			)
-	};
-	(
-		$prefix_str:tt;
-	) => {
-		""
-	}
-}
-
 #[cfg(test)]
 // Do not complain about unused `dispatch` and `dispatch_aux`.
 #[allow(dead_code)]
