@@ -61,9 +61,9 @@ mod hashable;
 #[macro_use]
 pub mod event;
 #[macro_use]
-pub mod metadata;
-#[macro_use]
 mod origin;
+#[macro_use]
+pub mod metadata;
 #[macro_use]
 mod runtime;
 
@@ -71,7 +71,6 @@ pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
 pub use runtime_io::print;
-
 
 #[macro_export]
 macro_rules! fail {
