@@ -158,7 +158,7 @@ impl<Components> Service<Components>
 			Components::build_transaction_pool(config.transaction_pool, client.clone())?
 		);
 		let transaction_pool_adapter = TransactionPoolAdapter::<Components> {
-			imports_external_transactions: !config.roles == Roles::LIGHT,
+			imports_external_transactions: !(config.roles == Roles::LIGHT),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 };
@@ -404,6 +404,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
 		if !self.imports_external_transactions {
+			debug!("Transaction rejected");
 			return None;
 		}
 
@@ -415,7 +416,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 				Err(e) => match e.into_pool_error() {
 					Ok(e) => match e.kind() {
 						transaction_pool::ErrorKind::AlreadyImported(hash) =>
-							Some(::std::str::FromStr::from_str(&hash).map_err(|_| {})
+							Some(::std::str::FromStr::from_str(&hash[2..]).map_err(|_| {})
 								.expect("Hash string is always valid")),
 						_ => {
 							debug!("Error adding transaction to the pool: {:?}", e);

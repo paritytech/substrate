@@ -18,7 +18,7 @@
 
 use client::{self, Client as SubstrateClient, ImportResult, ClientInfo, BlockStatus, BlockOrigin, CallExecutor};
 use client::error::Error;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::bft::Justification;
 use primitives::{Blake2Hasher};
@@ -61,6 +61,15 @@ pub trait Client<Block: BlockT>: Send + Sync {
 
 	/// Get method execution proof.
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error>;
+
+	/// Get key changes proof.
+	fn key_changes_proof(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		max: Block::Hash,
+		key: &[u8]
+	) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error>;
 }
 
 impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
@@ -115,5 +124,15 @@ impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
 
 	fn execution_proof(&self, block: &Block::Hash, method: &str, data: &[u8]) -> Result<(Vec<u8>, Vec<Vec<u8>>), Error> {
 		(self as &SubstrateClient<B, E, Block>).execution_proof(&BlockId::Hash(block.clone()), method, data)
+	}
+
+	fn key_changes_proof(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		max: Block::Hash,
+		key: &[u8]
+	) -> Result<(NumberFor<Block>, Vec<Vec<u8>>), Error> {
+		(self as &SubstrateClient<B, E, Block>).key_changes_proof(first, last, max, key)
 	}
 }

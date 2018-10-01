@@ -27,13 +27,12 @@ use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
-use primitives::{Blake2Hasher};
+use primitives::{Blake2Hasher, Bytes};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header};
 use tokio::runtime::TaskExecutor;
-use serde_json;
 
 use subscriptions::Subscriptions;
 
@@ -50,7 +49,7 @@ build_rpc_trait! {
 
 		/// Call a contract at a block's state.
 		#[rpc(name = "state_call", alias = ["state_callAt", ])]
-		fn call(&self, String, Vec<u8>, Trailing<Hash>) -> Result<Vec<u8>>;
+		fn call(&self, String, Bytes, Trailing<Hash>) -> Result<Bytes>;
 
 		/// Returns a storage entry at a specific block's state.
 		#[rpc(name = "state_getStorage", alias = ["state_getStorageAt", ])]
@@ -64,9 +63,9 @@ build_rpc_trait! {
 		#[rpc(name = "state_getStorageSize", alias = ["state_getStorageSizeAt", ])]
 		fn storage_size(&self, StorageKey, Trailing<Hash>) -> Result<Option<u64>>;
 
-		/// Returns the runtime metadata as JSON.
+		/// Returns the runtime metadata as an opaque blob.
 		#[rpc(name = "state_getMetadata")]
-		fn metadata(&self, Trailing<Hash>) -> Result<serde_json::Value>;
+		fn metadata(&self, Trailing<Hash>) -> Result<Bytes>;
 
 		/// Query historical storage entries (by key) starting from a block given as the second parameter.
 		///
@@ -122,10 +121,17 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 {
 	type Metadata = ::metadata::Metadata;
 
-	fn call(&self, method: String, data: Vec<u8>, block: Trailing<Block::Hash>) -> Result<Vec<u8>> {
+	fn call(&self, method: String, data: Bytes, block: Trailing<Block::Hash>) -> Result<Bytes> {
 		let block = self.unwrap_or_best(block)?;
-		trace!(target: "rpc", "Calling runtime at {:?} for method {} ({})", block, method, HexDisplay::from(&data));
-		Ok(self.client.executor().call(&BlockId::Hash(block), &method, &data)?.return_data)
+		trace!(target: "rpc", "Calling runtime at {:?} for method {} ({})", block, method, HexDisplay::from(&data.0));
+		let return_data = self.client
+			.executor()
+			.call(
+				&BlockId::Hash(block),
+				&method, &data.0
+			)?
+			.return_data;
+		Ok(Bytes(return_data))
 	}
 
 	fn storage(&self, key: StorageKey, block: Trailing<Block::Hash>) -> Result<Option<StorageData>> {
@@ -143,10 +149,9 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 		Ok(self.storage(key, block)?.map(|x| x.0.len() as u64))
 	}
 
-	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<serde_json::Value> {
+	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<Bytes> {
 		let block = self.unwrap_or_best(block)?;
-		let metadata = self.client.metadata(&BlockId::Hash(block))?;
-		serde_json::to_value(metadata).map_err(Into::into)
+		self.client.metadata(&BlockId::Hash(block)).map(Bytes).map_err(Into::into)
 	}
 
 	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {

@@ -438,11 +438,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	ext_sandbox_memory_set(memory_idx: u32, offset: u32, val_ptr: *const u8, val_len: usize) -> u32 => {
 		let dst_memory = this.sandbox_store.memory(memory_idx)?;
 
-		let data = match this.memory.get(offset, val_len as usize) {
+		let data = match this.memory.get(val_ptr, val_len as usize) {
 			Ok(data) => data,
 			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 		};
-		match dst_memory.set(val_ptr, &data) {
+		match dst_memory.set(offset, &data) {
 			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 			_ => {},
 		}

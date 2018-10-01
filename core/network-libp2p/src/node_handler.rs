@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
-use custom_proto::{RegisteredProtocols, RegisteredProtocolOutput};
+use custom_proto::{Packet, RegisteredProtocols, RegisteredProtocolSubstream};
 use futures::{prelude::*, task};
 use libp2p::core::{ConnectionUpgrade, Endpoint, PeerId, PublicKey, upgrade};
 use libp2p::core::nodes::handled_node::{NodeHandler, NodeHandlerEndpoint, NodeHandlerEvent};
@@ -52,7 +52,7 @@ pub struct SubstrateNodeHandler<TSubstream, TUserData> {
 	/// List of registered custom protocols.
 	registered_custom: Arc<RegisteredProtocols<TUserData>>,
 	/// Substreams open for "custom" protocols (eg. dot).
-	custom_protocols_substreams: Vec<RegisteredProtocolOutput<TUserData>>,
+	custom_protocols_substreams: Vec<RegisteredProtocolSubstream<TSubstream>>,
 
 	/// Address of the node.
 	address: Multiaddr,
@@ -81,10 +81,10 @@ pub struct SubstrateNodeHandler<TSubstream, TUserData> {
 	next_identify: Interval,
 
 	/// Substreams being upgraded on the listening side.
-	upgrades_in_progress_listen: Vec<Box<Future<Item = FinalUpgrade<TSubstream, TUserData>, Error = IoError> + Send>>,
+	upgrades_in_progress_listen: Vec<Box<Future<Item = FinalUpgrade<TSubstream>, Error = IoError> + Send>>,
 	/// Substreams being upgraded on the dialing side. Contrary to `upgrades_in_progress_listen`,
 	/// these have a known purpose.
-	upgrades_in_progress_dial: Vec<(UpgradePurpose, Box<Future<Item = FinalUpgrade<TSubstream, TUserData>, Error = IoError> + Send>)>,
+	upgrades_in_progress_dial: Vec<(UpgradePurpose, Box<Future<Item = FinalUpgrade<TSubstream>, Error = IoError> + Send>)>,
 	/// The substreams we want to open.
 	queued_dial_upgrades: Vec<UpgradePurpose>,
 	/// Number of outbound substreams the outside should open for us.
@@ -396,6 +396,11 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	fn shutdown(&mut self) {
 		// TODO: close gracefully
 		self.is_shutting_down = true;
+
+		for custom_proto in &mut self.custom_protocols_substreams {
+			custom_proto.shutdown();
+		}
+
 		if let Some(to_notify) = self.to_notify.take() {
 			to_notify.notify();
 		}
@@ -403,6 +408,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 
 	fn poll(&mut self) -> Poll<Option<NodeHandlerEvent<Self::OutboundOpenInfo, Self::OutEvent>>, IoError> {
 		if self.is_shutting_down {
+			// TODO: finish only when everything is closed
 			return Ok(Async::Ready(None));
 		}
 
@@ -456,7 +462,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	) {
 		debug_assert!(self.registered_custom.has_protocol(protocol),
 			"invalid protocol id requested in the API of the libp2p networking");
-		let proto = match self.custom_protocols_substreams.iter().find(|p| p.protocol_id == protocol) {
+		let proto = match self.custom_protocols_substreams.iter_mut().find(|p| p.protocol_id() == protocol) {
 			Some(proto) => proto,
 			None => {
 				// We are processing a message event before we could report to the outside that
@@ -465,13 +471,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			},
 		};
 
-		let mut message = Bytes::with_capacity(1 + data.len());
-		message.extend_from_slice(&[packet_id]);
-		message.extend_from_slice(&data);
-
-		if let Err(_) = proto.outgoing.unbounded_send(message) {
-			error!(target: "sub-libp2p", "Error while sending custom message to channel");
-		}
+		proto.send_message(Packet { id: packet_id, data: data.into() });
 	}
 
 	/// The node will try to open a Kademlia substream and produce a `KadOpen` event containing the
@@ -521,7 +521,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	/// Optionally produces an event to dispatch.
 	fn inject_fully_negotiated(
 		&mut self,
-		upgrade: FinalUpgrade<TSubstream, TUserData>
+		upgrade: FinalUpgrade<TSubstream>
 	) -> Option<SubstrateOutEvent<TSubstream>> {
 		match upgrade {
 			FinalUpgrade::IdentifyListener(sender) =>
@@ -561,15 +561,15 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 				}
 			},
 			FinalUpgrade::Custom(proto) => {
-				self.cancel_dial_upgrade(&UpgradePurpose::Custom(proto.protocol_id));
-				if self.custom_protocols_substreams.iter().any(|p| p.protocol_id == proto.protocol_id) {
+				self.cancel_dial_upgrade(&UpgradePurpose::Custom(proto.protocol_id()));
+				if self.custom_protocols_substreams.iter().any(|p| p.protocol_id() == proto.protocol_id()) {
 					// Skipping protocol that's already open.
 					return None;
 				}
 
 				let event = SubstrateOutEvent::CustomProtocolOpen {
-					protocol_id: proto.protocol_id,
-					version: proto.protocol_version,
+					protocol_id: proto.protocol_id(),
+					version: proto.protocol_version(),
 				};
 
 				self.custom_protocols_substreams.push(proto);
@@ -686,32 +686,32 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 		// Poll for messages on the custom protocol stream.
 		for n in (0 .. self.custom_protocols_substreams.len()).rev() {
 			let mut custom_proto = self.custom_protocols_substreams.swap_remove(n);
-			match custom_proto.incoming.poll() {
+			match custom_proto.poll() {
 				Ok(Async::NotReady) => self.custom_protocols_substreams.push(custom_proto),
-				Ok(Async::Ready(Some((packet_id, data)))) => {
-					let protocol_id = custom_proto.protocol_id;
+				Ok(Async::Ready(Some(Packet { id, data }))) => {
+					let protocol_id = custom_proto.protocol_id();
 					self.custom_protocols_substreams.push(custom_proto);
 					return Ok(Async::Ready(Some(SubstrateOutEvent::CustomMessage {
 						protocol_id,
-						packet_id,
+						packet_id: id,
 						data,
 					})));
 				},
 				Ok(Async::Ready(None)) => {
 					// Trying to reopen the protocol.
-					self.queued_dial_upgrades.push(UpgradePurpose::Custom(custom_proto.protocol_id));
+					self.queued_dial_upgrades.push(UpgradePurpose::Custom(custom_proto.protocol_id()));
 					self.num_out_user_must_open += 1;
 					return Ok(Async::Ready(Some(SubstrateOutEvent::CustomProtocolClosed {
-						protocol_id: custom_proto.protocol_id,
+						protocol_id: custom_proto.protocol_id(),
 						result: Ok(()),
 					})))
 				},
 				Err(err) => {
 					// Trying to reopen the protocol.
-					self.queued_dial_upgrades.push(UpgradePurpose::Custom(custom_proto.protocol_id));
+					self.queued_dial_upgrades.push(UpgradePurpose::Custom(custom_proto.protocol_id()));
 					self.num_out_user_must_open += 1;
 					return Ok(Async::Ready(Some(SubstrateOutEvent::CustomProtocolClosed {
-						protocol_id: custom_proto.protocol_id,
+						protocol_id: custom_proto.protocol_id(),
 						result: Err(err),
 					})))
 				},
@@ -851,16 +851,16 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 }
 
 /// Enum of all the possible protocols our service handles.
-enum FinalUpgrade<TSubstream, TUserData> {
+enum FinalUpgrade<TSubstream> {
 	Kad(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>),
 	IdentifyListener(identify::IdentifySender<TSubstream>),
 	IdentifyDialer(identify::IdentifyInfo, Multiaddr),
 	PingDialer(ping::PingDialer<TSubstream, Instant>),
 	PingListener(ping::PingListener<TSubstream>),
-	Custom(RegisteredProtocolOutput<TUserData>),
+	Custom(RegisteredProtocolSubstream<TSubstream>),
 }
 
-impl<TSubstream, TUserData> From<ping::PingOutput<TSubstream, Instant>> for FinalUpgrade<TSubstream, TUserData> {
+impl<TSubstream> From<ping::PingOutput<TSubstream, Instant>> for FinalUpgrade<TSubstream> {
 	fn from(out: ping::PingOutput<TSubstream, Instant>) -> Self {
 		match out {
 			ping::PingOutput::Ponger(ponger) => FinalUpgrade::PingListener(ponger),
@@ -869,7 +869,7 @@ impl<TSubstream, TUserData> From<ping::PingOutput<TSubstream, Instant>> for Fina
 	}
 }
 
-impl<TSubstream, TUserData> From<identify::IdentifyOutput<TSubstream>> for FinalUpgrade<TSubstream, TUserData> {
+impl<TSubstream> From<identify::IdentifyOutput<TSubstream>> for FinalUpgrade<TSubstream> {
 	fn from(out: identify::IdentifyOutput<TSubstream>) -> Self {
 		match out {
 			identify::IdentifyOutput::RemoteInfo { info, observed_addr } =>

@@ -296,11 +296,11 @@ impl<B: BlockT> ChainSync<B> {
 				if !self.is_known_or_already_downloading(protocol, header.parent_hash()) {
 					trace!(target: "sync", "Ignoring unknown stale block announce from {}: {} {:?}", who, hash, header);
 				} else {
-					trace!(target: "sync", "Downloading new stale block announced from {}: {} {:?}", who, hash, header);
+					trace!(target: "sync", "Considering new stale block announced from {}: {} {:?}", who, hash, header);
 					self.download_stale(protocol, who, &hash);
 				}
 			} else {
-				trace!(target: "sync", "Downloading new block announced from {}: {} {:?}", who, hash, header);
+				trace!(target: "sync", "Considering new block announced from {}: {} {:?}", who, hash, header);
 				self.download_new(protocol, who);
 			}
 		} else {
@@ -371,6 +371,7 @@ impl<B: BlockT> ChainSync<B> {
 			let import_status = self.import_queue.status();
 			// when there are too many blocks in the queue => do not try to download new blocks
 			if import_status.importing_count > MAX_IMPORTING_BLOCKS {
+				trace!(target: "sync", "Too many blocks in the queue.");
 				return;
 			}
 			// we should not download already queued blocks
@@ -395,7 +396,7 @@ impl<B: BlockT> ChainSync<B> {
 						trace!(target: "sync", "Nothing to request");
 					}
 				},
-				_ => (),
+				_ => trace!(target: "sync", "Peer {} is busy", who),
 			}
 		}
 	}

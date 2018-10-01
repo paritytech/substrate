@@ -52,7 +52,6 @@ impl OverlayedChanges {
 	///
 	/// Returns false if configuration has been set already and we now trying
 	/// to install different configuration. This isn't supported now.
-	#[must_use = "Result must be checked"]
 	pub(crate) fn set_changes_trie_config(&mut self, config: ChangesTrieConfig) -> bool {
 		if let Some(ref old_config) = self.changes_trie_config {
 			// we do not support changes trie configuration' change now

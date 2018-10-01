@@ -24,14 +24,14 @@ use futures::sync::oneshot::{channel, Receiver, Sender};
 use linked_hash_map::LinkedHashMap;
 use linked_hash_map::Entry;
 use parking_lot::Mutex;
-use client;
+use client::{self, error::{Error as ClientError, ErrorKind as ClientErrorKind}};
 use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-	RemoteCallRequest, RemoteReadRequest};
+	RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest};
 use io::SyncIo;
 use message;
 use network_libp2p::{Severity, NodeIndex};
 use service;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 
 /// Remote request timeout.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
@@ -62,6 +62,14 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 
 	/// When call response is received from remote node.
 	fn on_remote_call_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteCallResponse);
+
+	/// When changes response is received from remote node.
+	fn on_remote_changes_response(
+		&self,
+		io: &mut SyncIo,
+		peer: NodeIndex,
+		response: message::RemoteChangesResponse<NumberFor<Block>>
+	);
 }
 
 /// On-demand requests service. Dispatches requests to appropriate peers.
@@ -72,7 +80,7 @@ pub struct OnDemand<B: BlockT, E: service::ExecuteInContext<B>> {
 
 /// On-demand remote call response.
 pub struct RemoteResponse<T> {
-	receiver: Receiver<Result<T, client::error::Error>>,
+	receiver: Receiver<Result<T, ClientError>>,
 }
 
 #[derive(Default)]
@@ -92,24 +100,25 @@ struct Request<Block: BlockT> {
 }
 
 enum RequestData<Block: BlockT> {
-	RemoteHeader(RemoteHeaderRequest<Block::Header>, Sender<Result<Block::Header, client::error::Error>>),
-	RemoteRead(RemoteReadRequest<Block::Header>, Sender<Result<Option<Vec<u8>>, client::error::Error>>),
-	RemoteCall(RemoteCallRequest<Block::Header>, Sender<Result<client::CallResult, client::error::Error>>),
+	RemoteHeader(RemoteHeaderRequest<Block::Header>, Sender<Result<Block::Header, ClientError>>),
+	RemoteRead(RemoteReadRequest<Block::Header>, Sender<Result<Option<Vec<u8>>, ClientError>>),
+	RemoteCall(RemoteCallRequest<Block::Header>, Sender<Result<client::CallResult, ClientError>>),
+	RemoteChanges(RemoteChangesRequest<Block::Header>, Sender<Result<Vec<(NumberFor<Block>, u32)>, ClientError>>),
 }
 
 enum Accept<Block: BlockT> {
 	Ok,
-	CheckFailed(client::error::Error, RequestData<Block>),
+	CheckFailed(ClientError, RequestData<Block>),
 	Unexpected(RequestData<Block>),
 }
 
 impl<T> Future for RemoteResponse<T> {
 	type Item = T;
-	type Error = client::error::Error;
+	type Error = ClientError;
 
 	fn poll(&mut self) -> Poll<Self::Item, Self::Error> {
 		self.receiver.poll()
-			.map_err(|_| client::error::ErrorKind::RemoteFetchCancelled.into())
+			.map_err(|_| ClientErrorKind::RemoteFetchCancelled.into())
 			.and_then(|r| match r {
 				Async::Ready(Ok(ready)) => Ok(Async::Ready(ready)),
 				Async::Ready(Err(error)) => Err(error),
@@ -172,7 +181,7 @@ impl<B: BlockT, E> OnDemand<B, E> where
 					(retry_count - 1, Some(retry_request_data))
 				} else {
 					trace!(target: "sync", "Failed to get remote {} response for given number of retries", rtype);
-					retry_request_data.fail(client::error::ErrorKind::RemoteFetchFailed.into());
+					retry_request_data.fail(ClientErrorKind::RemoteFetchFailed.into());
 					(0, None)
 				}
 			},
@@ -262,6 +271,22 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 			data @ _ => Accept::Unexpected(data),
 		})
 	}
+
+	fn on_remote_changes_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>>) {
+		self.accept_response("changes", io, peer, response.id, |request| match request.data {
+			RequestData::RemoteChanges(request, sender) => match self.checker.check_changes_proof(
+				&request, response.max, response.proof
+			) {
+				Ok(response) => {
+					// we do not bother if receiver has been dropped already
+					let _ = sender.send(Ok(response));
+					Accept::Ok
+				},
+				Err(error) => Accept::CheckFailed(error, RequestData::RemoteChanges(request, sender)),
+			},
+			data @ _ => Accept::Unexpected(data),
+		})
+	}
 }
 
 impl<B, E> Fetcher<B> for OnDemand<B, E> where
@@ -272,6 +297,7 @@ impl<B, E> Fetcher<B> for OnDemand<B, E> where
 	type RemoteHeaderResult = RemoteResponse<B::Header>;
 	type RemoteReadResult = RemoteResponse<Option<Vec<u8>>>;
 	type RemoteCallResult = RemoteResponse<client::CallResult>;
+	type RemoteChangesResult = RemoteResponse<Vec<(NumberFor<B>, u32)>>;
 
 	fn remote_header(&self, request: RemoteHeaderRequest<B::Header>) -> Self::RemoteHeaderResult {
 		let (sender, receiver) = channel();
@@ -288,6 +314,12 @@ impl<B, E> Fetcher<B> for OnDemand<B, E> where
 	fn remote_call(&self, request: RemoteCallRequest<B::Header>) -> Self::RemoteCallResult {
 		let (sender, receiver) = channel();
 		self.schedule_request(request.retry_count.clone(), RequestData::RemoteCall(request, sender),
+			RemoteResponse { receiver })
+	}
+
+	fn remote_changes(&self, request: RemoteChangesRequest<B::Header>) -> Self::RemoteChangesResult {
+		let (sender, receiver) = channel();
+		self.schedule_request(request.retry_count.clone(), RequestData::RemoteChanges(request, sender),
 			RemoteResponse { receiver })
 	}
 }
@@ -377,35 +409,44 @@ impl<B, E> OnDemandCore<B, E> where
 impl<Block: BlockT> Request<Block> {
 	pub fn message(&self) -> message::Message<Block> {
 		match self.data {
-			RequestData::RemoteHeader(ref data, _) => message::generic::Message::RemoteHeaderRequest(
-				message::RemoteHeaderRequest {
+			RequestData::RemoteHeader(ref data, _) =>
+				message::generic::Message::RemoteHeaderRequest(message::RemoteHeaderRequest {
 					id: self.id,
 					block: data.block,
 				}),
-			RequestData::RemoteRead(ref data, _) => message::generic::Message::RemoteReadRequest(
-				message::RemoteReadRequest {
+			RequestData::RemoteRead(ref data, _) =>
+				message::generic::Message::RemoteReadRequest(message::RemoteReadRequest {
 					id: self.id,
 					block: data.block,
 					key: data.key.clone(),
 				}),
-			RequestData::RemoteCall(ref data, _) => message::generic::Message::RemoteCallRequest(
-				message::RemoteCallRequest {
+			RequestData::RemoteCall(ref data, _) =>
+				message::generic::Message::RemoteCallRequest(message::RemoteCallRequest {
 					id: self.id,
 					block: data.block,
 					method: data.method.clone(),
 					data: data.call_data.clone(),
+				}),
+			RequestData::RemoteChanges(ref data, _) =>
+				message::generic::Message::RemoteChangesRequest(message::RemoteChangesRequest {
+					id: self.id,
+					first: data.first_block.1.clone(),
+					last: data.last_block.1.clone(),
+					max: data.max_block.1.clone(),
+					key: data.key.clone(),
 				}),
 		}
 	}
 }
 
 impl<Block: BlockT> RequestData<Block> {
-	pub fn fail(self, error: client::error::Error) {
+	pub fn fail(self, error: ClientError) {
 		// don't care if anyone is listening
 		match self {
 			RequestData::RemoteHeader(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteCall(_, sender) => { let _ = sender.send(Err(error)); },
 			RequestData::RemoteRead(_, sender) => { let _ = sender.send(Err(error)); },
+			RequestData::RemoteChanges(_, sender) => { let _ = sender.send(Err(error)); },
 		}
 	}
 }
@@ -417,15 +458,15 @@ pub mod tests {
 	use std::time::Instant;
 	use futures::Future;
 	use parking_lot::RwLock;
-	use client;
+	use client::{self, error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
-		RemoteCallRequest, RemoteReadRequest};
+		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest};
 	use message;
 	use network_libp2p::NodeIndex;
 	use service::{Roles, ExecuteInContext};
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
-	use test_client::runtime::{Block, Header};
+	use test_client::runtime::{changes_trie_config, Block, Header};
 
 	pub struct DummyExecutor;
 	struct DummyFetchChecker { ok: bool }
@@ -440,27 +481,34 @@ pub mod tests {
 			_request: &RemoteHeaderRequest<Header>,
 			header: Option<Header>,
 			_remote_proof: Vec<Vec<u8>>
-		) -> client::error::Result<Header> {
+		) -> ClientResult<Header> {
 			match self.ok {
 				true if header.is_some() => Ok(header.unwrap()),
-				_ => Err(client::error::ErrorKind::Backend("Test error".into()).into()),
+				_ => Err(ClientErrorKind::Backend("Test error".into()).into()),
 			}
 		}
 
-		fn check_read_proof(&self, _request: &RemoteReadRequest<Header>, _remote_proof: Vec<Vec<u8>>) -> client::error::Result<Option<Vec<u8>>> {
+		fn check_read_proof(&self, _: &RemoteReadRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<Option<Vec<u8>>> {
 			match self.ok {
 				true => Ok(Some(vec![42])),
-				false => Err(client::error::ErrorKind::Backend("Test error".into()).into()),
+				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
 			}
 		}
 
-		fn check_execution_proof(&self, _request: &RemoteCallRequest<Header>, _remote_proof: Vec<Vec<u8>>) -> client::error::Result<client::CallResult> {
+		fn check_execution_proof(&self, _: &RemoteCallRequest<Header>, _: Vec<Vec<u8>>) -> ClientResult<client::CallResult> {
 			match self.ok {
 				true => Ok(client::CallResult {
 					return_data: vec![42],
 					changes: Default::default(),
 				}),
-				false => Err(client::error::ErrorKind::Backend("Test error".into()).into()),
+				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
+			}
+		}
+
+		fn check_changes_proof(&self, _: &RemoteChangesRequest<Header>, _: u64, _: Vec<Vec<u8>>) -> ClientResult<Vec<(u64, u32)>> {
+			match self.ok {
+				true => Ok(vec![(100, 2)]),
+				false => Err(ClientErrorKind::Backend("Test error".into()).into()),
 			}
 		}
 	}
@@ -729,6 +777,35 @@ pub mod tests {
 				extrinsics_root: Default::default(),
 				digest: Default::default(),
 			}),
+			proof: vec![vec![2]],
+		});
+		thread.join().unwrap();
+	}
+
+	#[test]
+	fn receives_remote_changes_response() {
+		let (_x, on_demand) = dummy(true);
+		let queue = RwLock::new(VecDeque::new());
+		let mut network = TestIo::new(&queue, None);
+		on_demand.on_connect(0, Roles::FULL);
+
+		let response = on_demand.remote_changes(RemoteChangesRequest {
+			changes_trie_config: changes_trie_config(),
+			first_block: (1, Default::default()),
+			last_block: (100, Default::default()),
+			max_block: (100, Default::default()),
+			tries_roots: vec![],
+			key: vec![],
+			retry_count: None,
+		});
+		let thread = ::std::thread::spawn(move || {
+			let result = response.wait().unwrap();
+			assert_eq!(result, vec![(100, 2)]);
+		});
+
+		on_demand.on_remote_changes_response(&mut network, 0, message::RemoteChangesResponse {
+			id: 0,
+			max: 1000,
 			proof: vec![vec![2]],
 		});
 		thread.join().unwrap();
