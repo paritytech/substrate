@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use std::collections::HashMap;
-use std::sync::atomic::{self, AtomicUsize};
+use std::sync::{Arc, atomic::{self, AtomicUsize}};
 
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
@@ -26,14 +26,34 @@ use tokio::runtime::TaskExecutor;
 
 type Id = u64;
 
+/// Generate unique ids for subscriptions.
+#[derive(Clone, Debug)]
+pub struct IdProvider {
+	next_id: Arc<AtomicUsize>,
+}
+impl Default for IdProvider {
+	fn default() -> Self {
+		IdProvider {
+			next_id: Arc::new(AtomicUsize::new(1)),
+		}
+	}
+}
+
+impl IdProvider {
+	/// Returns next id for the subscription.
+	pub fn next_id(&self) -> Id {
+		self.next_id.fetch_add(1, atomic::Ordering::AcqRel) as u64
+	}
+}
+
 /// Subscriptions manager.
 ///
 /// Takes care of assigning unique subscription ids and
 /// driving the sinks into completion.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Subscriptions {
-	next_id: AtomicUsize,
-	active_subscriptions: Mutex<HashMap<Id, oneshot::Sender<()>>>,
+	next_id: IdProvider,
+	active_subscriptions: Arc<Mutex<HashMap<Id, oneshot::Sender<()>>>>,
 	executor: TaskExecutor,
 }
 
@@ -57,7 +77,7 @@ impl Subscriptions {
 		R: future::IntoFuture<Future=F, Item=(), Error=()>,
 		F: future::Future<Item=(), Error=()> + Send + 'static,
 	{
-		let id = self.next_id.fetch_add(1, atomic::Ordering::AcqRel) as u64;
+		let id = self.next_id.next_id();
 		if let Ok(sink) = subscriber.assign_id(id.into()) {
 			let (tx, rx) = oneshot::channel();
 			let future = into_future(sink)
