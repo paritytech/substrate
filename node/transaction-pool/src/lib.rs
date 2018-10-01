@@ -185,6 +185,10 @@ impl<C: Client> transaction_pool::ChainApi for ChainApi<C> {
 	type Score = u64;
 	type Event = ();
 
+	fn latest_hash(&self) -> <C::Block as BlockT>::Hash {
+		self.api.block_number_to_hash(self.api.current_height()).expect("Latest block number always has a hash; qed")
+	}
+
 	fn verify_transaction(&self, _at: &BlockId<Self::Block>, xt: &ExtrinsicFor<Self>) -> Result<Self::VEx> {
 		let encoded = xt.encode();
 		let uxt = UncheckedExtrinsic::decode(&mut encoded.as_slice()).ok_or_else(|| ErrorKind::InvalidExtrinsicFormat)?;
