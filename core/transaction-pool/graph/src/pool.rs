@@ -32,7 +32,7 @@ use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
 	traits,
-	transaction_validity::TransactionValidity,
+	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 
 /// Modification notification event stream type;
@@ -42,6 +42,8 @@ pub type EventStream = mpsc::UnboundedReceiver<()>;
 pub type ExHash<A> = <A as ChainApi>::Hash;
 /// Extrinsic type for a pool.
 pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
+/// Block number type for the ChainApi
+pub type NumberFor<A> = traits::NumberFor<<A as ChainApi>::Block>;
 
 /// Concrete extrinsic validation and query logic.
 pub trait ChainApi: Send + Sync {
@@ -56,7 +58,7 @@ pub trait ChainApi: Send + Sync {
 	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error>;
 
 	/// Returns a block number given the block id.
-	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<u64, Self::Error>;
+	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error>;
 
 	/// Hash the extrinsic.
 	fn hash(&self, uxt: &ExtrinsicFor<Self>) -> Self::Hash;
@@ -86,7 +88,9 @@ pub struct Pool<B: ChainApi> {
 	rotator: PoolRotator<ExHash<B>>,
 }
 
-impl<B: ChainApi> Pool<B> {
+impl<B: ChainApi> Pool<B> where
+	NumberFor<B>: Into<base::BlockNumber>,
+{
 	/// Create a new transaction pool.
 	/// TODO [ToDr] Options
 	pub fn new(api: B) -> Self {
@@ -118,7 +122,8 @@ impl<B: ChainApi> Pool<B> {
 	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<ExHash<B>>, B::Error> where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
-		let block_number = self.api.block_id_to_number(at)?;
+		let block_number = self.api.block_id_to_number(at)?
+			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
 		xts
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
@@ -151,11 +156,11 @@ impl<B: ChainApi> Pool<B> {
 				}
 			})
 			.map(|tx| {
-				let imported = self.pool.write().import(block_number, tx?)?;
+				let imported = self.pool.write().import(block_number.into(), tx?)?;
 
 				self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
 
-				// notify listener
+				// TODO [ToDr] notify listener
 
 				Ok(imported.hash().clone())
 			})
@@ -176,10 +181,31 @@ impl<B: ChainApi> Pool<B> {
 	/// Remove from the pool.
 	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<Arc<base::Transaction<ExHash<B>, TxData<ExtrinsicFor<B>>>>> {
 		// temporarily ban invalid transactions
-		debug!(target: "transaction-pool", "Banning invalid transactions: {:?}", hashes);
+		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
 		self.rotator.ban(&time::Instant::now(), hashes);
 
 		self.pool.write().remove_invalid(hashes)
+	}
+
+	/// Get ready transactions ordered by priority
+	pub fn ready<F, X>(&self, f: F) -> X where
+		F: FnOnce(&mut Iterator<Item=Arc<base::Transaction<ExHash<B>, TxData<ExtrinsicFor<B>>>>>) -> X,
+	{
+		let pool = self.pool.read();
+		let mut ready = pool.ready();
+		f(&mut ready)
+	}
+
+	/// Prunes ready transactions that provide given list of tags.
+	pub fn prune_tags(&self, at: &BlockId<B::Block>, tags: impl IntoIterator<Item=Tag>) -> Result<(), B::Error> {
+		let block_number = self.api.block_id_to_number(at)?
+			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
+
+		let status = self.pool.write().prune_tags(block_number.into(), tags);
+		// try to re-submit pruned transactions since some of them might be still valid.
+		self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.raw.clone()));
+		// TODO [ToDr] Fire events for promoted / failed
+		Ok(())
 	}
 }
 

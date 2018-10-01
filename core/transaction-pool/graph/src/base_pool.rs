@@ -219,7 +219,7 @@ impl<Hash: hash::Hash + Member, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
 	}
 
 	/// Returns an iterator over ready transactions in the pool.
-	pub fn ready<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> + 'a {
+	pub fn ready<'a, 'b: 'a>(&'b self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> + 'a {
 		self.ready.get()
 	}
 

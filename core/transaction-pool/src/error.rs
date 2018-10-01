@@ -14,32 +14,21 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
-//! Substrate transaction pool.
-// end::description[]
+use client;
+use txpool;
 
-#![warn(missing_docs)]
-#![warn(unused_extern_crates)]
+error_chain! {
+	links {
+		Client(client::error::Error, client::error::ErrorKind);
+		Pool(txpool::error::Error, txpool::error::ErrorKind);
+	}
+}
 
-extern crate parity_codec;
-extern crate sr_primitives;
-extern crate substrate_client as client;
-extern crate substrate_primitives;
-extern crate substrate_transaction_graph as txpool;
-
-#[macro_use]
-extern crate error_chain;
-
-#[cfg(test)]
-extern crate substrate_test_client as test_client;
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
-
-mod api;
-#[cfg(test)]
-mod tests;
-
-pub mod error;
-
-pub use api::ChainApi;
-pub use txpool::*;
+impl txpool::IntoPoolError for Error {
+	fn into_pool_error(self) -> ::std::result::Result<txpool::error::Error, Self> {
+		match self {
+			Error(ErrorKind::Pool(e), c) => Ok(txpool::error::Error(e, c)),
+			e => Err(e),
+		}
+	}
+}

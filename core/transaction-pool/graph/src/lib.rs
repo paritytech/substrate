@@ -24,7 +24,6 @@
 //!
 //! TODO [ToDr]
 //! - [ ] Longevity handling (remove obsolete transactions periodically)
-//! - [ ] Banning / Future-rotation (once rejected (as invalid) should not be accepted for some time)
 //! - [ ] Multi-threading (getting ready transactions should not block the pool)
 // end::description[]
 
@@ -51,4 +50,4 @@ pub mod watcher;
 
 pub use self::error::IntoPoolError;
 pub use self::base_pool::Transaction;
-pub use self::pool::{Pool, ChainApi, EventStream, ExtrinsicFor, ExHash};
+pub use self::pool::{Pool, ChainApi, EventStream, ExtrinsicFor, ExHash, NumberFor};
