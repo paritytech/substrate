@@ -37,7 +37,6 @@ use primitives::{Bytes, Blake2Hasher};
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
 use subscriptions::Subscriptions;
-use tokio::runtime::TaskExecutor;
 
 pub mod error;
 
@@ -91,11 +90,15 @@ impl<B, E, P> Author<B, E, P> where
 	P: PoolChainApi + Sync + Send + 'static,
 {
 	/// Create new instance of Authoring API.
-	pub fn new(client: Arc<Client<B, E, <P as PoolChainApi>::Block>>, pool: Arc<Pool<P>>, executor: TaskExecutor) -> Self {
+	pub fn new(
+		client: Arc<Client<B, E, <P as PoolChainApi>::Block>>,
+		pool: Arc<Pool<P>>,
+		subscriptions: Subscriptions,
+	) -> Self {
 		Author {
 			client,
 			pool,
-			subscriptions: Subscriptions::new(executor),
+			subscriptions,
 		}
 	}
 }

@@ -155,12 +155,12 @@ fn should_watch_extrinsic() {
 	p.watch_extrinsic(Default::default(), subscriber, uxt(5, 5).encode().into());
 
 	// then
-	assert_eq!(runtime.block_on(id_rx), Ok(Ok(0.into())));
+	assert_eq!(runtime.block_on(id_rx), Ok(Ok(1.into())));
 	// check notifications
 	AuthorApi::submit_rich_extrinsic(&p, uxt(5, 1)).unwrap();
 	assert_eq!(
 		runtime.block_on(data.into_future()).unwrap().0,
-		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"usurped":1},"subscription":0}}"#.into())
+		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"usurped":1},"subscription":1}}"#.into())
 	);
 }
 
