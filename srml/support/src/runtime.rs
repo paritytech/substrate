@@ -655,8 +655,8 @@ macro_rules! __decl_outer_dispatch {
 		;
 	) => {
 		impl_outer_dispatch!(
-			pub enum Call where origin: Origin {
-				$( $parsed_name, )*
+			pub enum Call for $runtime where origin: Origin {
+				$( $parsed_modules::$parsed_name, )*
 			}
 		);
 	};

@@ -374,9 +374,9 @@ mod tests {
 	}
 
 	impl_outer_dispatch! {
-		pub enum Call where origin: Origin {
-			Balances,
-			Democracy,
+		pub enum Call for Test where origin: Origin {
+			balances::Balances,
+			democracy::Democracy,
 		}
 	}
 
