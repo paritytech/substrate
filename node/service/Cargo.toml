@@ -17,13 +17,13 @@ node-runtime = { path = "../runtime" }
 node-executor = { path = "../executor" }
 node-consensus = { path = "../consensus" }
 node-network = { path = "../network" }
-node-transaction-pool = { path = "../transaction-pool" }
 sr-io = { path = "../../core/sr-io" }
-substrate-primitives = { path = "../../core/primitives" }
-substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }
+substrate-network = { path = "../../core/network" }
+substrate-primitives = { path = "../../core/primitives" }
 substrate-service = { path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
+substrate-transaction-pool = { path = "../../core/transaction-pool" }
 
 [dev-dependencies]
 substrate-service-test = { path = "../../core/service/test" }

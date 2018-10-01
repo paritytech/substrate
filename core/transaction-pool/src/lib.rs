@@ -25,7 +25,8 @@ extern crate parity_codec;
 extern crate sr_primitives;
 extern crate substrate_client as client;
 extern crate substrate_primitives;
-extern crate substrate_transaction_graph as txpool;
+
+pub extern crate substrate_transaction_graph as txpool;
 
 #[macro_use]
 extern crate error_chain;
@@ -42,4 +43,3 @@ mod tests;
 pub mod error;
 
 pub use api::ChainApi;
-pub use txpool::*;

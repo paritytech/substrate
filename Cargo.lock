@@ -1586,7 +1586,6 @@ dependencies = [
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 0.1.0",
  "node-runtime 0.1.0",
- "node-transaction-pool 0.1.0",
  "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1596,6 +1595,7 @@ dependencies = [
  "substrate-client 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
+ "substrate-transaction-pool 0.1.0",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1700,7 +1700,6 @@ dependencies = [
  "node-network 0.1.0",
  "node-primitives 0.1.0",
  "node-runtime 0.1.0",
- "node-transaction-pool 0.1.0",
  "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "rhododendron 0.3.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1715,23 +1714,8 @@ dependencies = [
  "substrate-service-test 0.3.0",
  "substrate-telemetry 0.3.0",
  "substrate-test-client 0.1.0",
- "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
-]
-
-[[package]]
-name = "node-transaction-pool"
-version = "0.1.0"
-dependencies = [
- "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "node-primitives 0.1.0",
- "node-runtime 0.1.0",
- "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "sr-primitives 0.1.0",
- "substrate-client 0.1.0",
- "substrate-keyring 0.1.0",
- "substrate-primitives 0.1.0",
  "substrate-transaction-pool 0.1.0",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

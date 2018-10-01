@@ -16,25 +16,25 @@
 
 //! This service uses BFT consensus provided by the substrate.
 
-extern crate parking_lot;
-extern crate node_transaction_pool as transaction_pool;
 extern crate node_runtime;
 extern crate node_primitives;
 
-extern crate substrate_bft as bft;
 extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
 extern crate srml_system;
+extern crate substrate_bft as bft;
 extern crate substrate_client as client;
+extern crate substrate_primitives as primitives;
+extern crate substrate_transaction_pool as transaction_pool;
 
 extern crate exit_future;
-extern crate tokio;
+extern crate futures;
+extern crate parking_lot;
 extern crate rhododendron;
+extern crate tokio;
 
 #[macro_use]
 extern crate error_chain;
-extern crate futures;
 
 #[macro_use]
 extern crate log;

@@ -4,22 +4,22 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-futures = "0.1.17"
-parking_lot = "0.4"
-tokio = "0.1.7"
 error-chain = "0.12"
-log = "0.4"
 exit-future = "0.1"
-rhododendron = "0.3"
+futures = "0.1.17"
+log = "0.4"
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
-node-transaction-pool = { path = "../transaction-pool" }
-substrate-bft = { path = "../../core/bft" }
 parity-codec = "2.0"
-substrate-primitives = { path = "../../core/primitives" }
-substrate-client = { path = "../../core/client" }
+parking_lot = "0.4"
+rhododendron = "0.3"
 sr-primitives = { path = "../../core/sr-primitives" }
 srml-system = { path = "../../srml/system" }
+substrate-bft = { path = "../../core/bft" }
+substrate-client = { path = "../../core/client" }
+substrate-primitives = { path = "../../core/primitives" }
+substrate-transaction-pool = { path = "../../core/transaction-pool" }
+tokio = "0.1.7"
 
 [dev-dependencies]
 substrate-keyring = { path = "../../core/keyring" }

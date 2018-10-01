@@ -21,12 +21,14 @@ use std::sync::Arc;
 use client::{self, Client};
 use codec::Decode;
 use transaction_pool::{
-	Pool,
-	IntoPoolError,
-	ChainApi as PoolChainApi,
 	watcher::Status,
-	ExHash,
-	ExtrinsicFor,
+	txpool::{
+		Pool,
+		IntoPoolError,
+		ChainApi as PoolChainApi,
+		ExHash,
+		ExtrinsicFor,
+	},
 };
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
