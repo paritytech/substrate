@@ -23,7 +23,7 @@ use transaction_pool::{VerifiedTransaction, scoring, Transaction, ChainApi, Erro
 use test_client::runtime::{Block, Extrinsic, Transfer};
 use test_client;
 use tokio::runtime;
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::{traits, generic::BlockId};
 
 #[derive(Clone, Debug)]
 pub struct Verified
@@ -52,6 +52,10 @@ impl ChainApi for TestApi {
 	type Score = u64;
 	type Event = ();
 	type Ready = ();
+
+	fn latest_hash(&self) -> <Block as traits::Block>::Hash {
+		1.into()
+	}
 
 	fn verify_transaction(&self, _at: &BlockId<Block>, uxt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error> {
 		Ok(Verified {

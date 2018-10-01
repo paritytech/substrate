@@ -20,20 +20,38 @@ use std::{
 	collections::HashMap,
 };
 use txpool;
-
 use watcher;
 
-/// Extrinsic pool default listener.
-#[derive(Default)]
-pub struct Listener<H: ::std::hash::Hash + Eq> {
-	watchers: HashMap<H, watcher::Sender<H>>
+/// Returns the hash of the latest block.
+pub trait LatestHash {
+	type Hash: Clone;
+
+	/// Hash of the latest block.
+	fn latest_hash(&self) -> Self::Hash;
 }
 
-impl<H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default> Listener<H> {
+/// Extrinsic pool default listener.
+pub struct Listener<H: ::std::hash::Hash + Eq, C: LatestHash> {
+	watchers: HashMap<H, watcher::Sender<H, C::Hash>>,
+	chain: C,
+}
+
+impl<H, C> Listener<H, C> where
+	H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default,
+	C: LatestHash,
+{
+	/// Creates a new listener with given latest hash provider.
+	pub fn new(chain: C) -> Self {
+		Listener {
+			watchers: Default::default(),
+			chain,
+		}
+	}
+
 	/// Creates a new watcher for given verified extrinsic.
 	///
 	/// The watcher can be used to subscribe to lifecycle events of that extrinsic.
-	pub fn create_watcher<T: txpool::VerifiedTransaction<Hash=H>>(&mut self, xt: Arc<T>) -> watcher::Watcher<H> {
+	pub fn create_watcher<T: txpool::VerifiedTransaction<Hash=H>>(&mut self, xt: Arc<T>) -> watcher::Watcher<H, C::Hash> {
 		let sender = self.watchers.entry(*xt.hash()).or_insert_with(watcher::Sender::default);
 		sender.new_watcher()
 	}
@@ -43,7 +61,7 @@ impl<H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default> Li
 		self.fire(hash, |watcher| watcher.broadcast(peers));
 	}
 
-	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H>) {
+	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H, C::Hash>) {
 		let clean = if let Some(h) = self.watchers.get_mut(hash) {
 			fun(h);
 			h.is_done()
@@ -57,9 +75,10 @@ impl<H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default> Li
 	}
 }
 
-impl<H, T> txpool::Listener<T> for Listener<H> where
+impl<H, T, C> txpool::Listener<T> for Listener<H, C> where
 	H: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Default,
 	T: txpool::VerifiedTransaction<Hash=H>,
+	C: LatestHash,
 {
 	fn added(&mut self, tx: &Arc<T>, old: Option<&Arc<T>>) {
 		if let Some(old) = old {
@@ -88,8 +107,7 @@ impl<H, T> txpool::Listener<T> for Listener<H> where
 	}
 
 	fn culled(&mut self, tx: &Arc<T>) {
-		// TODO [ToDr] latest block number?
-		let header_hash = Default::default();
+		let header_hash = self.chain.latest_hash();
 		self.fire(tx.hash(), |watcher| watcher.finalised(header_hash))
 	}
 }
