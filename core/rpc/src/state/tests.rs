@@ -27,7 +27,7 @@ fn should_return_storage() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
-	let client = State::new(client, core.executor());
+	let client = State::new(client, Subscriptions::new(core.executor()));
 
 	assert_matches!(
 		client.storage(StorageKey(vec![10]), Some(genesis_hash).into()),
@@ -40,7 +40,7 @@ fn should_call_contract() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
 	let genesis_hash = client.genesis_hash();
-	let client = State::new(client, core.executor());
+	let client = State::new(client, Subscriptions::new(core.executor()));
 
 	assert_matches!(
 		client.call("balanceOf".into(), Bytes(vec![1,2,3]), Some(genesis_hash).into()),
@@ -55,15 +55,12 @@ fn should_notify_about_storage_changes() {
 	let (subscriber, id, transport) = pubsub::Subscriber::new_test("test");
 
 	{
-		let api = State {
-			client: Arc::new(test_client::new()),
-			subscriptions: Subscriptions::new(remote),
-		};
+		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
 
 		api.subscribe_storage(Default::default(), subscriber, None.into());
 
 		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(0))));
+		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
 		let mut builder = api.client.new_block().unwrap();
 		builder.push_transfer(runtime::Transfer {
@@ -89,17 +86,14 @@ fn should_send_initial_storage_changes_and_notifications() {
 	let (subscriber, id, transport) = pubsub::Subscriber::new_test("test");
 
 	{
-		let api = State {
-			client: Arc::new(test_client::new()),
-			subscriptions: Subscriptions::new(remote),
-		};
+		let api = State::new(Arc::new(test_client::new()), Subscriptions::new(remote));
 
 		api.subscribe_storage(Default::default(), subscriber, Some(vec![
 			StorageKey("a52da2b7c269da1366b3ed1cdb7299ce".from_hex().unwrap()),
 		]).into());
 
 		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(0))));
+		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
 		let mut builder = api.client.new_block().unwrap();
 		builder.push_transfer(runtime::Transfer {
@@ -125,7 +119,7 @@ fn should_send_initial_storage_changes_and_notifications() {
 fn should_query_storage() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let client = Arc::new(test_client::new());
-	let api = State::new(client.clone(), core.executor());
+	let api = State::new(client.clone(), Subscriptions::new(core.executor()));
 
 	let add_block = |nonce| {
 		let mut builder = client.new_block().unwrap();
