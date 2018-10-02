@@ -14,14 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{CodeOf, MaxDepth, ContractAddressFor, Module, Trait, Event, RawEvent};
+use super::{MaxDepth, ContractAddressFor, Module, Trait, Event, RawEvent};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use vm;
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
-use runtime_support::{StorageMap, StorageValue};
+use runtime_support::StorageValue;
 use balances::{self, EnsureAccountLiquid};
 
 // TODO: Add logs
@@ -60,7 +60,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("not enough gas to pay base call fee");
 		}
 
-		let dest_code = <CodeOf<T>>::get(&dest);
+		let dest_code = self.overlay.get_code(&dest);
 
 		let (change_set, events) = {
 			let mut overlay = OverlayAccountDb::new(&self.overlay);
@@ -124,8 +124,9 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		}
 
 		let dest = T::DetermineContractAddress::contract_address_for(init_code, data, &self.self_account);
-		if <CodeOf<T>>::exists(&dest) {
-			// TODO: Is it enough?
+
+		if !self.overlay.get_code(&dest).is_empty() {
+			// It should be enough to check only the code.
 			return Err("contract already exists");
 		}
 
@@ -185,9 +186,13 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 /// (transfering endowment), specified by `contract_create` flag,
 /// or because of a transfer via `call`.
 ///
-/// Note, that the fee is denominated in `T::Balance` units, but
+/// NOTE: that the fee is denominated in `T::Balance` units, but
 /// charged in `T::Gas` from the provided `gas_meter`. This means
 /// that the actual amount charged might differ.
+///
+/// NOTE: that we allow for draining all funds of the contract so it
+/// can go below existential deposit, essentially giving a contract
+/// the chance to give up it's life.
 fn transfer<'a, T: Trait>(
 	gas_meter: &mut GasMeter<T>,
 	contract_create: bool,
@@ -212,6 +217,7 @@ fn transfer<'a, T: Trait>(
 		return Err("not enough gas to pay transfer fee");
 	}
 
+	// We allow balance to go below the existential deposit here:
 	let from_balance = ctx.overlay.get_balance(transactor);
 	let new_from_balance = match from_balance.checked_sub(&value) {
 		Some(b) => b,

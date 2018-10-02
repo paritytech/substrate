@@ -31,7 +31,7 @@ extern crate log;
 pub use cli::error;
 
 use tokio::runtime::Runtime;
-pub use service::{Components as ServiceComponents, Service, CustomConfiguration};
+pub use service::{Components as ServiceComponents, Service, CustomConfiguration, ServiceFactory};
 pub use cli::{VersionInfo, IntoExit};
 
 /// The chain specification option.
@@ -94,8 +94,8 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			let mut runtime = Runtime::new()?;
 			let executor = runtime.executor();
 			match config.roles == service::Roles::LIGHT {
-				true => run_until_exit(&mut runtime, service::new_light(config, executor)?, exit)?,
-				false => run_until_exit(&mut runtime, service::new_full(config, executor)?, exit)?,
+				true => run_until_exit(&mut runtime, service::Factory::new_light(config, executor)?, exit)?,
+				false => run_until_exit(&mut runtime, service::Factory::new_full(config, executor)?, exit)?,
 			}
 		}
 	}

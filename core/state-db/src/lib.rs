@@ -36,6 +36,7 @@
 #[macro_use] extern crate parity_codec_derive;
 extern crate parking_lot;
 extern crate parity_codec as codec;
+#[cfg(test)]
 extern crate substrate_primitives as primitives;
 
 mod noncanonical;

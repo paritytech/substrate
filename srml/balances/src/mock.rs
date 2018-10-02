@@ -51,50 +51,61 @@ impl Trait for Runtime {
 	type Event = ();
 }
 
-pub fn new_test_ext(ext_deposit: u64, monied: bool) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
-	let balance_factor = if ext_deposit > 0 {
-		256
-	} else {
-		1
-	};
-	t.extend(GenesisConfig::<Runtime>{
-		balances: if monied {
-			vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
-		} else {
-			vec![(10, balance_factor), (20, balance_factor)]
-		},
-		transaction_base_fee: 0,
-		transaction_byte_fee: 0,
-		existential_deposit: ext_deposit,
-		transfer_fee: 0,
-		creation_fee: 0,
-		reclaim_rebate: 0,
-	}.build_storage().unwrap());
-	t.into()
+pub struct ExtBuilder {
+	existential_deposit: u64,
+	transfer_fee: u64,
+	creation_fee: u64,
+	monied: bool,
 }
-
-pub fn new_test_ext2(ext_deposit: u64, monied: bool) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
-	let balance_factor = if ext_deposit > 0 {
-		256
-	} else {
-		1
-	};
-	t.extend(GenesisConfig::<Runtime>{
-		balances: if monied {
-			vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
+impl Default for ExtBuilder {
+	fn default() -> Self {
+		Self {
+			existential_deposit: 0,
+			transfer_fee: 0,
+			creation_fee: 0,
+			monied: false,
+		}
+	}
+}
+impl ExtBuilder {
+	pub fn existential_deposit(mut self, existential_deposit: u64) -> Self {
+		self.existential_deposit = existential_deposit;
+		self
+	}
+	pub fn transfer_fee(mut self, transfer_fee: u64) -> Self {
+		self.transfer_fee = transfer_fee;
+		self
+	}
+	pub fn creation_fee(mut self, creation_fee: u64) -> Self {
+		self.creation_fee = creation_fee;
+		self
+	}
+	pub fn monied(mut self, monied: bool) -> Self {
+		self.monied = monied;
+		self
+	}
+	pub fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
+		let balance_factor = if self.existential_deposit > 0 {
+			256
 		} else {
-			vec![(10, balance_factor), (20, balance_factor)]
-		},
-		transaction_base_fee: 0,
-		transaction_byte_fee: 0,
-		existential_deposit: ext_deposit,
-		transfer_fee: 10,  // transfer_fee not zero
-		creation_fee: 50, // creation_fee not zero
-		reclaim_rebate: 0,
-	}.build_storage().unwrap());
-	t.into()
+			1
+		};
+		t.extend(GenesisConfig::<Runtime> {
+			balances: if self.monied {
+				vec![(1, 10 * balance_factor), (2, 20 * balance_factor), (3, 30 * balance_factor), (4, 40 * balance_factor)]
+			} else {
+				vec![(10, balance_factor), (20, balance_factor)]
+			},
+			transaction_base_fee: 0,
+			transaction_byte_fee: 0,
+			existential_deposit: self.existential_deposit,
+			transfer_fee: self.transfer_fee,
+			creation_fee: self.creation_fee,
+			reclaim_rebate: 0,
+		}.build_storage().unwrap());
+		t.into()
+	}
 }
 
 pub type System = system::Module<Runtime>;

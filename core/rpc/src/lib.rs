@@ -28,10 +28,8 @@ extern crate substrate_client as client;
 extern crate substrate_transaction_pool as transaction_pool;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
-extern crate substrate_state_machine as state_machine;
 extern crate sr_version as runtime_version;
 extern crate tokio;
-extern crate serde_json;
 
 #[macro_use]
 extern crate error_chain;
@@ -51,6 +49,8 @@ extern crate rustc_hex;
 mod errors;
 mod helpers;
 mod subscriptions;
+
+pub use subscriptions::Subscriptions;
 
 pub mod author;
 pub mod chain;

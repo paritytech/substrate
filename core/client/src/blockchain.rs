@@ -89,6 +89,8 @@ pub struct Info<Block: BlockT> {
 	pub genesis_hash: Block::Hash,
 	/// The head of the finalized chain.
 	pub finalized_hash: Block::Hash,
+	/// Last finalized block number.
+	pub finalized_number: <<Block as BlockT>::Header as HeaderT>::Number,
 }
 
 /// Block status.

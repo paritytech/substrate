@@ -25,9 +25,6 @@ extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 
@@ -142,6 +139,14 @@ pub fn run_tests(mut input: &[u8]) -> Vec<u8> {
 	let stxs = block.extrinsics.iter().map(Encode::encode).collect::<Vec<_>>();
 	print("reserialised transactions.");
 	[stxs.len() as u8].encode()
+}
+
+/// Changes trie configuration (optionally) used in tests.
+pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
+	primitives::ChangesTrieConfiguration {
+		digest_interval: 4,
+		digest_levels: 2,
+	}
 }
 
 pub mod api {

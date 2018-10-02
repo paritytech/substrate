@@ -261,6 +261,23 @@ pub enum StorageFunctionModifier {
 	Required,
 }
 
+/// All metadata about the outer dispatch.
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct OuterDispatchMetadata {
+	pub name: DecodeDifferentStr,
+	pub calls: DecodeDifferentArray<OuterDispatchCall>,
+}
+
+/// A Call from the outer dispatch.
+#[derive(Clone, PartialEq, Eq, Encode)]
+#[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
+pub struct OuterDispatchCall {
+	pub name: DecodeDifferentStr,
+	pub prefix: DecodeDifferentStr,
+	pub index: u16,
+}
+
 /// All metadata about an runtime module.
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
@@ -276,4 +293,5 @@ pub struct RuntimeModuleMetadata {
 pub struct RuntimeMetadata {
 	pub outer_event: OuterEventMetadata,
 	pub modules: DecodeDifferentArray<RuntimeModuleMetadata>,
+	pub outer_dispatch: OuterDispatchMetadata,
 }

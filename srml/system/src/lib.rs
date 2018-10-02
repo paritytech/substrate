@@ -28,9 +28,6 @@ extern crate sr_std as rstd;
 extern crate srml_support as runtime_support;
 
 #[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 

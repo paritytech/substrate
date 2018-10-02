@@ -24,9 +24,9 @@ use futures::{
 /// Possible extrinsic status events
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub enum Status<H> {
+pub enum Status<H, H2> {
 	/// Extrinsic has been finalised in block with given hash.
-	Finalised(H),
+	Finalised(H2),
 	/// Some state change (perhaps another extrinsic was included) rendered this extrinsic invalid.
 	Usurped(H),
 	/// The extrinsic has been broadcast to the given peers.
@@ -39,30 +39,39 @@ pub enum Status<H> {
 ///
 /// Represents a stream of status updates for particular extrinsic.
 #[derive(Debug)]
-pub struct Watcher<H> {
-	receiver: mpsc::UnboundedReceiver<Status<H>>,
+pub struct Watcher<H, H2> {
+	receiver: mpsc::UnboundedReceiver<Status<H, H2>>,
 }
 
-impl<H> Watcher<H> {
+impl<H, H2> Watcher<H, H2> {
 	/// Pipe the notifications to given sink.
 	///
 	/// Make sure to drive the future to completion.
-	pub fn into_stream(self) -> impl Stream<Item=Status<H>, Error=()> {
+	pub fn into_stream(self) -> impl Stream<Item=Status<H, H2>, Error=()> {
 		// we can safely ignore the error here, `UnboundedReceiver` never fails.
 		self.receiver.map_err(|_| ())
 	}
 }
 
 /// Sender part of the watcher. Exposed only for testing purposes.
-#[derive(Debug, Default)]
-pub struct Sender<H> {
-	receivers: Vec<mpsc::UnboundedSender<Status<H>>>,
+#[derive(Debug)]
+pub struct Sender<H, H2> {
+	receivers: Vec<mpsc::UnboundedSender<Status<H, H2>>>,
 	finalised: bool,
 }
 
-impl<H: Clone> Sender<H> {
+impl<H, H2> Default for Sender<H, H2> {
+	fn default() -> Self {
+		Sender {
+			receivers: Default::default(),
+			finalised: Default::default(),
+		}
+	}
+}
+
+impl<H: Clone, H2: Clone> Sender<H, H2> {
 	/// Add a new watcher to this sender object.
-	pub fn new_watcher(&mut self) -> Watcher<H> {
+	pub fn new_watcher(&mut self) -> Watcher<H, H2> {
 		let (tx, receiver) = mpsc::unbounded();
 		self.receivers.push(tx);
 		Watcher {
@@ -76,7 +85,7 @@ impl<H: Clone> Sender<H> {
 	}
 
 	/// Extrinsic has been finalised in block with given hash.
-	pub fn finalised(&mut self, hash: H) {
+	pub fn finalised(&mut self, hash: H2) {
 		self.send(Status::Finalised(hash));
 		self.finalised = true;
 	}
@@ -97,7 +106,7 @@ impl<H: Clone> Sender<H> {
 		self.finalised || self.receivers.is_empty()
 	}
 
-	fn send(&mut self, status: Status<H>) {
+	fn send(&mut self, status: Status<H, H2>) {
 		self.receivers.retain(|sender| sender.unbounded_send(status.clone()).is_ok())
 	}
 }

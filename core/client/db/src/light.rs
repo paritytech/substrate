@@ -71,7 +71,7 @@ impl<Block> LightStorage<Block>
 {
 	/// Create new storage with given settings.
 	pub fn new(config: DatabaseSettings) -> ClientResult<Self> {
-		let db = open_database(&config, "light")?;
+		let db = open_database(&config, columns::META, "light")?;
 
 		Self::from_kvdb(db as Arc<_>)
 	}
@@ -92,7 +92,7 @@ impl<Block> LightStorage<Block>
 			columns::HEADER,
 			columns::AUTHORITIES
 		)?;
-		let meta = RwLock::new(read_meta::<Block>(&*db, columns::META)?);
+		let meta = RwLock::new(read_meta::<Block>(&*db, columns::META, columns::HEADER)?);
 		let leaves = RwLock::new(LeafSet::read_from_db(&*db, columns::META, meta_keys::LEAF_PREFIX)?);
 
 		Ok(LightStorage {
@@ -154,6 +154,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 			best_number: meta.best_number,
 			genesis_hash: meta.genesis_hash,
 			finalized_hash: meta.finalized_hash,
+			finalized_number: meta.finalized_number,
 		})
 	}
 

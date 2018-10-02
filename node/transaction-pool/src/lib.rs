@@ -21,7 +21,6 @@ extern crate substrate_primitives;
 extern crate sr_primitives;
 extern crate node_runtime as runtime;
 extern crate node_primitives as primitives;
-extern crate parking_lot;
 
 #[cfg(test)]
 extern crate substrate_keyring;
@@ -185,6 +184,10 @@ impl<C: Client> transaction_pool::ChainApi for ChainApi<C> {
 	type Error = Error;
 	type Score = u64;
 	type Event = ();
+
+	fn latest_hash(&self) -> <C::Block as BlockT>::Hash {
+		self.api.block_number_to_hash(self.api.current_height()).expect("Latest block number always has a hash; qed")
+	}
 
 	fn verify_transaction(&self, _at: &BlockId<Self::Block>, xt: &ExtrinsicFor<Self>) -> Result<Self::VEx> {
 		let encoded = xt.encode();

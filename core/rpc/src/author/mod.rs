@@ -29,6 +29,7 @@ use transaction_pool::{
 	AllExtrinsics,
 	ExHash,
 	ExtrinsicFor,
+	HashOf,
 };
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
@@ -36,7 +37,6 @@ use primitives::{Bytes, Blake2Hasher};
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
 use subscriptions::Subscriptions;
-use tokio::runtime::TaskExecutor;
 
 pub mod error;
 
@@ -47,7 +47,7 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate authoring RPC API
-	pub trait AuthorApi<Hash, Extrinsic, PendingExtrinsics> {
+	pub trait AuthorApi<Hash, BlockHash, Extrinsic, PendingExtrinsics> {
 		type Metadata;
 
 		/// Submit extrinsic for inclusion in block.
@@ -60,11 +60,11 @@ build_rpc_trait! {
 		/// Returns all pending extrinsics, potentially grouped by sender.
 		#[rpc(name = "author_pendingExtrinsics")]
 		fn pending_extrinsics(&self) -> Result<PendingExtrinsics>;
-	
+
 		#[pubsub(name = "author_extrinsicUpdate")] {
 			/// Submit an extrinsic to watch.
 			#[rpc(name = "author_submitAndWatchExtrinsic")]
-			fn watch_extrinsic(&self, Self::Metadata, pubsub::Subscriber<Status<Hash>>, Bytes);
+			fn watch_extrinsic(&self, Self::Metadata, pubsub::Subscriber<Status<Hash, BlockHash>>, Bytes);
 
 			/// Unsubscribe from extrinsic watching.
 			#[rpc(name = "author_unwatchExtrinsic")]
@@ -90,16 +90,20 @@ impl<B, E, P> Author<B, E, P> where
 	P: PoolChainApi + Sync + Send + 'static,
 {
 	/// Create new instance of Authoring API.
-	pub fn new(client: Arc<Client<B, E, <P as PoolChainApi>::Block>>, pool: Arc<Pool<P>>, executor: TaskExecutor) -> Self {
+	pub fn new(
+		client: Arc<Client<B, E, <P as PoolChainApi>::Block>>,
+		pool: Arc<Pool<P>>,
+		subscriptions: Subscriptions,
+	) -> Self {
 		Author {
 			client,
 			pool,
-			subscriptions: Subscriptions::new(executor),
+			subscriptions,
 		}
 	}
 }
 
-impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author<B, E, P> where
+impl<B, E, P> AuthorApi<ExHash<P>, HashOf<P::Block>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author<B, E, P> where
 	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
@@ -127,7 +131,7 @@ impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author
 		Ok(self.pool.all())
 	}
 
-	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>>>, xt: Bytes) {
+	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>, HashOf<P::Block>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info()?.chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;

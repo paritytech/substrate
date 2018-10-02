@@ -25,6 +25,7 @@ extern crate futures;
 extern crate exit_future;
 extern crate serde;
 extern crate serde_json;
+extern crate parking_lot;
 extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
@@ -61,6 +62,7 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::collections::HashMap;
 use futures::prelude::*;
+use parking_lot::Mutex;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
@@ -81,7 +83,7 @@ pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
 	CodeExecutor, NetworkService, FactoryChainSpec, FactoryBlock,
 	FactoryFullConfiguration, RuntimeGenesis, FactoryGenesis,
-	ComponentExHash, ComponentExtrinsic,
+	ComponentExHash, ComponentExtrinsic, FactoryExtrinsic,
 };
 
 const DEFAULT_PROTOCOL_ID: &'static str = "sup";
@@ -95,7 +97,7 @@ pub struct Service<Components: components::Components> {
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
 	_rpc_http: Option<rpc::HttpServer>,
-	_rpc_ws: Option<rpc::WsServer>,
+	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
 	_telemetry: Option<tel::Telemetry>,
 }
 
@@ -156,7 +158,7 @@ impl<Components> Service<Components>
 			Components::build_transaction_pool(config.transaction_pool, client.clone())?
 		);
 		let transaction_pool_adapter = TransactionPoolAdapter::<Components> {
-			imports_external_transactions: !config.roles == Roles::LIGHT,
+			imports_external_transactions: !(config.roles == Roles::LIGHT),
 			pool: transaction_pool.clone(),
 			client: client.clone(),
 		 };
@@ -186,12 +188,14 @@ impl<Components> Service<Components>
 
 		{
 			// block notifications
-			let network = network.clone();
+			let network = Arc::downgrade(&network);
 			let txpool = transaction_pool.clone();
 
 			let events = client.import_notification_stream()
 				.for_each(move |notification| {
-					network.on_block_imported(notification.hash, &notification.header);
+					if let Some(network) = network.upgrade() {
+						network.on_block_imported(notification.hash, &notification.header);
+					}
 					txpool.cull(&BlockId::hash(notification.hash))
 						.map_err(|e| warn!("Error removing extrinsics: {:?}", e))?;
 					Ok(())
@@ -203,11 +207,13 @@ impl<Components> Service<Components>
 
 		{
 			// extrinsic notifications
-			let network = network.clone();
+			let network = Arc::downgrade(&network);
 			let events = transaction_pool.import_notification_stream()
 				// TODO [ToDr] Consider throttling?
 				.for_each(move |_| {
-					network.trigger_repropagate();
+					if let Some(network) = network.upgrade() {
+						network.trigger_repropagate();
+					}
 					Ok(())
 				})
 				.select(exit.clone())
@@ -226,9 +232,10 @@ impl<Components> Service<Components>
 		let (rpc_http, rpc_ws) = {
 			let handler = || {
 				let client = client.clone();
-				let chain = rpc::apis::chain::Chain::new(client.clone(), task_executor.clone());
-				let state = rpc::apis::state::State::new(client.clone(), task_executor.clone());
-				let author = rpc::apis::author::Author::new(client.clone(), transaction_pool.clone(), task_executor.clone());
+				let subscriptions = rpc::apis::Subscriptions::new(task_executor.clone());
+				let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
+				let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
+				let author = rpc::apis::author::Author::new(client.clone(), transaction_pool.clone(), subscriptions.clone());
 				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _, _>(
 					state,
 					chain,
@@ -277,7 +284,7 @@ impl<Components> Service<Components>
 			keystore: keystore,
 			exit,
 			_rpc_http: rpc_http,
-			_rpc_ws: rpc_ws,
+			_rpc_ws: rpc_ws.map(Mutex::new),
 			_telemetry: telemetry,
 		})
 	}
@@ -398,6 +405,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
 		if !self.imports_external_transactions {
+			debug!("Transaction rejected");
 			return None;
 		}
 
@@ -409,7 +417,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 				Err(e) => match e.into_pool_error() {
 					Ok(e) => match e.kind() {
 						transaction_pool::ErrorKind::AlreadyImported(hash) =>
-							Some(::std::str::FromStr::from_str(&hash).map_err(|_| {})
+							Some(::std::str::FromStr::from_str(&hash[2..]).map_err(|_| {})
 								.expect("Hash string is always valid")),
 						_ => {
 							debug!("Error adding transaction to the pool: {:?}", e);

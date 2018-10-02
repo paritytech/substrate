@@ -20,8 +20,9 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
 use codec::{Encode, Decode, Input, Output};
 pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
-	RemoteHeaderRequest, RemoteHeaderResponse, ConsensusVote,
-	SignedConsensusVote, FromBlock
+	RemoteHeaderRequest, RemoteHeaderResponse,
+	RemoteChangesRequest, RemoteChangesResponse,
+	ConsensusVote, SignedConsensusVote, FromBlock
 };
 
 /// A unique ID of a request.
@@ -274,6 +275,10 @@ pub mod generic {
 		RemoteHeaderRequest(RemoteHeaderRequest<Number>),
 		/// Remote header response.
 		RemoteHeaderResponse(RemoteHeaderResponse<Header>),
+		/// Remote changes request.
+		RemoteChangesRequest(RemoteChangesRequest<Hash>),
+		/// Remote changes reponse.
+		RemoteChangesResponse(RemoteChangesResponse<Number>),
 		/// Chain-specific message
 		#[codec(index = "255")]
 		ChainSpecific(Vec<u8>),
@@ -370,6 +375,33 @@ pub mod generic {
 		/// Header. None if proof generation has failed (e.g. header is unknown).
 		pub header: Option<Header>,
 		/// Header proof.
+		pub proof: Vec<Vec<u8>>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Remote changes request.
+	pub struct RemoteChangesRequest<H> {
+		/// Unique request id.
+		pub id: RequestId,
+		/// Hash of the first block of the range (including first) where changes are requested.
+		pub first: H,
+		/// Hash of the last block of the range (including last) where changes are requested.
+		pub last: H,
+		/// Hash of the last block that we can use when querying changes.
+		pub max: H,
+		/// Storage key which changes are requested.
+		pub key: Vec<u8>,
+	}
+
+	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
+	/// Remote changes response.
+	pub struct RemoteChangesResponse<N> {
+		/// Id of a request this response was made for.
+		pub id: RequestId,
+		/// Proof has been generated using block with this number as a max block. Should be
+		/// less than or equal to the RemoteChangesRequest::max block number.
+		pub max: N,
+		/// Changes proof.
 		pub proof: Vec<Vec<u8>>,
 	}
 }

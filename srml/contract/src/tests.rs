@@ -242,6 +242,40 @@ fn contract_transfer() {
 }
 
 #[test]
+fn contract_transfer_to_death() {
+	const CONTRACT_SHOULD_TRANSFER_VALUE: u64 = 6;
+
+	let code_transfer = wabt::wat2wasm(CODE_TRANSFER).unwrap();
+
+	with_externalities(&mut ExtBuilder::default().existential_deposit(5).build(), || {
+		<CodeOf<Test>>::insert(1, code_transfer.to_vec());
+
+		Balances::set_free_balance(&0, 100_000_000);
+		Balances::increase_total_stake_by(100_000_000);
+
+		Balances::set_free_balance(&1, 6);
+		Balances::increase_total_stake_by(6);
+		<StorageOf<Test>>::insert(1, b"foo".to_vec(), b"1".to_vec());
+
+		assert_ok!(Contract::call(Origin::signed(0), 1, 0, 100_000, Vec::new()));
+
+		assert_eq!(
+			Balances::free_balance(&0),
+			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 135 - base gas fee for call (by transaction)
+			// 2 * 135 - base gas fee for call (by the contract)
+			100_000_000 - (2 * 10) - (2 * 135) - (2 * 135),
+		);
+
+		assert!(!<CodeOf<Test>>::exists(1));
+		assert!(!<StorageOf<Test>>::exists(1, b"foo".to_vec()));
+		assert_eq!(Balances::free_balance(&1), 0);
+
+		assert_eq!(Balances::free_balance(&9), CONTRACT_SHOULD_TRANSFER_VALUE);
+	});
+}
+
+#[test]
 fn contract_transfer_takes_creation_fee() {
 	const CONTRACT_SHOULD_TRANSFER_VALUE: u64 = 6;
 	const CONTRACT_SHOULD_TRANSFER_TO: u64 = 9;

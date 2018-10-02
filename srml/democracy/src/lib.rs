@@ -18,10 +18,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-extern crate serde;
-
-#[cfg(feature = "std")]
+#[cfg(test)]
 extern crate substrate_primitives;
 
 #[cfg(feature = "std")]
@@ -377,9 +374,9 @@ mod tests {
 	}
 
 	impl_outer_dispatch! {
-		pub enum Call where origin: Origin {
-			Balances,
-			Democracy,
+		pub enum Call for Test where origin: Origin {
+			balances::Balances,
+			democracy::Democracy,
 		}
 	}
 

@@ -26,11 +26,11 @@ use serde::{Serialize, de::DeserializeOwned};
 use txpool::{self, Scoring, Readiness};
 
 use error::IntoPoolError;
-use listener::Listener;
+use listener::{self, Listener};
 use rotator::PoolRotator;
 use watcher::Watcher;
 
-use runtime_primitives::{generic::BlockId, traits::Block as BlockT};
+use runtime_primitives::{generic::BlockId, traits};
 
 /// Modification notification event stream type;
 pub type EventStream = mpsc::UnboundedReceiver<()>;
@@ -38,7 +38,7 @@ pub type EventStream = mpsc::UnboundedReceiver<()>;
 /// Extrinsic hash type for a pool.
 pub type ExHash<A> = <A as ChainApi>::Hash;
 /// Extrinsic type for a pool.
-pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as BlockT>::Extrinsic;
+pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
 /// Verified extrinsic data for `ChainApi`.
 pub type VerifiedFor<A> = Verified<ExtrinsicFor<A>, <A as ChainApi>::VEx>;
 /// A collection of all extrinsics.
@@ -80,7 +80,7 @@ where
 /// Concrete extrinsic validation and query logic.
 pub trait ChainApi: Send + Sync {
 	/// Block type.
-	type Block: BlockT;
+	type Block: traits::Block;
 	/// Extrinsic hash type.
 	type Hash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Serialize + DeserializeOwned + ::std::str::FromStr + Send + Sync + Default + 'static;
 	/// Extrinsic sender type.
@@ -96,6 +96,7 @@ pub trait ChainApi: Send + Sync {
 	type Score: ::std::cmp::Ord + Clone + Default + fmt::Debug + Send + Send + Sync + fmt::LowerHex;
 	/// Custom scoring update event type.
 	type Event: ::std::fmt::Debug;
+
 	/// Verify extrinsic at given block.
 	fn verify_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error>;
 
@@ -120,6 +121,20 @@ pub trait ChainApi: Send + Sync {
 	///
 	/// NOTE returning `InsertNew` here can lead to some transactions being accepted above pool limits.
 	fn should_replace(old: &VerifiedFor<Self>, new: &VerifiedFor<Self>) -> txpool::scoring::Choice;
+
+	/// Returns hash of the latest block in chain.
+	fn latest_hash(&self) -> HashOf<Self::Block>;
+}
+
+/// Returns block's hash type.
+pub type HashOf<B> = <B as traits::Block>::Hash;
+
+impl<T: ChainApi> listener::LatestHash for Arc<T> {
+	type Hash = HashOf<T::Block>;
+
+	fn latest_hash(&self) -> HashOf<T::Block> {
+		ChainApi::latest_hash(&**self)
+	}
 }
 
 pub struct Ready<'a, 'b, B: 'a + ChainApi> {
@@ -177,11 +192,11 @@ const POOL_TIME: time::Duration = time::Duration::from_secs(60 * 5);
 
 /// Extrinsics pool.
 pub struct Pool<B: ChainApi> {
-	api: B,
+	api: Arc<B>,
 	pool: RwLock<txpool::Pool<
 		VerifiedFor<B>,
 		ScoringAdapter<B>,
-		Listener<B::Hash>,
+		Listener<B::Hash, Arc<B>>,
 	>>,
 	import_notification_sinks: Mutex<Vec<mpsc::UnboundedSender<()>>>,
 	rotator: PoolRotator<B::Hash>,
@@ -190,8 +205,9 @@ pub struct Pool<B: ChainApi> {
 impl<B: ChainApi> Pool<B> {
 	/// Create a new transaction pool.
 	pub fn new(options: txpool::Options, api: B) -> Self {
+		let api = Arc::new(api);
 		Pool {
-			pool: RwLock::new(txpool::Pool::new(Listener::default(), ScoringAdapter::<B>(Default::default()), options)),
+			pool: RwLock::new(txpool::Pool::new(Listener::new(api.clone()), ScoringAdapter::<B>(Default::default()), options)),
 			import_notification_sinks: Default::default(),
 			api,
 			rotator: Default::default(),
@@ -253,7 +269,7 @@ impl<B: ChainApi> Pool<B> {
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
-	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<B::Hash>, B::Error> {
+	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<B::Hash, HashOf<B::Block>>, B::Error> {
 		let xt = self.submit_at(at, Some(xt))?.pop().expect("One extrinsic passed; one result returned; qed");
 		Ok(self.pool.write().listener_mut().create_watcher(xt))
 	}
@@ -295,7 +311,7 @@ impl<B: ChainApi> Pool<B> {
 
 	/// Cull transactions from the queue and then compute the pending set.
 	pub fn cull_and_get_pending<F, T>(&self, at: &BlockId<B::Block>, f: F) -> Result<T, B::Error> where
-		F: FnOnce(txpool::PendingIterator<VerifiedFor<B>, Ready<B>, ScoringAdapter<B>, Listener<B::Hash>>) -> T,
+		F: FnOnce(txpool::PendingIterator<VerifiedFor<B>, Ready<B>, ScoringAdapter<B>, Listener<B::Hash, Arc<B>>>) -> T,
 	{
 		self.cull_from(at, None);
 		Ok(self.pending(at, f))
@@ -322,7 +338,7 @@ impl<B: ChainApi> Pool<B> {
 
 	/// Retrieve the pending set. Be careful to not leak the pool `ReadGuard` to prevent deadlocks.
 	pub fn pending<F, T>(&self, at: &BlockId<B::Block>, f: F) -> T where
-		F: FnOnce(txpool::PendingIterator<VerifiedFor<B>, Ready<B>, ScoringAdapter<B>, Listener<B::Hash>>) -> T,
+		F: FnOnce(txpool::PendingIterator<VerifiedFor<B>, Ready<B>, ScoringAdapter<B>, Listener<B::Hash, Arc<B>>>) -> T,
 	{
 		let ready = self.ready(at);
 		f(self.pool.read().pending(ready))
@@ -389,7 +405,7 @@ impl<VEx> txpool::Ready<VEx> for AlwaysReady {
 #[cfg(test)]
 pub mod tests {
 	use txpool;
-	use super::{VerifiedFor, ExtrinsicFor};
+	use super::{VerifiedFor, ExtrinsicFor, HashOf};
 	use std::collections::HashMap;
 	use std::cmp::Ordering;
 	use {Pool, ChainApi, scoring, Readiness};
@@ -442,6 +458,10 @@ pub mod tests {
 		type Ready = HashMap<AccountId, u64>;
 		type Score = u64;
 		type Event = ();
+
+		fn latest_hash(&self) -> HashOf<Self::Block> {
+			1.into()
+		}
 
 		fn verify_transaction(&self, _at: &BlockId, uxt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error> {
 			let hash = BlakeTwo256::hash(&uxt.encode());
