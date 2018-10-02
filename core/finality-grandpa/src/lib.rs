@@ -63,6 +63,7 @@ pub struct Config {
 }
 
 /// Errors that can occur while voting in GRANDPA.
+#[derive(Debug)]
 pub enum Error {
 	/// An error within grandpa.
 	Grandpa(GrandpaError),
@@ -331,7 +332,6 @@ fn outgoing_messages<Block: BlockT, N: Network>(
 /// The environment we run GRANDPA in.
 pub struct Environment<B, E, Block: BlockT, N: Network> {
 	inner: Arc<Client<B, E, Block>>,
-	gossip_duration: Duration,
 	config: Config,
 	network: N,
 }
@@ -482,11 +482,29 @@ pub fn run_voter<B, E, Block: BlockT, N>(
 	config: Config,
 	client: Arc<Client<B, E, Block>>,
 	network: N,
-) -> impl Future<Item=(),Error=()> where
-	B: Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	N: Network,
+) -> Result<impl Future<Item=(),Error=()>,client::error::Error> where
+	Block::Hash: Ord,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	N: Network + 'static,
+	N::In: 'static,
 	NumberFor<Block>: As<u32>,
 {
-	Ok(()).into_future()
+	let chain_info = client.info()?;
+	let genesis_hash = chain_info.chain.genesis_hash;
+	let environment = Arc::new(Environment {
+		inner: client,
+		config,
+		network,
+	});
+
+	// TODO: load a bunch of these parameters from the DB
+	let voter = voter::Voter::new(
+		environment,
+		0, // last round.
+		RoundState::genesis((genesis_hash, 1)), // last round state
+		(genesis_hash, 1), // last finalized block.
+	);
+
+	Ok(voter.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e)))
 }
