@@ -454,9 +454,9 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 
 		let mut context = ProtocolContext::new(&self.context_data, io);
+		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles, status.best_number));
 		self.sync.write().new_peer(&mut context, who);
-		self.specialization.write().on_connect(&mut context, who, status.clone());
-		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles));
+		self.specialization.write().on_connect(&mut context, who, status);
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -559,6 +559,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.known_blocks.insert(hash.clone());
 			}
 		}
+		self.on_demand.as_ref().map(|s| s.on_block_announce(who, *header.number()));
 		self.sync.write().on_block_announce(&mut ProtocolContext::new(&self.context_data, io), who, hash, &header);
 	}
 
