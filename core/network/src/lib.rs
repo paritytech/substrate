@@ -55,7 +55,7 @@ pub mod error;
 pub mod message;
 pub mod specialization;
 
-#[cfg(test)] mod test;
+#[cfg(test)] pub mod test;
 
 pub use chain::Client as ClientHandle;
 pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
