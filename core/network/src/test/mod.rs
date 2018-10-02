@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![allow(missing_docs)]
+
+#[cfg(test)]
 mod sync;
 
 use std::collections::{VecDeque, HashSet, HashMap};
@@ -32,21 +35,22 @@ use service::TransactionPool;
 use network_libp2p::{NodeIndex, SessionInfo, Severity};
 use keyring::Keyring;
 use codec::{Encode, Decode};
-use import_queue::tests::SyncImportQueue;
+use import_queue::SyncImportQueue;
 use test_client::{self, TestClient};
-use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 use specialization::Specialization;
 use consensus_gossip::ConsensusGossip;
+
+pub use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 
 /// The test specialization.
 pub struct DummySpecialization {
 	/// Consensus gossip handle.
-	gossip: ConsensusGossip<Block>,
+	pub gossip: ConsensusGossip<Block>,
 }
 
 #[derive(Encode, Decode)]
 pub struct GossipMessage {
-	/// The topic to send under.
+	/// The topic to classify under.
 	pub topic: Hash,
 	/// The data to send.
 	pub data: Vec<u8>,
@@ -67,7 +71,7 @@ impl Specialization<Block> for DummySpecialization {
 		if let ::message::generic::Message::ChainSpecific(data) = message {
 			let gossip_message = GossipMessage::decode(&mut &data[..])
 				.expect("gossip messages all in known format; qed");
-			self.gossip.on_chain_specific(ctx, peer_id, gossip_message.data, gossip_message.topic)
+			self.gossip.on_chain_specific(ctx, peer_id, data, gossip_message.topic)
 		}
 	}
 }
@@ -207,7 +211,7 @@ impl Peer {
 			let mut builder = self.client.new_block().unwrap();
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
-			trace!("Generating {}, (#{})", block.hash(), block.header.number);
+			trace!("Generating {}, (#{}, parent={})", block.header.hash(), block.header.number, block.header.parent_hash);
 			self.client.justify_and_import(client::BlockOrigin::File, block).unwrap();
 		}
 	}
@@ -237,6 +241,11 @@ impl Peer {
 		where F: FnOnce(&mut DummySpecialization, &mut Context<Block>) -> U
 	{
 		self.sync.with_spec(&mut TestIo::new(&self.queue, None), f)
+	}
+
+	/// Get a reference to the client.
+	pub fn client(&self) -> &Arc<client::Client<test_client::Backend, test_client::Executor, Block>> {
+		&self.client
 	}
 }
 
@@ -325,7 +334,7 @@ impl TestNet {
 		self.started = true;
 	}
 
-	/// Route messages between peers.
+	/// Do one step of routing.
 	pub fn route(&mut self) {
 		for peer in 0..self.peers.len() {
 			let packet = self.peers[peer].pending_message();
@@ -346,6 +355,13 @@ impl TestNet {
 					self.peers[*d].on_disconnect(peer as NodeIndex);
 				}
 			}
+		}
+	}
+
+	/// Route messages between peers until all queues are empty.
+	pub fn route_until_complete(&mut self) {
+		while !self.done() {
+			self.route()
 		}
 	}
 

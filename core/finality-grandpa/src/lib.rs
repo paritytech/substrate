@@ -29,6 +29,15 @@ extern crate parity_codec as codec;
 #[macro_use]
 extern crate log;
 
+#[cfg(test)]
+extern crate substrate_network as network;
+
+#[cfg(test)]
+extern crate parking_lot;
+
+#[cfg(test)]
+extern crate substrate_keyring as keyring;
+
 use futures::prelude::*;
 use futures::stream::Fuse;
 use futures::sync::mpsc;
@@ -281,7 +290,7 @@ impl<I: Sink, N: Network> Sink for ClearOnDrop<I, N> {
 
 impl<I, N: Network> Drop for ClearOnDrop<I, N> {
 	fn drop(&mut self) {
-		self.network.drop_messages(self.round)
+		self.network.drop_messages(self.round);
 	}
 }
 
@@ -367,6 +376,7 @@ fn outgoing_messages<Block: BlockT, N: Network>(
 /// The environment we run GRANDPA in.
 pub struct Environment<B, E, Block: BlockT, N: Network> {
 	inner: Arc<Client<B, E, Block>>,
+	voters: HashMap<AuthorityId, usize>,
 	config: Config,
 	network: N,
 }
@@ -482,7 +492,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 		voter::RoundData {
 			prevote_timer: Box::new(prevote_timer.map_err(Error::Timer)),
     		precommit_timer: Box::new(precommit_timer.map_err(Error::Timer)),
-    		voters: HashMap::new(),
+    		voters: self.voters.clone(),
     		incoming,
     		outgoing,
 		}
@@ -527,6 +537,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 pub fn run_voter<B, E, Block: BlockT, N>(
 	config: Config,
 	client: Arc<Client<B, E, Block>>,
+	voters: HashMap<AuthorityId, usize>,
 	network: N,
 ) -> Result<impl Future<Item=(),Error=()>,client::error::Error> where
 	Block::Hash: Ord,
@@ -554,6 +565,7 @@ pub fn run_voter<B, E, Block: BlockT, N>(
 	let environment = Arc::new(Environment {
 		inner: client,
 		config,
+		voters,
 		network,
 	});
 
@@ -565,4 +577,191 @@ pub fn run_voter<B, E, Block: BlockT, N>(
 	);
 
 	Ok(voter.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e)))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use network::test::*;
+	use parking_lot::Mutex;
+	use tokio::runtime::current_thread;
+	use keyring::Keyring;
+	use client::BlockchainEvents;
+
+	#[derive(Clone)]
+	struct TestGrandpaNetwork {
+		inner: Arc<Mutex<TestNet>>,
+		peer_id: usize,
+	}
+
+	impl TestGrandpaNetwork {
+		fn new(inner: Arc<Mutex<TestNet>>, peer_id: usize,) -> Self {
+			TestGrandpaNetwork {
+				inner,
+				peer_id,
+			}
+		}
+	}
+
+	fn round_to_topic(round: u64) -> Hash {
+		let mut hash = Hash::default();
+		round.using_encoded(|s| {
+			let raw = hash.as_mut();
+			raw[..8].copy_from_slice(s);
+		});
+		hash
+	}
+
+	impl Network for TestGrandpaNetwork {
+		type In = Box<Stream<Item=Vec<u8>,Error=()>>;
+
+		fn messages_for(&self, round: u64) -> Self::In {
+			use network::consensus_gossip::ConsensusMessage;
+
+			let messages = self.inner.lock().peer(self.peer_id)
+				.with_spec(|spec, _| spec.gossip.messages_for(round_to_topic(round)));
+
+			let messages = messages
+				.map_err(
+					move |_| panic!("Messages for round {} dropped too early", round)
+				)
+				.map(|msg| match msg {
+					ConsensusMessage::ChainSpecific(raw, _) => {
+						let message = GossipMessage::decode(&mut &raw[..]).unwrap();
+						message.data
+					}
+					_ => panic!("Only chain-specific messages come under this stream"),
+				});
+
+			Box::new(messages)
+		}
+
+		fn send_message(&self, round: u64, message: Vec<u8>) {
+			let mut inner = self.inner.lock();
+			inner.peer(self.peer_id).gossip_message(round_to_topic(round), message);
+			inner.route();
+		}
+
+		fn drop_messages(&self, round: u64) {
+			let topic = round_to_topic(round);
+			self.inner.lock().peer(self.peer_id)
+				.with_spec(|spec, _| spec.gossip.collect_garbage(|t| t == &topic));
+		}
+	}
+
+	const TEST_GOSSIP_DURATION: Duration = Duration::from_millis(500);
+	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
+
+	#[test]
+	fn finalize_20_unanimous_3_peers() {
+		let mut net = TestNet::new(3);
+		net.peer(0).push_blocks(20, false);
+		net.sync();
+
+		let net = Arc::new(Mutex::new(net));
+		let peers = &[
+			(0, Keyring::Alice),
+			(1, Keyring::Bob),
+			(2, Keyring::Charlie),
+		];
+
+		let voters: Vec<_> = peers.iter()
+			.map(|&(_, ref key)| AuthorityId(key.to_raw_public()))
+			.collect();
+
+		let mut finality_notifications = Vec::new();
+
+		let mut runtime = current_thread::Runtime::new().unwrap();
+		for (peer_id, key) in peers {
+			let client = net.lock().peer(*peer_id).client().clone();
+			finality_notifications.push(
+				client.finality_notification_stream()
+					.take_while(|n| Ok(n.header.number() < &20))
+					.for_each(move |_| Ok(()))
+			);
+			let voter = run_voter(
+				Config {
+					gossip_duration: TEST_GOSSIP_DURATION,
+					voters: voters.clone(),
+					local_key: Some(Arc::new(key.clone().into())),
+				},
+				client,
+				voters.iter().map(|&id| (id, 1)).collect(),
+				TestGrandpaNetwork::new(net.clone(), *peer_id),
+			).expect("all in order with client and network");
+
+			runtime.spawn(voter);
+		}
+
+		// wait for all finalized on each.
+		let wait_for = ::futures::future::join_all(finality_notifications)
+			.map(|_| ())
+			.map_err(|_| ());
+
+		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+			.for_each(move |_| { net.lock().route_until_complete(); Ok(()) })
+			.map(|_| ())
+			.map_err(|_| ());
+
+		runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	}
+
+	#[test]
+	fn observer_can_finalize() {
+		let mut net = TestNet::new(4);
+		net.peer(0).push_blocks(20, false);
+		net.sync();
+
+		let net = Arc::new(Mutex::new(net));
+		let peers = &[
+			(0, Keyring::Alice),
+			(1, Keyring::Bob),
+			(2, Keyring::Charlie),
+		];
+
+		let voters: HashMap<_, _> = peers.iter()
+			.map(|&(_, ref key)| (AuthorityId(key.to_raw_public()), 1))
+			.collect();
+
+		let mut finality_notifications = Vec::new();
+
+		let mut runtime = current_thread::Runtime::new().unwrap();
+		let all_peers = peers.iter()
+			.cloned()
+			.map(|(id, key)| (id, Some(Arc::new(key.into()))))
+			.chain(::std::iter::once((3, None)));
+
+		for (peer_id, local_key) in all_peers {
+			let client = net.lock().peer(peer_id).client().clone();
+			finality_notifications.push(
+				client.finality_notification_stream()
+					.take_while(|n| Ok(n.header.number() < &20))
+					.for_each(move |_| Ok(()))
+			);
+			let voter = run_voter(
+				Config {
+					gossip_duration: TEST_GOSSIP_DURATION,
+					voters: voters.keys().cloned().collect(),
+					local_key,
+				},
+				client,
+				voters.clone(),
+				TestGrandpaNetwork::new(net.clone(), peer_id),
+			).expect("all in order with client and network");
+
+			runtime.spawn(voter);
+		}
+
+		// wait for all finalized on each.
+		let wait_for = ::futures::future::join_all(finality_notifications)
+			.map(|_| ())
+			.map_err(|_| ());
+
+		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+			.for_each(move |_| { net.lock().route_until_complete(); Ok(()) })
+			.map(|_| ())
+			.map_err(|_| ());
+
+		runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	}
 }

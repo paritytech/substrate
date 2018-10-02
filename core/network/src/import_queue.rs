@@ -232,7 +232,7 @@ enum SyncLink<'a, B: 'a + BlockT, E: 'a + ExecuteInContext<B>> {
 	/// Indirect link (through service).
 	Indirect(&'a RwLock<ChainSync<B>>, &'a Client<B>, &'a E),
 	/// Direct references are given.
-	#[cfg(test)]
+	#[cfg(any(test, feature = "test-helpers"))]
 	Direct(&'a mut ChainSync<B>, &'a mut Context<B>),
 }
 
@@ -402,7 +402,7 @@ impl<'a, B: 'static + BlockT, E: 'a + ExecuteInContext<B>> SyncLink<'a, B, E> {
 	/// Execute closure with locked ChainSync.
 	fn with_sync<F: Fn(&mut ChainSync<B>, &mut Context<B>)>(&mut self, closure: F) {
 		match *self {
-			#[cfg(test)]
+			#[cfg(any(test, feature = "test-helpers"))]
 			SyncLink::Direct(ref mut sync, ref mut protocol) =>
 				closure(*sync, *protocol),
 			SyncLink::Indirect(ref sync, _, ref service) =>
@@ -417,7 +417,7 @@ impl<'a, B: 'static + BlockT, E: 'a + ExecuteInContext<B>> SyncLink<'a, B, E> {
 impl<'a, B: 'static + BlockT, E: ExecuteInContext<B>> SyncLinkApi<B> for SyncLink<'a, B, E> {
 	fn chain(&self) -> &Client<B> {
 		match *self {
-			#[cfg(test)]
+			#[cfg(any(test, feature = "test-helpers"))]
 			SyncLink::Direct(_, ref protocol) => protocol.client(),
 			SyncLink::Indirect(_, ref chain, _) => *chain,
 		}
@@ -447,6 +447,40 @@ impl<'a, B: 'static + BlockT, E: ExecuteInContext<B>> SyncLinkApi<B> for SyncLin
 	}
 }
 
+
+/// Blocks import queue that is importing blocks in the same thread.
+/// The boolean value indicates whether blocks should be imported without instant finality.
+#[cfg(any(test, feature = "test-helpers"))]
+pub struct SyncImportQueue(pub bool);
+
+#[cfg(any(test, feature = "test-helpers"))]
+impl<B: 'static + BlockT> ImportQueue<B> for SyncImportQueue {
+	fn clear(&self) { }
+
+	fn stop(&self) { }
+
+	fn status(&self) -> ImportQueueStatus<B> {
+		ImportQueueStatus {
+			importing_count: 0,
+			best_importing_number: Zero::zero(),
+		}
+	}
+
+	fn is_importing(&self, _hash: &B::Hash) -> bool {
+		false
+	}
+
+	fn import_blocks(&self, sync: &mut ChainSync<B>, protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>)) {
+		struct DummyExecuteInContext;
+
+		impl<B: 'static + BlockT> ExecuteInContext<B> for DummyExecuteInContext {
+			fn execute_in_context<F: Fn(&mut Context<B>)>(&self, _closure: F) { }
+		}
+
+		import_many_blocks(&mut SyncLink::Direct::<_, DummyExecuteInContext>(sync, protocol), None, blocks, self.0);
+	}
+}
+
 #[cfg(test)]
 pub mod tests {
 	use client;
@@ -457,35 +491,6 @@ pub mod tests {
 	use runtime_primitives::generic::BlockId;
 	use super::*;
 
-	/// Blocks import queue that is importing blocks in the same thread.
-	/// The boolean value indicates whether blocks should be imported without instant finality.
-	pub struct SyncImportQueue(pub bool);
-	struct DummyExecuteInContext;
-
-	impl<B: 'static + BlockT> ExecuteInContext<B> for DummyExecuteInContext {
-		fn execute_in_context<F: Fn(&mut Context<B>)>(&self, _closure: F) { }
-	}
-
-	impl<B: 'static + BlockT> ImportQueue<B> for SyncImportQueue {
-		fn clear(&self) { }
-
-		fn stop(&self) { }
-
-		fn status(&self) -> ImportQueueStatus<B> {
-			ImportQueueStatus {
-				importing_count: 0,
-				best_importing_number: Zero::zero(),
-			}
-		}
-
-		fn is_importing(&self, _hash: &B::Hash) -> bool {
-			false
-		}
-
-		fn import_blocks(&self, sync: &mut ChainSync<B>, protocol: &mut Context<B>, blocks: (BlockOrigin, Vec<BlockData<B>>)) {
-			import_many_blocks(&mut SyncLink::Direct::<_, DummyExecuteInContext>(sync, protocol), None, blocks, self.0);
-		}
-	}
 
 	struct TestLink {
 		chain: Arc<Client<Block>>,
