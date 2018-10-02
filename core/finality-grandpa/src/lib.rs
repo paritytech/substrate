@@ -97,6 +97,9 @@ pub trait Network: Clone {
 
 	/// Send a message at a specific round out.
 	fn send_message(&self, round: u64, message: Vec<u8>);
+
+	/// Clean up messages for a round.
+	fn drop_messages(&self, round: u64);
 }
 
 /// Something which can determine if a block is known.
@@ -249,6 +252,36 @@ impl<Block: BlockT, Status: BlockStatus<Block>, I> Stream for UntilImported<Bloc
 		} else {
 			Ok(Async::NotReady)
 		}
+	}
+}
+
+// clears the network messages for inner round on drop.
+struct ClearOnDrop<I, N: Network> {
+	round: u64,
+	inner: I,
+	network: N,
+}
+
+impl<I: Sink, N: Network> Sink for ClearOnDrop<I, N> {
+	type SinkItem = I::SinkItem;
+	type SinkError = I::SinkError;
+
+	fn start_send(&mut self, item: Self::SinkItem) -> StartSend<Self::SinkItem, Self::SinkError> {
+		self.inner.start_send(item)
+	}
+
+	fn poll_complete(&mut self) -> Poll<(), Self::SinkError> {
+		self.inner.poll_complete()
+	}
+
+	fn close(&mut self) -> Poll<(), Self::SinkError> {
+		self.inner.close()
+	}
+}
+
+impl<I, N: Network> Drop for ClearOnDrop<I, N> {
+	fn drop(&mut self) {
+		self.network.drop_messages(self.round)
 	}
 }
 
@@ -439,12 +472,19 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 		// join incoming network messages with locally originating ones.
 		let incoming = Box::new(incoming.select(out_rx));
 
+		// schedule network message cleanup when sink drops.
+		let outgoing = Box::new(ClearOnDrop {
+			round,
+			network: self.network.clone(),
+			inner: outgoing,
+		});
+
 		voter::RoundData {
 			prevote_timer: Box::new(prevote_timer.map_err(Error::Timer)),
     		precommit_timer: Box::new(precommit_timer.map_err(Error::Timer)),
     		voters: HashMap::new(),
     		incoming,
-    		outgoing: Box::new(outgoing),
+    		outgoing,
 		}
 	}
 
@@ -466,7 +506,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 
     fn prevote_equivocation(
         &self,
-        round: u64,
+        _round: u64,
         equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block::Hash>, Self::Signature>
     ) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
@@ -475,7 +515,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 
     fn precommit_equivocation(
         &self,
-        round: u64,
+        _round: u64,
         equivocation: Equivocation<Self::Id, Precommit<Block::Hash>, Self::Signature>
     ) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
