@@ -46,6 +46,8 @@ use std::collections::{VecDeque, HashMap};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 
+const LAST_COMPLETED_KEY: &[u8] = b"grandpa_completed_round";
+
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash>;
 /// A signed message.
@@ -447,8 +449,12 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 	}
 
     fn completed(&self, round: u64, state: RoundState<Block::Hash>) {
-		// need to persist this.
-		unimplemented!()
+		let encoded_state = (round, state).encode();
+		if let Err(e) = self.inner.backend()
+			.insert_aux(&[(LAST_COMPLETED_KEY, &encoded_state[..])], &[])
+		{
+			warn!(target: "afg", "Error bookkeeping last completed round in DB: {:?}", e);
+		}
 	}
 
     fn finalize_block(&self, hash: Block::Hash, number: u32) {
@@ -492,18 +498,30 @@ pub fn run_voter<B, E, Block: BlockT, N>(
 {
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
+	let last_finalized = (
+		chain_info.chain.finalized_hash,
+		chain_info.chain.finalized_number.as_()
+	);
+
+	let (last_round_number, last_state) = match client.backend().get_aux(LAST_COMPLETED_KEY)? {
+		None => (0, RoundState::genesis((genesis_hash, 0))),
+		Some(raw) => <(u64, RoundState<Block::Hash>)>::decode(&mut &raw[..])
+			.ok_or_else(|| ::client::error::ErrorKind::Backend(
+				format!("Last GRANDPA round state kept in invalid format")
+			))?
+	};
+
 	let environment = Arc::new(Environment {
 		inner: client,
 		config,
 		network,
 	});
 
-	// TODO: load a bunch of these parameters from the DB
 	let voter = voter::Voter::new(
 		environment,
-		0, // last round.
-		RoundState::genesis((genesis_hash, 1)), // last round state
-		(genesis_hash, 1), // last finalized block.
+		last_round_number,
+		last_state,
+		last_finalized,
 	);
 
 	Ok(voter.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e)))
