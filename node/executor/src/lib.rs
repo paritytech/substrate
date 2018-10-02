@@ -19,7 +19,7 @@
 
 extern crate node_runtime;
 #[macro_use] extern crate substrate_executor;
-extern crate substrate_primitives as primitives;
+#[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
 
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate sr_primitives as runtime_primitives;
@@ -68,13 +68,6 @@ mod tests {
 	const BLOATY_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.wasm");
 	const COMPACT_CODE: &[u8] = include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm");
 	const GENESIS_HASH: [u8; 32] = [69u8; 32];
-
-	// TODO: move into own crate.
-	macro_rules! map {
-		($( $name:expr => $value:expr ),*) => (
-			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-		)
-	}
 
 	fn alice() -> AccountId {
 		AccountId::from(Keyring::Alice.to_raw_public())
