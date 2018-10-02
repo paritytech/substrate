@@ -52,7 +52,7 @@ use node_runtime::Runtime;
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As};
 use runtime_primitives::generic::{BlockId, Era};
-use runtime_primitives::api::{BlockBuilder as BlockBuilderAPI, Core, Miscellaneous};
+use runtime_primitives::api::{BlockBuilder as BlockBuilderAPI, Core, Miscellaneous, OldTxQueue};
 use srml_system::Trait as SystemT;
 use transaction_pool::{TransactionPool, Client as TPClient};
 use tokio::runtime::TaskExecutor;
@@ -93,6 +93,7 @@ pub trait AuthoringApi:
 	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
 	+ Miscellaneous<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+	+ OldTxQueue<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 {
 	/// The block used for this API type.
 	type Block: BlockT;
@@ -444,7 +445,8 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 				.filter(|tx| tx.verified.sender == local_id)
 				.last()
 				.map(|tx| Ok(tx.verified.index()))
-				.unwrap_or_else(|| self.client.index(&self.parent_id, local_id))
+				.unwrap_or_else(|| self.client.account_nonce(&self.parent_id, local_id))
+				.map_err(Error::from)
 			);
 
 			match cur_index {
