@@ -25,7 +25,6 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client;
 use client::block_builder::BlockBuilder;
-use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
 use protocol::{Context, Protocol};
