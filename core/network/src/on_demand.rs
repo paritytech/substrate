@@ -422,7 +422,7 @@ impl<B, E> OnDemandCore<B, E> where
 					entries are removed from best_blocks when peer is disconnected;
 					peer is in idle_peers and thus connected; qed");
 			let can_be_processed_by_peer = request.required_block() <= *peer_best_block;
-			if can_be_processed_by_peer {
+			if !can_be_processed_by_peer {
 				// return peer to the back of the queue
 				self.idle_peers.push_back(peer);
 
