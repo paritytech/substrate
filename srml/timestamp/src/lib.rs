@@ -66,7 +66,7 @@ pub trait Trait: consensus::Trait + system::Trait {
 	const TIMESTAMP_SET_POSITION: u32;
 
 	/// Type used for expressing timestamp.
-	type Moment: Parameter + Default  + SimpleArithmetic + Mul<Self::BlockNumber, Output = Self::Moment> + Div<Self::BlockNumber, Output = Self::Moment>;
+	type Moment: Parameter + Default + SimpleArithmetic + Mul<Self::BlockNumber, Output = Self::Moment> + Div<Self::BlockNumber, Output = Self::Moment>;
 }
 
 decl_module! {
