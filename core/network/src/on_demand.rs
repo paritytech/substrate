@@ -416,14 +416,13 @@ impl<B, E> OnDemandCore<B, E> where
 			};
 
 			// check if request can (optimistically) be processed by the peer
-			if {
-				let request = self.pending_requests.front().expect("checked in loop condition; qed");
-				let peer_best_block = self.best_blocks.get(&peer)
-					.expect("entries are inserted into best_blocks when peer is connected;
-						entries are removed from best_blocks when peer is disconnected;
-						peer is in idle_peers and thus connected; qed");
-				request.required_block() > *peer_best_block
-			} {
+			let request = self.pending_requests.front().expect("checked in loop condition; qed");
+			let peer_best_block = self.best_blocks.get(&peer)
+				.expect("entries are inserted into best_blocks when peer is connected;
+					entries are removed from best_blocks when peer is disconnected;
+					peer is in idle_peers and thus connected; qed");
+			let can_be_processed_by_peer = request.required_block() <= *peer_best_block;
+			if can_be_processed_by_peer {
 				// return peer to the back of the queue
 				self.idle_peers.push_back(peer);
 
