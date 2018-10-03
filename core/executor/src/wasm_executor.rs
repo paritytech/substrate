@@ -352,15 +352,18 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		imports_len: usize,
 		state: usize
 	) -> u32 => {
-		let wasm = this.memory.get(wasm_ptr, wasm_len as usize).map_err(|_| UserError("Sandbox error"))?;
-		let raw_env_def = this.memory.get(imports_ptr, imports_len as usize).map_err(|_| UserError("Sandbox error"))?;
+		let wasm = this.memory.get(wasm_ptr, wasm_len as usize)
+			.map_err(|_| UserError("OOB while ext_sandbox_instantiate: wasm"))?;
+		let raw_env_def = this.memory.get(imports_ptr, imports_len as usize)
+			.map_err(|_| UserError("OOB while ext_sandbox_instantiate: imports"))?;
 
 		// Extract a dispatch thunk from instance's table by the specified index.
 		let dispatch_thunk = {
-			let table = this.table.as_ref().ok_or_else(|| UserError("Sandbox error"))?;
+			let table = this.table.as_ref()
+				.ok_or_else(|| UserError("Runtime doesn't have a table; sandbox is unavailable"))?;
 			table.get(dispatch_thunk_idx)
-				.map_err(|_| UserError("Sandbox error"))?
-				.ok_or_else(|| UserError("Sandbox error"))?
+				.map_err(|_| UserError("dispatch_thunk_idx is out of the table bounds"))?
+				.ok_or_else(|| UserError("dispatch_thunk_idx points on an empty table entry"))?
 				.clone()
 		};
 
@@ -382,17 +385,17 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 
 		trace!(target: "sr-sandbox", "invoke, instance_idx={}", instance_idx);
 		let export = this.memory.get(export_ptr, export_len as usize)
-			.map_err(|_| UserError("Sandbox error"))
+			.map_err(|_| UserError("OOB while ext_sandbox_invoke: export"))
 			.and_then(|b|
 				String::from_utf8(b)
-					.map_err(|_| UserError("Sandbox error"))
+					.map_err(|_| UserError("export name should be a valid utf-8 sequence"))
 			)?;
 
 		// Deserialize arguments and convert them into wasmi types.
 		let serialized_args = this.memory.get(args_ptr, args_len as usize)
-			.map_err(|_| UserError("Sandbox error"))?;
+			.map_err(|_| UserError("OOB while ext_sandbox_invoke: args"))?;
 		let args = Vec::<sandbox_primitives::TypedValue>::decode(&mut &serialized_args[..])
-			.ok_or_else(|| UserError("Sandbox error"))?
+			.ok_or_else(|| UserError("Can't decode serialized arguments for the invocation"))?
 			.into_iter()
 			.map(Into::into)
 			.collect::<Vec<_>>();
@@ -406,11 +409,11 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				// Serialize return value and write it back into the memory.
 				sandbox_primitives::ReturnValue::Value(val.into()).using_encoded(|val| {
 					if val.len() > return_val_len as usize {
-						Err(UserError("Sandbox error"))?;
+						Err(UserError("Return value buffer is too small"))?;
 					}
 					this.memory
 						.set(return_val_ptr, val)
-						.map_err(|_| UserError("Sandbox error"))?;
+						.map_err(|_| UserError("Return value buffer is OOB"))?;
 					Ok(sandbox_primitives::ERR_OK)
 				})
 			}
