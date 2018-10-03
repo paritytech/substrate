@@ -43,10 +43,11 @@ extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, OnFinalise, Convert, As};
+use primitives::traits::{Zero, One, OnFinalise, Convert};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use system::ensure_signed;
+use rstd::ops::Mul;
 
 /// A session has changed.
 pub trait OnSessionChange<T> {
@@ -211,9 +212,9 @@ impl<T: Trait> Module<T> {
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
 	pub fn ideal_session_duration() -> T::Moment {
-		let block_period = <timestamp::Module<T>>::block_period();
-		let session_length = <T::Moment as As<T::BlockNumber>>::sa(Self::length());
-		session_length * block_period
+		let block_period: T::Moment = <timestamp::Module<T>>::block_period();
+		let session_length: T::BlockNumber = Self::length();
+		Mul::<T::BlockNumber>::mul(block_period, session_length)
 	}
 
 	/// Number of blocks remaining in this session, not counting this one. If the session is
