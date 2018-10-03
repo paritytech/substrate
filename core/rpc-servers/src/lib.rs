@@ -51,7 +51,7 @@ pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
 	PendingExtrinsics: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
 	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic, Metadata=Metadata>,
-	A: apis::author::AuthorApi<ExHash, Block::Extrinsic, PendingExtrinsics, Metadata=Metadata>,
+	A: apis::author::AuthorApi<ExHash, Block::Hash, Block::Extrinsic, PendingExtrinsics, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
 {
 	let mut io = pubsub::PubSubHandler::default();

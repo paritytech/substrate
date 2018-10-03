@@ -40,6 +40,8 @@ pub type EventStream = mpsc::UnboundedReceiver<()>;
 
 /// Extrinsic hash type for a pool.
 pub type ExHash<A> = <A as ChainApi>::Hash;
+/// Block hash type for a pool.
+pub type BlockHash<A> = <<A as ChainApi>::Block as traits::Block>::Hash;
 /// Extrinsic type for a pool.
 pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
 /// Block number type for the ChainApi
@@ -89,7 +91,7 @@ pub struct Options;
 /// Extrinsics pool.
 pub struct Pool<B: ChainApi> {
 	api: B,
-	listener: RwLock<Listener<ExHash<B>>>,
+	listener: RwLock<Listener<ExHash<B>, BlockHash<B>>>,
 	pool: RwLock<base::BasePool<
 		ExHash<B>,
 		TxData<ExtrinsicFor<B>>,
@@ -157,7 +159,7 @@ impl<B: ChainApi> Pool<B> where
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
-	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<ExHash<B>>, B::Error> {
+	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<ExHash<B>, BlockHash<B>>, B::Error> {
 		let xt = self.submit_at(at, Some(xt))?.pop().expect("One extrinsic passed; one result returned; qed");
 		Ok(self.listener.write().create_watcher(xt))
 	}

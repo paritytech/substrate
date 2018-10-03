@@ -37,6 +37,7 @@ macro_rules! impl_runtime_metadata {
 				$crate::metadata::RuntimeMetadata {
 					outer_event: Self::outer_event_metadata(),
 					modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+					outer_dispatch: Self::outer_dispatch_metadata(),
 				}
 			}
 		}
@@ -99,14 +100,15 @@ mod tests {
 	use super::*;
 	use substrate_metadata::{
 		EventMetadata, OuterEventMetadata, RuntimeModuleMetadata, CallMetadata, ModuleMetadata,
-		StorageFunctionModifier, StorageFunctionType, FunctionMetadata, FunctionArgumentMetadata,
-		StorageMetadata, StorageFunctionMetadata,
+		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
+		StorageMetadata, StorageFunctionMetadata, OuterDispatchMetadata, OuterDispatchCall
 	};
 	use codec::{Decode, Encode};
 
 	mod system {
 		pub trait Trait {
-			type Origin;
+			type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
+			type AccountId;
 		}
 
 		decl_module! {
@@ -118,6 +120,24 @@ mod tests {
 				SystemEvent,
 			}
 		);
+
+		#[derive(Clone, PartialEq, Eq, Debug)]
+		pub enum RawOrigin<AccountId> {
+			Root,
+			Signed(AccountId),
+			Inherent,
+		}
+
+		impl<AccountId> From<Option<AccountId>> for RawOrigin<AccountId> {
+			fn from(s: Option<AccountId>) -> RawOrigin<AccountId> {
+				match s {
+					Some(who) => RawOrigin::Signed(who),
+					None => RawOrigin::Inherent,
+				}
+			}
+		}
+
+		pub type Origin<T> = RawOrigin<<T as Trait>::AccountId>;
 	}
 
 	mod event_module {
@@ -163,15 +183,18 @@ mod tests {
 		);
 
 		decl_module! {
-			pub struct ModuleWithStorage<T: Trait> for enum Call where origin: T::Origin {}
+			pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
 		}
 
 		decl_storage! {
-			trait Store for ModuleWithStorage<T: Trait> as TestStorage {
+			trait Store for Module<T: Trait> as TestStorage {
 				StorageMethod : u32;
 			}
 		}
 	}
+
+	type EventModule = event_module::Module<TestRuntime>;
+	type EventModule2 = event_module2::Module<TestRuntime>;
 
 	#[derive(Debug, Clone, PartialEq, Eq, Encode, Decode, Deserialize, Serialize)]
 	pub struct TestRuntime;
@@ -183,24 +206,36 @@ mod tests {
 		}
 	}
 
+	impl_outer_origin! {
+		pub enum Origin for TestRuntime {}
+	}
+
+	impl_outer_dispatch! {
+		pub enum Call for TestRuntime where origin: Origin {
+			event_module::EventModule,
+			event_module2::EventModule2,
+		}
+	}
+
 	impl event_module::Trait for TestRuntime {
-		type Origin = u32;
+		type Origin = Origin;
 		type Balance = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime {
-		type Origin = u32;
+		type Origin = Origin;
 		type Balance = u32;
 	}
 
 	impl system::Trait for TestRuntime {
-		type Origin = u32;
+		type Origin = Origin;
+		type AccountId = u32;
 	}
 
 	impl_runtime_metadata!(
 		for TestRuntime with modules
 			event_module::Module,
-			event_module2::ModuleWithStorage with Storage,
+			event_module2::Module with Storage,
 	);
 
 	const EXPECTED_METADATA: RuntimeMetadata = RuntimeMetadata {
@@ -251,12 +286,7 @@ mod tests {
 							 FunctionMetadata {
 								 id: 0,
 								 name: DecodeDifferent::Encode("aux_0"),
-								 arguments: DecodeDifferent::Encode(&[
-									 FunctionArgumentMetadata {
-										 name: DecodeDifferent::Encode("origin"),
-										 ty: DecodeDifferent::Encode("T::Origin"),
-									 }
-								 ]),
+								 arguments: DecodeDifferent::Encode(&[]),
 								 documentation: DecodeDifferent::Encode(&[]),
 							 }
 						 ])
@@ -269,7 +299,7 @@ mod tests {
 				prefix: DecodeDifferent::Encode("event_module2"),
 				module: DecodeDifferent::Encode(FnEncode(||
 					ModuleMetadata {
-					 name: DecodeDifferent::Encode("ModuleWithStorage"),
+					 name: DecodeDifferent::Encode("Module"),
 					 call: CallMetadata {
 						 name: DecodeDifferent::Encode("Call"),
 						 functions: DecodeDifferent::Encode(&[])
@@ -290,7 +320,22 @@ mod tests {
 					}
 				))),
 			}
-		])
+		]),
+		outer_dispatch: OuterDispatchMetadata {
+			name: DecodeDifferent::Encode("Call"),
+			calls: DecodeDifferent::Encode(&[
+				OuterDispatchCall {
+					name: DecodeDifferent::Encode("EventModule"),
+					prefix: DecodeDifferent::Encode("event_module"),
+					index: 0,
+				},
+				OuterDispatchCall {
+					name: DecodeDifferent::Encode("EventModule2"),
+					prefix: DecodeDifferent::Encode("event_module2"),
+					index: 1,
+				}
+			])
+		}
 	};
 
 	#[test]

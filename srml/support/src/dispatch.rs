@@ -25,7 +25,7 @@ use serde;
 pub use codec::{Codec, Decode, Encode, Input, Output};
 pub use substrate_metadata::{
 	ModuleMetadata, FunctionMetadata, DecodeDifferent,
-	CallMetadata, FunctionArgumentMetadata
+	CallMetadata, FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
 };
 
 pub type Result = result::Result<(), &'static str>;
@@ -394,15 +394,13 @@ pub trait IsSubType<T: Callable> {
 /// Implement a meta-dispatch module to dispatch to other dispatchers.
 #[macro_export]
 macro_rules! impl_outer_dispatch {
-	() => ();
 	(
 		$(#[$attr:meta])*
-		pub enum $call_type:ident where origin: $origin:ty {
+		pub enum $call_type:ident for $runtime:ident where origin: $origin:ty {
 			$(
-				$camelcase:ident,
+				$module:ident::$camelcase:ident,
 			)*
 		}
-		$( $rest:tt )*
 	) => {
 		$(#[$attr])*
 		#[derive(Clone, PartialEq, Eq)]
@@ -435,7 +433,7 @@ macro_rules! impl_outer_dispatch {
 				}
 			}
 		)*
-		impl_outer_dispatch!{ $($rest)* }
+		__impl_outer_dispatch_metadata!($runtime; $call_type; $( $module::$camelcase, )*);
 	}
 }
 
@@ -458,11 +456,54 @@ macro_rules! __impl_outer_dispatch_common {
 				__impl_encode!(dest; *self; 0; $call_type; $( fn $camelcase( outer_dispatch_param ); )*)
 			}
 		}
-
 	}
 }
 
-/// Implement the `json_metadata` function.
+/// Implement metadata for outer dispatch.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __impl_outer_dispatch_metadata {
+	(
+		$runtime:ident;
+		$outer_name:ident;
+		$( $module:ident::$call:ident, )*
+	) => {
+		impl $runtime {
+			pub fn outer_dispatch_metadata() -> $crate::dispatch::OuterDispatchMetadata {
+				$crate::dispatch::OuterDispatchMetadata {
+					name: $crate::dispatch::DecodeDifferent::Encode(stringify!($outer_name)),
+					calls: __impl_outer_dispatch_metadata!(@encode_calls 0; ; $( $module::$call, )*),
+				}
+			}
+		}
+	};
+	(@encode_calls
+		$index:expr;
+		$( $encoded_call:expr ),*;
+		$module:ident::$call:ident,
+		$( $rest_module:ident::$rest:ident, )*
+	) => {
+		__impl_outer_dispatch_metadata!(
+			@encode_calls
+			$index + 1;
+			$( $encoded_call, )*
+			$crate::dispatch::OuterDispatchCall {
+				name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call)),
+				prefix: $crate::dispatch::DecodeDifferent::Encode(stringify!($module)),
+				index: $index,
+			};
+			$( $rest_module::$rest, )*
+		)
+	};
+	(@encode_calls
+		$index:expr;
+		$( $encoded_call:expr ),*;
+	) => {
+		$crate::dispatch::DecodeDifferent::Encode(&[ $( $encoded_call ),* ])
+	};
+}
+
+/// Implement metadata for dispatch.
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __dispatch_impl_metadata {
@@ -499,7 +540,7 @@ macro_rules! __call_to_metadata {
 		$crate::dispatch::CallMetadata {
 			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($call_type)),
 			functions: __functions_to_metadata!(0; $origin_type;; $(
-				fn $fn_name($from $(, $param_name: $param )* ) -> $result;
+				fn $fn_name( $( $param_name: $param ),* ) -> $result;
 				$( $doc_attr ),*;
 			)*),
 		}
@@ -510,15 +551,14 @@ macro_rules! __call_to_metadata {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! __functions_to_metadata{
-	// ROOT
 	(
 		$fn_id:expr;
 		$origin_type:ty;
 		$( $function_metadata:expr ),*;
-		fn $fn_name:ident(root
+		fn $fn_name:ident(
 			$(
-				, $param_name:ident : $param:ty
-			)*
+				$param_name:ident : $param:ty
+			),*
 		) -> $result:ty;
 		$( $fn_doc:expr ),*;
 		$( $rest:tt )*
@@ -531,31 +571,6 @@ macro_rules! __functions_to_metadata{
 			$($rest)*
 		)
 	};
-	// NON ROOT
-	(
-		$fn_id:expr;
-		$origin_type:ty;
-		$( $function_metadata:expr ),*;
-		fn $fn_name:ident(origin
-			$(
-				, $param_name:ident : $param:ty
-			)*
-		) -> $result:ty;
-		$( $fn_doc:expr ),*;
-		$($rest:tt)*
-	) => {
-		__functions_to_metadata!(
-			$fn_id + 1; $origin_type;
-			$( $function_metadata, )* __function_to_metadata!(
-				fn $fn_name(
-					origin: $origin_type
-					$( ,$param_name : $param )*
-				) -> $result; $( $fn_doc ),*; $fn_id;
-			);
-			$($rest)*
-		)
-	};
-	// BASE CASE
 	(
 		$fn_id:expr;
 		$origin_type:ty;
@@ -590,41 +605,6 @@ macro_rules! __function_to_metadata {
 			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
 		}
 	};
-	(
-		fn $fn_name:ident() -> $result:ty;
-		$( $fn_doc:expr ),*;
-		$fn_id:expr;
-	) => {
-		$crate::dispatch::FunctionMetadata {
-			id: $fn_id,
-			name: $crate::dispatch::DecodeDifferent::Encode(stringify!($fn_name)),
-			arguments: $crate::dispatch::DecodeDifferent::Encode(&[]),
-			documentation: $crate::dispatch::DecodeDifferent::Encode(&[ $( $fn_doc ),* ]),
-		}
-	};
-}
-
-/// Convert a function documentation attribute into its JSON representation.
-#[macro_export]
-#[doc(hidden)]
-macro_rules! __function_doc_to_json {
-	(
-		$prefix_str:tt;
-		$doc_attr:tt
-		$($rest:tt)*
-	) => {
-			concat!(
-				$prefix_str, r#" ""#,
-				$doc_attr,
-				r#"""#,
-				__function_doc_to_json!(","; $($rest)*)
-			)
-	};
-	(
-		$prefix_str:tt;
-	) => {
-		""
-	}
 }
 
 #[cfg(test)]
@@ -664,12 +644,7 @@ mod tests {
 				FunctionMetadata {
 					id: 0,
 					name: DecodeDifferent::Encode("aux_0"),
-					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("origin"),
-							ty: DecodeDifferent::Encode("T::Origin"),
-						}
-					]),
+					arguments: DecodeDifferent::Encode(&[]),
 					documentation: DecodeDifferent::Encode(&[
 						" Hi, this is a comment."
 					])
@@ -678,10 +653,6 @@ mod tests {
 					id: 1,
 					name: DecodeDifferent::Encode("aux_1"),
 					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("origin"),
-							ty: DecodeDifferent::Encode("T::Origin"),
-						},
 						FunctionArgumentMetadata {
 							name: DecodeDifferent::Encode("data"),
 							ty: DecodeDifferent::Encode("i32"),
@@ -693,10 +664,6 @@ mod tests {
 					id: 2,
 					name: DecodeDifferent::Encode("aux_2"),
 					arguments: DecodeDifferent::Encode(&[
-						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("origin"),
-							ty: DecodeDifferent::Encode("T::Origin"),
-						},
 						FunctionArgumentMetadata {
 							name: DecodeDifferent::Encode("data"),
 							ty: DecodeDifferent::Encode("i32"),

@@ -20,16 +20,15 @@ use std::{
 	hash,
 	sync::Arc,
 };
-
 use watcher;
 use sr_primitives::traits;
 
 /// Extrinsic pool default listener.
-pub struct Listener<H: hash::Hash + Eq> {
-	watchers: HashMap<H, watcher::Sender<H>>
+pub struct Listener<H: hash::Hash + Eq, H2> {
+	watchers: HashMap<H, watcher::Sender<H, H2>>
 }
 
-impl<H: hash::Hash + Eq> Default for Listener<H> {
+impl<H: hash::Hash + Eq, H2> Default for Listener<H, H2> {
 	fn default() -> Self {
 		Listener {
 			watchers: Default::default(),
@@ -37,8 +36,8 @@ impl<H: hash::Hash + Eq> Default for Listener<H> {
 	}
 }
 
-impl<H: hash::Hash + traits::Member> Listener<H> {
-	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H>) {
+impl<H: hash::Hash + traits::Member, H2: Clone> Listener<H, H2> {
+	fn fire<F>(&mut self, hash: &H, fun: F) where F: FnOnce(&mut watcher::Sender<H, H2>) {
 		let clean = if let Some(h) = self.watchers.get_mut(hash) {
 			fun(h);
 			h.is_done()
@@ -54,7 +53,7 @@ impl<H: hash::Hash + traits::Member> Listener<H> {
 	/// Creates a new watcher for given verified extrinsic.
 	///
 	/// The watcher can be used to subscribe to lifecycle events of that extrinsic.
-	pub fn create_watcher(&mut self, hash: H) -> watcher::Watcher<H> {
+	pub fn create_watcher(&mut self, hash: H) -> watcher::Watcher<H, H2> {
 		let sender = self.watchers.entry(hash).or_insert_with(watcher::Sender::default);
 		sender.new_watcher()
 	}
@@ -90,7 +89,7 @@ impl<H: hash::Hash + traits::Member> Listener<H> {
 	}
 
 	/// Transaction was pruned from the pool.
-	pub fn pruned(&mut self, header_hash: H, tx: &Arc<H>) {
+	pub fn pruned(&mut self, header_hash: H2, tx: &Arc<H>) {
 		self.fire(&**tx, |watcher| watcher.finalised(header_hash))
 	}
 }
