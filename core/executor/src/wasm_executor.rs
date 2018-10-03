@@ -424,33 +424,33 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let mem_idx = this.sandbox_store.new_memory(initial, maximum)?;
 		Ok(mem_idx)
 	},
-	ext_sandbox_memory_get(memory_idx: u32, offset: u32, buf_ptr: *mut u8, buf_len: usize) -> u32 => {
-		let dst_memory = this.sandbox_store.memory(memory_idx)?;
+	ext_sandbox_memory_get(memory_idx: u32, offset: u32, buf_ptr: *mut u8, buf_len: u32) -> u32 => {
+		let sandboxed_memory = this.sandbox_store.memory(memory_idx)?;
 
-		let data: Vec<u8> = match dst_memory.get(offset, buf_len as usize) {
-			Ok(data) => data,
-			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-		};
-		match this.memory.set(buf_ptr, &data) {
-			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-			_ => {},
+		match MemoryInstance::transfer(
+			&sandboxed_memory,
+			offset as usize,
+			&this.memory,
+			buf_ptr as usize,
+			buf_len as usize,
+		) {
+			Ok(()) => Ok(sandbox_primitives::ERR_OK),
+			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 		}
-
-		Ok(sandbox_primitives::ERR_OK)
 	},
-	ext_sandbox_memory_set(memory_idx: u32, offset: u32, val_ptr: *const u8, val_len: usize) -> u32 => {
-		let dst_memory = this.sandbox_store.memory(memory_idx)?;
+	ext_sandbox_memory_set(memory_idx: u32, offset: u32, val_ptr: *const u8, val_len: u32) -> u32 => {
+		let sandboxed_memory = this.sandbox_store.memory(memory_idx)?;
 
-		let data = match this.memory.get(val_ptr, val_len as usize) {
-			Ok(data) => data,
-			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-		};
-		match dst_memory.set(offset, &data) {
-			Err(_) => return Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
-			_ => {},
+		match MemoryInstance::transfer(
+			&this.memory,
+			val_ptr as usize,
+			&sandboxed_memory,
+			offset as usize,
+			val_len as usize,
+		) {
+			Ok(()) => Ok(sandbox_primitives::ERR_OK),
+			Err(_) => Ok(sandbox_primitives::ERR_OUT_OF_BOUNDS),
 		}
-
-		Ok(sandbox_primitives::ERR_OK)
 	},
 	ext_sandbox_memory_teardown(memory_idx: u32) => {
 		this.sandbox_store.memory_teardown(memory_idx)?;
