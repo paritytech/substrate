@@ -21,13 +21,16 @@ use std::sync::Arc;
 use client::{self, Client};
 use codec::Decode;
 use transaction_pool::{
-	watcher::Status,
 	txpool::{
-		Pool,
-		IntoPoolError,
+		self,
 		ChainApi as PoolChainApi,
 		ExHash,
 		ExtrinsicFor,
+		NumberFor,
+		TransactionFor,
+		IntoPoolError,
+		Pool,
+		watcher::Status,
 	},
 };
 use jsonrpc_macros::pubsub;
@@ -99,10 +102,11 @@ impl<B, E, P> Author<B, E, P> where
 	}
 }
 
-impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author<B, E, P> where
+impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, Vec<TransactionFor<P>>> for Author<B, E, P> where
 	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
+	NumberFor<P>: Into<txpool::base_pool::BlockNumber>,
 	P::Error: 'static,
 {
 	type Metadata = ::metadata::Metadata;
@@ -122,8 +126,8 @@ impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author
 			)
 	}
 
-	fn pending_extrinsics(&self) -> Result<AllExtrinsics<P>> {
-		Ok(self.pool.all())
+	fn pending_extrinsics(&self) -> Result<Vec<TransactionFor<P>>> {
+		Ok(self.pool.all(usize::max_value()))
 	}
 
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>>>, xt: Bytes) {

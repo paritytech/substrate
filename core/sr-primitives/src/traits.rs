@@ -78,7 +78,7 @@ pub trait BlockNumberToHash {
 	type BlockNumber: Zero;
 
 	/// The type of the hash.
-	type Hash;
+	type Hash: Encode;
 
 	/// Get the hash for a given block number, or `None` if unknown.
 	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash>;

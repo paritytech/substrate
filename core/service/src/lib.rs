@@ -75,7 +75,7 @@ use codec::{Encode, Decode};
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::ChainSpec;
-pub use transaction_pool::{Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, VerifiedTransaction, IntoPoolError};
+pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
@@ -116,6 +116,9 @@ pub fn new_client<Factory: components::ServiceFactory>(config: FactoryFullConfig
 impl<Components> Service<Components>
 	where
 		Components: components::Components,
+		txpool::NumberFor<Components::TransactionPoolApi>: Into<u64>,
+		txpool::ExHash<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
+		txpool::ExtrinsicFor<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
 {
 	/// Creates a new service.
 	pub fn new(
@@ -383,7 +386,9 @@ impl<C: Components> TransactionPoolAdapter<C> {
 	}
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> {
+impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> where
+	txpool::NumberFor<C::TransactionPoolApi>: Into<u64>,
+{
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
 		let best_block_id = match self.best_block_id() {
 			Some(id) => id,
@@ -412,17 +417,19 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
 			let best_block_id = self.best_block_id()?;
 			match self.pool.submit_one(&best_block_id, uxt) {
-				Ok(xt) => Some(*xt.hash()),
+				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
-					Ok(e) => match e.kind() {
-						transaction_pool::ErrorKind::AlreadyImported(hash) =>
-							Some(::std::str::FromStr::from_str(&hash[2..]).map_err(|_| {})
-								.expect("Hash string is always valid")),
-						_ => {
-							debug!("Error adding transaction to the pool: {:?}", e);
-							None
-						},
-					},
+					// 	TODO [ToDr]
+					Ok(e) => None,
+					// Ok(e) => match e.kind() {
+					// 	txpool::error::ErrorKind::AlreadyImported(hash) =>
+					// 		Some(::std::str::FromStr::from_str(&hash[2..]).map_err(|_| {})
+					// 			.expect("Hash string is always valid")),
+					// 	_ => {
+					// 		debug!("Error adding transaction to the pool: {:?}", e);
+					// 		None
+					// 	},
+					// },
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
 						None

@@ -26,9 +26,9 @@ use bft::{self, BftService};
 use client::{BlockchainEvents, ChainHead, BlockBody};
 use ed25519;
 use futures::prelude::*;
-use transaction_pool::{TransactionPool, Client as TPClient};
+use transaction_pool::txpool::{Pool as TransactionPool, ChainApi as PoolChainApi};
 use primitives;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, BlockNumberToHash};
 
 use tokio::executor::current_thread::TaskExecutor as LocalThreadHandle;
 use tokio::runtime::TaskExecutor as ThreadPoolHandle;
@@ -82,7 +82,7 @@ impl Service {
 		block_delay: u64,
 	) -> Service
 		where
-			A: AuthoringApi + TPClient<Block = <A as AuthoringApi>::Block> + 'static,
+			A: AuthoringApi + PoolChainApi<Block = <A as AuthoringApi>::Block> + BlockNumberToHash + 'static,
 			C: BlockchainEvents<<A as AuthoringApi>::Block>
 				+ ChainHead<<A as AuthoringApi>::Block>
 				+ BlockBody<<A as AuthoringApi>::Block>,
@@ -91,6 +91,7 @@ impl Service {
 			primitives::H256: From<<<A as AuthoringApi>::Block as BlockT>::Hash>,
 			<<A as AuthoringApi>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,
 			N: Network<Block = <A as AuthoringApi>::Block> + Send + 'static,
+			::transaction_pool::txpool::NumberFor<A>: Into<u64>,
 	{
 		use parking_lot::RwLock;
 		use super::OfflineTracker;

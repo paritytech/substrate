@@ -44,6 +44,8 @@ pub type ExHash<A> = <A as ChainApi>::Hash;
 pub type ExtrinsicFor<A> = <<A as ChainApi>::Block as traits::Block>::Extrinsic;
 /// Block number type for the ChainApi
 pub type NumberFor<A> = traits::NumberFor<<A as ChainApi>::Block>;
+/// A type of transaction stored in the pool
+pub type TransactionFor<A> = Arc<base::Transaction<ExHash<A>, TxData<ExtrinsicFor<A>>>>;
 
 /// Concrete extrinsic validation and query logic.
 pub trait ChainApi: Send + Sync {
@@ -69,12 +71,20 @@ pub trait ChainApi: Send + Sync {
 /// Transactions that don't get included within the limit are removed from the pool.
 const POOL_TIME: time::Duration = time::Duration::from_secs(60 * 5);
 
-#[derive(Debug)]
+/// Additional transaction data
+#[derive(Debug, Serialize, Deserialize)]
 pub struct TxData<Ex> {
+	/// Raw data stored by the user.
 	pub raw: Ex,
-	// TODO [ToDr] Should we use longevity instead?
-	pub valid_till: time::Instant,
+	/// Transaction validity deadline.
+	/// TODO [ToDr] Should we use longevity instead?
+	#[serde(skip)]
+	pub valid_till: Option<time::Instant>,
 }
+
+/// Pool configuration options.
+#[derive(Debug, Clone, Default)]
+pub struct Options;
 
 /// Extrinsics pool.
 pub struct Pool<B: ChainApi> {
@@ -91,32 +101,6 @@ pub struct Pool<B: ChainApi> {
 impl<B: ChainApi> Pool<B> where
 	NumberFor<B>: Into<base::BlockNumber>,
 {
-	/// Create a new transaction pool.
-	/// TODO [ToDr] Options
-	pub fn new(api: B) -> Self {
-		Pool {
-			api,
-			listener: Default::default(),
-			pool: Default::default(),
-			import_notification_sinks: Default::default(),
-			rotator: Default::default(),
-		}
-	}
-
-	/// Return an event stream of transactions imported to the pool.
-	pub fn import_notification_stream(&self) -> EventStream {
-		let (sink, stream) = mpsc::unbounded();
-		self.import_notification_sinks.lock().push(sink);
-		stream
-	}
-
-	/// Invoked when extrinsics are broadcasted.
-	pub fn on_broadcasted(&self, propagated: HashMap<ExHash<B>, Vec<String>>) {
-		let mut listener = self.listener.write();
-		for (hash, peers) in propagated.into_iter() {
-			listener.broadcasted(&hash, peers);
-		}
-	}
 
 	/// Imports a bunch of unverified extrinsics to the pool
 	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<ExHash<B>>, B::Error> where
@@ -138,7 +122,7 @@ impl<B: ChainApi> Pool<B> where
 						Ok(base::Transaction {
 							data: TxData {
 								raw: xt,
-								valid_till: time::Instant::now() + POOL_TIME,
+								valid_till: Some(time::Instant::now() + POOL_TIME),
 							},
 							hash,
 							priority,
@@ -178,8 +162,49 @@ impl<B: ChainApi> Pool<B> where
 		Ok(self.listener.write().create_watcher(xt))
 	}
 
+	/// Prunes ready transactions that provide given list of tags.
+	pub fn prune_tags(&self, at: &BlockId<B::Block>, tags: impl IntoIterator<Item=Tag>) -> Result<(), B::Error> {
+		let block_number = self.api.block_id_to_number(at)?
+			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
+
+		let status = self.pool.write().prune_tags(block_number.into(), tags);
+		// try to re-submit pruned transactions since some of them might be still valid.
+		self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.raw.clone()))?;
+		// TODO [ToDr] Fire events for promoted / failed
+		Ok(())
+	}
+}
+
+impl<B: ChainApi> Pool<B> {
+	/// Create a new transaction pool.
+	/// TODO [ToDr] Options
+	pub fn new(_options: Options, api: B) -> Self {
+		Pool {
+			api,
+			listener: Default::default(),
+			pool: Default::default(),
+			import_notification_sinks: Default::default(),
+			rotator: Default::default(),
+		}
+	}
+
+	/// Return an event stream of transactions imported to the pool.
+	pub fn import_notification_stream(&self) -> EventStream {
+		let (sink, stream) = mpsc::unbounded();
+		self.import_notification_sinks.lock().push(sink);
+		stream
+	}
+
+	/// Invoked when extrinsics are broadcasted.
+	pub fn on_broadcasted(&self, propagated: HashMap<ExHash<B>, Vec<String>>) {
+		let mut listener = self.listener.write();
+		for (hash, peers) in propagated.into_iter() {
+			listener.broadcasted(&hash, peers);
+		}
+	}
+
 	/// Remove from the pool.
-	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<Arc<base::Transaction<ExHash<B>, TxData<ExtrinsicFor<B>>>>> {
+	pub fn remove_invalid(&self, hashes: &[ExHash<B>]) -> Vec<TransactionFor<B>> {
 		// temporarily ban invalid transactions
 		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
 		self.rotator.ban(&time::Instant::now(), hashes);
@@ -189,23 +214,18 @@ impl<B: ChainApi> Pool<B> where
 
 	/// Get ready transactions ordered by priority
 	pub fn ready<F, X>(&self, f: F) -> X where
-		F: FnOnce(&mut Iterator<Item=Arc<base::Transaction<ExHash<B>, TxData<ExtrinsicFor<B>>>>>) -> X,
+		F: FnOnce(&mut Iterator<Item=TransactionFor<B>>) -> X,
 	{
 		let pool = self.pool.read();
 		let mut ready = pool.ready();
 		f(&mut ready)
 	}
 
-	/// Prunes ready transactions that provide given list of tags.
-	pub fn prune_tags(&self, at: &BlockId<B::Block>, tags: impl IntoIterator<Item=Tag>) -> Result<(), B::Error> {
-		let block_number = self.api.block_id_to_number(at)?
-			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
-
-		let status = self.pool.write().prune_tags(block_number.into(), tags);
-		// try to re-submit pruned transactions since some of them might be still valid.
-		self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.raw.clone()));
-		// TODO [ToDr] Fire events for promoted / failed
-		Ok(())
+	/// Returns all transactions in the pool.
+	///
+	/// Be careful with large limit values, as querying the entire pool might be time consuming.
+	pub fn all(&self, limit: usize) -> Vec<TransactionFor<B>> {
+		self.ready(|it| it.take(limit).collect())
 	}
 }
 

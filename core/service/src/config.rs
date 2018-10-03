@@ -39,7 +39,7 @@ pub struct Configuration<C, G: Serialize + DeserializeOwned + BuildStorage> {
 	/// Node roles.
 	pub roles: Roles,
 	/// Extrinsic pool configuration.
-	pub transaction_pool: transaction_pool::Options,
+	pub transaction_pool: transaction_pool::txpool::Options,
 	/// Network configuration.
 	pub network: NetworkConfiguration,
 	/// Path to key files.
@@ -113,7 +113,7 @@ pub fn platform() -> String {
 	let env_dash = if env.is_empty() { "" } else { "-" };
 	format!("{}-{}{}{}", Target::arch(), Target::os(), env_dash, env)
 }
-	
+
 /// Returns full version string, using supplied version and commit.
 pub fn full_version_from_strs(impl_version: &str, impl_commit: &str) -> String {
 	let commit_dash = if impl_commit.is_empty() { "" } else { "-" };

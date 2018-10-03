@@ -83,8 +83,11 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 	pub fn ban_if_stale<Ex>(&self, now: &Instant, xt: &Transaction<Hash, TxData<Ex>>) -> bool where
 		Hash: fmt::Debug + fmt::LowerHex,
 	{
-		if &xt.data.valid_till > now {
-			return false;
+		match xt.data.valid_till {
+			Some(ref valid_till) if valid_till > now => {
+				return false;
+			}
+			_ => {},
 		}
 
 		self.ban(now, &[xt.hash.clone()]);

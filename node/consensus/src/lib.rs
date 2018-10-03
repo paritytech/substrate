@@ -50,10 +50,10 @@ use codec::{Decode, Encode};
 use node_primitives::{AccountId, Timestamp, SessionKey, InherentData};
 use node_runtime::Runtime;
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As, BlockNumberToHash};
 use runtime_primitives::generic::{BlockId, Era};
 use srml_system::Trait as SystemT;
-use transaction_pool::{TransactionPool, Client as TPClient};
+use transaction_pool::txpool::{self, Pool as TransactionPool, ChainApi as PoolChainApi};
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Delay;
 
@@ -197,7 +197,7 @@ pub trait Network {
 
 /// Proposer factory.
 pub struct ProposerFactory<N, C> where
-	C: AuthoringApi + TPClient,
+	C: AuthoringApi + PoolChainApi,
 {
 	/// The client instance.
 	pub client: Arc<C>,
@@ -215,7 +215,8 @@ pub struct ProposerFactory<N, C> where
 
 impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C> where
 	N: Network<Block=<C as AuthoringApi>::Block>,
-	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
+	C: AuthoringApi + PoolChainApi<Block=<C as AuthoringApi>::Block> + BlockNumberToHash,
+	txpool::NumberFor<C>: Into<u64>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
 {
@@ -269,7 +270,7 @@ impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C
 }
 
 /// The proposer logic.
-pub struct Proposer<C: AuthoringApi + TPClient> {
+pub struct Proposer<C: AuthoringApi + PoolChainApi> {
 	client: Arc<C>,
 	start: Instant,
 	local_key: Arc<ed25519::Pair>,
@@ -283,7 +284,7 @@ pub struct Proposer<C: AuthoringApi + TPClient> {
 	minimum_timestamp: u64,
 }
 
-impl<C: AuthoringApi + TPClient> Proposer<C> {
+impl<C: AuthoringApi + PoolChainApi> Proposer<C> {
 	fn primary_index(&self, round_number: usize, len: usize) -> usize {
 		use primitives::uint::U256;
 
@@ -295,7 +296,8 @@ impl<C: AuthoringApi + TPClient> Proposer<C> {
 }
 
 impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
-	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
+	C: AuthoringApi + PoolChainApi<Block=<C as AuthoringApi>::Block> + BlockNumberToHash,
+	txpool::NumberFor<C>: Into<u64>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
 {
@@ -354,7 +356,7 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 				warn!("Unable to get the pending set: {:?}", e);
 			}
 
-			self.transaction_pool.remove(&unqueue_invalid, false);
+			self.transaction_pool.remove_invalid(&unqueue_invalid);
 		}
 
 		let block = block_builder.bake()?;
@@ -512,8 +514,9 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 			};
 			let uxt: <<C as AuthoringApi>::Block as BlockT>::Extrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
 			let hash = BlockId::<<C as AuthoringApi>::Block>::hash(self.parent_hash);
-			self.transaction_pool.submit_one(&hash, uxt)
-				.expect("locally signed extrinsic is valid; qed");
+			if let Err(e) = self.transaction_pool.submit_one(&hash, uxt) {
+				warn!("Error importing misbehavior report: {:?}", e);
+			}
 		}
 	}
 
