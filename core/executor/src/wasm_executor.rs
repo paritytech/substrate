@@ -558,13 +558,6 @@ mod tests {
 	use codec::Encode;
 	use state_machine::TestExternalities;
 
-	// TODO: move into own crate.
-	macro_rules! map {
-		($( $name:expr => $value:expr ),*) => (
-			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-		)
-	}
-
 	#[test]
 	fn returning_should_work() {
 		let mut ext = TestExternalities::default();
