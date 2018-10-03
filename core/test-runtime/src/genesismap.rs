@@ -68,12 +68,6 @@ impl GenesisConfig {
 	}
 }
 
-macro_rules! map {
-	($( $name:expr => $value:expr ),*) => (
-		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-	)
-}
-
 pub fn additional_storage_with_genesis(genesis_block: &::Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	map![
 		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().0.to_vec()
