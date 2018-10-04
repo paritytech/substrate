@@ -51,6 +51,7 @@
 //! [`Module::execute`]: struct.Module.html#impl-OnFinalise
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "bench", feature(test))]
 
 #[cfg(feature = "std")]
 #[macro_use]
@@ -86,6 +87,9 @@ extern crate assert_matches;
 
 #[cfg(test)]
 extern crate wabt;
+
+#[cfg(feature = "bench")]
+extern crate test;
 
 mod account_db;
 mod double_map;

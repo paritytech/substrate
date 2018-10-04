@@ -24,8 +24,8 @@ use substrate_primitives::{Blake2Hasher};
 use system::{Phase, EventRecord};
 use wabt;
 use {
-	runtime_io, balances, system, CodeOf, ContractAddressFor,
-	GenesisConfig, Module, StorageOf, Trait, RawEvent,
+	balances, runtime_io, system, CodeOf, ContractAddressFor,
+	GenesisConfig, Module, RawEvent, StorageOf, Trait,
 };
 
 impl_outer_origin! {
@@ -863,4 +863,71 @@ fn input_data() {
 			// all asserts are made within contract code itself.
 		},
 	);
+}
+
+#[cfg(feature = "bench")]
+mod benchmarks {
+	use test::Bencher;
+
+	use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
+	use super::*;
+
+	fn with_accountdb_at_depth<'a, F, T>(
+		overlay: &'a OverlayAccountDb<'a, Test>,
+		depth: usize,
+		mut f: F
+	) -> T
+		where F: FnMut(&OverlayAccountDb<Test>) -> T
+	{
+		if depth == 0 {
+			f(overlay)
+		} else {
+			with_accountdb_at_depth(&OverlayAccountDb::new(overlay), depth - 1, f)
+		}
+	}
+
+	#[bench]
+	fn bench_accountdb_snapshot(b: &mut Bencher) {
+		let direct = DirectAccountDb;
+		let overlay = OverlayAccountDb::<Test>::new(&direct);
+
+		let depth = 1000;
+
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				b.iter(|| {
+					with_accountdb_at_depth(&overlay, depth, |_| {})
+				});
+			}
+		);
+	}
+
+	#[bench]
+	fn bench_accountdb_get(b: &mut Bencher) {
+		let direct = DirectAccountDb;
+		let mut overlay = OverlayAccountDb::<Test>::new(&direct);
+
+		let depth = 1000;
+
+		overlay.set_storage(
+			&1,
+			"hello".as_bytes().to_vec(),
+			Some("world".as_bytes().to_vec()),
+		);
+
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				with_accountdb_at_depth(&overlay, depth, |overlay| {
+					b.iter(|| {
+						assert_eq!(
+							overlay.get_storage(&1, "hello".as_bytes()),
+							Some("world".as_bytes().to_vec()),
+						);
+					});
+				})
+			}
+		);
+	}
 }

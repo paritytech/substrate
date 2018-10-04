@@ -24,6 +24,7 @@ wabt = "0.4"
 assert_matches = "1.1"
 
 [features]
+bench = []
 default = ["std"]
 std = [
 	"serde_derive",
