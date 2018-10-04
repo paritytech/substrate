@@ -43,7 +43,9 @@ use futures::stream::Fuse;
 use futures::sync::mpsc;
 use client::{Client, ImportNotifications, backend::Backend, CallExecutor};
 use codec::{Encode, Decode};
-use runtime_primitives::traits::{As, NumberFor, Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{
+	As, NumberFor, Block as BlockT, Header as HeaderT, DigestItemFor,
+};
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, AuthorityId, Blake2Hasher};
 use tokio::timer::Interval;
@@ -390,6 +392,7 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, B
 	N: Network + 'static,
 	N::In: 'static,
 	NumberFor<Block>: As<u32>,
+	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		let tree_route_res = ::client::blockchain::tree_route(
@@ -434,6 +437,16 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, B
 	}
 }
 
+/// A GRANDPA-compatible DigestItem. This can describe when GRANDPA set changes
+/// are scheduled.
+// TODO: with specialization, do a blanket implementation so this trait
+// doesn't have to be implemented by users.
+pub trait CompatibleDigestItem<N> {
+	/// If this digest item notes a GRANDPA set change, return the number of
+	/// blocks the change should occur after.
+	fn scheduled_change_in(&self) -> Option<N> { None }
+}
+
 impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, E, Block, N> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -441,6 +454,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 	N: Network + 'static,
 	N::In: 'static,
 	NumberFor<Block>: As<u32>,
+	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
 {
 	type Timer = Box<Future<Item = (), Error = Self::Error>>;
 	type Id = AuthorityId;
@@ -555,6 +569,7 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 	N: Network + 'static,
 	N::In: 'static,
 	NumberFor<Block>: As<u32>,
+	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
 {
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
@@ -596,6 +611,8 @@ mod tests {
 	use tokio::runtime::current_thread;
 	use keyring::Keyring;
 	use client::BlockchainEvents;
+
+	impl CompatibleDigestItem<NumberFor<Block>> for DigestItemFor<Block> { }
 
 	#[derive(Clone)]
 	struct TestGrandpaNetwork {
