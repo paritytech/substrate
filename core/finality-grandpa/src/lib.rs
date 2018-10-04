@@ -440,17 +440,17 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 	N::In: 'static,
 	NumberFor<Block>: As<u32>,
 {
-    type Timer = Box<Future<Item = (), Error = Self::Error>>;
-    type Id = AuthorityId;
-    type Signature = ed25519::Signature;
-    type In = Box<Stream<Item = ::grandpa::SignedMessage<Block::Hash, Self::Signature, Self::Id>, Error = Self::Error>>;
-    type Out = Box<Sink<SinkItem = ::grandpa::Message<Block::Hash>, SinkError = Self::Error>>;
-    type Error = Error;
+	type Timer = Box<Future<Item = (), Error = Self::Error>>;
+	type Id = AuthorityId;
+	type Signature = ed25519::Signature;
+	type In = Box<Stream<Item = ::grandpa::SignedMessage<Block::Hash, Self::Signature, Self::Id>, Error = Self::Error>>;
+	type Out = Box<Sink<SinkItem = ::grandpa::Message<Block::Hash>, SinkError = Self::Error>>;
+	type Error = Error;
 
-    fn round_data(
-        &self,
-        round: u64
-    ) -> voter::RoundData<Self::Timer, Self::Id, Self::In, Self::Out> {
+	fn round_data(
+		&self,
+		round: u64
+	) -> voter::RoundData<Self::Timer, Self::Id, Self::In, Self::Out> {
 		use client::BlockchainEvents;
 		use tokio::timer::Delay;
 
@@ -491,14 +491,14 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 
 		voter::RoundData {
 			prevote_timer: Box::new(prevote_timer.map_err(Error::Timer)),
-    		precommit_timer: Box::new(precommit_timer.map_err(Error::Timer)),
-    		voters: self.voters.clone(),
-    		incoming,
-    		outgoing,
+			precommit_timer: Box::new(precommit_timer.map_err(Error::Timer)),
+			voters: self.voters.clone(),
+			incoming,
+			outgoing,
 		}
 	}
 
-    fn completed(&self, round: u64, state: RoundState<Block::Hash>) {
+	fn completed(&self, round: u64, state: RoundState<Block::Hash>) {
 		let encoded_state = (round, state).encode();
 		if let Err(e) = self.inner.backend()
 			.insert_aux(&[(LAST_COMPLETED_KEY, &encoded_state[..])], &[])
@@ -507,27 +507,27 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 		}
 	}
 
-    fn finalize_block(&self, hash: Block::Hash, number: u32) {
+	fn finalize_block(&self, hash: Block::Hash, number: u32) {
 		// TODO: don't unconditionally notify.
 		if let Err(e) = self.inner.finalize_block(BlockId::Hash(hash), true) {
 			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 		}
 	}
 
-    fn prevote_equivocation(
-        &self,
-        _round: u64,
-        equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block::Hash>, Self::Signature>
-    ) {
+	fn prevote_equivocation(
+		&self,
+		_round: u64,
+		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block::Hash>, Self::Signature>
+	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet; this could craft misbehavior reports of some kind.
 	}
 
-    fn precommit_equivocation(
-        &self,
-        _round: u64,
-        equivocation: Equivocation<Self::Id, Precommit<Block::Hash>, Self::Signature>
-    ) {
+	fn precommit_equivocation(
+		&self,
+		_round: u64,
+		equivocation: Equivocation<Self::Id, Precommit<Block::Hash>, Self::Signature>
+	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet
 	}
