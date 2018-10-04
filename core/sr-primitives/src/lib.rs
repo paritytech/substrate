@@ -18,7 +18,6 @@
 //! and depositing logs.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![feature(trace_macros)]
 
 #[cfg(feature = "std")]
 extern crate serde;
@@ -58,7 +57,6 @@ use substrate_primitives::hexdisplay::ascii_format;
 #[cfg(feature = "std")]
 pub mod testing;
 
-pub mod api;
 pub mod traits;
 pub mod generic;
 pub mod bft;

@@ -46,13 +46,13 @@ use std::sync::Arc;
 use std::time::{self, Duration, Instant};
 
 use client::{Client as SubstrateClient, CallExecutor};
+use client::runtime_api::{BlockBuilder as BlockBuilderAPI, Core, Miscellaneous, OldTxQueue};
 use codec::{Decode, Encode};
 use node_primitives::{AccountId, Timestamp, SessionKey, InherentData};
 use node_runtime::Runtime;
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As};
 use runtime_primitives::generic::{BlockId, Era};
-use runtime_primitives::api::{BlockBuilder as BlockBuilderAPI, Core, Miscellaneous, OldTxQueue};
 use srml_system::Trait as SystemT;
 use transaction_pool::{TransactionPool, Client as TPClient};
 use tokio::runtime::TaskExecutor;

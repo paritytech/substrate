@@ -2461,6 +2461,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sr-api"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "sr-version 0.1.0",
+]
+
+[[package]]
 name = "sr-io"
 version = "0.1.0"
 dependencies = [
@@ -2878,6 +2888,7 @@ dependencies = [
  "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "slog 2.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 0.1.0",
  "sr-primitives 0.1.0",
  "substrate-bft 0.1.0",
  "substrate-executor 0.1.0",

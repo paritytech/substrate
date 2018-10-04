@@ -41,6 +41,7 @@ use std::{
 
 use codec::{Decode, Encode};
 use client::{Client as SubstrateClient, CallExecutor};
+use client::runtime_api::OldTxQueue;
 use transaction_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
 use primitives::{AccountId, Hash, Index};
 use runtime::{Address, UncheckedExtrinsic};
@@ -50,7 +51,6 @@ use sr_primitives::traits::{
 	Bounded, Checkable, Block as BlockT, Hash as HashT, Header as HeaderT, BlakeTwo256, Lookup, CurrentHeight,
 	BlockNumberToHash
 };
-use sr_primitives::api::OldTxQueue;
 
 pub use transaction_pool::{Options, Status, LightStatus, VerifiedTransaction as VerifiedTransactionOps};
 pub use error::{Error, ErrorKind, Result};

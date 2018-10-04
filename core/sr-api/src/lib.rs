@@ -14,9 +14,16 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Primitives for interfacing with the runtime.
+//! API's for interfacing with the runtime.
 
-use {ApplyResult, traits::Block as BlockT, generic::BlockId};
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate sr_std as rstd;
+extern crate sr_primitives as primitives;
+extern crate parity_codec as codec;
+extern crate sr_version as runtime_version;
+
+use primitives::{ApplyResult, traits::Block as BlockT, generic::BlockId};
 use runtime_version::RuntimeVersion;
 use rstd::vec::Vec;
 use codec::{Encode, Decode};
@@ -256,7 +263,7 @@ macro_rules! decl_api {
 		$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
 		{ $( $result_return_ty:ty; )* };
 	) => {
-		#[cfg(not(feature = "api-for-runtime"))]
+		#[cfg(feature = "api-for-client")]
 		$( #[$attr] )*
 		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > {
 			type Error;
@@ -268,7 +275,7 @@ macro_rules! decl_api {
 			)*
 		}
 
-		#[cfg(feature = "api-for-runtime")]
+		#[cfg(not(feature = "api-for-client"))]
 		$( #[$attr] )*
 		pub trait $name $( < $( $generic_param_orig $( : $generic_bound_orig )* ),* > )* {
 			$(
