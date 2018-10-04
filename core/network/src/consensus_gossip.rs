@@ -197,7 +197,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Prune old or no longer relevant consensus messages. Provide a predicate
-	/// for pruning, which returns `true` when the items with a given topic should be pruned.
+	/// for pruning, which returns `false` when the items with a given topic should be pruned.
 	pub fn collect_garbage<P: Fn(&B::Hash) -> bool>(&mut self, predicate: P) {
 		self.live_message_sinks.retain(|_, sink| !sink.is_closed());
 
@@ -210,7 +210,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 				ConsensusMessage::ChainSpecific(_, ref h) => h,
 			};
 
-			if entry.instant + MESSAGE_LIFETIME >= now && !predicate(topic) {
+			if entry.instant + MESSAGE_LIFETIME >= now && predicate(topic) {
 				true
 			} else {
 				hashes.remove(&entry.hash);
@@ -346,7 +346,7 @@ mod tests {
 		consensus.message_hashes.insert(m2_hash);
 
 		// nothing to collect
-		consensus.collect_garbage(|_topic| false);
+		consensus.collect_garbage(|_topic| true);
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);
 
@@ -359,13 +359,13 @@ mod tests {
 			digest: Default::default(),
 		};
 
-		consensus.collect_garbage(|&topic| topic == Default::default());
+		consensus.collect_garbage(|&topic| topic != Default::default());
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);
 
 		// header that matches one of the messages
 		header.parent_hash = prev_hash;
-		consensus.collect_garbage(|topic| topic == &prev_hash);
+		consensus.collect_garbage(|topic| topic != &prev_hash);
 		assert_eq!(consensus.messages.len(), 1);
 		assert_eq!(consensus.message_hashes.len(), 1);
 		assert!(consensus.message_hashes.contains(&m2_hash));
@@ -373,7 +373,7 @@ mod tests {
 		// make timestamp expired
 		consensus.messages.clear();
 		push_msg!(m2_hash, now - MESSAGE_LIFETIME, m2);
-		consensus.collect_garbage(|_topic| false);
+		consensus.collect_garbage(|_topic| true);
 		assert!(consensus.messages.is_empty());
 		assert!(consensus.message_hashes.is_empty());
 	}
