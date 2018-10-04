@@ -18,8 +18,8 @@ tokio = "0.1.7"
 parking_lot = "0.4"
 error-chain = "0.12"
 log = "0.3"
-rhododendron = "0.3"
-serde = { version = "1.0", features = ["derive"]}
+rhododendron = { git = "https://github.com/paritytech/rhododendron.git", features = ["codec"] }
+serde = { version = "1.0", features = ["derive"] }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }

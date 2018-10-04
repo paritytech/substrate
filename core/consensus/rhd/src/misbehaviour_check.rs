@@ -19,7 +19,7 @@
 use codec::{Codec, Encode};
 use primitives::{AuthorityId, Signature};
 
-use rhd::messages::{Action, Message, MisbehaviorKind};
+use rhododendron::messages::{Action, Message, MisbehaviorKind};
 use runtime_io;
 
 // check a message signature. returns true if signed by that authority.
