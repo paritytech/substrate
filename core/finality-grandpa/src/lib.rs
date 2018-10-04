@@ -543,7 +543,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 }
 
 /// Run a GRANDPA voter as a task. The returned future should be executed in a tokio runtime.
-pub fn run_voter<B, E, Block: BlockT, N>(
+pub fn run_grandpa<B, E, Block: BlockT, N>(
 	config: Config,
 	client: Arc<Client<B, E, Block>>,
 	voters: HashMap<AuthorityId, usize>,
@@ -688,7 +688,7 @@ mod tests {
 					.take_while(|n| Ok(n.header.number() < &20))
 					.for_each(move |_| Ok(()))
 			);
-			let voter = run_voter(
+			let voter = run_grandpa(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					voters: voters.clone(),
@@ -747,7 +747,7 @@ mod tests {
 					.take_while(|n| Ok(n.header.number() < &20))
 					.for_each(move |_| Ok(()))
 			);
-			let voter = run_voter(
+			let voter = run_grandpa(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					voters: voters.keys().cloned().collect(),
