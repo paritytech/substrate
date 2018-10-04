@@ -129,9 +129,9 @@ decl_storage! {
 			use codec::{Encode, KeyedVec};
 
 			let auth_count = config.authorities.len() as u32;
-			for (i, v) in config.authorities.clone().into_iter().enumerate() {
+			config.authorities.iter().enumerate().for_each(|(i, v)| {
 				storage.insert((i as u32).to_keyed_vec(well_known_keys::AUTHORITY_PREFIX), v.encode());
-			};
+			});
 			storage.insert(well_known_keys::AUTHORITY_COUNT.to_vec(), auth_count.encode());
 			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
 		});
