@@ -374,9 +374,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 					.map(Some),
 				None => Ok(None)
 			})?
-			.and_then(|header| header.digest().logs().iter()
-				.find(|log| log.as_changes_trie_root().is_some())
-				.and_then(DigestItem::as_changes_trie_root)
+			.and_then(|header| header.digest().log(DigestItem::as_changes_trie_root)
 				.map(|root| H256::from_slice(root.as_ref()))))
 	}
 }

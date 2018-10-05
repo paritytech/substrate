@@ -1091,9 +1091,7 @@ pub(crate) mod tests {
 			remote_client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 			let header = remote_client.header(&BlockId::Number(i as u64 + 1)).unwrap().unwrap();
-			let trie_root = header.digest().logs().iter()
-				.find(|l| l.as_changes_trie_root().is_some())
-				.and_then(DigestItem::as_changes_trie_root)
+			let trie_root = header.digest().log(DigestItem::as_changes_trie_root)
 				.map(|root| H256::from_slice(root.as_ref()))
 				.unwrap();
 			local_roots.push(trie_root);
