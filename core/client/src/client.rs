@@ -1053,7 +1053,7 @@ impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 	type Error = Error;
 
 	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error> {
-		self.call_api_at(at, "random_seed", &())
+		self.call_api_at(at, "version", &())
 	}
 
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
@@ -1099,7 +1099,7 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 	fn inherent_extrinsics<InherentExtrinsic: Encode + Decode, UncheckedExtrinsic: Encode + Decode>(
 		&self, at: &BlockId<Block>, inherent: InherentExtrinsic
 	) -> Result<Vec<UncheckedExtrinsic>, Self::Error> {
-		self.call_api_at(at, "finalise_block", &(inherent))
+		self.call_api_at(at, "inherent_extrinsics", &(inherent))
 	}
 
 	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Hash, Self::Error> {

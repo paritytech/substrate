@@ -27,6 +27,8 @@ extern crate sr_version as runtime_version;
 use primitives::{ApplyResult, traits::Block as BlockT, generic::BlockId};
 use runtime_version::RuntimeVersion;
 use rstd::vec::Vec;
+#[doc(hidden)]
+pub use rstd::slice;
 use codec::{Encode, Decode};
 
 /// Declare the given API traits.
