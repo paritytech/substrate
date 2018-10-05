@@ -333,6 +333,24 @@ impl CheckEqual for substrate_primitives::H256 {
 	}
 }
 
+impl<I> CheckEqual for I where I: DigestItem {
+	#[cfg(feature = "std")]
+	fn check_equal(&self, other: &Self) {
+		if self != other {
+			println!("DigestItem: given={:?}, expected={:?}", self, other);
+		}
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn check_equal(&self, other: &Self) {
+		if self != other {
+			runtime_io::print("DigestItem not equal");
+			runtime_io::print(&Encode::encode(self)[..]);
+			runtime_io::print(&Encode::encode(other)[..]);
+		}
+	}
+}
+
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebugButNotDeserialize: Serialize + Debug {}
 #[cfg(feature = "std")]
@@ -491,7 +509,7 @@ pub trait Digest: Member + Default {
 /// for casting member to 'system' log items, known to substrate.
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Member {
+pub trait DigestItem: Codec + Member {
 	type Hash: Member;
 	type AuthorityId: Member;
 
