@@ -159,8 +159,7 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 	fn check_changes_proof(
 		&self,
 		request: &RemoteChangesRequest<Block::Header>,
-		remote_max: NumberFor<Block>,
-		remote_proof: Vec<Vec<u8>>
+		proof: ChangesProof<Block::Header>
 	) -> ClientResult<Vec<(NumberFor<Block>, u32)>>;
 }
 
@@ -224,17 +223,18 @@ impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 	fn check_changes_proof(
 		&self,
 		request: &RemoteChangesRequest<Block::Header>,
-		remote_max: NumberFor<Block>,
-		remote_proof: Vec<Vec<u8>>
+		remote_proof: ChangesProof<Block::Header>
 	) -> ClientResult<Vec<(NumberFor<Block>, u32)>> {
 		// since we need roots of all changes tries for the range begin..max
 		// => remote node can't use max block greater that one that we have passed
-		if remote_max > request.max_block.0 || remote_max < request.last_block.0 {
+		if remote_proof.max_block > request.max_block.0 || remote_proof.max_block < request.last_block.0 {
 			return Err(ClientErrorKind::ChangesTrieAccessFailed(format!(
 				"Invalid max_block used by the remote node: {}. Local: {}..{}..{}",
-				remote_max, request.first_block.0, request.last_block.0, request.max_block.0,
+				remote_proof.max_block, request.first_block.0, request.last_block.0, request.max_block.0,
 			)).into());
 		}
+
+		// TODO: check roots proof
 
 		let first_number = request.first_block.0.as_();
 		key_changes_proof_check::<_, H>(
@@ -242,11 +242,12 @@ impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 			&RootsStorage {
 				first: first_number,
 				roots: &request.tries_roots,
+				prev_roots: remote_proof.roots,
 			},
-			remote_proof,
+			remote_proof.proof,
 			first_number,
 			request.last_block.0.as_(),
-			remote_max.as_(),
+			remote_proof.max_block.as_(),
 			&request.key)
 		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
 		.map_err(|err| ClientErrorKind::ChangesTrieAccessFailed(err).into())
@@ -254,25 +255,32 @@ impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 }
 
 /// A view of HashMap<Number, Hash> as a changes trie roots storage.
-struct RootsStorage<'a, Hash: 'a> {
+struct RootsStorage<'a, Number: As<u64>, Hash: 'a> {
 	first: u64,
 	roots: &'a [Hash],
+	prev_roots: HashMap<Number, Hash>,
 }
 
-impl<'a, H, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Hash>
+impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
+		Number: Send + Sync + Eq + ::std::hash::Hash + As<u64>,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
 	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {
-		Ok(block.checked_sub(self.first)
-			.and_then(|index| self.roots.get(index as usize))
-			.cloned()
-			.map(|root| {
-				let mut hasher_root: H::Out = Default::default();
-				hasher_root.as_mut().copy_from_slice(root.as_ref());
-				hasher_root
-			}))
+		let root = if block < self.first {
+			self.prev_roots.get(&As::sa(block)).cloned()
+		} else {
+			block.checked_sub(self.first)
+				.and_then(|index| self.roots.get(index as usize))
+				.cloned()
+		};
+
+		Ok(root.map(|root| {
+			let mut hasher_root: H::Out = Default::default();
+			hasher_root.as_mut().copy_from_slice(root.as_ref());
+			hasher_root
+		}))
 	}
 }
 
@@ -436,11 +444,9 @@ pub mod tests {
 			let end_hash = remote_client.block_hash(end).unwrap().unwrap();
 
 			// 'fetch' changes proof from remote node
-			let changes_proof = remote_client.key_changes_proof(
+			let remote_proof = remote_client.key_changes_proof(
 				begin_hash, end_hash, begin_hash, max_hash, &key
 			).unwrap();
-			let remote_max = changes_proof.max_block;
-			let remote_proof = changes_proof.proof;
 
 			// check proof on local client
 			let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
@@ -453,8 +459,12 @@ pub mod tests {
 				key: key,
 				retry_count: None,
 			};
-			let local_result = local_checker.check_changes_proof(
-				&request, remote_max, remote_proof).unwrap();
+			let local_result = local_checker.check_changes_proof(&request, ChangesProof {
+				max_block: remote_proof.max_block,
+				proof: remote_proof.proof,
+				roots: remote_proof.roots,
+				roots_proof: remote_proof.roots_proof,
+			}).unwrap();
 
 			// ..and ensure that result is the same as on remote node
 			match local_result == expected_result {
@@ -479,10 +489,8 @@ pub mod tests {
 		let end_hash = remote_client.block_hash(end).unwrap().unwrap();
 
 		// 'fetch' changes proof from remote node
-		let changes_proof = remote_client.key_changes_proof(
+		let remote_proof = remote_client.key_changes_proof(
 			begin_hash, end_hash, begin_hash, max_hash, &key).unwrap();
-		let remote_max = changes_proof.max_block;
-		let mut remote_proof = changes_proof.proof;
 
 		let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
 		let request = RemoteChangesRequest::<Header> {
@@ -496,10 +504,19 @@ pub mod tests {
 		};
 
 		// check proof on local client using max from the future
-		assert!(local_checker.check_changes_proof(&request, remote_max + 1, remote_proof.clone()).is_err());
+		assert!(local_checker.check_changes_proof(&request, ChangesProof {
+			max_block: remote_proof.max_block + 1,
+			proof: remote_proof.proof.clone(),
+			roots: remote_proof.roots.clone(),
+			roots_proof: remote_proof.roots_proof.clone(),
+		}).is_err());
 
 		// check proof on local client using broken proof
-		remote_proof = local_roots_range.into_iter().map(|v| v.to_vec()).collect();
-		assert!(local_checker.check_changes_proof(&request, remote_max, remote_proof).is_err());
+		assert!(local_checker.check_changes_proof(&request, ChangesProof {
+			max_block: remote_proof.max_block,
+			proof: local_roots_range.into_iter().map(|v| v.to_vec()).collect(),
+			roots: remote_proof.roots,
+			roots_proof: remote_proof.roots_proof,
+		}).is_err());
 	}
 }
