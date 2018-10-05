@@ -29,7 +29,7 @@ use error::Error;
 use chain::Client;
 use specialization::Specialization;
 use on_demand::OnDemandService;
-use import_queue::AsyncImportQueue;
+use import_queue::ImportQueue;
 use runtime_primitives::traits::{Block as BlockT};
 
 /// Type that represents fetch completion future.
@@ -148,10 +148,13 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
 
 impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 	/// Creates and register protocol with the network service
-	pub fn new(params: Params<B, S, H>, protocol_id: ProtocolId) -> Result<Arc<Service<B, S, H>>, Error> {
+	pub fn new<Q: ImportQueue<B>>(
+		params: Params<B, S, H>,
+		protocol_id: ProtocolId,
+		import_queue: Q,
+	) -> Result<Arc<Service<B, S, H>>, Error> {
 		let chain = params.chain.clone();
-		// TODO: non-insatnt finality.
-		let import_queue = Arc::new(AsyncImportQueue::new(true));
+		let import_queue = Arc::new(import_queue);
 		let handler = Arc::new(ProtocolHandler {
 			protocol: Protocol::new(
 				params.config,

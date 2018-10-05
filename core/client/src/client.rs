@@ -158,26 +158,34 @@ pub struct ImportBlock<Block: BlockT> {
     /// Block's body
     pub body: Option<Vec<Block::Extrinsic>>,
     /// Is this block finalized already?
-    pub finalized: bool, // true for instant finality
+	/// `true` implies instant finality.
+    pub finalized: bool,
+	/// Auxiliary consensus data produced by the block.
+	/// Contains a list of key-value pairs. If values are `None`, the keys
+	/// will be deleted.
+	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 }
 
 impl<Block: BlockT> ImportBlock<Block> {
 	/// Deconstruct the justified header into parts.
 	pub fn into_inner(self)
-		-> (BlockOrigin,
+		-> (
+			BlockOrigin,
 			<Block as BlockT>::Header,
 			Justification,
 			Justification,
 			Option<Vec<<Block as BlockT>::Extrinsic>>,
-			bool
-			) {
+			bool,
+			Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		) {
 		(
 			self.origin,
 			self.header,
 			self.external_justification,
 			self.internal_justification,
 			self.body,
-			self.finalized
+			self.finalized,
+			self.auxiliary,
 		)
 	}
 }
@@ -503,7 +511,15 @@ impl<B, E, Block> Client<B, E, Block> where
 	    new_authorities: Option<Vec<AuthorityId>>,
 	) -> error::Result<ImportResult> {
 
-		let (origin, header, _, justification, body, finalized) = import_block.into_inner();
+		let (
+			origin,
+			header,
+			_,
+			justification,
+			body,
+			finalized,
+			_aux, // TODO: write this to DB also
+		) = import_block.into_inner();
 		let parent_hash = header.parent_hash().clone();
 
 		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
@@ -522,7 +538,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			justification,
 			body,
 			new_authorities,
-			finalized
+			finalized,
 		);
 
 		*self.importing_block.write() = None;

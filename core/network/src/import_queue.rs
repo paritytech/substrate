@@ -35,6 +35,21 @@ use sync::ChainSync;
 
 /// Blocks import queue API.
 pub trait ImportQueue<B: BlockT>: Send + Sync {
+	/// Start background work for the queue as necessary.
+	///
+	/// This is called automatically by the network service when synchronization
+	/// begins.
+	fn start<E>(
+		&self,
+		sync: Weak<RwLock<ChainSync<B>>>,
+		service: Weak<E>,
+		chain: Weak<Client<B>>
+	) -> Result<(), Error> where
+		Self: 'static,
+		E: 'static + ExecuteInContext<B>,
+	{
+		Ok(())
+	}
 	/// Clear the queue when sync is restarting.
 	fn clear(&self);
 	/// Clears the import queue and stops importing.
@@ -55,8 +70,9 @@ pub struct ImportQueueStatus<B: BlockT> {
 	pub best_importing_number: <<B as BlockT>::Header as HeaderT>::Number,
 }
 
-/// Blocks import queue that is importing blocks in the separate thread.
-pub struct AsyncImportQueue<B: BlockT> {
+/// Basic block import queue that is importing blocks sequentially in a separate thread,
+/// with pluggable verification.
+pub struct BasicQueue<B: BlockT> {
 	handle: Mutex<Option<::std::thread::JoinHandle<()>>>,
 	data: Arc<AsyncImportQueueData<B>>,
 	instant_finality: bool,
@@ -71,24 +87,13 @@ struct AsyncImportQueueData<B: BlockT> {
 	is_stopping: AtomicBool,
 }
 
-impl<B: BlockT> AsyncImportQueue<B> {
+impl<B: BlockT> BasicQueue<B> {
 	pub fn new(instant_finality: bool) -> Self {
 		Self {
 			handle: Mutex::new(None),
 			data: Arc::new(AsyncImportQueueData::new()),
 			instant_finality,
 		}
-	}
-
-	pub fn start<E: 'static + ExecuteInContext<B>>(&self, sync: Weak<RwLock<ChainSync<B>>>, service: Weak<E>, chain: Weak<Client<B>>) -> Result<(), Error> {
-		debug_assert!(self.handle.lock().is_none());
-
-		let qdata = self.data.clone();
-		let instant_finality = self.instant_finality;
-		*self.handle.lock() = Some(::std::thread::Builder::new().name("ImportQueue".into()).spawn(move || {
-			import_thread(sync, service, chain, qdata, instant_finality)
-		}).map_err(|err| Error::from(ErrorKind::Io(err)))?);
-		Ok(())
 	}
 }
 
@@ -104,7 +109,18 @@ impl<B: BlockT> AsyncImportQueueData<B> {
 	}
 }
 
-impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
+impl<B: BlockT> ImportQueue<B> for BasicQueue<B> {
+	fn start<E: 'static + ExecuteInContext<B>>(&self, sync: Weak<RwLock<ChainSync<B>>>, service: Weak<E>, chain: Weak<Client<B>>) -> Result<(), Error> {
+		debug_assert!(self.handle.lock().is_none());
+
+		let qdata = self.data.clone();
+		let instant_finality = self.instant_finality;
+		*self.handle.lock() = Some(::std::thread::Builder::new().name("ImportQueue".into()).spawn(move || {
+			import_thread(sync, service, chain, qdata, instant_finality)
+		}).map_err(|err| Error::from(ErrorKind::Io(err)))?);
+		Ok(())
+	}
+
 	fn clear(&self) {
 		let mut queue = self.data.queue.lock();
 		let mut queue_blocks = self.data.queue_blocks.write();
@@ -155,7 +171,7 @@ impl<B: BlockT> ImportQueue<B> for AsyncImportQueue<B> {
 	}
 }
 
-impl<B: BlockT> Drop for AsyncImportQueue<B> {
+impl<B: BlockT> Drop for BasicQueue<B> {
 	fn drop(&mut self) {
 		self.stop();
 	}
@@ -319,13 +335,14 @@ fn import_single_block<B: BlockT>(
 			let hash = header.hash();
 			let parent = header.parent_hash().clone();
 
-			let result = chain.import( ImportBlock {
+			let result = chain.import(ImportBlock {
 				origin: block_origin,
 				header: header,
 				external_justification: justification,
 				internal_justification: vec![],
 				body: block.body,
-				finalized: instant_finality
+				finalized: instant_finality,
+				aux: Vec::new(),
 			}, None);
 			match result {
 				Ok(ImportResult::AlreadyInChain) => {
