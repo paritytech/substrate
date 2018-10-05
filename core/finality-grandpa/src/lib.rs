@@ -82,6 +82,8 @@ pub enum Error {
 	Network(String),
 	/// A blockchain error.
 	Blockchain(String),
+	/// Could not complete a round on disk.
+	CouldNotCompleteRound(::client::error::Error),
 	/// A timer failed to fire.
 	Timer(::tokio::timer::Error),
 }
@@ -498,20 +500,27 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 		}
 	}
 
-	fn completed(&self, round: u64, state: RoundState<Block::Hash>) {
+	fn completed(&self, round: u64, state: RoundState<Block::Hash>) -> Result<(), Self::Error> {
 		let encoded_state = (round, state).encode();
 		if let Err(e) = self.inner.backend()
 			.insert_aux(&[(LAST_COMPLETED_KEY, &encoded_state[..])], &[])
 		{
-			warn!(target: "afg", "Error bookkeeping last completed round in DB: {:?}", e);
+			warn!(target: "afg", "Shutting down voter due to error bookkeeping last completed round in DB: {:?}", e);
+			Err(Error::CouldNotCompleteRound(e))
+		} else {
+			Ok(())
 		}
 	}
 
-	fn finalize_block(&self, hash: Block::Hash, number: u32) {
+	fn finalize_block(&self, hash: Block::Hash, number: u32) -> Result<(), Self::Error> {
 		// TODO: don't unconditionally notify.
 		if let Err(e) = self.inner.finalize_block(BlockId::Hash(hash), true) {
 			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
 		}
+
+		// we return without error in all cases because not being able to finalize is
+		// non-fatal.
+		Ok(())
 	}
 
 	fn prevote_equivocation(
@@ -534,7 +543,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 }
 
 /// Run a GRANDPA voter as a task. The returned future should be executed in a tokio runtime.
-pub fn run_voter<B, E, Block: BlockT, N>(
+pub fn run_grandpa<B, E, Block: BlockT, N>(
 	config: Config,
 	client: Arc<Client<B, E, Block>>,
 	voters: HashMap<AuthorityId, usize>,
@@ -679,7 +688,7 @@ mod tests {
 					.take_while(|n| Ok(n.header.number() < &20))
 					.for_each(move |_| Ok(()))
 			);
-			let voter = run_voter(
+			let voter = run_grandpa(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					voters: voters.clone(),
@@ -738,7 +747,7 @@ mod tests {
 					.take_while(|n| Ok(n.header.number() < &20))
 					.for_each(move |_| Ok(()))
 			);
-			let voter = run_voter(
+			let voter = run_grandpa(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					voters: voters.keys().cloned().collect(),
