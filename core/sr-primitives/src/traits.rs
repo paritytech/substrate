@@ -489,8 +489,8 @@ pub trait Digest: Member + Default {
 	/// Get reference to the first digest item that matches the passed predicate.
 	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
 		self.logs().iter()
-			.find(|log| predicate(log).is_some())
-			.and_then(predicate)
+			.filter_map(predicate)
+			.next()
 	}
 }
 
