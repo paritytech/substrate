@@ -411,7 +411,6 @@ pub fn prove_read<B, H>(
 where
 	B: Backend<H>,
 	H: Hasher,
-
 	H::Out: Ord + HeapSizeOf
 {
 	let trie_backend = backend.try_into_trie_backend()

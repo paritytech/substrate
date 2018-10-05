@@ -344,7 +344,8 @@ pub mod tests {
 		for i in 0..4 {
 			let builder = remote_client.new_block().unwrap();
 			remote_client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
-			local_headers_hashes.push(remote_client.block_hash(i + 1).unwrap());
+			local_headers_hashes.push(remote_client.block_hash(i + 1)
+				.map_err(|_| ClientErrorKind::Backend("TestError".into()).into()));
 		}
 
 		// 'fetch' header proof from remote node
@@ -353,7 +354,7 @@ pub mod tests {
 
 		// check remote read proof locally
 		let local_storage = InMemoryBlockchain::<Block>::new();
-		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(4, 0, local_headers_hashes.into_iter()).unwrap();
+		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(4, 0, local_headers_hashes).unwrap();
 		if insert_cht {
 			local_storage.insert_cht_root(1, local_cht_root);
 		}

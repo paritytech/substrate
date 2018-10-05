@@ -123,6 +123,12 @@ error_chain! {
 			description("Potential long-range attack: block not in finalized chain."),
 			display("Potential long-range attack: block not in finalized chain."),
 		}
+
+		/// Hash that is required for building CHT is missing.
+		MissingHashRequiredForCHT(cht_num: u64, block_number: u64) {
+			description("missed hash required for building CHT"),
+			display("Failed to get hash of block#{} for building CHT#{}", block_number, cht_num),
+		}
 	}
 }
 

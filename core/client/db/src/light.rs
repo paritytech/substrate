@@ -31,7 +31,7 @@ use codec::{Decode, Encode};
 use primitives::{AuthorityId, Blake2Hasher};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
-	Zero, One, As, NumberFor};
+	Zero, One, As, NumberFor, Digest, DigestItem};
 use cache::DbCache;
 use utils::{meta_keys, Meta, db_err, number_to_lookup_key, open_database,
 	read_db, read_id, read_meta};
@@ -48,6 +48,11 @@ pub(crate) mod columns {
 /// Keep authorities for last 'AUTHORITIES_ENTRIES_TO_KEEP' blocks.
 #[allow(unused)]
 pub(crate) const AUTHORITIES_ENTRIES_TO_KEEP: u64 = cht::SIZE;
+/// Prefix for headers CHT.
+const HEADER_CHT_PREFIX: u8 = 0;
+/// Prefix for changes tries roots CHT.
+const CHANGES_TRIE_CHT_PREFIX: u8 = 1;
+
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 pub struct LightStorage<Block: BlockT> {
@@ -187,7 +192,16 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 }
 
 impl<Block: BlockT> LightStorage<Block> {
-	// note that a block is finalized. only call with child of last finalized block.
+	// Get block changes trie root, if available.
+	fn changes_trie_root(&self, block: BlockId<Block>) -> ClientResult<Option<Block::Hash>> {
+		self.header(block)
+			.map(|header| header.and_then(|header|
+				header.digest().logs().iter().find(|i| i.as_changes_trie_root().is_some())
+					.and_then(DigestItem::as_changes_trie_root)
+					.cloned()))
+	}
+
+	// Note that a block is finalized. Only call with child of last finalized block.
 	fn note_finalized(&self, transaction: &mut DBTransaction, header: &Block::Header, hash: Block::Hash) -> ClientResult<()> {
 		let meta = self.meta.read();
 		if &meta.finalized_hash != header.parent_hash() {
@@ -199,30 +213,38 @@ impl<Block: BlockT> LightStorage<Block> {
 
 		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, hash.as_ref());
 
-		// build new CHT if required
+		// build new CHT(s) if required
 		if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
 			let new_cht_start: NumberFor<Block> = cht::start_number(cht::SIZE, new_cht_number);
-			let new_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+
+			let new_header_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
 				cht::SIZE, new_cht_number, (new_cht_start.as_()..)
-				.map(|num| self.hash(As::sa(num)).unwrap_or_default())
-			);
+				.map(|num| self.hash(As::sa(num)))
+			)?;
+			transaction.put(columns::CHT, &cht_key(HEADER_CHT_PREFIX, new_cht_start), new_header_cht_root.as_ref());
 
-			if let Some(new_cht_root) = new_cht_root {
-				transaction.put(columns::CHT, &number_to_lookup_key(new_cht_start), new_cht_root.as_ref());
+			// if the header includes changes trie root, let's build a changes tries roots CHT
+			if header.digest().logs().iter().find(|i| i.as_changes_trie_root().is_some()).is_some() {
+				let new_changes_trie_cht_root = cht::compute_root::<Block::Header, Blake2Hasher, _>(
+					cht::SIZE, new_cht_number, (new_cht_start.as_()..)
+					.map(|num| self.changes_trie_root(BlockId::Number(As::sa(num))))
+				)?;
+				transaction.put(columns::CHT, &cht_key(CHANGES_TRIE_CHT_PREFIX, new_cht_start), new_changes_trie_cht_root.as_ref());
+			}
 
-				let mut prune_block = new_cht_start;
-				let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
-				trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
+			// prune headers that are replaced with CHT
+			let mut prune_block = new_cht_start;
+			let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
+			trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
 
-				while prune_block <= new_cht_end {
-					let id = read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
-					if let Some(hash) = id {
-						let lookup_key = number_to_lookup_key(prune_block);
-						transaction.delete(columns::HASH_LOOKUP, &lookup_key);
-						transaction.delete(columns::HEADER, hash.as_ref());
-					}
-					prune_block += <<Block as BlockT>::Header as HeaderT>::Number::one();
+			while prune_block <= new_cht_end {
+				let id = read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
+				if let Some(hash) = id {
+					let lookup_key = number_to_lookup_key(prune_block);
+					transaction.delete(columns::HASH_LOOKUP, &lookup_key);
+					transaction.delete(columns::HEADER, hash.as_ref());
 				}
+				prune_block += <<Block as BlockT>::Header as HeaderT>::Number::one();
 			}
 		}
 
@@ -322,7 +344,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 
 		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
 		let cht_start = cht::start_number(cht_size, cht_number);
-		self.db.get(columns::CHT, &number_to_lookup_key(cht_start)).map_err(db_err)?
+		self.db.get(columns::CHT, &cht_key(HEADER_CHT_PREFIX, cht_start)).map_err(db_err)?
 			.ok_or_else(no_cht_for_block)
 			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
 	}
@@ -348,6 +370,13 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 	fn cache(&self) -> Option<&BlockchainCache<Block>> {
 		None
 	}
+}
+
+/// Build the key for inserting header-CHT at given block.
+fn cht_key<N: As<u64>>(cht_type: u8, block: N) -> [u8; 5] {
+	let mut key = [cht_type; 5];
+	key[1..].copy_from_slice(&number_to_lookup_key(block));
+	key
 }
 
 #[cfg(test)]

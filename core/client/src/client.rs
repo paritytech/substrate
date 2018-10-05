@@ -339,9 +339,8 @@ impl<B, E, Block> Client<B, E, Block> where
 		let block_num = *header.number();
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
-		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)).unwrap_or_default());
-		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _>(cht_size, cht_num, block_num, headers)
-			.ok_or_else(proof_error)?;
+		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)));
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _>(cht_size, cht_num, block_num, headers)?;
 		Ok((header, proof))
 	}
 

@@ -63,15 +63,16 @@ pub fn compute_root<Header, Hasher, I>(
 	cht_size: u64,
 	cht_num: Header::Number,
 	hashes: I,
-) -> Option<Hasher::Out>
+) -> ClientResult<Hasher::Out>
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord,
-		I: IntoIterator<Item=Option<Header::Hash>>,
+		I: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
-	build_pairs::<Header, I>(cht_size, cht_num, hashes)
-		.map(|pairs| trie::trie_root::<Hasher, _, _, _>(pairs))
+	Ok(trie::trie_root::<Hasher, _, _, _>(
+		build_pairs::<Header, I>(cht_size, cht_num, hashes)?
+	))
 }
 
 /// Build CHT-based header proof.
@@ -80,24 +81,23 @@ pub fn build_proof<Header, Hasher, I>(
 	cht_num: Header::Number,
 	block_num: Header::Number,
 	hashes: I
-) -> Option<Vec<Vec<u8>>>
+) -> ClientResult<Vec<Vec<u8>>>
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + HeapSizeOf,
-		I: IntoIterator<Item=Option<Header::Hash>>,
+		I: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
+	debug_assert_eq!(block_to_cht_number(cht_size, block_num), Some(cht_num));
+
 	let transaction = build_pairs::<Header, I>(cht_size, cht_num, hashes)?
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
 	let storage = InMemoryState::<Hasher>::default().update(transaction);
-	let (value, proof) = prove_read(storage, &encode_cht_key(block_num)).ok()?;
-	if value.is_none() {
-		None
-	} else {
-		Some(proof)
-	}
+	let (value, proof) = prove_read(storage, &encode_cht_key(block_num))?;
+	assert!(value.is_some(), "we have just built trie that includes the value for block_num");
+	Ok(proof)
 }
 
 /// Check CHT-based header proof.
@@ -131,26 +131,29 @@ fn build_pairs<Header, I>(
 	cht_size: u64,
 	cht_num: Header::Number,
 	hashes: I
-) -> Option<Vec<(Vec<u8>, Vec<u8>)>>
+) -> ClientResult<Vec<(Vec<u8>, Vec<u8>)>>
 	where
 		Header: HeaderT,
-		I: IntoIterator<Item=Option<Header::Hash>>,
+		I: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
 	let start_num = start_number(cht_size, cht_num);
 	let mut pairs = Vec::new();
 	let mut hash_number = start_num;
 	for hash in hashes.into_iter().take(cht_size as usize) {
-		pairs.push(hash.map(|hash| (
+		let hash = hash?.ok_or_else(|| ClientError::from(
+			ClientErrorKind::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_())
+		))?;
+		pairs.push((
 			encode_cht_key(hash_number).to_vec(),
 			encode_cht_value(hash)
-		))?);
+		));
 		hash_number += Header::Number::one();
 	}
 
 	if pairs.len() as u64 == cht_size {
-		Some(pairs)
+		Ok(pairs)
 	} else {
-		None
+		Err(ClientErrorKind::MissingHashRequiredForCHT(cht_num.as_(), hash_number.as_()).into())
 	}
 }
 
@@ -242,30 +245,35 @@ mod tests {
 
 	#[test]
 	fn build_pairs_fails_when_no_enough_blocks() {
-		assert!(build_pairs::<Header, _>(SIZE, 0, vec![Some(1.into()); SIZE as usize / 2]).is_none());
+		assert!(build_pairs::<Header, _>(SIZE, 0,
+			::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize / 2)).is_err());
 	}
 
 	#[test]
 	fn build_pairs_fails_when_missing_block() {
-		assert!(build_pairs::<Header, _>(SIZE, 0, ::std::iter::repeat(Some(1.into())).take(SIZE as usize / 2)
-			.chain(::std::iter::once(None))
-			.chain(::std::iter::repeat(Some(2.into())).take(SIZE as usize / 2 - 1))).is_none());
+		assert!(build_pairs::<Header, _>(SIZE, 0, ::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize / 2)
+			.chain(::std::iter::once(Ok(None)))
+			.chain(::std::iter::repeat_with(|| Ok(Some(2.into()))).take(SIZE as usize / 2 - 1))).is_err());
 	}
 
 	#[test]
 	fn compute_root_works() {
-		assert!(compute_root::<Header, Blake2Hasher, _>(SIZE, 42, vec![Some(1.into()); SIZE as usize]).is_some());
+		assert!(compute_root::<Header, Blake2Hasher, _>(SIZE, 42,
+			::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize)).is_ok());
 	}
 
 	#[test]
-	fn build_proof_fails_when_querying_wrong_block() {
+	#[should_panic]
+	fn build_proof_panics_when_querying_wrong_block() {
 		assert!(build_proof::<Header, Blake2Hasher, _>(
-			SIZE, 0, (SIZE * 1000) as u64, vec![Some(1.into()); SIZE as usize]).is_none());
+			SIZE, 0, (SIZE * 1000) as u64,
+				::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize)).is_err());
 	}
 
 	#[test]
 	fn build_proof_works() {
 		assert!(build_proof::<Header, Blake2Hasher, _>(
-			SIZE, 0, (SIZE / 2) as u64, vec![Some(1.into()); SIZE as usize]).is_some());
+			SIZE, 0, (SIZE / 2) as u64,
+				::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize)).is_ok());
 	}
 }
