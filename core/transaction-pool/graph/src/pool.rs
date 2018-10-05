@@ -226,8 +226,8 @@ impl<B: ChainApi> Pool<B> {
 	/// Returns all transactions in the pool.
 	///
 	/// Be careful with large limit values, as querying the entire pool might be time consuming.
-	pub fn all(&self, limit: usize) -> Vec<TransactionFor<B>> {
-		self.ready(|it| it.take(limit).collect())
+	pub fn all(&self, limit: usize) -> Vec<ExtrinsicFor<B>> {
+		self.ready(|it| it.take(limit).map(|ex| ex.data.raw.clone()).collect())
 	}
 }
 

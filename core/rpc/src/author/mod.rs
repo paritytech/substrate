@@ -28,7 +28,6 @@ use transaction_pool::{
 		ExHash,
 		ExtrinsicFor,
 		NumberFor,
-		TransactionFor,
 		IntoPoolError,
 		Pool,
 		watcher::Status,
@@ -106,7 +105,7 @@ impl<B, E, P> Author<B, E, P> where
 	}
 }
 
-impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<TransactionFor<P>>> for Author<B, E, P> where
+impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<ExtrinsicFor<P>>> for Author<B, E, P> where
 	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
@@ -130,7 +129,7 @@ impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<Transactio
 			)
 	}
 
-	fn pending_extrinsics(&self) -> Result<Vec<TransactionFor<P>>> {
+	fn pending_extrinsics(&self) -> Result<Vec<ExtrinsicFor<P>>> {
 		Ok(self.pool.all(usize::max_value()))
 	}
 

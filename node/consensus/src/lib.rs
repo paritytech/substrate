@@ -336,25 +336,24 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 
 		{
 			let mut unqueue_invalid = Vec::new();
-			let result = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending_iterator| {
+			self.transaction_pool.ready(|pending_iterator| {
 				let mut pending_size = 0;
 				for pending in pending_iterator {
-					if pending_size + pending.verified.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
+					// TODO [ToDr] Probably get rid of it, and validate in runtime.
+					let encoded_size = pending.data.raw.encode().len();
+					if pending_size + encoded_size >= MAX_TRANSACTIONS_SIZE { break }
 
-					match block_builder.push_extrinsic(pending.original.clone()) {
+					match block_builder.push_extrinsic(pending.data.raw.clone()) {
 						Ok(()) => {
-							pending_size += pending.verified.encoded_size();
+							pending_size += encoded_size;
 						}
 						Err(e) => {
 							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
-							unqueue_invalid.push(pending.verified.hash().clone());
+							unqueue_invalid.push(pending.hash.clone());
 						}
 					}
 				}
 			});
-			if let Err(e) = result {
-				warn!("Unable to get the pending set: {:?}", e);
-			}
 
 			self.transaction_pool.remove_invalid(&unqueue_invalid);
 		}
@@ -469,19 +468,17 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 
 		let local_id = self.local_key.public().0.into();
 		let mut next_index = {
-			let cur_index = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending| pending
-				.filter(|tx| tx.verified.sender == local_id)
-				.last()
-				.map(|tx| Ok(tx.verified.index()))
-				.unwrap_or_else(|| AuthoringApi::index(self.client.as_ref(), &self.parent_id, local_id))
-			);
+			// let cur_index = self.transaction_pool.ready(|pending| pending
+			// 	.filter(|tx| tx.verified.sender == local_id)
+			// 	.last()
+			// 	.map(|tx| Ok(tx.verified.index()))
+			// 	.unwrap_or_else(|| AuthoringApi::index(self.client.as_ref(), &self.parent_id, local_id))
+			// );
+			// TODO [ToDr] Use pool data
+			let cur_index = AuthoringApi::index(self.client.as_ref(), &self.parent_id, local_id);
 
 			match cur_index {
-				Ok(Ok(cur_index)) => cur_index + 1,
-				Ok(Err(e)) => {
-					warn!(target: "consensus", "Error computing next transaction index: {}", e);
-					return;
-				}
+				Ok(cur_index) => cur_index + 1,
 				Err(e) => {
 					warn!(target: "consensus", "Error computing next transaction index: {}", e);
 					return;

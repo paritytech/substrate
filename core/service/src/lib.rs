@@ -391,21 +391,13 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	txpool::NumberFor<C::TransactionPoolApi>: Into<u64>,
 {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
-		let best_block_id = match self.best_block_id() {
-			Some(id) => id,
-			None => return vec![],
-		};
-		self.pool.cull_and_get_pending(&best_block_id, |pending| pending
+		self.pool.ready(|pending| pending
 			.map(|t| {
-				let hash = t.hash().clone();
-				let ex: ComponentExtrinsic<C> = t.original.clone();
+				let hash = t.hash.clone();
+				let ex: ComponentExtrinsic<C> = t.data.raw.clone();
 				(hash, ex)
 			})
-			.collect()
-		).unwrap_or_else(|e| {
-			warn!("Error retrieving pending set: {}", e);
-			vec![]
-		})
+			.collect())
 	}
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
