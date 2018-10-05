@@ -42,7 +42,7 @@ name = "aio-limited"
 version = "0.1.0"
 source = "git+https://github.com/paritytech/aio-limited.git#1f42497dcd2a6f85b83af97cd80314b26a1e4a9e"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.5.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "quick-error 1.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -467,7 +467,7 @@ source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9
 dependencies = [
  "base64 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "chashmap 2.2.1 (git+https://github.com/redox-os/tfs)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_json 1.0.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "tempfile 3.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -563,7 +563,7 @@ name = "exit-future"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -598,6 +598,18 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "libc 0.2.43 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "finality-grandpa"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -654,7 +666,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "futures"
-version = "0.1.21"
+version = "0.1.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
@@ -662,7 +674,7 @@ name = "futures-cpupool"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -787,7 +799,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "base64 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-cpupool 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "httparse 1.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "iovec 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -869,7 +881,7 @@ name = "jsonrpc-core"
 version = "8.0.2"
 source = "git+https://github.com/paritytech/jsonrpc.git#53f814e94317313ccb485eb57e435c921a974cf0"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde_derive 1.0.70 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1031,7 +1043,7 @@ version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "libp2p-dns 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "libp2p-floodsub 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
@@ -1063,7 +1075,7 @@ dependencies = [
  "bs58 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "multiaddr 0.3.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "multihash 0.8.1-pre (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
@@ -1083,7 +1095,7 @@ name = "libp2p-dns"
 version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "multiaddr 0.3.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
@@ -1100,7 +1112,7 @@ dependencies = [
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "multiaddr 0.3.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
@@ -1119,7 +1131,7 @@ source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "libp2p-peerstore 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1142,7 +1154,7 @@ dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "datastore 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "libp2p-identify 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "libp2p-ping 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
@@ -1165,7 +1177,7 @@ source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1181,7 +1193,7 @@ source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9
 dependencies = [
  "bs58 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "datastore 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "multiaddr 0.3.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "owning_ref 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1195,7 +1207,7 @@ version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "multiaddr 0.3.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
@@ -1212,7 +1224,7 @@ version = "0.1.1"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
  "aio-limited 0.1.0 (git+https://github.com/paritytech/aio-limited.git)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-executor 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1225,7 +1237,7 @@ version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "libp2p-peerstore 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1247,7 +1259,7 @@ dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "ctr 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "eth-secp256k1 0.5.7 (git+https://github.com/paritytech/rust-secp256k1)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "protobuf 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1264,7 +1276,7 @@ name = "libp2p-tcp-transport"
 version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "multiaddr 0.3.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
@@ -1278,7 +1290,7 @@ name = "libp2p-transport-timeout"
 version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-timer 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1289,7 +1301,7 @@ name = "libp2p-uds"
 version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "multiaddr 0.3.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
@@ -1301,7 +1313,7 @@ name = "libp2p-websocket"
 version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "multiaddr 0.3.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
@@ -1317,7 +1329,7 @@ version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p-core 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1509,7 +1521,7 @@ version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1582,7 +1594,7 @@ version = "0.1.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-primitives 0.1.0",
  "node-runtime 0.1.0",
@@ -1631,7 +1643,7 @@ dependencies = [
 name = "node-network"
 version = "0.1.0"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-consensus 0.1.0",
  "node-primitives 0.1.0",
@@ -2169,7 +2181,7 @@ name = "relay"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -2186,7 +2198,7 @@ version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2248,7 +2260,7 @@ version = "0.1.0"
 source = "git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d#8111062f0177fd7423626f2db9560273644a4c4d"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -2807,7 +2819,7 @@ version = "0.1.0"
 dependencies = [
  "ctrlc 3.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-cli 0.1.0",
  "vergen 2.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -2817,7 +2829,7 @@ name = "substrate-bft"
 version = "0.1.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2843,7 +2855,7 @@ dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "fdlimit 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "names 0.11.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2867,7 +2879,7 @@ version = "0.1.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2936,6 +2948,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-finality-grandpa"
+version = "0.1.0"
+dependencies = [
+ "finality-grandpa 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "substrate-client 0.1.0",
+ "substrate-keyring 0.1.0",
+ "substrate-network 0.1.0",
+ "substrate-primitives 0.1.0",
+ "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "substrate-keyring"
 version = "0.1.0"
 dependencies = [
@@ -2990,7 +3019,7 @@ dependencies = [
  "bitflags 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "linked-hash-map 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3014,7 +3043,7 @@ dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.43 (registry+https://github.com/rust-lang/crates.io-index)",
  "libp2p 0.1.0 (git+https://github.com/tomaka/libp2p-rs?rev=8111062f0177fd7423626f2db9560273644a4c4d)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3108,7 +3137,7 @@ version = "0.3.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "exit-future 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3139,7 +3168,7 @@ version = "0.3.0"
 dependencies = [
  "env_logger 0.4.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "fdlimit 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
@@ -3240,7 +3269,7 @@ name = "substrate-transaction-pool"
 version = "0.1.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3424,7 +3453,7 @@ name = "tk-listen"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3435,7 +3464,7 @@ name = "tokio"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio 0.6.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-executor 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-fs 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3453,7 +3482,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3463,7 +3492,7 @@ version = "0.1.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "iovec 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio 0.6.14 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3480,7 +3509,7 @@ name = "tokio-current-thread"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-executor 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3489,7 +3518,7 @@ name = "tokio-dns-unofficial"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures-cpupool 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3500,7 +3529,7 @@ name = "tokio-executor"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3508,7 +3537,7 @@ name = "tokio-fs"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-threadpool 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3519,7 +3548,7 @@ version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -3528,7 +3557,7 @@ name = "tokio-proto"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.3.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "net2 0.2.32 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3545,7 +3574,7 @@ name = "tokio-reactor"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio 0.6.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "slab 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3558,7 +3587,7 @@ name = "tokio-service"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3567,7 +3596,7 @@ version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "iovec 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio 0.6.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3580,7 +3609,7 @@ version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "crossbeam-deque 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "num_cpus 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3593,7 +3622,7 @@ version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "crossbeam-utils 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "slab 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-executor 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3603,7 +3632,7 @@ name = "tokio-tls"
 version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "native-tls 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-core 0.1.17 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3615,7 +3644,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "mio 0.6.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-io 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3628,7 +3657,7 @@ version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "iovec 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.43 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3894,7 +3923,7 @@ name = "want"
 version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "try-lock 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -3919,7 +3948,7 @@ dependencies = [
  "bitflags 0.9.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "byteorder 1.2.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "hyper 0.10.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "native-tls 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.3.22 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4036,7 +4065,7 @@ version = "0.1.0"
 source = "git+https://github.com/paritytech/yamux#5acf79ecfb69ccdcb65c9f624f285b79716a029d"
 dependencies = [
  "bytes 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
- "futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)",
+ "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "nohash-hasher 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -4119,6 +4148,7 @@ dependencies = [
 "checksum failure_derive 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "946d0e98a50d9831f5d589038d2ca7f8f455b1c21028c0db0e84116a12696426"
 "checksum fake-simd 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 "checksum fdlimit 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b1ee15a7050e5580b3712877157068ea713b245b080ff302ae2ca973cfcd9baa"
+"checksum finality-grandpa 0.1.3 (registry+https://github.com/rust-lang/crates.io-index)" = "7c9a8a25e71e4a11a1a5ef36a9ad09b4ae8c4e0bcf27a900137899ac678b01b0"
 "checksum fixed-hash 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "0d5ec8112f00ea8a483e04748a85522184418fd1cf02890b626d8fc28683f7de"
 "checksum fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "2fad85553e09a6f881f739c29f0b00b0f01357c743266d478b68951ce23285f3"
 "checksum foreign-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
@@ -4126,7 +4156,7 @@ dependencies = [
 "checksum fs-swap 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "31a94e9407e53addc49de767234a0b000978523c59117e5badb575ccbb8370f6"
 "checksum fuchsia-zircon 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "2e9763c69ebaae630ba35f74888db465e49e259ba1bc0eda7d06f4a067615d82"
 "checksum fuchsia-zircon-sys 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)" = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"
-"checksum futures 0.1.21 (registry+https://github.com/rust-lang/crates.io-index)" = "1a70b146671de62ec8c8ed572219ca5d594d9b06c0b364d5e67b722fc559b48c"
+"checksum futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)" = "0c84b40c7e2de99ffd70602db314a7a8c26b2b3d830e6f7f7a142a8860ab3ca4"
 "checksum futures-cpupool 0.1.8 (registry+https://github.com/rust-lang/crates.io-index)" = "ab90cde24b3319636588d0c35fe03b1333857621051837ed769faefb4c2162e4"
 "checksum gcc 0.3.54 (registry+https://github.com/rust-lang/crates.io-index)" = "5e33ec290da0d127825013597dbdfc28bee4964690c7ce1166cbc2a7bd08b1bb"
 "checksum generic-array 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ef25c5683767570c2bbd7deba372926a55eaae9982d7726ee2a1050239d45b9d"

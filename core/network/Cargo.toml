@@ -23,7 +23,15 @@ parity-codec = "2.0"
 parity-codec-derive = "2.0"
 substrate-network-libp2p = { path = "../../core/network-libp2p" }
 
+env_logger = { version = "0.4", optional = true }
+substrate-keyring = { path = "../../core/keyring", optional = true }
+substrate-test-client = { path = "../../core/test-client", optional = true }
+
 [dev-dependencies]
-env_logger = "0.4"
+env_logger = { version = "0.4" }
 substrate-keyring = { path = "../../core/keyring" }
 substrate-test-client = { path = "../../core/test-client" }
+
+[features]
+default = []
+test-helpers = ["env_logger", "substrate-keyring", "substrate-test-client"]
