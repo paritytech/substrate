@@ -20,7 +20,8 @@
 
 extern crate sr_std as rstd;
 extern crate sr_primitives as primitives;
-extern crate parity_codec as codec;
+#[doc(hidden)]
+pub extern crate parity_codec as codec;
 extern crate sr_version as runtime_version;
 
 use primitives::{ApplyResult, traits::Block as BlockT};
@@ -341,10 +342,10 @@ decl_api! {
 decl_api! {
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
 	pub trait BlockBuilder<Block: BlockT> {
-		fn initialise_block(header: &<Block as BlockT>::Header);
-		fn apply_extrinsic<Extrinsic>(extrinsic: &Extrinsic) -> ApplyResult;
+		fn initialise_block(header: <Block as BlockT>::Header);
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
 		fn finalise_block() -> <Block as BlockT>::Header;
-		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: &InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
+		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
 		fn random_seed() -> <Block as BlockT>::Hash;
 	}
 }
@@ -359,8 +360,8 @@ decl_api! {
 
 decl_api! {
 	/// The `NewTxQueue` api trait for interfering with the new transaction queue.
-	pub trait NewTxQueue {
-		fn validate_transaction<Extrinsic, TransactionValidity>(tx: Extrinsic) -> TransactionValidity;
+	pub trait NewTxQueue<Block: BlockT> {
+		fn validate_transaction<TransactionValidity>(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}
 }
 

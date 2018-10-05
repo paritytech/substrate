@@ -1084,11 +1084,11 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 {
 	type Error = Error;
 
-	fn initialise_block(&self, at: &BlockId<Block>, header: &<Block as BlockT>::Header) -> Result<(), Self::Error> {
+	fn initialise_block(&self, at: &BlockId<Block>, header: <Block as BlockT>::Header) -> Result<(), Self::Error> {
 		self.call_api_at(at, "initialise_block", &(header))
 	}
 
-	fn apply_extrinsic<Extrinsic: Encode + Decode>(&self, at: &BlockId<Block>, extrinsic: &Extrinsic) -> Result<ApplyResult, Self::Error> {
+	fn apply_extrinsic(&self, at: &BlockId<Block>, extrinsic: <Block as BlockT>::Extrinsic) -> Result<ApplyResult, Self::Error> {
 		self.call_api_at(at, "apply_extrinsic", &(extrinsic))
 	}
 
@@ -1097,7 +1097,7 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 	}
 
 	fn inherent_extrinsics<InherentExtrinsic: Encode + Decode, UncheckedExtrinsic: Encode + Decode>(
-		&self, at: &BlockId<Block>, inherent: &InherentExtrinsic
+		&self, at: &BlockId<Block>, inherent: InherentExtrinsic
 	) -> Result<Vec<UncheckedExtrinsic>, Self::Error> {
 		self.call_api_at(at, "finalise_block", &(inherent))
 	}
@@ -1134,8 +1134,8 @@ impl<B, E, Block> api::NewTxQueue<Block> for Client<B, E, Block> where
 {
 	type Error = Error;
 
-	fn validate_transaction<Extrinsic: Encode + Decode, TransactionValidity: Encode + Decode>(
-		&self, at: &BlockId<Block>, tx: Extrinsic
+	fn validate_transaction<TransactionValidity: Encode + Decode>(
+		&self, at: &BlockId<Block>, tx: <Block as BlockT>::Extrinsic
 	) -> Result<TransactionValidity, Self::Error> {
 		self.call_api_at(at, "validate_transaction", &(tx))
 	}
