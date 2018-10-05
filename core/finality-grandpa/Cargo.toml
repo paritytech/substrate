@@ -15,7 +15,6 @@ tokio = "0.1.7"
 [dependencies.finality-grandpa]
 version = "0.2.0"
 features = ["derive-codec"]
-path = "../../../finality-afg"
 
 [dev-dependencies]
 substrate-network = { path = "../network", features = ["test-helpers"] }
