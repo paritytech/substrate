@@ -134,7 +134,7 @@ impl<B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
 
 		let mut block_builder = self.new_block_at(at)?;
 		if runtime_version.has_api(*b"inherent", 1) {
-			for inherent in self.inherent_extrinsics(at, &inherent_data)? {
+			for inherent in self.inherent_extrinsics(at, inherent_data)? {
 				block_builder.push(inherent)?;
 			}
 		}
