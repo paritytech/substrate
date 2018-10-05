@@ -16,6 +16,7 @@
 
 //! Light client data fetcher. Fetches requested data from remote full nodes.
 
+use std::collections::HashMap;
 use std::marker::PhantomData;
 use futures::IntoFuture;
 
@@ -90,6 +91,21 @@ pub struct RemoteChangesRequest<Header: HeaderT> {
 	pub key: Vec<u8>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
 	pub retry_count: Option<usize>,
+}
+
+/// Key changes read proof.
+#[derive(Debug, PartialEq, Eq)]
+pub struct ChangesProof<Header: HeaderT> {
+	/// Max block that has been used in changes query.
+	pub max_block: Header::Number,
+	/// All touched nodes of all changes tries.
+	pub proof: Vec<Vec<u8>>,
+	/// All changes tries roots that have been touched AND are missing from
+	/// the requester' node. It is a map of block number => changes trie root.
+	pub roots: HashMap<Header::Number, Header::Hash>,
+	/// The proofs for all changes tries roots that have been touched AND are
+	/// missing from the requester' node. It is a map of CHT number => proof.
+	pub roots_proof: Vec<Vec<u8>>,
 }
 
 /// Light client data fetcher. Implementations of this trait must check if remote data
@@ -420,9 +436,11 @@ pub mod tests {
 			let end_hash = remote_client.block_hash(end).unwrap().unwrap();
 
 			// 'fetch' changes proof from remote node
-			let (remote_max, remote_proof) = remote_client.key_changes_proof(
-				begin_hash, end_hash, max_hash, &key
+			let changes_proof = remote_client.key_changes_proof(
+				begin_hash, end_hash, begin_hash, max_hash, &key
 			).unwrap();
+			let remote_max = changes_proof.max_block;
+			let remote_proof = changes_proof.proof;
 
 			// check proof on local client
 			let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
@@ -461,8 +479,11 @@ pub mod tests {
 		let end_hash = remote_client.block_hash(end).unwrap().unwrap();
 
 		// 'fetch' changes proof from remote node
-		let (remote_max, mut remote_proof) = remote_client.key_changes_proof(
-			begin_hash, end_hash, max_hash, &key).unwrap();
+		let changes_proof = remote_client.key_changes_proof(
+			begin_hash, end_hash, begin_hash, max_hash, &key).unwrap();
+		let remote_max = changes_proof.max_block;
+		let mut remote_proof = changes_proof.proof;
+
 		let local_roots_range = local_roots.clone()[(begin - 1) as usize..].to_vec();
 		let request = RemoteChangesRequest::<Header> {
 			changes_trie_config: runtime::changes_trie_config(),

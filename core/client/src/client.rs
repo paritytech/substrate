@@ -16,20 +16,23 @@
 
 //! Substrate Client
 
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor,
+	CurrentHeight, BlockNumberToHash, Digest, DigestItem};
 use runtime_primitives::BuildStorage;
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use codec::{Encode, Decode};
 use state_machine::{
-	Backend as StateBackend, CodeExecutor,
+	DBValue, Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, prove_read,
+	ChangesTrieRootsStorage, ChangesTrieStorage,
 	key_changes, key_changes_proof,
 };
 
@@ -38,6 +41,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
+use light::fetcher::ChangesProof;
 use {cht, error, in_mem, block_builder, bft, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
@@ -340,7 +344,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
 		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)));
-		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _>(cht_size, cht_num, block_num, headers)?;
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, ::std::iter::once(block_num), headers)?;
 		Ok((header, proof))
 	}
 
@@ -371,6 +375,8 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
+	/// `min` is the hash of the first block, which changes trie root is known to the requester - when we're using
+	/// changes tries from ascendants of this block, we should provide proofs for changes tries roots
 	/// `max` is the hash of the last block known to the requester - we can't use changes tries from descendants
 	/// of this block.
 	/// Works only for runtimes that are supporting changes tries.
@@ -378,9 +384,37 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self,
 		first: Block::Hash,
 		last: Block::Hash,
+		min: Block::Hash,
 		max: Block::Hash,
 		key: &[u8]
-	) -> error::Result<(NumberFor<Block>, Vec<Vec<u8>>)> {
+	) -> error::Result<ChangesProof<Block::Header>>
+		where
+			Block::Hash: From<H256>,
+	{
+		struct AccessedRootsRecorder<'a, Block: BlockT> {
+			storage: &'a ChangesTrieStorage<Blake2Hasher>,
+			min: u64,
+			required_roots_proofs: Mutex<BTreeMap<NumberFor<Block>, H256>>,
+		};
+
+		impl<'a, Block: BlockT> ChangesTrieRootsStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
+			fn root(&self, block: u64) -> Result<Option<H256>, String> {
+				let root = self.storage.root(block)?;
+				if block < self.min {
+					if let Some(ref root) = root {
+						self.required_roots_proofs.lock().insert(As::sa(block), root.clone());
+					}
+				}
+				Ok(root)
+			}
+		}
+
+		impl<'a, Block: BlockT> ChangesTrieStorage<Blake2Hasher> for AccessedRootsRecorder<'a, Block> {
+			fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
+				self.storage.get(key)
+			}
+		}
+
 		let config = self.changes_trie_config.as_ref();
 		let storage = self.backend.changes_trie_storage();
 		let (config, storage) = match (config, storage) {
@@ -388,19 +422,83 @@ impl<B, E, Block> Client<B, E, Block> where
 			_ => return Err(error::ErrorKind::ChangesTriesNotSupported.into()),
 		};
 
+		let min_number = self.require_block_number_from_id(&BlockId::Hash(min))?;
+		let recording_storage = AccessedRootsRecorder::<Block> {
+			storage,
+			min: min_number.as_(),
+			required_roots_proofs: Mutex::new(BTreeMap::new()),
+		};
+
 		let max_number = ::std::cmp::min(
 			self.backend.blockchain().info()?.best_number,
 			self.require_block_number_from_id(&BlockId::Hash(max))?,
 		);
-		key_changes_proof::<_, Blake2Hasher>(
+
+		// fetch key changes proof
+		let key_changes_proof = key_changes_proof::<_, Blake2Hasher>(
 			config,
-			storage,
+			&recording_storage,
 			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
 			self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
 			max_number.as_(),
-			key)
-		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
-		.map(|proof| (max_number, proof))
+			key
+		)
+		.map_err(|err| error::Error::from(error::ErrorKind::ChangesTrieAccessFailed(err)))?;
+
+		// now gather proofs for all changes tries roots that were touched during key_changes_proof
+		// execution AND are unknown (i.e. replaced with CHT) to the requester
+		let roots = recording_storage.required_roots_proofs.into_inner();
+		let roots_proof = self.changes_trie_roots_proof(
+			roots.keys().cloned()
+		)?;
+
+		Ok(ChangesProof {
+			max_block: max_number,
+			proof: key_changes_proof,
+			roots: roots.into_iter().map(|(n, h)| (n, h.into())).collect(),
+			roots_proof,
+		})
+	}
+
+	/// Generate CHT-based proof for roots of changes tries at given blocks.
+	fn changes_trie_roots_proof<I: IntoIterator<Item=NumberFor<Block>>>(&self, blocks: I) -> error::Result<Vec<Vec<u8>>> {
+		// most probably we have touched several changes tries that are parts of the single CHT
+		// => GroupBy changes tries by CHT number and then gather proof for the whole group at once
+		let mut proof = HashSet::new();
+
+		let mut current_cht_num = None;
+		let mut current_cht_blocks = Vec::new();
+		for block in blocks {
+			let new_cht_num = cht::block_to_cht_number(cht::SIZE, block.as_())
+				.expect("block_to_cht_number only returns None if called for genesis block;
+					key_changes_proof never touches genesis block; qed");
+			let advance_to_next_cht = current_cht_num.is_some() && current_cht_num != Some(new_cht_num);
+			if advance_to_next_cht {
+				let current_cht_num = current_cht_num.expect("advance_to_next_cht is true;
+					it is true only when current_cht_num is Some; qed");
+				let current_cht_proof = self.changes_trie_roots_proof_at_cht(
+					As::sa(current_cht_num),
+					::std::mem::replace(&mut current_cht_blocks, Vec::new()),
+				)?;
+
+				proof.extend(current_cht_proof);
+			} else {
+				current_cht_blocks.push(block);
+			}
+
+			current_cht_num = Some(new_cht_num);
+		}
+
+		Ok(proof.into_iter().collect())
+	}
+
+	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
+	fn changes_trie_roots_proof_at_cht(&self, cht_num: NumberFor<Block>, blocks: Vec<NumberFor<Block>>) -> error::Result<Vec<Vec<u8>>> {
+		let cht_start = cht::start_number(cht::SIZE, cht_num);
+		let roots = (cht_start.as_()..).map(|num| self.header(&BlockId::Number(As::sa(num)))
+			.map(|block| block.and_then(|block| block.digest().logs().iter().filter_map(DigestItem::as_changes_trie_root).next().cloned())));
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht::SIZE, cht_num, blocks, roots)?;
+		Ok(proof)
 	}
 
 	/// Create a new block, built on the head of the chain.

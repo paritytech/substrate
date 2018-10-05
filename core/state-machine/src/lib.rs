@@ -370,7 +370,7 @@ where
 {
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
-	let proving_backend = proving_backend::ProvingBackend::new(trie_backend);
+	let proving_backend = proving_backend::ProvingBackend::new(&trie_backend);
 	let (result, _, _) = execute::<H, _, changes_trie::InMemoryStorage<H>, _>(
 		&proving_backend,
 		None,
@@ -413,8 +413,22 @@ where
 	H: Hasher,
 	H::Out: Ord + HeapSizeOf
 {
+
 	let trie_backend = backend.try_into_trie_backend()
 		.ok_or_else(|| Box::new(ExecutionError::UnableToGenerateProof) as Box<Error>)?;
+	prove_read_on_trie_backend(&trie_backend, key)
+}
+
+/// Generate storage read proof on trie backend.
+pub fn prove_read_on_trie_backend<S, H>(
+	trie_backend: &TrieBackend<S, H>,
+	key: &[u8]
+) -> Result<(Option<Vec<u8>>, Vec<Vec<u8>>), Box<Error>>
+where
+	S: trie_backend_essence::TrieBackendStorage<H>,
+	H: Hasher,
+	H::Out: Ord + HeapSizeOf
+{
 	let proving_backend = proving_backend::ProvingBackend::<_, H>::new(trie_backend);
 	let result = proving_backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)?;
 	Ok((result, proving_backend.extract_proof()))

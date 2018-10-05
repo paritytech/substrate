@@ -57,14 +57,14 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 /// Patricia trie-based backend which also tracks all touched storage trie values.
 /// These can be sent to remote node and used as a proof of execution.
-pub struct ProvingBackend<S: TrieBackendStorage<H>, H: Hasher> {
-	backend: TrieBackend<S, H>,
+pub struct ProvingBackend<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> {
+	backend: &'a TrieBackend<S, H>,
 	proof_recorder: RefCell<Recorder<H::Out>>,
 }
 
-impl<S: TrieBackendStorage<H>, H: Hasher> ProvingBackend<S, H> {
+impl<'a, S: 'a + TrieBackendStorage<H>, H: 'a + Hasher> ProvingBackend<'a, S, H> {
 	/// Create new proving backend.
-	pub fn new(backend: TrieBackend<S, H>) -> Self {
+	pub fn new(backend: &'a TrieBackend<S, H>) -> Self {
 		ProvingBackend {
 			backend,
 			proof_recorder: RefCell::new(Recorder::new()),
@@ -81,10 +81,10 @@ impl<S: TrieBackendStorage<H>, H: Hasher> ProvingBackend<S, H> {
 	}
 }
 
-impl<S, H> Backend<H> for ProvingBackend<S, H>
+impl<'a, S, H> Backend<H> for ProvingBackend<'a, S, H>
 	where
-		S: TrieBackendStorage<H>,
-		H: Hasher,
+		S: 'a + TrieBackendStorage<H>,
+		H: 'a + Hasher,
 		H::Out: Ord + HeapSizeOf,
 {
 	type Error = String;

@@ -23,6 +23,8 @@
 //! root has. A correct proof implies that the claimed block is identical to the one
 //! we discarded.
 
+use std::collections::HashSet;
+
 use hash_db;
 use heapsize::HeapSizeOf;
 use trie;
@@ -30,7 +32,7 @@ use trie;
 use primitives::H256;
 use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
 use state_machine::backend::InMemory as InMemoryState;
-use state_machine::{prove_read, read_proof_check};
+use state_machine::{prove_read_on_trie_backend, read_proof_check, Backend as StateBackend};
 
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 
@@ -76,28 +78,35 @@ pub fn compute_root<Header, Hasher, I>(
 }
 
 /// Build CHT-based header proof.
-pub fn build_proof<Header, Hasher, I>(
+pub fn build_proof<Header, Hasher, BlocksI, HashesI>(
 	cht_size: u64,
 	cht_num: Header::Number,
-	block_num: Header::Number,
-	hashes: I
+	blocks: BlocksI,
+	hashes: HashesI
 ) -> ClientResult<Vec<Vec<u8>>>
 	where
 		Header: HeaderT,
 		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + HeapSizeOf,
-		I: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
+		BlocksI: IntoIterator<Item=Header::Number>,
+		HashesI: IntoIterator<Item=ClientResult<Option<Header::Hash>>>,
 {
-	debug_assert_eq!(block_to_cht_number(cht_size, block_num), Some(cht_num));
-
-	let transaction = build_pairs::<Header, I>(cht_size, cht_num, hashes)?
+	let transaction = build_pairs::<Header, _>(cht_size, cht_num, hashes)?
 		.into_iter()
 		.map(|(k, v)| (k, Some(v)))
 		.collect::<Vec<_>>();
 	let storage = InMemoryState::<Hasher>::default().update(transaction);
-	let (value, proof) = prove_read(storage, &encode_cht_key(block_num))?;
-	assert!(value.is_some(), "we have just built trie that includes the value for block_num");
-	Ok(proof)
+	let trie_storage = storage.try_into_trie_backend()
+		.expect("InMemoryState::try_into_trie_backend always returns Some; qed");
+	let mut total_proof = HashSet::new();
+	for block in blocks.into_iter() {
+		debug_assert_eq!(block_to_cht_number(cht_size, block), Some(cht_num));
+
+		let (value, proof) = prove_read_on_trie_backend(&trie_storage, &encode_cht_key(block))?;
+		assert!(value.is_some(), "we have just built trie that includes the value for block");
+		total_proof.extend(proof);
+	}
+	Ok(total_proof.into_iter().collect())
 }
 
 /// Check CHT-based header proof.
@@ -265,15 +274,15 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn build_proof_panics_when_querying_wrong_block() {
-		assert!(build_proof::<Header, Blake2Hasher, _>(
-			SIZE, 0, (SIZE * 1000) as u64,
+		assert!(build_proof::<Header, Blake2Hasher, _, _>(
+			SIZE, 0, vec![(SIZE * 1000) as u64],
 				::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize)).is_err());
 	}
 
 	#[test]
 	fn build_proof_works() {
-		assert!(build_proof::<Header, Blake2Hasher, _>(
-			SIZE, 0, (SIZE / 2) as u64,
+		assert!(build_proof::<Header, Blake2Hasher, _, _>(
+			SIZE, 0, vec![(SIZE / 2) as u64],
 				::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize)).is_ok());
 	}
 }
