@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+#![allow(missing_docs)]
+
+#[cfg(test)]
 mod sync;
 
 use std::collections::{VecDeque, HashSet, HashMap};
@@ -22,7 +25,6 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use client;
 use client::block_builder::BlockBuilder;
-use runtime_primitives::traits::Block as BlockT;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
 use protocol::{Context, Protocol};
@@ -31,27 +33,45 @@ use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{NodeIndex, SessionInfo, Severity};
 use keyring::Keyring;
-use codec::Encode;
-use import_queue::tests::SyncImportQueue;
+use codec::{Encode, Decode};
+use import_queue::SyncImportQueue;
 use test_client::{self, TestClient};
-use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
 use specialization::Specialization;
+use consensus_gossip::ConsensusGossip;
 
-pub struct DummySpecialization;
+pub use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
+
+/// The test specialization.
+pub struct DummySpecialization {
+	/// Consensus gossip handle.
+	pub gossip: ConsensusGossip<Block>,
+}
+
+#[derive(Encode, Decode)]
+pub struct GossipMessage {
+	/// The topic to classify under.
+	pub topic: Hash,
+	/// The data to send.
+	pub data: Vec<u8>,
+}
 
 impl Specialization<Block> for DummySpecialization {
 	fn status(&self) -> Vec<u8> { vec![] }
 
-	fn on_connect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _status: ::message::Status<Block>) {
-
+	fn on_connect(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, status: ::message::Status<Block>) {
+		self.gossip.new_peer(ctx, peer_id, status.roles);
 	}
 
-	fn on_disconnect(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex) {
-
+	fn on_disconnect(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex) {
+		self.gossip.peer_disconnected(ctx, peer_id);
 	}
 
-	fn on_message(&mut self, _ctx: &mut Context<Block>, _peer_id: NodeIndex, _message: ::message::Message<Block>) {
-
+	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, message: ::message::Message<Block>) {
+		if let ::message::generic::Message::ChainSpecific(data) = message {
+			let gossip_message = GossipMessage::decode(&mut &data[..])
+				.expect("gossip messages all in known format; qed");
+			self.gossip.on_chain_specific(ctx, peer_id, data, gossip_message.topic)
+		}
 	}
 }
 
@@ -173,19 +193,30 @@ impl Peer {
 	fn flush(&self) {
 	}
 
-	fn generate_blocks<F>(&self, count: usize, mut edit_block: F) 
-	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>) 
+	/// Push a message into the gossip network and relay to peers.
+	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
+	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>) {
+		self.sync.with_spec(&mut TestIo::new(&self.queue, None), |spec, ctx| {
+			let message = GossipMessage { topic, data }.encode();
+			spec.gossip.multicast_chain_specific(ctx, message, topic);
+		})
+	}
+
+	/// Add blocks to the peer -- edit the block before adding
+	pub fn generate_blocks<F>(&self, count: usize, mut edit_block: F)
+	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>)
 	{
 		for _ in 0 .. count {
 			let mut builder = self.client.new_block().unwrap();
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
-			trace!("Generating {}, (#{})", block.hash(), block.header.number);
+			trace!("Generating {}, (#{}, parent={})", block.header.hash(), block.header.number, block.header.parent_hash);
 			self.client.justify_and_import(client::BlockOrigin::File, block).unwrap();
 		}
 	}
 
-	fn push_blocks(&self, count: usize, with_tx: bool) {
+	/// Push blocks to the peer (simplified: with or without a TX)
+	pub fn push_blocks(&self, count: usize, with_tx: bool) {
 		let mut nonce = 0;
 		if with_tx {
 			self.generate_blocks(count, |builder| {
@@ -202,6 +233,18 @@ impl Peer {
 		} else {
 			self.generate_blocks(count, |_| ());
 		}
+	}
+
+	/// Execute a function with specialization for this peer.
+	pub fn with_spec<F, U>(&self, f: F) -> U
+		where F: FnOnce(&mut DummySpecialization, &mut Context<Block>) -> U
+	{
+		self.sync.with_spec(&mut TestIo::new(&self.queue, None), f)
+	}
+
+	/// Get a reference to the client.
+	pub fn client(&self) -> &Arc<client::Client<test_client::Backend, test_client::Executor, Block>> {
+		&self.client
 	}
 }
 
@@ -226,11 +269,13 @@ pub struct TestNet {
 }
 
 impl TestNet {
-	fn new(n: usize) -> Self {
+	/// Create new test network with this many peers.
+	pub fn new(n: usize) -> Self {
 		Self::new_with_config(n, ProtocolConfig::default())
 	}
 
-	fn new_with_config(n: usize, config: ProtocolConfig) -> Self {
+	/// Create new test network with peers and given config.
+	pub fn new_with_config(n: usize, config: ProtocolConfig) -> Self {
 		let mut net = TestNet {
 			peers: Vec::new(),
 			started: false,
@@ -243,11 +288,23 @@ impl TestNet {
 		net
 	}
 
+	/// Add a peer.
 	pub fn add_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let import_queue = Arc::new(SyncImportQueue(false));
-		let sync = Protocol::new(config.clone(), client.clone(), import_queue, None, tx_pool, DummySpecialization).unwrap();
+		let specialization = DummySpecialization {
+			gossip: ConsensusGossip::new(),
+		};
+		let sync = Protocol::new(
+			config.clone(),
+			client.clone(),
+			import_queue,
+			None,
+			tx_pool,
+			specialization
+		).unwrap();
+
 		self.peers.push(Arc::new(Peer {
 			sync: sync,
 			client: client,
@@ -255,10 +312,12 @@ impl TestNet {
 		}));
 	}
 
+	/// Get reference to peer.
 	pub fn peer(&self, i: usize) -> &Peer {
 		&self.peers[i]
 	}
 
+	/// Start network.
 	fn start(&mut self) {
 		if self.started {
 			return;
@@ -274,7 +333,8 @@ impl TestNet {
 		self.started = true;
 	}
 
-	fn sync_step(&mut self) {
+	/// Do one step of routing.
+	pub fn route(&mut self) {
 		for peer in 0..self.peers.len() {
 			let packet = self.peers[peer].pending_message();
 			if let Some(packet) = packet {
@@ -294,20 +354,32 @@ impl TestNet {
 					self.peers[*d].on_disconnect(peer as NodeIndex);
 				}
 			}
-
-			self.sync_step_peer(peer);
 		}
 	}
 
-	fn sync_step_peer(&mut self, peer_num: usize) {
-		self.peers[peer_num].sync_step();
+	/// Route messages between peers until all queues are empty.
+	pub fn route_until_complete(&mut self) {
+		while !self.done() {
+			self.route()
+		}
 	}
 
-	fn restart_peer(&mut self, i: usize) {
+	/// Do a step of synchronization.
+	pub fn sync_step(&mut self) {
+		self.route();
+
+		for peer in &mut self.peers {
+			peer.sync_step();
+		}
+	}
+
+	/// Restart sync for a peer.
+	pub fn restart_peer(&mut self, i: usize) {
 		self.peers[i].restart_sync();
 	}
 
-	fn sync(&mut self) -> u32 {
+	/// Perform synchronization until complete.
+	pub fn sync(&mut self) -> u32 {
 		self.start();
 		let mut total_steps = 0;
 		while !self.done() {
@@ -317,14 +389,16 @@ impl TestNet {
 		total_steps
 	}
 
-	fn sync_steps(&mut self, count: usize) {
+	/// Do the given amount of sync steps.
+	pub fn sync_steps(&mut self, count: usize) {
 		self.start();
 		for _ in 0..count {
 			self.sync_step();
 		}
 	}
 
-	fn done(&self) -> bool {
+	/// Whether all peers have synced.
+	pub fn done(&self) -> bool {
 		self.peers.iter().all(|p| p.is_done())
 	}
 }

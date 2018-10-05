@@ -54,7 +54,7 @@ struct MessageEntry<B: BlockT> {
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
 	peers: HashMap<NodeIndex, PeerConsensus<B::Hash>>,
-	message_sink: Option<(mpsc::UnboundedSender<ConsensusMessage<B>>, B::Hash)>,
+	live_message_sinks: HashMap<B::Hash, mpsc::UnboundedSender<ConsensusMessage<B>>>,
 	messages: Vec<MessageEntry<B>>,
 	message_hashes: HashSet<B::Hash>,
 }
@@ -64,7 +64,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	pub fn new() -> Self {
 		ConsensusGossip {
 			peers: HashMap::new(),
-			message_sink: None,
+			live_message_sinks: HashMap::new(),
 			messages: Default::default(),
 			message_hashes: Default::default(),
 		}
@@ -72,7 +72,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 
 	/// Closes all notification streams.
 	pub fn abort(&mut self) {
-		self.message_sink = None;
+		self.live_message_sinks.clear();
 	}
 
 	/// Handle new connected peer.
@@ -150,23 +150,23 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	/// Handles incoming chain-specific message and repropagates
-	pub fn on_chain_specific(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: Vec<u8>, parent_hash: B::Hash) {
+	pub fn on_chain_specific(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: Vec<u8>, topic: B::Hash) {
 		debug!(target: "gossip", "received chain-specific gossip message");
-		if let Some((hash, message)) = self.handle_incoming(protocol, who, ConsensusMessage::ChainSpecific(message, parent_hash)) {
+		if let Some((hash, message)) = self.handle_incoming(protocol, who, ConsensusMessage::ChainSpecific(message, topic)) {
 			debug!(target: "gossip", "handled incoming chain-specific message");
 			// propagate to other peers.
 			self.multicast(protocol, message, Some(hash));
 		}
 	}
 
-	/// Get a stream of messages relevant to consensus on top of a given parent hash.
-	pub fn messages_for(&mut self, parent_hash: B::Hash) -> mpsc::UnboundedReceiver<ConsensusMessage<B>> {
+	/// Get a stream of messages relevant to consensus for the given topic.
+	pub fn messages_for(&mut self, topic: B::Hash) -> mpsc::UnboundedReceiver<ConsensusMessage<B>> {
 		let (sink, stream) = mpsc::unbounded();
 
 		for entry in self.messages.iter() {
 			let message_matches = match entry.message {
-				ConsensusMessage::Bft(ref msg) => msg.parent_hash == parent_hash,
-				ConsensusMessage::ChainSpecific(_, ref h) => h == &parent_hash,
+				ConsensusMessage::Bft(ref msg) => msg.parent_hash == topic,
+				ConsensusMessage::ChainSpecific(_, ref h) => h == &topic,
 			};
 
 			if message_matches {
@@ -174,14 +174,14 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			}
 		}
 
-		self.message_sink = Some((sink, parent_hash));
+		self.live_message_sinks.insert(topic, sink);
 		stream
 	}
 
 	/// Multicast a chain-specific message to other authorities.
-	pub fn multicast_chain_specific(&mut self, protocol: &mut Context<B>, message: Vec<u8>, parent_hash: B::Hash) {
+	pub fn multicast_chain_specific(&mut self, protocol: &mut Context<B>, message: Vec<u8>, topic: B::Hash) {
 		trace!(target:"gossip", "sending chain-specific message");
-		self.multicast(protocol, ConsensusMessage::ChainSpecific(message, parent_hash), None);
+		self.multicast(protocol, ConsensusMessage::ChainSpecific(message, topic), None);
 	}
 
 	/// Multicast a BFT message to other authorities
@@ -196,20 +196,21 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		self.peers.remove(&who);
 	}
 
-	/// Prune old or no longer relevant consensus messages.
-	/// Supply an optional block hash where consensus is known to have concluded.
-	pub fn collect_garbage(&mut self, best_hash: Option<&B::Hash>) {
+	/// Prune old or no longer relevant consensus messages. Provide a predicate
+	/// for pruning, which returns `false` when the items with a given topic should be pruned.
+	pub fn collect_garbage<P: Fn(&B::Hash) -> bool>(&mut self, predicate: P) {
+		self.live_message_sinks.retain(|_, sink| !sink.is_closed());
+
 		let hashes = &mut self.message_hashes;
 		let before = self.messages.len();
 		let now = Instant::now();
 		self.messages.retain(|entry| {
-			if entry.instant + MESSAGE_LIFETIME >= now &&
-				best_hash.map_or(true, |parent_hash|
-					match entry.message {
-						ConsensusMessage::Bft(ref msg) => &msg.parent_hash != parent_hash,
-						ConsensusMessage::ChainSpecific(_, ref h) => h != parent_hash,
-					})
-			{
+			let topic = match entry.message {
+				ConsensusMessage::Bft(ref msg) => &msg.parent_hash,
+				ConsensusMessage::ChainSpecific(_, ref h) => h,
+			};
+
+			if entry.instant + MESSAGE_LIFETIME >= now && predicate(topic) {
 				true
 			} else {
 				hashes.remove(&entry.hash);
@@ -223,7 +224,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 	}
 
 	fn handle_incoming(&mut self, protocol: &mut Context<B>, who: NodeIndex, message: ConsensusMessage<B>) -> Option<(B::Hash, ConsensusMessage<B>)> {
-		let (hash, parent, message) = match message {
+		let (hash, topic, message) = match message {
 			ConsensusMessage::Bft(msg) => {
 				let parent = msg.parent_hash;
 				let generic = GenericMessage::BftMessage(msg);
@@ -236,13 +237,13 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 					}
 				)
 			}
-			ConsensusMessage::ChainSpecific(msg, parent) => {
+			ConsensusMessage::ChainSpecific(msg, topic) => {
 				let generic = GenericMessage::ChainSpecific(msg);
 				(
 					::protocol::hash_message::<B>(&generic),
-					parent,
+					topic,
 					match generic {
-						GenericMessage::ChainSpecific(msg) => ConsensusMessage::ChainSpecific(msg, parent),
+						GenericMessage::ChainSpecific(msg) => ConsensusMessage::ChainSpecific(msg, topic),
 						_ => panic!("`generic` is known to be the `ChainSpecific` variant; qed"),
 					}
 				)
@@ -254,14 +255,14 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			return None;
 		}
 
-		match (protocol.client().info(), protocol.client().header(&BlockId::Hash(parent))) {
+		match (protocol.client().info(), protocol.client().header(&BlockId::Hash(topic))) {
 			(_, Err(e)) | (Err(e), _) => {
 				debug!(target:"gossip", "Error reading blockchain: {:?}", e);
 				return None;
 			},
 			(Ok(info), Ok(Some(header))) => {
 				if header.number() < &info.chain.best_number {
-					trace!(target:"gossip", "Ignored ancient message from {}, hash={}", who, parent);
+					trace!(target:"gossip", "Ignored ancient message from {}, hash={}", who, topic);
 					return None;
 				}
 			},
@@ -269,16 +270,17 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		}
 
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
+			use std::collections::hash_map::Entry;
 			peer.known_messages.insert(hash);
-			if let Some((sink, parent_hash)) = self.message_sink.take() {
-				if parent == parent_hash {
-					debug!(target: "gossip", "Pushing relevant consensus message to sink.");
-					if let Err(e) = sink.unbounded_send(message.clone()) {
-						trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
-					}
+			if let Entry::Occupied(mut entry) = self.live_message_sinks.entry(topic) {
+				debug!(target: "gossip", "Pushing relevant consensus message to sink.");
+				if let Err(e) = entry.get().unbounded_send(message.clone()) {
+					trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
 				}
 
-				self.message_sink = Some((sink, parent_hash));
+				if entry.get().is_closed() {
+					entry.remove_entry();
+				}
 			}
 		} else {
 			trace!(target:"gossip", "Ignored statement from unregistered peer {}", who);
@@ -344,7 +346,7 @@ mod tests {
 		consensus.message_hashes.insert(m2_hash);
 
 		// nothing to collect
-		consensus.collect_garbage(None);
+		consensus.collect_garbage(|_topic| true);
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);
 
@@ -357,13 +359,13 @@ mod tests {
 			digest: Default::default(),
 		};
 
-		consensus.collect_garbage(Some(&H256::default()));
+		consensus.collect_garbage(|&topic| topic != Default::default());
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);
 
 		// header that matches one of the messages
 		header.parent_hash = prev_hash;
-		consensus.collect_garbage(Some(&prev_hash));
+		consensus.collect_garbage(|topic| topic != &prev_hash);
 		assert_eq!(consensus.messages.len(), 1);
 		assert_eq!(consensus.message_hashes.len(), 1);
 		assert!(consensus.message_hashes.contains(&m2_hash));
@@ -371,7 +373,7 @@ mod tests {
 		// make timestamp expired
 		consensus.messages.clear();
 		push_msg!(m2_hash, now - MESSAGE_LIFETIME, m2);
-		consensus.collect_garbage(None);
+		consensus.collect_garbage(|_topic| true);
 		assert!(consensus.messages.is_empty());
 		assert!(consensus.message_hashes.is_empty());
 	}
