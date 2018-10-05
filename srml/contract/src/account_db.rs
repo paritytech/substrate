@@ -65,6 +65,7 @@ pub trait AccountDb<T: Trait> {
 
 pub trait CheckpointedAccountDb<T: Trait>: AccountDb<T> {
 	fn checkpoint(&mut self);
+	fn merge_checkpoint(&mut self);
 	fn revert(&mut self);
 	fn commit(self);
 }
@@ -214,6 +215,16 @@ impl<'a, T: Trait> CheckpointedAccountDb<T> for OverlayAccountDb<'a, T> {
 					None => self.local.remove(&address),
 					Some(entry) => self.local.insert(address, entry),
 				};
+			}
+		}
+	}
+
+	fn merge_checkpoint(&mut self) {
+		if let Some(checkpoint) = self.checkpoints.pop() {
+			if let Some(previous_checkpoint) = self.checkpoints.last_mut() {
+				for (address, changed) in checkpoint.into_iter() {
+					previous_checkpoint.entry(address).or_insert(changed);
+				}
 			}
 		}
 	}
