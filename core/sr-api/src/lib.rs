@@ -24,12 +24,14 @@ extern crate sr_primitives as primitives;
 pub extern crate parity_codec as codec;
 extern crate sr_version as runtime_version;
 
-use primitives::{ApplyResult, traits::Block as BlockT, generic::BlockId};
+#[doc(hidden)]
+pub use primitives::{ApplyResult, traits::Block as BlockT, generic::BlockId};
 use runtime_version::RuntimeVersion;
 use rstd::vec::Vec;
 #[doc(hidden)]
 pub use rstd::slice;
-use codec::{Encode, Decode};
+#[doc(hidden)]
+pub use codec::{Encode, Decode};
 
 /// Declare the given API traits.
 ///
@@ -126,7 +128,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			Found;
-			$( $generic_param_parsed $( : $generic_bound_parsed )* , )* Block: BlockT;
+			$( $generic_param_parsed $( : $generic_bound_parsed )* , )* Block: $crate::BlockT;
 			$( $generic_param_rest $( : $generic_bound_rest )* ),*
 		);
 	};
@@ -140,7 +142,7 @@ macro_rules! decl_apis {
 			)*
 		};
 		$( $block_found:ident )*;
-		$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
+		$( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		$generic_param:ident $( : $generic_bound:ident )*
 		$(, $generic_param_rest:ident $( : $generic_bound_rest:ident )* )*
 	) => {
@@ -169,7 +171,7 @@ macro_rules! decl_apis {
 			)*
 		};
 		Found;
-	 	$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
+	 	$( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 	) => {
 		decl_apis!(
 			@GENERATE_FNS
@@ -209,7 +211,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			// We need to add the required generic Block parameter
-			Block: BlockT $(, $generic_param_parsed $( : $generic_bound_parsed )* )*;
+			Block: $crate::BlockT $(, $generic_param_parsed $( : $generic_bound_parsed )* )*;
 			{};
 			$( $( $return_ty )*; )*
 		);
@@ -223,7 +225,7 @@ macro_rules! decl_apis {
 				) $( -> $return_ty:ty)*;
 			)*
         };
-        $( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
+        $( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 		$return_ty_current:ty;
 		$( $( $return_ty_rest:ty )*; )*
@@ -252,7 +254,7 @@ macro_rules! decl_apis {
 				) $( -> $return_ty:ty)*;
 			)*
         };
-        $( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
+        $( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 		;
 		$( $( $return_ty_rest:ty )*; )*
@@ -281,7 +283,7 @@ macro_rules! decl_apis {
 				) $( -> $return_ty:ty)*;
 			)*
         };
-        $( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
+        $( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 	) => {
 		decl_apis!(
@@ -308,7 +310,7 @@ macro_rules! decl_apis {
 				) $( -> $return_ty:ty)*;
 			)*
 		};
-		$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
+		$( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 		$( $generic_param_joined:ident $( : $generic_bound_joined:ident )*, )*;
 	) => {
@@ -317,8 +319,8 @@ macro_rules! decl_apis {
 			type Error;
 
 			$(
-				fn $fn_name $( < $( $fn_generic: Encode + Decode ),* > )* (
-					&self, at: &BlockId<Block> $(, $param_name: $param_type )*
+				fn $fn_name $( < $( $fn_generic: $crate::Encode + $crate::Decode ),* > )* (
+					&self, at: &$crate::BlockId<Block> $(, $param_name: $param_type )*
 				) -> $result_return_ty;
 			)*
 		}
