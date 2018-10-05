@@ -37,7 +37,7 @@ pub use codec::{Encode, Decode};
 ///
 /// # Example:
 ///
-/// ```
+/// ```nocompile
 /// decl_apis!{
 ///     pub trait Test<Event> {
 ///         fn test<AccountId>(event: Event) -> AccountId;
@@ -47,7 +47,7 @@ pub use codec::{Encode, Decode};
 ///
 /// Will result in the following declaration:
 ///
-/// ```
+/// ```nocompile
 /// mod runtime {
 ///     pub trait Test<Event, AccountId> {
 ///         fn test(event: Event) -> AccountId;
@@ -60,7 +60,7 @@ pub use codec::{Encode, Decode};
 /// }
 /// ```
 ///
-/// The declarations generated in the `runtime` module, will be used by `impl_apis!` for implementing
+/// The declarations generated in the `runtime` module will be used by `impl_apis!` for implementing
 /// the traits for a runtime. The other declarations should be used for implementing the interface
 /// in the client.
 #[macro_export]
@@ -419,10 +419,16 @@ decl_apis! {
 /// All desired API's need to be implemented in one `impl_apis!` call.
 /// Besides generating the implementation for the runtime, there will be also generated an
 /// auxiliary module named `api` that contains function for inferring with the API in native/wasm.
+/// It is important to use the traits from the `runtime` module with this macro.
 ///
 /// # Example:
 ///
 /// ```nocompile
+/// #[macro_use]
+/// extern crate sr_api as runtime_api;
+///
+/// use runtime_api::runtime::{Core, OldTxQueue};
+///
 /// impl_apis! {
 ///     impl Core<Block, AccountId> for Runtime {
 ///         fn version() -> RuntimeVersion { 1 }
@@ -443,6 +449,8 @@ decl_apis! {
 ///         }
 ///     }
 /// }
+///
+/// fn main() {}
 /// ```
 #[macro_export]
 macro_rules! impl_apis {
