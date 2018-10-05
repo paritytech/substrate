@@ -63,7 +63,6 @@ mod checked_block;
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
-use runtime_api::{Core, BlockBuilder, Metadata, Miscellaneous, NewTxQueue, OldTxQueue};
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;

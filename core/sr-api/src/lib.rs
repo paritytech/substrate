@@ -24,20 +24,17 @@ extern crate sr_primitives as primitives;
 pub extern crate parity_codec as codec;
 extern crate sr_version as runtime_version;
 
-use primitives::{ApplyResult, traits::Block as BlockT};
-#[cfg(feature = "api-for-client")]
-use primitives::generic::BlockId;
+use primitives::{ApplyResult, traits::Block as BlockT, generic::BlockId};
 use runtime_version::RuntimeVersion;
 use rstd::vec::Vec;
-#[cfg(feature = "api-for-client")]
 use codec::{Encode, Decode};
 
-/// Declare an API trait.
+/// Declare the given API traits.
 ///
 /// # Example:
 ///
 /// ```
-/// decl_api!{
+/// decl_apis!{
 ///     pub trait Test<Event> {
 ///         fn test<AccountId>(event: Event) -> AccountId;
 ///     }
@@ -47,50 +44,61 @@ use codec::{Encode, Decode};
 /// Will result in the following declaration:
 ///
 /// ```
-/// pub trait Test<Event, AccountId> {
-///     fn test(event: Event) -> AccountId;
+/// mod runtime {
+///     pub trait Test<Event, AccountId> {
+///         fn test(event: Event) -> AccountId;
+///     }
 /// }
-/// ```
 ///
-/// By enabling the `api-for-client` feature, the declaration will change to the following:
-///
-/// ```
 /// pub trait Test<Block: BlockT, Event> {
 ///     type Error;
 ///     fn test<AccountId: Encode + Decode>(&self, at: &BlockId<Block>, event: Event) -> Result<Event, Self::Error>;
 /// }
 /// ```
 ///
-/// The declaration generated with the `api-for-client` feature enabled, should be used by the client
-/// in core. Without the feature being enabled, the resulting declaration should be used in
-/// conjunction with the `impl_apis!`.
-macro_rules! decl_api {
+/// The declarations generated in the `runtime` module, will be used by `impl_apis!` for implementing
+/// the traits for a runtime. The other declarations should be used for implementing the interface
+/// in the client.
+macro_rules! decl_apis {
 	(
-		$( #[$attr:meta] )*
-		pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:ident )* ),* >)* {
+		$(
+			$( #[$attr:meta] )*
+			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:ident )* ),* >)* {
+				$(
+					fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
+						$( $param_name:ident : $param_type:ty )*
+					) $( -> $return_ty:ty)*;
+				)*
+			}
+		)*
+	) => {
+		$(
+			decl_apis!(
+				@ADD_BLOCK_GENERIC
+				$( #[$attr] )*
+				pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
+					$(
+						fn $fn_name $( < $( $fn_generic ),* > )* ($( $param_name : $param_type )* ) $( -> $return_ty )*;
+					)*
+				};
+				;
+				;
+				$( $( $generic_param $( : $generic_bound )* ),* )*
+			);
+		)*
+		decl_apis! {
+			@GENERATE_RUNTIME_TRAITS
 			$(
-				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty )*
-				) $( -> $return_ty:ty)*;
+				$( #[$attr] )*
+				pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
+					$(
+						fn $fn_name $( < $( $fn_generic ),* > )* ($( $param_name : $param_type )* ) $( -> $return_ty )*;
+					)*
+				};
 			)*
 		}
-	) => {
-		decl_api!(
-			@add_block_generic
-			$( #[$attr] )*
-			pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
-				$(
-					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type )* ) $( -> $return_ty
-					)*;
-				)*
-			};
-			;
-			;
-			$( $( $generic_param $( : $generic_bound )* ),* )*
-		);
 	};
-	(@add_block_generic
+	(@ADD_BLOCK_GENERIC
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
@@ -104,8 +112,8 @@ macro_rules! decl_api {
 		Block: BlockT
 		$(, $generic_param_rest:ident $( : $generic_bound_rest:ident )* )*
 	) => {
-		decl_api!(
-			@add_block_generic
+		decl_apis!(
+			@ADD_BLOCK_GENERIC
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
@@ -119,7 +127,7 @@ macro_rules! decl_api {
 			$( $generic_param_rest $( : $generic_bound_rest )* ),*
 		);
 	};
-	(@add_block_generic
+	(@ADD_BLOCK_GENERIC
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 	 		$(
@@ -133,8 +141,8 @@ macro_rules! decl_api {
 		$generic_param:ident $( : $generic_bound:ident )*
 		$(, $generic_param_rest:ident $( : $generic_bound_rest:ident )* )*
 	) => {
-		decl_api!(
-			@add_block_generic
+		decl_apis!(
+			@ADD_BLOCK_GENERIC
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
@@ -148,7 +156,7 @@ macro_rules! decl_api {
 			$( $generic_param_rest $( : $generic_bound_rest )* ),*
 		);
 	};
-	(@add_block_generic
+	(@ADD_BLOCK_GENERIC
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
@@ -160,8 +168,8 @@ macro_rules! decl_api {
 		Found;
 	 	$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
 	) => {
-		decl_api!(
-			@generate_fns
+		decl_apis!(
+			@GENERATE_FNS
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
@@ -175,7 +183,7 @@ macro_rules! decl_api {
 			$( $( $return_ty )*; )*
 		);
 	};
-	(@add_block_generic
+	(@ADD_BLOCK_GENERIC
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
@@ -187,8 +195,8 @@ macro_rules! decl_api {
 		;
 		$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
 	) => {
-		decl_api!(
-			@generate_fns
+		decl_apis!(
+			@GENERATE_FNS
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
@@ -203,7 +211,7 @@ macro_rules! decl_api {
 			$( $( $return_ty )*; )*
 		);
 	};
-	(@generate_fns
+	(@GENERATE_FNS
         $( #[$attr:meta] )*
         pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
@@ -217,8 +225,8 @@ macro_rules! decl_api {
 		$return_ty_current:ty;
 		$( $( $return_ty_rest:ty )*; )*
 	) => {
-		decl_api!(
-			@generate_fns
+		decl_apis!(
+			@GENERATE_FNS
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
@@ -232,7 +240,7 @@ macro_rules! decl_api {
 			$( $( $return_ty_rest )*; )*
 		);
 	};
-	(@generate_fns
+	(@GENERATE_FNS
         $( #[$attr:meta] )*
         pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
@@ -246,8 +254,8 @@ macro_rules! decl_api {
 		;
 		$( $( $return_ty_rest:ty )*; )*
 	) => {
-		decl_api!(
-			@generate_fns
+		decl_apis!(
+			@GENERATE_FNS
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
@@ -261,7 +269,7 @@ macro_rules! decl_api {
 			$( $( $return_ty_rest )*; )*
 		);
 	};
-	(@generate_fns
+	(@GENERATE_FNS
         $( #[$attr:meta] )*
         pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
@@ -273,8 +281,8 @@ macro_rules! decl_api {
         $( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
 		{ $( $result_return_ty:ty; )* };
 	) => {
-		decl_api!(
-			@generate_traits
+		decl_apis!(
+			@GENERATE_CLIENT_TRAITS
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
@@ -288,7 +296,7 @@ macro_rules! decl_api {
 			$( $( $generic_param_orig $( : $generic_bound_orig )*, )* )* $( $( $( $fn_generic, )* )* )*;
 		);
 	};
-	(@generate_traits
+	(@GENERATE_CLIENT_TRAITS
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
@@ -301,7 +309,6 @@ macro_rules! decl_api {
 		{ $( $result_return_ty:ty; )* };
 		$( $generic_param_joined:ident $( : $generic_bound_joined:ident )*, )*;
 	) => {
-		#[cfg(feature = "api-for-client")]
 		$( #[$attr] )*
 		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > {
 			type Error;
@@ -312,34 +319,69 @@ macro_rules! decl_api {
 				) -> $result_return_ty;
 			)*
 		}
-
-		#[cfg(not(feature = "api-for-client"))]
-		$( #[$attr] )*
-		pub trait $name < $( $generic_param_joined $( : $generic_bound_joined )* ),* > {
+	};
+	(@GENERATE_RUNTIME_TRAITS
+		$(
+			$( #[$attr:meta] )*
+			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:ident )* ),* >)* {
+				$(
+					fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
+						$( $param_name:ident : $param_type:ty )*
+					) $( -> $return_ty:ty)*;
+				)*
+			};
+		)*
+	) => {
+		decl_apis! {
+			@GENERATE_RUNTIME_TRAITS_WITH_JOINED_GENERICS
 			$(
-				fn $fn_name ($( $param_name: $param_type ),*) $( -> $return_ty )*;
+				$( #[$attr] )*
+				pub trait $name < $( $( $generic_param $( : $generic_bound )*, )* )* $( $( $( $fn_generic, )* )* )* > {
+					$(
+						fn $fn_name ($( $param_name: $param_type ),*) $( -> $return_ty )*;
+					)*
+				}
+			)*
+		}
+	};
+	(@GENERATE_RUNTIME_TRAITS_WITH_JOINED_GENERICS
+		$(
+			$( #[$attr:meta] )*
+			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:ident )*, )* > {
+				$(
+					fn $fn_name:ident($( $param_name:ident : $param_type:ty )*) $( -> $return_ty:ty)*;
+				)*
+			}
+		)*
+	) => {
+		pub mod runtime {
+			use super::*;
+
+			$(
+				$( #[$attr] )*
+				pub trait $name < $( $generic_param $( : $generic_bound )* ),* > {
+					$(
+						fn $fn_name ($( $param_name: $param_type ),*) $( -> $return_ty )*;
+					)*
+				}
 			)*
 		}
 	};
 }
 
-decl_api! {
+decl_apis! {
 	/// The `Core` api trait that is mandantory for each runtime.
 	pub trait Core<Block: BlockT, AuthorityId> {
 		fn version() -> RuntimeVersion;
 		fn authorities() -> Vec<AuthorityId>;
 		fn execute_block(block: Block);
 	}
-}
 
-decl_api! {
 	/// The `Metadata` api trait that returns metadata for the runtime.
 	pub trait Metadata {
 		fn metadata() -> Vec<u8>;
 	}
-}
 
-decl_api! {
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
 	pub trait BlockBuilder<Block: BlockT> {
 		fn initialise_block(header: <Block as BlockT>::Header);
@@ -348,24 +390,18 @@ decl_api! {
 		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
 		fn random_seed() -> <Block as BlockT>::Hash;
 	}
-}
 
-decl_api! {
 	/// The `OldTxQueue` api trait for interfering with the old transaction queue.
 	pub trait OldTxQueue {
 		fn account_nonce<AccountId, Index>(account: AccountId) -> Index;
 		fn lookup_address<Address, LookupId>(address: Address) -> Option<LookupId>;
 	}
-}
 
-decl_api! {
 	/// The `NewTxQueue` api trait for interfering with the new transaction queue.
 	pub trait NewTxQueue<Block: BlockT> {
 		fn validate_transaction<TransactionValidity>(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}
-}
 
-decl_api! {
 	/// The `Miscellaneous` api trait for getting miscellaneous information from the runtime.
 	pub trait Miscellaneous {
 		fn validator_count() -> u32;
@@ -415,7 +451,7 @@ macro_rules! impl_apis {
 		}
 		$( $rest:tt )*
 	) => {
-		impl $trait_name $( < $( $generic ),* > )* for $runtime {
+		impl $crate::runtime::$trait_name $( < $( $generic ),* > )* for $runtime {
 			$(
 				fn $fn_name ( $( $arg_name : $arg_ty ),* ) $( -> $return_ty )* {
 					$( $impl )*
@@ -440,7 +476,7 @@ macro_rules! impl_apis {
 		}
 		$( $rest:tt )*
 	) => {
-		impl $trait_name $( < $( $generic ),* > )* for $runtime {
+		impl $crate::runtime::$trait_name $( < $( $generic ),* > )* for $runtime {
 			$(
 				fn $fn_name ( $( $arg_name : $arg_ty ),* ) $( -> $return_ty )* {
 					$( $impl )*
@@ -458,8 +494,9 @@ macro_rules! impl_apis {
 		$runtime:ident;
 		$( $fn_name:ident ( $( $arg_name:ident : $arg_ty:ty ),* ); )*;
 	) => {
-		mod api {
+		pub mod api {
 			use super::*;
+			use $crate::runtime::*;
 
 			#[cfg(feature = "std")]
 			pub fn dispatch(method: &str, mut data: &[u8]) -> Option<Vec<u8>> {

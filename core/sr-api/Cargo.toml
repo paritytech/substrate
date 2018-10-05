@@ -17,4 +17,3 @@ std = [
 	"sr-primitives/std",
 	"sr-version/std",
 ]
-api-for-client = []
