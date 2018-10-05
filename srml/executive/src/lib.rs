@@ -204,7 +204,7 @@ impl<
 		// remove temporaries.
 		let new_header = <system::Module<System>>::finalise();
 
-		// check digest. uncomment next two lines to figure out next digest hash for tests.
+		// check digest.
 		assert_eq!(
 			header.digest().logs().len(),
 			new_header.digest().logs().len(),
