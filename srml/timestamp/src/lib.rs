@@ -53,12 +53,10 @@ extern crate parity_codec as codec;
 
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{OnFinalise, SimpleArithmetic, Zero};
+use runtime_primitives::traits::{As, OnFinalise, SimpleArithmetic, Zero};
 use system::ensure_inherent;
 use rstd::ops::{Mul, Div};
 
-#[cfg(any(feature = "std", test))]
-use runtime_primitives::traits::As;
 
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The position of the required timestamp-set extrinsic.
