@@ -46,6 +46,10 @@ pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
+/// When light node connects to the full node and the full node is behind light node
+/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
+/// and disconnect to free connection slot.
+const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: Specialization<B>, H: ExHashT> {
@@ -436,6 +440,16 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 				io.report_peer(who, Severity::Bad(&format!("Peer using unsupported protocol version {}", status.version)));
 				return;
 			}
+			if self.config.roles & Roles::LIGHT == Roles::LIGHT {
+				let self_best_block = self.context_data.chain.info().ok()
+					.and_then(|info| info.best_queued_number)
+					.unwrap_or_else(|| Zero::zero());
+				let blocks_difference = self_best_block.as_().checked_sub(status.best_number.as_()).unwrap_or(0);
+				if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
+					io.report_peer(who, Severity::Useless("Peer is far behind us and will unable to serve light requests"));
+					return;
+				}
+			}
 
 			let peer = Peer {
 				protocol_version: status.version,
@@ -454,9 +468,9 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 
 		let mut context = ProtocolContext::new(&self.context_data, io);
+		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles, status.best_number));
 		self.sync.write().new_peer(&mut context, who);
-		self.specialization.write().on_connect(&mut context, who, status.clone());
-		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles));
+		self.specialization.write().on_connect(&mut context, who, status);
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -559,6 +573,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.known_blocks.insert(hash.clone());
 			}
 		}
+		self.on_demand.as_ref().map(|s| s.on_block_announce(who, *header.number()));
 		self.sync.write().on_block_announce(&mut ProtocolContext::new(&self.context_data, io), who, hash, &header);
 	}
 
