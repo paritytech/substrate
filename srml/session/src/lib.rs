@@ -42,7 +42,7 @@ extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, OnFinalise, Convert};
+use primitives::traits::{As, Zero, One, OnFinalise, Convert};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use system::ensure_signed;
