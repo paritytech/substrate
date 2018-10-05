@@ -503,6 +503,13 @@ pub trait Digest: Member + Default {
 	fn logs(&self) -> &[Self::Item];
 	/// Push new digest item.
 	fn push(&mut self, item: Self::Item);
+
+	/// Get reference to the first digest item that matches the passed predicate.
+	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
+		self.logs().iter()
+			.filter_map(predicate)
+			.next()
+	}
 }
 
 /// Single digest item. Could be any type that implements `Member` and provides methods
