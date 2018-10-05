@@ -4,8 +4,8 @@
 #![feature(alloc)]
 extern crate alloc;
 use alloc::vec::Vec;
+use alloc::slice;
 
-#[macro_use]
 extern crate sr_io as runtime_io;
 extern crate sr_sandbox as sandbox;
 extern crate substrate_primitives;
@@ -15,8 +15,37 @@ use runtime_io::{
 	twox_128, twox_256, ed25519_verify, enumerated_trie_root
 };
 
+macro_rules! impl_stubs {
+	( $( $new_name:ident $($nodecode:ident)* => $invoke:expr ),* ) => {
+		$(
+			impl_stubs!(@METHOD $new_name $($nodecode)* => $invoke);
+		)*
+	};
+	( @METHOD $new_name:ident => $invoke:expr ) => {
+		#[no_mangle]
+		pub fn $new_name(input_data: *mut u8, input_len: usize) -> u64 {
+			let input: &[u8] = if input_len == 0 {
+				&[0u8; 0]
+			} else {
+				unsafe {
+					slice::from_raw_parts(input_data, input_len)
+				}
+			};
+
+			let output: Vec<u8> = $invoke(input);
+			let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
+
+			// Leak the output vector to avoid it being freed.
+			// This is fine in a WASM context since the heap
+			// will be discarded after the call.
+			::core::mem::forget(output);
+			res
+		}
+	};
+}
+
 impl_stubs!(
-	test_data_in NO_DECODE => |input| {
+	test_data_in => |input| {
 		print("set_storage");
 		set_storage(b"input", input);
 
@@ -29,22 +58,22 @@ impl_stubs!(
 		print("finished!");
 		b"all ok!".to_vec()
 	},
-	test_clear_prefix NO_DECODE => |input| {
+	test_clear_prefix => |input| {
 		clear_prefix(input);
 		b"all ok!".to_vec()
 	},
-	test_empty_return NO_DECODE => |_| Vec::new(),
-	test_panic NO_DECODE => |_| panic!("test panic"),
-	test_conditional_panic NO_DECODE => |input: &[u8]| {
+	test_empty_return => |_| Vec::new(),
+	test_panic => |_| panic!("test panic"),
+	test_conditional_panic => |input: &[u8]| {
 		if input.len() > 0 {
 			panic!("test panic")
 		}
 		input.to_vec()
 	},
-	test_blake2_256 NO_DECODE => |input| blake2_256(input).to_vec(),
-	test_twox_256 NO_DECODE => |input| twox_256(input).to_vec(),
-	test_twox_128 NO_DECODE => |input| twox_128(input).to_vec(),
-	test_ed25519_verify NO_DECODE => |input: &[u8]| {
+	test_blake2_256 => |input| blake2_256(input).to_vec(),
+	test_twox_256 => |input| twox_256(input).to_vec(),
+	test_twox_128 => |input| twox_128(input).to_vec(),
+	test_ed25519_verify => |input: &[u8]| {
 		let mut pubkey = [0; 32];
 		let mut sig = [0; 64];
 
@@ -54,14 +83,14 @@ impl_stubs!(
 		let msg = b"all ok!";
 		[ed25519_verify(&sig, &msg[..], &pubkey) as u8].to_vec()
 	},
-	test_enumerated_trie_root NO_DECODE => |_| {
+	test_enumerated_trie_root => |_| {
 		enumerated_trie_root::<substrate_primitives::Blake2Hasher>(&[&b"zero"[..], &b"one"[..], &b"two"[..]]).to_vec()
 	},
-	test_sandbox NO_DECODE => |code: &[u8]| {
+	test_sandbox => |code: &[u8]| {
 		let ok = execute_sandboxed(code, &[]).is_ok();
 		[ok as u8].to_vec()
 	},
-	test_sandbox_args NO_DECODE => |code: &[u8]| {
+	test_sandbox_args => |code: &[u8]| {
 		let ok = execute_sandboxed(
 			code,
 			&[
@@ -71,7 +100,7 @@ impl_stubs!(
 		).is_ok();
 		[ok as u8].to_vec()
 	},
-	test_sandbox_return_val NO_DECODE => |code: &[u8]| {
+	test_sandbox_return_val => |code: &[u8]| {
 		let result = execute_sandboxed(
 			code,
 			&[
@@ -81,7 +110,7 @@ impl_stubs!(
 		let ok = if let Ok(sandbox::ReturnValue::Value(sandbox::TypedValue::I32(0x1337))) = result { true } else { false };
 		[ok as u8].to_vec()
 	},
-	test_sandbox_instantiate NO_DECODE => |code: &[u8]| {
+	test_sandbox_instantiate => |code: &[u8]| {
 		let env_builder = sandbox::EnvironmentDefinitionBuilder::new();
 		let code = match sandbox::Instance::new(code, &env_builder, &mut ()) {
 			Ok(_) => 0,
