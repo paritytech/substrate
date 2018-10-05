@@ -20,10 +20,12 @@ use super::{CodeOf, StorageOf, Trait};
 use double_map::StorageDoubleMap;
 use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
+use rstd::marker::PhantomData;
 use rstd::prelude::*;
 use runtime_support::StorageMap;
 use {balances, system};
 
+#[derive(Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
@@ -59,21 +61,38 @@ pub trait AccountDb<T: Trait> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>>;
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8>;
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance;
-
-	fn commit(&mut self, change_set: ChangeSet<T>);
 }
 
-pub struct DirectAccountDb;
-impl<T: Trait> AccountDb<T> for DirectAccountDb {
+pub trait CheckpointedAccountDb<T: Trait>: AccountDb<T> {
+	fn checkpoint(&mut self);
+	fn revert(&mut self);
+	fn commit(self);
+}
+
+pub struct DirectAccountDb<T>(PhantomData<T>);
+
+// Cannot derive(Default) since it erroneously bounds T by Default.
+impl<T> Default for DirectAccountDb<T> {
+	fn default() -> Self {
+		DirectAccountDb(PhantomData)
+	}
+}
+
+impl<T: Trait> AccountDb<T> for DirectAccountDb<T> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
 		<StorageOf<T>>::get(account.clone(), location.to_vec())
 	}
+
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
 		<CodeOf<T>>::get(account)
 	}
+
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		balances::Module::<T>::free_balance(account)
 	}
+}
+
+impl<T: Trait> DirectAccountDb<T> {
 	fn commit(&mut self, s: ChangeSet<T>) {
 		for (address, changed) in s.into_iter() {
 			if let Some(balance) = changed.balance {
@@ -100,21 +119,40 @@ impl<T: Trait> AccountDb<T> for DirectAccountDb {
 	}
 }
 
+pub type CheckpointChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, Option<ChangeEntry<T>>>;
+
 pub struct OverlayAccountDb<'a, T: Trait + 'a> {
-	local: RefCell<ChangeSet<T>>,
-	underlying: &'a AccountDb<T>,
+	underlying: &'a mut DirectAccountDb<T>,
+	local: ChangeSet<T>,
+	checkpoints: Vec<CheckpointChangeSet<T>>,
 }
+
 impl<'a, T: Trait> OverlayAccountDb<'a, T> {
-	pub fn new(underlying: &'a AccountDb<T>) -> OverlayAccountDb<'a, T> {
+	pub fn new(underlying: &'a mut DirectAccountDb<T>) -> OverlayAccountDb<'a, T> {
 		OverlayAccountDb {
-			local: RefCell::new(ChangeSet::new()),
+			local: ChangeSet::new(),
+			checkpoints: Vec::new(),
 			underlying,
 		}
 	}
 
-	pub fn into_change_set(self) -> ChangeSet<T> {
-		self.local.into_inner()
+	fn snapshot_and_set<F>(&mut self, account: &T::AccountId, f: F)
+		where F: FnOnce(&mut ChangeEntry<T>)
+	{
+		let checkpoint = self.checkpoints.last_mut();
+
+		match self.local.entry(account.clone()) {
+			Entry::Occupied(mut o) => {
+				checkpoint.map(|c| c.entry(account.clone()).or_insert(Some(o.get().clone())));
+				f(o.get_mut());
+			},
+			Entry::Vacant(v) => {
+				checkpoint.map(|c| c.entry(account.clone()).or_insert(None));
+				f(v.insert(Default::default()));
+			},
+		}
 	}
+
 
 	pub fn set_storage(
 		&mut self,
@@ -122,71 +160,65 @@ impl<'a, T: Trait> OverlayAccountDb<'a, T> {
 		location: Vec<u8>,
 		value: Option<Vec<u8>>,
 	) {
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.storage
-			.insert(location, value);
+		self.snapshot_and_set(account, |entry| {
+			entry.storage.insert(location, value);
+		});
 	}
+
 	pub fn set_code(&mut self, account: &T::AccountId, code: Vec<u8>) {
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.code = Some(code);
+		self.snapshot_and_set(account, |entry| {
+			entry.code = Some(code);
+		});
 	}
+
 	pub fn set_balance(&mut self, account: &T::AccountId, balance: T::Balance) {
-		self.local
-			.borrow_mut()
-			.entry(account.clone())
-			.or_insert(Default::default())
-			.balance = Some(balance);
+		self.snapshot_and_set(account, |entry| {
+			entry.balance = Some(balance);
+		});
 	}
 }
 
 impl<'a, T: Trait> AccountDb<T> for OverlayAccountDb<'a, T> {
 	fn get_storage(&self, account: &T::AccountId, location: &[u8]) -> Option<Vec<u8>> {
 		self.local
-			.borrow()
 			.get(account)
 			.and_then(|a| a.storage.get(location))
 			.cloned()
 			.unwrap_or_else(|| self.underlying.get_storage(account, location))
 	}
+
 	fn get_code(&self, account: &T::AccountId) -> Vec<u8> {
 		self.local
-			.borrow()
 			.get(account)
 			.and_then(|a| a.code.clone())
 			.unwrap_or_else(|| self.underlying.get_code(account))
 	}
+
 	fn get_balance(&self, account: &T::AccountId) -> T::Balance {
 		self.local
-			.borrow()
 			.get(account)
 			.and_then(|a| a.balance)
 			.unwrap_or_else(|| self.underlying.get_balance(account))
 	}
-	fn commit(&mut self, s: ChangeSet<T>) {
-		let mut local = self.local.borrow_mut();
+}
 
-		for (address, changed) in s.into_iter() {
-			match local.entry(address) {
-				Entry::Occupied(e) => {
-					let mut value = e.into_mut();
-					if changed.balance.is_some() {
-						value.balance = changed.balance;
-					}
-					if changed.code.is_some() {
-						value.code = changed.code;
-					}
-					value.storage.extend(changed.storage.into_iter());
-				}
-				Entry::Vacant(e) => {
-					e.insert(changed);
-				}
+impl<'a, T: Trait> CheckpointedAccountDb<T> for OverlayAccountDb<'a, T> {
+	fn checkpoint(&mut self) {
+		self.checkpoints.push(CheckpointChangeSet::new());
+	}
+
+	fn revert(&mut self) {
+		if let Some(checkpoint) = self.checkpoints.pop() {
+			for (address, changed) in checkpoint.into_iter() {
+				match changed {
+					None => self.local.remove(&address),
+					Some(entry) => self.local.insert(address, entry),
+				};
 			}
 		}
+	}
+
+	fn commit(self) {
+		self.underlying.commit(self.local);
 	}
 }

@@ -101,7 +101,7 @@ mod gas;
 mod tests;
 
 use exec::ExecutionContext;
-use account_db::{AccountDb, OverlayAccountDb};
+use account_db::{AccountDb, CheckpointedAccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
 use rstd::prelude::*;
@@ -242,24 +242,28 @@ impl<T: Trait> Module<T> {
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
 		let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+		let mut underlying = account_db::DirectAccountDb::default();
+		let mut overlay = OverlayAccountDb::<T>::new(&mut underlying);
 
-		let mut ctx = ExecutionContext {
-			self_account: origin.clone(),
-			depth: 0,
-			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
-			events: Vec::new(),
+		let result = {
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay: &mut overlay,
+				events: Vec::new(),
+			};
+
+			let mut output_data = Vec::new();
+			ctx.call(origin.clone(), dest, value, &mut gas_meter, &data, &mut output_data)
+				.and(Ok(ctx.events))
 		};
 
-		let mut output_data = Vec::new();
-		let result = ctx.call(origin.clone(), dest, value, &mut gas_meter, &data, &mut output_data);
-
-		if let Ok(_) = result {
+		let result = result.map(|events| {
 			// Commit all changes that made it thus far into the persistant storage.
-			account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
-
+			overlay.commit();
 			// Then deposit all events produced.
-			ctx.events.into_iter().for_each(Self::deposit_event);
-		}
+			events.into_iter().for_each(Self::deposit_event);
+		});
 
 		// Refund cost of the unused gas.
 		//
@@ -267,7 +271,7 @@ impl<T: Trait> Module<T> {
 		// can alter the balance of the caller.
 		gas::refund_unused_gas::<T>(&origin, gas_meter);
 
-		result.map(|_| ())
+		result
 	}
 
 	/// Create a new contract, optionally transfering some balance to the created account.
@@ -293,22 +297,27 @@ impl<T: Trait> Module<T> {
 		// NOTE: it is very important to avoid any state changes before
 		// paying for the gas.
 		let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+		let mut underlying = account_db::DirectAccountDb::default();
+		let mut overlay = OverlayAccountDb::<T>::new(&mut underlying);
 
-		let mut ctx = ExecutionContext {
-			self_account: origin.clone(),
-			depth: 0,
-			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
-			events: Vec::new(),
+		let result = {
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay: &mut overlay,
+				events: Vec::new(),
+			};
+
+			ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data)
+				.and(Ok(ctx.events))
 		};
-		let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
 
-		if let Ok(_) = result {
+		let result = result.map(|events| {
 			// Commit all changes that made it thus far into the persistant storage.
-			account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
-
+			overlay.commit();
 			// Then deposit all events produced.
-			ctx.events.into_iter().for_each(Self::deposit_event);
-		}
+			events.into_iter().for_each(Self::deposit_event);
+		});
 
 		// Refund cost of the unused gas.
 		//
@@ -316,7 +325,7 @@ impl<T: Trait> Module<T> {
 		// can alter the balance of the caller.
 		gas::refund_unused_gas::<T>(&origin, gas_meter);
 
-		result.map(|_| ())
+		result
 	}
 }
 

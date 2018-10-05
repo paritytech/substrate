@@ -15,7 +15,7 @@
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
 use super::{MaxDepth, ContractAddressFor, Module, Trait, Event, RawEvent};
-use account_db::{AccountDb, OverlayAccountDb};
+use account_db::{AccountDb, CheckpointedAccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use vm;
 
@@ -32,15 +32,15 @@ pub struct CreateReceipt<T: Trait> {
 // TODO: Add logs.
 pub struct CallReceipt;
 
-pub struct ExecutionContext<'a, T: Trait + 'a> {
+pub struct ExecutionContext<'a, 'b: 'a, T: Trait + 'b> {
 	// typically should be dest
 	pub self_account: T::AccountId,
-	pub overlay: OverlayAccountDb<'a, T>,
+	pub overlay: &'a mut OverlayAccountDb<'b, T>,
 	pub depth: usize,
 	pub events: Vec<Event<T>>,
 }
 
-impl<'a, T: Trait> ExecutionContext<'a, T> {
+impl<'a, 'b, T: Trait> ExecutionContext<'a, 'b, T> {
 	/// Make a call to the specified address.
 	pub fn call(
 		&mut self,
@@ -62,13 +62,11 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 
 		let dest_code = self.overlay.get_code(&dest);
 
-		let (change_set, events) = {
-			let mut overlay = OverlayAccountDb::new(&self.overlay);
-
+		let do_call = |ctx: &mut ExecutionContext<T>| {
 			let mut nested = ExecutionContext {
-				overlay: overlay,
+				overlay: ctx.overlay,
 				self_account: dest.clone(),
-				depth: self.depth + 1,
+				depth: ctx.depth + 1,
 				events: Vec::new(),
 			};
 
@@ -76,7 +74,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				transfer(
 					gas_meter,
 					false,
-					&self.self_account,
+					&ctx.self_account,
 					&dest,
 					value,
 					&mut nested,
@@ -97,13 +95,23 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				).map_err(|_| "vm execute returned error while call")?;
 			}
 
-			(nested.overlay.into_change_set(), nested.events)
+			Ok(nested.events)
 		};
 
-		self.overlay.commit(change_set);
-		self.events.extend(events);
+		// create a new checkpoint to revert any state changes in case the call fails
+		self.overlay.checkpoint();
 
-		Ok(CallReceipt)
+		match do_call(self) {
+			Ok(events) => {
+				self.events.extend(events);
+				Ok(CallReceipt)
+			}
+			Err(err) => {
+				// revert all state changes
+				self.overlay.revert();
+				Err(err)
+			},
+		}
 	}
 
 	pub fn create(
@@ -130,13 +138,11 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 			return Err("contract already exists");
 		}
 
-		let (change_set, events) = {
-			let mut overlay = OverlayAccountDb::new(&self.overlay);
-
+		let do_create = |ctx: &mut ExecutionContext<T>, dest: T::AccountId| {
 			let mut nested = ExecutionContext {
-				overlay: overlay,
+				overlay: ctx.overlay,
 				self_account: dest.clone(),
-				depth: self.depth + 1,
+				depth: ctx.depth + 1,
 				events: Vec::new(),
 			};
 
@@ -144,7 +150,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				transfer(
 					gas_meter,
 					true,
-					&self.self_account,
+					&ctx.self_account,
 					&dest,
 					endowment,
 					&mut nested,
@@ -164,16 +170,23 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				gas_meter,
 			).map_err(|_| "vm execute returned error while create")?;
 
-			nested.overlay.set_code(&dest, contract_code);
-			(nested.overlay.into_change_set(), nested.events)
+			Ok(nested.events)
 		};
 
-		self.overlay.commit(change_set);
-		self.events.extend(events);
+		// create a new checkpoint to revert any state changes in case the call fails
+		self.overlay.checkpoint();
 
-		Ok(CreateReceipt {
-			address: dest,
-		})
+		match do_create(self, dest.clone()) {
+			Ok(events) => {
+				self.events.extend(events);
+				Ok(CreateReceipt { address: dest })
+			}
+			Err(err) => {
+				// revert all state changes
+				self.overlay.revert();
+				Err(err)
+			},
+		}
 	}
 }
 
@@ -193,13 +206,13 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 /// NOTE: that we allow for draining all funds of the contract so it
 /// can go below existential deposit, essentially giving a contract
 /// the chance to give up it's life.
-fn transfer<'a, T: Trait>(
+fn transfer<'a, 'b, T: Trait>(
 	gas_meter: &mut GasMeter<T>,
 	contract_create: bool,
 	transactor: &T::AccountId,
 	dest: &T::AccountId,
 	value: T::Balance,
-	ctx: &mut ExecutionContext<'a, T>,
+	ctx: &mut ExecutionContext<'a, 'b, T>,
 ) -> Result<(), &'static str> {
 	let to_balance = ctx.overlay.get_balance(dest);
 
@@ -252,12 +265,12 @@ fn transfer<'a, T: Trait>(
 	Ok(())
 }
 
-struct CallContext<'a, 'b: 'a, T: Trait + 'b> {
-	ctx: &'a mut ExecutionContext<'b, T>,
+struct CallContext<'a, 'b: 'a, 'c: 'b, T: Trait + 'c> {
+	ctx: &'a mut ExecutionContext<'b, 'c, T>,
 	_caller: T::AccountId,
 }
 
-impl<'a, 'b: 'a, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, T> {
+impl<'a, 'b: 'a, 'c, T: Trait + 'b> vm::Ext for CallContext<'a, 'b, 'c, T> {
 	type T = T;
 
 	fn get_storage(&self, key: &[u8]) -> Option<Vec<u8>> {
