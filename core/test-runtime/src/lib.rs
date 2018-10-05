@@ -154,8 +154,8 @@ pub mod api {
 	impl_stubs!(
 		version => |()| super::version(),
 		authorities => |()| system::authorities(),
-		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),
+		initialise_block => |header| system::initialise_block(header),
 		apply_extrinsic => |utx| system::execute_transaction(utx),
 		finalise_block => |()| system::finalise_block(),
 		balance_of => |a| system::balance_of(a)

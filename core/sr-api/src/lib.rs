@@ -61,6 +61,7 @@ use codec::{Encode, Decode};
 /// The declarations generated in the `runtime` module, will be used by `impl_apis!` for implementing
 /// the traits for a runtime. The other declarations should be used for implementing the interface
 /// in the client.
+#[macro_export]
 macro_rules! decl_apis {
 	(
 		$(
@@ -453,7 +454,7 @@ macro_rules! impl_apis {
 		}
 		$( $rest:tt )*
 	) => {
-		impl $crate::runtime::$trait_name $( < $( $generic ),* > )* for $runtime {
+		impl $trait_name $( < $( $generic ),* > )* for $runtime {
 			$(
 				fn $fn_name ( $( $arg_name : $arg_ty ),* ) $( -> $return_ty )* {
 					$( $impl )*
@@ -478,7 +479,7 @@ macro_rules! impl_apis {
 		}
 		$( $rest:tt )*
 	) => {
-		impl $crate::runtime::$trait_name $( < $( $generic ),* > )* for $runtime {
+		impl $trait_name $( < $( $generic ),* > )* for $runtime {
 			$(
 				fn $fn_name ( $( $arg_name : $arg_ty ),* ) $( -> $return_ty )* {
 					$( $impl )*
@@ -498,7 +499,6 @@ macro_rules! impl_apis {
 	) => {
 		pub mod api {
 			use super::*;
-			use $crate::runtime::*;
 
 			#[cfg(feature = "std")]
 			pub fn dispatch(method: &str, mut data: &[u8]) -> Option<Vec<u8>> {
