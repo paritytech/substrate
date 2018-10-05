@@ -474,10 +474,7 @@ where
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 
-			let changes_trie_root = header.digest().logs().iter()
-				.find(|log| log.as_changes_trie_root().is_some())
-				.and_then(DigestItem::as_changes_trie_root)
-				.cloned();
+			let changes_trie_root = header.digest().log(DigestItem::as_changes_trie_root).cloned();
 			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					let changes_trie_root: H::Out = changes_trie_root.into();

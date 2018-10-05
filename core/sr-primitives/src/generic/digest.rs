@@ -108,7 +108,7 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 	}
 }
 
-impl<Hash: Member, AuthorityId: Member> traits::DigestItem for DigestItem<Hash, AuthorityId> {
+impl<Hash: Codec + Member, AuthorityId: Codec + Member> traits::DigestItem for DigestItem<Hash, AuthorityId> {
 	type Hash = Hash;
 	type AuthorityId = AuthorityId;
 

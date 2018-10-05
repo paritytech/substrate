@@ -256,9 +256,8 @@ pub enum StorageFunctionType {
 #[derive(Clone, PartialEq, Eq, Encode)]
 #[cfg_attr(feature = "std", derive(Decode, Debug, Serialize))]
 pub enum StorageFunctionModifier {
-	None,
+	Optional,
 	Default,
-	Required,
 }
 
 /// All metadata about the outer dispatch.

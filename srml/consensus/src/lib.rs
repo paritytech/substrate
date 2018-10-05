@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Conensus module for runtime; manages the authority set ready for the native code.
+//! Consensus module for runtime; manages the authority set ready for the native code.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
@@ -118,7 +118,23 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Consensus {
 		// Authorities set actual at the block execution start. IsSome only if
 		// the set has been changed.
-		OriginalAuthorities: Vec<T::SessionKey>;
+		OriginalAuthorities: Option<Vec<T::SessionKey>>;
+	}
+	add_extra_genesis {
+		config(authorities): Vec<T::SessionKey>;
+		#[serde(with = "substrate_primitives::bytes")]
+		config(code): Vec<u8>;
+
+		build(|storage: &mut primitives::StorageMap, config: &GenesisConfig<T>| {
+			use codec::{Encode, KeyedVec};
+
+			let auth_count = config.authorities.len() as u32;
+			config.authorities.iter().enumerate().for_each(|(i, v)| {
+				storage.insert((i as u32).to_keyed_vec(well_known_keys::AUTHORITY_PREFIX), v.encode());
+			});
+			storage.insert(well_known_keys::AUTHORITY_COUNT.to_vec(), auth_count.encode());
+			storage.insert(well_known_keys::CODE.to_vec(), config.code.clone());
+		});
 	}
 }
 
@@ -232,37 +248,3 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	}
 }
 
-#[cfg(any(feature = "std", test))]
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct GenesisConfig<T: Trait> {
-	pub authorities: Vec<T::SessionKey>,
-	#[serde(with = "substrate_primitives::bytes")]
-	pub code: Vec<u8>,
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for GenesisConfig<T> {
-	fn default() -> Self {
-		GenesisConfig {
-			authorities: vec![],
-			code: vec![],
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
-{
-	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
-		use codec::{Encode, KeyedVec};
-		let auth_count = self.authorities.len() as u32;
-		let mut r: primitives::StorageMap = self.authorities.into_iter().enumerate().map(|(i, v)|
-			((i as u32).to_keyed_vec(well_known_keys::AUTHORITY_PREFIX), v.encode())
-		).collect();
-		r.insert(well_known_keys::AUTHORITY_COUNT.to_vec(), auth_count.encode());
-		r.insert(well_known_keys::CODE.to_vec(), self.code);
-		Ok(r.into())
-	}
-}
