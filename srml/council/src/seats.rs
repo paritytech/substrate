@@ -104,53 +104,53 @@ decl_storage! {
 
 		// parameters
 		/// How much should be locked up in order to submit one's candidacy.
-		pub CandidacyBond get(candidacy_bond): required T::Balance;
+		pub CandidacyBond get(candidacy_bond) config(): T::Balance = T::Balance::sa(9);
 		/// How much should be locked up in order to be able to submit votes.
-		pub VotingBond get(voting_bond): required T::Balance;
+		pub VotingBond get(voting_bond) config(voter_bond): T::Balance;
 		/// The punishment, per voter, if you provide an invalid presentation.
-		pub PresentSlashPerVoter get(present_slash_per_voter): required T::Balance;
+		pub PresentSlashPerVoter get(present_slash_per_voter) config(): T::Balance = T::Balance::sa(1);
 		/// How many runners-up should have their approvals persist until the next vote.
-		pub CarryCount get(carry_count): required u32;
+		pub CarryCount get(carry_count) config(): u32 = 2;
 		/// How long to give each top candidate to present themselves after the vote ends.
-		pub PresentationDuration get(presentation_duration): required T::BlockNumber;
+		pub PresentationDuration get(presentation_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// How many votes need to go by after a voter's last vote before they can be reaped if their
 		/// approvals are moot.
-		pub InactiveGracePeriod get(inactivity_grace_period): required VoteIndex;
+		pub InactiveGracePeriod get(inactivity_grace_period) config(inactive_grace_period): VoteIndex = 1;
 		/// How often (in blocks) to check for new votes.
-		pub VotingPeriod get(voting_period): required T::BlockNumber;
+		pub VotingPeriod get(voting_period) config(approval_voting_period): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// How long each position is active for.
-		pub TermDuration get(term_duration): required T::BlockNumber;
+		pub TermDuration get(term_duration) config(): T::BlockNumber = T::BlockNumber::sa(5);
 		/// Number of accounts that should be sitting on the council.
-		pub DesiredSeats get(desired_seats): required u32;
+		pub DesiredSeats get(desired_seats) config(): u32;
 
 		// permanent state (always relevant, changes only at the finalisation of voting)
 		/// The current council. When there's a vote going on, this should still be used for executive
 		/// matters.
-		pub ActiveCouncil get(active_council): default Vec<(T::AccountId, T::BlockNumber)>;
+		pub ActiveCouncil get(active_council) config(): Vec<(T::AccountId, T::BlockNumber)>;
 		/// The total number of votes that have happened or are in progress.
-		pub VoteCount get(vote_index): default VoteIndex;
+		pub VoteCount get(vote_index): VoteIndex;
 
 		// persistent state (always relevant, changes constantly)
 		/// The last cleared vote index that this voter was last active at.
-		pub ApprovalsOf get(approvals_of): default map [ T::AccountId => Vec<bool> ];
+		pub ApprovalsOf get(approvals_of): map T::AccountId => Vec<bool>;
 		/// The vote index and list slot that the candidate `who` was registered or `None` if they are not
 		/// currently registered.
-		pub RegisterInfoOf get(candidate_reg_info): map [ T::AccountId => (VoteIndex, u32) ];
+		pub RegisterInfoOf get(candidate_reg_info): map T::AccountId => Option<(VoteIndex, u32)>;
 		/// The last cleared vote index that this voter was last active at.
-		pub LastActiveOf get(voter_last_active): map [ T::AccountId => VoteIndex ];
+		pub LastActiveOf get(voter_last_active): map T::AccountId => Option<VoteIndex>;
 		/// The present voter list.
-		pub Voters get(voters): default Vec<T::AccountId>;
+		pub Voters get(voters): Vec<T::AccountId>;
 		/// The present candidate list.
-		pub Candidates get(candidates): default Vec<T::AccountId>; // has holes
-		pub CandidateCount get(candidate_count): default u32;
+		pub Candidates get(candidates): Vec<T::AccountId>; // has holes
+		pub CandidateCount get(candidate_count): u32;
 
 		// temporary state (only relevant during finalisation/presentation)
 		/// The accounts holding the seats that will become free on the next tally.
-		pub NextFinalise get(next_finalise): (T::BlockNumber, u32, Vec<T::AccountId>);
+		pub NextFinalise get(next_finalise): Option<(T::BlockNumber, u32, Vec<T::AccountId>)>;
 		/// The stakes as they were at the point that the vote ended.
-		pub SnapshotedStakes get(snapshoted_stakes): required Vec<T::Balance>;
+		pub SnapshotedStakes get(snapshoted_stakes): Vec<T::Balance>;
 		/// Get the leaderboard if we;re in the presentation phase.
-		pub Leaderboard get(leaderboard): Vec<(T::Balance, T::AccountId)>; // ORDERED low -> high
+		pub Leaderboard get(leaderboard): Option<Vec<(T::Balance, T::AccountId)> >; // ORDERED low -> high
 	}
 }
 

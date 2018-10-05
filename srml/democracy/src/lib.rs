@@ -27,7 +27,7 @@ extern crate serde_derive;
 
 #[macro_use]
 extern crate parity_codec_derive;
-#[macro_use]
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 #[macro_use]
 extern crate srml_support;
@@ -74,31 +74,31 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Democracy {
 
 		/// The number of (public) proposals that have been made so far.
-		pub PublicPropCount get(public_prop_count): default PropIndex;
+		pub PublicPropCount get(public_prop_count) build(|_| 0 as PropIndex) : PropIndex;
 		/// The public proposals. Unsorted.
-		pub PublicProps get(public_props): default Vec<(PropIndex, T::Proposal, T::AccountId)>;
+		pub PublicProps get(public_props): Vec<(PropIndex, T::Proposal, T::AccountId)>;
 		/// Those who have locked a deposit.
-		pub DepositOf get(deposit_of): map [ PropIndex => (T::Balance, Vec<T::AccountId>) ];
+		pub DepositOf get(deposit_of): map PropIndex => Option<(T::Balance, Vec<T::AccountId>)>;
 		/// How often (in blocks) new public referenda are launched.
-		pub LaunchPeriod get(launch_period): required T::BlockNumber;
+		pub LaunchPeriod get(launch_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// The minimum amount to be used as a deposit for a public referendum proposal.
-		pub MinimumDeposit get(minimum_deposit): required T::Balance;
+		pub MinimumDeposit get(minimum_deposit) config(): T::Balance;
 
 		/// How often (in blocks) to check for new votes.
-		pub VotingPeriod get(voting_period): required T::BlockNumber;
+		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 
 		/// The next free referendum index, aka the number of referendums started so far.
-		pub ReferendumCount get(referendum_count): required ReferendumIndex;
+		pub ReferendumCount get(referendum_count) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// The next referendum index that should be tallied.
-		pub NextTally get(next_tally): required ReferendumIndex;
+		pub NextTally get(next_tally) build(|_| 0 as ReferendumIndex): ReferendumIndex;
 		/// Information concerning any given referendum.
-		pub ReferendumInfoOf get(referendum_info): map [ ReferendumIndex => (T::BlockNumber, T::Proposal, VoteThreshold) ];
+		pub ReferendumInfoOf get(referendum_info): map ReferendumIndex => Option<(T::BlockNumber, T::Proposal, VoteThreshold)>;
 
 		/// Get the voters for the current proposal.
-		pub VotersFor get(voters_for): default map [ ReferendumIndex => Vec<T::AccountId> ];
+		pub VotersFor get(voters_for): map ReferendumIndex => Vec<T::AccountId>;
 
 		/// Get the vote, if Some, of `who`.
-		pub VoteOf get(vote_of): map [ (ReferendumIndex, T::AccountId) => bool ];
+		pub VoteOf get(vote_of): map (ReferendumIndex, T::AccountId) => Option<bool>;
 	}
 }
 
@@ -308,55 +308,6 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 		if let Err(e) = Self::end_block(n) {
 			runtime_io::print(e);
 		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct GenesisConfig<T: Trait> {
-	pub launch_period: T::BlockNumber,
-	pub voting_period: T::BlockNumber,
-	pub minimum_deposit: T::Balance,
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> GenesisConfig<T> {
-	pub fn new() -> Self {
-		GenesisConfig {
-			launch_period: T::BlockNumber::sa(1),
-			voting_period: T::BlockNumber::sa(1),
-			minimum_deposit: T::Balance::sa(1),
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for GenesisConfig<T> {
-	fn default() -> Self {
-		GenesisConfig {
-			launch_period: T::BlockNumber::sa(1000),
-			voting_period: T::BlockNumber::sa(1000),
-			minimum_deposit: T::Balance::sa(0),
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
-{
-	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
-		use codec::Encode;
-
-		Ok(map![
-			Self::hash(<LaunchPeriod<T>>::key()).to_vec() => self.launch_period.encode(),
-			Self::hash(<VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
-			Self::hash(<MinimumDeposit<T>>::key()).to_vec() => self.minimum_deposit.encode(),
-			Self::hash(<ReferendumCount<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
-			Self::hash(<NextTally<T>>::key()).to_vec() => (0 as ReferendumIndex).encode(),
-			Self::hash(<PublicPropCount<T>>::key()).to_vec() => (0 as PropIndex).encode()
-		])
 	}
 }
 
