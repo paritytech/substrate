@@ -24,6 +24,7 @@ use rstd::prelude::*;
 use runtime_support::StorageMap;
 use {balances, system};
 
+#[cfg_attr(test, derive(PartialEq))]
 pub struct ChangeEntry<T: Trait> {
 	balance: Option<T::Balance>,
 	code: Option<Vec<u8>>,
@@ -38,6 +39,17 @@ impl<T: Trait> Default for ChangeEntry<T> {
 			code: Default::default(),
 			storage: Default::default(),
 		}
+	}
+}
+
+#[cfg(test)]
+impl<T: Trait> ChangeEntry<T> {
+	pub fn new(
+		balance: Option<T::Balance>,
+		code: Option<Vec<u8>>,
+		storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
+	) -> ChangeEntry<T> {
+		ChangeEntry { balance, code, storage }
 	}
 }
 

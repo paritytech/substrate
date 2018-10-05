@@ -869,20 +869,24 @@ fn input_data() {
 mod benchmarks {
 	use test::Bencher;
 
-	use account_db::{AccountDb, DirectAccountDb, OverlayAccountDb};
+	use account_db::{AccountDb, ChangeEntry, ChangeSet, DirectAccountDb, OverlayAccountDb};
 	use super::*;
 
-	fn with_accountdb_at_depth<'a, F, T>(
+	fn with_accountdb_at_depth<'a, V, F, T>(
 		overlay: &'a OverlayAccountDb<'a, Test>,
 		depth: usize,
-		mut f: F
+		visitor: V,
+		mut finl: F,
 	) -> T
-		where F: FnMut(&OverlayAccountDb<Test>) -> T
+		where V: Fn(&mut OverlayAccountDb<Test>),
+			  F: FnMut(OverlayAccountDb<Test>) -> T
 	{
 		if depth == 0 {
-			f(overlay)
+			finl(OverlayAccountDb::new(overlay))
 		} else {
-			with_accountdb_at_depth(&OverlayAccountDb::new(overlay), depth - 1, f)
+			let mut overlay = OverlayAccountDb::new(overlay);
+			visitor(&mut overlay);
+			with_accountdb_at_depth(&overlay, depth - 1, visitor, finl)
 		}
 	}
 
@@ -897,7 +901,7 @@ mod benchmarks {
 			&mut ExtBuilder::default().build(),
 			|| {
 				b.iter(|| {
-					with_accountdb_at_depth(&overlay, depth, |_| {})
+					with_accountdb_at_depth(&overlay, depth, |_| {}, |_| {})
 				});
 			}
 		);
@@ -919,14 +923,142 @@ mod benchmarks {
 		with_externalities(
 			&mut ExtBuilder::default().build(),
 			|| {
-				with_accountdb_at_depth(&overlay, depth, |overlay| {
+				with_accountdb_at_depth(&overlay, depth, |_| {}, |overlay| {
 					b.iter(|| {
-						assert_eq!(
-							overlay.get_storage(&1, "hello".as_bytes()),
+						overlay.get_storage(&1, "hello".as_bytes())
+					});
+
+					assert_eq!(
+						overlay.get_storage(&1, "hello".as_bytes()),
+						Some("world".as_bytes().to_vec()),
+					);
+				})
+			}
+		);
+	}
+
+	#[bench]
+	fn bench_accountdb_set(b: &mut Bencher) {
+		let direct = DirectAccountDb;
+		let overlay = OverlayAccountDb::<Test>::new(&direct);
+
+		let depth = 1000;
+
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				with_accountdb_at_depth(&overlay, depth, |_| {}, |mut overlay| {
+					b.iter(|| {
+						overlay.set_storage(
+							&1,
+							"hello".as_bytes().to_vec(),
 							Some("world".as_bytes().to_vec()),
 						);
 					});
 				})
+			}
+		);
+	}
+
+	#[bench]
+	fn bench_accountdb_changeset(b: &mut Bencher) {
+		let direct = DirectAccountDb;
+		let overlay = OverlayAccountDb::<Test>::new(&direct);
+
+		let depth = 1000;
+
+		fn aux<'a>(
+			overlay: &'a OverlayAccountDb<'a, Test>,
+			depth: usize,
+		) -> ChangeSet<Test> {
+			if depth == 0 {
+				return ChangeSet::new();
+			} else {
+				let mut overlay = OverlayAccountDb::new(overlay);
+				overlay.set_storage(
+					&1,
+					"hello".as_bytes().to_vec(),
+					Some("world".as_bytes().to_vec()),
+				);
+				let change_set = aux(&overlay, depth - 1);
+				overlay.commit(change_set);
+				overlay.into_change_set()
+			}
+		}
+
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				let mut change_set = None;
+				b.iter(|| {
+					change_set = Some(aux(
+						&overlay,
+						depth,
+					));
+				});
+
+				if let Some(change_set) = change_set {
+					let expected_storage =
+						vec![("hello".as_bytes().to_vec(), Some("world".as_bytes().to_vec()))];
+
+					let expected_change_entry: ChangeEntry<Test> =
+						ChangeEntry::new(None, None, expected_storage.into_iter().collect());
+
+					assert!(
+						change_set.into_iter().collect::<Vec<_>>() ==
+							vec![(1, expected_change_entry)]
+					);
+				}
+			}
+		);
+	}
+
+	#[bench]
+	fn bench_accountdb_revert_noop(b: &mut Bencher) {
+		let direct = DirectAccountDb;
+		let overlay = OverlayAccountDb::<Test>::new(&direct);
+
+		let depth = 1000;
+
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				b.iter(|| {
+					with_accountdb_at_depth(
+						&overlay,
+						depth,
+						|_| {},
+						|_| {},
+					)
+				});
+			}
+		);
+	}
+
+	#[bench]
+	fn bench_accountdb_revert_with_data(b: &mut Bencher) {
+		let direct = DirectAccountDb;
+		let overlay = OverlayAccountDb::<Test>::new(&direct);
+
+		let depth = 1000;
+
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				b.iter(|| {
+					with_accountdb_at_depth(
+						&overlay,
+						depth,
+						|overlay| {
+							overlay.set_storage(
+								&1,
+								"hello".as_bytes().to_vec(),
+								Some("world".as_bytes().to_vec()),
+							);
+						},
+						|_| {},
+					)
+				});
 			}
 		);
 	}
