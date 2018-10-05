@@ -46,7 +46,6 @@ use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member};
-use primitives::bft::MisbehaviorReport;
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
 
