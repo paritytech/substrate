@@ -17,7 +17,7 @@
 //! Substrate chain configurations.
 
 use primitives::{AuthorityId, ed25519};
-use node_runtime::{GenesisConfig, ConsensusConfig, CouncilConfig, DemocracyConfig,
+use node_runtime::{GenesisConfig, ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
 	ContractConfig, Permill, Perbill};
 use service::ChainSpec;
@@ -84,7 +84,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			voting_period: 5 * MINUTES,	// 3 days to discuss & vote on an active referendum
 			minimum_deposit: 50 * DOLLARS,	// 12000 as the minimum deposit for a referendum
 		}),
-		council: Some(CouncilConfig {
+		council_seats: Some(CouncilSeatsConfig {
 			active_council: vec![],
 			candidacy_bond: 10 * DOLLARS,
 			voter_bond: 1 * DOLLARS,
@@ -96,6 +96,8 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			desired_seats: 0,
 			inactive_grace_period: 1,	// one additional vote should go by before an inactive voter can be reaped.
 
+		}),
+		council_voting: Some(CouncilVotingConfig {
 			cooloff_period: 4 * DAYS,
 			voting_period: 1 * DAYS,
 		}),
@@ -179,7 +181,7 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			voting_period: 18,
 			minimum_deposit: 10,
 		}),
-		council: Some(CouncilConfig {
+		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
 				.filter(|a| initial_authorities.iter().find(|&b| a.0 == b.0).is_none())
 				.map(|a| (a.clone(), 1000000)).collect(),
@@ -192,7 +194,8 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			term_duration: 1000000,
 			desired_seats: (endowed_accounts.len() - initial_authorities.len()) as u32,
 			inactive_grace_period: 1,
-
+		}),
+		council_voting: Some(CouncilVotingConfig {
 			cooloff_period: 75,
 			voting_period: 20,
 		}),

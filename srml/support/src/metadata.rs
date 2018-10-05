@@ -188,7 +188,11 @@ mod tests {
 
 		decl_storage! {
 			trait Store for Module<T: Trait> as TestStorage {
-				StorageMethod : u32;
+				StorageMethod : Option<u32>;
+			}
+			add_extra_genesis {
+			    config(_marker) : ::std::marker::PhantomData<T>;
+			    build(|_, _| {});
 			}
 		}
 	}
@@ -312,7 +316,7 @@ mod tests {
 					   functions: DecodeDifferent::Encode(&[
 						   StorageFunctionMetadata {
 							   name: DecodeDifferent::Encode("StorageMethod"),
-							   modifier: StorageFunctionModifier::None,
+							   modifier: StorageFunctionModifier::Optional,
 							   ty: StorageFunctionType::Plain(DecodeDifferent::Encode("u32")),
 							   documentation: DecodeDifferent::Encode(&[]),
 						   }

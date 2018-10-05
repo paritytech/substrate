@@ -21,7 +21,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 // Assert macros used in tests.
-#[cfg_attr(feature = "std", macro_use)]
 extern crate sr_std;
 
 // Needed for tests (`with_externalities`).
@@ -88,7 +87,7 @@ pub trait Trait: balances::Trait {
 // Information about where this dispatch initiated from is provided as the first argument
 // "origin". As such functions must always look like:
 //
-// `fn foo(origin, bar: Bar, baz: Baz) -> Result = 0;`
+// `fn foo(origin, bar: Bar, baz: Baz) -> Result;`
 //
 // The `Result` is required as part of the syntax (and expands to the conventional dispatch
 // result of `Result<(), &'static str>`).
@@ -134,23 +133,20 @@ decl_storage! {
 	// keep things around between blocks.
 	trait Store for Module<T: Trait> as Example {
 		// Any storage declarations of the form:
-		//   `pub? Name get(getter_name)? : [required | default]? <type>;`
+		//   `pub? Name get(getter_name)? [config()|config(myname)] [build(|_| {...})] : <type> (= <new_default_value>)?;`
 		// where `<type>` is either:
 		//   - `Type` (a basic value item); or
-		//   - `map [ KeyType => ValueType ]` (a map item).
+		//   - `map KeyType => ValueType` (a map item).
 		//
 		// Note that there are two optional modifiers for the storage type declaration.
-		// - `Foo: u32`:
+		// - `Foo: Option<u32>`:
 		//   - `Foo::put(1); Foo::get()` returns `Some(1)`;
 		//   - `Foo::kill(); Foo::get()` returns `None`.
-		// - `Foo: required u32`:
-		//   - `Foo::put(1); Foo::get()` returns `1`;
-		//   - `Foo::kill(); Foo::get()` panics.
-		// - `Foo: default u32`:
+		// - `Foo: u32`:
 		//   - `Foo::put(1); Foo::get()` returns `1`;
 		//   - `Foo::kill(); Foo::get()` returns `0` (u32::default()).
 		// e.g. Foo: u32;
-		// e.g. pub Bar get(bar): default map [ T::AccountId => Vec<(T::Balance, u64)> ];
+		// e.g. pub Bar get(bar): map T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
 		// `runtime_support::StorageValue`. For map items, you'll get a type which
@@ -159,10 +155,10 @@ decl_storage! {
 		// If they have a getter (`get(getter_name)`), then your module will come
 		// equipped with `fn getter_name() -> Type` for basic value items or
 		// `fn getter_name(key: KeyType) -> ValueType` for map items.
-		Dummy get(dummy): T::Balance;
+		Dummy get(dummy) config(): Option<T::Balance>;
 
 		// this one uses the default, we'll demonstrate the usage of 'mutate' API.
-		Foo get(foo): default T::Balance;
+		Foo get(foo) config(): T::Balance;
 	}
 }
 
@@ -277,47 +273,6 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 		// Anything that needs to be done at the end of the block.
 		// We just kill our dummy storage item.
 		<Dummy<T>>::kill();
-	}
-}
-
-#[cfg(feature = "std")]
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-/// The genesis block configuration type. This is a simple default-capable struct that
-/// contains any fields with which this module can be configured at genesis time.
-pub struct GenesisConfig<T: Trait> {
-	/// A value with which to initialise the Dummy storage item.
-	pub dummy: T::Balance,
-	pub foo: T::Balance,
-}
-
-#[cfg(feature = "std")]
-impl<T: Trait> Default for GenesisConfig<T> {
-	fn default() -> Self {
-		GenesisConfig {
-			dummy: Default::default(),
-			foo: Default::default(),
-		}
-	}
-}
-
-// This expresses the specific key/value pairs that must be placed in storage in order
-// to initialise the module and properly reflect the configuration.
-//
-// Ideally this would re-use the `::put` logic in the storage item type for introducing
-// the values into the `StorageMap` (which is just a `HashMap<Vec<u8>, Vec<u8>>`). That
-// is not yet in place, though, so for now we do everything "manually", using `hash`,
-// `::key()` and `.to_vec()` for the key and `.encode()` for the value.
-#[cfg(feature = "std")]
-impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
-{
-	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
-		use codec::Encode;
-		Ok(map![
-			Self::hash(<Dummy<T>>::key()).to_vec() => self.dummy.encode(),
-			Self::hash(<Foo<T>>::key()).to_vec() => self.foo.encode()
-		])
 	}
 }
 

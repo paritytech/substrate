@@ -25,7 +25,6 @@ extern crate serde_derive;
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-#[cfg_attr(feature = "std", macro_use)]
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -54,10 +53,6 @@ mod mock;
 
 pub mod address;
 mod tests;
-mod genesis_config;
-
-#[cfg(feature = "std")]
-pub use genesis_config::GenesisConfig;
 
 /// Number of account IDs stored per enum set.
 const ENUM_SET_SIZE: usize = 64;
@@ -114,7 +109,7 @@ pub trait Trait: system::Trait {
 	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Codec + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
 	/// A function which is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
@@ -153,20 +148,24 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as Balances {
 		/// The total amount of stake on the system.
-		pub TotalIssuance get(total_issuance): required T::Balance;
+		pub TotalIssuance get(total_issuance) build(|config: &GenesisConfig<T>| {
+			config.balances.iter().fold(Zero::zero(), |acc: T::Balance, &(_, n)| acc + n)
+		}): T::Balance;
 		/// The minimum amount allowed to keep an account open.
-		pub ExistentialDeposit get(existential_deposit): required T::Balance;
+		pub ExistentialDeposit get(existential_deposit) config(): T::Balance;
 		/// The amount credited to a destination's account whose index was reclaimed.
-		pub ReclaimRebate get(reclaim_rebate): required T::Balance;
+		pub ReclaimRebate get(reclaim_rebate) config(): T::Balance;
 		/// The fee required to make a transfer.
-		pub TransferFee get(transfer_fee): required T::Balance;
+		pub TransferFee get(transfer_fee) config(): T::Balance;
 		/// The fee required to create an account. At least as big as ReclaimRebate.
-		pub CreationFee get(creation_fee): required T::Balance;
+		pub CreationFee get(creation_fee) config(): T::Balance;
 
 		/// The next free enumeration set.
-		pub NextEnumSet get(next_enum_set): required T::AccountIndex;
+		pub NextEnumSet get(next_enum_set) build(|config: &GenesisConfig<T>| {
+			T::AccountIndex::sa(config.balances.len() / ENUM_SET_SIZE)
+		}): T::AccountIndex;
 		/// The enumeration sets.
-		pub EnumSet get(enum_set): default map [ T::AccountIndex => Vec<T::AccountId> ];
+		pub EnumSet get(enum_set): map T::AccountIndex => Vec<T::AccountId>;
 
 		/// The 'free' balance of a given account.
 		///
@@ -179,13 +178,13 @@ decl_storage! {
 		///
 		/// `system::AccountNonce` is also deleted if `ReservedBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-		pub FreeBalance get(free_balance): default map [ T::AccountId => T::Balance ];
+		pub FreeBalance get(free_balance) build(|config: &GenesisConfig<T>| config.balances.clone()): map T::AccountId => T::Balance;
 
-		/// The amount of the balance of a given account that is exterally reserved; this can still get
+		/// The amount of the balance of a given account that is externally reserved; this can still get
 		/// slashed, but gets slashed last of all.
 		///
 		/// This balance is a 'reserve' balance that other subsystems use in order to set aside tokens
-		/// that are still 'owned' by the account holder, but which are unspendable. (This is different
+		/// that are still 'owned' by the account holder, but which are suspendable. (This is different
 		/// and wholly unrelated to the `Bondage` system used in the staking module.)
 		///
 		/// When this balance falls below the value of `ExistentialDeposit`, then this 'reserve account'
@@ -193,15 +192,25 @@ decl_storage! {
 		///
 		/// `system::AccountNonce` is also deleted if `FreeBalance` is also zero (it also gets
 		/// collapsed to zero if it ever becomes less than `ExistentialDeposit`.
-		pub ReservedBalance get(reserved_balance): default map [ T::AccountId => T::Balance ];
+		pub ReservedBalance get(reserved_balance): map T::AccountId => T::Balance;
 
 
 		// Payment stuff.
 
 		/// The fee to be paid for making a transaction; the base.
-		pub TransactionBaseFee get(transaction_base_fee): required T::Balance;
+		pub TransactionBaseFee get(transaction_base_fee) config(): T::Balance;
 		/// The fee to be paid for making a transaction; the per-byte portion.
-		pub TransactionByteFee get(transaction_byte_fee): required T::Balance;
+		pub TransactionByteFee get(transaction_byte_fee) config(): T::Balance;
+	}
+	add_extra_genesis {
+		config(balances): Vec<(T::AccountId, T::Balance)>;
+		build(|storage: &mut primitives::StorageMap, config: &GenesisConfig<T>| {
+			let ids: Vec<_> = config.balances.iter().map(|x| x.0.clone()).collect();
+			for i in 0..(ids.len() + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE {
+				storage.insert(GenesisConfig::<T>::hash(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),
+					ids[i * ENUM_SET_SIZE..ids.len().min((i + 1) * ENUM_SET_SIZE)].to_owned().encode());
+			}
+		});
 	}
 }
 

@@ -75,13 +75,17 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait> as CouncilMotions {
 		/// The (hashes of) the active proposals.
-		pub Proposals get(proposals): default Vec<T::Hash>;
+		pub Proposals get(proposals): Vec<T::Hash>;
 		/// Actual proposal for a given hash, if it's current.
-		pub ProposalOf get(proposal_of): map [ T::Hash => <T as Trait>::Proposal ];
+		pub ProposalOf get(proposal_of): map T::Hash => Option< <T as Trait>::Proposal >;
 		/// Votes for a given proposal: (required_yes_votes, yes_voters, no_voters).
-		pub Voting get(voting): map [ T::Hash => (ProposalIndex, u32, Vec<T::AccountId>, Vec<T::AccountId>) ];
+		pub Voting get(voting): map T::Hash => Option<(ProposalIndex, u32, Vec<T::AccountId>, Vec<T::AccountId>)>;
 		/// Proposals so far.
-		pub ProposalCount get(proposal_count): default u32;
+		pub ProposalCount get(proposal_count): u32;
+	}
+	add_extra_genesis {
+		config(_marker): ::std::marker::PhantomData<T>;
+		build(|_, _| {});
 	}
 }
 
