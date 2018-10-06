@@ -14,7 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Blocks import queue.
+//! Import Queue primitive: something which can verify and import blocks.
+//!
+//! This serves as an intermediate and abstracted step between synchronization
+//! and import. Each mode of consensus will have its own requirements for block verification.
+//! Some algorithms can verify in parallel, while others only sequentially.
+//!
+//! The `ImportQueue` trait allows such verification strategies to be instantiated.
+//! The `BasicQueue` and `BasicVerifier` traits allow serial queues to be
+//! instantiated simply.
 
 use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, Weak};
@@ -41,9 +49,9 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	/// begins.
 	fn start<E>(
 		&self,
-		sync: Weak<RwLock<ChainSync<B>>>,
-		service: Weak<E>,
-		chain: Weak<Client<B>>
+		_sync: Weak<RwLock<ChainSync<B>>>,
+		_service: Weak<E>,
+		_chain: Weak<Client<B>>
 	) -> Result<(), Error> where
 		Self: Sized,
 		E: 'static + ExecuteInContext<B>,
@@ -88,6 +96,7 @@ struct AsyncImportQueueData<B: BlockT> {
 }
 
 impl<B: BlockT> BasicQueue<B> {
+	/// Instantiate a new basic queue, with given verifier.
 	pub fn new(instant_finality: bool) -> Self {
 		Self {
 			handle: Mutex::new(None),
@@ -98,7 +107,7 @@ impl<B: BlockT> BasicQueue<B> {
 }
 
 impl<B: BlockT> AsyncImportQueueData<B> {
-	pub fn new() -> Self {
+	fn new() -> Self {
 		Self {
 			signal: Default::default(),
 			queue: Mutex::new(VecDeque::new()),

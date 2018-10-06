@@ -22,7 +22,7 @@ use futures::sync::mpsc;
 use std::time::{Instant, Duration};
 use rand::{self, Rng};
 use network_libp2p::NodeIndex;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor};
 use runtime_primitives::generic::BlockId;
 use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
@@ -93,7 +93,15 @@ where
 		}
 	}
 
-	fn propagate(&mut self, protocol: &mut Context<B>, topic: B::Hash, message: ConsensusMessage) {
+	fn propagate<F>(
+		&mut self,
+		protocol: &mut Context<B>,
+		message_hash: B::Hash,
+		topic: B::Hash,
+		get_message: F,
+	)
+		where F: Fn() -> ConsensusMessage,
+	{
 		let mut non_authorities: Vec<_> = self.peers.iter()
 			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&topic) { Some(*id) } else { None })
 			.collect();
@@ -107,25 +115,29 @@ where
 
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.is_authority {
-				if peer.known_messages.insert(topic.clone()) {
+				if peer.known_messages.insert(message_hash.clone()) {
+					let message = get_message();
 					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
-					protocol.send_message(*id, Message::Consensus(topic, message.clone()));
+					protocol.send_message(*id, Message::Consensus(topic, message));
 				}
 			}
 			else if non_authorities.contains(&id) {
+				let message = get_message();
 				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
 				peer.known_messages.insert(topic.clone());
-				protocol.send_message(*id, Message::Consensus(topic, message.clone()));
+				protocol.send_message(*id, Message::Consensus(topic, message));
 			}
 		}
 	}
 
-	fn register_message(&mut self, topic: B::Hash, message: ConsensusMessage) {
-		if self.message_hashes.insert(topic) {
+	fn register_message<F>(&mut self, message_hash: B::Hash, topic: B::Hash, get_message: F)
+		where F: Fn() -> ConsensusMessage
+	{
+		if self.message_hashes.insert(message_hash) {
 			self.messages.push(MessageEntry {
 				topic,
 				instant: Instant::now(),
-				message,
+				message: get_message(),
 			});
 		}
 	}
@@ -168,7 +180,9 @@ where
 		topic: B::Hash,
 		message: ConsensusMessage,
 	) -> Option<(B::Hash, ConsensusMessage)> {
-		if self.message_hashes.contains(&topic) {
+		let message_hash = HashFor::<B>::hash(&message[..]);
+
+		if self.message_hashes.contains(&message_hash) {
 			trace!(target:"gossip", "Ignored already known message from {}", who);
 			return None;
 		}
@@ -190,7 +204,7 @@ where
 
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			use std::collections::hash_map::Entry;
-			peer.known_messages.insert(topic);
+			peer.known_messages.insert(message_hash);
 			if let Entry::Occupied(mut entry) = self.live_message_sinks.entry(topic) {
 				debug!(target: "gossip", "Pushing relevant consensus message to sink.");
 				if let Err(e) = entry.get().unbounded_send(message.clone()) {
@@ -206,12 +220,15 @@ where
 			return None;
 		}
 
+		self.multicast(protocol, message_hash, topic, || message.clone());
 		Some((topic, message))
 	}
 
-	fn multicast(&mut self, protocol: &mut Context<B>, topic: B::Hash, message: ConsensusMessage) {
-		self.register_message(topic, message.clone());
-		self.propagate(protocol, topic, message);
+	fn multicast<F>(&mut self, protocol: &mut Context<B>, message_hash: B::Hash, topic: B::Hash, get_message: F)
+		where F: Fn() -> ConsensusMessage
+	{
+		self.register_message(message_hash, topic, &get_message);
+		self.propagate(protocol, message_hash, topic, get_message);
 	}
 }
 
@@ -294,6 +311,7 @@ mod tests {
 	#[test]
 	fn message_stream_include_those_sent_before_asking_for_stream() {
 		use futures::Stream;
+		use codec::Encode;
 
 		let mut consensus = ConsensusGossip::new();
 
@@ -311,12 +329,27 @@ mod tests {
 		};
 
 		let message = generic::Message::BftMessage(localized.clone());
-		let message_hash = ::protocol::hash_message::<Block>(&message);
+		let message_hash = HashFor::<Block>::hash(&message.encode());
+		let topic = Default::default();
 
 		let message = Message::Bft(localized);
-		consensus.register_message(message_hash, message.clone());
+		consensus.register_message(message_hash, topic, || message.clone());
 		let stream = consensus.messages_for(parent_hash);
 
 		assert_eq!(stream.wait().next(), Some(Ok(message)));
+	}
+
+	#[test]
+	fn can_keep_multiple_messages_per_topic() {
+		let mut consensus: = ConsensusGossip::<Block>::new();
+
+		let topic = [1; 32].into();
+		let msg_a = vec![1, 2, 3];
+		let msg_b = vec![4, 5, 6];
+
+		consensus.register_message(HashFor::<Block>::hash(&msg_a), topic, || msg_a.clone());
+		consensus.register_message(HashFor::<Block>::hash(&msg_b), topic, || msg_b.clone());
+
+		assert_eq!(consensus.messages.len(), 2);
 	}
 }
