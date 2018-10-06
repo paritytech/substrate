@@ -168,7 +168,6 @@ where
 		topic: B::Hash,
 		message: ConsensusMessage,
 	) -> Option<(B::Hash, ConsensusMessage)> {
-
 		if self.message_hashes.contains(&topic) {
 			trace!(target:"gossip", "Ignored already known message from {}", who);
 			return None;
@@ -191,7 +190,7 @@ where
 
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			use std::collections::hash_map::Entry;
-			peer.known_messages.insert(hash);
+			peer.known_messages.insert(topic);
 			if let Entry::Occupied(mut entry) = self.live_message_sinks.entry(topic) {
 				debug!(target: "gossip", "Pushing relevant consensus message to sink.");
 				if let Err(e) = entry.get().unbounded_send(message.clone()) {

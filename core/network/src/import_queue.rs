@@ -45,7 +45,7 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 		service: Weak<E>,
 		chain: Weak<Client<B>>
 	) -> Result<(), Error> where
-		Self: 'static,
+		Self: Sized,
 		E: 'static + ExecuteInContext<B>,
 	{
 		Ok(())
@@ -342,7 +342,7 @@ fn import_single_block<B: BlockT>(
 				internal_justification: vec![],
 				body: block.body,
 				finalized: instant_finality,
-				aux: Vec::new(),
+				auxiliary: Vec::new(),
 			}, None);
 			match result {
 				Ok(ImportResult::AlreadyInChain) => {
