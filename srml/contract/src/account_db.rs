@@ -18,7 +18,6 @@
 
 use super::{CodeOf, StorageOf, Trait};
 use double_map::StorageDoubleMap;
-use rstd::cell::RefCell;
 use rstd::collections::btree_map::{BTreeMap, Entry};
 use rstd::marker::PhantomData;
 use rstd::prelude::*;
@@ -44,7 +43,7 @@ impl<T: Trait> Default for ChangeEntry<T> {
 	}
 }
 
-#[cfg(test)]
+#[cfg(feature = "bench")]
 impl<T: Trait> ChangeEntry<T> {
 	pub fn new(
 		balance: Option<T::Balance>,
@@ -65,8 +64,8 @@ pub trait AccountDb<T: Trait> {
 
 pub trait CheckpointedAccountDb<T: Trait>: AccountDb<T> {
 	fn checkpoint(&mut self);
-	fn merge_checkpoint(&mut self);
 	fn revert(&mut self);
+	fn commit_checkpoint(&mut self);
 	fn commit(self);
 }
 
@@ -219,7 +218,7 @@ impl<'a, T: Trait> CheckpointedAccountDb<T> for OverlayAccountDb<'a, T> {
 		}
 	}
 
-	fn merge_checkpoint(&mut self) {
+	fn commit_checkpoint(&mut self) {
 		if let Some(checkpoint) = self.checkpoints.pop() {
 			if let Some(previous_checkpoint) = self.checkpoints.last_mut() {
 				for (address, changed) in checkpoint.into_iter() {

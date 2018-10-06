@@ -104,7 +104,7 @@ impl<'a, 'b, T: Trait> ExecutionContext<'a, 'b, T> {
 		match do_call(self) {
 			Ok(events) => {
 				// merge the current checkpoint with previous changes
-				self.overlay.merge_checkpoint();
+				self.overlay.commit_checkpoint();
 				self.events.extend(events);
 				Ok(CallReceipt)
 			},
@@ -181,7 +181,7 @@ impl<'a, 'b, T: Trait> ExecutionContext<'a, 'b, T> {
 		match do_create(self, dest.clone()) {
 			Ok(events) => {
 				// merge the current checkpoint with previous changes
-				self.overlay.merge_checkpoint();
+				self.overlay.commit_checkpoint();
 				self.events.extend(events);
 				Ok(CreateReceipt { address: dest })
 			},

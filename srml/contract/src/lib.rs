@@ -101,7 +101,7 @@ mod gas;
 mod tests;
 
 use exec::ExecutionContext;
-use account_db::{AccountDb, CheckpointedAccountDb, OverlayAccountDb};
+use account_db::{CheckpointedAccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
 
 use rstd::prelude::*;
