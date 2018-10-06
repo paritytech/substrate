@@ -219,7 +219,6 @@ mod tests {
 	use node_primitives::Block;
 	use bft::{Proposer, Environment};
 	use node_network::consensus::ConsensusNetwork;
-	use substrate_test_client::fake_justify;
 	use node_primitives::BlockId;
 	use keyring::Keyring;
 	use node_runtime::{UncheckedExtrinsic, Call, BalancesCall};
@@ -234,6 +233,8 @@ mod tests {
 
 	#[test]
 	fn test_sync() {
+		use client::{ImportBlock, BlockOrigin};
+
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
 		let validators = vec![alice.public().0.into(), bob.public().0.into()];
@@ -254,9 +255,15 @@ mod tests {
 			};
 			let (proposer, _, _) = proposer_factory.init(&parent_header, &validators, alice.clone()).unwrap();
 			let block = proposer.propose().expect("Error making test block");
-			let justification = fake_justify::<Block>(&block.header, &keys);
-			let justification = service.client().check_justification(block.header, justification).unwrap();
-			(justification, Some(block.extrinsics))
+			ImportBlock {
+				origin: BlockOrigin::File,
+				external_justification: Vec::new(),
+				internal_justification: Vec::new(),
+				finalized: true,
+				body: Some(block.extrinsics),
+				header: block.header,
+				auxiliary: Vec::new(),
+			}
 		};
 		let extrinsic_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
 			let payload = (0, Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69)), Era::immortal(), service.client().genesis_hash());

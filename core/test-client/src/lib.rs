@@ -20,7 +20,6 @@
 
 #![warn(missing_docs)]
 
-extern crate rhododendron;
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
@@ -34,7 +33,7 @@ pub mod client_ext;
 pub mod trait_tests;
 mod block_builder_ext;
 
-pub use client_ext::{TestClient, fake_justify};
+pub use client_ext::TestClient;
 pub use block_builder_ext::BlockBuilderExt;
 pub use client::blockchain;
 pub use client::backend;
