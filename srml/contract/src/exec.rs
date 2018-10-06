@@ -172,6 +172,8 @@ impl<'a, 'b, T: Trait> ExecutionContext<'a, 'b, T> {
 				gas_meter,
 			).map_err(|_| "vm execute returned error while create")?;
 
+			nested.overlay.set_code(&nested.self_account, contract_code);
+
 			Ok(nested.events)
 		};
 
