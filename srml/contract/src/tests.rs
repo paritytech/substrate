@@ -869,31 +869,31 @@ fn input_data() {
 mod benchmarks {
 	use test::Bencher;
 
-	use account_db::{AccountDb, ChangeEntry, ChangeSet, DirectAccountDb, OverlayAccountDb};
+	use account_db::*;
 	use super::*;
 
 	fn with_accountdb_at_depth<'a, V, F, T>(
-		overlay: &'a OverlayAccountDb<'a, Test>,
+		overlay: &mut OverlayAccountDb<'a, Test>,
 		depth: usize,
-		visitor: V,
+		mut visitor: V,
 		mut finl: F,
 	) -> T
-		where V: Fn(&mut OverlayAccountDb<Test>),
-			  F: FnMut(OverlayAccountDb<Test>) -> T
+		where V: FnMut(&mut OverlayAccountDb<Test>),
+			  F: FnMut(&mut OverlayAccountDb<Test>) -> T
 	{
 		if depth == 0 {
-			finl(OverlayAccountDb::new(overlay))
+			finl(overlay)
 		} else {
-			let mut overlay = OverlayAccountDb::new(overlay);
-			visitor(&mut overlay);
-			with_accountdb_at_depth(&overlay, depth - 1, visitor, finl)
+			overlay.checkpoint();
+			visitor(overlay);
+			with_accountdb_at_depth(overlay, depth - 1, visitor, finl)
 		}
 	}
 
 	#[bench]
 	fn bench_accountdb_snapshot(b: &mut Bencher) {
-		let direct = DirectAccountDb;
-		let overlay = OverlayAccountDb::<Test>::new(&direct);
+		let mut direct = DirectAccountDb::default();
+		let mut overlay = OverlayAccountDb::<Test>::new(&mut direct);
 
 		let depth = 1000;
 
@@ -901,7 +901,7 @@ mod benchmarks {
 			&mut ExtBuilder::default().build(),
 			|| {
 				b.iter(|| {
-					with_accountdb_at_depth(&overlay, depth, |_| {}, |_| {})
+					with_accountdb_at_depth(&mut overlay, depth, |_| {}, |_| {})
 				});
 			}
 		);
@@ -909,8 +909,8 @@ mod benchmarks {
 
 	#[bench]
 	fn bench_accountdb_get(b: &mut Bencher) {
-		let direct = DirectAccountDb;
-		let mut overlay = OverlayAccountDb::<Test>::new(&direct);
+		let mut direct = DirectAccountDb::default();
+		let mut overlay = OverlayAccountDb::<Test>::new(&mut direct);
 
 		let depth = 1000;
 
@@ -923,7 +923,7 @@ mod benchmarks {
 		with_externalities(
 			&mut ExtBuilder::default().build(),
 			|| {
-				with_accountdb_at_depth(&overlay, depth, |_| {}, |overlay| {
+				with_accountdb_at_depth(&mut overlay, depth, |_| {}, |overlay| {
 					b.iter(|| {
 						overlay.get_storage(&1, "hello".as_bytes())
 					});
@@ -939,15 +939,15 @@ mod benchmarks {
 
 	#[bench]
 	fn bench_accountdb_set(b: &mut Bencher) {
-		let direct = DirectAccountDb;
-		let overlay = OverlayAccountDb::<Test>::new(&direct);
+		let mut direct = DirectAccountDb::default();
+		let mut overlay = OverlayAccountDb::<Test>::new(&mut direct);
 
 		let depth = 1000;
 
 		with_externalities(
 			&mut ExtBuilder::default().build(),
 			|| {
-				with_accountdb_at_depth(&overlay, depth, |_| {}, |mut overlay| {
+				with_accountdb_at_depth(&mut overlay, depth, |_| {}, |overlay| {
 					b.iter(|| {
 						overlay.set_storage(
 							&1,
@@ -962,74 +962,72 @@ mod benchmarks {
 
 	#[bench]
 	fn bench_accountdb_changeset(b: &mut Bencher) {
-		let direct = DirectAccountDb;
-		let overlay = OverlayAccountDb::<Test>::new(&direct);
+		let mut direct = DirectAccountDb::default();
 
 		let depth = 1000;
 
 		fn aux<'a>(
-			overlay: &'a OverlayAccountDb<'a, Test>,
+			overlay: &mut OverlayAccountDb<'a, Test>,
 			depth: usize,
-		) -> ChangeSet<Test> {
-			if depth == 0 {
-				return ChangeSet::new();
-			} else {
-				let mut overlay = OverlayAccountDb::new(overlay);
+		) {
+			if depth != 0 {
+				overlay.checkpoint();
 				overlay.set_storage(
 					&1,
 					"hello".as_bytes().to_vec(),
 					Some("world".as_bytes().to_vec()),
 				);
-				let change_set = aux(&overlay, depth - 1);
-				overlay.commit(change_set);
-				overlay.into_change_set()
+				aux(overlay, depth - 1);
+				overlay.commit_checkpoint();
 			}
 		}
 
 		with_externalities(
 			&mut ExtBuilder::default().build(),
 			|| {
-				let mut change_set = None;
-				b.iter(|| {
-					change_set = Some(aux(
-						&overlay,
+				b.iter(move || {
+					let mut overlay = OverlayAccountDb::<Test>::new(&mut direct);
+
+					aux(
+						&mut overlay,
 						depth,
-					));
-				});
-
-				if let Some(change_set) = change_set {
-					let expected_storage =
-						vec![("hello".as_bytes().to_vec(), Some("world".as_bytes().to_vec()))];
-
-					let expected_change_entry: ChangeEntry<Test> =
-						ChangeEntry::new(None, None, expected_storage.into_iter().collect());
-
-					assert!(
-						change_set.into_iter().collect::<Vec<_>>() ==
-							vec![(1, expected_change_entry)]
 					);
-				}
+
+					overlay.commit();
+				});
 			}
 		);
 	}
 
 	#[bench]
 	fn bench_accountdb_revert_noop(b: &mut Bencher) {
-		let direct = DirectAccountDb;
-		let overlay = OverlayAccountDb::<Test>::new(&direct);
+		let mut direct = DirectAccountDb::default();
 
 		let depth = 1000;
+
+		fn aux<'a>(
+			overlay: &mut OverlayAccountDb<'a, Test>,
+			depth: usize,
+		) {
+			if depth != 0 {
+				overlay.checkpoint();
+				aux(overlay, depth - 1);
+				overlay.revert();
+			}
+		}
 
 		with_externalities(
 			&mut ExtBuilder::default().build(),
 			|| {
-				b.iter(|| {
-					with_accountdb_at_depth(
-						&overlay,
+				b.iter(move || {
+					let mut overlay = OverlayAccountDb::<Test>::new(&mut direct);
+
+					aux(
+						&mut overlay,
 						depth,
-						|_| {},
-						|_| {},
-					)
+					);
+
+					overlay.commit();
 				});
 			}
 		);
@@ -1037,27 +1035,38 @@ mod benchmarks {
 
 	#[bench]
 	fn bench_accountdb_revert_with_data(b: &mut Bencher) {
-		let direct = DirectAccountDb;
-		let overlay = OverlayAccountDb::<Test>::new(&direct);
+		let mut direct = DirectAccountDb::default();
 
 		let depth = 1000;
+
+		fn aux<'a>(
+			overlay: &mut OverlayAccountDb<'a, Test>,
+			depth: usize,
+		) {
+			if depth != 0 {
+				overlay.checkpoint();
+				overlay.set_storage(
+					&1,
+					"hello".as_bytes().to_vec(),
+					Some("world".as_bytes().to_vec()),
+				);
+				aux(overlay, depth - 1);
+				overlay.revert();
+			}
+		}
 
 		with_externalities(
 			&mut ExtBuilder::default().build(),
 			|| {
 				b.iter(|| {
-					with_accountdb_at_depth(
-						&overlay,
+					let mut overlay = OverlayAccountDb::<Test>::new(&mut direct);
+
+					aux(
+						&mut overlay,
 						depth,
-						|overlay| {
-							overlay.set_storage(
-								&1,
-								"hello".as_bytes().to_vec(),
-								Some("world".as_bytes().to_vec()),
-							);
-						},
-						|_| {},
-					)
+					);
+
+					overlay.commit();
 				});
 			}
 		);
