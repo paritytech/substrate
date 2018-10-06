@@ -44,17 +44,6 @@ impl<T: Trait> Default for ChangeEntry<T> {
 	}
 }
 
-#[cfg(feature = "bench")]
-impl<T: Trait> ChangeEntry<T> {
-	pub fn new(
-		balance: Option<T::Balance>,
-		code: Option<Vec<u8>>,
-		storage: BTreeMap<Vec<u8>, Option<Vec<u8>>>,
-	) -> ChangeEntry<T> {
-		ChangeEntry { balance, code, storage }
-	}
-}
-
 pub type ChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, ChangeEntry<T>>;
 
 pub trait AccountDb<T: Trait> {
