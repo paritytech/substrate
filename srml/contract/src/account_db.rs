@@ -122,6 +122,16 @@ impl<T: Trait> DirectAccountDb<T> {
 
 pub type CheckpointChangeSet<T> = BTreeMap<<T as system::Trait>::AccountId, Option<ChangeEntry<T>>>;
 
+/// The `OverlayAccountDb` wraps a `DirectAccountDb` and provides functionality for
+/// checkpointing, reverting, committing checkpoints (i.e. merging them), and finally
+/// committing the existing changes to the underlying `DirectAccountDb`. Creating a new
+/// checkpoint implies pushing a new map to a vec that will hold previous state of any
+/// written account (only the first write per checkpoint is snapshotted). Reverting a
+/// checkpoint is done by popping a map from this vec and reapplying the changes to the
+/// current local storage. Checkpoints can also be committed, e.g. after a subcall is
+/// successful, so that from that point forward reverting the checkpoint means reverting
+/// all changes from both checkpoints. The `OverlayAccountDb` also caches any values
+/// fetched from the `DirectAccountDb` in a separate map.
 pub struct OverlayAccountDb<'a, T: Trait + 'a> {
 	underlying: &'a mut DirectAccountDb<T>,
 	cache: RefCell<ChangeSet<T>>,
