@@ -656,7 +656,7 @@ pub mod tests {
 
 	#[test]
 	fn async_import_queue_drops() {
-		let queue = AsyncImportQueue::new(true);
+		let queue = BasicQueue::new(true);
 		let service = Arc::new(DummyExecutor);
 		let chain = Arc::new(test_client::new());
 		queue.start(Weak::new(), Arc::downgrade(&service), Arc::downgrade(&chain) as Weak<Client<Block>>).unwrap();

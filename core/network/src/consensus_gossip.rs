@@ -38,6 +38,7 @@ struct PeerConsensus<H> {
 
 struct MessageEntry<B: BlockT> {
 	topic: B::Hash,
+	message_hash: B::Hash,
 	message: ConsensusMessage,
 	instant: Instant,
 }
@@ -136,6 +137,7 @@ where
 		if self.message_hashes.insert(message_hash) {
 			self.messages.push(MessageEntry {
 				topic,
+				message_hash,
 				instant: Instant::now(),
 				message: get_message(),
 			});
@@ -159,7 +161,7 @@ where
 			if entry.instant + MESSAGE_LIFETIME >= now && predicate(&entry.topic) {
 				true
 			} else {
-				hashes.remove(&entry.topic);
+				hashes.remove(&entry.message_hash);
 				false
 			}
 		});
@@ -167,6 +169,16 @@ where
 		for (_, ref mut peer) in self.peers.iter_mut() {
 			peer.known_messages.retain(|h| hashes.contains(h));
 		}
+	}
+
+	/// Get all incoming messages for a topic.
+	pub fn messages_for(&mut self, topic: B::Hash) -> mpsc::UnboundedReceiver<ConsensusMessage> {
+		let (tx, rx) = mpsc::unbounded();
+		for entry in self.messages.iter().filter(|e| e.topic == topic) {
+			tx.unbounded_send(entry.message.clone()).expect("receiver known to be live; qed");
+		}
+
+		rx
 	}
 
 	/// Handle an incoming ConsensusMessage for topic by who via protocol. Discard message if topic
@@ -220,11 +232,17 @@ where
 			return None;
 		}
 
-		self.multicast(protocol, message_hash, topic, || message.clone());
+		self.multicast_inner(protocol, message_hash, topic, || message.clone());
 		Some((topic, message))
 	}
 
-	fn multicast<F>(&mut self, protocol: &mut Context<B>, message_hash: B::Hash, topic: B::Hash, get_message: F)
+	/// Multicast a message to all peers.
+	pub fn multicast(&mut self, protocol: &mut Context<B>, topic: B::Hash, message: ConsensusMessage) {
+		let message_hash = HashFor::<B>::hash(&message);
+		self.multicast_inner(protocol, message_hash, topic, || message.clone());
+	}
+
+	fn multicast_inner<F>(&mut self, protocol: &mut Context<B>, message_hash: B::Hash, topic: B::Hash, get_message: F)
 		where F: Fn() -> ConsensusMessage
 	{
 		self.register_message(message_hash, topic, &get_message);
@@ -234,10 +252,8 @@ where
 
 #[cfg(test)]
 mod tests {
-	use runtime_primitives::bft::Justification;
-	use runtime_primitives::testing::{H256, Header, Block as RawBlock};
+	use runtime_primitives::testing::{H256, Block as RawBlock};
 	use std::time::Instant;
-	use message::{self, generic};
 	use super::*;
 
 	type Block = RawBlock<u64>;
@@ -250,28 +266,22 @@ mod tests {
 		let now = Instant::now();
 		let m1_hash = H256::random();
 		let m2_hash = H256::random();
-		let m1 = Message::Bft(message::LocalizedBftMessage {
-			parent_topic: prev_hash,
-			message: message::generic::BftMessage::Auxiliary(Justification {
-				round_number: 0,
-				topic: Default::default(),
-				signatures: Default::default(),
-			}),
-		});
-		let m2 = Message::ChainSpecific(vec![1, 2, 3], best_hash);
+		let m1 = vec![1, 2, 3];
+		let m2 = vec![4, 5, 6];
 
 		macro_rules! push_msg {
-			($topic:expr, $now: expr, $m:expr) => {
+			($topic:expr, $hash: expr, $now: expr, $m:expr) => {
 				consensus.messages.push(MessageEntry {
-					topic: $hash,
+					topic: $topic,
+					message_hash: $hash,
 					instant: $now,
 					message: $m,
 				})
 			}
 		}
 
-		push_msg!(m1_hash, now, m1);
-		push_msg!(m2_hash, now, m2.clone());
+		push_msg!(prev_hash, m1_hash, now, m1);
+		push_msg!(best_hash, m2_hash, now, m2.clone());
 		consensus.message_hashes.insert(m1_hash);
 		consensus.message_hashes.insert(m2_hash);
 
@@ -280,21 +290,12 @@ mod tests {
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);
 
-		// random header, nothing should be cleared
-		let mut header = Header {
-			parent_hash: H256::default(),
-			number: 0,
-			state_root: H256::default(),
-			extrinsics_root: H256::default(),
-			digest: Default::default(),
-		};
-
+		// nothing to collect with default.
 		consensus.collect_garbage(|&topic| topic != Default::default());
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.message_hashes.len(), 2);
 
-		// header that matches one of the messages
-		header.parent_hash = prev_hash;
+		// topic that was used in one message.
 		consensus.collect_garbage(|topic| topic != &prev_hash);
 		assert_eq!(consensus.messages.len(), 1);
 		assert_eq!(consensus.message_hashes.len(), 1);
@@ -302,7 +303,7 @@ mod tests {
 
 		// make timestamp expired
 		consensus.messages.clear();
-		push_msg!(m2_hash, now - MESSAGE_LIFETIME, m2);
+		push_msg!(best_hash, m2_hash, now - MESSAGE_LIFETIME, m2);
 		consensus.collect_garbage(|_topic| true);
 		assert!(consensus.messages.is_empty());
 		assert!(consensus.message_hashes.is_empty());
@@ -311,37 +312,23 @@ mod tests {
 	#[test]
 	fn message_stream_include_those_sent_before_asking_for_stream() {
 		use futures::Stream;
-		use codec::Encode;
 
-		let mut consensus = ConsensusGossip::new();
+		let mut consensus = ConsensusGossip::<Block>::new();
 
-		let bft_message = generic::BftMessage::Consensus(generic::SignedMessage::Vote(generic::SignedConsensusVote {
-			vote: generic::ConsensusVote::AdvanceRound(0),
-			sender: [0; 32].into(),
-			signature: Default::default(),
-		}));
+		let message = vec![1, 2, 3];
 
-		let parent_hash = [1; 32].into();
+		let message_hash = HashFor::<Block>::hash(&message);
+		let topic = HashFor::<Block>::hash(&[1,2,3]);
 
-		let localized = ::message::LocalizedBftMessage::<Block> {
-			message: bft_message,
-			parent_hash: parent_hash,
-		};
-
-		let message = generic::Message::BftMessage(localized.clone());
-		let message_hash = HashFor::<Block>::hash(&message.encode());
-		let topic = Default::default();
-
-		let message = Message::Bft(localized);
 		consensus.register_message(message_hash, topic, || message.clone());
-		let stream = consensus.messages_for(parent_hash);
+		let stream = consensus.messages_for(topic);
 
 		assert_eq!(stream.wait().next(), Some(Ok(message)));
 	}
 
 	#[test]
 	fn can_keep_multiple_messages_per_topic() {
-		let mut consensus: = ConsensusGossip::<Block>::new();
+		let mut consensus = ConsensusGossip::<Block>::new();
 
 		let topic = [1; 32].into();
 		let msg_a = vec![1, 2, 3];

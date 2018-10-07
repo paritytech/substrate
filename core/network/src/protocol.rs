@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor, As, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, Zero};
 use runtime_primitives::generic::BlockId;
 use network_libp2p::{NodeIndex, Severity};
 use codec::{Encode, Decode};
@@ -710,10 +710,4 @@ fn send_message<B: BlockT, H: ExHashT>(peers: &RwLock<HashMap<NodeIndex, Peer<B,
 		_ => (),
 	}
 	io.send(who, message.encode());
-}
-
-/// Hash a message.
-pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
-	let data = message.encode();
-	HashFor::<B>::hash(&data)
 }
