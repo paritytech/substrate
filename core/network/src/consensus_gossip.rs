@@ -104,7 +104,7 @@ where
 		where F: Fn() -> ConsensusMessage,
 	{
 		let mut non_authorities: Vec<_> = self.peers.iter()
-			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&topic) { Some(*id) } else { None })
+			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&message_hash) { Some(*id) } else { None })
 			.collect();
 
 		rand::thread_rng().shuffle(&mut non_authorities);
@@ -121,11 +121,10 @@ where
 					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
 					protocol.send_message(*id, Message::Consensus(topic, message));
 				}
-			}
-			else if non_authorities.contains(&id) {
+			} else if non_authorities.contains(&id) {
 				let message = get_message();
 				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
-				peer.known_messages.insert(topic.clone());
+				peer.known_messages.insert(message_hash.clone());
 				protocol.send_message(*id, Message::Consensus(topic, message));
 			}
 		}
@@ -177,6 +176,7 @@ where
 		for entry in self.messages.iter().filter(|e| e.topic == topic) {
 			tx.unbounded_send(entry.message.clone()).expect("receiver known to be live; qed");
 		}
+		self.live_message_sinks.insert(topic, tx);
 
 		rx
 	}
