@@ -14,18 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::fmt;
-use std::cmp::Ordering;
-use std::iter;
-use std::net::Ipv4Addr;
-use std::str;
-use std::time::Duration;
-use TimerToken;
+use std::{fmt, iter, net::Ipv4Addr, str};
 use libp2p::{multiaddr::Protocol, Multiaddr, PeerId};
-use error::Error;
 
-/// Protocol handler level packet id
-pub type PacketId = u8;
 /// Protocol / handler id
 pub type ProtocolId = [u8; 3];
 
@@ -37,66 +28,6 @@ pub type NodeIndex = usize;
 
 /// secio secret key;
 pub type Secret = [u8; 32];
-
-/// Shared session information
-#[derive(Debug, Clone)]
-pub struct SessionInfo {
-	/// Peer public key
-	pub id: NodeId,
-	/// Peer client ID
-	pub client_version: String,
-	/// Peer RLPx protocol version
-	pub protocol_version: u32,
-	/// Session protocol capabilities
-	pub capabilities: Vec<SessionCapabilityInfo>,
-	/// Peer protocol capabilities
-	pub peer_capabilities: Vec<PeerCapabilityInfo>,
-	/// Peer ping delay
-	pub ping: Option<Duration>,
-	/// True if this session was originated by us.
-	pub originated: bool,
-	/// Remote endpoint address of the session
-	pub remote_address: String,
-	/// Local endpoint address of the session
-	pub local_address: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PeerCapabilityInfo {
-	pub protocol: ProtocolId,
-	pub version: u8,
-}
-
-impl ToString for PeerCapabilityInfo {
-	fn to_string(&self) -> String {
-		format!("{}/{}", str::from_utf8(&self.protocol[..]).unwrap_or("???"), self.version)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SessionCapabilityInfo {
-	pub protocol: [u8; 3],
-	pub version: u8,
-	pub packet_count: u8,
-	pub id_offset: u8,
-}
-
-impl PartialOrd for SessionCapabilityInfo {
-	fn partial_cmp(&self, other: &SessionCapabilityInfo) -> Option<Ordering> {
-		Some(self.cmp(other))
-	}
-}
-
-impl Ord for SessionCapabilityInfo {
-	fn cmp(&self, b: &SessionCapabilityInfo) -> Ordering {
-		// By protocol id first
-		if self.protocol != b.protocol {
-			return self.protocol.cmp(&b.protocol);
-		}
-		// By version
-		self.version.cmp(&b.version)
-	}
-}
 
 /// Network service configuration
 #[derive(Debug, PartialEq, Clone)]
@@ -186,97 +117,6 @@ impl<'a> fmt::Display for Severity<'a> {
 			Severity::Bad(r) => write!(fmt, "Bad ({})", r),
 		}
 	}
-}
-
-/// IO access point. This is passed to all IO handlers and provides an interface to the IO subsystem.
-pub trait NetworkContext {
-	/// Send a packet over the network to another peer.
-	fn send(&self, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>);
-
-	/// Send a packet over the network to another peer using specified protocol.
-	fn send_protocol(&self, protocol: ProtocolId, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>);
-
-	/// Respond to a current network message. Panics if no there is no packet in the context. If the session is expired returns nothing.
-	fn respond(&self, packet_id: PacketId, data: Vec<u8>);
-
-	/// Report peer. Depending on the report, peer may be disconnected and possibly banned.
-	fn report_peer(&self, peer: NodeIndex, reason: Severity);
-
-	/// Check if the session is still active.
-	fn is_expired(&self) -> bool;
-
-	/// Register a new IO timer. 'IoHandler::timeout' will be called with the token.
-	fn register_timer(&self, token: TimerToken, delay: Duration) -> Result<(), Error>;
-
-	/// Returns peer identification string
-	fn peer_client_version(&self, peer: NodeIndex) -> String;
-
-	/// Returns information on p2p session
-	fn session_info(&self, peer: NodeIndex) -> Option<SessionInfo>;
-
-	/// Returns max version for a given protocol.
-	fn protocol_version(&self, protocol: ProtocolId, peer: NodeIndex) -> Option<u8>;
-
-	/// Returns this object's subprotocol name.
-	fn subprotocol_name(&self) -> ProtocolId;
-}
-
-impl<'a, T> NetworkContext for &'a T where T: ?Sized + NetworkContext {
-	fn send(&self, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>) {
-		(**self).send(peer, packet_id, data)
-	}
-
-	fn send_protocol(&self, protocol: ProtocolId, peer: NodeIndex, packet_id: PacketId, data: Vec<u8>) {
-		(**self).send_protocol(protocol, peer, packet_id, data)
-	}
-
-	fn respond(&self, packet_id: PacketId, data: Vec<u8>) {
-		(**self).respond(packet_id, data)
-	}
-
-	fn report_peer(&self, peer: NodeIndex, reason: Severity) {
-		(**self).report_peer(peer, reason)
-	}
-
-	fn is_expired(&self) -> bool {
-		(**self).is_expired()
-	}
-
-	fn register_timer(&self, token: TimerToken, delay: Duration) -> Result<(), Error> {
-		(**self).register_timer(token, delay)
-	}
-
-	fn peer_client_version(&self, peer: NodeIndex) -> String {
-		(**self).peer_client_version(peer)
-	}
-
-	fn session_info(&self, peer: NodeIndex) -> Option<SessionInfo> {
-		(**self).session_info(peer)
-	}
-
-	fn protocol_version(&self, protocol: ProtocolId, peer: NodeIndex) -> Option<u8> {
-		(**self).protocol_version(protocol, peer)
-	}
-
-	fn subprotocol_name(&self) -> ProtocolId {
-		(**self).subprotocol_name()
-	}
-}
-
-/// Network IO protocol handler. This needs to be implemented for each new subprotocol.
-/// All the handler function are called from within IO event loop.
-/// `Message` is the type for message data.
-pub trait NetworkProtocolHandler: Sync + Send {
-	/// Initialize the handler
-	fn initialize(&self, _io: &NetworkContext) {}
-	/// Called when new network packet received.
-	fn read(&self, io: &NetworkContext, peer: &NodeIndex, packet_id: u8, data: &[u8]);
-	/// Called when new peer is connected. Only called when peer supports the same protocol.
-	fn connected(&self, io: &NetworkContext, peer: &NodeIndex);
-	/// Called when a previously connected peer disconnects.
-	fn disconnected(&self, io: &NetworkContext, peer: &NodeIndex);
-	/// Timer function called after a timeout created with `NetworkContext::timeout`.
-	fn timeout(&self, _io: &NetworkContext, _timer: TimerToken) {}
 }
 
 /// Non-reserved peer modes.

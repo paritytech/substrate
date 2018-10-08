@@ -28,18 +28,17 @@ use libp2p::kad::{KadConnecController, KadFindNodeRespond};
 use libp2p::secio;
 use node_handler::{SubstrateOutEvent, SubstrateNodeHandler, SubstrateInEvent, IdentificationRequest};
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
-use std::{mem, sync::Arc, time::Duration};
+use std::{mem, sync::Arc};
 use transport;
-use {Error, NodeIndex, PacketId, ProtocolId};
+use {Error, NodeIndex, ProtocolId};
 
 /// Starts a swarm.
 ///
 /// Returns a stream that must be polled regularly in order for the networking to function.
-pub fn start_swarm<TUserData>(
-	registered_custom: Arc<RegisteredProtocols<TUserData>>,
+pub fn start_swarm(
+	registered_custom: RegisteredProtocols,
 	local_private_key: secio::SecioKeyPair,
-) -> Result<Swarm<TUserData>, Error>
-where TUserData: Send + Sync + Clone + 'static {
+) -> Result<Swarm, Error> {
 	// Private and public keys.
 	let local_public_key = local_private_key.to_public_key();
 	let local_peer_id = local_public_key.clone().into_peer_id();
@@ -48,7 +47,7 @@ where TUserData: Send + Sync + Clone + 'static {
 	let transport = transport::build_transport(local_private_key);
 
 	// Build the underlying libp2p swarm.
-	let swarm = Libp2pSwarm::with_handler_builder(transport, HandlerBuilder(registered_custom));
+	let swarm = Libp2pSwarm::with_handler_builder(transport, HandlerBuilder(Arc::new(registered_custom)));
 
 	Ok(Swarm {
 		swarm,
@@ -64,11 +63,10 @@ where TUserData: Send + Sync + Clone + 'static {
 /// Dummy structure that exists because we need to be able to express the type. Otherwise we would
 /// use a closure.
 #[derive(Clone)]
-struct HandlerBuilder<TUserData>(Arc<RegisteredProtocols<TUserData>>);
-impl<TUserData> HandlerFactory for HandlerBuilder<TUserData>
-where TUserData: Clone + Send + Sync + 'static
+struct HandlerBuilder(Arc<RegisteredProtocols>);
+impl HandlerFactory for HandlerBuilder
 {
-	type Handler = SubstrateNodeHandler<Substream<Muxer>, TUserData>;
+	type Handler = SubstrateNodeHandler<Substream<Muxer>>;
 
 	#[inline]
 	fn new_handler(&self, addr: ConnectedPoint) -> Self::Handler {
@@ -122,9 +120,6 @@ pub enum SwarmEvent {
 		error: IoError,
 	},
 
-	/// Report the duration of the ping for the given node.
-	PingDuration(NodeIndex, Duration),
-
 	/// Report information about the node.
 	NodeInfos {
 		/// Index of the node.
@@ -159,8 +154,6 @@ pub enum SwarmEvent {
 		node_index: NodeIndex,
 		/// Protocol which generated the message.
 		protocol_id: ProtocolId,
-		/// Identifier of the packet.
-		packet_id: u8,
 		/// Data that has been received.
 		data: Bytes,
 	},
@@ -209,13 +202,13 @@ pub enum SwarmEvent {
 }
 
 /// Network swarm. Must be polled regularly in order for the networking to work.
-pub struct Swarm<TUserData> {
+pub struct Swarm {
 	/// Stream of events of the swarm.
 	swarm: Libp2pSwarm<
 		Boxed<(PeerId, Muxer)>,
 		SubstrateInEvent,
 		SubstrateOutEvent<Substream<Muxer>>,
-		HandlerBuilder<TUserData>
+		HandlerBuilder
 	>,
 
 	/// Public key of the local node.
@@ -252,8 +245,7 @@ struct NodeInfo {
 /// The muxer used by the transport.
 type Muxer = muxing::StreamMuxerBox;
 
-impl<TUserData> Swarm<TUserData>
-	where TUserData: Clone + Send + Sync + 'static {
+impl Swarm {
 	/// Start listening on a multiaddr.
 	#[inline]
 	pub fn listen_on(&mut self, addr: Multiaddr) -> Result<Multiaddr, Multiaddr> {
@@ -311,12 +303,11 @@ impl<TUserData> Swarm<TUserData>
 		&mut self,
 		node_index: NodeIndex,
 		protocol: ProtocolId,
-		packet_id: PacketId,
 		data: Vec<u8>
 	) {
 		if let Some(info) = self.nodes_info.get_mut(&node_index) {
 			if let Some(mut connected) = self.swarm.peer(info.peer_id.clone()).as_connected() {
-				connected.send_event(SubstrateInEvent::SendCustomMessage { protocol, packet_id, data });
+				connected.send_event(SubstrateInEvent::SendCustomMessage { protocol, data });
 			} else {
 				error!(target: "sub-libp2p", "Tried to send message to {:?}, but we're not \
 					connected to it", info.peer_id);
@@ -637,7 +628,7 @@ impl<TUserData> Swarm<TUserData>
 			},
 			SubstrateOutEvent::PingSuccess(ping) => {
 				trace!(target: "sub-libp2p", "Pong from {:?} in {:?}", peer_id, ping);
-				Some(SwarmEvent::PingDuration(node_index, ping))
+				None
 			},
 			SubstrateOutEvent::Identified { info, observed_addr } => {
 				self.add_observed_addr(&peer_id, &observed_addr);
@@ -689,11 +680,10 @@ impl<TUserData> Swarm<TUserData>
 					protocol: protocol_id,
 				})
 			},
-			SubstrateOutEvent::CustomMessage { protocol_id, packet_id, data } => {
+			SubstrateOutEvent::CustomMessage { protocol_id, data } => {
 				Some(SwarmEvent::CustomMessage {
 					node_index,
 					protocol_id,
-					packet_id,
 					data,
 				})
 			},
@@ -706,8 +696,7 @@ impl<TUserData> Swarm<TUserData>
 	}
 }
 
-impl<TUserData> Stream for Swarm<TUserData>
-	where TUserData: Clone + Send + Sync + 'static {
+impl Stream for Swarm {
 	type Item = SwarmEvent;
 	type Error = IoError;
 

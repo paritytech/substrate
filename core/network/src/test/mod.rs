@@ -31,7 +31,7 @@ use protocol::{Context, Protocol};
 use primitives::{Blake2Hasher};
 use config::ProtocolConfig;
 use service::TransactionPool;
-use network_libp2p::{NodeIndex, SessionInfo, Severity};
+use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
 use codec::{Encode, Decode};
 use import_queue::SyncImportQueue;
@@ -79,7 +79,6 @@ pub struct TestIo<'p> {
 	queue: &'p RwLock<VecDeque<TestPacket>>,
 	pub to_disconnect: HashSet<NodeIndex>,
 	packets: Vec<TestPacket>,
-	peers_info: HashMap<NodeIndex, String>,
 	_sender: Option<NodeIndex>,
 }
 
@@ -90,7 +89,6 @@ impl<'p> TestIo<'p> where {
 			_sender: sender,
 			to_disconnect: HashSet::new(),
 			packets: Vec::new(),
-			peers_info: HashMap::new(),
 		}
 	}
 }
@@ -106,10 +104,6 @@ impl<'p> SyncIo for TestIo<'p> {
 		self.to_disconnect.insert(who);
 	}
 
-	fn is_expired(&self) -> bool {
-		false
-	}
-
 	fn send(&mut self, who: NodeIndex, data: Vec<u8>) {
 		self.packets.push(TestPacket {
 			data: data,
@@ -117,13 +111,11 @@ impl<'p> SyncIo for TestIo<'p> {
 		});
 	}
 
-	fn peer_info(&self, who: NodeIndex) -> String {
-		self.peers_info.get(&who)
-			.cloned()
-			.unwrap_or_else(|| who.to_string())
+	fn peer_debug_info(&self, _who: NodeIndex) -> String {
+		"unknown".to_string()
 	}
 
-	fn peer_session_info(&self, _peer_id: NodeIndex) -> Option<SessionInfo> {
+	fn peer_id(&self, _peer_id: NodeIndex) -> Option<PeerId> {
 		None
 	}
 }
