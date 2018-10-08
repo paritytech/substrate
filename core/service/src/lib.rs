@@ -413,24 +413,21 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		let encoded = transaction.encode();
 		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
 			let best_block_id = self.best_block_id()?;
+			let hash = self.pool.hash_of(&uxt);
 			match self.pool.submit_one(&best_block_id, uxt) {
 				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
-					// 	TODO [ToDr]
-					Ok(e) => None,
-					// Ok(e) => match e.kind() {
-					// 	txpool::error::ErrorKind::AlreadyImported(hash) =>
-					// 		Some(::std::str::FromStr::from_str(&hash[2..]).map_err(|_| {})
-					// 			.expect("Hash string is always valid")),
-					// 	_ => {
-					// 		debug!("Error adding transaction to the pool: {:?}", e);
-					// 		None
-					// 	},
-					// },
+					Ok(e) => match e.kind() {
+						txpool::error::ErrorKind::AlreadyImported => Some(hash),
+						_ => {
+							debug!("Error adding transaction to the pool: {:?}", e);
+							None
+						},
+					},
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
 						None
-					}
+					},
 				}
 			}
 		} else {

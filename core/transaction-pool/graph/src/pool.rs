@@ -115,8 +115,7 @@ impl<B: ChainApi> Pool<B> where
 			.map(|xt| -> Result<_, B::Error> {
 				let hash = self.api.hash(&xt);
 				if self.rotator.is_banned(&hash) {
-					let kind: error::ErrorKind = "Temporarily Banned".into();
-					return Err(kind.into())?;
+					return Err(error::ErrorKind::TemporarilyBanned.into())?;
 				}
 
 				match self.api.validate_transaction(at, &xt)? {
@@ -134,10 +133,10 @@ impl<B: ChainApi> Pool<B> where
 						})
 					},
 					TransactionValidity::Invalid => {
-						unimplemented!()
+						bail!(error::Error::from(error::ErrorKind::InvalidTransaction))
 					},
 					TransactionValidity::Unknown => {
-						unimplemented!()
+						bail!(error::Error::from(error::ErrorKind::UnknownTransactionValidity))
 					},
 				}
 			})
@@ -178,6 +177,10 @@ impl<B: ChainApi> Pool<B> where
 		Ok(())
 	}
 
+	/// Returns transaction hash
+	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
+		self.api.hash(xt)
+	}
 	// TODO [ToDr] Clear stale transactions
 }
 

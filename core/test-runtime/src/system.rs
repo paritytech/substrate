@@ -126,7 +126,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	let provides = vec![hash(&tx.from, tx.nonce)];
 
 	TransactionValidity::Valid(
-		/* priority: */1,
+		/* priority: */tx.amount,
 		requires,
 		provides,
 		/* longevity: */64

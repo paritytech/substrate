@@ -20,6 +20,21 @@ use sr_primitives::transaction_validity::TransactionPriority as Priority;
 
 error_chain! {
 	errors {
+		/// Transaction is not verifiable yet, but might be in the future.
+		UnknownTransactionValidity {
+			description("Runtime cannot determine validity of the transaction yet."),
+			display("Unkown Transaction Validity"),
+		}
+		/// Transaction is invalid
+		InvalidTransaction {
+			description("Runtime check for the transaction failed."),
+			display("Invalid Transaction"),
+		}
+		/// The transaction is temporarily baned
+		TemporarilyBanned {
+			description("Transaction is temporarily banned from importing to the pool."),
+			display("Temporarily Banned"),
+		}
 		/// The transaction is already in the pool.
 		AlreadyImported {
 			description("Transaction is already in the pool."),

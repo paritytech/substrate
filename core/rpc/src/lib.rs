@@ -42,6 +42,9 @@ extern crate log;
 #[macro_use]
 extern crate assert_matches;
 #[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
+#[cfg(test)]
 extern crate substrate_test_client as test_client;
 #[cfg(test)]
 extern crate rustc_hex;
