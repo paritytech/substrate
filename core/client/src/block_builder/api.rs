@@ -17,7 +17,7 @@
 //! API for building blocks with a given runtime.
 
 use runtime_primitives::{ApplyResult, traits::Block as BlockT};
-use state_machine::{ExecutionManager, OverlayedChanges};
+use state_machine::OverlayedChanges;
 
 decl_apis! {
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.

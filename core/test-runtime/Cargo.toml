@@ -18,6 +18,7 @@ sr-io = { path = "../sr-io", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
 sr-version = { path = "../sr-version", default-features = false }
 srml-support = { path = "../../srml/support", default-features = false }
+substrate-client = { path = "../client" }
 
 [features]
 default = ["std"]
@@ -34,5 +35,5 @@ std = [
 	"srml-support/std",
 	"substrate-primitives/std",
 	"sr-primitives/std",
-	"sr-version/std"
+	"sr-version/std",
 ]

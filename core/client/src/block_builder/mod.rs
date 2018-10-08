@@ -22,7 +22,7 @@ use self::api::BlockBuilder as BlockBuilderAPI;
 use std::vec::Vec;
 use std::marker::PhantomData;
 use codec::Encode;
-use state_machine::{self, native_when_possible};
+use state_machine;
 use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
 use runtime_primitives::generic::BlockId;
 use {backend, error, Client, CallExecutor};

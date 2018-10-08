@@ -162,7 +162,7 @@ impl<'a, C: 'a + Client> Lookup for LocalContext<'a, C> {
 	type Source = Address;
 	type Target = AccountId;
 	fn lookup(&self, a: Address) -> ::std::result::Result<AccountId, &'static str> {
-		self.0.lookup_address(&BlockId::number(self.current_height()), a).unwrap_or(None).ok_or("error with lookup")
+		self.0.lookup_address(&BlockId::number(self.current_height()), &a).unwrap_or(None).ok_or("error with lookup")
 	}
 }
 
@@ -223,7 +223,7 @@ impl<C: Client> transaction_pool::ChainApi for ChainApi<C> {
 		// transaction-pool trait.
 		let api = &self.api;
 		let next_index = known_nonces.entry(sender)
-			.or_insert_with(|| api.account_nonce(at, sender).ok().unwrap_or_else(Bounded::max_value));
+			.or_insert_with(|| api.account_nonce(at, &sender).ok().unwrap_or_else(Bounded::max_value));
 
 		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.verified.index);
 

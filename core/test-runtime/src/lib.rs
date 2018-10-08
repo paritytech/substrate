@@ -47,6 +47,8 @@ extern crate substrate_keyring as keyring;
 #[cfg_attr(any(feature = "std", test), macro_use)]
 extern crate substrate_primitives as primitives;
 
+extern crate substrate_client as client;
+
 #[cfg(feature = "std")] pub mod genesismap;
 pub mod system;
 
@@ -61,6 +63,7 @@ pub use primitives::hash::H256;
 use primitives::AuthorityId;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
+use client::block_builder::api::runtime::BlockBuilder;
 
 /// Test runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {

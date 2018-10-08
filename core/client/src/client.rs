@@ -32,7 +32,7 @@ use codec::{Encode, Decode};
 use state_machine::{
 	Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, prove_read,
-	key_changes, key_changes_proof, OverlayedChanges, native_when_possible
+	key_changes, key_changes_proof, OverlayedChanges
 };
 
 use backend::{self, BlockImportOperation};
@@ -441,37 +441,43 @@ impl<B, E, Block> Client<B, E, Block> where
 				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
 			Default::default()
 		);
-		self.state_at(&parent).and_then(|state| {
-			let mut overlay = Default::default();
-			let execution_manager = || match self.api_execution_strategy {
-				ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-				ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
-				ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-					warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
-					warn!("   Function {:?}", function);
-					warn!("   Native result {:?}", native_result);
-					warn!("   Wasm result {:?}", wasm_result);
-					wasm_result
-				}),
-			};
-			self.executor().call_at_state(
-				&state,
-				&mut overlay,
-				"initialise_block",
-				&header.encode(),
-				execution_manager()
-			)?;
-			let (r, _, _) = args.using_encoded(|input|
-				self.executor().call_at_state(
-				&state,
-				&mut overlay,
-				function,
-				input,
-				execution_manager()
-			))?;
-			Ok(R::decode(&mut &r[..])
-			   .ok_or_else(|| error::Error::from(error::ErrorKind::CallResultDecode(function)))?)
-		})
+		let mut overlay = Default::default();
+
+		self.call_at_state(at, "initialise_block", &header, &mut overlay)?;
+		self.call_at_state(at, function, args, &mut overlay)
+	}
+
+	fn call_at_state<A: Encode, R: Decode>(
+		&self,
+		at: &BlockId<Block>,
+		function: &'static str,
+		args: &A,
+		changes: &mut OverlayedChanges
+	) -> error::Result<R> {
+		let state = self.state_at(at)?;
+
+		let execution_manager = || match self.api_execution_strategy {
+			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
+				warn!("   Function {:?}", function);
+				warn!("   Native result {:?}", native_result);
+				warn!("   Wasm result {:?}", wasm_result);
+				wasm_result
+			}),
+		};
+
+		self.executor.call_at_state(
+			&state,
+			changes,
+			function,
+			&args.encode(),
+			execution_manager()
+		).and_then(|res|
+			R::decode(&mut &res.0[..])
+				.ok_or_else(|| Error::from(ErrorKind::CallResultDecode(function)))
+		)
 	}
 
 	/// Check a header's justification.
@@ -1090,15 +1096,7 @@ impl<B, E, Block> block_builder::api::BlockBuilder<Block> for Client<B, E, Block
 		changes: &mut OverlayedChanges,
 		header: &<Block as BlockT>::Header
 	) -> Result<(), Self::Error> {
-		let state = self.state_at(at)?;
-
-		self.executor.call_at_state(
-			&state,
-			changes,
-			"initialise_block",
-			&header.encode(),
-			native_when_possible()
-		).map(|_| ())
+		self.call_at_state(at, "initialise_block", header, changes)
 	}
 
 	fn apply_extrinsic(
@@ -1107,18 +1105,7 @@ impl<B, E, Block> block_builder::api::BlockBuilder<Block> for Client<B, E, Block
 		changes: &mut OverlayedChanges,
 		extrinsic: &<Block as BlockT>::Extrinsic
 	) -> Result<ApplyResult, Self::Error> {
-		let state = self.state_at(at)?;
-
-		self.executor.call_at_state(
-			&state,
-			changes,
-			"apply_extrinsic",
-			&extrinsic.encode(),
-			native_when_possible()
-		).and_then(|res|
-			ApplyResult::decode(&mut &res.0[..])
-				.ok_or_else(|| Error::from(ErrorKind::CallResultDecode("apply_extrinsic")))
-		)
+		self.call_at_state(at, "apply_extrinsic", extrinsic, changes)
 	}
 
 	fn finalise_block(
@@ -1126,18 +1113,7 @@ impl<B, E, Block> block_builder::api::BlockBuilder<Block> for Client<B, E, Block
 		at: &BlockId<Block>,
 		changes: &mut OverlayedChanges
 	) -> Result<<Block as BlockT>::Header, Self::Error> {
-		let state = self.state_at(at)?;
-
-		self.executor.call_at_state(
-			&state,
-			changes,
-			"finalise_block",
-			&[],
-			native_when_possible()
-		).and_then(|res|
-			<Block as BlockT>::Header::decode(&mut &res.0[..])
-				.ok_or_else(|| Error::from(ErrorKind::CallResultDecode("finalise_block")))
-		)
+		self.call_at_state(at, "finalise_block", &(), changes)
 	}
 
 	fn inherent_extrinsics<InherentExtrinsic: Encode + Decode, UncheckedExtrinsic: Encode + Decode>(
