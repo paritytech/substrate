@@ -41,6 +41,10 @@ pub use codec::{Encode, Decode};
 /// decl_apis!{
 ///     pub trait Test<Event> {
 ///         fn test<AccountId>(event: Event) -> AccountId;
+///
+///         /// A function that will have the extra parameter `param` on the client side,
+///         /// the runtime does not have any parameter.
+///         fn testWithExtraParams() with ClientSide(param: &Client);
 ///     }
 /// }
 /// ```
@@ -57,6 +61,7 @@ pub use codec::{Encode, Decode};
 /// pub trait Test<Block: BlockT, Event> {
 ///     type Error;
 ///     fn test<AccountId: Encode + Decode>(&self, at: &BlockId<Block>, event: Event) -> Result<Event, Self::Error>;
+///     fn testWithExtraParams(&self, at: &BlockId<Block>, param: &Client) -> Result<Event, Self::Error>;
 /// }
 /// ```
 ///
@@ -72,8 +77,10 @@ macro_rules! decl_apis {
 				$(
 					$( #[$fn_attr:meta] )*
 					fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-						$( $param_name:ident : $param_type:ty )*
-					) $( -> $return_ty:ty)*;
+						$( $param_name:ident : $param_type:ty ),*
+					)
+					$( with ClientSide ( $( $client_param_name:ident : $client_param_type:ty ),+ ) )*
+					$( -> $return_ty:ty)*;
 				)*
 			}
 		)*
@@ -85,7 +92,10 @@ macro_rules! decl_apis {
 				pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
 					$(
 						$( #[$fn_attr] )*
-						fn $fn_name $( < $( $fn_generic ),* > )* ($( $param_name : $param_type )* ) $( -> $return_ty )*;
+						fn $fn_name $( < $( $fn_generic ),* > )* (
+							$( $( $client_param_name: $client_param_type, )* )*
+							$( $param_name : &$param_type, )*
+						) $( -> $return_ty )*;
 					)*
 				};
 				;
@@ -112,7 +122,7 @@ macro_rules! decl_apis {
 			$(
 				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty )*
+					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty)*;
 			)*
 		};
@@ -128,7 +138,7 @@ macro_rules! decl_apis {
 				$(
 					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type )*
+						$( $param_name : $param_type, )*
 					) $( -> $return_ty )*;
 				)*
 			};
@@ -143,7 +153,7 @@ macro_rules! decl_apis {
 	 		$(
 				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty )*
+					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty )*;
 			)*
 		};
@@ -159,7 +169,7 @@ macro_rules! decl_apis {
 				$(
 					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type )*
+						$( $param_name : $param_type, )*
 					) $( -> $return_ty )*;
 				)*
 			};
@@ -174,7 +184,7 @@ macro_rules! decl_apis {
 			$(
 				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty )*
+					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty )*;
 			)*
 		};
@@ -188,7 +198,7 @@ macro_rules! decl_apis {
 				$(
 					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type )*
+						$( $param_name : $param_type, )*
 					) $( -> $return_ty )*;
 				)*
 			};
@@ -203,7 +213,7 @@ macro_rules! decl_apis {
 			$(
 				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty )*
+					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty )*;
 			)*
 		};
@@ -217,7 +227,7 @@ macro_rules! decl_apis {
 				$(
 					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type )*
+						$( $param_name : $param_type, )*
 					) $( -> $return_ty )*;
 				)*
 			};
@@ -233,7 +243,7 @@ macro_rules! decl_apis {
 			$(
 				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty )*
+					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty)*;
 			)*
         };
@@ -249,7 +259,7 @@ macro_rules! decl_apis {
 				$(
 					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type )*
+						$( $param_name : $param_type, )*
 					) $( -> $return_ty )*;
 				)*
 			};
@@ -264,7 +274,7 @@ macro_rules! decl_apis {
 			$(
 				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty )*
+					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty)*;
 			)*
         };
@@ -280,7 +290,7 @@ macro_rules! decl_apis {
 				$(
 					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type )*
+						$( $param_name : $param_type, )*
 					) $( -> $return_ty )*;
 				)*
 			};
@@ -295,7 +305,7 @@ macro_rules! decl_apis {
 			$(
 				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty )*
+					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty)*;
 			)*
         };
@@ -309,7 +319,7 @@ macro_rules! decl_apis {
 				$(
 					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
-						$( $param_name : $param_type )*
+						$( $param_name : $param_type, )*
 					) $( -> $return_ty )*;
 				)*
 			};
@@ -324,7 +334,7 @@ macro_rules! decl_apis {
 			$(
 				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
-					$( $param_name:ident : $param_type:ty )*
+					$( $param_name:ident : $param_type:ty, )*
 				) $( -> $return_ty:ty)*;
 			)*
 		};

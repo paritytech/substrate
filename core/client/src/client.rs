@@ -17,7 +17,7 @@
 //! Substrate Client
 
 use std::sync::Arc;
-use error::Error;
+use error::{Error, ErrorKind};
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
@@ -32,7 +32,7 @@ use codec::{Encode, Decode};
 use state_machine::{
 	Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, prove_read,
-	key_changes, key_changes_proof,
+	key_changes, key_changes_proof, OverlayedChanges, native_when_possible
 };
 
 use backend::{self, BlockImportOperation};
@@ -1060,7 +1060,7 @@ impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 		bft::Authorities::authorities(self, at).map_err(Into::into)
 	}
 
-	fn execute_block(&self, at: &BlockId<Block>, block: Block) -> Result<(), Self::Error> {
+	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), Self::Error> {
 		self.call_api_at(at, "execute_block", &(block))
 	}
 }
@@ -1077,27 +1077,71 @@ impl<B, E, Block> api::Metadata<Block> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
+impl<B, E, Block> block_builder::api::BlockBuilder<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT,
 {
 	type Error = Error;
 
-	fn initialise_block(&self, at: &BlockId<Block>, header: <Block as BlockT>::Header) -> Result<(), Self::Error> {
-		self.call_api_at(at, "initialise_block", &(header))
+	fn initialise_block(
+		&self,
+		at: &BlockId<Block>,
+		changes: &mut OverlayedChanges,
+		header: &<Block as BlockT>::Header
+	) -> Result<(), Self::Error> {
+		let state = self.state_at(at)?;
+
+		self.executor.call_at_state(
+			&state,
+			changes,
+			"initialise_block",
+			&header.encode(),
+			native_when_possible()
+		).map(|_| ())
 	}
 
-	fn apply_extrinsic(&self, at: &BlockId<Block>, extrinsic: <Block as BlockT>::Extrinsic) -> Result<ApplyResult, Self::Error> {
-		self.call_api_at(at, "apply_extrinsic", &(extrinsic))
+	fn apply_extrinsic(
+		&self,
+		at: &BlockId<Block>,
+		changes: &mut OverlayedChanges,
+		extrinsic: &<Block as BlockT>::Extrinsic
+	) -> Result<ApplyResult, Self::Error> {
+		let state = self.state_at(at)?;
+
+		self.executor.call_at_state(
+			&state,
+			changes,
+			"apply_extrinsic",
+			&extrinsic.encode(),
+			native_when_possible()
+		).and_then(|res|
+			ApplyResult::decode(&mut &res.0[..])
+				.ok_or_else(|| Error::from(ErrorKind::CallResultDecode("apply_extrinsic")))
+		)
 	}
 
-	fn finalise_block(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Header, Self::Error> {
-		self.call_api_at(at, "finalise_block", &())
+	fn finalise_block(
+		&self,
+		at: &BlockId<Block>,
+		changes: &mut OverlayedChanges
+	) -> Result<<Block as BlockT>::Header, Self::Error> {
+		let state = self.state_at(at)?;
+
+		self.executor.call_at_state(
+			&state,
+			changes,
+			"finalise_block",
+			&[],
+			native_when_possible()
+		).and_then(|res|
+			<Block as BlockT>::Header::decode(&mut &res.0[..])
+				.ok_or_else(|| Error::from(ErrorKind::CallResultDecode("finalise_block")))
+		)
 	}
 
 	fn inherent_extrinsics<InherentExtrinsic: Encode + Decode, UncheckedExtrinsic: Encode + Decode>(
-		&self, at: &BlockId<Block>, inherent: InherentExtrinsic
+		&self, at: &BlockId<Block>, inherent: &InherentExtrinsic
 	) -> Result<Vec<UncheckedExtrinsic>, Self::Error> {
 		self.call_api_at(at, "inherent_extrinsics", &(inherent))
 	}
@@ -1115,13 +1159,13 @@ impl<B, E, Block> api::OldTxQueue<Block> for Client<B, E, Block> where
 	type Error = Error;
 
 	fn account_nonce<AccountId: Encode + Decode, Index: Encode + Decode>(
-		&self, at: &BlockId<Block>, account: AccountId
+		&self, at: &BlockId<Block>, account: &AccountId
 	) -> Result<Index, Self::Error> {
 		self.call_api_at(at, "account_nonce", &(account))
 	}
 
 	fn lookup_address<Address: Encode + Decode, AccountId: Encode + Decode>(
-		&self, at: &BlockId<Block>, address: Address
+		&self, at: &BlockId<Block>, address: &Address
 	) -> Result<Option<AccountId>, Self::Error> {
 		self.call_api_at(at, "lookup_address", &(address))
 	}
@@ -1135,7 +1179,7 @@ impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> whe
 	type Error = Error;
 
 	fn validate_transaction<TransactionValidity: Encode + Decode>(
-		&self, at: &BlockId<Block>, tx: <Block as BlockT>::Extrinsic
+		&self, at: &BlockId<Block>, tx: &<Block as BlockT>::Extrinsic
 	) -> Result<TransactionValidity, Self::Error> {
 		self.call_api_at(at, "validate_transaction", &(tx))
 	}
