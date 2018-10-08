@@ -546,7 +546,7 @@ impl<B, E, Block> Client<B, E, Block> where
 				for tx in transactions {
 					let tx = self.call_api("validate_transaction", tx)?;
 					match tx {
-						TransactionValidity::Valid { mut provides, .. } => {
+						TransactionValidity::Valid(_, _, mut provides, ..) => {
 							tags.append(&mut provides);
 						},
 						v => {

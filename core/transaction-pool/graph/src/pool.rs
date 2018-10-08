@@ -120,7 +120,7 @@ impl<B: ChainApi> Pool<B> where
 				}
 
 				match self.api.validate_transaction(at, &xt)? {
-					TransactionValidity::Valid { priority, requires, provides, longevity } => {
+					TransactionValidity::Valid(priority, requires, provides, longevity)=> {
 						Ok(base::Transaction {
 							data: TxData {
 								raw: xt,
