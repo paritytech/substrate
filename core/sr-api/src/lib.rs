@@ -402,8 +402,8 @@ decl_apis! {
 		fn lookup_address<Address, LookupId>(address: Address) -> Option<LookupId>;
 	}
 
-	/// The `NewTxQueue` api trait for interfering with the new transaction queue.
-	pub trait NewTxQueue<Block: BlockT> {
+	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
+	pub trait TaggedTransactionQueue<Block: BlockT> {
 		fn validate_transaction<TransactionValidity>(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}
 

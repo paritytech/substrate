@@ -311,7 +311,7 @@ impl_apis! {
 		}
 	}
 
-	impl NewTxQueue<Block, TransactionValidity> for Runtime {
+	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}

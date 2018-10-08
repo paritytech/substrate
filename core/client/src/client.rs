@@ -1127,7 +1127,7 @@ impl<B, E, Block> api::OldTxQueue<Block> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> api::NewTxQueue<Block> for Client<B, E, Block> where
+impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT,
