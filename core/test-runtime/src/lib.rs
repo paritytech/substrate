@@ -156,6 +156,7 @@ pub mod api {
 		authorities => |()| system::authorities(),
 		initialise_block => |header| system::initialise_block(header),
 		execute_block => |block| system::execute_block(block),
+		validate_transaction => |utx| system::validate_transaction(utx),
 		apply_extrinsic => |utx| system::execute_transaction(utx),
 		finalise_block => |()| system::finalise_block(),
 		balance_of => |a| system::balance_of(a)
