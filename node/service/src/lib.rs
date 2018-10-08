@@ -40,26 +40,28 @@ extern crate hex_literal;
 #[cfg(test)]
 extern crate parking_lot;
 #[cfg(test)]
-extern crate substrate_bft as bft;
+extern crate rhododendron as rhd;
 #[cfg(test)]
 extern crate substrate_test_client;
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
-#[cfg(test)]
 extern crate sr_primitives as runtime_primitives;
 pub mod chain_spec;
 
 use std::sync::Arc;
+use std::ops::Deref;
 use codec::Decode;
 use transaction_pool::txpool::{Pool as TransactionPool};
 use node_primitives::{Block, Hash, Timestamp, BlockId};
 use node_runtime::{GenesisConfig, BlockPeriod, StorageValue, Runtime};
 use client::Client;
-use consensus::AuthoringApi;
-use node_network::{Protocol as DemoProtocol, consensus::ConsensusNetwork};
+use node_network::Protocol as DemoProtocol;
 use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
-use primitives::{Blake2Hasher, storage::StorageKey, twox_128};
+use network::import_queue::{BasicQueue, BlockOrigin, ImportBlock, Verifier};
+use network::Error as NetworkError;
+use runtime_primitives::{traits::Block as BlockT};
+use primitives::{Blake2Hasher, storage::StorageKey, twox_128, AuthorityId};
 
 pub use service::{Roles, PruningMode, TransactionPoolOptions, ServiceFactory,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
@@ -71,14 +73,44 @@ pub type ChainSpec = service::ChainSpec<GenesisConfig>;
 pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, Block>;
 pub type NetworkService = network::Service<Block, <Factory as service::ServiceFactory>::NetworkProtocol, Hash>;
 
+/// A verifier that doesn't actually do any checks
+pub struct NoneVerifier;
+/// This Verifiyer accepts all data as valid
+impl<B: BlockT> Verifier<B> for NoneVerifier {
+	fn verify(
+		&self,
+		origin: BlockOrigin,
+		header: B::Header,
+		justification: Vec<u8>,
+		body: Option<Vec<B::Extrinsic>>
+	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
+		Ok((ImportBlock {
+			origin,
+			header,
+			body,
+			finalized: true,
+			external_justification: justification,
+			internal_justification: vec![],
+			auxiliary: Vec::new(),
+		}, None))
+	}
+}
+
 /// A collection of type to generalise specific components over full / light client.
 pub trait Components: service::Components {
 	/// Demo API.
-	type Api: 'static + AuthoringApi + Send + Sync;
+	type Api: 'static +  Send + Sync;
 	/// Client backend.
 	type Backend: 'static + client::backend::Backend<Block, Blake2Hasher>;
 	/// Client executor.
 	type Executor: 'static + client::CallExecutor<Block, Blake2Hasher> + Send + Sync;
+
+	fn build_import_queue(
+		_config: &FactoryFullConfiguration<Self::Factory>,
+		_client: Arc<ComponentClient<Self>>
+	) -> Result<BasicQueue<Block, NoneVerifier>, NetworkError> {
+		Ok(BasicQueue::new(Arc::new(NoneVerifier {})))
+	}
 }
 
 impl Components for service::LightComponents<Factory> {
@@ -112,8 +144,10 @@ impl service::ServiceFactory for Factory {
 	type LightTransactionPoolApi = transaction_pool::ChainApi<service::LightBackend<Self>, service::LightExecutor<Self>, Block>;
 	type Genesis = GenesisConfig;
 	type Configuration = CustomConfiguration;
-	type FullService = Service<service::FullComponents<Self>>;
-	type LightService = Service<service::LightComponents<Self>>;
+	type FullService = Service<FullComponents<Self>>;
+	type LightService = Service<LightComponents<Self>>;
+	/// instance of import queue for clients
+	type ImportQueue = BasicQueue<Block, NoneVerifier>;
 
 	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<service::FullClient<Self>>)
 		-> Result<TransactionPool<Self::FullTransactionPoolApi>, Error>
@@ -146,64 +180,34 @@ impl service::ServiceFactory for Factory {
 	fn new_full(config: Configuration, executor: TaskExecutor)
 		-> Result<Service<FullComponents<Factory>>, Error>
 	{
-		let is_validator = (config.roles & Roles::AUTHORITY) == Roles::AUTHORITY;
 		let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
-		// Spin consensus service if configured
-		let consensus = if is_validator {
-			// Load the first available key
-			let key = service.keystore().load(&service.keystore().contents()?[0], "")?;
-			info!("Using authority key {}", key.public());
-
-			let client = service.client();
-
-			let consensus_net = ConsensusNetwork::new(service.network(), client.clone());
-			let block_id = BlockId::number(client.info().unwrap().chain.best_number);
-			// TODO: this needs to be dynamically adjustable
-			let block_delay = client.storage(&block_id, &StorageKey(twox_128(BlockPeriod::<Runtime>::key()).to_vec()))?
-				.and_then(|data| Timestamp::decode(&mut data.0.as_slice()))
-				.unwrap_or_else(|| {
-					warn!("Block period is missing in the storage.");
-					5
-				});
-			Some(consensus::Service::new(
-				client.clone(),
-				client.clone(),
-				consensus_net,
-				service.transaction_pool(),
-				executor,
-				key,
-				block_delay,
-			))
-		} else {
-			None
-		};
-
+		// FIXME: Spin consensus service if configured
+		let consensus = None;
 		Ok(Service {
 			inner: service,
 			_consensus: consensus,
 		})
 	}
 }
-
 /// Demo service.
 pub struct Service<C: Components> {
 	inner: service::Service<C>,
-	_consensus: Option<consensus::Service>,
+	_consensus: Option<bool>,  // FIXME: add actual consensus engine
 }
+
+impl<C: Components> ::std::ops::Deref for Service<C> {
+	type Target = service::Service<C>;
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
 
 /// Creates bare client without any networking.
 pub fn new_client(config: Configuration)
 	-> Result<Arc<service::ComponentClient<FullComponents<Factory>>>, Error>
 {
-	service::new_client::<Factory>(config)
-}
-
-impl<C: Components> ::std::ops::Deref for Service<C> {
-	type Target = service::Service<C>;
-
-	fn deref(&self) -> &Self::Target {
-		&self.inner
-	}
+	service::new_client::<Factory>(&config)
 }
 
 #[cfg(test)]
@@ -211,13 +215,13 @@ mod tests {
 	use std::sync::Arc;
 	use parking_lot::RwLock;
 	use {service, service_test, Factory, chain_spec};
-	use consensus::{self, OfflineTracker};
+	// use consensus::{self, OfflineTracker};
 	use primitives::ed25519;
 	use runtime_primitives::traits::BlockNumberToHash;
 	use runtime_primitives::generic::Era;
 	use node_primitives::Block;
-	use bft::{Proposer, Environment};
-	use node_network::consensus::ConsensusNetwork;
+	// use rhd::{Proposer, Environment};
+	// use node_network::consensus::ConsensusNetwork;
 	use node_primitives::BlockId;
 	use keyring::Keyring;
 	use node_runtime::{UncheckedExtrinsic, Call, BalancesCall};
@@ -231,6 +235,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg(feature = "rhd")]
 	fn test_sync() {
 		use client::{ImportBlock, BlockOrigin};
 
@@ -276,11 +281,6 @@ mod tests {
 			OpaqueExtrinsic(v)
 		};
 		service_test::sync::<Factory, _, _>(chain_spec::integration_test_config(), block_factory, extrinsic_factory);
-	}
-
-	#[test]
-	fn test_consensus() {
-		service_test::consensus::<Factory>(chain_spec::integration_test_config(), vec!["Alice".into(), "Bob".into()]);
 	}
 
 }

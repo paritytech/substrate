@@ -277,12 +277,16 @@ impl<Block: BlockT> Specialization<Block> for ConsensusGossip<Block> where
 		self.peer_disconnected(ctx, who);
 	}
 
-	fn on_message(&mut self, ctx: &mut Context<Block>, who: NodeIndex, message: &mut Option<message::Message<Block>>) {
+	fn on_message(
+		&mut self,
+		ctx: &mut Context<Block>,
+		who: NodeIndex,
+		message: &mut Option<::message::Message<Block>>
+	) {
 		match message.take() {
-			Some(generic_message::Message::BftMessage(msg)) => {
-				trace!(target: "gossip", "BFT message from {}: {:?}", who, msg);
-				// TODO: check signature here? what if relevant block is unknown?
-				self.on_bft_message(ctx, who, msg)
+			Some(generic_message::Message::Consensus(topic, msg)) => {
+				trace!(target: "gossip", "Consensus message from {}: {:?}", who, msg);
+				self.on_incoming(ctx, who, topic, msg);
 			}
 			r => *message = r,
 		}

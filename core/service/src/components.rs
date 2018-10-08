@@ -139,6 +139,8 @@ pub trait ServiceFactory: 'static + Sized {
 	type FullService: Deref<Target = Service<FullComponents<Self>>> + Send + Sync + 'static;
 	/// Extended light service type.
 	type LightService: Deref<Target = Service<LightComponents<Self>>> + Send + Sync + 'static;
+	/// ImportQueue
+	type ImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements.
 	/// Extrinsic pool constructor for the full client.
@@ -187,6 +189,21 @@ pub trait Components: 'static {
 	/// Create extrinsic pool.
 	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)
 		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>;
+
+	/// instance of import queue for clients
+	fn build_import_queue(
+		config: &FactoryFullConfiguration<Self::Factory>,
+		_client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error> {
+		if let Some(name) = config.chain_spec.consensus_engine() {
+			match name {
+				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
+			}
+
+		} else {
+			Err("Chain Specification doesn't containg any consensus_engine name".into())
+		}
+	}
 }
 
 /// A struct that implement `Components` for the full client.

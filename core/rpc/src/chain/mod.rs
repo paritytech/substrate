@@ -23,7 +23,7 @@ use jsonrpc_macros::{pubsub, Trailing};
 use jsonrpc_pubsub::SubscriptionId;
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
-use runtime_primitives::generic::{BlockId, SignedBlock, Block as RuntimeBlock};
+use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use runtime_version::RuntimeVersion;
 use primitives::{Blake2Hasher};

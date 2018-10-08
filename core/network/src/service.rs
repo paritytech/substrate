@@ -125,11 +125,11 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
 
 impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 	/// Creates and register protocol with the network service
-	pub fn new<Q: ImportQueue<B> + 'static>(
+	pub fn new<I: 'static + ImportQueue<B>>(
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
-		import_queue: Q,
-	) -> Result<Arc<Service<B, S, H>>, Error> {
+		import_queue: I,
+	) -> Result<Arc<Service<B, S, H>>, Error> {	
 		let chain = params.chain.clone();
 		let import_queue = Arc::new(import_queue);
 		let handler = Arc::new(Protocol::new(

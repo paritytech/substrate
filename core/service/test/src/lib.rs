@@ -47,7 +47,7 @@ use service::{
 	FactoryExtrinsic,
 };
 use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
-use client::{BlockOrigin, ImportBlock};
+use client::ImportBlock;
 use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
 

@@ -17,7 +17,8 @@
 //! Tracks offline validators.
 #![allow(dead_code)]
 
-#[cfg(test)]
+#![cfg(feature="rhd")]
+
 extern crate substrate_primitives as primitives;
 
 use primitives::{generic::BlockId, Justification};

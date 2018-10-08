@@ -28,6 +28,7 @@ extern crate node_runtime;
 #[cfg(test)] extern crate srml_session as session;
 #[cfg(test)] extern crate srml_staking as staking;
 #[cfg(test)] extern crate srml_system as system;
+#[cfg(test)] extern crate srml_consensus as consensus;
 #[cfg(test)] extern crate srml_timestamp as timestamp;
 #[cfg(test)] extern crate srml_treasury as treasury;
 #[cfg(test)] extern crate srml_contract as contract;
@@ -36,7 +37,6 @@ extern crate node_runtime;
 #[cfg(test)] extern crate sr_io as runtime_io;
 #[cfg(test)] extern crate substrate_trie as trie;
 #[cfg(test)] extern crate substrate_state_machine as state_machine;
-#[cfg(test)] extern crate substrate_consensus_common as consensus;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 #[cfg(test)] extern crate wabt;
 

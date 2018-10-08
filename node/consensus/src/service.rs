@@ -82,7 +82,6 @@ impl Service {
 		block_delay: u64,
 	) -> Service
 		where
-<<<<<<< HEAD
 			error::Error: From<<A as AuthoringApi>::Error>,
 			A: AuthoringApi + BlockNumberToHash + 'static,
 			P: PoolChainApi<Block = <A as AuthoringApi>::Block> + 'static,
@@ -94,12 +93,6 @@ impl Service {
 			primitives::H256: From<<<A as AuthoringApi>::Block as BlockT>::Hash>,
 			<<A as AuthoringApi>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,
 			N: Network<Block = <A as AuthoringApi>::Block> + Send + 'static,
-=======
-			A: Api + Send + Sync + 'static,
-			C: BlockchainEvents<Block> + ChainHead<Block> + BlockBody<Block>,
-			C: rhd::BlockImport<Block> + rhd::Authorities<Block> + Send + Sync + 'static,
-			N: Network + Send + 'static,
->>>>>>> split out consensus
 	{
 		use parking_lot::RwLock;
 		use super::OfflineTracker;

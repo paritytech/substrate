@@ -1066,7 +1066,7 @@ impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 	}
 
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
-		bft::Authorities::authorities(self, at).map_err(Into::into)
+		self.authorities_at(at)
 	}
 
 	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), Self::Error> {
