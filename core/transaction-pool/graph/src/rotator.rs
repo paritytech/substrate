@@ -121,7 +121,7 @@ mod tests {
 		let tx = Transaction {
 			data: TxData {
 				raw: (),
-				valid_till: Instant::now(),
+				valid_till: Some(Instant::now()),
 			},
 			hash: hash.clone(),
 			priority: 5,
@@ -187,7 +187,7 @@ mod tests {
 			Transaction {
 				data: TxData {
 					raw: (),
-					valid_till: time,
+					valid_till: Some(time),
 				},
 				hash,
 				priority: 5,

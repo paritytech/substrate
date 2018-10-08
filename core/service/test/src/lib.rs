@@ -48,7 +48,7 @@ use service::{
 };
 use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
 use client::{BlockOrigin, JustifiedHeader};
-use sr_primitives::traits::As;
+use sr_primitives::traits::{self, As};
 use sr_primitives::generic::BlockId;
 
 struct TestNet<F: ServiceFactory> {
@@ -218,6 +218,7 @@ where
 	F: ServiceFactory,
 	B: Fn(&F::FullService) -> (JustifiedHeader<F::Block>, Option<Vec<FactoryExtrinsic<F>>>),
 	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
+	<<<F as ServiceFactory>::Block as traits::Block>::Header as traits::Header>::Number: Into<u64>,
 {
 	const NUM_NODES: u32 = 10;
 	const NUM_BLOCKS: usize = 512;
@@ -247,7 +248,7 @@ where
 	let best_block = BlockId::number(first_service.client().info().unwrap().chain.best_number);
 	first_service.transaction_pool().submit_one(&best_block, extrinsic_factory(&first_service)).unwrap();
 	network.run_until_all_full(|_index, service|
-		service.transaction_pool().all().len() == 1
+		service.transaction_pool().all(usize::max_value()).len() == 1
 	);
 }
 

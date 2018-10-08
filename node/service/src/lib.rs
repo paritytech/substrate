@@ -22,12 +22,12 @@ extern crate node_primitives;
 extern crate node_runtime;
 extern crate node_executor;
 extern crate node_network;
-extern crate node_transaction_pool as transaction_pool;
 extern crate node_consensus as consensus;
-extern crate substrate_primitives as primitives;
-extern crate substrate_network as network;
 extern crate substrate_client as client;
+extern crate substrate_network as network;
+extern crate substrate_primitives as primitives;
 extern crate substrate_service as service;
+extern crate substrate_transaction_pool as transaction_pool;
 extern crate parity_codec as codec;
 extern crate tokio;
 #[cfg(test)]
@@ -51,13 +51,12 @@ pub mod chain_spec;
 
 use std::sync::Arc;
 use codec::Decode;
-use transaction_pool::TransactionPool;
+use transaction_pool::txpool::{Pool as TransactionPool};
 use node_primitives::{Block, Hash, Timestamp, BlockId};
 use node_runtime::{GenesisConfig, BlockPeriod, StorageValue, Runtime};
 use client::Client;
 use consensus::AuthoringApi;
 use node_network::{Protocol as DemoProtocol, consensus::ConsensusNetwork};
-use transaction_pool::Client as TPApi;
 use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
 use primitives::{Blake2Hasher, storage::StorageKey, twox_128};
@@ -75,7 +74,7 @@ pub type NetworkService = network::Service<Block, <Factory as service::ServiceFa
 /// A collection of type to generalise specific components over full / light client.
 pub trait Components: service::Components {
 	/// Demo API.
-	type Api: 'static + AuthoringApi + TPApi + Send + Sync;
+	type Api: 'static + AuthoringApi + Send + Sync;
 	/// Client backend.
 	type Backend: 'static + client::backend::Backend<Block, Blake2Hasher>;
 	/// Client executor.
@@ -109,21 +108,21 @@ impl service::ServiceFactory for Factory {
 	type ExtrinsicHash = Hash;
 	type NetworkProtocol = DemoProtocol;
 	type RuntimeDispatch = node_executor::Executor;
-	type FullTransactionPoolApi = transaction_pool::ChainApi<service::FullClient<Self>>;
-	type LightTransactionPoolApi = transaction_pool::ChainApi<service::LightClient<Self>>;
+	type FullTransactionPoolApi = transaction_pool::ChainApi<service::FullBackend<Self>, service::FullExecutor<Self>, Block>;
+	type LightTransactionPoolApi = transaction_pool::ChainApi<service::LightBackend<Self>, service::LightExecutor<Self>, Block>;
 	type Genesis = GenesisConfig;
 	type Configuration = CustomConfiguration;
 	type FullService = Service<service::FullComponents<Self>>;
 	type LightService = Service<service::LightComponents<Self>>;
 
 	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<service::FullClient<Self>>)
-		-> Result<TransactionPool<service::FullClient<Self>>, Error>
+		-> Result<TransactionPool<Self::FullTransactionPoolApi>, Error>
 	{
 		Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
 	}
 
 	fn build_light_transaction_pool(config: TransactionPoolOptions, client: Arc<service::LightClient<Self>>)
-		-> Result<TransactionPool<service::LightClient<Self>>, Error>
+		-> Result<TransactionPool<Self::LightTransactionPoolApi>, Error>
 	{
 		Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
 	}

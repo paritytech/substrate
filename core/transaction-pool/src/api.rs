@@ -39,6 +39,15 @@ pub struct ChainApi<B, E, Block: traits::Block> {
 	client: Arc<client::Client<B, E, Block>>,
 }
 
+impl<B, E, Block: traits::Block> ChainApi<B, E, Block> {
+	/// Create new transaction pool logic.
+	pub fn new(client: Arc<client::Client<B, E, Block>>) -> Self {
+		ChainApi {
+			client,
+		}
+	}
+}
+
 impl<B, E, Block> txpool::ChainApi for ChainApi<B, E, Block> where
 	Block: traits::Block,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,

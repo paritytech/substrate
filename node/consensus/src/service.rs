@@ -72,17 +72,18 @@ pub struct Service {
 
 impl Service {
 	/// Create and start a new instance.
-	pub fn new<A, C, N>(
+	pub fn new<A, P, C, N>(
 		client: Arc<C>,
 		api: Arc<A>,
 		network: N,
-		transaction_pool: Arc<TransactionPool<A>>,
+		transaction_pool: Arc<TransactionPool<P>>,
 		thread_pool: ThreadPoolHandle,
 		key: ed25519::Pair,
 		block_delay: u64,
 	) -> Service
 		where
-			A: AuthoringApi + PoolChainApi<Block = <A as AuthoringApi>::Block> + BlockNumberToHash + 'static,
+			A: AuthoringApi + BlockNumberToHash + 'static,
+			P: PoolChainApi<Block = <A as AuthoringApi>::Block> + 'static,
 			C: BlockchainEvents<<A as AuthoringApi>::Block>
 				+ ChainHead<<A as AuthoringApi>::Block>
 				+ BlockBody<<A as AuthoringApi>::Block>,
@@ -91,7 +92,7 @@ impl Service {
 			primitives::H256: From<<<A as AuthoringApi>::Block as BlockT>::Hash>,
 			<<A as AuthoringApi>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,
 			N: Network<Block = <A as AuthoringApi>::Block> + Send + 'static,
-			::transaction_pool::txpool::NumberFor<A>: Into<u64>,
+			::transaction_pool::txpool::NumberFor<P>: Into<u64>,
 	{
 		use parking_lot::RwLock;
 		use super::OfflineTracker;

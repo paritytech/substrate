@@ -199,7 +199,7 @@ impl<Components> Service<Components>
 					if let Some(network) = network.upgrade() {
 						network.on_block_imported(notification.hash, &notification.header);
 					}
-					txpool.cull(&BlockId::hash(notification.hash))
+					txpool.prune_tags(&BlockId::hash(notification.hash), notification.tags)
 						.map_err(|e| warn!("Error removing extrinsics: {:?}", e))?;
 					Ok(())
 				})
@@ -291,7 +291,11 @@ impl<Components> Service<Components>
 			_telemetry: telemetry,
 		})
 	}
+}
 
+impl<Components> Service<Components> where
+	Components: components::Components,
+{
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()

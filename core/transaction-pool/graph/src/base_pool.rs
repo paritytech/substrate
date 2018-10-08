@@ -274,6 +274,22 @@ impl<Hash: hash::Hash + Member, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
 			promoted,
 		}
 	}
+
+	/// Get pool status.
+	pub fn status(&self) -> Status {
+		Status {
+			ready: self.ready.len(),
+			future: self.future.len(),
+		}
+	}
+}
+
+/// Pool status
+pub struct Status {
+	/// Number of transactions in the ready queue.
+	pub ready: usize,
+	/// Number of transactions in the future queue.
+	pub future: usize,
 }
 
 #[cfg(test)]

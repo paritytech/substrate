@@ -130,7 +130,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Extrinsic pool backend type for the full client.
 	type FullTransactionPoolApi: txpool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + Send + 'static;
 	/// Extrinsic pool backend type for the light client.
-	type LightTransactionPoolApi:txpool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + 'static;
+	type LightTransactionPoolApi: txpool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + 'static;
 	/// Genesis configuration for the runtime.
 	type Genesis: RuntimeGenesis;
 	/// Other configuration for service members.

@@ -53,7 +53,7 @@ use primitives::{AuthorityId, ed25519, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As, BlockNumberToHash};
 use runtime_primitives::generic::{BlockId, Era};
 use srml_system::Trait as SystemT;
-use transaction_pool::txpool::{self, Pool as TransactionPool, ChainApi as PoolChainApi};
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Delay;
 
@@ -196,13 +196,14 @@ pub trait Network {
 }
 
 /// Proposer factory.
-pub struct ProposerFactory<N, C> where
-	C: AuthoringApi + PoolChainApi,
+pub struct ProposerFactory<N, C, A> where
+	C: AuthoringApi,
+	A: txpool::ChainApi,
 {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The transaction pool.
-	pub transaction_pool: Arc<TransactionPool<C>>,
+	pub transaction_pool: Arc<TransactionPool<A>>,
 	/// The backing network handle.
 	pub network: N,
 	/// handle to remote task executor
@@ -213,14 +214,15 @@ pub struct ProposerFactory<N, C> where
 	pub force_delay: Timestamp,
 }
 
-impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C> where
+impl<N, C, A> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C, A> where
 	N: Network<Block=<C as AuthoringApi>::Block>,
-	C: AuthoringApi + PoolChainApi<Block=<C as AuthoringApi>::Block> + BlockNumberToHash,
-	txpool::NumberFor<C>: Into<u64>,
+	C: AuthoringApi + BlockNumberToHash,
+	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
+	txpool::NumberFor<A>: Into<u64>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
 {
-	type Proposer = Proposer<C>;
+	type Proposer = Proposer<C, A>;
 	type Input = N::Input;
 	type Output = N::Output;
 	type Error = Error;
@@ -270,7 +272,7 @@ impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C
 }
 
 /// The proposer logic.
-pub struct Proposer<C: AuthoringApi + PoolChainApi> {
+pub struct Proposer<C: AuthoringApi, A: txpool::ChainApi> {
 	client: Arc<C>,
 	start: Instant,
 	local_key: Arc<ed25519::Pair>,
@@ -278,13 +280,13 @@ pub struct Proposer<C: AuthoringApi + PoolChainApi> {
 	parent_id: BlockId<<C as AuthoringApi>::Block>,
 	parent_number: <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Number,
 	random_seed: <<C as AuthoringApi>::Block as BlockT>::Hash,
-	transaction_pool: Arc<TransactionPool<C>>,
+	transaction_pool: Arc<TransactionPool<A>>,
 	offline: SharedOfflineTracker,
 	validators: Vec<AccountId>,
 	minimum_timestamp: u64,
 }
 
-impl<C: AuthoringApi + PoolChainApi> Proposer<C> {
+impl<C: AuthoringApi, A: txpool::ChainApi> Proposer<C, A> {
 	fn primary_index(&self, round_number: usize, len: usize) -> usize {
 		use primitives::uint::U256;
 
@@ -295,9 +297,10 @@ impl<C: AuthoringApi + PoolChainApi> Proposer<C> {
 	}
 }
 
-impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
-	C: AuthoringApi + PoolChainApi<Block=<C as AuthoringApi>::Block> + BlockNumberToHash,
-	txpool::NumberFor<C>: Into<u64>,
+impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
+	C: AuthoringApi + BlockNumberToHash,
+	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
+	txpool::NumberFor<A>: Into<u64>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
 {

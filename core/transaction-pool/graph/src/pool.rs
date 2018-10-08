@@ -120,7 +120,7 @@ impl<B: ChainApi> Pool<B> where
 				}
 
 				match self.api.validate_transaction(at, &xt)? {
-					TransactionValidity::Valid(priority, requires, provides, longevity) => {
+					TransactionValidity::Valid { priority, requires, provides, longevity } => {
 						Ok(base::Transaction {
 							data: TxData {
 								raw: xt,
@@ -173,8 +173,12 @@ impl<B: ChainApi> Pool<B> where
 		// try to re-submit pruned transactions since some of them might be still valid.
 		self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.raw.clone()))?;
 		// TODO [ToDr] Fire events for promoted / failed
+		// clear banned transactions timeouts
+		self.rotator.clear_timeouts(&time::Instant::now());
 		Ok(())
 	}
+
+	// TODO [ToDr] Clear stale transactions
 }
 
 impl<B: ChainApi> Pool<B> {
@@ -228,6 +232,11 @@ impl<B: ChainApi> Pool<B> {
 	/// Be careful with large limit values, as querying the entire pool might be time consuming.
 	pub fn all(&self, limit: usize) -> Vec<ExtrinsicFor<B>> {
 		self.ready(|it| it.take(limit).map(|ex| ex.data.raw.clone()).collect())
+	}
+
+	/// Returns pool status.
+	pub fn status(&self) -> base::Status {
+		self.pool.read().status()
 	}
 }
 

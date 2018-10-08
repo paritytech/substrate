@@ -20,7 +20,11 @@ use std::sync::Arc;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
+use runtime_primitives::{
+	bft::Justification,
+	generic::{BlockId, SignedBlock, Block as RuntimeBlock},
+	transaction_validity::{TransactionValidity, TransactionTag},
+};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
 use runtime_primitives::BuildStorage;
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration};
@@ -156,6 +160,8 @@ pub struct BlockImportNotification<Block: BlockT> {
 	pub header: Block::Header,
 	/// Is this the new best block.
 	pub is_new_best: bool,
+	/// Tags provided by transactions imported in that block.
+	pub tags: Vec<TransactionTag>,
 }
 
 /// Summary of a finalized block.
@@ -531,6 +537,29 @@ impl<B, E, Block> Client<B, E, Block> where
 		result
 	}
 
+	// TODO [ToDr] Optimize and re-use tags from the pool.
+	fn transaction_tags(&self, body: &Option<Vec<Block::Extrinsic>>) -> error::Result<Vec<TransactionTag>> {
+		Ok(match body {
+			None => vec![],
+			Some(ref transactions) => {
+				let mut tags = vec![];
+				for tx in transactions {
+					let tx = self.call_api("validate_transaction", tx)?;
+					match tx {
+						TransactionValidity::Valid { mut provides, .. } => {
+							tags.append(&mut provides);
+						},
+						v => {
+							warn!("Invalid transaction: {:?}", v);
+						},
+					}
+
+				}
+				tags
+			},
+		})
+	}
+
 	fn execute_and_import_block(
 		&self,
 		origin: BlockOrigin,
@@ -566,6 +595,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			self.apply_finality(parent_hash, last_best, make_notifications)?;
 		}
 
+		let tags = self.transaction_tags(&body)?;
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
 		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
@@ -651,6 +681,7 @@ impl<B, E, Block> Client<B, E, Block> where
 				origin,
 				header,
 				is_new_best,
+				tags,
 			};
 
 			self.import_notification_sinks.lock()

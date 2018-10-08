@@ -374,7 +374,6 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 	}
 
 	/// Returns number of transactions in this queue.
-	#[cfg(test)]
 	pub fn len(&self) -> usize {
 		self.ready.len()
 	}

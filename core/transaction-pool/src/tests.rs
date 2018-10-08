@@ -19,7 +19,7 @@ use super::*;
 
 use keyring::Keyring::{self, *};
 use parity_codec::Encode;
-use txpool;
+use txpool::{self, Pool};
 use test_client::runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer};
 use sr_primitives::{
 	generic::{self, BlockId},
@@ -49,7 +49,12 @@ impl txpool::ChainApi for TestApi {
 		};
 		let provides = vec![vec![uxt.transfer.nonce as u8]];
 
-		Ok(TransactionValidity::Valid(1, requires, provides, 64))
+		Ok(TransactionValidity::Valid {
+			priority: 1,
+			requires,
+			provides,
+			longevity: 64
+		})
 	}
 
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {
@@ -88,7 +93,7 @@ fn uxt(who: Keyring, nonce: Index) -> Extrinsic {
 }
 
 fn pool() -> Pool<TestApi> {
-	Pool::new(TestApi::default())
+	Pool::new(Default::default(), TestApi::default())
 }
 
 #[test]
