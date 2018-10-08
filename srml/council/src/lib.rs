@@ -32,7 +32,8 @@ extern crate hex_literal;
 extern crate parity_codec as codec;
 #[macro_use] extern crate parity_codec_derive;
 extern crate substrate_primitives;
-#[macro_use] extern crate sr_std as rstd;
+#[cfg_attr(not(feature = "std"), macro_use)]
+extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[macro_use] extern crate srml_support;
 extern crate sr_primitives as primitives;
@@ -40,85 +41,11 @@ extern crate srml_balances as balances;
 extern crate srml_democracy as democracy;
 extern crate srml_system as system;
 
-#[cfg(feature = "std")]
-use rstd::prelude::*;
-#[cfg(feature = "std")]
-use primitives::traits::As;
-#[cfg(feature = "std")]
-use srml_support::StorageValue;
-
 pub mod voting;
 pub mod motions;
 pub mod seats;
 
 pub use seats::{Trait, Module, RawEvent, Event, VoteIndex};
-
-#[cfg(feature = "std")]
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct GenesisConfig<T: seats::Trait> {
-	// for the voting onto the council
-	pub candidacy_bond: T::Balance,
-	pub voter_bond: T::Balance,
-	pub present_slash_per_voter: T::Balance,
-	pub carry_count: u32,
-	pub active_council: Vec<(T::AccountId, T::BlockNumber)>,
-	pub approval_voting_period: T::BlockNumber,
-	pub presentation_duration: T::BlockNumber,
-	pub desired_seats: u32,
-	pub term_duration: T::BlockNumber,
-	pub inactive_grace_period: T::BlockNumber,
-
-	// for the council's votes.
-	pub cooloff_period: T::BlockNumber,
-	pub voting_period: T::BlockNumber,
-}
-
-#[cfg(feature = "std")]
-impl<T: seats::Trait + voting::Trait + motions::Trait> Default for GenesisConfig<T> {
-	fn default() -> Self {
-		GenesisConfig {
-			candidacy_bond: T::Balance::sa(9),
-			voter_bond: T::Balance::sa(0),
-			present_slash_per_voter: T::Balance::sa(1),
-			carry_count: 2,
-			inactive_grace_period: T::BlockNumber::sa(1),
-			active_council: vec![],
-			approval_voting_period: T::BlockNumber::sa(1000),
-			presentation_duration: T::BlockNumber::sa(1000),
-			desired_seats: 0,
-			term_duration: T::BlockNumber::sa(5),
-			cooloff_period: T::BlockNumber::sa(1000),
-			voting_period: T::BlockNumber::sa(3),
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T: seats::Trait + voting::Trait + motions::Trait> primitives::BuildStorage for GenesisConfig<T>
-{
-	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
-		use codec::Encode;
-
-		Ok(map![
-			Self::hash(<seats::CandidacyBond<T>>::key()).to_vec() => self.candidacy_bond.encode(),
-			Self::hash(<seats::VotingBond<T>>::key()).to_vec() => self.voter_bond.encode(),
-			Self::hash(<seats::PresentSlashPerVoter<T>>::key()).to_vec() => self.present_slash_per_voter.encode(),
-			Self::hash(<seats::CarryCount<T>>::key()).to_vec() => self.carry_count.encode(),
-			Self::hash(<seats::PresentationDuration<T>>::key()).to_vec() => self.presentation_duration.encode(),
-			Self::hash(<seats::VotingPeriod<T>>::key()).to_vec() => self.approval_voting_period.encode(),
-			Self::hash(<seats::TermDuration<T>>::key()).to_vec() => self.term_duration.encode(),
-			Self::hash(<seats::DesiredSeats<T>>::key()).to_vec() => self.desired_seats.encode(),
-			Self::hash(<seats::InactiveGracePeriod<T>>::key()).to_vec() => self.inactive_grace_period.encode(),
-			Self::hash(<seats::ActiveCouncil<T>>::key()).to_vec() => self.active_council.encode(),
-
-			Self::hash(<voting::CooloffPeriod<T>>::key()).to_vec() => self.cooloff_period.encode(),
-			Self::hash(<voting::VotingPeriod<T>>::key()).to_vec() => self.voting_period.encode(),
-			Self::hash(<voting::Proposals<T>>::key()).to_vec() => vec![0u8; 0].encode()
-		])
-	}
-}
 
 #[cfg(test)]
 mod tests {
@@ -205,7 +132,7 @@ mod tests {
 			voting_period: 3,
 			minimum_deposit: 1,
 		}.build_storage().unwrap());
-		t.extend(GenesisConfig::<Test>{
+		t.extend(seats::GenesisConfig::<Test> {
 			candidacy_bond: 9,
 			voter_bond: 3,
 			present_slash_per_voter: 1,
@@ -220,6 +147,8 @@ mod tests {
 			presentation_duration: 2,
 			desired_seats: 2,
 			term_duration: 5,
+		}.build_storage().unwrap());
+		t.extend(voting::GenesisConfig::<Test> {
 			cooloff_period: 2,
 			voting_period: 1,
 		}.build_storage().unwrap());

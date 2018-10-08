@@ -50,7 +50,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	MakePayment, Hash, As};
+	MakePayment, Hash, As, Digest};
 use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -204,10 +204,17 @@ impl<
 		// remove temporaries.
 		let new_header = <system::Module<System>>::finalise();
 
-		// check digest. uncomment next two lines to figure out next digest hash for tests.
-//		runtime_io::print(&header.digest().encode()[..]);
-//		runtime_io::print(&new_header.digest().encode()[..]);
-		assert!(header.digest() == new_header.digest());
+		// check digest.
+		assert_eq!(
+			header.digest().logs().len(),
+			new_header.digest().logs().len(),
+			"Number of digest items must match that calculated."
+		);
+		let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
+		for (header_item, computed_item) in items_zip {
+			header_item.check_equal(&computed_item);
+			assert!(header_item == computed_item, "Digest item must match that calculated.");
+		}
 
 		// check storage root.
 		let storage_root = System::Hashing::storage_root();

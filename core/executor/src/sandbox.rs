@@ -181,21 +181,21 @@ pub struct GuestExternals<'a, FE: SandboxCapabilities + Externals + 'a> {
 	state: u32,
 }
 
-fn trap() -> Trap {
-	TrapKind::Host(Box::new(UserError("Sandbox error"))).into()
+fn trap(msg: &'static str) -> Trap {
+	TrapKind::Host(Box::new(UserError(msg))).into()
 }
 
 fn deserialize_result(serialized_result: &[u8]) -> Result<Option<RuntimeValue>, Trap> {
 	use self::sandbox_primitives::{HostError, ReturnValue};
 	let result_val = Result::<ReturnValue, HostError>::decode(&mut &serialized_result[..])
-		.ok_or_else(|| trap())?;
+		.ok_or_else(|| trap("Decoding Result<ReturnValue, HostError> failed!"))?;
 
 	match result_val {
 		Ok(return_value) => Ok(match return_value {
 			ReturnValue::Unit => None,
 			ReturnValue::Value(typed_value) => Some(RuntimeValue::from(typed_value)),
 		}),
-		Err(HostError) => Err(trap()),
+		Err(HostError) => Err(trap("Supervisor function returned sandbox::HostError")),
 	}
 }
 
@@ -257,7 +257,8 @@ impl<'a, FE: SandboxCapabilities + Externals + 'a> Externals for GuestExternals<
 				let len = (v & 0xFFFFFFFF) as u32;
 				(ptr, len)
 			}
-			_ => return Err(trap()),
+			Ok(_) => return Err(trap("Supervisor function returned unexpected result!")),
+			Err(_) => return Err(trap("Supervisor function trapped!")),
 		};
 
 		let serialized_result_val = self.supervisor_externals
@@ -474,7 +475,12 @@ impl Store {
 		};
 
 		let mem =
-			MemoryInstance::alloc(Pages(initial as usize), maximum).map_err(|_| UserError("Sandbox error"))?;
+			MemoryInstance::alloc(
+				Pages(initial as usize),
+				maximum,
+			)
+			.map_err(|_| UserError("Sandboxed memory allocation error"))?;
+
 		let mem_idx = self.memories.len();
 		self.memories.push(Some(mem));
 		Ok(mem_idx as u32)
@@ -490,8 +496,8 @@ impl Store {
 		self.instances
 			.get(instance_idx as usize)
 			.cloned()
-			.ok_or_else(|| UserError("Sandbox error"))?
-			.ok_or_else(|| UserError("Sandbox error"))
+			.ok_or_else(|| UserError("Trying to access a non-existent instance"))?
+			.ok_or_else(|| UserError("Trying to access a torndown instance"))
 	}
 
 	/// Returns reference to a memory instance by `memory_idx`.
@@ -499,35 +505,47 @@ impl Store {
 	/// # Errors
 	///
 	/// Returns `Err` If `memory_idx` isn't a valid index of an memory or
-	/// memory is already torndown.
+	/// if memory has been torn down.
 	pub fn memory(&self, memory_idx: u32) -> Result<MemoryRef, UserError> {
 		self.memories
 			.get(memory_idx as usize)
 			.cloned()
-			.ok_or_else(|| UserError("Sandbox error"))?
-			.ok_or_else(|| UserError("Sandbox error"))
+			.ok_or_else(|| UserError("Trying to access a non-existent sandboxed memory"))?
+			.ok_or_else(|| UserError("Trying to access a torndown sandboxed memory"))
 	}
 
-	/// Teardown the memory at the specified index.
+	/// Tear down the memory at the specified index.
 	///
 	/// # Errors
 	///
-	/// Returns `Err` if `memory_idx` isn't a valid index of an memory.
+	/// Returns `Err` if `memory_idx` isn't a valid index of an memory or
+	/// if it has been torn down.
 	pub fn memory_teardown(&mut self, memory_idx: u32) -> Result<(), UserError> {
-		if memory_idx as usize >= self.memories.len() {
-			return Err(UserError("Sandbox error"));
+		match self.memories.get_mut(memory_idx as usize) {
+			None => Err(UserError("Trying to teardown a non-existent sandboxed memory")),
+			Some(None) => Err(UserError("Double teardown of a sandboxed memory")),
+			Some(memory) => {
+				*memory = None;
+				Ok(())
+			}
 		}
-		self.memories[memory_idx as usize] = None;
-		Ok(())
 	}
 
-	/// Teardown the instance at the specified index.
+	/// Tear down the instance at the specified index.
+	///
+	/// # Errors
+	///
+	/// Returns `Err` if `instance_idx` isn't a valid index of an instance or
+	/// if it has been torn down.
 	pub fn instance_teardown(&mut self, instance_idx: u32) -> Result<(), UserError> {
-		if instance_idx as usize >= self.instances.len() {
-			return Err(UserError("Sandbox error"));
+		match self.instances.get_mut(instance_idx as usize) {
+			None => Err(UserError("Trying to teardown a non-existent instance")),
+			Some(None) => Err(UserError("Double teardown of an instance")),
+			Some(instance) => {
+				*instance = None;
+				Ok(())
+			}
 		}
-		self.instances[instance_idx as usize] = None;
-		Ok(())
 	}
 
 	fn register_sandbox_instance(&mut self, sandbox_instance: Rc<SandboxInstance>) -> u32 {

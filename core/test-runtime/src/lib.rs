@@ -43,7 +43,7 @@ extern crate sr_version as runtime_version;
 extern crate hex_literal;
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
-#[cfg_attr(test, macro_use)]
+#[cfg_attr(any(feature = "std", test), macro_use)]
 extern crate substrate_primitives as primitives;
 
 #[cfg(feature = "std")] pub mod genesismap;

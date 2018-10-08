@@ -68,7 +68,8 @@ impl Protocol {
 	fn new_consensus(&mut self, parent_hash: Hash) {
 		let old_consensus = self.live_consensus.take();
 		self.live_consensus = Some(parent_hash);
-		self.consensus_gossip.collect_garbage(old_consensus.as_ref());
+		self.consensus_gossip
+			.collect_garbage(|topic| old_consensus.as_ref().map_or(true, |h| topic != h));
 	}
 }
 
@@ -105,7 +106,7 @@ impl Specialization<Block> for Protocol {
 	}
 
 	fn maintain_peers(&mut self, _ctx: &mut Context<Block>) {
-		self.consensus_gossip.collect_garbage(None);
+		self.consensus_gossip.collect_garbage(|_| true);
 	}
 
 	fn on_block_imported(&mut self, _ctx: &mut Context<Block>, _hash: Hash, _header: &Header) {

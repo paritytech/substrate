@@ -30,7 +30,6 @@ extern crate serde_derive;
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-#[cfg_attr(feature = "std", macro_use)]
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -62,12 +61,8 @@ use system::ensure_signed;
 mod mock;
 
 mod tests;
-mod genesis_config;
 
-#[cfg(feature = "std")]
-pub use genesis_config::GenesisConfig;
-
-const DEFAULT_MINIMUM_VALIDATOR_COUNT: usize = 4;
+const DEFAULT_MINIMUM_VALIDATOR_COUNT: u32 = 4;
 
 #[derive(PartialEq, Clone)]
 #[cfg_attr(test, derive(Debug))]
@@ -83,7 +78,7 @@ pub enum LockStatus<BlockNumber: Parameter> {
 pub struct ValidatorPrefs<Balance> {
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	pub unstake_threshold: u32,
-	// Reward that validator takes up-front; only the rest is split between themself and nominators.
+	// Reward that validator takes up-front; only the rest is split between themselves and nominators.
 	pub validator_payment: Balance,
 }
 
@@ -140,53 +135,53 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Staking {
 
 		/// The ideal number of staking participants.
-		pub ValidatorCount get(validator_count): required u32;
+		pub ValidatorCount get(validator_count) config(): u32;
 		/// Minimum number of staking participants before emergency conditions are imposed.
-		pub MinimumValidatorCount: u32;
+		pub MinimumValidatorCount get(minimum_validator_count) config(): u32 = DEFAULT_MINIMUM_VALIDATOR_COUNT;
 		/// The length of a staking era in sessions.
-		pub SessionsPerEra get(sessions_per_era): required T::BlockNumber;
+		pub SessionsPerEra get(sessions_per_era) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub SessionReward get(session_reward): required Perbill;
+		pub SessionReward get(session_reward) config(): Perbill = Perbill::from_billionths(60);
 		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub OfflineSlash get(offline_slash): required Perbill;
+		pub OfflineSlash get(offline_slash) config(): Perbill = Perbill::from_millionths(1000); // Perbill::from_fraction() is only for std, so use from_millionths().
 		/// Number of instances of offline reports before slashing begins for validators.
-		pub OfflineSlashGrace get(offline_slash_grace): default u32;
+		pub OfflineSlashGrace get(offline_slash_grace) config(): u32;
 		/// The length of the bonding duration in blocks.
-		pub BondingDuration get(bonding_duration): required T::BlockNumber;
+		pub BondingDuration get(bonding_duration) config(): T::BlockNumber = T::BlockNumber::sa(1000);
 
 		/// The current era index.
-		pub CurrentEra get(current_era): required T::BlockNumber;
+		pub CurrentEra get(current_era) config(): T::BlockNumber;
 		/// Preferences that a validator has.
-		pub ValidatorPreferences get(validator_preferences): default map [ T::AccountId => ValidatorPrefs<T::Balance> ];
+		pub ValidatorPreferences get(validator_preferences): map T::AccountId => ValidatorPrefs<T::Balance>;
 		/// All the accounts with a desire to stake.
-		pub Intentions get(intentions): default Vec<T::AccountId>;
+		pub Intentions get(intentions) config(): Vec<T::AccountId>;
 		/// All nominator -> nominee relationships.
-		pub Nominating get(nominating): map [ T::AccountId => T::AccountId ];
+		pub Nominating get(nominating): map T::AccountId => Option<T::AccountId>;
 		/// Nominators for a particular account.
-		pub NominatorsFor get(nominators_for): default map [ T::AccountId => Vec<T::AccountId> ];
+		pub NominatorsFor get(nominators_for): map T::AccountId => Vec<T::AccountId>;
 		/// Nominators for a particular account that is in action right now.
-		pub CurrentNominatorsFor get(current_nominators_for): default map [ T::AccountId => Vec<T::AccountId> ];
+		pub CurrentNominatorsFor get(current_nominators_for): map T::AccountId => Vec<T::AccountId>;
 
 		/// Maximum reward, per validator, that is provided per acceptable session.
-		pub CurrentSessionReward get(current_session_reward): default T::Balance;
+		pub CurrentSessionReward get(current_session_reward) config(): T::Balance;
 		/// Slash, per validator that is taken for the first time they are found to be offline.
-		pub CurrentOfflineSlash get(current_offline_slash): default T::Balance;
+		pub CurrentOfflineSlash get(current_offline_slash) config(): T::Balance;
 
 		/// The next value of sessions per era.
-		pub NextSessionsPerEra get(next_sessions_per_era): T::BlockNumber;
+		pub NextSessionsPerEra get(next_sessions_per_era): Option<T::BlockNumber>;
 		/// The session index at which the era length last changed.
-		pub LastEraLengthChange get(last_era_length_change): default T::BlockNumber;
+		pub LastEraLengthChange get(last_era_length_change): T::BlockNumber;
 
 		/// The highest and lowest staked validator slashable balances.
-		pub StakeRange get(stake_range): default PairOf<T::Balance>;
+		pub StakeRange get(stake_range): PairOf<T::Balance>;
 
 		/// The block at which the `who`'s funds become entirely liquid.
-		pub Bondage get(bondage): default map [ T::AccountId => T::BlockNumber ];
+		pub Bondage get(bondage): map T::AccountId => T::BlockNumber;
 		/// The number of times a given validator has been reported offline. This gets decremented by one each era that passes.
-		pub SlashCount get(slash_count): default map [ T::AccountId => u32 ];
+		pub SlashCount get(slash_count): map T::AccountId => u32;
 
 		/// We are forcing a new era.
-		pub ForcingNewEra get(forcing_new_era): ();
+		pub ForcingNewEra get(forcing_new_era): Option<()>;
 	}
 }
 
@@ -198,11 +193,6 @@ impl<T: Trait> Module<T> {
 	}
 
 	// PUBLIC IMMUTABLES
-
-	/// MinimumValidatorCount getter, introduces a default.
-	pub fn minimum_validator_count() -> usize {
-		<MinimumValidatorCount<T>>::get().map(|v| v as usize).unwrap_or(DEFAULT_MINIMUM_VALIDATOR_COUNT)
-	}
 
 	/// The length of a staking era in blocks.
 	pub fn era_length() -> T::BlockNumber {
@@ -256,7 +246,7 @@ impl<T: Trait> Module<T> {
 	fn unstake(origin: T::Origin, intentions_index: u32) -> Result {
 		let who = ensure_signed(origin)?;
 		// unstake fails in degenerate case of having too few existing staked parties
-		if Self::intentions().len() <= Self::minimum_validator_count() {
+		if Self::intentions().len() <= Self::minimum_validator_count() as usize {
 			return Err("cannot unstake when there are too few staked participants")
 		}
 		Self::apply_unstake(&who, intentions_index as usize)
@@ -375,7 +365,7 @@ impl<T: Trait> Module<T> {
 	fn slash_validator(v: &T::AccountId, slash: T::Balance) {
 		// skip the slash in degenerate case of having only 4 staking participants despite having a larger
 		// desired number of validators (validator_count).
-		if Self::intentions().len() <= Self::minimum_validator_count() {
+		if Self::intentions().len() <= Self::minimum_validator_count() as usize {
 			return
 		}
 
@@ -490,7 +480,7 @@ impl<T: Trait> Module<T> {
 
 		// Avoid reevaluate validator set if it would leave us with fewer than the minimum
 		// needed validators
-		if intentions.len() < Self::minimum_validator_count() {
+		if intentions.len() < Self::minimum_validator_count() as usize {
 			return
 		}
 

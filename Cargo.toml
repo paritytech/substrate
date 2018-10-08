@@ -24,6 +24,7 @@ members = [
 	"core/client",
 	"core/client/db",
 	"core/executor",
+	"core/finality-grandpa",
 	"core/keyring",
 	"core/misbehavior-check",
 	"core/network",

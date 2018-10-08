@@ -201,7 +201,17 @@ fn transfer<'a, T: Trait>(
 	value: T::Balance,
 	ctx: &mut ExecutionContext<'a, T>,
 ) -> Result<(), &'static str> {
-	let would_create = ctx.overlay.get_balance(dest).is_zero();
+	let to_balance = ctx.overlay.get_balance(dest);
+
+	// This flag is totally distinct from `contract_create`, which shows if this function
+	// is called from `CREATE` procedure.
+	//
+	// `would_create` indicates whether the account will be created if this transfer gets executed.
+	// For example, we can create a contract at the address which already has some funds. In this
+	// case `contract_create` will be `true` but `would_create` will be `false`. Another example would
+	// be when this function is called from `CALL`, but `dest` doesn't exist yet. In this case
+	// `contract_create` will be `false` but `would_create` will be `true`.
+	let would_create = to_balance.is_zero();
 
 	let fee: T::Balance = if contract_create {
 		<Module<T>>::contract_fee()
@@ -228,7 +238,6 @@ fn transfer<'a, T: Trait>(
 	}
 	<T as balances::Trait>::EnsureAccountLiquid::ensure_account_liquid(transactor)?;
 
-	let to_balance = ctx.overlay.get_balance(dest);
 	let new_to_balance = match to_balance.checked_add(&value) {
 		Some(b) => b,
 		None => return Err("destination balance too high to receive value"),

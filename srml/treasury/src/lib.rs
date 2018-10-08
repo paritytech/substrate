@@ -18,7 +18,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg_attr(feature = "std", macro_use)]
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -107,30 +106,30 @@ decl_storage! {
 
 		/// Proportion of funds that should be bonded in order to place a proposal. An accepted
 		/// proposal gets these back. A rejected proposal doesn't.
-		ProposalBond get(proposal_bond): required Permill;
+		ProposalBond get(proposal_bond) config(): Permill;
 
 		/// Minimum amount of funds that should be placed in a deposit for making a proposal.
-		ProposalBondMinimum get(proposal_bond_minimum): required T::Balance;
+		ProposalBondMinimum get(proposal_bond_minimum) config(): T::Balance;
 
 		/// Period between successive spends.
-		SpendPeriod get(spend_period): required T::BlockNumber;
+		SpendPeriod get(spend_period) config(): T::BlockNumber = runtime_primitives::traits::One::one();
 
 		/// Percentage of spare funds (if any) that are burnt per spend period.
-		Burn get(burn): required Permill;
+		Burn get(burn) config(): Permill;
 
 		// State...
 
 		/// Total funds available to this module for spending.
-		Pot get(pot): default T::Balance;
+		Pot get(pot): T::Balance;
 
 		/// Number of proposals that have been made.
-		ProposalCount get(proposal_count): default ProposalIndex;
+		ProposalCount get(proposal_count): ProposalIndex;
 
 		/// Proposals that have been made.
-		Proposals get(proposals): map [ ProposalIndex => Proposal<T::AccountId, T::Balance> ];
+		Proposals get(proposals): map ProposalIndex => Option<Proposal<T::AccountId, T::Balance>>;
 
 		/// Proposal indices that have been approved but not yet awarded.
-		Approvals get(approvals): default Vec<ProposalIndex>;
+		Approvals get(approvals): Vec<ProposalIndex>;
 	}
 }
 
@@ -284,45 +283,6 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 		if (n % Self::spend_period()).is_zero() {
 			Self::spend_funds();
 		}
-	}
-}
-
-#[cfg(feature = "std")]
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-/// The genesis block configuration type. This is a simple default-capable struct that
-/// contains any fields with which this module can be configured at genesis time.
-pub struct GenesisConfig<T: Trait> {
-	pub proposal_bond: Permill,
-	pub proposal_bond_minimum: T::Balance,
-	pub spend_period: T::BlockNumber,
-	pub burn: Permill,
-}
-
-#[cfg(feature = "std")]
-impl<T: Trait> Default for GenesisConfig<T> {
-	fn default() -> Self {
-		GenesisConfig {
-			proposal_bond: Default::default(),
-			proposal_bond_minimum: Default::default(),
-			spend_period: runtime_primitives::traits::One::one(),
-			burn: Default::default(),
-		}
-	}
-}
-
-#[cfg(feature = "std")]
-impl<T: Trait> runtime_primitives::BuildStorage for GenesisConfig<T>
-{
-	fn build_storage(self) -> ::std::result::Result<runtime_primitives::StorageMap, String> {
-		use codec::Encode;
-		Ok(map![
-			Self::hash(<ProposalBond<T>>::key()).to_vec() => self.proposal_bond.encode(),
-			Self::hash(<ProposalBondMinimum<T>>::key()).to_vec() => self.proposal_bond_minimum.encode(),
-			Self::hash(<SpendPeriod<T>>::key()).to_vec() => self.spend_period.encode(),
-			Self::hash(<Burn<T>>::key()).to_vec() => self.burn.encode()
-		])
 	}
 }
 

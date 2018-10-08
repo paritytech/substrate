@@ -37,9 +37,14 @@ extern crate rand;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate parity_codec_derive;
 
-#[cfg(test)] extern crate env_logger;
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate substrate_test_client as test_client;
+#[cfg(test)]
+extern crate env_logger;
+
+#[cfg(any(test, feature = "test-helpers"))]
+extern crate substrate_keyring as keyring;
+
+#[cfg(any(test, feature = "test-helpers"))]
+extern crate substrate_test_client as test_client;
 
 mod service;
 mod sync;
@@ -55,7 +60,8 @@ pub mod error;
 pub mod message;
 pub mod specialization;
 
-#[cfg(test)] mod test;
+#[cfg(any(test, feature = "test-helpers"))]
+pub mod test;
 
 pub use chain::Client as ClientHandle;
 pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,

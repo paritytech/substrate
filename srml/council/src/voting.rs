@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
-use primitives::traits::{OnFinalise, Hash};
+use primitives::traits::{OnFinalise, Hash, As};
 use runtime_io::print;
 use srml_support::dispatch::Result;
 use srml_support::{StorageValue, StorageMap, IsSubType};
@@ -43,20 +43,20 @@ decl_module! {
 
 decl_storage! {
 	trait Store for Module<T: Trait> as CouncilVoting {
-		pub CooloffPeriod get(cooloff_period): required T::BlockNumber;
-		pub VotingPeriod get(voting_period): required T::BlockNumber;
-		pub Proposals get(proposals): required Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
-		pub ProposalOf get(proposal_of): map [ T::Hash => T::Proposal ];
-		pub ProposalVoters get(proposal_voters): default map [ T::Hash => Vec<T::AccountId> ];
-		pub CouncilVoteOf get(vote_of): map [ (T::Hash, T::AccountId) => bool ];
-		pub VetoedProposal get(veto_of): map [ T::Hash => (T::BlockNumber, Vec<T::AccountId>) ];
+		pub CooloffPeriod get(cooloff_period) config(): T::BlockNumber = T::BlockNumber::sa(1000);
+		pub VotingPeriod get(voting_period) config(): T::BlockNumber = T::BlockNumber::sa(3);
+		pub Proposals get(proposals) build(|_| vec![0u8; 0]): Vec<(T::BlockNumber, T::Hash)>; // ordered by expiry.
+		pub ProposalOf get(proposal_of): map T::Hash => Option<T::Proposal>;
+		pub ProposalVoters get(proposal_voters): map T::Hash => Vec<T::AccountId>;
+		pub CouncilVoteOf get(vote_of): map (T::Hash, T::AccountId) => Option<bool>;
+		pub VetoedProposal get(veto_of): map T::Hash => Option<(T::BlockNumber, Vec<T::AccountId>)>;
 	}
 }
 
 /// An event in this module.
 decl_event!(
 	pub enum Event<T> where <T as system::Trait>::Hash {
-		/// A voting tally has happened for a referendum cancelation vote.
+		/// A voting tally has happened for a referendum cancellation vote.
 		/// Last three are yes, no, abstain counts.
 		TallyCancelation(Hash, u32, u32, u32),
 		/// A voting tally has happened for a referendum vote.
