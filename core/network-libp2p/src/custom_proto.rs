@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use libp2p::core::{Multiaddr, ConnectionUpgrade, Endpoint};
 use libp2p::tokio_codec::Framed;
-use std::collections::VecDeque;
-use std::io::Error as IoError;
-use std::vec::IntoIter as VecIntoIter;
+use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream, task};
 use tokio_io::{AsyncRead, AsyncWrite};
 use unsigned_varint::codec::UviBytes;
@@ -30,24 +28,21 @@ use ProtocolId;
 /// Note that "a single protocol" here refers to `par` for example. However
 /// each protocol can have multiple different versions for networking purposes.
 #[derive(Clone)]
-pub struct RegisteredProtocol<TUserData> {
+pub struct RegisteredProtocol {
 	/// Id of the protocol for API purposes.
 	id: ProtocolId,
 	/// Base name of the protocol as advertised on the network.
 	/// Ends with `/` so that we can append a version number behind.
 	base_name: Bytes,
-	/// List of protocol versions that we support, plus their packet count.
+	/// List of protocol versions that we support.
 	/// Ordered in descending order so that the best comes first.
-	/// The packet count is used to filter out invalid messages.
-	supported_versions: Vec<(u8, u8)>,
-	/// Custom data.
-	custom_data: TUserData,
+	supported_versions: Vec<u8>,
 }
 
-impl<TUserData> RegisteredProtocol<TUserData> {
+impl RegisteredProtocol {
 	/// Creates a new `RegisteredProtocol`. The `custom_data` parameter will be
 	/// passed inside the `RegisteredProtocolOutput`.
-	pub fn new(custom_data: TUserData, protocol: ProtocolId, versions: &[(u8, u8)])
+	pub fn new(protocol: ProtocolId, versions: &[u8])
 		-> Self {
 		let mut base_name = Bytes::from_static(b"/substrate/");
 		base_name.extend_from_slice(&protocol);
@@ -57,11 +52,10 @@ impl<TUserData> RegisteredProtocol<TUserData> {
 			base_name,
 			id: protocol,
 			supported_versions: {
-				let mut tmp: Vec<_> = versions.iter().rev().cloned().collect();
-				tmp.sort_unstable_by(|a, b| b.1.cmp(&a.1));
+				let mut tmp = versions.to_vec();
+				tmp.sort_unstable_by(|a, b| b.cmp(&a));
 				tmp
 			},
-			custom_data,
 		}
 	}
 
@@ -69,12 +63,6 @@ impl<TUserData> RegisteredProtocol<TUserData> {
 	#[inline]
 	pub fn id(&self) -> ProtocolId {
 		self.id
-	}
-
-	/// Returns the custom data that was passed to `new`.
-	#[inline]
-	pub fn custom_data(&self) -> &TUserData {
-		&self.custom_data
 	}
 }
 
@@ -88,23 +76,12 @@ pub struct RegisteredProtocolSubstream<TSubstream> {
 	requires_poll_complete: bool,
 	/// The underlying substream.
 	inner: stream::Fuse<Framed<TSubstream, UviBytes<Bytes>>>,
-	/// Maximum packet id.
-	packet_count: u8,
 	/// Id of the protocol.
 	protocol_id: ProtocolId,
 	/// Version of the protocol that was negotiated.
 	protocol_version: u8,
 	/// Task to notify when something is changed and we need to be polled.
 	to_notify: Option<task::Task>,
-}
-
-/// Packet of data that can be sent or received.
-#[derive(Debug, Clone)]
-pub struct Packet {
-	/// Identifier of the packet.
-	pub id: u8,
-	/// The raw data.
-	pub data: Bytes,
 }
 
 impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
@@ -134,14 +111,10 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 	}
 
 	/// Sends a message to the substream.
-	pub fn send_message(&mut self, Packet { id: packet_id, data }: Packet) {
-		if packet_id >= self.packet_count {
-			error!(target: "sub-libp2p", "Tried to send a packet with an invalid ID {}", packet_id);
-			return;
-		}
-
+	pub fn send_message(&mut self, data: Bytes) {
+		// TODO: remove the packet id system
 		let mut message = Bytes::with_capacity(1 + data.len());
-		message.extend_from_slice(&[packet_id]);
+		message.extend_from_slice(&[0]);
 		message.extend_from_slice(&data);
 		self.send_queue.push_back(message);
 
@@ -156,36 +129,13 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 			task.notify();
 		}
 	}
-
-	/// Turns raw data into a packet and checks whether it is valid.
-	fn data_to_packet(&self, mut data: BytesMut) -> Result<Packet, ()> {
-		// The `data` should be prefixed by the packet ID, therefore an empty packet is invalid.
-		if data.is_empty() {
-			debug!(target: "sub-libp2p", "ignoring incoming packet because it was empty");
-			return Err(());
-		}
-
-		let packet = {
-			let id = data[0];
-			let data = data.split_off(1);
-			Packet { id, data: data.freeze() }
-		};
-
-		if packet.id >= self.packet_count {
-			debug!(target: "sub-libp2p", "ignoring incoming packet because packet_id {} is \
-				too large", packet.id);
-			return Err(())
-		}
-
-		Ok(packet)
-	}
 }
 
 impl<TSubstream> Stream for RegisteredProtocolSubstream<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite,
 {
-	type Item = Packet;
-	type Error = IoError;
+	type Item = Bytes;
+	type Error = io::Error;
 
 	fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
 		// If we are closing, close as soon as the Sink is closed.
@@ -215,10 +165,16 @@ where TSubstream: AsyncRead + AsyncWrite,
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
 		loop {
 			match self.inner.poll()? {
-				Async::Ready(Some(data)) =>
-					if let Ok(packet) = self.data_to_packet(data) {
-						return Ok(Async::Ready(Some(packet)))
-					},
+				Async::Ready(Some(mut data)) => {
+					// The `data` should be prefixed by the packet ID, therefore an empty
+					// packet is invalid.
+					// TODO: remove the packet id system
+					if data.is_empty() {
+						return Err(io::Error::new(io::ErrorKind::Other, "bad packet"));
+					}
+					let data = data.split_off(1);
+					return Ok(Async::Ready(Some(data.freeze())))
+				},
 				Async::Ready(None) =>
 					if !self.requires_poll_complete && self.send_queue.is_empty() {
 						return Ok(Async::Ready(None))
@@ -234,9 +190,8 @@ where TSubstream: AsyncRead + AsyncWrite,
 	}
 }
 
-impl<TSubstream, TUserData> ConnectionUpgrade<TSubstream> for RegisteredProtocol<TUserData>
+impl<TSubstream> ConnectionUpgrade<TSubstream> for RegisteredProtocol
 where TSubstream: AsyncRead + AsyncWrite,
-	  TUserData: Clone,
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
 	type UpgradeIdentifier = u8;		// Protocol version
@@ -244,7 +199,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 	#[inline]
 	fn protocol_names(&self) -> Self::NamesIter {
 		// Report each version as an individual protocol.
-		self.supported_versions.iter().map(|&(ver, _)| {
+		self.supported_versions.iter().map(|&ver| {
 			let num = ver.to_string();
 			let mut name = self.base_name.clone();
 			name.extend_from_slice(num.as_bytes());
@@ -253,7 +208,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 	}
 
 	type Output = RegisteredProtocolSubstream<TSubstream>;
-	type Future = future::FutureResult<Self::Output, IoError>;
+	type Future = future::FutureResult<Self::Output, io::Error>;
 
 	#[allow(deprecated)]
 	fn upgrade(
@@ -263,13 +218,6 @@ where TSubstream: AsyncRead + AsyncWrite,
 		_: Endpoint,
 		_: &Multiaddr
 	) -> Self::Future {
-		let packet_count = self.supported_versions
-			.iter()
-			.find(|&(v, _)| *v == protocol_version)
-			.expect("negotiated protocol version that wasn't advertised ; \
-				programmer error")
-			.1;
-		
 		let framed = Framed::new(socket, UviBytes::default());
 
 		future::ok(RegisteredProtocolSubstream {
@@ -277,7 +225,6 @@ where TSubstream: AsyncRead + AsyncWrite,
 			send_queue: VecDeque::new(),
 			requires_poll_complete: false,
 			inner: framed.fuse(),
-			packet_count,
 			protocol_id: self.id,
 			protocol_version,
 			to_notify: None,
@@ -287,9 +234,9 @@ where TSubstream: AsyncRead + AsyncWrite,
 
 // Connection upgrade for all the protocols contained in it.
 #[derive(Clone)]
-pub struct RegisteredProtocols<TUserData>(pub Vec<RegisteredProtocol<TUserData>>);
+pub struct RegisteredProtocols(pub Vec<RegisteredProtocol>);
 
-impl<TUserData> RegisteredProtocols<TUserData> {
+impl RegisteredProtocols {
 	/// Returns the number of protocols.
 	#[inline]
 	pub fn len(&self) -> usize {
@@ -298,7 +245,7 @@ impl<TUserData> RegisteredProtocols<TUserData> {
 
 	/// Finds a protocol in the list by its id.
 	pub fn find_protocol(&self, protocol: ProtocolId)
-		-> Option<&RegisteredProtocol<TUserData>> {
+		-> Option<&RegisteredProtocol> {
 		self.0.iter().find(|p| p.id == protocol)
 	}
 
@@ -308,19 +255,18 @@ impl<TUserData> RegisteredProtocols<TUserData> {
 	}
 }
 
-impl<TUserData> Default for RegisteredProtocols<TUserData> {
+impl Default for RegisteredProtocols {
 	fn default() -> Self {
 		RegisteredProtocols(Vec::new())
 	}
 }
 
-impl<TSubstream, TUserData> ConnectionUpgrade<TSubstream> for RegisteredProtocols<TUserData>
+impl<TSubstream> ConnectionUpgrade<TSubstream> for RegisteredProtocols
 where TSubstream: AsyncRead + AsyncWrite,
-	  TUserData: Clone,
 {
 	type NamesIter = VecIntoIter<(Bytes, Self::UpgradeIdentifier)>;
 	type UpgradeIdentifier = (usize,
-		<RegisteredProtocol<TUserData> as ConnectionUpgrade<TSubstream>>::UpgradeIdentifier);
+		<RegisteredProtocol as ConnectionUpgrade<TSubstream>>::UpgradeIdentifier);
 
 	fn protocol_names(&self) -> Self::NamesIter {
 		// We concat the lists of `RegisteredProtocol::protocol_names` for
@@ -331,8 +277,8 @@ where TSubstream: AsyncRead + AsyncWrite,
 		).collect::<Vec<_>>().into_iter()
 	}
 
-	type Output = <RegisteredProtocol<TUserData> as ConnectionUpgrade<TSubstream>>::Output;
-	type Future = <RegisteredProtocol<TUserData> as ConnectionUpgrade<TSubstream>>::Future;
+	type Output = <RegisteredProtocol as ConnectionUpgrade<TSubstream>>::Output;
+	type Future = <RegisteredProtocol as ConnectionUpgrade<TSubstream>>::Future;
 
 	#[inline]
 	fn upgrade(

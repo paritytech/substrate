@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
-use custom_proto::RegisteredProtocols;
+use custom_proto::{RegisteredProtocol, RegisteredProtocols};
 use fnv::{FnvHashMap, FnvHashSet};
 use futures::{prelude::*, task, Stream};
 use futures::sync::{oneshot, mpsc};
@@ -36,8 +36,8 @@ use std::time::{Duration, Instant};
 use swarm::{self, Swarm, SwarmEvent};
 use topology::{DisconnectReason, NetTopology};
 use tokio_timer::{Delay, Interval};
-use {Error, ErrorKind, NetworkConfiguration, NetworkProtocolHandler, NodeIndex, parse_str_addr};
-use {NonReservedPeerMode, PacketId, ProtocolId};
+use {Error, ErrorKind, NetworkConfiguration, NodeIndex, parse_str_addr};
+use {NonReservedPeerMode, ProtocolId};
 
 // File where the network topology is stored.
 const NODES_FILE: &str = "nodes.json";
@@ -47,16 +47,18 @@ const PEER_DISABLE_DURATION: Duration = Duration::from_secs(5 * 60);
 /// Starts the substrate libp2p service.
 ///
 /// Returns a stream that must be polled regularly in order for the networking to function.
-pub fn start_service(
+pub fn start_service<TProtos>(
 	config: NetworkConfiguration,
-	registered_custom: Arc<RegisteredProtocols<Arc<NetworkProtocolHandler + Send + Sync>>>,
-) -> Result<Service, Error> {
+	registered_custom: TProtos,
+) -> Result<Service, Error>
+where TProtos: IntoIterator<Item = RegisteredProtocol> {
 	// Private and public keys configuration.
 	let local_private_key = obtain_private_key(&config)?;
 	let local_public_key = local_private_key.to_public_key();
 	let local_peer_id = local_public_key.clone().into_peer_id();
 
 	// Build the swarm.
+	let registered_custom = RegisteredProtocols(registered_custom.into_iter().collect());
 	let mut swarm = swarm::start_swarm(registered_custom, local_private_key)?;
 
 	// Listen on multiaddresses.
@@ -170,18 +172,6 @@ pub fn start_service(
 
 /// Event produced by the service.
 pub enum ServiceEvent {
-	/// We have successfully connected to a new node.
-	NewNode {
-		/// Index that was attributed for this node. Will be used for all further interaction with
-		/// it.
-		node_index: NodeIndex,
-		/// Public key of the node as a peer id.
-		peer_id: PeerId,
-		/// Whether we dialed the node or if it came to us. Should be used only for statistics
-		/// purposes.
-		endpoint: ConnectedPoint,
-	},
-
 	/// Closed connection to a node.
 	///
 	/// It is guaranteed that this node has been opened with a `NewNode` event beforehand. However
@@ -191,17 +181,6 @@ pub enum ServiceEvent {
 		node_index: NodeIndex,
 		/// List of custom protocols that were still open.
 		closed_custom_protocols: Vec<ProtocolId>,
-	},
-
-	/// Report the duration of the ping for the given node.
-	PingDuration(NodeIndex, Duration),
-
-	/// Report information about the node.
-	NodeInfos {
-		/// Index of the node.
-		node_index: NodeIndex,
-		/// The client version. Note that it can be anything and should not be trusted.
-		client_version: String,
 	},
 
 	/// A custom protocol substream has been opened with a node.
@@ -238,8 +217,6 @@ pub enum ServiceEvent {
 		node_index: NodeIndex,
 		/// Protocol which generated the message.
 		protocol_id: ProtocolId,
-		/// Identifier of the packet.
-		packet_id: u8,
 		/// Data that has been received.
 		data: Bytes,
 	},
@@ -248,7 +225,7 @@ pub enum ServiceEvent {
 /// Network service. Must be polled regularly in order for the networking to work.
 pub struct Service {
 	/// Stream of events of the swarm.
-	swarm: Swarm<Arc<NetworkProtocolHandler + Send + Sync>>,
+	swarm: Swarm,
 
 	/// Maximum number of incoming non-reserved connections, taken from the config.
 	max_incoming_connections: usize,
@@ -256,10 +233,8 @@ pub struct Service {
 	/// Maximum number of outgoing non-reserved connections, taken from the config.
 	max_outgoing_connections: usize,
 
-	/// For each node we're connected to, its address if known.
-	///
-	/// This is used purely to report disconnections to the topology.
-	nodes_addresses: FnvHashMap<NodeIndex, Multiaddr>,
+	/// For each node we're connected to, how we're connected to it.
+	nodes_addresses: FnvHashMap<NodeIndex, ConnectedPoint>,
 
 	/// If true, only reserved peers can connect.
 	reserved_only: bool,
@@ -322,6 +297,12 @@ impl Service {
 		self.kad_system.local_peer_id()
 	}
 
+	/// Returns the list of all the peers we are connected to.
+	#[inline]
+	pub fn connected_peers<'a>(&'a self) -> impl Iterator<Item = NodeIndex> + 'a {
+		self.nodes_addresses.keys().cloned()
+	}
+
 	/// Try to add a reserved peer.
 	pub fn add_reserved_peer(&mut self, peer_id: PeerId, addr: Multiaddr) {
 		self.reserved_peers.insert(peer_id.clone());
@@ -330,35 +311,59 @@ impl Service {
 	}
 
 	/// Try to remove a reserved peer.
-	// TODO: remove `_addr` parameter?
-	pub fn remove_reserved_peer(&mut self, peer_id: PeerId, _addr: Multiaddr) {
+	///
+	/// If we are in reserved mode and we were connected to a node with this peer ID, then this
+	/// method will disconnect it and return its index.
+	pub fn remove_reserved_peer(&mut self, peer_id: PeerId) -> Option<NodeIndex> {
 		self.reserved_peers.remove(&peer_id);
 		if self.reserved_only {
 			if let Some(node_index) = self.swarm.latest_node_by_peer_id(&peer_id) {
 				self.drop_node_inner(node_index, DisconnectReason::NoSlot, None);
+				return Some(node_index);
 			}
+		}
+		None
+	}
+
+	/// Start accepting all peers again if we weren't.
+	pub fn accept_unreserved_peers(&mut self) {
+		if self.reserved_only {
+			self.reserved_only = false;
+			self.connect_to_nodes();
 		}
 	}
 
-	/// Set the non-reserved peer mode.
-	pub fn set_non_reserved_mode(&mut self, mode: NonReservedPeerMode) {
-		self.reserved_only = mode == NonReservedPeerMode::Deny;
-		if self.reserved_only {
-			// Disconnect the nodes that are not reserved.
-			let to_disconnect: Vec<NodeIndex> = self.swarm
-				.nodes()
-				.filter(|&n| {
-					let peer_id = self.swarm.peer_id_of_node(n)
-						.expect("swarm.nodes() always returns valid node indices");
-					!self.reserved_peers.contains(peer_id)
-				})
-				.collect();
-			for node_index in to_disconnect {
-				self.drop_node_inner(node_index, DisconnectReason::NoSlot, None);
-			}
-		} else {
-			self.connect_to_nodes();
+	/// Start refusing non-reserved nodes. Returns the list of nodes that have been disconnected.
+	pub fn deny_unreserved_peers(&mut self) -> Vec<NodeIndex> {
+		self.reserved_only = true;
+
+		// Disconnect the nodes that are not reserved.
+		let to_disconnect: Vec<NodeIndex> = self.swarm
+			.nodes()
+			.filter(|&n| {
+				let peer_id = self.swarm.peer_id_of_node(n)
+					.expect("swarm.nodes() always returns valid node indices");
+				!self.reserved_peers.contains(peer_id)
+			})
+			.collect();
+
+		for &node_index in &to_disconnect {
+			self.drop_node_inner(node_index, DisconnectReason::NoSlot, None);
 		}
+
+		to_disconnect
+	}
+
+	/// Returns the `PeerId` of a node.
+	#[inline]
+	pub fn peer_id_of_node(&self, node_index: NodeIndex) -> Option<&PeerId> {
+		self.swarm.peer_id_of_node(node_index)
+	}
+
+	/// Returns the way we are connected to a node.
+	#[inline]
+	pub fn node_endpoint(&self, node_index: NodeIndex) -> Option<&ConnectedPoint> {
+		self.nodes_addresses.get(&node_index)
 	}
 
 	/// Sends a message to a peer using the custom protocol.
@@ -367,10 +372,9 @@ impl Service {
 		&mut self,
 		node_index: NodeIndex,
 		protocol: ProtocolId,
-		packet_id: PacketId,
 		data: Vec<u8>
 	) {
-		self.swarm.send_custom_message(node_index, protocol, packet_id, data)
+		self.swarm.send_custom_message(node_index, protocol, data)
 	}
 
 	/// Disconnects a peer and bans it for a little while.
@@ -378,6 +382,10 @@ impl Service {
 	/// Same as `drop_node`, except that the same peer will not be able to reconnect later.
 	#[inline]
 	pub fn ban_node(&mut self, node_index: NodeIndex) {
+		if let Some(peer_id) = self.swarm.peer_id_of_node(node_index) {
+			info!(target: "sub-libp2p", "Banned {:?}", peer_id);
+		}
+
 		self.drop_node_inner(node_index, DisconnectReason::Banned, Some(PEER_DISABLE_DURATION));
 	}
 
@@ -387,6 +395,10 @@ impl Service {
 	/// Corresponding closing events will be generated once the closing actually happens.
 	#[inline]
 	pub fn drop_node(&mut self, node_index: NodeIndex) {
+		if let Some(peer_id) = self.swarm.peer_id_of_node(node_index) {
+			info!(target: "sub-libp2p", "Dropped {:?}", peer_id);
+		}
+
 		self.drop_node_inner(node_index, DisconnectReason::Useless, None);
 	}
 
@@ -414,8 +426,8 @@ impl Service {
 			to_notify.notify();
 		}
 
-		if let Some(addr) = self.nodes_addresses.remove(&node_index) {
-			self.topology.report_disconnected(&addr, reason);
+		if let Some(ConnectedPoint::Dialer { address }) = self.nodes_addresses.remove(&node_index) {
+			self.topology.report_disconnected(&address, reason);
 		}
 
 		if let Some(disable_duration) = disable_duration {
@@ -472,10 +484,8 @@ impl Service {
 				continue;
 			}
 
-			// TODO: it is possible that we are connected to this peer, but the topology
-			// doesn't know about that because we don't know its multiaddress yet
-			// TODO: after some changes in libp2p, we can avoid this situation and also remove
-			// the `num_to_open` variable
+			// It is possible that we are connected to this peer, but the topology doesn't know
+			// about that because it is an incoming connection.
 			match self.swarm.ensure_connection(peer_id.clone(), addr.clone()) {
 				Ok(true) => (),
 				Ok(false) => num_to_open -= 1,
@@ -578,15 +588,13 @@ impl Service {
 
 	/// Handles the swarm opening a connection to the given peer.
 	///
-	/// Returns the `NewNode` event to produce.
-	///
 	/// > **Note**: Must be called from inside `poll()`, otherwise it will panic.
 	fn handle_connection(
 		&mut self,
 		node_index: NodeIndex,
 		peer_id: PeerId,
 		endpoint: ConnectedPoint
-	) -> Option<ServiceEvent> {
+	) {
 		// Reject connections to our own node, which can happen if the DHT contains `127.0.0.1`
 		// for example.
 		if &peer_id == self.kad_system.local_peer_id() {
@@ -595,7 +603,7 @@ impl Service {
 			if let ConnectedPoint::Dialer { ref address } = endpoint {
 				self.topology.report_failed_to_connect(address);
 			}
-			return None;
+			return;
 		}
 
 		// Reject non-reserved nodes if we're in reserved mode.
@@ -606,7 +614,7 @@ impl Service {
 			if let ConnectedPoint::Dialer { ref address } = endpoint {
 				self.topology.report_failed_to_connect(address);
 			}
-			return None;
+			return;
 		}
 
 		// Reject connections from disabled peers.
@@ -617,7 +625,7 @@ impl Service {
 				if let ConnectedPoint::Dialer { ref address } = endpoint {
 					self.topology.report_failed_to_connect(address);
 				}
-				return None;
+				return;
 			}
 		}
 
@@ -629,18 +637,17 @@ impl Service {
 				} else {
 					info!(target: "sub-libp2p", "Rejected incoming peer {:?} because we are full", peer_id);
 					assert_eq!(self.swarm.drop_node(node_index), Ok(Vec::new()));
-					return None;
+					return;
 				}
 			},
 			ConnectedPoint::Dialer { ref address } => {
 				if is_reserved || self.num_outgoing_connections() < self.max_outgoing_connections {
 					debug!(target: "sub-libp2p", "Connected to {:?} through {}", peer_id, address);
 					self.topology.report_connected(address, &peer_id);
-					self.nodes_addresses.insert(node_index, address.clone());
 				} else {
 					debug!(target: "sub-libp2p", "Rejected dialed peer {:?} because we are full", peer_id);
 					assert_eq!(self.swarm.drop_node(node_index), Ok(Vec::new()));
-					return None;
+					return;
 				}
 			},
 		};
@@ -649,19 +656,19 @@ impl Service {
 			error!(target: "sub-libp2p", "accept_node returned an error");
 		}
 
+		// We are finally sure that we're connected.
+
+		if let ConnectedPoint::Dialer { ref address } = endpoint {
+			self.topology.report_connected(address, &peer_id);
+		}
+		self.nodes_addresses.insert(node_index, endpoint.clone());
+
 		// If we're waiting for a Kademlia substream for this peer id, open one.
 		let kad_pending_ctrls = self.kad_pending_ctrls.lock();
 		if kad_pending_ctrls.contains_key(&peer_id) {
 			let res = self.swarm.open_kademlia(node_index);
 			debug_assert!(res.is_ok());
 		}
-		drop(kad_pending_ctrls);
-
-		Some(ServiceEvent::NewNode {
-			node_index,
-			peer_id,
-			endpoint
-		})
 	}
 
 	/// Processes an event received by the swarm.
@@ -674,22 +681,20 @@ impl Service {
 		event: SwarmEvent
 	) -> Option<ServiceEvent> {
 		match event {
-			SwarmEvent::NodePending { node_index, peer_id, endpoint } =>
-				if let Some(event) = self.handle_connection(node_index, peer_id, endpoint) {
-					Some(event)
-				} else {
-					None
-				},
+			SwarmEvent::NodePending { node_index, peer_id, endpoint } => {
+				self.handle_connection(node_index, peer_id, endpoint);
+				None
+			},
 			SwarmEvent::Reconnected { node_index, endpoint, closed_custom_protocols } => {
-				if let Some(addr) = self.nodes_addresses.remove(&node_index) {
-					self.topology.report_disconnected(&addr, DisconnectReason::FoundBetterAddr);
+				if let Some(ConnectedPoint::Dialer { address }) = self.nodes_addresses.remove(&node_index) {
+					self.topology.report_disconnected(&address, DisconnectReason::FoundBetterAddr);
 				}
-				if let ConnectedPoint::Dialer { address } = endpoint {
+				if let ConnectedPoint::Dialer { ref address } = endpoint {
 					let peer_id = self.swarm.peer_id_of_node(node_index)
 						.expect("the swarm always produces events containing valid node indices");
-					self.nodes_addresses.insert(node_index, address.clone());
-					self.topology.report_connected(&address, peer_id);
+					self.topology.report_connected(address, peer_id);
 				}
+				self.nodes_addresses.insert(node_index, endpoint);
 				Some(ServiceEvent::ClosedCustomProtocols {
 					node_index,
 					protocols: closed_custom_protocols,
@@ -697,8 +702,8 @@ impl Service {
 			},
 			SwarmEvent::NodeClosed { node_index, peer_id, closed_custom_protocols } => {
 				debug!(target: "sub-libp2p", "Connection to {:?} closed gracefully", peer_id);
-				if let Some(addr) = self.nodes_addresses.get(&node_index) {
-					self.topology.report_disconnected(addr, DisconnectReason::RemoteClosed);
+				if let Some(ConnectedPoint::Dialer { ref address }) = self.nodes_addresses.get(&node_index) {
+					self.topology.report_disconnected(address, DisconnectReason::RemoteClosed);
 				}
 				self.connect_to_nodes();
 				Some(ServiceEvent::NodeClosed {
@@ -715,8 +720,8 @@ impl Service {
 			SwarmEvent::UnresponsiveNode { node_index } => {
 				let closed_custom_protocols = self.swarm.drop_node(node_index)
 					.expect("the swarm always produces events containing valid node indices");
-				if let Some(addr) = self.nodes_addresses.remove(&node_index) {
-					self.topology.report_disconnected(&addr, DisconnectReason::Useless);
+				if let Some(ConnectedPoint::Dialer { address }) = self.nodes_addresses.remove(&node_index) {
+					self.topology.report_disconnected(&address, DisconnectReason::Useless);
 				}
 				Some(ServiceEvent::NodeClosed {
 					node_index,
@@ -730,27 +735,22 @@ impl Service {
 				let closed_custom_protocols = self.swarm.drop_node(node_index)
 					.expect("the swarm always produces events containing valid node indices");
 				self.topology.report_useless(&peer_id);
-				if let Some(addr) = self.nodes_addresses.remove(&node_index) {
-					self.topology.report_disconnected(&addr, DisconnectReason::Useless);
+				if let Some(ConnectedPoint::Dialer { address }) = self.nodes_addresses.remove(&node_index) {
+					self.topology.report_disconnected(&address, DisconnectReason::Useless);
 				}
 				Some(ServiceEvent::NodeClosed {
 					node_index,
 					closed_custom_protocols,
 				})
 			},
-			SwarmEvent::PingDuration(node_index, ping) =>
-				Some(ServiceEvent::PingDuration(node_index, ping)),
-			SwarmEvent::NodeInfos { node_index, client_version, listen_addrs } => {
+			SwarmEvent::NodeInfos { node_index, listen_addrs, .. } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
 					.expect("the swarm always produces events containing valid node indices");
 				self.topology.add_self_reported_listen_addrs(
 					peer_id,
 					listen_addrs.into_iter()
 				);
-				Some(ServiceEvent::NodeInfos {
-					node_index,
-					client_version,
-				})
+				None
 			},
 			SwarmEvent::KadFindNode { searched, responder, .. } => {
 				let response = self.build_kademlia_response(&searched);
@@ -786,14 +786,13 @@ impl Service {
 					node_index,
 					protocol,
 				}),
-			SwarmEvent::CustomMessage { node_index, protocol_id, packet_id, data } => {
+			SwarmEvent::CustomMessage { node_index, protocol_id, data } => {
 				let peer_id = self.swarm.peer_id_of_node(node_index)
 					.expect("the swarm always produces events containing valid node indices");
 				self.kad_system.update_kbuckets(peer_id.clone());
 				Some(ServiceEvent::CustomMessage {
 					node_index,
 					protocol_id,
-					packet_id,
 					data,
 				})
 			},
