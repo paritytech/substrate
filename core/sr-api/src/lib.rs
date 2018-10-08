@@ -25,7 +25,7 @@ pub extern crate parity_codec as codec;
 extern crate sr_version as runtime_version;
 
 #[doc(hidden)]
-pub use primitives::{ApplyResult, traits::Block as BlockT, generic::BlockId};
+pub use primitives::{traits::Block as BlockT, generic::BlockId};
 use runtime_version::RuntimeVersion;
 use rstd::vec::Vec;
 #[doc(hidden)]
@@ -70,6 +70,7 @@ macro_rules! decl_apis {
 			$( #[$attr:meta] )*
 			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:ident )* ),* >)* {
 				$(
+					$( #[$fn_attr:meta] )*
 					fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 						$( $param_name:ident : $param_type:ty )*
 					) $( -> $return_ty:ty)*;
@@ -83,6 +84,7 @@ macro_rules! decl_apis {
 				$( #[$attr] )*
 				pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
 					$(
+						$( #[$fn_attr] )*
 						fn $fn_name $( < $( $fn_generic ),* > )* ($( $param_name : $param_type )* ) $( -> $return_ty )*;
 					)*
 				};
@@ -97,6 +99,7 @@ macro_rules! decl_apis {
 				$( #[$attr] )*
 				pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
 					$(
+						$( #[$fn_attr] )*
 						fn $fn_name $( < $( $fn_generic ),* > )* ($( $param_name : $param_type )* ) $( -> $return_ty )*;
 					)*
 				};
@@ -107,6 +110,7 @@ macro_rules! decl_apis {
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
+				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 					$( $param_name:ident : $param_type:ty )*
 				) $( -> $return_ty:ty)*;
@@ -122,6 +126,7 @@ macro_rules! decl_apis {
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
+					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
 						$( $param_name : $param_type )*
 					) $( -> $return_ty )*;
@@ -136,6 +141,7 @@ macro_rules! decl_apis {
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 	 		$(
+				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 					$( $param_name:ident : $param_type:ty )*
 				) $( -> $return_ty:ty )*;
@@ -151,6 +157,7 @@ macro_rules! decl_apis {
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
+					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
 						$( $param_name : $param_type )*
 					) $( -> $return_ty )*;
@@ -165,6 +172,7 @@ macro_rules! decl_apis {
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
+				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 					$( $param_name:ident : $param_type:ty )*
 				) $( -> $return_ty:ty )*;
@@ -178,6 +186,7 @@ macro_rules! decl_apis {
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
+					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
 						$( $param_name : $param_type )*
 					) $( -> $return_ty )*;
@@ -192,6 +201,7 @@ macro_rules! decl_apis {
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
+				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 					$( $param_name:ident : $param_type:ty )*
 				) $( -> $return_ty:ty )*;
@@ -205,6 +215,7 @@ macro_rules! decl_apis {
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
+					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
 						$( $param_name : $param_type )*
 					) $( -> $return_ty )*;
@@ -220,6 +231,7 @@ macro_rules! decl_apis {
         $( #[$attr:meta] )*
         pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
+				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 					$( $param_name:ident : $param_type:ty )*
 				) $( -> $return_ty:ty)*;
@@ -235,6 +247,7 @@ macro_rules! decl_apis {
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
+					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
 						$( $param_name : $param_type )*
 					) $( -> $return_ty )*;
@@ -249,6 +262,7 @@ macro_rules! decl_apis {
         $( #[$attr:meta] )*
         pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
+				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 					$( $param_name:ident : $param_type:ty )*
 				) $( -> $return_ty:ty)*;
@@ -264,6 +278,7 @@ macro_rules! decl_apis {
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
+					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
 						$( $param_name : $param_type )*
 					) $( -> $return_ty )*;
@@ -278,6 +293,7 @@ macro_rules! decl_apis {
         $( #[$attr:meta] )*
         pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
+				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 					$( $param_name:ident : $param_type:ty )*
 				) $( -> $return_ty:ty)*;
@@ -291,6 +307,7 @@ macro_rules! decl_apis {
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
 				$(
+					$( #[$fn_attr] )*
 					fn $fn_name $( < $( $fn_generic ),* > )* (
 						$( $param_name : $param_type )*
 					) $( -> $return_ty )*;
@@ -305,6 +322,7 @@ macro_rules! decl_apis {
 		$( #[$attr:meta] )*
 		pub trait $name:ident $(< $( $generic_param_orig:ident $( : $generic_bound_orig:ident )* ),* >)* {
 			$(
+				$( #[$fn_attr:meta] )*
 				fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 					$( $param_name:ident : $param_type:ty )*
 				) $( -> $return_ty:ty)*;
@@ -316,9 +334,11 @@ macro_rules! decl_apis {
 	) => {
 		$( #[$attr] )*
 		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > {
+			/// The Error type returned by this API.
 			type Error;
 
 			$(
+				$( #[$fn_attr] )*
 				fn $fn_name $( < $( $fn_generic: $crate::Encode + $crate::Decode ),* > )* (
 					&self, at: &$crate::BlockId<Block> $(, $param_name: $param_type )*
 				) -> $result_return_ty;
@@ -330,6 +350,7 @@ macro_rules! decl_apis {
 			$( #[$attr:meta] )*
 			pub trait $name:ident $(< $( $generic_param:ident $( : $generic_bound:ident )* ),* >)* {
 				$(
+					$( #[$fn_attr:meta] )*
 					fn $fn_name:ident $( < $( $fn_generic:ident ),* > )* (
 						$( $param_name:ident : $param_type:ty )*
 					) $( -> $return_ty:ty)*;
@@ -343,6 +364,7 @@ macro_rules! decl_apis {
 				$( #[$attr] )*
 				pub trait $name < $( $( $generic_param $( : $generic_bound )*, )* )* $( $( $( $fn_generic, )* )* )* > {
 					$(
+						$( #[$fn_attr] )*
 						fn $fn_name ($( $param_name: $param_type ),*) $( -> $return_ty )*;
 					)*
 				}
@@ -354,11 +376,13 @@ macro_rules! decl_apis {
 			$( #[$attr:meta] )*
 			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:ident )*, )* > {
 				$(
+					$( #[$fn_attr:meta] )*
 					fn $fn_name:ident($( $param_name:ident : $param_type:ty )*) $( -> $return_ty:ty)*;
 				)*
 			}
 		)*
 	) => {
+		/// The API traits to implement on the runtime side.
 		pub mod runtime {
 			use super::*;
 
@@ -366,6 +390,7 @@ macro_rules! decl_apis {
 				$( #[$attr] )*
 				pub trait $name < $( $generic_param $( : $generic_bound )* ),* > {
 					$(
+						$( #[$fn_attr] )*
 						fn $fn_name ($( $param_name: $param_type ),*) $( -> $return_ty )*;
 					)*
 				}
@@ -385,15 +410,6 @@ decl_apis! {
 	/// The `Metadata` api trait that returns metadata for the runtime.
 	pub trait Metadata {
 		fn metadata() -> Vec<u8>;
-	}
-
-	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
-	pub trait BlockBuilder<Block: BlockT> {
-		fn initialise_block(header: <Block as BlockT>::Header);
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
-		fn finalise_block() -> <Block as BlockT>::Header;
-		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
-		fn random_seed() -> <Block as BlockT>::Hash;
 	}
 
 	/// The `OldTxQueue` api trait for interfering with the old transaction queue.
