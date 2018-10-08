@@ -227,13 +227,11 @@ mod tests {
 	use node_runtime::RawAddress;
 
 	#[test]
-	#[ignore]
 	fn test_connectivity() {
 		service_test::connectivity::<Factory>(chain_spec::integration_test_config());
 	}
 
 	#[test]
-	#[ignore]
 	fn test_sync() {
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
 		let bob: Arc<ed25519::Pair> = Arc::new(Keyring::Bob.into());
@@ -274,7 +272,6 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore]
 	fn test_consensus() {
 		service_test::consensus::<Factory>(chain_spec::integration_test_config(), vec!["Alice".into(), "Bob".into()]);
 	}

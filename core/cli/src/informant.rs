@@ -101,13 +101,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 	let txpool = service.transaction_pool();
 	let display_txpool_import = txpool.import_notification_stream().for_each(move |_| {
 		let status = txpool.status();
-		telemetry!("txpool.import";
-				   // TODO [ToDr] keep for backward compatibility?
-				   "mem_usage" => 0,
-				   "sender" => 0,
-				   "count" => status.ready,
-				   "future" => status.future
-		);
+		telemetry!("txpool.import"; "ready" => status.ready, "future" => status.future);
 		Ok(())
 	});
 

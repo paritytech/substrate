@@ -105,12 +105,13 @@ impl<B: ChainApi> Pool<B> where
 {
 
 	/// Imports a bunch of unverified extrinsics to the pool
-	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<ExHash<B>>, B::Error> where
+	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
 		T: IntoIterator<Item=ExtrinsicFor<B>>
 	{
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
-		xts
+
+		Ok(xts
 			.into_iter()
 			.map(|xt| -> Result<_, B::Error> {
 				let hash = self.api.hash(&xt);
@@ -149,17 +150,17 @@ impl<B: ChainApi> Pool<B> where
 
 				Ok(imported.hash().clone())
 			})
-			.collect()
+			.collect())
 	}
 
 	/// Imports one unverified extrinsic to the pool
 	pub fn submit_one(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<ExHash<B>, B::Error> {
-		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed"))
+		Ok(self.submit_at(at, ::std::iter::once(xt))?.pop().expect("One extrinsic passed; one result returned; qed")?)
 	}
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
 	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<ExHash<B>, BlockHash<B>>, B::Error> {
-		let xt = self.submit_at(at, Some(xt))?.pop().expect("One extrinsic passed; one result returned; qed");
+		let xt = self.submit_one(at, xt)?;
 		Ok(self.listener.write().create_watcher(xt))
 	}
 
@@ -172,16 +173,30 @@ impl<B: ChainApi> Pool<B> where
 		// try to re-submit pruned transactions since some of them might be still valid.
 		self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.raw.clone()))?;
 		// TODO [ToDr] Fire events for promoted / failed
-		// clear banned transactions timeouts
-		self.rotator.clear_timeouts(&time::Instant::now());
+
+		self.clear_stale(at)?;
 		Ok(())
 	}
 
-	/// Returns transaction hash
-	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
-		self.api.hash(xt)
+	/// Removes stale transactions from the pool.
+	///
+	/// Stale transactions are transaction beyond their longevity period.
+	/// Note this function does not remove transactions that are already included in the chain.
+	/// See `prune_tags` ifyou want this.
+	pub fn clear_stale(&self, _at: &BlockId<B::Block>) -> Result<(), B::Error> {
+		let now = time::Instant::now();
+		let to_remove = self.ready(|pending| pending
+			.filter(|tx| self.rotator.ban_if_stale(&now, &tx))
+			.map(|tx| tx.hash.clone())
+			.collect::<Vec<_>>()
+		);
+		// removing old transactions
+		self.remove_invalid(&to_remove);
+		// clear banned transactions timeouts
+		self.rotator.clear_timeouts(&now);
+
+		Ok(())
 	}
-	// TODO [ToDr] Clear stale transactions
 }
 
 impl<B: ChainApi> Pool<B> {
@@ -240,6 +255,11 @@ impl<B: ChainApi> Pool<B> {
 	/// Returns pool status.
 	pub fn status(&self) -> base::Status {
 		self.pool.read().status()
+	}
+
+	/// Returns transaction hash
+	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
+		self.api.hash(xt)
 	}
 }
 

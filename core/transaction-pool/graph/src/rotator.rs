@@ -21,7 +21,6 @@
 
 use std::{
 	collections::HashMap,
-	fmt,
 	hash,
 	time::{Duration, Instant},
 };
@@ -80,9 +79,7 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 	/// Bans extrinsic if it's stale.
 	///
 	/// Returns `true` if extrinsic is stale and got banned.
-	pub fn ban_if_stale<Ex>(&self, now: &Instant, xt: &Transaction<Hash, TxData<Ex>>) -> bool where
-		Hash: fmt::Debug + fmt::LowerHex,
-	{
+	pub fn ban_if_stale<Ex>(&self, now: &Instant, xt: &Transaction<Hash, TxData<Ex>>) -> bool {
 		match xt.data.valid_till {
 			Some(ref valid_till) if valid_till > now => {
 				return false;
