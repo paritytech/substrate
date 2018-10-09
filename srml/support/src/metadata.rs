@@ -33,12 +33,14 @@ macro_rules! impl_runtime_metadata {
 		$( $rest:tt )*
 	) => {
 		impl $runtime {
-			pub fn metadata() -> $crate::metadata::RuntimeMetadata {
-				$crate::metadata::RuntimeMetadata {
-					outer_event: Self::outer_event_metadata(),
-					modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
-					outer_dispatch: Self::outer_dispatch_metadata(),
-				}
+			pub fn metadata() -> Vec<u8> {
+				$crate::codec::Encode::encode(
+					&$crate::metadata::RuntimeMetadata {
+						outer_event: Self::outer_event_metadata(),
+						modules: __runtime_modules_to_metadata!($runtime;; $( $rest )*),
+						outer_dispatch: Self::outer_dispatch_metadata(),
+					}
+				)
 			}
 		}
 	}
@@ -103,7 +105,7 @@ mod tests {
 		StorageFunctionModifier, StorageFunctionType, FunctionMetadata,
 		StorageMetadata, StorageFunctionMetadata, OuterDispatchMetadata, OuterDispatchCall
 	};
-	use codec::{Decode, Encode};
+	use codec::Decode;
 
 	mod system {
 		pub trait Trait {
@@ -344,12 +346,9 @@ mod tests {
 
 	#[test]
 	fn runtime_metadata() {
-		let metadata = TestRuntime::metadata();
-		assert_eq!(EXPECTED_METADATA, metadata);
-
-		let metadata_encoded = metadata.encode();
+		let metadata_encoded = TestRuntime::metadata();
 		let metadata_decoded = RuntimeMetadata::decode(&mut &metadata_encoded[..]);
 
-		assert_eq!(metadata, metadata_decoded.unwrap());
+		assert_eq!(EXPECTED_METADATA, metadata_decoded.unwrap());
 	}
 }

@@ -465,6 +465,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sr-api"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-primitives 0.1.0",
+ "sr-std 0.1.0",
+ "sr-version 0.1.0",
+]
+
+[[package]]
 name = "sr-io"
 version = "0.1.0"
 dependencies = [
@@ -491,6 +501,7 @@ dependencies = [
  "serde_derive 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-io 0.1.0",
  "sr-std 0.1.0",
+ "sr-version 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -564,7 +575,7 @@ dependencies = [
  "twox-hash 1.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "uint 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wasmi 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -591,6 +602,7 @@ dependencies = [
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 2.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 0.1.0",
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
@@ -697,7 +709,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "wasmi"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "byteorder 1.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -801,7 +813,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum untrusted 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)" = "f392d7819dbe58833e26872f5f6f0d68b7bbbe90fc3667e98731c4a15ad9a7ae"
 "checksum version_check 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)" = "914b1a6776c4c929a602fafd8bc742e06365d4bcbe48c30f9cca5824f70dc9dd"
 "checksum void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
-"checksum wasmi 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "522fe3fdd44a56f25cd5ddcd8ccdb1cf2e982ceb28fcb00f41d8a018ae5245a8"
+"checksum wasmi 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "d184c4b7081f30316f74f8d73c197314dcb56ea7af9323522b42a2fa9cb19453"
 "checksum winapi 0.3.6 (registry+https://github.com/rust-lang/crates.io-index)" = "92c1eb33641e276cfa214a0522acad57be5c56b10cb348b3c5117db75f3ac4b0"
 "checksum winapi-i686-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
 "checksum winapi-x86_64-pc-windows-gnu 0.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"

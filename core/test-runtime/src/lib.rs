@@ -33,6 +33,7 @@ extern crate srml_support as runtime_support;
 #[macro_use]
 extern crate parity_codec_derive;
 #[macro_use]
+extern crate sr_api as runtime_api;
 extern crate sr_io as runtime_io;
 #[macro_use]
 extern crate sr_version as runtime_version;
@@ -52,10 +53,12 @@ pub mod system;
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 
-use runtime_primitives::traits::{BlindCheckable, BlakeTwo256};
-use runtime_primitives::Ed25519Signature;
+use runtime_api::runtime::*;
+use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT};
+use runtime_primitives::{ApplyResult, Ed25519Signature};
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
+use primitives::AuthorityId;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 
@@ -149,15 +152,57 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 	}
 }
 
-pub mod api {
-	use system;
-	impl_stubs!(
-		version => |()| super::version(),
-		authorities => |()| system::authorities(),
-		initialise_block => |header| system::initialise_block(header),
-		execute_block => |block| system::execute_block(block),
-		apply_extrinsic => |utx| system::execute_transaction(utx),
-		finalise_block => |()| system::finalise_block(),
-		balance_of => |a| system::balance_of(a)
-	);
+mod test_api {
+	decl_apis! {
+		pub trait TestAPI {
+			fn balance_of<AccountId>(id: AccountId) -> u64;
+		}
+	}
+}
+use test_api::runtime::TestAPI;
+
+struct Runtime;
+
+impl_apis! {
+	impl Core<Block, AuthorityId> for Runtime {
+		fn version() -> RuntimeVersion {
+			version()
+		}
+
+		fn authorities() -> Vec<AuthorityId> {
+			system::authorities()
+		}
+
+		fn execute_block(block: Block) {
+			system::execute_block(block)
+		}
+	}
+
+	impl BlockBuilder<Block, u32, u32> for Runtime {
+		fn initialise_block(header: <Block as BlockT>::Header) {
+			system::initialise_block(header)
+		}
+
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+			system::execute_transaction(extrinsic)
+		}
+
+		fn finalise_block() -> <Block as BlockT>::Header {
+			system::finalise_block()
+		}
+
+		fn inherent_extrinsics(_data: u32) -> Vec<u32> {
+			unimplemented!()
+		}
+
+		fn random_seed() -> <Block as BlockT>::Hash {
+			unimplemented!()
+		}
+	}
+
+	impl TestAPI<AccountId> for Runtime {
+		fn balance_of(id: AccountId) -> u64 {
+			system::balance_of(id)
+		}
+	}
 }
