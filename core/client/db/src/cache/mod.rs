@@ -194,10 +194,11 @@ impl<Block: BlockT> BlockchainCache<Block> for DbCacheSync<Block> {
 				ComplexBlockId::new(hash, *header.number())
 			},
 			BlockId::Number(number) => {
-				let hash = utils::read_id::<Block>(
+				let hash = utils::read_header::<Block>(
 					&**db,
 					columns.hash_lookup,
-					BlockId::Number(number.clone())).ok()??;
+					columns.header,
+					BlockId::Number(number.clone())).ok()??.hash();
 				ComplexBlockId::new(hash, number)
 			},
 		};
