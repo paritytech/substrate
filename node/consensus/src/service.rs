@@ -83,6 +83,7 @@ impl Service {
 	) -> Service
 		where
 			A: AuthoringApi + TPClient<Block = <A as AuthoringApi>::Block> + 'static,
+			error::Error: From<<A as AuthoringApi>::Error>,
 			C: BlockchainEvents<<A as AuthoringApi>::Block>
 				+ ChainHead<<A as AuthoringApi>::Block>
 				+ BlockBody<<A as AuthoringApi>::Block>,

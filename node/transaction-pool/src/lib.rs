@@ -41,6 +41,7 @@ use std::{
 
 use codec::{Decode, Encode};
 use client::{Client as SubstrateClient, CallExecutor};
+use client::runtime_api::OldTxQueue;
 use transaction_pool::{Readiness, scoring::{Change, Choice}, VerifiedFor, ExtrinsicFor};
 use primitives::{AccountId, Hash, Index};
 use runtime::{Address, UncheckedExtrinsic};
@@ -62,13 +63,11 @@ pub trait Client:
 	Send
 	+ Sync
 	+ CurrentHeight<BlockNumber=<<<Self as Client>::Block as BlockT>::Header as HeaderT>::Number>
-	+ BlockNumberToHash<BlockNumber=<<<Self as Client>::Block as BlockT>::Header as HeaderT>::Number, Hash=<<Self as Client>::Block as BlockT>::Hash> {
+	+ BlockNumberToHash<BlockNumber=<<<Self as Client>::Block as BlockT>::Header as HeaderT>::Number, Hash=<<Self as Client>::Block as BlockT>::Hash>
+	+ OldTxQueue<<Self as Client>::Block>
+{
 	/// The block used for this API type.
 	type Block: BlockT;
-	/// Get the nonce (né index) of an account at a block.
-	fn index(&self, at: &BlockId<Self::Block>, account: AccountId) -> Result<u64>;
-	/// Get the account id of an address at a block.
-	fn lookup(&self, at: &BlockId<Self::Block>, address: Address) -> Result<Option<AccountId>>;
 }
 
 impl<B, E, Block> Client for SubstrateClient<B, E, Block> where
@@ -77,14 +76,6 @@ impl<B, E, Block> Client for SubstrateClient<B, E, Block> where
 	Block: BlockT,
 {
 	type Block = Block;
-
-	fn index(&self, at: &BlockId<Block>, account: AccountId) -> Result<u64> {
-		self.call_api_at(at, "account_nonce", &account).map_err(Into::into)
-	}
-
-	fn lookup(&self, at: &BlockId<Block>, address: Address) -> Result<Option<AccountId>> {
-		self.call_api_at(at, "lookup_address", &address).map_err(Into::into)
-	}
 }
 
 /// Type alias for the transaction pool.
@@ -171,7 +162,7 @@ impl<'a, C: 'a + Client> Lookup for LocalContext<'a, C> {
 	type Source = Address;
 	type Target = AccountId;
 	fn lookup(&self, a: Address) -> ::std::result::Result<AccountId, &'static str> {
-		self.0.lookup(&BlockId::number(self.current_height()), a).unwrap_or(None).ok_or("error with lookup")
+		self.0.lookup_address(&BlockId::number(self.current_height()), a).unwrap_or(None).ok_or("error with lookup")
 	}
 }
 
@@ -232,7 +223,7 @@ impl<C: Client> transaction_pool::ChainApi for ChainApi<C> {
 		// transaction-pool trait.
 		let api = &self.api;
 		let next_index = known_nonces.entry(sender)
-			.or_insert_with(|| api.index(at, sender).ok().unwrap_or_else(Bounded::max_value));
+			.or_insert_with(|| api.account_nonce(at, sender).ok().unwrap_or_else(Bounded::max_value));
 
 		trace!(target: "transaction-pool", "Next index for sender is {}; xt index is {}", next_index, xt.verified.index);
 

@@ -17,12 +17,14 @@
 //! Substrate Client
 
 use std::sync::Arc;
+use error::Error;
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
-use runtime_primitives::BuildStorage;
+use runtime_primitives::{ApplyResult, BuildStorage};
+use runtime_api as api;
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -1040,6 +1042,126 @@ impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
+	}
+}
+
+impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error> {
+		self.call_api_at(at, "version", &())
+	}
+
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+		bft::Authorities::authorities(self, at).map_err(Into::into)
+	}
+
+	fn execute_block(&self, at: &BlockId<Block>, block: Block) -> Result<(), Self::Error> {
+		self.call_api_at(at, "execute_block", &(block))
+	}
+}
+
+impl<B, E, Block> api::Metadata<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn metadata(&self, at: &BlockId<Block>) -> Result<Vec<u8>, Self::Error> {
+		self.call_api_at(at, "metadata", &())
+	}
+}
+
+impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn initialise_block(&self, at: &BlockId<Block>, header: <Block as BlockT>::Header) -> Result<(), Self::Error> {
+		self.call_api_at(at, "initialise_block", &(header))
+	}
+
+	fn apply_extrinsic(&self, at: &BlockId<Block>, extrinsic: <Block as BlockT>::Extrinsic) -> Result<ApplyResult, Self::Error> {
+		self.call_api_at(at, "apply_extrinsic", &(extrinsic))
+	}
+
+	fn finalise_block(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Header, Self::Error> {
+		self.call_api_at(at, "finalise_block", &())
+	}
+
+	fn inherent_extrinsics<InherentExtrinsic: Encode + Decode, UncheckedExtrinsic: Encode + Decode>(
+		&self, at: &BlockId<Block>, inherent: InherentExtrinsic
+	) -> Result<Vec<UncheckedExtrinsic>, Self::Error> {
+		self.call_api_at(at, "inherent_extrinsics", &(inherent))
+	}
+
+	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Hash, Self::Error> {
+		self.call_api_at(at, "random_seed", &())
+	}
+}
+
+impl<B, E, Block> api::OldTxQueue<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn account_nonce<AccountId: Encode + Decode, Index: Encode + Decode>(
+		&self, at: &BlockId<Block>, account: AccountId
+	) -> Result<Index, Self::Error> {
+		self.call_api_at(at, "account_nonce", &(account))
+	}
+
+	fn lookup_address<Address: Encode + Decode, AccountId: Encode + Decode>(
+		&self, at: &BlockId<Block>, address: Address
+	) -> Result<Option<AccountId>, Self::Error> {
+		self.call_api_at(at, "lookup_address", &(address))
+	}
+}
+
+impl<B, E, Block> api::NewTxQueue<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn validate_transaction<TransactionValidity: Encode + Decode>(
+		&self, at: &BlockId<Block>, tx: <Block as BlockT>::Extrinsic
+	) -> Result<TransactionValidity, Self::Error> {
+		self.call_api_at(at, "validate_transaction", &(tx))
+	}
+}
+
+impl<B, E, Block> api::Miscellaneous<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn validator_count(&self, at: &BlockId<Block>) -> Result<u32, Self::Error> {
+		self.call_api_at(at, "validator_count", &())
+	}
+
+	fn validators<AccountId: Encode + Decode>(
+		&self, at: &BlockId<Block>
+	) -> Result<Vec<AccountId>, Self::Error> {
+		self.call_api_at(at, "validators", &())
+	}
+
+	fn timestamp<Moment: Encode + Decode>(
+		&self, at: &BlockId<Block>
+	) -> Result<Moment, Self::Error> {
+		self.call_api_at(at, "timestamp", &())
 	}
 }
 

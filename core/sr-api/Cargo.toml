@@ -1,0 +1,19 @@
+[package]
+name = "sr-api"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+parity-codec = { version = "2.0", default-features = false }
+sr-std = { path = "../sr-std", default-features = false }
+sr-primitives = { path = "../sr-primitives", default-features = false }
+sr-version = { path = "../sr-version", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"sr-std/std",
+	"parity-codec/std",
+	"sr-primitives/std",
+	"sr-version/std",
+]

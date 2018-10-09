@@ -19,8 +19,13 @@
 use std;
 use state_machine;
 use runtime_primitives::ApplyError;
+use bft;
 
 error_chain! {
+	links {
+		BFT(bft::error::Error, bft::error::ErrorKind) #[doc="BFT error"];
+	}
+
 	errors {
 		/// Backend error.
 		Backend(s: String) {

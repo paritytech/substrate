@@ -181,34 +181,6 @@ pub fn print<T: Printable + Sized>(value: T) {
 	value.print();
 }
 
-#[macro_export]
-macro_rules! impl_stubs {
-	( $( $new_name:ident $($nodecode:ident)* => $invoke: expr ),*) => {
-		/// Dispatch logic for the native runtime.
-		pub fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {
-			match method {
-				$(
-					stringify!($new_name) => { impl_stubs!(@METHOD data $new_name $($nodecode)* => $invoke) }
-				)*
-				_ => None,
-			}
-		}
-	};
-	(@METHOD $data: ident $new_name: ident NO_DECODE => $invoke:expr) => {
-		Some($invoke($data))
-	};
-	(@METHOD $data: ident $new_name: ident => $invoke:expr) => {{
-		let mut data = $data;
-		let input = match $crate::codec::Decode::decode(&mut data) {
-			Some(input) => input,
-			None => panic!("Bad input data provided to {}", stringify!($new_name)),
-		};
-
-		let output = $invoke(input);
-		Some($crate::codec::Encode::encode(&output))
-	}}
-}
-
 #[cfg(test)]
 mod std_tests {
 	use super::*;
