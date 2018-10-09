@@ -66,6 +66,10 @@ impl<B, E, Block> txpool::ChainApi for ChainApi<B, E, Block> where
 		Ok(self.client.block_number_from_id(at)?)
 	}
 
+	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::BlockHash<Self>>> {
+		Ok(self.client.block_hash_from_id(at)?)
+	}
+
 	fn hash(&self, ex: &txpool::ExtrinsicFor<Self>) -> Self::Hash {
 		Blake2Hasher::hash(&ex.encode())
 	}

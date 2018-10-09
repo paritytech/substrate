@@ -64,6 +64,9 @@ pub trait ChainApi: Send + Sync {
 	/// Returns a block number given the block id.
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error>;
 
+	/// Returns a block hash given the block id.
+	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error>;
+
 	/// Hash the extrinsic.
 	fn hash(&self, uxt: &ExtrinsicFor<Self>) -> Self::Hash;
 }
@@ -137,6 +140,7 @@ impl<B: ChainApi> Pool<B> where
 						bail!(error::Error::from(error::ErrorKind::InvalidTransaction))
 					},
 					TransactionValidity::Unknown => {
+						self.listener.write().rejected(&hash, false);
 						bail!(error::Error::from(error::ErrorKind::UnknownTransactionValidity))
 					},
 				}
@@ -146,8 +150,8 @@ impl<B: ChainApi> Pool<B> where
 
 				self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
 
-				// TODO [ToDr] notify listener
-
+				let mut listener = self.listener.write();
+				fire_events(&mut *listener, &imported);
 				Ok(imported.hash().clone())
 			})
 			.collect())
@@ -170,10 +174,35 @@ impl<B: ChainApi> Pool<B> where
 			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
 
 		let status = self.pool.write().prune_tags(block_number.into(), tags);
+		{
+			let mut listener = self.listener.write();
+			for promoted in &status.promoted {
+				fire_events(&mut *listener, promoted);
+			}
+			for f in &status.failed {
+				listener.dropped(f, None);
+			}
+		}
 		// try to re-submit pruned transactions since some of them might be still valid.
-		self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.raw.clone()))?;
-		// TODO [ToDr] Fire events for promoted / failed
-
+		let hashes = status.pruned.iter().map(|tx| tx.hash.clone()).collect::<Vec<_>>();
+		let results = self.submit_at(at, status.pruned.into_iter().map(|tx| tx.data.raw.clone()))?;
+		// Fire mined event for transactions that became invalid.
+		let hashes = results.into_iter().enumerate().filter_map(|(idx, r)| match r.map_err(error::IntoPoolError::into_pool_error) {
+			Err(Ok(err)) => match err.kind() {
+				error::ErrorKind::InvalidTransaction => Some(hashes[idx].clone()),
+				_ => None,
+			},
+			_ => None,
+		});
+		{
+			let header_hash = self.api.block_id_to_hash(at)?
+				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
+			let mut listener = self.listener.write();
+			for h in hashes {
+				listener.pruned(header_hash, &h)
+			}
+		}
+		// clear old transactions
 		self.clear_stale(at)?;
 		Ok(())
 	}
@@ -233,7 +262,14 @@ impl<B: ChainApi> Pool<B> {
 		debug!(target: "txpool", "Banning invalid transactions: {:?}", hashes);
 		self.rotator.ban(&time::Instant::now(), hashes);
 
-		self.pool.write().remove_invalid(hashes)
+		let invalid = self.pool.write().remove_invalid(hashes);
+
+		let mut listener = self.listener.write();
+		for tx in &invalid {
+			listener.invalid(&tx.hash);
+		}
+
+		invalid
 	}
 
 	/// Get ready transactions ordered by priority
@@ -260,6 +296,32 @@ impl<B: ChainApi> Pool<B> {
 	/// Returns transaction hash
 	pub fn hash_of(&self, xt: &ExtrinsicFor<B>) -> ExHash<B> {
 		self.api.hash(xt)
+	}
+}
+
+fn fire_events<H, H2, Ex>(
+	listener: &mut Listener<H, H2>,
+	imported: &base::Imported<H, Ex>,
+) where
+	H: hash::Hash + Eq + traits::Member,
+	H2: Clone,
+{
+	match *imported {
+		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
+			listener.ready(hash, None);
+			for f in failed {
+				listener.rejected(f, true);
+			}
+			for r in removed {
+				listener.dropped(&r.hash, Some(hash));
+			}
+			for p in promoted {
+				listener.ready(p, None);
+			}
+		},
+		base::Imported::Future { ref hash } => {
+			listener.future(hash)
+		},
 	}
 }
 

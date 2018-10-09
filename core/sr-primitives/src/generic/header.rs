@@ -81,7 +81,6 @@ impl<'a, Number: 'a, Hash: 'a + HashT, DigestItem: 'a> Deserialize<'a> for Heade
 	}
 }
 
-// TODO [ToDr] Issue with bounds
 impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 	Number: Decode,
 	Hash: HashT,

@@ -61,6 +61,13 @@ impl txpool::ChainApi for TestApi {
 		Ok(Some(number_of(at)))
 	}
 
+	fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::BlockHash<Self>>> {
+		Ok(match at {
+			generic::BlockId::Hash(x) => Some(x.clone()),
+			_ => Some(Default::default()),
+		})
+	}
+
 	fn hash(&self, ex: &txpool::ExtrinsicFor<Self>) -> Self::Hash {
 		BlakeTwo256::hash(&ex.encode())
 	}

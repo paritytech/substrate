@@ -18,7 +18,6 @@
 use std::{
 	collections::HashMap,
 	hash,
-	sync::Arc,
 };
 use watcher;
 use sr_primitives::traits;
@@ -63,15 +62,19 @@ impl<H: hash::Hash + traits::Member, H2: Clone> Listener<H, H2> {
 		self.fire(hash, |watcher| watcher.broadcast(peers));
 	}
 
-	/// New transaction was added to the pool.
-	pub fn added(&mut self, tx: &Arc<H>, old: Option<&Arc<H>>) {
+	/// New transaction was added to the ready pool or promoted from the future pool.
+	pub fn ready(&mut self, tx: &H, old: Option<&H>) {
 		if let Some(old) = old {
-			self.fire(old, |watcher| watcher.usurped((**tx).clone()));
+			self.fire(old, |watcher| watcher.usurped(tx.clone()));
 		}
 	}
 
+	/// New transaction was added to the future pool.
+	pub fn future(&mut self, _tx: &H) {
+	}
+
 	/// Transaction was dropped from the pool because of the limit.
-	pub fn dropped(&mut self, tx: &Arc<H>, by: Option<&H>) {
+	pub fn dropped(&mut self, tx: &H, by: Option<&H>) {
 		self.fire(tx, |watcher| match by {
 			Some(t) => watcher.usurped(t.clone()),
 			None => watcher.dropped(),
@@ -79,17 +82,17 @@ impl<H: hash::Hash + traits::Member, H2: Clone> Listener<H, H2> {
 	}
 
 	/// Transaction was rejected from the pool.
-	pub fn rejected(&mut self, tx: &Arc<H>, is_invalid: bool) {
+	pub fn rejected(&mut self, tx: &H, is_invalid: bool) {
 		warn!(target: "transaction-pool", "Extrinsic rejected ({}): {:?}", is_invalid, tx);
 	}
 
 	/// Transaction was removed as invalid.
-	pub fn invalid(&mut self, tx: &Arc<H>) {
+	pub fn invalid(&mut self, tx: &H) {
 		warn!(target: "transaction-pool", "Extrinsic invalid: {:?}", tx);
 	}
 
 	/// Transaction was pruned from the pool.
-	pub fn pruned(&mut self, header_hash: H2, tx: &Arc<H>) {
-		self.fire(&**tx, |watcher| watcher.finalised(header_hash))
+	pub fn pruned(&mut self, header_hash: H2, tx: &H) {
+		self.fire(tx, |watcher| watcher.finalised(header_hash))
 	}
 }

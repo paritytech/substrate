@@ -21,8 +21,8 @@ use txpool;
 
 error_chain! {
 	links {
-		Client(client::error::Error, client::error::ErrorKind);
-		Pool(txpool::error::Error, txpool::error::ErrorKind);
+		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
+		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
 	}
 }
 
