@@ -36,7 +36,7 @@ extern crate parking_lot;
 extern crate hash_db;
 extern crate heapsize;
 extern crate kvdb;
-#[macro_use] extern crate sr_api;
+extern crate sr_api;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;

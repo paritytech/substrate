@@ -46,8 +46,7 @@ use std::sync::Arc;
 use std::time::{self, Duration, Instant};
 
 use client::{Client as SubstrateClient, CallExecutor};
-use client::runtime_api::{Core, Miscellaneous, OldTxQueue};
-use client::block_builder::api::BlockBuilder as BlockBuilderAPI;
+use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, Miscellaneous, OldTxQueue};
 use codec::{Decode, Encode};
 use node_primitives::{AccountId, Timestamp, SessionKey, InherentData};
 use node_runtime::Runtime;

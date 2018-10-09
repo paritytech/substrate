@@ -56,7 +56,6 @@ extern crate srml_treasury as treasury;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;
-extern crate substrate_client as client;
 
 #[cfg(feature = "std")]
 mod checked_block;
@@ -75,7 +74,6 @@ use council::{motions as council_motions, voting as council_voting};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
-use client::block_builder::api::runtime::BlockBuilder;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;

@@ -16,15 +16,13 @@
 
 //! Utility struct to build a block.
 
-pub mod api;
-
-use self::api::BlockBuilder as BlockBuilderAPI;
 use std::vec::Vec;
 use std::marker::PhantomData;
 use codec::Encode;
 use state_machine;
 use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
 use runtime_primitives::generic::BlockId;
+use runtime_api::BlockBuilder as BlockBuilderAPI;
 use {backend, error, Client, CallExecutor};
 use runtime_primitives::ApplyOutcome;
 use primitives::{Blake2Hasher};

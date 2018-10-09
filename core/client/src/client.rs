@@ -1083,12 +1083,13 @@ impl<B, E, Block> api::Metadata<Block> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> block_builder::api::BlockBuilder<Block> for Client<B, E, Block> where
+impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT,
 {
 	type Error = Error;
+	type OverlayedChanges = OverlayedChanges;
 
 	fn initialise_block(
 		&self,
