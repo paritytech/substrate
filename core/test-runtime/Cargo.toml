@@ -34,5 +34,5 @@ std = [
 	"srml-support/std",
 	"substrate-primitives/std",
 	"sr-primitives/std",
-	"sr-version/std"
+	"sr-version/std",
 ]
