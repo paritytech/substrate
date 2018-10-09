@@ -1,12 +1,12 @@
 [package]
-name = "substrate-consensus-rhd"
+name = "substrate-consensus-aura"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Rhododendron Round-Based consensus-algorithm for substrate"
 
 [dependencies]
 futures = "0.1.17"
-parity-codec = { version = "2.0" }
+parity-codec = { version = "1.1" }
 parity-codec-derive = { version = "2.0" }
 substrate-primitives = { path = "../../primitives" }
 srml-support = { path = "../../../srml/support" }
@@ -18,13 +18,13 @@ tokio = "0.1.7"
 parking_lot = "0.4"
 error-chain = "0.12"
 log = "0.3"
-rhododendron = { version = "0.4.0", features = ["codec"] }
+rhododendron = { git = "https://github.com/paritytech/rhododendron.git", features = ["codec"] }
 serde = { version = "1.0", features = ["derive"] }
-substrate-consensus-common = { path = "../common" }
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
+
 
 [features]
 default = ["std"]

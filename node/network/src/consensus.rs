@@ -95,8 +95,7 @@ fn process_bft_message(
 	msg: msg::LocalizedBftMessage<Block, Hash>,
 	local_id: &SessionKey,
 	authorities: &[SessionKey]
-	) -> Result<Option<bft::Communication<Block>>, bft::Error>
-{
+) -> Result<Option<bft::Communication<Block>>, bft::Error> {
 	Ok(Some(match msg.message {
 		msg::BftMessage::Consensus(c) => rhododendron::Communication::Consensus(match c {
 			msg::SignedConsensusMessage::Propose(proposal) => rhododendron::LocalizedMessage::Propose({

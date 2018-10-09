@@ -31,7 +31,7 @@ pub type Signature = H512;
 pub const PKCS_LEN: usize = 85;
 
 /// A localized signature also contains sender information.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct LocalizedSignature {
 	/// The signer of the signature.
 	pub signer: Public,
@@ -52,7 +52,7 @@ pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], public: P) -> bool {
 }
 
 /// A public key.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
