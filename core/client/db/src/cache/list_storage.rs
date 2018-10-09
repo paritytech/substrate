@@ -23,7 +23,7 @@ use kvdb::{KeyValueDB, DBTransaction};
 use client::error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use codec::{Encode, Decode};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, NumberFor, Header};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use utils::{self, db_err, meta_keys};
 
 use cache::{CacheItemT, ComplexBlockId};
@@ -127,7 +127,7 @@ impl DbStorage {
 impl<Block: BlockT, T: CacheItemT> Storage<Block, T> for DbStorage {
 	fn read_id(&self, at: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
 		utils::read_header::<Block>(&*self.db, self.columns.hash_lookup, self.columns.header, BlockId::Number(at))
-			.map(|x| x.map(|x| x.hash()))
+			.map(|maybe_header| maybe_header.map(|header| header.hash()))
 	}
 
 	fn read_header(&self, at: &Block::Hash) -> ClientResult<Option<Block::Header>> {
