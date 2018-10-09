@@ -146,18 +146,20 @@ mod tests {
 	use super::*;
 	use primitives::{Blake2Hasher};
 
-	fn test_proving() -> ProvingBackend<MemoryDB<Blake2Hasher>, Blake2Hasher> {
-		ProvingBackend::new(test_trie())
+	fn test_proving<'a>(trie_backend: &'a TrieBackend<MemoryDB<Blake2Hasher>, Blake2Hasher>) -> ProvingBackend<'a, MemoryDB<Blake2Hasher>, Blake2Hasher> {
+		ProvingBackend::new(trie_backend)
 	}
 
 	#[test]
 	fn proof_is_empty_until_value_is_read() {
-		assert!(test_proving().extract_proof().is_empty());
+		let trie_backend = test_trie();
+		assert!(test_proving(&trie_backend).extract_proof().is_empty());
 	}
 
 	#[test]
 	fn proof_is_non_empty_after_value_is_read() {
-		let backend = test_proving();
+		let trie_backend = test_trie();
+		let backend = test_proving(&trie_backend);
 		assert_eq!(backend.storage(b"key").unwrap(), Some(b"value".to_vec()));
 		assert!(!backend.extract_proof().is_empty());
 	}
@@ -170,7 +172,7 @@ mod tests {
 	#[test]
 	fn passes_throgh_backend_calls() {
 		let trie_backend = test_trie();
-		let proving_backend = test_proving();
+		let proving_backend = test_proving(&trie_backend);
 		assert_eq!(trie_backend.storage(b"key").unwrap(), proving_backend.storage(b"key").unwrap());
 		assert_eq!(trie_backend.pairs(), proving_backend.pairs());
 
@@ -193,7 +195,7 @@ mod tests {
 		assert_eq!(in_memory_root, trie_root);
 		(0..64).for_each(|i| assert_eq!(trie.storage(&[i]).unwrap().unwrap(), vec![i]));
 
-		let proving = ProvingBackend::new(trie);
+		let proving = ProvingBackend::new(&trie);
 		assert_eq!(proving.storage(&[42]).unwrap().unwrap(), vec![42]);
 
 		let proof = proving.extract_proof();

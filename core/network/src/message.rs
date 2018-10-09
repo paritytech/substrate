@@ -387,6 +387,9 @@ pub mod generic {
 		pub first: H,
 		/// Hash of the last block of the range (including last) where changes are requested.
 		pub last: H,
+		/// Hash of the first block for which the requester has the changes trie root. All other
+		/// affected roots must be proved.
+		pub min: H,
 		/// Hash of the last block that we can use when querying changes.
 		pub max: H,
 		/// Storage key which changes are requested.

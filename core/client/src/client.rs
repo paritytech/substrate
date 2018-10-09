@@ -387,10 +387,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		min: Block::Hash,
 		max: Block::Hash,
 		key: &[u8]
-	) -> error::Result<ChangesProof<Block::Header>>
-		where
-			Block::Hash: From<H256>,
-	{
+	) -> error::Result<ChangesProof<Block::Header>> {
 		struct AccessedRootsRecorder<'a, Block: BlockT> {
 			storage: &'a ChangesTrieStorage<Blake2Hasher>,
 			min: u64,
@@ -455,7 +452,12 @@ impl<B, E, Block> Client<B, E, Block> where
 		Ok(ChangesProof {
 			max_block: max_number,
 			proof: key_changes_proof,
-			roots: roots.into_iter().map(|(n, h)| (n, h.into())).collect(),
+			roots: roots.into_iter().map(|(n, h)| {
+				let mut hash = <Block::Hash>::default();
+				let hash_source = &(*h)[..::std::cmp::min(hash.as_ref().len(), h.len())];
+				hash.as_mut().copy_from_slice(hash_source);
+				(n, hash)
+			}).collect(),
 			roots_proof,
 		})
 	}

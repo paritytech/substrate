@@ -33,6 +33,7 @@ use service::{Roles, TransactionPool, ExHashT};
 use import_queue::ImportQueue;
 use config::ProtocolConfig;
 use chain::Client;
+use client::light::fetcher::ChangesProof;
 use on_demand::OnDemandService;
 use io::SyncIo;
 use error;
@@ -653,16 +654,21 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	fn on_remote_changes_request(&self, io: &mut SyncIo, who: NodeIndex, request: message::RemoteChangesRequest<B::Hash>) {
 		trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{})",
 			request.id, who, request.key.to_hex(), request.first, request.last);
-		let (max, proof) = match self.context_data.chain.key_changes_proof(request.first, request.last, request.max, &request.key) {
-			Ok((max, proof)) => (max, proof),
+		let proof = match self.context_data.chain.key_changes_proof(request.first, request.last, request.min, request.max, &request.key) {
+			Ok(proof) => proof,
 			Err(error) => {
 				trace!(target: "sync", "Remote changes proof request {} from {} for key {} ({}..{}) failed with: {}",
 					request.id, who, request.key.to_hex(), request.first, request.last, error);
-				(Zero::zero(), Default::default())
+				ChangesProof::<B::Header> {
+					max_block: Zero::zero(),
+					proof: vec![],
+					roots: HashMap::new(),
+					roots_proof: vec![],
+				}
 			},
 		};
  		self.send_message(io, who, GenericMessage::RemoteChangesResponse(message::RemoteChangesResponse {
-			id: request.id, max, proof,
+			id: request.id, max: proof.max_block, proof: proof.proof,
 		}));
 	}
 
