@@ -82,6 +82,7 @@ impl Service {
 		block_delay: u64,
 	) -> Service
 		where
+			error::Error: From<<A as AuthoringApi>::Error>,
 			A: AuthoringApi + BlockNumberToHash + 'static,
 			P: PoolChainApi<Block = <A as AuthoringApi>::Block> + 'static,
 			C: BlockchainEvents<<A as AuthoringApi>::Block>

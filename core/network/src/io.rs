@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use network_libp2p::{NetworkContext, Severity, NodeIndex, SessionInfo};
+use parking_lot::Mutex;
+use network_libp2p::{Service, Severity, NodeIndex, PeerId, ProtocolId};
+use std::sync::Arc;
 
 /// IO interface for the syncing handler.
 /// Provides peer connection management and an interface to the blockchain client.
@@ -24,49 +26,54 @@ pub trait SyncIo {
 	/// Send a packet to a peer.
 	fn send(&mut self, who: NodeIndex, data: Vec<u8>);
 	/// Returns peer identifier string
-	fn peer_info(&self, who: NodeIndex) -> String {
+	fn peer_debug_info(&self, who: NodeIndex) -> String {
 		who.to_string()
 	}
 	/// Returns information on p2p session
-	fn peer_session_info(&self, who: NodeIndex) -> Option<SessionInfo>;
-	/// Check if the session is expired
-	fn is_expired(&self) -> bool;
+	fn peer_id(&self, who: NodeIndex) -> Option<PeerId>;
 }
 
-/// Wraps `NetworkContext` and the blockchain client
+/// Wraps the network service.
 pub struct NetSyncIo<'s> {
-	network: &'s NetworkContext,
+	network: &'s Arc<Mutex<Service>>,
+	protocol: ProtocolId,
 }
 
 impl<'s> NetSyncIo<'s> {
-	/// Creates a new instance from the `NetworkContext` and the blockchain client reference.
-	pub fn new(network: &'s NetworkContext) -> NetSyncIo<'s> {
+	/// Creates a new instance.
+	pub fn new(network: &'s Arc<Mutex<Service>>, protocol: ProtocolId) -> NetSyncIo<'s> {
 		NetSyncIo {
-			network: network,
+			network,
+			protocol,
 		}
 	}
 }
 
 impl<'s> SyncIo for NetSyncIo<'s> {
 	fn report_peer(&mut self, who: NodeIndex, reason: Severity) {
-		self.network.report_peer(who, reason);
+		info!("Purposefully dropping {} ; reason: {:?}", who, reason);
+		match reason {
+			Severity::Bad(_) => self.network.lock().ban_node(who),
+			Severity::Useless(_) => self.network.lock().drop_node(who),
+			Severity::Timeout => self.network.lock().drop_node(who),
+		}
 	}
 
 	fn send(&mut self, who: NodeIndex, data: Vec<u8>) {
-		self.network.send(who, 0, data)
+		self.network.lock().send_custom_message(who, self.protocol, data)
 	}
 
-	fn peer_session_info(&self, who: NodeIndex) -> Option<SessionInfo> {
-		self.network.session_info(who)
+	fn peer_id(&self, who: NodeIndex) -> Option<PeerId> {
+		let net = self.network.lock();
+		net.peer_id_of_node(who).cloned()
 	}
 
-	fn is_expired(&self) -> bool {
-		self.network.is_expired()
-	}
-
-	fn peer_info(&self, who: NodeIndex) -> String {
-		self.network.peer_client_version(who)
+	fn peer_debug_info(&self, who: NodeIndex) -> String {
+		let net = self.network.lock();
+		if let (Some(peer_id), Some(addr)) = (net.peer_id_of_node(who), net.node_endpoint(who)) {
+			format!("{:?} through {:?}", peer_id, addr)
+		} else {
+			"unknown".to_string()
+		}
 	}
 }
-
-

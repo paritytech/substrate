@@ -36,6 +36,7 @@ extern crate parking_lot;
 extern crate hash_db;
 extern crate heapsize;
 extern crate kvdb;
+extern crate sr_api;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
@@ -67,3 +68,8 @@ pub use client::{
 pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
 pub use leaves::LeafSet;
+
+/// Traits for interfacing with the runtime from the client.
+pub mod runtime_api {
+	pub use sr_api::*;
+}

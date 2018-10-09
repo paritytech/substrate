@@ -32,6 +32,7 @@ extern crate parity_codec as codec;
 extern crate futures;
 extern crate rustc_hex;
 extern crate rand;
+extern crate tokio;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate error_chain;

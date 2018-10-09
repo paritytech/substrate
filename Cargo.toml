@@ -31,6 +31,7 @@ members = [
 	"core/primitives",
 	"core/rpc",
 	"core/rpc-servers",
+	"core/sr-api",
 	"core/sr-io",
 	"core/sr-sandbox",
 	"core/sr-std",

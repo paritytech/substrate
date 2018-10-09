@@ -44,29 +44,21 @@ extern crate log;
 #[cfg(test)] #[macro_use]
 extern crate assert_matches;
 
-pub use connection_filter::{ConnectionFilter, ConnectionDirection};
-pub use error::{Error, ErrorKind, DisconnectReason};
-pub use libp2p::{Multiaddr, multiaddr::Protocol, PeerId};
-pub use traits::*;
-
-pub type TimerToken = usize;
-
-// TODO: remove as it is unused ; however modifying `network` causes a clusterfuck of dependencies
-// resolve errors at the moment
-mod connection_filter;
 mod custom_proto;
 mod error;
 mod node_handler;
 mod secret;
-mod service;
 mod service_task;
 mod swarm;
-mod timeouts;
 mod topology;
 mod traits;
 mod transport;
 
-pub use service::NetworkService;
+pub use custom_proto::RegisteredProtocol;
+pub use error::{Error, ErrorKind, DisconnectReason};
+pub use libp2p::{Multiaddr, multiaddr::Protocol, PeerId};
+pub use service_task::{start_service, Service, ServiceEvent};
+pub use traits::*;	// TODO: expand to actual items
 
 /// Check if node url is valid
 pub fn validate_node_url(url: &str) -> Result<(), Error> {
@@ -77,7 +69,7 @@ pub fn validate_node_url(url: &str) -> Result<(), Error> {
 }
 
 /// Parses a string address and returns the component, if valid.
-pub(crate) fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), Error> {
+pub fn parse_str_addr(addr_str: &str) -> Result<(PeerId, Multiaddr), Error> {
 	let mut addr: Multiaddr = addr_str.parse().map_err(|_| ErrorKind::AddressParse)?;
 	let who = match addr.pop() {
 		Some(Protocol::P2p(key)) =>

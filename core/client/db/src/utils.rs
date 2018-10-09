@@ -44,8 +44,8 @@ pub mod meta_keys {
 	pub const BEST_BLOCK: &[u8; 4] = b"best";
 	/// Last finalized block key.
 	pub const FINALIZED_BLOCK: &[u8; 5] = b"final";
-	/// Best authorities block key.
-	pub const BEST_AUTHORITIES: &[u8; 4] = b"auth";
+	/// Meta information prefix for list-based caches.
+	pub const CACHE_META_PREFIX: &[u8; 5] = b"cache";
 	/// Genesis block hash.
 	pub const GENESIS_HASH: &[u8; 3] = b"gen";
 	/// Leaves prefix list key.
@@ -80,17 +80,6 @@ pub fn number_to_lookup_key<N>(n: N) -> BlockLookupKey where N: As<u64> {
 		((n >> 8) & 0xff) as u8,
 		(n & 0xff) as u8
 	]
-}
-
-/// Convert block lookup key into block number.
-pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u64> {
-	match key.len() {
-		4 => Ok((key[0] as u64) << 24
-			| (key[1] as u64) << 16
-			| (key[2] as u64) << 8
-			| (key[3] as u64)).map(As::sa),
-		_ => Err(client::error::ErrorKind::Backend("Invalid block key".into()).into()),
-	}
 }
 
 /// Maps database error to client error
