@@ -16,7 +16,7 @@
 
 //! On-demand requests service.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::sync::{Arc, Weak};
 use std::time::{Instant, Duration};
 use futures::{Async, Future, Poll};
@@ -68,7 +68,7 @@ pub trait OnDemandService<Block: BlockT>: Send + Sync {
 		&self,
 		io: &mut SyncIo,
 		peer: NodeIndex,
-		response: message::RemoteChangesResponse<NumberFor<Block>>
+		response: message::RemoteChangesResponse<NumberFor<Block>, Block::Hash>
 	);
 }
 
@@ -272,14 +272,14 @@ impl<B, E> OnDemandService<B> for OnDemand<B, E> where
 		})
 	}
 
-	fn on_remote_changes_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>>) {
+	fn on_remote_changes_response(&self, io: &mut SyncIo, peer: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
 		self.accept_response("changes", io, peer, response.id, |request| match request.data {
 			RequestData::RemoteChanges(request, sender) => match self.checker.check_changes_proof(
 				&request, ChangesProof {
 					max_block: response.max,
 					proof: response.proof,
-					roots: HashMap::new(), // TODO
-					roots_proof: vec![],
+					roots: response.roots.into_iter().collect(),
+					roots_proof: response.roots_proof,
 			}) {
 				Ok(response) => {
 					// we do not bother if receiver has been dropped already
@@ -813,6 +813,8 @@ pub mod tests {
 			id: 0,
 			max: 1000,
 			proof: vec![vec![2]],
+			roots: vec![],
+			roots_proof: vec![],
 		});
 		thread.join().unwrap();
 	}

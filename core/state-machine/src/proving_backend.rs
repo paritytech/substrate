@@ -127,16 +127,28 @@ where
 	H: Hasher,
 	H::Out: HeapSizeOf,
 {
-	let mut db = MemoryDB::default();	// TODO: use new for correctness
-	for item in proof {
-		db.insert(&item);
-	}
+	let db = create_proof_check_backend_storage(proof);
 
 	if !db.contains(&root) {
 		return Err(Box::new(ExecutionError::InvalidProof) as Box<Error>);
 	}
 
 	Ok(TrieBackend::new(db, root))
+}
+
+/// Create in-memory storage of proof check backend.
+pub fn create_proof_check_backend_storage<H>(
+	proof: Vec<Vec<u8>>
+) -> MemoryDB<H>
+where
+	H: Hasher,
+	H::Out: HeapSizeOf,
+{
+	let mut db = MemoryDB::default();	// TODO: use new for correctness
+	for item in proof {
+		db.insert(&item);
+	}
+	db
 }
 
 #[cfg(test)]

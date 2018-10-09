@@ -32,7 +32,8 @@ use trie;
 use primitives::H256;
 use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
 use state_machine::backend::InMemory as InMemoryState;
-use state_machine::{prove_read_on_trie_backend, read_proof_check, Backend as StateBackend};
+use state_machine::{MemoryDB, TrieBackend, Backend as StateBackend,
+	prove_read_on_trie_backend, read_proof_check, read_proof_check_on_proving_backend};
 
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 
@@ -118,21 +119,105 @@ pub fn check_proof<Header, Hasher>(
 ) -> ClientResult<()>
 	where
 		Header: HeaderT,
-		Header::Hash: AsRef<[u8]>,
 		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + HeapSizeOf,
+{
+	do_check_proof::<Header, Hasher, _>(local_root, local_number, remote_hash, move |local_root, local_cht_key|
+		read_proof_check::<Hasher>(local_root, remote_proof,
+			local_cht_key).map_err(|e| ClientError::from(e)))
+}
+
+/// Check CHT-based header proof on pre-created proving backend.
+pub fn check_proof_on_proving_backend<Header, Hasher>(
+	local_root: Header::Hash,
+	local_number: Header::Number,
+	remote_hash: Header::Hash,
+	proving_backend: &TrieBackend<MemoryDB<Hasher>, Hasher>,
+) -> ClientResult<()>
+	where
+		Header: HeaderT,
+		Hasher: hash_db::Hasher,
+		Hasher::Out: Ord + HeapSizeOf,
+{
+	do_check_proof::<Header, Hasher, _>(local_root, local_number, remote_hash, |_, local_cht_key|
+		read_proof_check_on_proving_backend::<Hasher>(
+			proving_backend, local_cht_key).map_err(|e| ClientError::from(e)))
+}
+
+/// Check CHT-based header proof using passed checker function.
+fn do_check_proof<Header, Hasher, F>(
+	local_root: Header::Hash,
+	local_number: Header::Number,
+	remote_hash: Header::Hash,
+	checker: F,
+) -> ClientResult<()>
+	where
+		Header: HeaderT,
+		Hasher: hash_db::Hasher,
+		Hasher::Out: Ord + HeapSizeOf,
+		F: FnOnce(Hasher::Out, &[u8]) -> ClientResult<Option<Vec<u8>>>,
 {
 	let mut root: Hasher::Out = Default::default();
 	root.as_mut().copy_from_slice(local_root.as_ref());
 	let local_cht_key = encode_cht_key(local_number);
-	let local_cht_value = read_proof_check::<Hasher>(root, remote_proof,
-		&local_cht_key).map_err(|e| ClientError::from(e))?;
-	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
+	let local_cht_value = checker(root, &local_cht_key)?;
+	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?; // TODO: InvalidHeaderProof
 	let local_hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
 	match &local_hash[..] == remote_hash.as_ref() {
 		true => Ok(()),
 		false => Err(ClientErrorKind::InvalidHeaderProof.into()),
 	}
+
+}
+
+/// Group ordered blocks by CHT number and call functor with blocks of each group.
+pub fn for_each_cht_group<Header, I, F, P>(
+	blocks: I,
+	mut functor: F,
+	mut functor_param: P,
+) -> ClientResult<()>
+	where
+		Header: HeaderT,
+		I: IntoIterator<Item=Header::Number>,
+		F: FnMut(P, Header::Number, Vec<Header::Number>) -> ClientResult<P>,
+{
+	let mut current_cht_num = None;
+	let mut current_cht_blocks = Vec::new();
+	for block in blocks {
+		let new_cht_num = match block_to_cht_number(SIZE, block.as_()) {
+			Some(new_cht_num) => new_cht_num,
+			None => return Err(ClientErrorKind::Backend(format!(
+				"Cannot compute CHT root for the block #{}", block)).into()
+			),
+		};
+
+		let advance_to_next_cht = current_cht_num.is_some() && current_cht_num != Some(new_cht_num);
+		if advance_to_next_cht {
+			let current_cht_num = current_cht_num.expect("advance_to_next_cht is true;
+				it is true only when current_cht_num is Some; qed");
+			assert!(new_cht_num > current_cht_num, "for_each_cht_group only supports ordered iterators");
+
+			functor_param = functor(
+				functor_param,
+				As::sa(current_cht_num),
+				::std::mem::replace(&mut current_cht_blocks, Vec::new()),
+			)?;
+		} else {
+			current_cht_blocks.push(block);
+		}
+
+		current_cht_num = Some(new_cht_num);
+	}
+
+	if let Some(current_cht_num) = current_cht_num {
+		functor(
+			functor_param,
+			As::sa(current_cht_num),
+			::std::mem::replace(&mut current_cht_blocks, Vec::new()),
+		)?;
+	}
+
+	Ok(())
 }
 
 /// Build pairs for computing CHT.

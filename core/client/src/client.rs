@@ -468,28 +468,11 @@ impl<B, E, Block> Client<B, E, Block> where
 		// => GroupBy changes tries by CHT number and then gather proof for the whole group at once
 		let mut proof = HashSet::new();
 
-		let mut current_cht_num = None;
-		let mut current_cht_blocks = Vec::new();
-		for block in blocks {
-			let new_cht_num = cht::block_to_cht_number(cht::SIZE, block.as_())
-				.expect("block_to_cht_number only returns None if called for genesis block;
-					key_changes_proof never touches genesis block; qed");
-			let advance_to_next_cht = current_cht_num.is_some() && current_cht_num != Some(new_cht_num);
-			if advance_to_next_cht {
-				let current_cht_num = current_cht_num.expect("advance_to_next_cht is true;
-					it is true only when current_cht_num is Some; qed");
-				let current_cht_proof = self.changes_trie_roots_proof_at_cht(
-					As::sa(current_cht_num),
-					::std::mem::replace(&mut current_cht_blocks, Vec::new()),
-				)?;
-
-				proof.extend(current_cht_proof);
-			} else {
-				current_cht_blocks.push(block);
-			}
-
-			current_cht_num = Some(new_cht_num);
-		}
+		cht::for_each_cht_group::<Block::Header, _, _, _>(blocks, |_, cht_num, cht_blocks| {
+			let cht_proof = self.changes_trie_roots_proof_at_cht(cht_num, cht_blocks)?;
+			proof.extend(cht_proof);
+			Ok(())
+		}, ())?;
 
 		Ok(proof.into_iter().collect())
 	}
@@ -1148,7 +1131,7 @@ pub(crate) mod tests {
 	use super::*;
 	use keyring::Keyring;
 	use primitives::twox_128;
-	use runtime_primitives::traits::{Digest as DigestT, DigestItem as DigestItemT};
+	use runtime_primitives::traits::DigestItem as DigestItemT;
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
 	use test_client::client::BlockOrigin;

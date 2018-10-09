@@ -17,16 +17,16 @@
 //! Light client data fetcher. Fetches requested data from remote full nodes.
 
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use futures::IntoFuture;
 
-use hash_db::Hasher;
+use hash_db::{HashDB, Hasher};
 use heapsize::HeapSizeOf;
 use primitives::ChangesTrieConfiguration;
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
-use state_machine::{CodeExecutor, ChangesTrieRootsStorage, read_proof_check,
-	key_changes_proof_check};
+use state_machine::{TrieBackend, CodeExecutor, ChangesTrieRootsStorage, read_proof_check,
+	key_changes_proof_check, create_proof_check_backend_storage};
 
 use call_executor::CallResult;
 use cht;
@@ -104,7 +104,7 @@ pub struct ChangesProof<Header: HeaderT> {
 	pub proof: Vec<Vec<u8>>,
 	/// All changes tries roots that have been touched AND are missing from
 	/// the requester' node. It is a map of block number => changes trie root.
-	pub roots: HashMap<Header::Number, Header::Hash>,
+	pub roots: BTreeMap<Header::Number, Header::Hash>,
 	/// The proofs for all changes tries roots that have been touched AND are
 	/// missing from the requester' node. It is a map of CHT number => proof.
 	pub roots_proof: Vec<Vec<u8>>,
@@ -239,33 +239,64 @@ impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S,
 			)).into());
 		}
 
+		// check proofs for changes tries
+		let remote_max_block = remote_proof.max_block;
+		let remote_roots = remote_proof.roots;
+		let remote_roots_proof = remote_proof.roots_proof;
+		let remote_proof = remote_proof.proof;
+		if !remote_roots.is_empty() {
+			let roots_proof_storage = create_proof_check_backend_storage(remote_roots_proof);
+			cht::for_each_cht_group::<Block::Header, _, _, _>(remote_roots.keys().cloned(), |mut roots_proof_storage, cht_num, cht_blocks| {
+				let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht::SIZE, cht_num)?;
+				for block in cht_blocks {
+					let mut remote_root = H::Out::default();
+					remote_root.as_mut().copy_from_slice(remote_roots[&block].as_ref()); // TODO
+
+					if !roots_proof_storage.contains(&remote_root) {
+						// TODO: error
+					}
+
+					let proving_backend = TrieBackend::new(roots_proof_storage, remote_root);
+					let remote_changes_trie_root = remote_roots[&block];
+					cht::check_proof_on_proving_backend::<Block::Header, H>(
+						local_cht_root,
+						block,
+						remote_changes_trie_root,
+						&proving_backend)?;
+					roots_proof_storage = proving_backend.into_storage();
+				}
+
+				Ok(roots_proof_storage)
+			}, roots_proof_storage)?;
+		}
+
 		// and now check the key changes proof + get the changes
 		key_changes_proof_check::<_, H>(
 			&request.changes_trie_config,
 			&RootsStorage {
 				roots: (request.tries_roots.0, &request.tries_roots.1),
-				prev_roots: remote_proof.roots,
+				prev_roots: remote_roots,
 			},
-			remote_proof.proof,
+			remote_proof,
 			request.first_block.0.as_(),
 			request.last_block.0.as_(),
-			remote_proof.max_block.as_(),
+			remote_max_block.as_(),
 			&request.key)
 		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
 		.map_err(|err| ClientErrorKind::ChangesTrieAccessFailed(err).into())
 	}
 }
 
-/// A view of HashMap<Number, Hash> as a changes trie roots storage.
+/// A view of BTreeMap<Number, Hash> as a changes trie roots storage.
 struct RootsStorage<'a, Number: As<u64>, Hash: 'a> {
 	roots: (Number, &'a [Hash]),
-	prev_roots: HashMap<Number, Hash>,
+	prev_roots: BTreeMap<Number, Hash>,
 }
 
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: Send + Sync + Eq + ::std::hash::Hash + Copy + As<u64>,
+		Number: Send + Sync + Eq + ::std::cmp::Ord + Copy + As<u64>,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
 	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {

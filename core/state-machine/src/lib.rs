@@ -60,6 +60,7 @@ pub use changes_trie::{Storage as ChangesTrieStorage,
 	InMemoryStorage as InMemoryChangesTrieStorage,
 	key_changes, key_changes_proof, key_changes_proof_check};
 pub use overlayed_changes::OverlayedChanges;
+pub use proving_backend::create_proof_check_backend_storage;
 pub use trie_backend_essence::Storage;
 pub use trie_backend::TrieBackend;
 
@@ -419,7 +420,7 @@ where
 	prove_read_on_trie_backend(&trie_backend, key)
 }
 
-/// Generate storage read proof on trie backend.
+/// Generate storage read proof on pre-created trie backend.
 pub fn prove_read_on_trie_backend<S, H>(
 	trie_backend: &TrieBackend<S, H>,
 	key: &[u8]
@@ -442,11 +443,22 @@ pub fn read_proof_check<H>(
 ) -> Result<Option<Vec<u8>>, Box<Error>>
 where
 	H: Hasher,
-
 	H::Out: Ord + HeapSizeOf
 {
-	let backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
-	backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
+	let proving_backend = proving_backend::create_proof_check_backend::<H>(root, proof)?;
+	read_proof_check_on_proving_backend(&proving_backend, key)
+}
+
+/// Check storage read proof on pre-created proving backend.
+pub fn read_proof_check_on_proving_backend<H>(
+	proving_backend: &TrieBackend<MemoryDB<H>, H>,
+	key: &[u8],
+) -> Result<Option<Vec<u8>>, Box<Error>>
+where
+	H: Hasher,
+	H::Out: Ord + HeapSizeOf
+{
+	proving_backend.storage(key).map_err(|e| Box::new(e) as Box<Error>)
 }
 
 /// Sets overlayed changes' changes trie configuration. Returns error if configuration

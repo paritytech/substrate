@@ -57,7 +57,7 @@ const CHANGES_TRIE_CHT_PREFIX: u8 = 1;
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
 pub struct LightStorage<Block: BlockT> {
 	db: Arc<KeyValueDB>,
-	meta: RwLock<Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>>,
+	meta: RwLock<Meta<NumberFor<Block>, Block::Hash>>,
 	leaves: RwLock<LeafSet<Block::Hash, NumberFor<Block>>>,
 	_cache: DbCache<Block>,
 }
@@ -121,7 +121,7 @@ impl<Block> LightStorage<Block>
 	fn update_meta(
 		&self,
 		hash: Block::Hash,
-		number: <<Block as BlockT>::Header as HeaderT>::Number,
+		number: NumberFor<Block>,
 		is_best: bool,
 		is_finalized: bool,
 	) {
@@ -179,14 +179,14 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 		}
 	}
 
-	fn number(&self, hash: Block::Hash) -> ClientResult<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
+	fn number(&self, hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
 		self.header(BlockId::Hash(hash)).and_then(|key| match key {
 			Some(hdr) => Ok(Some(hdr.number().clone())),
 			None => Ok(None),
 		})
 	}
 
-	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
+	fn hash(&self, number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
 		read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(number))
 	}
 }
@@ -244,11 +244,22 @@ impl<Block: BlockT> LightStorage<Block> {
 					transaction.delete(columns::HASH_LOOKUP, &lookup_key);
 					transaction.delete(columns::HEADER, hash.as_ref());
 				}
-				prune_block += <<Block as BlockT>::Header as HeaderT>::Number::one();
+				prune_block += One::one();
 			}
 		}
 
 		Ok(())
+	}
+
+	/// Read CHT root of given type for the block.
+	fn read_cht_root(&self, cht_type: u8, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+		let no_cht_for_block = || ClientErrorKind::Backend(format!("CHT for block {} not exists", block)).into();
+
+		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
+		let cht_start = cht::start_number(cht_size, cht_number);
+		self.db.get(columns::CHT, &cht_key(cht_type, cht_start)).map_err(db_err)?
+			.ok_or_else(no_cht_for_block)
+			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
 	}
 }
 
@@ -339,14 +350,12 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		Ok(())
 	}
 
-	fn cht_root(&self, cht_size: u64, block: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Block::Hash> {
-		let no_cht_for_block = || ClientErrorKind::Backend(format!("CHT for block {} not exists", block)).into();
+	fn header_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+		self.read_cht_root(HEADER_CHT_PREFIX, cht_size, block)
+	}
 
-		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
-		let cht_start = cht::start_number(cht_size, cht_number);
-		self.db.get(columns::CHT, &cht_key(HEADER_CHT_PREFIX, cht_start)).map_err(db_err)?
-			.ok_or_else(no_cht_for_block)
-			.and_then(|hash| Block::Hash::decode(&mut &*hash).ok_or_else(no_cht_for_block))
+	fn changes_trie_cht_root(&self, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+		self.read_cht_root(CHANGES_TRIE_CHT_PREFIX, cht_size, block)
 	}
 
 	fn finalize_header(&self, id: BlockId<Block>) -> ClientResult<()> {
@@ -527,12 +536,12 @@ pub(crate) mod tests {
 
 	#[test]
 	fn get_cht_fails_for_genesis_block() {
-		assert!(LightStorage::<Block>::new_test().cht_root(cht::SIZE, 0).is_err());
+		assert!(LightStorage::<Block>::new_test().header_cht_root(cht::SIZE, 0).is_err());
 	}
 
 	#[test]
 	fn get_cht_fails_for_non_existant_cht() {
-		assert!(LightStorage::<Block>::new_test().cht_root(cht::SIZE, (cht::SIZE / 2) as u64).is_err());
+		assert!(LightStorage::<Block>::new_test().header_cht_root(cht::SIZE, (cht::SIZE / 2) as u64).is_err());
 	}
 
 	#[test]
@@ -546,9 +555,9 @@ pub(crate) mod tests {
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		}
 
-		let cht_root_1 = db.cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
-		let cht_root_2 = db.cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
-		let cht_root_3 = db.cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
+		let cht_root_1 = db.header_cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
+		let cht_root_2 = db.header_cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
+		let cht_root_3 = db.header_cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
 	}

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, BTreeMap};
 use std::{mem, cmp};
 use std::sync::Arc;
 use std::time;
@@ -662,17 +662,21 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 				ChangesProof::<B::Header> {
 					max_block: Zero::zero(),
 					proof: vec![],
-					roots: HashMap::new(),
+					roots: BTreeMap::new(),
 					roots_proof: vec![],
 				}
 			},
 		};
  		self.send_message(io, who, GenericMessage::RemoteChangesResponse(message::RemoteChangesResponse {
-			id: request.id, max: proof.max_block, proof: proof.proof,
+			id: request.id,
+			max: proof.max_block,
+			proof: proof.proof,
+			roots: proof.roots.into_iter().collect(),
+			roots_proof: proof.roots_proof,
 		}));
 	}
 
- 	fn on_remote_changes_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>>) {
+ 	fn on_remote_changes_response(&self, io: &mut SyncIo, who: NodeIndex, response: message::RemoteChangesResponse<NumberFor<B>, B::Hash>) {
 		trace!(target: "sync", "Remote changes proof response {} from {} (max={})",
 			response.id, who, response.max);
 		self.on_demand.as_ref().map(|s| s.on_remote_changes_response(io, who, response));
