@@ -302,7 +302,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			}
 
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
-			transaction.put(columns::HASH_LOOKUP, &number_to_lookup_key(number), hash.as_ref());
 		}
 
 		// blocks in longest chain are keyed by number
