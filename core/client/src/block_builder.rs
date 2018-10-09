@@ -31,8 +31,8 @@ use hash_db::Hasher;
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, B, E, Block, H>
 where
-	B: backend::Backend<Block, H>,
-	E: CallExecutor<Block, H> + Clone,
+	B: backend::Backend<Block, H> + 'a,
+	E: CallExecutor<Block, H> + Clone + 'a,
 	Block: BlockT,
 	H: Hasher,
 	H::Out: Ord,
@@ -48,8 +48,8 @@ where
 
 impl<'a, B, E, Block> BlockBuilder<'a, B, E, Block, Blake2Hasher>
 where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	B: backend::Backend<Block, Blake2Hasher> + 'a,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + 'a,
 	Block: BlockT,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
