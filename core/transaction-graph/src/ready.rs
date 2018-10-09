@@ -165,7 +165,7 @@ impl<Hash: hash::Hash + Member> ReadyTransactions<Hash> {
 
 		let transaction = TransactionRef {
 			insertion_id,
-			valid_till: block_number + tx.longevity,
+			valid_till: block_number.saturating_add(tx.longevity),
 			transaction: Arc::new(tx),
 		};
 
@@ -493,6 +493,14 @@ mod tests {
 		tx4.requires = vec![tx1.provides[0].clone()];
 		tx4.provides = vec![];
 		let block_number = 1;
+		let tx5 = Transaction {
+			ex: vec![5],
+			hash: 5,
+			priority: 1,
+			longevity: u64::max_value(),	// use the max_value() here for testing.
+			requires: vec![tx1.provides[0].clone()],
+			provides: vec![],
+		};
 
 		// when
 		let x = WaitingTransaction::new(tx1, &ready.provided_tags());
@@ -502,6 +510,8 @@ mod tests {
 		let x = WaitingTransaction::new(tx3, &ready.provided_tags());
 		ready.import(block_number, x).unwrap();
 		let x = WaitingTransaction::new(tx4, &ready.provided_tags());
+		ready.import(block_number, x).unwrap();
+		let x = WaitingTransaction::new(tx5, &ready.provided_tags());
 		ready.import(block_number, x).unwrap();
 
 		// then
@@ -513,6 +523,7 @@ mod tests {
 		assert_eq!(it.next(), Some(2));
 		assert_eq!(it.next(), Some(3));
 		assert_eq!(it.next(), Some(4));
+		assert_eq!(it.next(), Some(5));
 		assert_eq!(it.next(), None);
 	}
 
