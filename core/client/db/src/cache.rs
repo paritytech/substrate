@@ -327,7 +327,7 @@ fn read_storage_entry<Block, T>(
 mod tests {
 	use runtime_primitives::testing::Block as RawBlock;
 	use light::{AUTHORITIES_ENTRIES_TO_KEEP, columns, LightStorage};
-	use light::tests::insert_block;
+	use light::tests::{insert_block, default_header};
 	use super::*;
 
 	type Block = RawBlock<u64>;
@@ -370,7 +370,7 @@ mod tests {
 		let mut prev_hash = Default::default();
 		for number in 0..authorities_at.len() {
 			let authorities_at_number = authorities_at[number].1.clone().and_then(|e| e.value);
-			prev_hash = insert_block(&db, &prev_hash, number as u64, authorities_at_number);
+			prev_hash = insert_block(&db, authorities_at_number, || default_header(&prev_hash, number as u64));
 			assert_eq!(db.cache().authorities_at_cache().best_entry(), authorities_at[number].1);
 			assert_eq!(db.db().iter(columns::AUTHORITIES).count(), authorities_at[number].0);
 		}
@@ -387,7 +387,7 @@ mod tests {
 		let mut current_entries_count = authorities_at.last().unwrap().0;
 		let pruning_starts_at = AUTHORITIES_ENTRIES_TO_KEEP as usize;
 		for number in authorities_at.len()..authorities_at.len() + pruning_starts_at {
-			prev_hash = insert_block(&db, &prev_hash, number as u64, None);
+			prev_hash = insert_block(&db, None, || default_header(&prev_hash, number as u64));
 			if number > pruning_starts_at {
 				let prev_entries_count = authorities_at[number - pruning_starts_at].0;
 				let entries_count = authorities_at.get(number - pruning_starts_at + 1).map(|e| e.0)

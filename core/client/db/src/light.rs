@@ -391,45 +391,40 @@ fn cht_key<N: As<u64>>(cht_type: u8, block: N) -> [u8; 5] {
 #[cfg(test)]
 pub(crate) mod tests {
 	use client::cht;
+	use runtime_primitives::generic::DigestItem;
 	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock};
 	use super::*;
 
 	type Block = RawBlock<u32>;
 
-	pub fn insert_block_with_extrinsics_root(
-		db: &LightStorage<Block>,
-		parent: &Hash,
-		number: u64,
-		authorities: Option<Vec<AuthorityId>>,
-		extrinsics_root: Hash,
-	) -> Hash {
-		let header = Header {
-			number: number.into(),
-			parent_hash: *parent,
-			state_root: Default::default(),
-			digest: Default::default(),
-			extrinsics_root,
-		};
-
-		let hash = header.hash();
-		db.import_header(header, authorities, NewBlockState::Best).unwrap();
-		hash
-	}
-
-	pub fn insert_block(
-		db: &LightStorage<Block>,
-		parent: &Hash,
-		number: u64,
-		authorities: Option<Vec<AuthorityId>>
-	) -> Hash {
-		let header = Header {
+	pub fn default_header(parent: &Hash, number: u64) -> Header {
+		Header {
 			number: number.into(),
 			parent_hash: *parent,
 			state_root: Default::default(),
 			digest: Default::default(),
 			extrinsics_root: Default::default(),
-		};
+		}
+	}
 
+	fn header_with_changes_trie(parent: &Hash, number: u64) -> Header {
+		let mut header = default_header(parent, number);
+		header.digest.logs.push(DigestItem::ChangesTrieRoot([(number % 256) as u8; 32].into()));
+		header
+	}
+
+	fn header_with_extrinsics_root(parent: &Hash, number: u64, extrinsics_root: Hash) -> Header {
+		let mut header = default_header(parent, number);
+		header.extrinsics_root = extrinsics_root;
+		header
+	}
+
+	pub fn insert_block<F: Fn() -> Header>(
+		db: &LightStorage<Block>,
+		authorities: Option<Vec<AuthorityId>>,
+		header: F,
+	) -> Hash {
+		let header = header();
 		let hash = header.hash();
 		db.import_header(header, authorities, NewBlockState::Best).unwrap();
 		hash
@@ -438,7 +433,7 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_known_header() {
 		let db = LightStorage::new_test();
-		let known_hash = insert_block(&db, &Default::default(), 0, None);
+		let known_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		let header_by_hash = db.header(BlockId::Hash(known_hash)).unwrap().unwrap();
 		let header_by_number = db.header(BlockId::Number(0)).unwrap().unwrap();
 		assert_eq!(header_by_hash, header_by_number);
@@ -454,12 +449,12 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_info() {
 		let db = LightStorage::new_test();
-		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		let info = db.info().unwrap();
 		assert_eq!(info.best_hash, genesis_hash);
 		assert_eq!(info.best_number, 0);
 		assert_eq!(info.genesis_hash, genesis_hash);
-		let best_hash = insert_block(&db, &genesis_hash, 1, None);
+		let best_hash = insert_block(&db, None, || default_header(&genesis_hash, 1));
 		let info = db.info().unwrap();
 		assert_eq!(info.best_hash, best_hash);
 		assert_eq!(info.best_number, 1);
@@ -469,7 +464,7 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_block_status() {
 		let db = LightStorage::new_test();
-		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		assert_eq!(db.status(BlockId::Hash(genesis_hash)).unwrap(), BlockStatus::InChain);
 		assert_eq!(db.status(BlockId::Number(0)).unwrap(), BlockStatus::InChain);
 		assert_eq!(db.status(BlockId::Hash(1.into())).unwrap(), BlockStatus::Unknown);
@@ -479,7 +474,7 @@ pub(crate) mod tests {
 	#[test]
 	fn returns_block_hash() {
 		let db = LightStorage::new_test();
-		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		assert_eq!(db.hash(0).unwrap(), Some(genesis_hash));
 		assert_eq!(db.hash(1).unwrap(), None);
 	}
@@ -488,50 +483,70 @@ pub(crate) mod tests {
 	fn import_header_works() {
 		let db = LightStorage::new_test();
 
-		let genesis_hash = insert_block(&db, &Default::default(), 0, None);
+		let genesis_hash = insert_block(&db, None, || default_header(&Default::default(), 0));
 		assert_eq!(db.db.iter(columns::HEADER).count(), 1);
 		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), 1);
 
-		let _ = insert_block(&db, &genesis_hash, 1, None);
+		let _ = insert_block(&db, None, || default_header(&genesis_hash, 1));
 		assert_eq!(db.db.iter(columns::HEADER).count(), 2);
 		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), 2);
 	}
 
 	#[test]
 	fn finalized_ancient_headers_are_replaced_with_cht() {
-		let db = LightStorage::new_test();
+		fn insert_headers<F: Fn(&Hash, u64) -> Header>(header_producer: F) -> LightStorage<Block> {
+			let db = LightStorage::new_test();
 
-		// insert genesis block header (never pruned)
-		let mut prev_hash = insert_block(&db, &Default::default(), 0, None);
+			// insert genesis block header (never pruned)
+			let mut prev_hash = insert_block(&db, None, || header_producer(&Default::default(), 0));
 
-		// insert SIZE blocks && ensure that nothing is pruned
-		for number in 0..cht::SIZE {
-			prev_hash = insert_block(&db, &prev_hash, 1 + number, None);
+			// insert SIZE blocks && ensure that nothing is pruned
+			for number in 0..cht::SIZE {
+				prev_hash = insert_block(&db, None, || header_producer(&prev_hash, 1 + number));
+			}
+			assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE) as usize);
+			assert_eq!(db.db.iter(columns::CHT).count(), 0);
+
+			// insert next SIZE blocks && ensure that nothing is pruned
+			for number in 0..cht::SIZE {
+				prev_hash = insert_block(&db, None, || header_producer(&prev_hash, 1 + cht::SIZE + number));
+			}
+			assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + cht::SIZE) as usize);
+			assert_eq!(db.db.iter(columns::CHT).count(), 0);
+
+			// insert block #{2 * cht::SIZE + 1} && check that new CHT is created + headers of this CHT are pruned
+			// nothing is yet finalized, so nothing is pruned.
+			prev_hash = insert_block(&db, None, || header_producer(&prev_hash, 1 + cht::SIZE + cht::SIZE));
+			assert_eq!(db.db.iter(columns::HEADER).count(), (2 + cht::SIZE + cht::SIZE) as usize);
+			assert_eq!(db.db.iter(columns::CHT).count(), 0);
+
+			// now finalize the block.
+			for i in (0..(cht::SIZE + cht::SIZE)).map(|i| i + 1) {
+				db.finalize_header(BlockId::Number(i)).unwrap();
+			}
+			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
+			db
 		}
-		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE) as usize);
-		assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
-		// insert next SIZE blocks && ensure that nothing is pruned
-		for number in 0..cht::SIZE {
-			prev_hash = insert_block(&db, &prev_hash, 1 + cht::SIZE + number, None);
-		}
-		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + cht::SIZE) as usize);
-		assert_eq!(db.db.iter(columns::CHT).count(), 0);
-
-		// insert block #{2 * cht::SIZE + 1} && check that new CHT is created + headers of this CHT are pruned
-		// nothing is yet finalized, so nothing is pruned.
-		prev_hash = insert_block(&db, &prev_hash, 1 + cht::SIZE + cht::SIZE, None);
-		assert_eq!(db.db.iter(columns::HEADER).count(), (2 + cht::SIZE + cht::SIZE) as usize);
-		assert_eq!(db.db.iter(columns::CHT).count(), 0);
-
-		// now finalize the block.
-		for i in (0..(cht::SIZE + cht::SIZE)).map(|i| i + 1) {
-			db.finalize_header(BlockId::Number(i)).unwrap();
-		}
-		db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
+		// when headers are created without changes tries roots
+		let db = insert_headers(default_header);
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
 		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_lookup_key(1 + i)).unwrap().is_none()));
+		assert!(db.header_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
+		assert!(db.header_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
+
+		// when headers are created with changes tries roots
+		let db = insert_headers(header_with_changes_trie);
+		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
+		assert_eq!(db.db.iter(columns::CHT).count(), 2);
+		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_lookup_key(1 + i)).unwrap().is_none()));
+		assert!(db.header_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
+		assert!(db.header_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
+		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE / 2).is_ok());
+		assert!(db.changes_trie_cht_root(cht::SIZE, cht::SIZE + cht::SIZE / 2).is_err());
 	}
 
 	#[test]
@@ -549,9 +564,9 @@ pub(crate) mod tests {
 		let db = LightStorage::new_test();
 
 		// insert 1 + SIZE + SIZE + 1 blocks so that CHT#0 is created
-		let mut prev_hash = insert_block(&db, &Default::default(), 0, None);
+		let mut prev_hash = insert_block(&db, None, || header_with_changes_trie(&Default::default(), 0));
 		for i in 1..1 + cht::SIZE + cht::SIZE + 1 {
-			prev_hash = insert_block(&db, &prev_hash, i as u64, None);
+			prev_hash = insert_block(&db, None, || header_with_changes_trie(&prev_hash, i as u64));
 			db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		}
 
@@ -560,21 +575,27 @@ pub(crate) mod tests {
 		let cht_root_3 = db.header_cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
 		assert_eq!(cht_root_1, cht_root_2);
 		assert_eq!(cht_root_2, cht_root_3);
+
+		let cht_root_1 = db.changes_trie_cht_root(cht::SIZE, cht::start_number(cht::SIZE, 0)).unwrap();
+		let cht_root_2 = db.changes_trie_cht_root(cht::SIZE, (cht::start_number(cht::SIZE, 0) + cht::SIZE / 2) as u64).unwrap();
+		let cht_root_3 = db.changes_trie_cht_root(cht::SIZE, cht::end_number(cht::SIZE, 0)).unwrap();
+		assert_eq!(cht_root_1, cht_root_2);
+		assert_eq!(cht_root_2, cht_root_3);
 	}
 
 	#[test]
 	fn tree_route_works() {
 		let db = LightStorage::new_test();
-		let block0 = insert_block(&db, &Default::default(), 0, None);
+		let block0 = insert_block(&db, None, || default_header(&Default::default(), 0));
 
 		// fork from genesis: 3 prong.
-		let a1 = insert_block(&db, &block0, 1, None);
-		let a2 = insert_block(&db, &a1, 2, None);
-		let a3 = insert_block(&db, &a2, 3, None);
+		let a1 = insert_block(&db, None, || default_header(&block0, 1));
+		let a2 = insert_block(&db, None, || default_header(&a1, 2));
+		let a3 = insert_block(&db, None, || default_header(&a2, 3));
 
 		// fork from genesis: 2 prong.
-		let b1 = insert_block_with_extrinsics_root(&db, &block0, 1, None, Hash::from([1; 32]));
-		let b2 = insert_block(&db, &b1, 2, None);
+		let b1 = insert_block(&db, None, || header_with_extrinsics_root(&block0, 1, Hash::from([1; 32])));
+		let b2 = insert_block(&db, None, || default_header(&b1, 2));
 
 		{
 			let tree_route = ::client::blockchain::tree_route(
