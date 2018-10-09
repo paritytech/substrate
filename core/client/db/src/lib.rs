@@ -229,7 +229,7 @@ impl<Block: BlockT> client::blockchain::HeaderBackend<Block> for BlockchainDb<Bl
 	}
 
 	fn hash(&self, number: NumberFor<Block>) -> Result<Option<Block::Hash>, client::error::Error> {
-		self.header(BlockId::Number(number)).and_then(|key| match key {
+		self.header(BlockId::Number(number)).and_then(|maybe_header| match maybe_header {
 			Some(header) => Ok(Some(header.hash().clone())),
 			None => Ok(None),
 		})
