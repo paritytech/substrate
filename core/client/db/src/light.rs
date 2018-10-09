@@ -247,17 +247,6 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		let number = *header.number();
 		let parent_hash = *header.parent_hash();
 
-		// blocks in longest chain are keyed by number
-		let lookup_key = if leaf_state.is_best() {
-			::utils::number_to_lookup_key(number).to_vec()
-		} else {
-		// other blocks are keyed by number + hash
-			::utils::number_and_hash_to_lookup_key(number, hash)
-		};
-
-		transaction.put(columns::HEADER, &lookup_key, &header.encode());
-		transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
-
 		if leaf_state.is_best() {
 			// handle reorg.
 			{
@@ -315,6 +304,17 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
 			transaction.put(columns::HASH_LOOKUP, &number_to_lookup_key(number), hash.as_ref());
 		}
+
+		// blocks in longest chain are keyed by number
+		let lookup_key = if leaf_state.is_best() {
+			::utils::number_to_lookup_key(number).to_vec()
+		} else {
+		// other blocks are keyed by number + hash
+			::utils::number_and_hash_to_lookup_key(number, hash)
+		};
+
+		transaction.put(columns::HEADER, &lookup_key, &header.encode());
+		transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
 
 		let finalized = match leaf_state {
 			NewBlockState::Final => true,

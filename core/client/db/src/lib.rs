@@ -553,24 +553,6 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			let parent_hash = *pending_block.header.parent_hash();
 			let number = pending_block.header.number().clone();
 
-			// blocks in longest chain are keyed by number
-			let lookup_key = if pending_block.leaf_state.is_best() {
-				::utils::number_to_lookup_key(number).to_vec()
-			} else {
-			// other blocks are keyed by number + hash
-				::utils::number_and_hash_to_lookup_key(number, hash)
-			};
-
-			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
-			if let Some(body) = pending_block.body {
-				transaction.put(columns::BODY, &lookup_key, &body.encode());
-			}
-			if let Some(justification) = pending_block.justification {
-				transaction.put(columns::JUSTIFICATION, &lookup_key, &justification.encode());
-			}
-
-			transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
-
 			if pending_block.leaf_state.is_best() {
 				let meta = self.blockchain.meta.read();
 
@@ -660,6 +642,24 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 
 				transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
 			}
+
+			// blocks in longest chain are keyed by number
+			let lookup_key = if pending_block.leaf_state.is_best() {
+				::utils::number_to_lookup_key(number).to_vec()
+			} else {
+			// other blocks are keyed by number + hash
+				::utils::number_and_hash_to_lookup_key(number, hash)
+			};
+
+			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
+			if let Some(body) = pending_block.body {
+				transaction.put(columns::BODY, &lookup_key, &body.encode());
+			}
+			if let Some(justification) = pending_block.justification {
+				transaction.put(columns::JUSTIFICATION, &lookup_key, &justification.encode());
+			}
+
+			transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
 
 			if number == Zero::zero() {
 				transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, hash.as_ref());
