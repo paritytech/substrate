@@ -17,20 +17,22 @@
 //! Utility struct to build a block.
 
 use std::vec::Vec;
-use codec::{Decode, Encode};
-use state_machine::{self, native_when_possible};
+use std::marker::PhantomData;
+use codec::Encode;
+use state_machine;
 use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
 use runtime_primitives::generic::BlockId;
+use runtime_api::BlockBuilder as BlockBuilderAPI;
 use {backend, error, Client, CallExecutor};
-use runtime_primitives::{ApplyResult, ApplyOutcome};
+use runtime_primitives::ApplyOutcome;
 use primitives::{Blake2Hasher};
 use hash_db::Hasher;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<B, E, Block, H>
+pub struct BlockBuilder<'a, B, E, Block, H>
 where
-	B: backend::Backend<Block, H>,
-	E: CallExecutor<Block, H> + Clone,
+	B: backend::Backend<Block, H> + 'a,
+	E: CallExecutor<Block, H> + Clone + 'a,
 	Block: BlockT,
 	H: Hasher,
 	H::Out: Ord,
@@ -38,25 +40,26 @@ where
 {
 	header: <Block as BlockT>::Header,
 	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
-	executor: E,
-	state: B::State,
+	client: &'a Client<B, E, Block>,
+	block_id: BlockId<Block>,
 	changes: state_machine::OverlayedChanges,
+	_marker: PhantomData<H>,
 }
 
-impl<B, E, Block> BlockBuilder<B, E, Block, Blake2Hasher>
+impl<'a, B, E, Block> BlockBuilder<'a, B, E, Block, Blake2Hasher>
 where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	B: backend::Backend<Block, Blake2Hasher> + 'a,
+	E: CallExecutor<Block, Blake2Hasher> + Clone + 'a,
 	Block: BlockT,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
-	pub fn new(client: &Client<B, E, Block>) -> error::Result<Self> {
+	pub fn new(client: &'a Client<B, E, Block>) -> error::Result<Self> {
 		client.info().and_then(|i| Self::at_block(&BlockId::Hash(i.chain.best_hash), client))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
 	/// build upon.
-	pub fn at_block(block_id: &BlockId<Block>, client: &Client<B, E, Block>) -> error::Result<Self> {
+	pub fn at_block(block_id: &BlockId<Block>, client: &'a Client<B, E, Block>) -> error::Result<Self> {
 		let number = client.block_number_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?
 			+ One::one();
@@ -64,8 +67,6 @@ where
 		let parent_hash = client.block_hash_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?;
 
-		let executor = client.executor().clone();
-		let state = client.state_at(block_id)?;
 		let mut changes = Default::default();
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			number,
@@ -75,15 +76,16 @@ where
 			Default::default()
 		);
 
-		executor.call_at_state(&state, &mut changes, "initialise_block", &header.encode(), native_when_possible())?;
+		client.initialise_block(block_id, &mut changes, &header)?;
 		changes.commit_prospective();
 
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
-			executor,
-			state,
+			client,
+			block_id: *block_id,
 			changes,
+			_marker: Default::default(),
 		})
 	}
 
@@ -91,21 +93,17 @@ where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		match self.executor.call_at_state(&self.state, &mut self.changes, "apply_extrinsic", &xt.encode(), native_when_possible()) {
-			Ok((result, _, _)) => {
-				match ApplyResult::decode(&mut result.as_slice()) {
-					Some(Ok(ApplyOutcome::Success)) | Some(Ok(ApplyOutcome::Fail)) => {
+		match self.client.apply_extrinsic(&self.block_id, &mut self.changes, &xt) {
+			Ok(result) => {
+				match result {
+					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
 						self.extrinsics.push(xt);
 						self.changes.commit_prospective();
 						Ok(())
 					}
-					Some(Err(e)) => {
+					Err(e) => {
 						self.changes.discard_prospective();
 						Err(error::ErrorKind::ApplyExtinsicFailed(e).into())
-					}
-					None => {
-						self.changes.discard_prospective();
-						Err(error::ErrorKind::CallResultDecode("apply_extrinsic").into())
 					}
 				}
 			}
@@ -118,15 +116,7 @@ where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		let (output, _, _) = self.executor.call_at_state(
-			&self.state,
-			&mut self.changes,
-			"finalise_block",
-			&[],
-			native_when_possible(),
-		)?;
-		self.header = <<Block as BlockT>::Header as Decode>::decode(&mut &output[..])
-			.expect("Header came straight out of runtime so must be valid");
+		self.header = self.client.finalise_block(&self.block_id, &mut self.changes)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),

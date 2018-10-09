@@ -29,7 +29,7 @@ pub trait BlockBuilderExt {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 }
 
-impl<B, E> BlockBuilderExt for client::block_builder::BlockBuilder<B, E, runtime::Block, Blake2Hasher>
+impl<'a, B, E> BlockBuilderExt for client::block_builder::BlockBuilder<'a, B, E, runtime::Block, Blake2Hasher>
     where
         B: client::backend::Backend<runtime::Block, Blake2Hasher>,
         E: client::CallExecutor<runtime::Block, Blake2Hasher> + Clone,
