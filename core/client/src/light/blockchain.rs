@@ -155,3 +155,62 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 		unimplemented!()
 	}
 }
+
+#[cfg(test)]
+pub mod tests {
+	use blockchain::Info;
+	use light::fetcher::tests::OkCallFetcher;
+	use super::*;
+
+	pub struct DummyStorage;
+	pub type DummyBlockchain = Blockchain<DummyStorage, OkCallFetcher>;
+
+	impl<Block: BlockT> BlockchainHeaderBackend<Block> for DummyStorage {
+		fn header(&self, _id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn info(&self) -> ClientResult<Info<Block>> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn status(&self, _id: BlockId<Block>) -> ClientResult<BlockStatus> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn number(&self, _hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn hash(&self, _number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+	}
+
+	impl<Block: BlockT> Storage<Block> for DummyStorage {
+		fn import_header(
+			&self,
+			_header: Block::Header,
+			_authorities: Option<Vec<AuthorityId>>,
+			_state: NewBlockState,
+		) -> ClientResult<()> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn finalize_header(&self, _block: BlockId<Block>) -> ClientResult<()> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn last_finalized(&self) -> ClientResult<Block::Hash> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn cht_root(&self, _cht_size: u64, _block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+			Err(ClientErrorKind::Backend("Test error".into()).into())
+		}
+
+		fn cache(&self) -> Option<&BlockchainCache<Block>> {
+			None
+		}
+	}
+}

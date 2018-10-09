@@ -16,6 +16,7 @@
 
 //! Light client data fetcher. Fetches requested data from remote full nodes.
 
+use std::sync::Arc;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use futures::IntoFuture;
@@ -30,6 +31,7 @@ use state_machine::{CodeExecutor, ChangesTrieRootsStorage, read_proof_check,
 use call_executor::CallResult;
 use cht;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
+use light::blockchain::{Blockchain, Storage as BlockchainStorage};
 use light::call_executor::check_execution_proof;
 
 /// Remote call request.
@@ -84,9 +86,9 @@ pub struct RemoteChangesRequest<Header: HeaderT> {
 	/// Only use digests from blocks up to this hash. Should be last_block OR come
 	/// after this block and be the part of the same fork.
 	pub max_block: (Header::Number, Header::Hash),
-	// TODO: get rid of this + preserve change_trie_roots when replacing headers with CHT!!!
-	/// Changes trie roots for the range of blocks [first_block..max_block].
-	pub tries_roots: Vec<Header::Hash>,
+	/// Known changes trie roots for the range of blocks [tries_roots.0..max_block].
+	/// Proofs for roots of ascendants of tries_roots.0 are provided by the full node.
+	pub tries_roots: (Header::Number, Vec<Header::Hash>),
 	/// Storage key to read.
 	pub key: Vec<u8>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -133,8 +135,8 @@ pub trait Fetcher<Block: BlockT>: Send + Sync {
 
 /// Light client remote data checker.
 ///
-/// Implementations of this trait should not use any blockchain data except that is
-/// passed to its methods.
+/// Implementations of this trait should not use any prunable blockchain data
+/// except that is passed to its methods.
 pub trait FetchChecker<Block: BlockT>: Send + Sync {
 	/// Check remote header proof.
 	fn check_header_proof(
@@ -164,26 +166,29 @@ pub trait FetchChecker<Block: BlockT>: Send + Sync {
 }
 
 /// Remote data checker.
-pub struct LightDataChecker<E, H> {
+pub struct LightDataChecker<E, H, B: BlockT, S: BlockchainStorage<B>, F> {
+	blockchain: Arc<Blockchain<S, F>>,
 	executor: E,
-	_hasher: PhantomData<H>,
+	_hasher: PhantomData<(B, H)>,
 }
 
-impl<E, H> LightDataChecker<E, H> {
+impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F> {
 	/// Create new light data checker.
-	pub fn new(executor: E) -> Self {
+	pub fn new(blockchain: Arc<Blockchain<S, F>>, executor: E) -> Self {
 		Self {
-			executor, _hasher: PhantomData
+			blockchain, executor, _hasher: PhantomData
 		}
 	}
 }
 
-impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
+impl<E, Block, H, S, F> FetchChecker<Block> for LightDataChecker<E, H, Block, S, F>
 	where
 		Block: BlockT,
 		E: CodeExecutor<H>,
 		H: Hasher,
 		H::Out: Ord + HeapSizeOf,
+		S: BlockchainStorage<Block>,
+		F: Send + Sync,
 {
 	fn check_header_proof(
 		&self,
@@ -234,18 +239,15 @@ impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 			)).into());
 		}
 
-		// TODO: check roots proof
-
-		let first_number = request.first_block.0.as_();
+		// and now check the key changes proof + get the changes
 		key_changes_proof_check::<_, H>(
 			&request.changes_trie_config,
 			&RootsStorage {
-				first: first_number,
-				roots: &request.tries_roots,
+				roots: (request.tries_roots.0, &request.tries_roots.1),
 				prev_roots: remote_proof.roots,
 			},
 			remote_proof.proof,
-			first_number,
+			request.first_block.0.as_(),
 			request.last_block.0.as_(),
 			remote_proof.max_block.as_(),
 			&request.key)
@@ -256,23 +258,22 @@ impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 
 /// A view of HashMap<Number, Hash> as a changes trie roots storage.
 struct RootsStorage<'a, Number: As<u64>, Hash: 'a> {
-	first: u64,
-	roots: &'a [Hash],
+	roots: (Number, &'a [Hash]),
 	prev_roots: HashMap<Number, Hash>,
 }
 
 impl<'a, H, Number, Hash> ChangesTrieRootsStorage<H> for RootsStorage<'a, Number, Hash>
 	where
 		H: Hasher,
-		Number: Send + Sync + Eq + ::std::hash::Hash + As<u64>,
+		Number: Send + Sync + Eq + ::std::hash::Hash + Copy + As<u64>,
 		Hash: 'a + Send + Sync + Clone + AsRef<[u8]>,
 {
 	fn root(&self, block: u64) -> Result<Option<H::Out>, String> {
-		let root = if block < self.first {
+		let root = if block < self.roots.0.as_() {
 			self.prev_roots.get(&As::sa(block)).cloned()
 		} else {
-			block.checked_sub(self.first)
-				.and_then(|index| self.roots.get(index as usize))
+			block.checked_sub(self.roots.0.as_())
+				.and_then(|index| self.roots.1.get(index as usize))
 				.cloned()
 		};
 
@@ -298,6 +299,7 @@ pub mod tests {
 	use in_mem::{Blockchain as InMemoryBlockchain};
 	use light::fetcher::{Fetcher, FetchChecker, LightDataChecker,
 		RemoteCallRequest, RemoteHeaderRequest};
+	use light::blockchain::tests::{DummyStorage, DummyBlockchain};
 	use primitives::{Blake2Hasher};
 	use primitives::storage::well_known_keys;
 	use runtime_primitives::generic::BlockId;
@@ -330,7 +332,7 @@ pub mod tests {
 	}
 
 	fn prepare_for_read_proof_check() -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, Block, DummyStorage, OkCallFetcher>,
 		Header, Vec<Vec<u8>>, usize)
 	{
 		// prepare remote client
@@ -354,12 +356,12 @@ pub mod tests {
 			::backend::NewBlockState::Final,
 		).unwrap();
 		let local_executor = test_client::LocalExecutor::new();
-		let local_checker = LightDataChecker::new(local_executor);
+		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage)), local_executor);
 		(local_checker, remote_block_header, remote_read_proof, authorities_len)
 	}
 
 	fn prepare_for_header_proof_check(insert_cht: bool) -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher>,
+		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, Block, DummyStorage, OkCallFetcher>,
 		Hash, Header, Vec<Vec<u8>>)
 	{
 		// prepare remote client
@@ -383,7 +385,7 @@ pub mod tests {
 			local_storage.insert_cht_root(1, local_cht_root);
 		}
 		let local_executor = test_client::LocalExecutor::new();
-		let local_checker = LightDataChecker::new(local_executor);
+		let local_checker = LightDataChecker::new(Arc::new(DummyBlockchain::new(DummyStorage)), local_executor);
 		(local_checker, local_cht_root, remote_block_header, remote_header_proof)
 	}
 
@@ -433,8 +435,8 @@ pub mod tests {
 	#[test]
 	fn changes_proof_is_generated_and_checked() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
-		let local_checker = LightDataChecker::<_, Blake2Hasher>::new(
-			test_client::LocalExecutor::new());
+		let local_checker = LightDataChecker::<_, Blake2Hasher, Block, DummyStorage, OkCallFetcher>::new(
+			Arc::new(DummyBlockchain::new(DummyStorage)), test_client::LocalExecutor::new());
 		let local_checker = &local_checker as &FetchChecker<Block>;
 		let max = remote_client.info().unwrap().chain.best_number;
 		let max_hash = remote_client.info().unwrap().chain.best_hash;
@@ -455,7 +457,7 @@ pub mod tests {
 				first_block: (begin, begin_hash),
 				last_block: (end, end_hash),
 				max_block: (max, max_hash),
-				tries_roots: local_roots_range,
+				tries_roots: (begin, local_roots_range),
 				key: key,
 				retry_count: None,
 			};
@@ -478,8 +480,8 @@ pub mod tests {
 	#[test]
 	fn check_changes_proof_fails_if_proof_is_wrong() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
-		let local_checker = LightDataChecker::<_, Blake2Hasher>::new(
-			test_client::LocalExecutor::new());
+		let local_checker = LightDataChecker::<_, Blake2Hasher, Block, DummyStorage, OkCallFetcher>::new(
+			Arc::new(DummyBlockchain::new(DummyStorage)), test_client::LocalExecutor::new());
 		let local_checker = &local_checker as &FetchChecker<Block>;
 		let max = remote_client.info().unwrap().chain.best_number;
 		let max_hash = remote_client.info().unwrap().chain.best_hash;
@@ -498,7 +500,7 @@ pub mod tests {
 			first_block: (begin, begin_hash),
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),
-			tries_roots: local_roots_range.clone(),
+			tries_roots: (begin, local_roots_range.clone()),
 			key: key,
 			retry_count: None,
 		};

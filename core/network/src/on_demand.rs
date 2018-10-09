@@ -800,7 +800,7 @@ pub mod tests {
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
 			max_block: (100, Default::default()),
-			tries_roots: vec![],
+			tries_roots: (1, vec![]),
 			key: vec![],
 			retry_count: None,
 		});
