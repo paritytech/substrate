@@ -19,7 +19,7 @@
 use std::{
 	sync::Arc,
 };
-use client;
+use client::{self, runtime_api::TaggedTxQueue};
 use parity_codec::Encode;
 use txpool;
 use substrate_primitives::{
@@ -58,7 +58,7 @@ impl<B, E, Block> txpool::ChainApi for ChainApi<B, E, Block> where
 	type Error = error::Error;
 
 	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
-		Ok(self.client.call_api_at(at, "validate_transaction", uxt)?)
+		Ok(self.client.validate_transaction(at, uxt.clone())?)
 	}
 
 	// TODO [toDr] Use proper lbock number type

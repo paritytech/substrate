@@ -328,6 +328,7 @@ fn fire_events<H, H2, Ex>(
 #[cfg(test)]
 mod tests {
 	#[test]
+	#[ignore]
 	fn should_have_some_basic_tests() {
 		assert_eq!(true, false);
 	}

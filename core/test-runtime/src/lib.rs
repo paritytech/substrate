@@ -174,12 +174,14 @@ impl_apis! {
 			system::authorities()
 		}
 
-		fn validate_transaction(extrinsic: <Block as BlockT>::Extrinsic) -> TransactionValidity {
-			system::validate_transaction(utx)
-		}
-
 		fn execute_block(block: Block) {
 			system::execute_block(block)
+		}
+	}
+
+	impl TaggedTxQueue<Block> for Runtime {
+		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+			system::validate_transaction(utx)
 		}
 	}
 

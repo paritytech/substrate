@@ -1158,14 +1158,14 @@ impl<B, E, Block> api::OldTxQueue<Block> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> api::NewTxQueue<Block> for Client<B, E, Block> where
+impl<B, E, Block> api::TaggedTxQueue<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT,
 {
 	type Error = Error;
 
-	fn validate_transaction<TransactionValidity: Encode + Decode>(
+	fn validate_transaction(
 		&self, at: &BlockId<Block>, tx: <Block as BlockT>::Extrinsic
 	) -> Result<TransactionValidity, Self::Error> {
 		self.call_api_at(at, "validate_transaction", &(tx))

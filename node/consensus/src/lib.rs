@@ -100,7 +100,7 @@ pub trait AuthoringApi:
 	/// The block builder for this API type.
 	type BlockBuilder: BlockBuilder<Self::Block>;
 	/// The error used by this API type.
-	type Error;
+	type Error: std::error::Error;
 
 	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
 	fn build_block(&self, at: &BlockId<Self::Block>, inherent_data: InherentData) -> Result<Self::BlockBuilder>;
@@ -443,8 +443,8 @@ impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
 
-		let local_id = self.local_key.public().0.into();
 		let mut next_index = {
+			let local_id = self.local_key.public().0;
 			// let cur_index = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending| pending
 			// 	.filter(|tx| tx.verified.sender == local_id)
 			// 	.last()
@@ -453,12 +453,12 @@ impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 			// 	.map_err(Error::from)
 			// );
 			// TODO [ToDr] Use pool data
-			let cur_index = self.client.account_nonce(&self.parent_id, local_id);
+			let cur_index: Result<u64> = self.client.account_nonce(&self.parent_id, local_id).map_err(Error::from);
 
 			match cur_index {
 				Ok(cur_index) => cur_index + 1,
 				Err(e) => {
-					warn!(target: "consensus", "Error computing next transaction index: {}", e);
+					warn!(target: "consensus", "Error computing next transaction index: {:?}", e);
 					return;
 				}
 			}

@@ -25,7 +25,7 @@ pub extern crate parity_codec as codec;
 extern crate sr_version as runtime_version;
 
 #[doc(hidden)]
-pub use primitives::{ApplyResult, traits::Block as BlockT, generic::BlockId};
+pub use primitives::{ApplyResult, traits::Block as BlockT, generic::BlockId, transaction_validity::TransactionValidity};
 use runtime_version::RuntimeVersion;
 use rstd::vec::Vec;
 #[doc(hidden)]
@@ -402,9 +402,9 @@ decl_apis! {
 		fn lookup_address<Address, LookupId>(address: Address) -> Option<LookupId>;
 	}
 
-	/// The `NewTxQueue` api trait for interfering with the new transaction queue.
-	pub trait NewTxQueue<Block: BlockT> {
-		fn validate_transaction<TransactionValidity>(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
+	/// The `TaggedTxQueue` api trait for interfering with the new transaction queue.
+	pub trait TaggedTxQueue<Block: BlockT> {
+		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
 	}
 
 	/// The `Miscellaneous` api trait for getting miscellaneous information from the runtime.
@@ -427,7 +427,7 @@ decl_apis! {
 /// #[macro_use]
 /// extern crate sr_api as runtime_api;
 ///
-/// use runtime_api::runtime::{Core, OldTxQueue};
+/// use runtime_api::runtime::{Core, TaggedTxQueue};
 ///
 /// impl_apis! {
 ///     impl Core<Block, AccountId> for Runtime {
@@ -440,13 +440,10 @@ decl_apis! {
 ///         }
 ///     }
 ///
-///     impl OldTxQueue<AccountId, Index, Address, LookupId> for Runtime {
-///         fn account_nonce(account: AccountId) -> Index {
-///             0
-///         }
-///         fn lookup_address(address: Address) -> Option<LookupId> {
-///             None
-///         }
+///     impl TaggedTxQueue<AccountId, Index, Address, LookupId> for Runtime {
+///			fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+///				unimplemented!()
+///			}
 ///     }
 /// }
 ///
