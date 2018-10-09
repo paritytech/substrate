@@ -34,7 +34,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,
 	Zero, One, As, NumberFor};
 use cache::{DbCacheSync, DbCache, ComplexBlockId};
 use utils::{meta_keys, Meta, db_err, number_to_lookup_key, open_database,
-	read_db, read_id, read_meta};
+	read_db, block_id_to_lookup_key, read_meta};
 use DatabaseSettings;
 
 pub(crate) mod columns {
@@ -168,14 +168,19 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	}
 
 	fn number(&self, hash: Block::Hash) -> ClientResult<Option<<<Block as BlockT>::Header as HeaderT>::Number>> {
-		self.header(BlockId::Hash(hash)).and_then(|key| match key {
-			Some(hdr) => Ok(Some(hdr.number().clone())),
-			None => Ok(None),
-		})
+		if let Some(lookup_key) = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Hash(hash))? {
+			let number = ::utils::lookup_key_to_number(&lookup_key)?;
+			Ok(Some(number))
+		} else {
+			Ok(None)
+		}
 	}
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
-		read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(number))
+		self.header(BlockId::Number(number)).and_then(|key| match key {
+			Some(header) => Ok(Some(header.hash().clone())),
+			None => Ok(None),
+		})
 	}
 }
 
@@ -212,7 +217,7 @@ impl<Block: BlockT> LightStorage<Block> {
 				trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
 
 				while prune_block <= new_cht_end {
-					let id = read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
+					let id = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
 					if let Some(hash) = id {
 						let lookup_key = number_to_lookup_key(prune_block);
 						transaction.delete(columns::HASH_LOOKUP, &lookup_key);
@@ -242,7 +247,16 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		let number = *header.number();
 		let parent_hash = *header.parent_hash();
 
-		transaction.put(columns::HEADER, hash.as_ref(), &header.encode());
+		// blocks in longest chain are keyed by number
+		let lookup_key = if leaf_state.is_best() {
+			::utils::number_to_lookup_key(number).to_vec()
+		} else {
+		// other blocks are keyed by number + hash
+			::utils::number_and_hash_to_lookup_key(number, hash)
+		};
+
+		transaction.put(columns::HEADER, &lookup_key, &header.encode());
+		transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
 
 		if leaf_state.is_best() {
 			// handle reorg.
@@ -263,19 +277,37 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 								(&retracted.number, &retracted.hash));
 						}
 
-						transaction.delete(
-							columns::HASH_LOOKUP,
-							&::utils::number_to_lookup_key(retracted.number)
-						);
+						let prev_lookup_key = ::utils::number_to_lookup_key(retracted.number);
+						let new_lookup_key = ::utils::number_and_hash_to_lookup_key(retracted.number, retracted.hash);
+
+						// change mapping from `number -> header`
+						// to `number + hash -> header`
+						let retracted_header = if let Some(header) = self.header(BlockId::Number(retracted.number))? {
+							header
+						} else {
+							return Err(::client::error::ErrorKind::UnknownBlock(format!("retracted {:?}", retracted)).into());
+						};
+						transaction.delete(columns::HEADER, &prev_lookup_key);
+						transaction.put(columns::HEADER, &new_lookup_key, &retracted_header.encode());
+
+						transaction.put(columns::HASH_LOOKUP, retracted.hash.as_ref(), &new_lookup_key);
 					}
 
 					for enacted in tree_route.enacted() {
-						let hash: &Block::Hash = &enacted.hash;
-						transaction.put(
-							columns::HASH_LOOKUP,
-							&::utils::number_to_lookup_key(enacted.number),
-							hash.as_ref(),
-						)
+						let prev_lookup_key = ::utils::number_and_hash_to_lookup_key(enacted.number, enacted.hash);
+						let new_lookup_key = ::utils::number_to_lookup_key(enacted.number);
+
+						// change mapping from `number + hash -> header`
+						// to `number -> header`
+						let enacted_header = if let Some(header) = self.header(BlockId::Number(enacted.number))? {
+							header
+						} else {
+							return Err(::client::error::ErrorKind::UnknownBlock(format!("enacted {:?}", enacted)).into());
+						};
+						transaction.delete(columns::HEADER, &prev_lookup_key);
+						transaction.put(columns::HEADER, &new_lookup_key, &enacted_header.encode());
+
+						transaction.put(columns::HASH_LOOKUP, enacted.hash.as_ref(), &new_lookup_key);
 					}
 				}
 			}

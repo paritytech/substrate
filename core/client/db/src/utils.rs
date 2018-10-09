@@ -82,6 +82,26 @@ pub fn number_to_lookup_key<N>(n: N) -> BlockLookupKey where N: As<u64> {
 	]
 }
 
+pub fn number_and_hash_to_lookup_key<N, H>(number: N, hash: H) -> Vec<u8> where
+	N: As<u64>,
+	H: AsRef<[u8]>
+{
+	let mut lookup_key = number_to_lookup_key(number).to_vec();
+	lookup_key.extend_from_slice(hash.as_ref());
+	lookup_key
+}
+
+/// Convert block lookup key into block number.
+pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u64> {
+	if key.len() < 4 {
+		return Err(client::error::ErrorKind::Backend("Invalid block key".into()).into());
+	}
+	Ok((key[0] as u64) << 24
+		| (key[1] as u64) << 16
+		| (key[2] as u64) << 8
+		| (key[3] as u64)).map(As::sa)
+}
+
 /// Maps database error to client error
 pub fn db_err(err: io::Error) -> client::error::Error {
 	use std::error::Error;
@@ -113,23 +133,18 @@ pub fn open_database(config: &DatabaseSettings, col_meta: Option<u32>, db_type: 
 	Ok(Arc::new(db))
 }
 
-/// Convert block id to block key, looking up canonical hash by number from DB as necessary.
-pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block>) -> Result<Option<Block::Hash>, client::error::Error>
+/// Convert block id to block key.
+/// block key is the key header, block and justification are stored under in the DB.
+/// looking up canonical number by hash from DB as necessary.
+pub fn block_id_to_lookup_key<Block>(db: &KeyValueDB, hash_lookup_col: Option<u32>, id: BlockId<Block>) -> Result<Option<Vec<u8>>, client::error::Error>
 	where
 		Block: BlockT,
 {
 	match id {
-		BlockId::Hash(h) => Ok(Some(h)),
-		BlockId::Number(n) => db.get(col_index, &number_to_lookup_key(n)).map(|v|
-			v.map(|v| {
-				let mut h = <Block::Hash>::default();
-				{
-					let h = h.as_mut();
-					let len = ::std::cmp::min(v.len(), h.len());
-					h.as_mut().copy_from_slice(&v[..len]);
-				}
-				h
-			})
+		// numbers are solely looked up in canonical chain
+		BlockId::Number(n) => Ok(Some(number_to_lookup_key(n).to_vec())),
+		BlockId::Hash(h) => db.get(hash_lookup_col, h.as_ref()).map(|v|
+			v.map(|v| { v.into_vec() })
 		).map_err(db_err),
 	}
 }
@@ -139,7 +154,7 @@ pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>,
 	where
 		Block: BlockT,
 {
-	read_id(db, col_index, id).and_then(|key| match key {
+	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
 		Some(key) => db.get(col, key.as_ref()).map_err(db_err),
 		None => Ok(None),
 	})
