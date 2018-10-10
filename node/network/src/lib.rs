@@ -21,6 +21,7 @@
 #![warn(unused_extern_crates)]
 
 extern crate substrate_bft as bft;
+#[macro_use]
 extern crate substrate_network;
 extern crate substrate_primitives;
 
@@ -36,59 +37,15 @@ extern crate log;
 
 pub mod consensus;
 
-use node_primitives::{Block, Hash, Header};
-use substrate_network::{NodeIndex, Context};
+use node_primitives::{Block, Hash};
 use substrate_network::consensus_gossip::ConsensusGossip;
-use substrate_network::message;
-use substrate_network::specialization::Specialization;
-use substrate_network::StatusMessage as GenericFullStatus;
-
-type FullStatus = GenericFullStatus<Block>;
 
 /// Specialization of the network service for the node protocol.
 pub type NetworkService = ::substrate_network::Service<Block, Protocol, Hash>;
 
-
-/// Demo protocol attachment for substrate.
-pub struct Protocol {
-	consensus_gossip: ConsensusGossip<Block>,
-}
-
-impl Protocol {
-	/// Instantiate a node protocol handler.
-	pub fn new() -> Self {
-		Protocol {
-			consensus_gossip: ConsensusGossip::new(),
-		}
-	}
-}
-
-impl Specialization<Block> for Protocol {
-	fn status(&self) -> Vec<u8> {
-		Vec::new()
-	}
-
-	fn on_connect(&mut self, ctx: &mut Context<Block>, who: NodeIndex, status: FullStatus) {
-		self.consensus_gossip.on_connect(ctx, who, status);
-	}
-
-	fn on_disconnect(&mut self, ctx: &mut Context<Block>, who: NodeIndex) {
-		self.consensus_gossip.on_disconnect(ctx, who);
-	}
-
-	fn on_message(&mut self, ctx: &mut Context<Block>, who: NodeIndex, message: &mut Option<message::Message<Block>>) {
-		self.consensus_gossip.on_message(ctx, who, message);
-	}
-
-	fn on_abort(&mut self) {
-		self.consensus_gossip.on_abort();
-	}
-
-	fn maintain_peers(&mut self, ctx: &mut Context<Block>) {
-		self.consensus_gossip.maintain_peers(ctx);
-	}
-
-	fn on_block_imported(&mut self, ctx: &mut Context<Block>, hash: Hash, header: &Header) {
-		self.consensus_gossip.on_block_imported(ctx, hash, header);
+construct_simple_protocol! {
+	/// Demo protocol attachment for substrate.
+	pub struct Protocol where Block = Block {
+		consensus_gossip: ConsensusGossip<Block>,
 	}
 }
