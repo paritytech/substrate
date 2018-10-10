@@ -161,17 +161,18 @@ fn do_check_proof<Header, Hasher, F>(
 	root.as_mut().copy_from_slice(local_root.as_ref());
 	let local_cht_key = encode_cht_key(local_number);
 	let local_cht_value = checker(root, &local_cht_key)?;
-	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?; // TODO: InvalidHeaderProof
-	let local_hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidHeaderProof)?;
+	let local_cht_value = local_cht_value.ok_or_else(|| ClientErrorKind::InvalidCHTProof)?;
+	let local_hash = decode_cht_value(&local_cht_value).ok_or_else(|| ClientErrorKind::InvalidCHTProof)?;
 	match &local_hash[..] == remote_hash.as_ref() {
 		true => Ok(()),
-		false => Err(ClientErrorKind::InvalidHeaderProof.into()),
+		false => Err(ClientErrorKind::InvalidCHTProof.into()),
 	}
 
 }
 
 /// Group ordered blocks by CHT number and call functor with blocks of each group.
 pub fn for_each_cht_group<Header, I, F, P>(
+	cht_size: u64,
 	blocks: I,
 	mut functor: F,
 	mut functor_param: P,
@@ -184,7 +185,7 @@ pub fn for_each_cht_group<Header, I, F, P>(
 	let mut current_cht_num = None;
 	let mut current_cht_blocks = Vec::new();
 	for block in blocks {
-		let new_cht_num = match block_to_cht_number(SIZE, block.as_()) {
+		let new_cht_num = match block_to_cht_number(cht_size, block.as_()) {
 			Some(new_cht_num) => new_cht_num,
 			None => return Err(ClientErrorKind::Backend(format!(
 				"Cannot compute CHT root for the block #{}", block)).into()
@@ -373,12 +374,12 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn for_each_cht_group_panics() {
-		let _ = for_each_cht_group::<Header, _, _, _>(vec![SIZE * 5, SIZE * 2], |_, _, _| Ok(()), ());
+		let _ = for_each_cht_group::<Header, _, _, _>(SIZE, vec![SIZE * 5, SIZE * 2], |_, _, _| Ok(()), ());
 	}
 
 	#[test]
 	fn for_each_cht_group_works() {
-		let _ = for_each_cht_group::<Header, _, _, _>(vec![
+		let _ = for_each_cht_group::<Header, _, _, _>(SIZE, vec![
 			SIZE * 2 + 1, SIZE * 2 + 2, SIZE * 2 + 5,
 			SIZE * 4 + 1, SIZE * 4 + 7,
 			SIZE * 6 + 1

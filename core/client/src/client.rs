@@ -388,6 +388,26 @@ impl<B, E, Block> Client<B, E, Block> where
 		max: Block::Hash,
 		key: &[u8]
 	) -> error::Result<ChangesProof<Block::Header>> {
+		self.key_changes_proof_with_cht_size(
+			first,
+			last,
+			min,
+			max,
+			key,
+			cht::SIZE,
+		)
+	}
+
+	/// Does the same work as `key_changes_proof`, but assumes that CHTs are of passed size.
+	pub fn key_changes_proof_with_cht_size(
+		&self,
+		first: Block::Hash,
+		last: Block::Hash,
+		min: Block::Hash,
+		max: Block::Hash,
+		key: &[u8],
+		cht_size: u64,
+	) -> error::Result<ChangesProof<Block::Header>> {
 		struct AccessedRootsRecorder<'a, Block: BlockT> {
 			storage: &'a ChangesTrieStorage<Blake2Hasher>,
 			min: u64,
@@ -445,9 +465,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		// now gather proofs for all changes tries roots that were touched during key_changes_proof
 		// execution AND are unknown (i.e. replaced with CHT) to the requester
 		let roots = recording_storage.required_roots_proofs.into_inner();
-		let roots_proof = self.changes_trie_roots_proof(
-			roots.keys().cloned()
-		)?;
+		let roots_proof = self.changes_trie_roots_proof(cht_size, roots.keys().cloned())?;
 
 		Ok(ChangesProof {
 			max_block: max_number,
@@ -463,13 +481,13 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Generate CHT-based proof for roots of changes tries at given blocks.
-	fn changes_trie_roots_proof<I: IntoIterator<Item=NumberFor<Block>>>(&self, blocks: I) -> error::Result<Vec<Vec<u8>>> {
+	fn changes_trie_roots_proof<I: IntoIterator<Item=NumberFor<Block>>>(&self, cht_size: u64, blocks: I) -> error::Result<Vec<Vec<u8>>> {
 		// most probably we have touched several changes tries that are parts of the single CHT
 		// => GroupBy changes tries by CHT number and then gather proof for the whole group at once
 		let mut proof = HashSet::new();
 
-		cht::for_each_cht_group::<Block::Header, _, _, _>(blocks, |_, cht_num, cht_blocks| {
-			let cht_proof = self.changes_trie_roots_proof_at_cht(cht_num, cht_blocks)?;
+		cht::for_each_cht_group::<Block::Header, _, _, _>(cht_size, blocks, |_, cht_num, cht_blocks| {
+			let cht_proof = self.changes_trie_roots_proof_at_cht(cht_size, cht_num, cht_blocks)?;
 			proof.extend(cht_proof);
 			Ok(())
 		}, ())?;
@@ -478,11 +496,11 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
-	fn changes_trie_roots_proof_at_cht(&self, cht_num: NumberFor<Block>, blocks: Vec<NumberFor<Block>>) -> error::Result<Vec<Vec<u8>>> {
-		let cht_start = cht::start_number(cht::SIZE, cht_num);
+	fn changes_trie_roots_proof_at_cht(&self, cht_size: u64, cht_num: NumberFor<Block>, blocks: Vec<NumberFor<Block>>) -> error::Result<Vec<Vec<u8>>> {
+		let cht_start = cht::start_number(cht_size, cht_num);
 		let roots = (cht_start.as_()..).map(|num| self.header(&BlockId::Number(As::sa(num)))
 			.map(|block| block.and_then(|block| block.digest().logs().iter().filter_map(DigestItem::as_changes_trie_root).next().cloned())));
-		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht::SIZE, cht_num, blocks, roots)?;
+		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, blocks, roots)?;
 		Ok(proof)
 	}
 

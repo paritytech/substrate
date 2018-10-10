@@ -161,15 +161,28 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 
 #[cfg(test)]
 pub mod tests {
+	use std::collections::HashMap;
+	use test_client::runtime::{Hash, Block, Header};
 	use blockchain::Info;
 	use light::fetcher::tests::OkCallFetcher;
 	use super::*;
 
-	pub struct DummyStorage;
 	pub type DummyBlockchain = Blockchain<DummyStorage, OkCallFetcher>;
 
-	impl<Block: BlockT> BlockchainHeaderBackend<Block> for DummyStorage {
-		fn header(&self, _id: BlockId<Block>) -> ClientResult<Option<Block::Header>> {
+	pub struct DummyStorage {
+		pub changes_tries_cht_roots: HashMap<u64, Hash>,
+	}
+
+	impl DummyStorage {
+		pub fn new() -> Self {
+			DummyStorage {
+				changes_tries_cht_roots: HashMap::new(),
+			}
+		}
+	}
+
+	impl BlockchainHeaderBackend<Block> for DummyStorage {
+		fn header(&self, _id: BlockId<Block>) -> ClientResult<Option<Header>> {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
@@ -181,19 +194,19 @@ pub mod tests {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
-		fn number(&self, _hash: Block::Hash) -> ClientResult<Option<NumberFor<Block>>> {
+		fn number(&self, _hash: Hash) -> ClientResult<Option<NumberFor<Block>>> {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
-		fn hash(&self, _number: NumberFor<Block>) -> ClientResult<Option<Block::Hash>> {
+		fn hash(&self, _number: u64) -> ClientResult<Option<Hash>> {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 	}
 
-	impl<Block: BlockT> Storage<Block> for DummyStorage {
+	impl Storage<Block> for DummyStorage {
 		fn import_header(
 			&self,
-			_header: Block::Header,
+			_header: Header,
 			_authorities: Option<Vec<AuthorityId>>,
 			_state: NewBlockState,
 		) -> ClientResult<()> {
@@ -204,16 +217,21 @@ pub mod tests {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
-		fn last_finalized(&self) -> ClientResult<Block::Hash> {
+		fn last_finalized(&self) -> ClientResult<Hash> {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
-		fn header_cht_root(&self, _cht_size: u64, _block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+		fn header_cht_root(&self, _cht_size: u64, _block: u64) -> ClientResult<Hash> {
 			Err(ClientErrorKind::Backend("Test error".into()).into())
 		}
 
-		fn changes_trie_cht_root(&self, _cht_size: u64, _block: NumberFor<Block>) -> ClientResult<Block::Hash> {
-			Err(ClientErrorKind::Backend("Test error".into()).into())
+		fn changes_trie_cht_root(&self, cht_size: u64, block: u64) -> ClientResult<Hash> {
+			cht::block_to_cht_number(cht_size, block)
+				.and_then(|cht_num| self.changes_tries_cht_roots.get(&cht_num))
+				.cloned()
+				.ok_or_else(|| ClientErrorKind::Backend(
+					format!("Test error: CHT for block #{} not found", block)
+				).into())
 		}
 
 		fn cache(&self) -> Option<&BlockchainCache<Block>> {
