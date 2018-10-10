@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -19,8 +19,13 @@
 use std;
 use state_machine;
 use runtime_primitives::ApplyError;
+use bft;
 
 error_chain! {
+	links {
+		BFT(bft::error::Error, bft::error::ErrorKind) #[doc="BFT error"];
+	}
+
 	errors {
 		/// Backend error.
 		Backend(s: String) {

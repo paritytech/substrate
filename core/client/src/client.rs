@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -18,13 +18,15 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
+use error::{Error, ErrorKind};
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor,
-	CurrentHeight, BlockNumberToHash, Digest, DigestItem};
-use runtime_primitives::BuildStorage;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Digest, DigestItem, Zero, As,
+	NumberFor, CurrentHeight, BlockNumberToHash};
+use runtime_primitives::{ApplyResult, BuildStorage};
+use runtime_api as api;
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -33,7 +35,7 @@ use state_machine::{
 	DBValue, Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	ChangesTrieRootsStorage, ChangesTrieStorage,
-	key_changes, key_changes_proof,
+	key_changes, key_changes_proof, OverlayedChanges
 };
 
 use backend::{self, BlockImportOperation};
@@ -499,7 +501,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	fn changes_trie_roots_proof_at_cht(&self, cht_size: u64, cht_num: NumberFor<Block>, blocks: Vec<NumberFor<Block>>) -> error::Result<Vec<Vec<u8>>> {
 		let cht_start = cht::start_number(cht_size, cht_num);
 		let roots = (cht_start.as_()..).map(|num| self.header(&BlockId::Number(As::sa(num)))
-			.map(|block| block.and_then(|block| block.digest().logs().iter().filter_map(DigestItem::as_changes_trie_root).next().cloned())));
+			.map(|block| block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned())));
 		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _, _>(cht_size, cht_num, blocks, roots)?;
 		Ok(proof)
 	}
@@ -539,37 +541,43 @@ impl<B, E, Block> Client<B, E, Block> where
 				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
 			Default::default()
 		);
-		self.state_at(&parent).and_then(|state| {
-			let mut overlay = Default::default();
-			let execution_manager = || match self.api_execution_strategy {
-				ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-				ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
-				ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-					warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
-					warn!("   Function {:?}", function);
-					warn!("   Native result {:?}", native_result);
-					warn!("   Wasm result {:?}", wasm_result);
-					wasm_result
-				}),
-			};
-			self.executor().call_at_state(
-				&state,
-				&mut overlay,
-				"initialise_block",
-				&header.encode(),
-				execution_manager()
-			)?;
-			let (r, _, _) = args.using_encoded(|input|
-				self.executor().call_at_state(
-				&state,
-				&mut overlay,
-				function,
-				input,
-				execution_manager()
-			))?;
-			Ok(R::decode(&mut &r[..])
-			   .ok_or_else(|| error::Error::from(error::ErrorKind::CallResultDecode(function)))?)
-		})
+		let mut overlay = Default::default();
+
+		self.call_at_state(at, "initialise_block", &header, &mut overlay)?;
+		self.call_at_state(at, function, args, &mut overlay)
+	}
+
+	fn call_at_state<A: Encode, R: Decode>(
+		&self,
+		at: &BlockId<Block>,
+		function: &'static str,
+		args: &A,
+		changes: &mut OverlayedChanges
+	) -> error::Result<R> {
+		let state = self.state_at(at)?;
+
+		let execution_manager = || match self.api_execution_strategy {
+			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
+				warn!("   Function {:?}", function);
+				warn!("   Native result {:?}", native_result);
+				warn!("   Wasm result {:?}", wasm_result);
+				wasm_result
+			}),
+		};
+
+		self.executor.call_at_state(
+			&state,
+			changes,
+			function,
+			&args.encode(),
+			execution_manager()
+		).and_then(|res|
+			R::decode(&mut &res.0[..])
+				.ok_or_else(|| Error::from(ErrorKind::CallResultDecode(function)))
+		)
 	}
 
 	/// Check a header's justification.
@@ -1143,6 +1151,141 @@ impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 	}
 }
 
+impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error> {
+		self.call_api_at(at, "version", &())
+	}
+
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+		bft::Authorities::authorities(self, at).map_err(Into::into)
+	}
+
+	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), Self::Error> {
+		self.call_api_at(at, "execute_block", &(block))
+	}
+}
+
+impl<B, E, Block> api::Metadata<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn metadata(&self, at: &BlockId<Block>) -> Result<Vec<u8>, Self::Error> {
+		self.call_api_at(at, "metadata", &())
+	}
+}
+
+impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+	type OverlayedChanges = OverlayedChanges;
+
+	fn initialise_block(
+		&self,
+		at: &BlockId<Block>,
+		changes: &mut OverlayedChanges,
+		header: &<Block as BlockT>::Header
+	) -> Result<(), Self::Error> {
+		self.call_at_state(at, "initialise_block", header, changes)
+	}
+
+	fn apply_extrinsic(
+		&self,
+		at: &BlockId<Block>,
+		changes: &mut OverlayedChanges,
+		extrinsic: &<Block as BlockT>::Extrinsic
+	) -> Result<ApplyResult, Self::Error> {
+		self.call_at_state(at, "apply_extrinsic", extrinsic, changes)
+	}
+
+	fn finalise_block(
+		&self,
+		at: &BlockId<Block>,
+		changes: &mut OverlayedChanges
+	) -> Result<<Block as BlockT>::Header, Self::Error> {
+		self.call_at_state(at, "finalise_block", &(), changes)
+	}
+
+	fn inherent_extrinsics<InherentExtrinsic: Encode + Decode, UncheckedExtrinsic: Encode + Decode>(
+		&self, at: &BlockId<Block>, inherent: &InherentExtrinsic
+	) -> Result<Vec<UncheckedExtrinsic>, Self::Error> {
+		self.call_api_at(at, "inherent_extrinsics", &(inherent))
+	}
+
+	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Hash, Self::Error> {
+		self.call_api_at(at, "random_seed", &())
+	}
+}
+
+impl<B, E, Block> api::OldTxQueue<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn account_nonce<AccountId: Encode + Decode, Index: Encode + Decode>(
+		&self, at: &BlockId<Block>, account: &AccountId
+	) -> Result<Index, Self::Error> {
+		self.call_api_at(at, "account_nonce", &(account))
+	}
+
+	fn lookup_address<Address: Encode + Decode, AccountId: Encode + Decode>(
+		&self, at: &BlockId<Block>, address: &Address
+	) -> Result<Option<AccountId>, Self::Error> {
+		self.call_api_at(at, "lookup_address", &(address))
+	}
+}
+
+impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn validate_transaction<TransactionValidity: Encode + Decode>(
+		&self, at: &BlockId<Block>, tx: &<Block as BlockT>::Extrinsic
+	) -> Result<TransactionValidity, Self::Error> {
+		self.call_api_at(at, "validate_transaction", &(tx))
+	}
+}
+
+impl<B, E, Block> api::Miscellaneous<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	fn validator_count(&self, at: &BlockId<Block>) -> Result<u32, Self::Error> {
+		self.call_api_at(at, "validator_count", &())
+	}
+
+	fn validators<AccountId: Encode + Decode>(
+		&self, at: &BlockId<Block>
+	) -> Result<Vec<AccountId>, Self::Error> {
+		self.call_api_at(at, "validators", &())
+	}
+
+	fn timestamp<Moment: Encode + Decode>(
+		&self, at: &BlockId<Block>
+	) -> Result<Moment, Self::Error> {
+		self.call_api_at(at, "timestamp", &())
+	}
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
 	use std::collections::HashMap;
@@ -1191,9 +1334,7 @@ pub(crate) mod tests {
 			remote_client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
 
 			let header = remote_client.header(&BlockId::Number(i as u64 + 1)).unwrap().unwrap();
-			let trie_root = header.digest().logs().iter()
-				.find(|l| l.as_changes_trie_root().is_some())
-				.and_then(DigestItem::as_changes_trie_root)
+			let trie_root = header.digest().log(DigestItem::as_changes_trie_root)
 				.map(|root| H256::from_slice(root.as_ref()))
 				.unwrap();
 			local_roots.push(trie_root);

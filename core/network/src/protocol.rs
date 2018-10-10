@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -42,11 +42,13 @@ const REQUEST_TIMEOUT_SEC: u64 = 40;
 
 /// Current protocol version.
 pub (crate) const CURRENT_VERSION: u32 = 1;
-/// Current packet count.
-pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
+/// When light node connects to the full node and the full node is behind light node
+/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
+/// and disconnect to free connection slot.
+const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: Specialization<B>, H: ExHashT> {
@@ -286,14 +288,14 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Called when a new peer is connected
 	pub fn on_peer_connected(&self, io: &mut SyncIo, who: NodeIndex) {
-		trace!(target: "sync", "Connected {}: {}", who, io.peer_info(who));
+		trace!(target: "sync", "Connected {}: {}", who, io.peer_debug_info(who));
 		self.handshaking_peers.write().insert(who, time::Instant::now());
 		self.send_status(io, who);
 	}
 
 	/// Called by peer when it is disconnecting
 	pub fn on_peer_disconnected(&self, io: &mut SyncIo, peer: NodeIndex) {
-		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_info(peer));
+		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_debug_info(peer));
 
 		// lock all the the peer lists so that add/remove peer events are in order
 		let mut sync = self.sync.write();
@@ -417,16 +419,12 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called by peer to report status
 	fn on_status_message(&self, io: &mut SyncIo, who: NodeIndex, status: message::Status<B>) {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
-		if io.is_expired() {
-			trace!(target: "sync", "Status packet from expired session {}:{}", who, io.peer_info(who));
-			return;
-		}
 
 		{
 			let mut peers = self.context_data.peers.write();
 			let mut handshaking_peers = self.handshaking_peers.write();
 			if peers.contains_key(&who) {
-				debug!(target: "sync", "Unexpected status packet from {}:{}", who, io.peer_info(who));
+				debug!(target: "sync", "Unexpected status packet from {}:{}", who, io.peer_debug_info(who));
 				return;
 			}
 			if status.genesis_hash != self.genesis_hash {
@@ -436,6 +434,16 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			if status.version != CURRENT_VERSION {
 				io.report_peer(who, Severity::Bad(&format!("Peer using unsupported protocol version {}", status.version)));
 				return;
+			}
+			if self.config.roles & Roles::LIGHT == Roles::LIGHT {
+				let self_best_block = self.context_data.chain.info().ok()
+					.and_then(|info| info.best_queued_number)
+					.unwrap_or_else(|| Zero::zero());
+				let blocks_difference = self_best_block.as_().checked_sub(status.best_number.as_()).unwrap_or(0);
+				if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
+					io.report_peer(who, Severity::Useless("Peer is far behind us and will unable to serve light requests"));
+					return;
+				}
 			}
 
 			let peer = Peer {
@@ -451,13 +459,13 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			};
 			peers.insert(who.clone(), peer);
 			handshaking_peers.remove(&who);
-			debug!(target: "sync", "Connected {} {}", who, io.peer_info(who));
+			debug!(target: "sync", "Connected {} {}", who, io.peer_debug_info(who));
 		}
 
 		let mut context = ProtocolContext::new(&self.context_data, io);
+		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles, status.best_number));
 		self.sync.write().new_peer(&mut context, who);
-		self.specialization.write().on_connect(&mut context, who, status.clone());
-		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles));
+		self.specialization.write().on_connect(&mut context, who, status);
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -501,9 +509,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.unzip();
 
 			if !to_send.is_empty() {
-				let node_id = io.peer_session_info(*who)
-					.map(|info| format!("{}@{:?}", info.remote_address, info.id));
-
+				let node_id = io.peer_id(*who).map(|id| id.to_base58());
 				if let Some(id) = node_id {
 					for hash in hashes {
 						propagated_to.entry(hash).or_insert_with(Vec::new).push(id.clone());
@@ -560,6 +566,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.known_blocks.insert(hash.clone());
 			}
 		}
+		self.on_demand.as_ref().map(|s| s.on_block_announce(who, *header.number()));
 		self.sync.write().on_block_announce(&mut ProtocolContext::new(&self.context_data, io), who, hash, &header);
 	}
 

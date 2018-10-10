@@ -66,7 +66,7 @@ extern crate parity_codec as codec;
 extern crate sr_io as runtime_io;
 extern crate sr_sandbox as sandbox;
 
-#[macro_use]
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 
 extern crate srml_balances as balances;
@@ -93,13 +93,9 @@ mod exec;
 mod vm;
 mod gas;
 
-mod genesis_config;
-
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "std")]
-pub use genesis_config::GenesisConfig;
 use exec::ExecutionContext;
 use account_db::{AccountDb, OverlayAccountDb};
 use double_map::StorageDoubleMap;
@@ -188,22 +184,22 @@ decl_event! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Contract {
 		/// The fee required to create a contract. At least as big as staking's ReclaimRebate.
-		ContractFee get(contract_fee): required T::Balance;
+		ContractFee get(contract_fee) config(): T::Balance = T::Balance::sa(21);
 		/// The fee charged for a call into a contract.
-		CallBaseFee get(call_base_fee): required T::Gas;
+		CallBaseFee get(call_base_fee) config(): T::Gas = T::Gas::sa(135);
 		/// The fee charged for a create of a contract.
-		CreateBaseFee get(create_base_fee): required T::Gas;
+		CreateBaseFee get(create_base_fee) config(): T::Gas = T::Gas::sa(175);
 		/// The price of one unit of gas.
-		GasPrice get(gas_price): required T::Balance;
+		GasPrice get(gas_price) config(): T::Balance = T::Balance::sa(1);
 		/// The maximum nesting level of a call/create stack.
-		MaxDepth get(max_depth): required u32;
+		MaxDepth get(max_depth) config(): u32 = 100;
 		/// The maximum amount of gas that could be expended per block.
-		BlockGasLimit get(block_gas_limit): required T::Gas;
+		BlockGasLimit get(block_gas_limit) config(): T::Gas = T::Gas::sa(1_000_000);
 		/// Gas spent so far in this block.
-		GasSpent get(gas_spent): default T::Gas;
+		GasSpent get(gas_spent): T::Gas;
 
 		/// The code associated with an account.
-		pub CodeOf: default map [ T::AccountId => Vec<u8> ];	// TODO Vec<u8> values should be optimised to not do a length prefix.
+		pub CodeOf: map T::AccountId => Vec<u8>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
 	}
 }
 

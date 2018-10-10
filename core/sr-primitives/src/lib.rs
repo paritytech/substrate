@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -37,6 +37,7 @@ extern crate num_traits;
 extern crate integer_sqrt;
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
+extern crate sr_version as runtime_version;
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
 extern crate substrate_primitives;

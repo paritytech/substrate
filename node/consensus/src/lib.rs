@@ -46,6 +46,7 @@ use std::sync::Arc;
 use std::time::{self, Duration, Instant};
 
 use client::{Client as SubstrateClient, CallExecutor};
+use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, Miscellaneous, OldTxQueue};
 use codec::{Decode, Encode};
 use node_primitives::{AccountId, Timestamp, SessionKey, InherentData};
 use node_runtime::Runtime;
@@ -80,40 +81,32 @@ const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 pub trait BlockBuilder<Block: BlockT> {
 	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<()>;
-
-	/// Bake the block with provided extrinsics.
-	fn bake(self) -> Result<Block>;
 }
 
 /// Local client abstraction for the consensus.
-pub trait AuthoringApi: Send + Sync {
+pub trait AuthoringApi:
+	Send
+	+ Sync
+	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
+	+ Miscellaneous<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+	+ OldTxQueue<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+{
 	/// The block used for this API type.
 	type Block: BlockT;
-	/// The block builder for this API type.
-	type BlockBuilder: BlockBuilder<Self::Block>;
-
-	/// Get the value of the randomness beacon at a given block.
-	fn random_seed(&self, at: &BlockId<Self::Block>) -> Result<<Self::Block as BlockT>::Hash>;
-
-	/// Get validators at a given block.
-	fn validators(&self, at: &BlockId<Self::Block>) -> Result<Vec<AccountId>>;
+	/// The error used by this API type.
+	type Error;
 
 	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
-	fn build_block(&self, at: &BlockId<Self::Block>, inherent_data: InherentData) -> Result<Self::BlockBuilder>;
-
-	/// Get the nonce (né index) of an account at a block.
-	fn index(&self, at: &BlockId<Self::Block>, account: AccountId) -> Result<u64>;
-
-	/// Attempt to produce the (encoded) inherent extrinsics for a block being built upon the given.
-	/// This may vary by runtime and will fail if a runtime doesn't follow the same API.
-	fn inherent_extrinsics(&self, at: &BlockId<Self::Block>, inherent_data: InherentData) -> Result<Vec<<Self::Block as BlockT>::Extrinsic>>;
-
-	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
-	/// and an error if we can't evaluate for some reason.
-	fn evaluate_block(&self, at: &BlockId<Self::Block>, block: Self::Block) -> Result<bool>;
+	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+		&self,
+		at: &BlockId<Self::Block>,
+		inherent_data: InherentData,
+		build_ctx: F,
+	) -> Result<Self::Block>;
 }
 
-impl<B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<B, E, Block, Blake2Hasher> where
+impl<'a, B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<'a, B, E, Block, Blake2Hasher> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT
@@ -121,57 +114,34 @@ impl<B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<B,
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<()> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
 	}
-
-	fn bake(self) -> Result<Block> {
-		client::block_builder::BlockBuilder::bake(self).map_err(Into::into)
-	}
 }
 
-impl<B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
+impl<'a, B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT,
 {
 	type Block = Block;
-	type BlockBuilder = client::block_builder::BlockBuilder<B, E, Block, Blake2Hasher>;
+	type Error = client::error::Error;
 
-	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Self::Block as BlockT>::Hash> {
-		self.call_api_at(at, "random_seed", &()).map_err(Into::into)
-	}
-
-	fn validators(&self, at: &BlockId<Block>) -> Result<Vec<AccountId>> {
-		self.call_api_at(at, "validators", &()).map_err(Into::into)
-	}
-
-	fn build_block(&self, at: &BlockId<Block>, inherent_data: InherentData) -> Result<Self::BlockBuilder> {
+	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+		&self,
+		at: &BlockId<Self::Block>,
+		inherent_data: InherentData,
+		mut build_ctx: F,
+	) -> Result<Self::Block> {
 		let runtime_version = self.runtime_version_at(at)?;
 
 		let mut block_builder = self.new_block_at(at)?;
 		if runtime_version.has_api(*b"inherent", 1) {
-			for inherent in self.inherent_extrinsics(at, inherent_data)? {
+			for inherent in self.inherent_extrinsics(at, &inherent_data)? {
 				block_builder.push(inherent)?;
 			}
 		}
-		Ok(block_builder)
-	}
 
-	fn index(&self, at: &BlockId<Block>, account: AccountId) -> Result<u64> {
-		self.call_api_at(at, "account_nonce", &account).map_err(Into::into)
-	}
+		build_ctx(&mut block_builder);
 
-	fn inherent_extrinsics(&self, at: &BlockId<Self::Block>, inherent_data: InherentData) -> Result<Vec<<Block as BlockT>::Extrinsic>> {
-		self.call_api_at(at, "inherent_extrinsics", &inherent_data).map_err(Into::into)
-	}
-
-	fn evaluate_block(&self, at: &BlockId<Self::Block>, block: Self::Block) -> Result<bool> {
-		let res: client::error::Result<()> = self.call_api_at(at, "execute_block", &block);
-		match res {
-			Ok(()) => Ok(true),
-			Err(err) => match err.kind() {
-				&client::error::ErrorKind::Execution(_) => Ok(false),
-				_ => Err(err.into())
-			}
-		}
+		block_builder.bake().map_err(Into::into)
 	}
 }
 
@@ -217,7 +187,8 @@ impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C
 	N: Network<Block=<C as AuthoringApi>::Block>,
 	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
-		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
+		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
+	Error: From<<C as AuthoringApi>::Error>
 {
 	type Proposer = Proposer<C>;
 	type Input = N::Input;
@@ -297,7 +268,8 @@ impl<C: AuthoringApi + TPClient> Proposer<C> {
 impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
-		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
+		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
+	error::Error: From<<C as AuthoringApi>::Error>
 {
 	type Create = Result<<C as AuthoringApi>::Block>;
 	type Error = Error;
@@ -330,34 +302,33 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 			offline_indices,
 		};
 
-		let mut block_builder = self.client.build_block(&self.parent_id, inherent_data)?;
+		let block = self.client.build_block(
+			&self.parent_id,
+			inherent_data,
+			|block_builder| {
+				let mut unqueue_invalid = Vec::new();
+				let result = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending_iterator| {
+					let mut pending_size = 0;
+					for pending in pending_iterator {
+						if pending_size + pending.verified.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
 
-		{
-			let mut unqueue_invalid = Vec::new();
-			let result = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending_iterator| {
-				let mut pending_size = 0;
-				for pending in pending_iterator {
-					if pending_size + pending.verified.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
-
-					match block_builder.push_extrinsic(pending.original.clone()) {
-						Ok(()) => {
-							pending_size += pending.verified.encoded_size();
-						}
-						Err(e) => {
-							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
-							unqueue_invalid.push(pending.verified.hash().clone());
+						match block_builder.push_extrinsic(pending.original.clone()) {
+							Ok(()) => {
+								pending_size += pending.verified.encoded_size();
+							}
+							Err(e) => {
+								trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+								unqueue_invalid.push(pending.verified.hash().clone());
+							}
 						}
 					}
+				});
+				if let Err(e) = result {
+					warn!("Unable to get the pending set: {:?}", e);
 				}
-			});
-			if let Err(e) = result {
-				warn!("Unable to get the pending set: {:?}", e);
-			}
 
-			self.transaction_pool.remove(&unqueue_invalid, false);
-		}
-
-		let block = block_builder.bake()?;
+				self.transaction_pool.remove(&unqueue_invalid, false);
+			})?;
 
 		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
 			  block.header().number(),
@@ -419,7 +390,7 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 
 			match timestamp_delay {
 				Some(duration) => future::Either::A(
-					Delay::new(duration).map_err(|e| Error::from(ErrorKind::Timer(e)))
+					Delay::new(duration).map_err(|e| ErrorKind::Timer(e).into())
 				),
 				None => future::Either::B(future::ok(())),
 			}
@@ -434,9 +405,13 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 
 		// evaluate whether the block is actually valid.
 		// TODO: is it better to delay this until the delays are finished?
-		let evaluated = self.client
-			.evaluate_block(&self.parent_id, unchecked_proposal.clone())
-			.map_err(Into::into);
+		let evaluated = match self.client.execute_block(&self.parent_id, &unchecked_proposal.clone()).map_err(Error::from) {
+			Ok(()) => Ok(true),
+			Err(err) => match err.kind() {
+				error::ErrorKind::Client(client::error::ErrorKind::Execution(_)) => Ok(false),
+				_ => Err(err)
+			}
+		};
 
 		let future = future::result(evaluated).and_then(move |good| {
 			let end_result = future::ok(good);
@@ -471,7 +446,8 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 				.filter(|tx| tx.verified.sender == local_id)
 				.last()
 				.map(|tx| Ok(tx.verified.index()))
-				.unwrap_or_else(|| AuthoringApi::index(self.client.as_ref(), &self.parent_id, local_id))
+				.unwrap_or_else(|| self.client.account_nonce(&self.parent_id, &local_id))
+				.map_err(Error::from)
 			);
 
 			match cur_index {

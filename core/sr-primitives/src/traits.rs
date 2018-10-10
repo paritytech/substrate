@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -333,6 +333,24 @@ impl CheckEqual for substrate_primitives::H256 {
 	}
 }
 
+impl<I> CheckEqual for I where I: DigestItem {
+	#[cfg(feature = "std")]
+	fn check_equal(&self, other: &Self) {
+		if self != other {
+			println!("DigestItem: given={:?}, expected={:?}", self, other);
+		}
+	}
+
+	#[cfg(not(feature = "std"))]
+	fn check_equal(&self, other: &Self) {
+		if self != other {
+			runtime_io::print("DigestItem not equal");
+			runtime_io::print(&Encode::encode(self)[..]);
+			runtime_io::print(&Encode::encode(other)[..]);
+		}
+	}
+}
+
 #[cfg(feature = "std")]
 pub trait MaybeSerializeDebugButNotDeserialize: Serialize + Debug {}
 #[cfg(feature = "std")]
@@ -485,13 +503,20 @@ pub trait Digest: Member + Default {
 	fn logs(&self) -> &[Self::Item];
 	/// Push new digest item.
 	fn push(&mut self, item: Self::Item);
+
+	/// Get reference to the first digest item that matches the passed predicate.
+	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {
+		self.logs().iter()
+			.filter_map(predicate)
+			.next()
+	}
 }
 
 /// Single digest item. Could be any type that implements `Member` and provides methods
 /// for casting member to 'system' log items, known to substrate.
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Member {
+pub trait DigestItem: Codec + Member {
 	type Hash: Member;
 	type AuthorityId: Member;
 

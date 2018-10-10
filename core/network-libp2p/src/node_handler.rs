@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
-use custom_proto::{Packet, RegisteredProtocols, RegisteredProtocolSubstream};
+use custom_proto::{RegisteredProtocols, RegisteredProtocolSubstream};
 use futures::{prelude::*, task};
 use libp2p::core::{ConnectionUpgrade, Endpoint, PeerId, PublicKey, upgrade};
 use libp2p::core::nodes::handled_node::{NodeHandler, NodeHandlerEndpoint, NodeHandlerEvent};
@@ -28,7 +28,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_timer::{Delay, Interval};
-use {Multiaddr, PacketId, ProtocolId};
+use {Multiaddr, ProtocolId};
 
 /// Duration after which we consider that a ping failed.
 const PING_TIMEOUT: Duration = Duration::from_secs(30);
@@ -48,9 +48,9 @@ const DELAY_TO_FIRST_IDENTIFY: Duration = Duration::from_secs(2);
 ///
 /// The node will be pinged at a regular interval to determine whether it's still alive. We will
 /// also regularly query the remote for identification information, for statistics purposes.
-pub struct SubstrateNodeHandler<TSubstream, TUserData> {
+pub struct SubstrateNodeHandler<TSubstream> {
 	/// List of registered custom protocols.
-	registered_custom: Arc<RegisteredProtocols<TUserData>>,
+	registered_custom: Arc<RegisteredProtocols>,
 	/// Substreams open for "custom" protocols (eg. dot).
 	custom_protocols_substreams: Vec<RegisteredProtocolSubstream<TSubstream>>,
 
@@ -140,8 +140,6 @@ pub enum SubstrateOutEvent<TSubstream> {
 	CustomMessage {
 		/// Protocol which generated the message.
 		protocol_id: ProtocolId,
-		/// Identifier of the packet.
-		packet_id: u8,
 		/// Data that has been received.
 		data: Bytes,
 	},
@@ -235,7 +233,6 @@ pub enum SubstrateInEvent {
 	/// Sends a message through a custom protocol substream.
 	SendCustomMessage {
 		protocol: ProtocolId,
-		packet_id: PacketId,
 		data: Vec<u8>,
 	},
 
@@ -258,13 +255,12 @@ macro_rules! listener_upgrade {
 	)
 }
 
-impl<TSubstream, TUserData> SubstrateNodeHandler<TSubstream, TUserData>
+impl<TSubstream> SubstrateNodeHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
-	  TUserData: Clone + Send + 'static,
 {
 	/// Creates a new node handler.
 	#[inline]
-	pub fn new(registered_custom: Arc<RegisteredProtocols<TUserData>>, endpoint: ConnectedPoint) -> Self {
+	pub fn new(registered_custom: Arc<RegisteredProtocols>, endpoint: ConnectedPoint) -> Self {
 		let registered_custom_len = registered_custom.len();
 		let queued_dial_upgrades = registered_custom.0
 			.iter()
@@ -298,9 +294,8 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	}
 }
 
-impl<TSubstream, TUserData> NodeHandler<TSubstream> for SubstrateNodeHandler<TSubstream, TUserData>
+impl<TSubstream> NodeHandler<TSubstream> for SubstrateNodeHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
-	  TUserData: Clone + Send + 'static,
 {
 	type InEvent = SubstrateInEvent;
 	type OutEvent = SubstrateOutEvent<TSubstream>;
@@ -383,8 +378,8 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 
 	fn inject_event(&mut self, event: Self::InEvent) {
 		match event {
-			SubstrateInEvent::SendCustomMessage { protocol, packet_id, data } => {
-				self.send_custom_message(protocol, packet_id, data);
+			SubstrateInEvent::SendCustomMessage { protocol, data } => {
+				self.send_custom_message(protocol, data);
 			},
 			SubstrateInEvent::OpenKademlia => self.open_kademlia(),
 			SubstrateInEvent::Accept => {
@@ -449,15 +444,13 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	}
 }
 
-impl<TSubstream, TUserData> SubstrateNodeHandler<TSubstream, TUserData>
+impl<TSubstream> SubstrateNodeHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
-	  TUserData: Clone + Send + 'static,
 {
 	/// Sends a message on a custom protocol substream.
 	fn send_custom_message(
 		&mut self,
 		protocol: ProtocolId,
-		packet_id: PacketId,
 		data: Vec<u8>,
 	) {
 		debug_assert!(self.registered_custom.has_protocol(protocol),
@@ -471,7 +464,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			},
 		};
 
-		proto.send_message(Packet { id: packet_id, data: data.into() });
+		proto.send_message(data.into());
 	}
 
 	/// The node will try to open a Kademlia substream and produce a `KadOpen` event containing the
@@ -688,12 +681,11 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 			let mut custom_proto = self.custom_protocols_substreams.swap_remove(n);
 			match custom_proto.poll() {
 				Ok(Async::NotReady) => self.custom_protocols_substreams.push(custom_proto),
-				Ok(Async::Ready(Some(Packet { id, data }))) => {
+				Ok(Async::Ready(Some(data))) => {
 					let protocol_id = custom_proto.protocol_id();
 					self.custom_protocols_substreams.push(custom_proto);
 					return Ok(Async::Ready(Some(SubstrateOutEvent::CustomMessage {
 						protocol_id,
-						packet_id: id,
 						data,
 					})));
 				},
