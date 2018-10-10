@@ -202,10 +202,9 @@ pub fn for_each_cht_group<Header, I, F, P>(
 				As::sa(current_cht_num),
 				::std::mem::replace(&mut current_cht_blocks, Vec::new()),
 			)?;
-		} else {
-			current_cht_blocks.push(block);
 		}
 
+		current_cht_blocks.push(block);
 		current_cht_num = Some(new_cht_num);
 	}
 
@@ -369,5 +368,29 @@ mod tests {
 		assert!(build_proof::<Header, Blake2Hasher, _, _>(
 			SIZE, 0, vec![(SIZE / 2) as u64],
 				::std::iter::repeat_with(|| Ok(Some(1.into()))).take(SIZE as usize)).is_ok());
+	}
+
+	#[test]
+	#[should_panic]
+	fn for_each_cht_group_panics() {
+		let _ = for_each_cht_group::<Header, _, _, _>(vec![SIZE * 5, SIZE * 2], |_, _, _| Ok(()), ());
+	}
+
+	#[test]
+	fn for_each_cht_group_works() {
+		let _ = for_each_cht_group::<Header, _, _, _>(vec![
+			SIZE * 2 + 1, SIZE * 2 + 2, SIZE * 2 + 5,
+			SIZE * 4 + 1, SIZE * 4 + 7,
+			SIZE * 6 + 1
+		], |_, cht_num, blocks| {
+			match cht_num {
+				2 => assert_eq!(blocks, vec![SIZE * 2 + 1, SIZE * 2 + 2, SIZE * 2 + 5]),
+				4 => assert_eq!(blocks, vec![SIZE * 4 + 1, SIZE * 4 + 7]),
+				6 => assert_eq!(blocks, vec![SIZE * 6 + 1]),
+				_ => unreachable!(),
+			}
+
+			Ok(())
+		}, ());
 	}
 }
