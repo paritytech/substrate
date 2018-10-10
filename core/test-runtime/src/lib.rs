@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -179,7 +179,7 @@ impl_apis! {
 		}
 	}
 
-	impl TaggedTxQueue<Block> for Runtime {
+	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
 		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			system::validate_transaction(utx)
 		}

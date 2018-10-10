@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -236,7 +236,7 @@ impl<
 			Err("invalid account index") => return TransactionValidity::Unknown,
 			// Technically a bad signature could also imply an out-of-date account index, but
 			// that's more of an edge case.
-			Err(e) => return TransactionValidity::Invalid,
+			Err(_) => return TransactionValidity::Invalid,
 		};
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {
