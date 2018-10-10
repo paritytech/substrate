@@ -35,7 +35,7 @@ pub trait Specialization<B: BlockT>: Send + Sync + 'static {
 	fn on_disconnect(&mut self, ctx: &mut Context<B>, who: NodeIndex);
 
 	/// Called when a network-specific message arrives.
-	fn on_message(&mut self, ctx: &mut Context<B>, who: NodeIndex, message: ::message::Message<B>);
+	fn on_message(&mut self, ctx: &mut Context<B>, who: NodeIndex, message: &mut Option<::message::Message<B>>);
 
 	/// Called on abort.
 	fn on_abort(&mut self) { }

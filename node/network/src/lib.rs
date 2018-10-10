@@ -86,14 +86,14 @@ impl Specialization<Block> for Protocol {
 		self.consensus_gossip.peer_disconnected(ctx, who);
 	}
 
-	fn on_message(&mut self, ctx: &mut Context<Block>, who: NodeIndex, message: message::Message<Block>) {
-		match message {
-			generic_message::Message::BftMessage(msg) => {
+	fn on_message(&mut self, ctx: &mut Context<Block>, who: NodeIndex, message: &mut Option<message::Message<Block>>) {
+		match message.take() {
+			Some(generic_message::Message::BftMessage(msg)) => {
 				trace!(target: "node-network", "BFT message from {}: {:?}", who, msg);
 				// TODO: check signature here? what if relevant block is unknown?
 				self.consensus_gossip.on_bft_message(ctx, who, msg)
 			}
-			generic_message::Message::ChainSpecific(_) => {
+			Some(generic_message::Message::ChainSpecific(_)) => {
 				trace!(target: "node-network", "Bad message from {}", who);
 				ctx.report_peer(who, Severity::Bad("Invalid node protocol message format"));
 			}
