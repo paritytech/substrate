@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
-use trie::{TrieDB, Trie, Recorder, MemoryDB};
+use trie::{TrieDB, Trie, Recorder, MemoryDB, DeltaTrie};
 use trie_backend::TrieBackend;
 use trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use {Error, ExecutionError, Backend};
@@ -37,7 +37,6 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: HeapSizeOf,
-	
 {
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = MemoryDB::default();
@@ -107,10 +106,11 @@ impl<S, H> Backend<H> for ProvingBackend<S, H>
 		self.backend.pairs()
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	fn storage_root<I>(&self, delta: I, def: &DeltaTrie<H>) -> (H::Out, MemoryDB<H>)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 	{
-		self.backend.storage_root(delta)
+		self.backend.storage_root::<I>(delta, def)
 	}
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {

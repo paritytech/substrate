@@ -145,6 +145,35 @@ fn branch_node(has_value: bool, has_children: impl Iterator<Item = bool>) -> [u8
 	[first, (bitmap % 256 ) as u8, (bitmap / 256 ) as u8]
 }
 
+/// A trie interface that is capable of taking the delta of changes, and produce the change set.
+pub trait DeltaTrie<H: Hasher> {
+	fn trie_root(&self, input: &mut Iterator<Item = (Vec<u8>, Vec<u8>)>) -> H::Out;
+	fn trie_root_from_delta<'a>(&self, db: &'a mut (hash_db::HashDB<H, trie_db::DBValue> + 'a), root: &'a mut H::Out, delta: &mut Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>) -> Result<(), Box<TrieError<H::Out>>>;
+}
+
+/// Default delta trie implementation.
+pub struct ParityDeltaTrie;
+
+impl<H: Hasher> DeltaTrie<H> for ParityDeltaTrie {
+	fn trie_root(&self, input: &mut Iterator<Item = (Vec<u8>, Vec<u8>)>) -> H::Out
+	{
+		trie_root::trie_root::<H, TrieStream, _, _, _>(input)
+	}
+
+	fn trie_root_from_delta<'a>(&self, db: &'a mut (hash_db::HashDB<H, trie_db::DBValue> + 'a), root: &'a mut H::Out, delta: &mut Iterator<Item = (Vec<u8>, Option<Vec<u8>>)>) -> Result<(), Box<TrieError<H::Out>>> {
+		let mut trie = TrieDBMut::<H>::from_existing(db, root)?;
+
+		for (key, change) in delta {
+			match change {
+				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
+				None => trie.remove(key.as_ref())?, // TODO: archive mode
+			};
+		}
+
+		Ok(())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

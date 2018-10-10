@@ -18,7 +18,7 @@
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, MemoryDB};
+use trie::{TrieDB, TrieError, Trie, MemoryDB, DeltaTrie};
 use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use {Backend};
 
@@ -92,8 +92,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		}
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, MemoryDB<H>)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	fn storage_root<I>(&self, delta: I, def: &DeltaTrie<H>) -> (H::Out, MemoryDB<H>)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		let mut write_overlay = MemoryDB::default();
 		let mut root = *self.essence.root();
@@ -103,17 +104,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			let mut trie = TrieDBMut::<H>::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
-			for (key, change) in delta {
-				let result = match change {
-					Some(val) => trie.insert(&key, &val),
-					None => trie.remove(&key), // TODO: archive mode
-				};
-
-				if let Err(e) = result {
-					warn!(target: "trie", "Failed to write to trie: {}", e);
-				}
-			}
+			def.trie_root_from_delta(&mut eph, &mut root, &mut delta.into_iter()).expect("prior state root to exist"); // TODO: handle gracefully
 		}
 
 		(root, write_overlay)

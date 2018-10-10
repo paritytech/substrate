@@ -21,9 +21,10 @@ use std::cmp::Ord;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use hash_db::Hasher;
+use trie::DeltaTrie;
 use trie_backend::TrieBackend;
 use trie_backend_essence::TrieBackendStorage;
-use substrate_trie::{TrieDBMut, TrieMut, MemoryDB, trie_root};
+use substrate_trie::{TrieDBMut, TrieMut, MemoryDB};
 use heapsize::HeapSizeOf;
 
 /// A state backend is used to read state data and can have changes committed
@@ -54,9 +55,8 @@ pub trait Backend<H: Hasher> {
 
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>>(&self, delta: I, def: &DeltaTrie<H>) -> (H::Out, Self::Transaction)
 	where
-		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
 
 	/// Get all key/value pairs into a Vec.
@@ -156,7 +156,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		self.inner.keys().filter(|key| key.starts_with(prefix)).map(|k| &**k).for_each(f);
 	}
 
-	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	fn storage_root<I>(&self, delta: I, def: &DeltaTrie<H>) -> (H::Out, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		<H as Hasher>::Out: Ord,
@@ -164,10 +164,12 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		let existing_pairs = self.inner.iter().map(|(k, v)| (k.clone(), Some(v.clone())));
 
 		let transaction: Vec<_> = delta.into_iter().collect();
-		let root = trie_root::<H, _, _, _>(existing_pairs.chain(transaction.iter().cloned())
-			.collect::<HashMap<_, _>>()
-			.into_iter()
-			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+		let root = def.trie_root(
+			&mut existing_pairs.chain(transaction.iter().cloned())
+				.collect::<HashMap<_, _>>()
+				.into_iter()
+				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+				.into_iter()
 		);
 
 		(root, transaction)
@@ -189,7 +191,6 @@ pub(crate) fn insert_into_memory_db<H, I>(mdb: &mut MemoryDB<H>, input: I) -> Op
 	where
 		H: Hasher,
 		H::Out: HeapSizeOf,
-	
 		I: Iterator<Item=(Vec<u8>, Vec<u8>)>,
 {
 	let mut root = <H as Hasher>::Out::default();

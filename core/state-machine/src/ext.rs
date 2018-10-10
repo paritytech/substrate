@@ -18,6 +18,7 @@
 
 use std::{error, fmt, cmp::Ord};
 use backend::Backend;
+use trie::ParityDeltaTrie;
 use changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root};
 use {Externalities, OverlayedChanges};
 use hash_db::Hasher;
@@ -191,7 +192,7 @@ where
 		let delta = self.overlay.committed.iter().map(|(k, v)| (k.clone(), v.value.clone()))
 			.chain(self.overlay.prospective.iter().map(|(k, v)| (k.clone(), v.value.clone())));
 
-		let (root, transaction) = self.backend.storage_root(delta);
+		let (root, transaction) = self.backend.storage_root(delta, &ParityDeltaTrie);
 		self.storage_transaction = Some((transaction, root));
 		root
 	}
