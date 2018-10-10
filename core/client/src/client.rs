@@ -552,9 +552,9 @@ impl<B, E, Block> Client<B, E, Block> where
 						TransactionValidity::Valid(_, _, mut provides, ..) => {
 							tags.append(&mut provides);
 						},
-						v => {
-							warn!("Invalid transaction: {:?}", v);
-						},
+						// silently ignore invalid transactions,
+						// cause they might just be intrinsics
+						_ => {}
 					}
 
 				}
