@@ -52,7 +52,6 @@ pub type NetworkService = ::substrate_network::Service<Block, Protocol, Hash>;
 /// Demo protocol attachment for substrate.
 pub struct Protocol {
 	consensus_gossip: ConsensusGossip<Block>,
-	live_consensus: Option<Hash>,
 }
 
 impl Protocol {
@@ -60,16 +59,7 @@ impl Protocol {
 	pub fn new() -> Self {
 		Protocol {
 			consensus_gossip: ConsensusGossip::new(),
-			live_consensus: None,
 		}
-	}
-
-	/// Note new consensus session.
-	fn new_consensus(&mut self, parent_hash: Hash) {
-		let old_consensus = self.live_consensus.take();
-		self.live_consensus = Some(parent_hash);
-		self.consensus_gossip
-			.collect_garbage(|topic| old_consensus.as_ref().map_or(true, |h| topic != h));
 	}
 }
 

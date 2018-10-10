@@ -275,7 +275,7 @@ impl<P: AuthoringApi + Send + Sync + 'static> Network for ConsensusNetwork<P> {
 		// spin up a task in the background that processes all incoming statements
 		// TODO: propagate statements on a timer?
 		let process_task = self.network.with_spec(|spec, _ctx| {
-			spec.new_consensus(parent_hash);
+			spec.consensus_gossip.new_session(parent_hash);
 			MessageProcessTask {
 				inner_stream: spec.consensus_gossip.messages_for(parent_hash),
 				bft_messages: bft_send,

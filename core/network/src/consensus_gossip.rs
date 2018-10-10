@@ -60,6 +60,7 @@ pub struct ConsensusGossip<B: BlockT> {
 	live_message_sinks: HashMap<B::Hash, mpsc::UnboundedSender<ConsensusMessage<B>>>,
 	messages: Vec<MessageEntry<B>>,
 	message_hashes: HashSet<B::Hash>,
+	session_start: Option<B::Hash>,
 }
 
 impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
@@ -70,6 +71,7 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 			live_message_sinks: HashMap::new(),
 			messages: Default::default(),
 			message_hashes: Default::default(),
+			session_start: None
 		}
 	}
 
@@ -302,6 +304,13 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		let hash = hash.unwrap_or_else(|| ::protocol::hash_message(&generic));
 		self.register_message(hash, message);
 		self.propagate(protocol, generic, hash);
+	}
+
+	/// Note new consensus session.
+	pub fn new_session(&mut self, parent_hash: B::Hash) {
+		let old_session = self.session_start.take();
+		self.session_start = Some(parent_hash);
+		self.collect_garbage(|topic| old_session.as_ref().map_or(true, |h| topic != h));
 	}
 }
 
