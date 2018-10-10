@@ -42,13 +42,6 @@ pub mod blake2 {
 	#[derive(Debug)]
 	pub struct Blake2Hasher;
 
-	impl Blake2Hasher {
-		/// Hash given set of bytes
-		pub fn hash(x: &[u8]) -> H256 {
-			<Self as Hasher>::hash(x)
-		}
-	}
-
 	impl Hasher for Blake2Hasher {
 		type Out = H256;
 		type StdHasher = Hash256StdHasher;

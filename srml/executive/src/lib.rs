@@ -236,7 +236,7 @@ impl<
 			Err("invalid account index") => return TransactionValidity::Unknown,
 			// Technically a bad signature could also imply an out-of-date account index, but
 			// that's more of an edge case.
-			Err(_) => return TransactionValidity::Invalid,
+			Err(e) => return TransactionValidity::Invalid,
 		};
 
 		if let (Some(sender), Some(index)) = (xt.sender(), xt.index()) {

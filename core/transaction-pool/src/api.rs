@@ -25,6 +25,7 @@ use txpool;
 use substrate_primitives::{
 	H256,
 	Blake2Hasher,
+	Hasher,
 };
 use sr_primitives::{
 	generic::BlockId,

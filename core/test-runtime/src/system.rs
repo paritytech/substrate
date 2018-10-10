@@ -18,14 +18,14 @@
 //! and depositing logs.
 
 use rstd::prelude::*;
-use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root};
+use runtime_io::{storage_root, enumerated_trie_root, storage_changes_root, twox_128};
 use runtime_support::storage::{self, StorageValue, StorageMap};
 use runtime_primitives::traits::{Hash as HashT, BlakeTwo256, Digest as DigestT};
 use runtime_primitives::generic;
 use runtime_primitives::{ApplyError, ApplyOutcome, ApplyResult, transaction_validity::TransactionValidity};
 use codec::{KeyedVec, Encode};
 use super::{AccountId, BlockNumber, Extrinsic, H256 as Hash, Block, Header, Digest};
-use primitives::{Blake2Hasher, twox_128};
+use primitives::{Blake2Hasher};
 use primitives::storage::well_known_keys;
 
 const NONCE_OF: &[u8] = b"nonce:";
@@ -120,10 +120,16 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 		twox_128(&nonce.to_keyed_vec(&*from)).to_vec()
 	};
 	let requires = if tx.nonce != expected_nonce && tx.nonce > 0 {
-		vec![hash(&tx.from, tx.nonce - 1)]
-	} else { vec![] };
+		let mut deps = Vec::new();
+		deps.push(hash(&tx.from, tx.nonce - 1));
+		deps
+	} else { Vec::new() };
 
-	let provides = vec![hash(&tx.from, tx.nonce)];
+	let provides = {
+		let mut p = Vec::new();
+		p.push(hash(&tx.from, tx.nonce));
+		p
+	};
 
 	TransactionValidity::Valid(
 		/* priority: */tx.amount,
