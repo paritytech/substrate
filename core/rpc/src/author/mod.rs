@@ -22,12 +22,10 @@ use client::{self, Client};
 use codec::Decode;
 use transaction_pool::{
 	txpool::{
-		self,
 		ChainApi as PoolChainApi,
 		BlockHash,
 		ExHash,
 		ExtrinsicFor,
-		NumberFor,
 		IntoPoolError,
 		Pool,
 		watcher::Status,
@@ -109,7 +107,6 @@ impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<ExtrinsicF
 	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
-	NumberFor<P>: Into<txpool::base_pool::BlockNumber>,
 	P::Error: 'static,
 {
 	type Metadata = ::metadata::Metadata;

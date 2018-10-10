@@ -188,7 +188,6 @@ impl<N, C, A> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N
 	N: Network<Block=<C as AuthoringApi>::Block>,
 	C: AuthoringApi + BlockNumberToHash,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
-	txpool::NumberFor<A>: Into<u64>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
 	Error: From<<C as AuthoringApi>::Error>
@@ -271,7 +270,6 @@ impl<C: AuthoringApi, A: txpool::ChainApi> Proposer<C, A> {
 impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 	C: AuthoringApi + BlockNumberToHash,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
-	txpool::NumberFor<A>: Into<u64>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
 	error::Error: From<<C as AuthoringApi>::Error>

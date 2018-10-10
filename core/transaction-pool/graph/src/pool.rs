@@ -31,7 +31,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
-	traits,
+	traits::{self, As},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 
@@ -103,9 +103,7 @@ pub struct Pool<B: ChainApi> {
 	rotator: PoolRotator<ExHash<B>>,
 }
 
-impl<B: ChainApi> Pool<B> where
-	NumberFor<B>: Into<base::BlockNumber>,
-{
+impl<B: ChainApi> Pool<B> {
 
 	/// Imports a bunch of unverified extrinsics to the pool
 	pub fn submit_at<T>(&self, at: &BlockId<B::Block>, xts: T) -> Result<Vec<Result<ExHash<B>, B::Error>>, B::Error> where
@@ -146,7 +144,7 @@ impl<B: ChainApi> Pool<B> where
 				}
 			})
 			.map(|tx| {
-				let imported = self.pool.write().import(block_number.into(), tx?)?;
+				let imported = self.pool.write().import(block_number.as_(), tx?)?;
 
 				self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
 
@@ -173,7 +171,7 @@ impl<B: ChainApi> Pool<B> where
 		let block_number = self.api.block_id_to_number(at)?
 			.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?;
 
-		let status = self.pool.write().prune_tags(block_number.into(), tags);
+		let status = self.pool.write().prune_tags(block_number.as_(), tags);
 		{
 			let mut listener = self.listener.write();
 			for promoted in &status.promoted {

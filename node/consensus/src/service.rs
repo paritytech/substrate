@@ -93,7 +93,6 @@ impl Service {
 			primitives::H256: From<<<A as AuthoringApi>::Block as BlockT>::Hash>,
 			<<A as AuthoringApi>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,
 			N: Network<Block = <A as AuthoringApi>::Block> + Send + 'static,
-			::transaction_pool::txpool::NumberFor<P>: Into<u64>,
 	{
 		use parking_lot::RwLock;
 		use super::OfflineTracker;

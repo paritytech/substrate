@@ -48,7 +48,7 @@ use service::{
 };
 use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
 use client::{BlockOrigin, JustifiedHeader};
-use sr_primitives::traits::{self, As};
+use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
 
 struct TestNet<F: ServiceFactory> {
@@ -218,7 +218,6 @@ where
 	F: ServiceFactory,
 	B: Fn(&F::FullService) -> (JustifiedHeader<F::Block>, Option<Vec<FactoryExtrinsic<F>>>),
 	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
-	<<<F as ServiceFactory>::Block as traits::Block>::Header as traits::Header>::Number: Into<u64>,
 {
 	const NUM_NODES: u32 = 10;
 	const NUM_BLOCKS: usize = 512;

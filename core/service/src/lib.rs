@@ -116,7 +116,6 @@ pub fn new_client<Factory: components::ServiceFactory>(config: FactoryFullConfig
 impl<Components> Service<Components>
 	where
 		Components: components::Components,
-		txpool::NumberFor<Components::TransactionPoolApi>: Into<u64>,
 		txpool::ExHash<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
 		txpool::ExtrinsicFor<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
 {
@@ -391,9 +390,7 @@ impl<C: Components> TransactionPoolAdapter<C> {
 	}
 }
 
-impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> where
-	txpool::NumberFor<C::TransactionPoolApi>: Into<u64>,
-{
+impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
 		self.pool.ready(|pending| pending
 			.map(|t| {
