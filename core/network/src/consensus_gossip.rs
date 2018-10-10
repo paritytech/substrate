@@ -27,6 +27,9 @@ use runtime_primitives::generic::BlockId;
 use message::{self, generic::Message as GenericMessage};
 use protocol::Context;
 use service::Roles;
+use specialization::Specialization;
+use StatusMessage;
+use generic_message;
 
 // TODO: Add additional spam/DoS attack protection.
 const MESSAGE_LIFETIME: Duration = Duration::from_secs(600);
@@ -300,6 +303,48 @@ impl<B: BlockT> ConsensusGossip<B> where B::Header: HeaderT<Number=u64> {
 		self.register_message(hash, message);
 		self.propagate(protocol, generic, hash);
 	}
+}
+
+impl<Block: BlockT> Specialization<Block> for ConsensusGossip<Block> where
+	Block::Header: HeaderT<Number=u64>
+{
+	fn status(&self) -> Vec<u8> {
+		Vec::new()
+	}
+
+	fn on_connect(&mut self, ctx: &mut Context<Block>, who: NodeIndex, status: StatusMessage<Block>) {
+		self.new_peer(ctx, who, status.roles);
+	}
+
+	fn on_disconnect(&mut self, ctx: &mut Context<Block>, who: NodeIndex) {
+		self.peer_disconnected(ctx, who);
+	}
+
+	fn on_message(&mut self, ctx: &mut Context<Block>, who: NodeIndex, message: &mut Option<message::Message<Block>>) {
+		match message.take() {
+			Some(generic_message::Message::BftMessage(msg)) => {
+				trace!(target: "gossip", "BFT message from {}: {:?}", who, msg);
+				// TODO: check signature here? what if relevant block is unknown?
+				self.on_bft_message(ctx, who, msg)
+			}
+			r => *message = r,
+		}
+	}
+
+	fn on_abort(&mut self) {
+		self.abort();
+	}
+
+	fn maintain_peers(&mut self, _ctx: &mut Context<Block>) {
+		self.collect_garbage(|_| true);
+	}
+
+	fn on_block_imported(
+		&mut self,
+		_ctx: &mut Context<Block>,
+		_hash: <Block as BlockT>::Hash,
+		_header: &<Block as BlockT>::Header)
+	{}
 }
 
 #[cfg(test)]

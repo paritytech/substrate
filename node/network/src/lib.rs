@@ -37,9 +37,9 @@ extern crate log;
 pub mod consensus;
 
 use node_primitives::{Block, Hash, Header};
-use substrate_network::{NodeIndex, Context, Severity};
+use substrate_network::{NodeIndex, Context};
 use substrate_network::consensus_gossip::ConsensusGossip;
-use substrate_network::{message, generic_message};
+use substrate_network::message;
 use substrate_network::specialization::Specialization;
 use substrate_network::StatusMessage as GenericFullStatus;
 
@@ -79,36 +79,26 @@ impl Specialization<Block> for Protocol {
 	}
 
 	fn on_connect(&mut self, ctx: &mut Context<Block>, who: NodeIndex, status: FullStatus) {
-		self.consensus_gossip.new_peer(ctx, who, status.roles);
+		self.consensus_gossip.on_connect(ctx, who, status);
 	}
 
 	fn on_disconnect(&mut self, ctx: &mut Context<Block>, who: NodeIndex) {
-		self.consensus_gossip.peer_disconnected(ctx, who);
+		self.consensus_gossip.on_disconnect(ctx, who);
 	}
 
 	fn on_message(&mut self, ctx: &mut Context<Block>, who: NodeIndex, message: &mut Option<message::Message<Block>>) {
-		match message.take() {
-			Some(generic_message::Message::BftMessage(msg)) => {
-				trace!(target: "node-network", "BFT message from {}: {:?}", who, msg);
-				// TODO: check signature here? what if relevant block is unknown?
-				self.consensus_gossip.on_bft_message(ctx, who, msg)
-			}
-			Some(generic_message::Message::ChainSpecific(_)) => {
-				trace!(target: "node-network", "Bad message from {}", who);
-				ctx.report_peer(who, Severity::Bad("Invalid node protocol message format"));
-			}
-			_ => {}
-		}
+		self.consensus_gossip.on_message(ctx, who, message);
 	}
 
 	fn on_abort(&mut self) {
-		self.consensus_gossip.abort();
+		self.consensus_gossip.on_abort();
 	}
 
-	fn maintain_peers(&mut self, _ctx: &mut Context<Block>) {
-		self.consensus_gossip.collect_garbage(|_| true);
+	fn maintain_peers(&mut self, ctx: &mut Context<Block>) {
+		self.consensus_gossip.maintain_peers(ctx);
 	}
 
-	fn on_block_imported(&mut self, _ctx: &mut Context<Block>, _hash: Hash, _header: &Header) {
+	fn on_block_imported(&mut self, ctx: &mut Context<Block>, hash: Hash, header: &Header) {
+		self.consensus_gossip.on_block_imported(ctx, hash, header);
 	}
 }
