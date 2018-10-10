@@ -421,7 +421,10 @@ impl<B, E, Block> Client<B, E, Block> where
 				let root = self.storage.root(block)?;
 				if block < self.min {
 					if let Some(ref root) = root {
-						self.required_roots_proofs.lock().insert(As::sa(block), root.clone());
+						self.required_roots_proofs.lock().insert(
+							As::sa(block),
+							root.clone()
+						);
 					}
 				}
 				Ok(root)
@@ -483,7 +486,11 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Generate CHT-based proof for roots of changes tries at given blocks.
-	fn changes_trie_roots_proof<I: IntoIterator<Item=NumberFor<Block>>>(&self, cht_size: u64, blocks: I) -> error::Result<Vec<Vec<u8>>> {
+	fn changes_trie_roots_proof<I: IntoIterator<Item=NumberFor<Block>>>(
+		&self,
+		cht_size: u64,
+		blocks: I
+	) -> error::Result<Vec<Vec<u8>>> {
 		// most probably we have touched several changes tries that are parts of the single CHT
 		// => GroupBy changes tries by CHT number and then gather proof for the whole group at once
 		let mut proof = HashSet::new();
@@ -498,7 +505,12 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Generates CHT-based proof for roots of changes tries at given blocks (that are part of single CHT).
-	fn changes_trie_roots_proof_at_cht(&self, cht_size: u64, cht_num: NumberFor<Block>, blocks: Vec<NumberFor<Block>>) -> error::Result<Vec<Vec<u8>>> {
+	fn changes_trie_roots_proof_at_cht(
+		&self,
+		cht_size: u64,
+		cht_num: NumberFor<Block>,
+		blocks: Vec<NumberFor<Block>>
+	) -> error::Result<Vec<Vec<u8>>> {
 		let cht_start = cht::start_number(cht_size, cht_num);
 		let roots = (cht_start.as_()..).map(|num| self.header(&BlockId::Number(As::sa(num)))
 			.map(|block| block.and_then(|block| block.digest().log(DigestItem::as_changes_trie_root).cloned())));

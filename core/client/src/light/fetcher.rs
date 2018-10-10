@@ -87,8 +87,8 @@ pub struct RemoteChangesRequest<Header: HeaderT> {
 	/// after this block and be the part of the same fork.
 	pub max_block: (Header::Number, Header::Hash),
 	/// Known changes trie roots for the range of blocks [tries_roots.0..max_block].
-	/// Proofs for roots of ascendants of tries_roots.0 are provided by the full node.
-	pub tries_roots: (Header::Number, Vec<Header::Hash>),
+	/// Proofs for roots of ascendants of tries_roots.0 are provided by the remote node.
+	pub tries_roots: (Header::Number, Header::Hash, Vec<Header::Hash>),
 	/// Storage key to read.
 	pub key: Vec<u8>,
 	/// Number of times to retry request. None means that default RETRY_COUNT is used.
@@ -202,14 +202,18 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 
 		// check if remote node has responded with extra changes trie roots proofs
 		// all changes tries roots must be in range [request.first_block.0; request.tries_roots.0)
-		let is_extra_first_root = remote_proof.roots.keys().next().map(|first_root| *first_root < request.first_block.0
-			|| *first_root >= request.tries_roots.0).unwrap_or(false);
-		let is_extra_last_root = remote_proof.roots.keys().next_back().map(|last_root| *last_root >= request.tries_roots.0)
+		let is_extra_first_root = remote_proof.roots.keys().next()
+			.map(|first_root| *first_root < request.first_block.0
+				|| *first_root >= request.tries_roots.0)
+			.unwrap_or(false);
+		let is_extra_last_root = remote_proof.roots.keys().next_back()
+			.map(|last_root| *last_root >= request.tries_roots.0)
 			.unwrap_or(false);
 		if is_extra_first_root || is_extra_last_root {
 			return Err(ClientErrorKind::ChangesTrieAccessFailed(format!(
 				"Extra changes tries roots proofs provided by the remote node: [{:?}..{:?}]. Expected in range: [{}; {})",
-				remote_proof.roots.keys().next(), remote_proof.roots.keys().next_back(), request.first_block.0, request.tries_roots.0
+				remote_proof.roots.keys().next(), remote_proof.roots.keys().next_back(),
+				request.first_block.0, request.tries_roots.0,
 			)).into());
 		}
 
@@ -232,7 +236,7 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 		key_changes_proof_check::<_, H>(
 			&request.changes_trie_config,
 			&RootsStorage {
-				roots: (request.tries_roots.0, &request.tries_roots.1),
+				roots: (request.tries_roots.0, &request.tries_roots.2),
 				prev_roots: remote_roots,
 			},
 			remote_proof,
@@ -256,15 +260,17 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 			H::Out: Ord + HeapSizeOf,
 	{
 		// all the checks are sharing the same storage
-		let roots_proof_storage = create_proof_check_backend_storage(remote_roots_proof);
+		let storage = create_proof_check_backend_storage(remote_roots_proof);
 
 		// we remote_roots.keys() are sorted => we can use this to group changes tries roots
 		// that are belongs to the same CHT
-		cht::for_each_cht_group::<B::Header, _, _, _>(cht_size, remote_roots.keys().cloned(), |mut roots_proof_storage, _, cht_blocks| {
+		let blocks = remote_roots.keys().cloned();
+		cht::for_each_cht_group::<B::Header, _, _, _>(cht_size, blocks, |mut storage, _, cht_blocks| {
 			// get local changes trie CHT root for given CHT
 			// it should be there, because it is never pruned AND request has been composed
 			// when required header has been pruned (=> replaced with CHT)
-			let first_block = cht_blocks.first().cloned().expect("for_each_cht_group never calls callback with empty groups");
+			let first_block = cht_blocks.first().cloned()
+				.expect("for_each_cht_group never calls callback with empty groups");
 			let local_cht_root = self.blockchain.storage().changes_trie_cht_root(cht_size, first_block)?;
 
 			// check changes trie root for every block within CHT range
@@ -274,12 +280,12 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 				// we share the storage for multiple checks, do it here
 				let mut cht_root = H::Out::default();
 				cht_root.as_mut().copy_from_slice(local_cht_root.as_ref());
-				if !roots_proof_storage.contains(&cht_root) {
+				if !storage.contains(&cht_root) {
 					return Err(ClientErrorKind::InvalidCHTProof.into());
 				}
 
 				// check proof for single changes trie root
-				let proving_backend = TrieBackend::new(roots_proof_storage, cht_root);
+				let proving_backend = TrieBackend::new(storage, cht_root);
 				let remote_changes_trie_root = remote_roots[&block];
 				cht::check_proof_on_proving_backend::<B::Header, H>(
 					local_cht_root,
@@ -288,11 +294,11 @@ impl<E, H, B: BlockT, S: BlockchainStorage<B>, F> LightDataChecker<E, H, B, S, F
 					&proving_backend)?;
 
 				// and return the storage to use in following checks
-				roots_proof_storage = proving_backend.into_storage();
+				storage = proving_backend.into_storage();
 			}
 
-			Ok(roots_proof_storage)
-		}, roots_proof_storage)
+			Ok(storage)
+		}, storage)
 	}
 }
 
@@ -425,10 +431,9 @@ pub mod tests {
 		}
 	}
 
-	fn prepare_for_read_proof_check() -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, Block, DummyStorage, OkCallFetcher>,
-		Header, Vec<Vec<u8>>, usize)
-	{
+	type TestChecker = LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, Block, DummyStorage, OkCallFetcher>;
+
+	fn prepare_for_read_proof_check() -> (TestChecker, Header, Vec<Vec<u8>>, usize) {
 		// prepare remote client
 		let remote_client = test_client::new();
 		let remote_block_id = BlockId::Number(0);
@@ -454,10 +459,7 @@ pub mod tests {
 		(local_checker, remote_block_header, remote_read_proof, authorities_len)
 	}
 
-	fn prepare_for_header_proof_check(insert_cht: bool) -> (
-		LightDataChecker<executor::NativeExecutor<test_client::LocalExecutor>, Blake2Hasher, Block, DummyStorage, OkCallFetcher>,
-		Hash, Header, Vec<Vec<u8>>)
-	{
+	fn prepare_for_header_proof_check(insert_cht: bool) -> (TestChecker, Hash, Header, Vec<Vec<u8>>) {
 		// prepare remote client
 		let remote_client = test_client::new();
 		let mut local_headers_hashes = Vec::new();
@@ -529,8 +531,10 @@ pub mod tests {
 	#[test]
 	fn changes_proof_is_generated_and_checked_when_headers_are_not_pruned() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
-		let local_checker = LightDataChecker::<_, Blake2Hasher, Block, DummyStorage, OkCallFetcher>::new(
-			Arc::new(DummyBlockchain::new(DummyStorage::new())), test_client::LocalExecutor::new());
+		let local_checker = TestChecker::new(
+			Arc::new(DummyBlockchain::new(DummyStorage::new())),
+			test_client::LocalExecutor::new()
+		);
 		let local_checker = &local_checker as &FetchChecker<Block>;
 		let max = remote_client.info().unwrap().chain.best_number;
 		let max_hash = remote_client.info().unwrap().chain.best_hash;
@@ -551,7 +555,7 @@ pub mod tests {
 				first_block: (begin, begin_hash),
 				last_block: (end, end_hash),
 				max_block: (max, max_hash),
-				tries_roots: (begin, local_roots_range),
+				tries_roots: (begin, begin_hash, local_roots_range),
 				key: key,
 				retry_count: None,
 			};
@@ -593,8 +597,10 @@ pub mod tests {
 		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
 		let mut local_storage = DummyStorage::new();
 		local_storage.changes_tries_cht_roots.insert(0, local_cht_root);
-		let local_checker = LightDataChecker::<_, Blake2Hasher, Block, DummyStorage, OkCallFetcher>::new(
-			Arc::new(DummyBlockchain::new(local_storage)), test_client::LocalExecutor::new());
+		let local_checker = TestChecker::new(
+			Arc::new(DummyBlockchain::new(local_storage)),
+			test_client::LocalExecutor::new()
+		);
 
 		// check proof on local client
 		let request = RemoteChangesRequest::<Header> {
@@ -602,7 +608,7 @@ pub mod tests {
 			first_block: (1, b1),
 			last_block: (4, b4),
 			max_block: (4, b4),
-			tries_roots: (3, vec![remote_roots[2].clone(), remote_roots[3].clone()]),
+			tries_roots: (3, b3, vec![remote_roots[2].clone(), remote_roots[3].clone()]),
 			key: dave,
 			retry_count: None,
 		};
@@ -619,8 +625,10 @@ pub mod tests {
 	#[test]
 	fn check_changes_proof_fails_if_proof_is_wrong() {
 		let (remote_client, local_roots, test_cases) = prepare_client_with_key_changes();
-		let local_checker = LightDataChecker::<_, Blake2Hasher, Block, DummyStorage, OkCallFetcher>::new(
-			Arc::new(DummyBlockchain::new(DummyStorage::new())), test_client::LocalExecutor::new());
+		let local_checker = TestChecker::new(
+			Arc::new(DummyBlockchain::new(DummyStorage::new())),
+			test_client::LocalExecutor::new()
+		);
 		let local_checker = &local_checker as &FetchChecker<Block>;
 		let max = remote_client.info().unwrap().chain.best_number;
 		let max_hash = remote_client.info().unwrap().chain.best_hash;
@@ -639,7 +647,7 @@ pub mod tests {
 			first_block: (begin, begin_hash),
 			last_block: (end, end_hash),
 			max_block: (max, max_hash),
-			tries_roots: (begin, local_roots_range.clone()),
+			tries_roots: (begin, begin_hash, local_roots_range.clone()),
 			key: key,
 			retry_count: None,
 		};
@@ -680,7 +688,8 @@ pub mod tests {
 		// we're testing this test case here:
 		// (1, 4, dave.clone(), vec![(4, 0), (1, 1), (1, 0)]),
 		let (remote_client, remote_roots, _) = prepare_client_with_key_changes();
-		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
+		let local_cht_root = cht::compute_root::<Header, Blake2Hasher, _>(
+			4, 0, remote_roots.iter().cloned().map(|ct| Ok(Some(ct)))).unwrap();
 		let dave = twox_128(&runtime::system::balance_of_key(Keyring::Dave.to_raw_public().into())).to_vec();
 
 		// 'fetch' changes proof from remote node:
@@ -695,15 +704,20 @@ pub mod tests {
 		).unwrap();
 
 		// fails when changes trie CHT is missing from the local db
-		let local_checker = LightDataChecker::<_, Blake2Hasher, Block, DummyStorage, OkCallFetcher>::new(
-			Arc::new(DummyBlockchain::new(DummyStorage::new())), test_client::LocalExecutor::new());
-		assert!(local_checker.check_changes_tries_proof(4, &remote_proof.roots, remote_proof.roots_proof.clone()).is_err());
+		let local_checker = TestChecker::new(
+			Arc::new(DummyBlockchain::new(DummyStorage::new())),
+			test_client::LocalExecutor::new()
+		);
+		assert!(local_checker.check_changes_tries_proof(4, &remote_proof.roots,
+			remote_proof.roots_proof.clone()).is_err());
 
 		// fails when proof is broken
 		let mut local_storage = DummyStorage::new();
 		local_storage.changes_tries_cht_roots.insert(0, local_cht_root);
-		let local_checker = LightDataChecker::<_, Blake2Hasher, Block, DummyStorage, OkCallFetcher>::new(
-			Arc::new(DummyBlockchain::new(local_storage)), test_client::LocalExecutor::new());
+		let local_checker = TestChecker::new(
+			Arc::new(DummyBlockchain::new(local_storage)),
+			test_client::LocalExecutor::new()
+		);
 		assert!(local_checker.check_changes_tries_proof(4, &remote_proof.roots, vec![]).is_err());
 	}
 }

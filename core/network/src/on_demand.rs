@@ -486,7 +486,7 @@ impl<Block: BlockT> Request<Block> {
 					id: self.id,
 					first: data.first_block.1.clone(),
 					last: data.last_block.1.clone(),
-					min: Default::default(), // TODO
+					min: data.tries_roots.1.clone(),
 					max: data.max_block.1.clone(),
 					key: data.key.clone(),
 				}),
@@ -855,7 +855,7 @@ pub mod tests {
 			first_block: (1, Default::default()),
 			last_block: (100, Default::default()),
 			max_block: (100, Default::default()),
-			tries_roots: (1, vec![]),
+			tries_roots: (1, Default::default(), vec![]),
 			key: vec![],
 			retry_count: None,
 		});

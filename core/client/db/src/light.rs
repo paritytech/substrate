@@ -218,7 +218,11 @@ impl<Block: BlockT> LightStorage<Block> {
 				cht::SIZE, new_cht_number, (new_cht_start.as_()..)
 				.map(|num| self.hash(As::sa(num)))
 			)?;
-			transaction.put(columns::CHT, &cht_key(HEADER_CHT_PREFIX, new_cht_start), new_header_cht_root.as_ref());
+			transaction.put(
+				columns::CHT,
+				&cht_key(HEADER_CHT_PREFIX, new_cht_start),
+				new_header_cht_root.as_ref()
+			);
 
 			// if the header includes changes trie root, let's build a changes tries roots CHT
 			if header.digest().log(DigestItem::as_changes_trie_root).is_some() {
@@ -226,13 +230,18 @@ impl<Block: BlockT> LightStorage<Block> {
 					cht::SIZE, new_cht_number, (new_cht_start.as_()..)
 					.map(|num| self.changes_trie_root(BlockId::Number(As::sa(num))))
 				)?;
-				transaction.put(columns::CHT, &cht_key(CHANGES_TRIE_CHT_PREFIX, new_cht_start), new_changes_trie_cht_root.as_ref());
+				transaction.put(
+					columns::CHT,
+					&cht_key(CHANGES_TRIE_CHT_PREFIX, new_cht_start),
+					new_changes_trie_cht_root.as_ref()
+				);
 			}
 
 			// prune headers that are replaced with CHT
 			let mut prune_block = new_cht_start;
 			let new_cht_end = cht::end_number(cht::SIZE, new_cht_number);
-			trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
+			trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}",
+				new_cht_start, new_cht_end, new_cht_number);
 
 			while prune_block <= new_cht_end {
 				let id = read_id::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
@@ -249,7 +258,12 @@ impl<Block: BlockT> LightStorage<Block> {
 	}
 
 	/// Read CHT root of given type for the block.
-	fn read_cht_root(&self, cht_type: u8, cht_size: u64, block: NumberFor<Block>) -> ClientResult<Block::Hash> {
+	fn read_cht_root(
+		&self,
+		cht_type: u8,
+		cht_size: u64,
+		block: NumberFor<Block>
+	) -> ClientResult<Block::Hash> {
 		let no_cht_for_block = || ClientErrorKind::Backend(format!("CHT for block {} not exists", block)).into();
 
 		let cht_number = cht::block_to_cht_number(cht_size, block).ok_or_else(no_cht_for_block)?;
