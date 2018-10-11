@@ -139,7 +139,7 @@ sudo apt install cmake pkg-config libssl-dev git
 
  - Mac:
 [source, shell]
-sudo apt install cmake pkg-config openssl git
+brew install cmake pkg-config openssl git
 
 Then, grab the Substrate source code:
 
