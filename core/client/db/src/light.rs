@@ -543,6 +543,7 @@ pub(crate) mod tests {
 			prev_hash = insert_block(&db, &prev_hash, 1 + number, None);
 		}
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE) as usize);
+		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), (1 + cht::SIZE) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
 		// insert next SIZE blocks && ensure that nothing is pruned
@@ -550,12 +551,14 @@ pub(crate) mod tests {
 			prev_hash = insert_block(&db, &prev_hash, 1 + cht::SIZE + number, None);
 		}
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + cht::SIZE) as usize);
+		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), (1 + cht::SIZE + cht::SIZE) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
 		// insert block #{2 * cht::SIZE + 1} && check that new CHT is created + headers of this CHT are pruned
 		// nothing is yet finalized, so nothing is pruned.
 		prev_hash = insert_block(&db, &prev_hash, 1 + cht::SIZE + cht::SIZE, None);
 		assert_eq!(db.db.iter(columns::HEADER).count(), (2 + cht::SIZE + cht::SIZE) as usize);
+		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), (2 + cht::SIZE + cht::SIZE) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 0);
 
 		// now finalize the block.
@@ -564,6 +567,7 @@ pub(crate) mod tests {
 		}
 		db.finalize_header(BlockId::Hash(prev_hash)).unwrap();
 		assert_eq!(db.db.iter(columns::HEADER).count(), (1 + cht::SIZE + 1) as usize);
+		assert_eq!(db.db.iter(columns::HASH_LOOKUP).count(), (1 + cht::SIZE + 1) as usize);
 		assert_eq!(db.db.iter(columns::CHT).count(), 1);
 		assert!((0..cht::SIZE).all(|i| db.db.get(columns::HEADER, &number_to_lookup_key(1 + i)).unwrap().is_none()));
 	}
