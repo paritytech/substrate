@@ -395,7 +395,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		self.pool.ready(|pending| pending
 			.map(|t| {
 				let hash = t.hash.clone();
-				let ex: ComponentExtrinsic<C> = t.data.raw.clone();
+				let ex: ComponentExtrinsic<C> = t.data.clone();
 				(hash, ex)
 			})
 			.collect())
