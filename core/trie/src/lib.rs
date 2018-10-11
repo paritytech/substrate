@@ -53,7 +53,7 @@ pub type TrieError<H> = trie_db::TrieError<H, Error>;
 pub trait AsHashDB<H: Hasher>: hash_db::AsHashDB<H, trie_db::DBValue> {}
 impl<H: Hasher, T: hash_db::AsHashDB<H, trie_db::DBValue>> AsHashDB<H> for T {}
 /// As in `hash_db`, but less generic, trait exposed.
-pub type HashDB<H> = hash_db::HashDB<H, trie_db::DBValue>;
+pub type HashDB<'a, H> = hash_db::HashDB<H, trie_db::DBValue> + 'a;
 /// As in `memory_db`, but less generic, trait exposed.
 pub type MemoryDB<H> = memory_db::MemoryDB<H, trie_db::DBValue>;
 
@@ -71,6 +71,26 @@ pub fn trie_root<H: Hasher, I, A, B>(input: I) -> H::Out where
 	B: AsRef<[u8]>,
 {
 	trie_root::trie_root::<H, TrieStream, _, _, _>(input)
+}
+
+/// Determine a trie root given a hash DB and delta values.
+pub fn delta_trie_root<H: Hasher, I, A, B>(_key: &[u8], db: &mut HashDB<H>, mut root: H::Out, delta: I) -> Result<H::Out, Box<TrieError<H::Out>>> where
+	I: IntoIterator<Item = (A, Option<B>)>,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
+{
+	{
+		let mut trie = TrieDBMut::<H>::from_existing(db, &mut root)?;
+
+		for (key, change) in delta {
+			match change {
+				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
+				None => trie.remove(key.as_ref())?, // TODO: archive mode
+			};
+		}
+	}
+
+	Ok(root)
 }
 
 /// Determine a trie root node's data given its ordered contents, closed form.
@@ -93,6 +113,44 @@ where
 		.enumerate()
 		.map(|(i, v)| (codec::Encode::encode(&codec::Compact(i as u32)), v))
 	)
+}
+
+/// Determine whether a child trie key is valid. `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
+pub fn is_child_trie_key_valid<H: Hasher>(_key: &[u8]) -> bool {
+	true
+}
+
+/// Determine a child trie root given its ordered contents, closed form. H is the default hasher, but a generic
+/// implementation may ignore this type parameter and use other hashers.
+pub fn child_trie_root<H: Hasher, I, A, B>(_key: &[u8], input: I) -> Vec<u8> where
+	I: IntoIterator<Item = (A, B)>,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
+{
+	trie_root::<H, _, _, _>(input).as_ref().iter().cloned().collect()
+}
+
+/// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
+pub fn child_delta_trie_root<H: Hasher, I, A, B>(_key: &[u8], db: &mut HashDB<H>, root: Vec<u8>, delta: I) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
+	I: IntoIterator<Item = (A, Option<B>)>,
+	A: AsRef<[u8]> + Ord,
+	B: AsRef<[u8]>,
+	H::Out: for<'a> From<&'a [u8]>
+{
+	let mut root = H::Out::from(&root); // root is fetched from DB, not writable by runtime, so it's always valid.
+
+	{
+		let mut trie = TrieDBMut::<H>::from_existing(db, &mut root)?;
+
+		for (key, change) in delta {
+			match change {
+				Some(val) => trie.insert(key.as_ref(), val.as_ref())?,
+				None => trie.remove(key.as_ref())?, // TODO: archive mode
+			};
+		}
+	}
+
+	Ok(root.as_ref().iter().cloned().collect())
 }
 
 // Utilities (not exported):
