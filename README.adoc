@@ -122,7 +122,7 @@ Inherent extrinsic knowledge is again somewhat generic, and the actual construct
 If you'd actually like hack on Substrate, you can just grab the source code and
 build it. The instructions below are for linux systems.
 
-You can find instructions for Mac OS X <a href="https://hackmd.io/s/SkXncjF5X">here</a>.
+You can find instructions for Mac OS X here: https://hackmd.io/s/SkXncjF5X
 
 Ensure you have Rust and the support software installed:
 
