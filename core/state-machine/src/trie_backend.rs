@@ -18,7 +18,7 @@
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, MemoryDB};
+use trie::{TrieDB, TrieError, Trie, MemoryDB, delta_trie_root};
 use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use {Backend};
 
@@ -103,16 +103,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 				&mut write_overlay,
 			);
 
-			let mut trie = TrieDBMut::<H>::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
-			for (key, change) in delta {
-				let result = match change {
-					Some(val) => trie.insert(&key, &val),
-					None => trie.remove(&key), // TODO: archive mode
-				};
-
-				if let Err(e) = result {
-					warn!(target: "trie", "Failed to write to trie: {}", e);
-				}
+			match delta_trie_root::<H, _, _, _>(&mut eph, root, delta) {
+				Ok(ret) => root = ret,
+				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
 		}
 

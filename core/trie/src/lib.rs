@@ -74,7 +74,7 @@ pub fn trie_root<H: Hasher, I, A, B>(input: I) -> H::Out where
 }
 
 /// Determine a trie root given a hash DB and delta values.
-pub fn delta_trie_root<H: Hasher, I, A, B>(_key: &[u8], db: &mut HashDB<H>, mut root: H::Out, delta: I) -> Result<H::Out, Box<TrieError<H::Out>>> where
+pub fn delta_trie_root<H: Hasher, I, A, B>(db: &mut HashDB<H>, mut root: H::Out, delta: I) -> Result<H::Out, Box<TrieError<H::Out>>> where
 	I: IntoIterator<Item = (A, Option<B>)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
