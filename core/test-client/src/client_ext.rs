@@ -47,8 +47,8 @@ impl<B, E> TestClient for Client<B, E, runtime::Block>
 		let import = ImportBlock {
 			origin,
 			header: block.header,
-			external_justification: vec![],
-			post_runtime_digests: vec![],
+			justification: vec![],
+			post_digests: vec![],
 			body: Some(block.extrinsics),
 			finalized: false,
 			auxiliary: Vec::new(),
