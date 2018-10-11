@@ -217,13 +217,13 @@ impl<Block: BlockT> LightStorage<Block> {
 				trace!(target: "db", "Replacing blocks [{}..{}] with CHT#{}", new_cht_start, new_cht_end, new_cht_number);
 
 				while prune_block <= new_cht_end {
-					let id = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?;
-					if let Some(hash) = id {
-						let lookup_key = number_to_lookup_key(prune_block);
-						transaction.delete(columns::HASH_LOOKUP, &lookup_key);
-						transaction.delete(columns::HEADER, hash.as_ref());
+					if let Some(hash) = self.hash(prune_block)? {
+						let lookup_key = block_id_to_lookup_key::<Block>(&*self.db, columns::HASH_LOOKUP, BlockId::Number(prune_block))?
+							.expect("retrieved hash for `prune_block` right above. therefore retrieving lookup key must succeed. q.e.d.");
+						transaction.delete(columns::HASH_LOOKUP, hash.as_ref());
+						transaction.delete(columns::HEADER, &lookup_key);
 					}
-					prune_block += <<Block as BlockT>::Header as HeaderT>::Number::one();
+					prune_block += NumberFor::<Block>::one();
 				}
 			}
 		}
