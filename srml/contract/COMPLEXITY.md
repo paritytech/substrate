@@ -38,11 +38,11 @@ Instantiation of a sandbox module consists of the following steps:
 
 In order to start the process of instantiation, the supervisor should provide the wasm module code being instantiated and the environment definition (a set of functions, memories (and maybe globals and tables in the future) available for import by the guest module) for that module. While the environment definition typically is of the constant size (unless mechanisms like dynamic linking are used), the size of wasm is not.
 
-The allocation and computational complexity of loading wasm module depend on the underlying wasm VM being used. For example, the size and computing time for JIT compilers can be non-linear, because of compilation. However, for wasmi, it should be linear. As per validation and instantiation, in WebAssembly they are designed to be able to be performed in linear time.
+Validation and instantiation in WebAssembly are designed to be able to be performed in linear time. The allocation and computational complexity of loading wasm module depend on the underlying wasm VM being used. For example, for JIT compilers it can be non-linear because of compilation. However, for wasmi, it should be linear. We can try to use other VMs that are able to compile code with memory and time consumption proportional to the size of the code.
 
 Since it is the module what requests memory, amount of allocation depends on the module code itself. If an untrusted code is being instantiated, it's up to the supervisor to limit the amount of memory available to allocate.
 
-**complexity**: Compute complexity is *typically* proportional to the size of wasm code. Memory complexity is *typically* proportional to the size of wasm code and the amount of memory requested by the module.
+**complexity**: Compute complexity is proportional to the size of wasm code. Memory complexity is proportional to the size of wasm code and the amount of memory requested by the module.
 
 ### Preparation to invoke
 
@@ -56,9 +56,9 @@ Invocation of an exported function in the sandboxed module consists of the follo
 
 The actual complexity of invocation depends on the underlying VM. Wasmi will reserve a relatively large chunk of memory for the stack before execution of the code, although it's of constant size.
 
-The size of the arguments and the return value depends on the exact function in question and typically can be considered as constant.
+The size of the arguments and the return value depends on the exact function in question, but can be considered as constant.
 
-**complexity**: Memory and computational complexity *typically* can be considered as a constant.
+**complexity**: Memory and computational complexity can be considered as a constant.
 
 ### Call from the guest to the supervisor
 
@@ -72,9 +72,9 @@ The executor handles each call from the guest. The execution of it consists of t
 
 Because calling into the supervisor requires invoking a wasm VM, the actual complexity of invocation depends on the actual VM used for the runtime/supervisor. Wasmi will reserve a relatively large chunk of memory for the stack before execution of the code, although it's of constant size.
 
-The size of the arguments and the return value depends on the exact function in question and typically can be considered as a constant.
+The size of the arguments and the return value depends on the exact function in question, but can be considered as a constant.
 
-**complexity**: Memory and computational complexity *typically* can be considered as a constant.
+**complexity**: Memory and computational complexity can be considered as a constant.
 
 # `AccountDb`
 
@@ -101,7 +101,7 @@ A lookup in the local cache consists of at least one `Map` lookup, for locating 
 
 While these functions only modify the local `Map`, if changes made by them are committed to the bottommost `AccountDb`, each changed entry in the `Map` will require a DB write. It should be ensured that pricing accounts for this fact.
 
-**complexity**: Each lookup has a logarithmical computing time to the number of inserted entries, which is *typically* small. No additional memory is required.
+**complexity**: Each lookup has a logarithmical computing time to the number of inserted entries. No additional memory is required.
 
 ## commit
 
