@@ -140,6 +140,20 @@ impl OverlayedChanges {
 		}
 	}
 
+	/// Inserts the given key-value pair into the prospective child change set.
+	///
+	/// `None` can be used to delete a value specified by the given key.
+	pub(crate) fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, val: Option<Vec<u8>>) {
+		let extrinsic_index = self.extrinsic_index();
+		let map_entry = self.prospective.children.entry(storage_key).or_default();
+		map_entry.1.insert(key, val);
+
+		if let Some(extrinsic) = extrinsic_index {
+			map_entry.0.get_or_insert_with(Default::default)
+				.insert(extrinsic);
+		}
+	}
+
 	/// Sync the child storage root.
 	pub(crate) fn sync_child_storage_root(&mut self, storage_key: Vec<u8>, root: Option<Vec<u8>>) {
 		let entry = self.prospective.top.entry(storage_key.clone()).or_default();

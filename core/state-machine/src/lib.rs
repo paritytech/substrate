@@ -125,6 +125,9 @@ pub trait Externalities<H: Hasher> {
 	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
+	/// Set or clear a child storage entry. Return whether the operation succeeds.
+	fn place_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Option<Vec<u8>>) -> bool;
+
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 

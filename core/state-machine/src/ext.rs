@@ -214,6 +214,17 @@ where
 		self.overlay.set_storage(key, value);
 	}
 
+	fn place_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Option<Vec<u8>>) -> bool {
+		if !is_child_storage_key(&storage_key) || !is_child_trie_key_valid::<H>(&storage_key) {
+			return false;
+		}
+
+		self.mark_dirty();
+		self.overlay.set_child_storage(storage_key, key, value);
+
+		true
+	}
+
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		if is_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
