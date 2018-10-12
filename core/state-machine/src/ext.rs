@@ -225,7 +225,7 @@ where
 		true
 	}
 
-	fn clear_child_storage(&mut self, storage_key: &[u8]) {
+	fn kill_child_storage(&mut self, storage_key: &[u8]) {
 		if !is_child_storage_key(storage_key) || !is_child_trie_key_valid::<H>(storage_key) {
 			return;
 		}

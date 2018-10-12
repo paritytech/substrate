@@ -104,9 +104,19 @@ pub trait Externalities<H: Hasher> {
 		self.place_storage(key, Some(value));
 	}
 
+	/// Set child storage entry `key` of current contract being called (effective immediately).
+	fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) -> bool {
+		self.place_child_storage(storage_key, key, Some(value))
+	}
+
 	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn clear_storage(&mut self, key: &[u8]) {
 		self.place_storage(key.to_vec(), None);
+	}
+
+	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
+	fn clear_child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> bool {
+		self.place_child_storage(storage_key.to_vec(), key.to_vec(), None)
 	}
 
 	/// Whether a storage entry exists.
@@ -120,7 +130,7 @@ pub trait Externalities<H: Hasher> {
 	}
 
 	/// Clear an entire child storage.
-	fn clear_child_storage(&mut self, storage_key: &[u8]);
+	fn kill_child_storage(&mut self, storage_key: &[u8]);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);

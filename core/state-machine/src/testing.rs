@@ -119,7 +119,7 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		false
 	}
 
-	fn clear_child_storage(&mut self, _storage_key: &[u8]) { }
+	fn kill_child_storage(&mut self, _storage_key: &[u8]) { }
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.changes.clear_prefix(prefix);
