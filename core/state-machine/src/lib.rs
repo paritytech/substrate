@@ -119,6 +119,9 @@ pub trait Externalities<H: Hasher> {
 		self.child_storage(storage_key, key).is_some()
 	}
 
+	/// Clear an entire child storage.
+	fn clear_child_storage(&mut self, storage_key: &[u8]);
+
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
 

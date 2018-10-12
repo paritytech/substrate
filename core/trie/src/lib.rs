@@ -168,6 +168,22 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], db: &mut H
 	Ok(root.as_ref().to_vec())
 }
 
+/// Call `f` for all keys in a child trie.
+pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8])>(_storage_key: &[u8], db: &HashDB<H>, root_slice: &[u8], mut f: F) -> Result<(), Box<TrieError<H::Out>>> {
+	let mut root = H::Out::default();
+	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
+
+	let trie = TrieDB::<H>::new(db, &root)?;
+	let iter = trie.iter()?;
+
+	for x in iter {
+		let (key, _) = x?;
+		f(&key);
+	}
+
+	Ok(())
+}
+
 /// Read a value from the child trie.
 pub fn read_child_trie_value<H: Hasher>(_storage_key: &[u8], db: &HashDB<H>, root_slice: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
 	let mut root = H::Out::default();

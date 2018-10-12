@@ -167,6 +167,32 @@ impl OverlayedChanges {
 		}
 	}
 
+	/// Clear child storage of given storage key.
+	///
+	/// NOTE that this doesn't take place immediately but written into the prospective
+	/// change set, and still can be reverted by [`discard_prospective`].
+	///
+	/// [`discard_prospective`]: #method.discard_prospective
+	pub(crate) fn clear_child_storage(&mut self, storage_key: &[u8]) {
+		let extrinsic_index = self.extrinsic_index();
+		let map_entry = self.prospective.children.entry(storage_key.to_vec()).or_default();
+
+		if let Some(extrinsic) = extrinsic_index {
+			map_entry.0.get_or_insert_with(Default::default)
+				.insert(extrinsic);
+		}
+
+		for (_, entry) in map_entry.1.iter_mut() {
+			*entry = None;
+		}
+
+		if let Some((_, committed_map)) = self.committed.children.get(storage_key) {
+			for (key, _) in committed_map.iter() {
+				map_entry.1.insert(key.clone(), None);
+			}
+		}
+	}
+
 	/// Removes all key-value pairs which keys share the given prefix.
 	///
 	/// NOTE that this doesn't take place immediately but written into the prospective

@@ -118,6 +118,10 @@ impl<S, H> Backend<H> for ProvingBackend<S, H>
 		}.child_storage(storage_key, key)
 	}
 
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+		self.backend.for_keys_in_child_storage(storage_key, f)
+	}
+
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.backend.for_keys_with_prefix(prefix, f)
 	}

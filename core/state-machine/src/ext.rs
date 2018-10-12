@@ -225,6 +225,18 @@ where
 		true
 	}
 
+	fn clear_child_storage(&mut self, storage_key: &[u8]) {
+		if !is_child_storage_key(storage_key) || !is_child_trie_key_valid::<H>(storage_key) {
+			return;
+		}
+
+		self.mark_dirty();
+		self.overlay.clear_child_storage(storage_key);
+		self.backend.for_keys_in_child_storage(storage_key, |key| {
+			self.overlay.set_child_storage(storage_key.to_vec(), key.to_vec(), None);
+		});
+	}
+
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		if is_child_storage_key(prefix) {
 			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
