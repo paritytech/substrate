@@ -70,7 +70,7 @@ extern "C" {
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
-	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u8) -> *mut u8;
+	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_storage_changes_root(block: u64, result: *mut u8) -> u32;
 	fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
 	fn ext_chain_id() -> u64;
@@ -181,7 +181,7 @@ pub fn exists_storage(key: &[u8]) -> bool {
 /// Determine whether a particular key exists in storage.
 pub fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
 	unsafe {
-		ext_exists_storage(
+		ext_exists_child_storage(
 			storage_key.as_ptr(), storage_key.len() as u32,
 			key.as_ptr(), key.len() as u32
 		) != 0
@@ -227,7 +227,7 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 /// the number of bytes that the key in storage was beyond the offset.
 pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
 	unsafe {
-		match ext_get_storage_into(
+		match ext_get_child_storage_into(
 			storage_key.as_ptr(), storage_key.len() as u32,
 			key.as_ptr(), key.len() as u32,
 			value_out.as_mut_ptr(), value_out.len() as u32,
