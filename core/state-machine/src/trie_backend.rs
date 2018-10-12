@@ -121,6 +121,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
+	use trie::{TrieMut, TrieDBMut};
 	use super::*;
 
 	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {

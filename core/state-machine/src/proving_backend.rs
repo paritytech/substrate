@@ -37,7 +37,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: HeapSizeOf,
-	
+
 {
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = MemoryDB::default();
@@ -182,7 +182,7 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked() {
-		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
+		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
