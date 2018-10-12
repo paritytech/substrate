@@ -35,7 +35,7 @@ pub trait Backend<H: Hasher> {
 	type Error: super::Error;
 
 	/// Storage changes to be applied if committing
-	type Transaction;
+	type Transaction: Consolidate;
 
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
@@ -64,6 +64,24 @@ pub trait Backend<H: Hasher> {
 
 	/// Try convert into trie backend.
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>>;
+}
+
+/// Trait that allows consolidate two transactions together.
+pub trait Consolidate {
+	/// Consolidate two transactions into one.
+	fn consolidate(&mut self, other: Self);
+}
+
+impl Consolidate for Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> {
+	fn consolidate(&mut self, mut other: Self) {
+		self.append(&mut other);
+	}
+}
+
+impl<H: Hasher> Consolidate for MemoryDB<H> {
+	fn consolidate(&mut self, other: Self) {
+		MemoryDB::consolidate(self, other)
+	}
 }
 
 /// Error impossible.
