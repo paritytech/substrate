@@ -17,11 +17,12 @@
 //! Conrete externalities implementation.
 
 use std::{error, fmt, cmp::Ord};
-use backend::Backend;
+use backend::{Backend, Consolidate};
 use changes_trie::{Storage as ChangesTrieStorage, compute_changes_trie_root};
 use {Externalities, OverlayedChanges};
 use hash_db::Hasher;
-use substrate_trie::{MemoryDB, TrieDBMut, TrieMut};
+use primitives::storage::well_known_keys::is_child_storage_key;
+use substrate_trie::{MemoryDB, TrieDBMut, TrieMut, default_child_trie_root, is_child_trie_key_valid};
 use heapsize::HeapSizeOf;
 
 const EXT_NOT_ALLOWED_TO_FAIL: &'static str = "Externalities not allowed to fail within runtime";
@@ -122,6 +123,32 @@ where
 	fn mark_dirty(&mut self) {
 		self.storage_transaction = None;
 	}
+
+	/// Fetch child storage root together with its transaction.
+	fn child_storage_root_transaction(&mut self, storage_key: &[u8]) -> (Vec<u8>, B::Transaction) {
+		self.mark_dirty();
+		let storage_key = storage_key.to_vec();
+
+		let (root, transaction) = {
+			let delta = self.overlay.committed.children.get(&storage_key)
+				.into_iter()
+				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
+				.chain(self.overlay.prospective.children.get(&storage_key)
+					   .into_iter()
+					   .flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
+
+			self.backend.child_storage_root(&storage_key, delta)
+		};
+
+		let root_val = if root == default_child_trie_root::<H>(&storage_key) {
+			None
+		} else {
+			Some(root.clone())
+		};
+		self.overlay.sync_child_storage_root(storage_key, root_val);
+
+		(root, transaction)
+	}
 }
 
 #[cfg(test)]
@@ -183,17 +210,38 @@ where
 	}
 
 	fn storage_root(&mut self) -> H::Out {
-		if let Some((_, ref root)) =  self.storage_transaction {
+		if let Some((_, ref root)) = self.storage_transaction {
 			return root.clone();
 		}
 
-		// compute and memoize
-		let delta = self.overlay.committed.iter().map(|(k, v)| (k.clone(), v.value.clone()))
-			.chain(self.overlay.prospective.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+		let mut transaction = B::Transaction::default();
+		let child_storage_keys: Vec<_> = self.overlay.prospective.children.keys().cloned().collect();
 
-		let (root, transaction) = self.backend.storage_root(delta);
+		for key in child_storage_keys {
+			let (_, t) = self.child_storage_root_transaction(&key);
+			transaction.consolidate(t);
+		}
+
+		// compute and memoize
+		let delta = self.overlay.committed.top.iter().map(|(k, v)| (k.clone(), v.value.clone()))
+			.chain(self.overlay.prospective.top.iter().map(|(k, v)| (k.clone(), v.value.clone())));
+
+		let (root, t) = self.backend.storage_root(delta);
+		transaction.consolidate(t);
 		self.storage_transaction = Some((transaction, root));
 		root
+	}
+
+	fn child_storage_root(&mut self, storage_key: &[u8]) -> Option<Vec<u8>> {
+		if !is_child_storage_key(storage_key) || !is_child_trie_key_valid::<H>(storage_key) {
+			return None;
+		}
+
+		if self.storage_transaction.is_some() {
+			return Some(self.storage(storage_key).unwrap_or(default_child_trie_root::<H>(storage_key)));
+		}
+
+		Some(self.child_storage_root_transaction(storage_key).0)
 	}
 
 	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> {

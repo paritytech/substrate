@@ -31,6 +31,9 @@
 //! block }, containing entries for every storage key that has been changed in
 //! the last N*digest_level-1 blocks (except for genesis block), mapping these keys
 //! to the set of lower-level digest blocks.
+//!
+//! Changes trie only contains the top level storage changes. Sub-level changes
+//! are propogated through its storage root on the top level storage.
 
 mod build;
 mod build_iterator;

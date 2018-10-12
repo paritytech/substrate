@@ -122,6 +122,10 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		trie_root::<H, _, _, _>(self.inner.clone())
 	}
 
+	fn child_storage_root(&mut self, _storage_key: &[u8]) -> Option<Vec<u8>> {
+		None
+	}
+
 	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> {
 		compute_changes_trie_root::<_, _, H>(
 			&InMemory::default(),

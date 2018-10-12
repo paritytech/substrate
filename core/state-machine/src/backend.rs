@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 use hash_db::Hasher;
 use trie_backend::TrieBackend;
 use trie_backend_essence::TrieBackendStorage;
-use substrate_trie::{TrieDBMut, TrieMut, MemoryDB, trie_root};
+use substrate_trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root};
 use heapsize::HeapSizeOf;
 
 /// A state backend is used to read state data and can have changes committed
@@ -35,7 +35,7 @@ pub trait Backend<H: Hasher> {
 	type Error: super::Error;
 
 	/// Storage changes to be applied if committing
-	type Transaction: Consolidate;
+	type Transaction: Consolidate + Default;
 
 	/// Type of trie backend storage.
 	type TrieBackendStorage: TrieBackendStorage<H>;
@@ -55,6 +55,13 @@ pub trait Backend<H: Hasher> {
 	/// Calculate the storage root, with given delta over what is already stored in
 	/// the backend, and produce a "transaction" that can be used to commit.
 	fn storage_root<I>(&self, delta: I) -> (H::Out, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord;
+
+	/// Calculate the child storage root, with given delta over what is already stored in
+	/// the backend, and produce a "transaction" that can be used to commit.
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
@@ -206,6 +213,29 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		);
 
 		let full_transaction = transaction.into_iter().map(|(k, v)| (None, k, v)).collect();
+
+		(root, full_transaction)
+	}
+
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord
+	{
+		let storage_key = storage_key.to_vec();
+
+		let existing_pairs = self.inner.get(&Some(storage_key.clone())).into_iter().flat_map(|map| map.iter().map(|(k, v)| (k.clone(), Some(v.clone()))));
+
+		let transaction: Vec<_> = delta.into_iter().collect();
+		let root = child_trie_root::<H, _, _, _>(
+			&storage_key,
+			existing_pairs.chain(transaction.iter().cloned())
+				.collect::<HashMap<_, _>>()
+				.into_iter()
+				.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
+		);
+
+		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(storage_key.clone()), k, v)).collect();
 
 		(root, full_transaction)
 	}

@@ -113,6 +113,14 @@ impl<S, H> Backend<H> for ProvingBackend<S, H>
 		self.backend.storage_root(delta)
 	}
 
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord
+	{
+		self.backend.child_storage_root(storage_key, delta)
+	}
+
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
 		None
 	}

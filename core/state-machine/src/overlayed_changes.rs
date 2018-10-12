@@ -28,9 +28,9 @@ use primitives::storage::well_known_keys::EXTRINSIC_INDEX;
 #[derive(Debug, Default, Clone)]
 pub struct OverlayedChanges {
 	/// Changes that are not yet committed.
-	pub(crate) prospective: HashMap<Vec<u8>, OverlayedValue>,
+	pub(crate) prospective: OverlayedChangeSet,
 	/// Committed changes.
-	pub(crate) committed: HashMap<Vec<u8>, OverlayedValue>,
+	pub(crate) committed: OverlayedChangeSet,
 	/// Changes trie configuration. None by default, but could be installed by the
 	/// runtime if it supports change tries.
 	pub(crate) changes_trie_config: Option<ChangesTrieConfig>,
@@ -45,6 +45,28 @@ pub struct OverlayedValue {
 	/// The set of extinsic indices where the values has been changed.
 	/// Is filled only if runtime ahs announced changes trie support.
 	pub extrinsics: Option<HashSet<u32>>,
+}
+
+/// Prospective or committed overlayed change set.
+#[derive(Debug, Default, Clone)]
+pub struct OverlayedChangeSet {
+	/// Top level storage changes.
+	pub top: HashMap<Vec<u8>, OverlayedValue>,
+	/// Child storage changes.
+	pub children: HashMap<Vec<u8>, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>)>,
+}
+
+impl OverlayedChangeSet {
+	/// Whether the change set is empty.
+	pub fn is_empty(&self) -> bool {
+		self.top.is_empty() && self.children.is_empty()
+	}
+
+	/// Clear the change set.
+	pub fn clear(&mut self) {
+		self.top.clear();
+		self.children.clear();
+	}
 }
 
 impl OverlayedChanges {
@@ -68,8 +90,8 @@ impl OverlayedChanges {
 	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
 	/// value has been set.
 	pub fn storage(&self, key: &[u8]) -> Option<Option<&[u8]>> {
-		self.prospective.get(key)
-			.or_else(|| self.committed.get(key))
+		self.prospective.top.get(key)
+			.or_else(|| self.committed.top.get(key))
 			.map(|x| x.value.as_ref().map(AsRef::as_ref))
 	}
 
@@ -78,12 +100,25 @@ impl OverlayedChanges {
 	/// `None` can be used to delete a value specified by the given key.
 	pub(crate) fn set_storage(&mut self, key: Vec<u8>, val: Option<Vec<u8>>) {
 		let extrinsic_index = self.extrinsic_index();
-		let entry = self.prospective.entry(key).or_default();
+		let entry = self.prospective.top.entry(key).or_default();
 		entry.value = val;
 
 		if let Some(extrinsic) = extrinsic_index {
 			entry.extrinsics.get_or_insert_with(Default::default)
 				.insert(extrinsic);
+		}
+	}
+
+	/// Sync the child storage root.
+	pub(crate) fn sync_child_storage_root(&mut self, storage_key: Vec<u8>, root: Option<Vec<u8>>) {
+		let entry = self.prospective.top.entry(storage_key.clone()).or_default();
+		entry.value = root;
+
+		if let Some((Some(extrinsics), _)) = self.prospective.children.get(&storage_key) {
+			for extrinsic in extrinsics {
+				entry.extrinsics.get_or_insert_with(Default::default)
+					.insert(*extrinsic);
+			}
 		}
 	}
 
@@ -98,7 +133,7 @@ impl OverlayedChanges {
 
 		// Iterate over all prospective and mark all keys that share
 		// the given prefix as removed (None).
-		for (key, entry) in self.prospective.iter_mut() {
+		for (key, entry) in self.prospective.top.iter_mut() {
 			if key.starts_with(prefix) {
 				entry.value = None;
 
@@ -111,9 +146,9 @@ impl OverlayedChanges {
 
 		// Then do the same with keys from commited changes.
 		// NOTE that we are making changes in the prospective change set.
-		for key in self.committed.keys() {
+		for key in self.committed.top.keys() {
 			if key.starts_with(prefix) {
-				let entry = self.prospective.entry(key.clone()).or_default();
+				let entry = self.prospective.top.entry(key.clone()).or_default();
 				entry.value = None;
 
 				if let Some(extrinsic) = extrinsic_index {
@@ -134,12 +169,23 @@ impl OverlayedChanges {
 		if self.committed.is_empty() {
 			::std::mem::swap(&mut self.prospective, &mut self.committed);
 		} else {
-			for (key, val) in self.prospective.drain() {
-				let entry = self.committed.entry(key).or_default();
+			for (key, val) in self.prospective.top.drain() {
+				let entry = self.committed.top.entry(key).or_default();
 				entry.value = val.value;
 
 				if let Some(prospective_extrinsics) = val.extrinsics {
 					entry.extrinsics.get_or_insert_with(Default::default)
+						.extend(prospective_extrinsics);
+				}
+			}
+			for (storage_key, map) in self.prospective.children.drain() {
+				let entry = self.committed.children.entry(storage_key).or_default();
+				for (key, val) in map.1 {
+					entry.1.insert(key, val);
+				}
+
+				if let Some(prospective_extrinsics) = map.0 {
+					entry.0.get_or_insert_with(Default::default)
 						.extend(prospective_extrinsics);
 				}
 			}
@@ -152,7 +198,7 @@ impl OverlayedChanges {
 	/// Will panic if there are any uncommitted prospective changes.
 	pub fn into_committed(self) -> impl Iterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
 		assert!(self.prospective.is_empty());
-		self.committed.into_iter().map(|(k, v)| (k, v.value))
+		self.committed.top.into_iter().map(|(k, v)| (k, v.value))
 	}
 
 	/// Inserts storage entry responsible for current extrinsic index.

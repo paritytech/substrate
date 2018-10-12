@@ -73,10 +73,10 @@ fn prepare_extrinsics_input<B, H>(
 	where
 		B: Backend<H>,
 		H: Hasher,
-	
+
 {
 	let mut extrinsic_map = BTreeMap::<Vec<u8>, BTreeSet<u32>>::new();
-	for (key, val) in changes.prospective.iter().chain(changes.committed.iter()) {
+	for (key, val) in changes.prospective.top.iter().chain(changes.committed.top.iter()) {
 		let extrinsics = match val.extrinsics {
 			Some(ref extrinsics) => extrinsics,
 			None => continue,

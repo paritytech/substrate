@@ -136,13 +136,13 @@ pub fn child_trie_root<H: Hasher, I, A, B>(_key: &[u8], input: I) -> Vec<u8> whe
 }
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_delta_trie_root<H: Hasher, I, A, B>(_key: &[u8], db: &mut HashDB<H>, root: Vec<u8>, delta: I) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
+pub fn child_delta_trie_root<H: Hasher, I, A, B>(_key: &[u8], db: &mut HashDB<H>, root_vec: Vec<u8>, delta: I) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
 	I: IntoIterator<Item = (A, Option<B>)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
-	H::Out: for<'a> From<&'a [u8]>
 {
-	let mut root = H::Out::from(&root); // root is fetched from DB, not writable by runtime, so it's always valid.
+	let mut root = H::Out::default();
+	root.as_mut().copy_from_slice(&root_vec); // root is fetched from DB, not writable by runtime, so it's always valid.
 
 	{
 		let mut trie = TrieDBMut::<H>::from_existing(db, &mut root)?;
@@ -155,7 +155,7 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B>(_key: &[u8], db: &mut HashDB<H>
 		}
 	}
 
-	Ok(root.as_ref().iter().cloned().collect())
+	Ok(root.as_ref().to_vec())
 }
 
 // Utilities (not exported):
