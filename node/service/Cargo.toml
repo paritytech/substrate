@@ -4,27 +4,27 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-parking_lot = "0.4"
 error-chain = "0.12"
+hex-literal = "0.1"
 lazy_static = "1.0"
 log = "0.4"
-slog = "^2"
-tokio = "0.1.7"
-hex-literal = "0.1"
-parity-codec = { version = "2.0" }
+node-consensus = { path = "../consensus" }
+node-executor = { path = "../executor" }
+node-network = { path = "../network" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
-node-executor = { path = "../executor" }
-node-consensus = { path = "../consensus" }
-node-network = { path = "../network" }
-node-transaction-pool = { path = "../transaction-pool" }
+parity-codec = { version = "2.0" }
+parking_lot = "0.4"
+slog = "^2"
 sr-io = { path = "../../core/sr-io" }
 sr-primitives = { path = "../../core/sr-primitives" }
-substrate-primitives = { path = "../../core/primitives" }
-substrate-network = { path = "../../core/network" }
 substrate-client = { path = "../../core/client" }
+substrate-network = { path = "../../core/network" }
+substrate-primitives = { path = "../../core/primitives" }
 substrate-service = { path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
+substrate-transaction-pool = { path = "../../core/transaction-pool" }
+tokio = "0.1.7"
 
 [dev-dependencies]
 substrate-service-test = { path = "../../core/service/test" }

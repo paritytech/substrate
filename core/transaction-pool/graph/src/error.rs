@@ -14,10 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+//! Transaction pool errors.
+
 use sr_primitives::transaction_validity::TransactionPriority as Priority;
 
 error_chain! {
 	errors {
+		/// Transaction is not verifiable yet, but might be in the future.
+		UnknownTransactionValidity {
+			description("Runtime cannot determine validity of the transaction yet."),
+			display("Unkown Transaction Validity"),
+		}
+		/// Transaction is invalid
+		InvalidTransaction {
+			description("Runtime check for the transaction failed."),
+			display("Invalid Transaction"),
+		}
+		/// The transaction is temporarily baned
+		TemporarilyBanned {
+			description("Transaction is temporarily banned from importing to the pool."),
+			display("Temporarily Banned"),
+		}
 		/// The transaction is already in the pool.
 		AlreadyImported {
 			description("Transaction is already in the pool."),
@@ -34,4 +51,18 @@ error_chain! {
 			display("Cycle Detected"),
 		}
 	}
+}
+
+/// Transaction pool error conversion.
+pub trait IntoPoolError: ::std::error::Error + Send + Sized {
+	/// Try to extract original `Error`
+	///
+	/// This implementation is optional and used only to
+	/// provide more descriptive error messages for end users
+	/// of RPC API.
+	fn into_pool_error(self) -> ::std::result::Result<Error, Self> { Err(self) }
+}
+
+impl IntoPoolError for Error {
+	fn into_pool_error(self) -> ::std::result::Result<Error, Self> { Ok(self) }
 }

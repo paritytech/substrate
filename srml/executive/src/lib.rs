@@ -224,11 +224,11 @@ impl<
 
 	/// Check a given transaction for validity. This doesn't execute any
 	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
-	/// 
+	///
 	/// Changes made to the storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.encode().len();
-		
+
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
@@ -259,8 +259,13 @@ impl<
 				deps.push((sender, expected_index).encode());
 				expected_index = expected_index + One::one();
 			}
-			
-			TransactionValidity::Valid(encoded_len as TransactionPriority, deps, vec![(sender, *index).encode()], TransactionLongevity::max_value())
+
+			TransactionValidity::Valid(
+				/*priority: */encoded_len as TransactionPriority,
+				/*requires: */deps,
+				/*provides: */vec![(sender, *index).encode()],
+				/*longevity: */TransactionLongevity::max_value(),
+			)
 		} else {
 			return TransactionValidity::Invalid
 		}

@@ -28,16 +28,26 @@ use sr_primitives::transaction_validity::{
 
 use error;
 use future::WaitingTransaction;
-use pool::{BlockNumber, Transaction};
+use base_pool::{BlockNumber, Transaction};
 
-#[derive(Debug, Clone)]
-pub struct TransactionRef<Hash> {
-	pub transaction: Arc<Transaction<Hash>>,
+#[derive(Debug)]
+pub struct TransactionRef<Hash, Ex> {
+	pub transaction: Arc<Transaction<Hash, Ex>>,
 	pub valid_till: BlockNumber,
 	pub insertion_id: u64,
 }
 
-impl<Hash> Ord for TransactionRef<Hash> {
+impl<Hash, Ex> Clone for TransactionRef<Hash, Ex> {
+	fn clone(&self) -> Self {
+		TransactionRef {
+			transaction: self.transaction.clone(),
+			valid_till: self.valid_till,
+			insertion_id: self.insertion_id,
+		}
+	}
+}
+
+impl<Hash, Ex> Ord for TransactionRef<Hash, Ex> {
 	fn cmp(&self, other: &Self) -> cmp::Ordering {
 		self.transaction.priority.cmp(&other.transaction.priority)
 			.then(other.valid_till.cmp(&self.valid_till))
@@ -45,23 +55,23 @@ impl<Hash> Ord for TransactionRef<Hash> {
 	}
 }
 
-impl<Hash> PartialOrd for TransactionRef<Hash> {
+impl<Hash, Ex> PartialOrd for TransactionRef<Hash, Ex> {
 	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
-impl<Hash> PartialEq for TransactionRef<Hash> {
+impl<Hash, Ex> PartialEq for TransactionRef<Hash, Ex> {
 	fn eq(&self, other: &Self) -> bool {
 		self.cmp(other) == cmp::Ordering::Equal
 	}
 }
-impl<Hash> Eq for TransactionRef<Hash> {}
+impl<Hash, Ex> Eq for TransactionRef<Hash, Ex> {}
 
 #[derive(Debug)]
-struct ReadyTx<Hash> {
+struct ReadyTx<Hash, Ex> {
 	/// A reference to a transaction
-	pub transaction: TransactionRef<Hash>,
+	pub transaction: TransactionRef<Hash, Ex>,
 	/// A list of transactions that get unlocked by this one
 	pub unlocks: Vec<Hash>,
 	/// How many required tags are provided inherently
@@ -79,19 +89,19 @@ qed
 "#;
 
 #[derive(Debug)]
-pub struct ReadyTransactions<Hash: hash::Hash + Eq> {
+pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// Insertion id
 	insertion_id: u64,
 	/// tags that are provided by Ready transactions
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
-	ready: HashMap<Hash, ReadyTx<Hash>>,
+	ready: HashMap<Hash, ReadyTx<Hash, Ex>>,
 	// ^^ TODO [ToDr] Consider wrapping this into `Arc<RwLock<>>` and allow multiple concurrent iterators
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
-	best: BTreeSet<TransactionRef<Hash>>,
+	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
 
-impl<Hash: hash::Hash + Eq> Default for ReadyTransactions<Hash> {
+impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
 	fn default() -> Self {
 		ReadyTransactions {
 			insertion_id: Default::default(),
@@ -102,7 +112,7 @@ impl<Hash: hash::Hash + Eq> Default for ReadyTransactions<Hash> {
 	}
 }
 
-impl<Hash: hash::Hash + Member> ReadyTransactions<Hash> {
+impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 	/// Borrows a map of tags that are provided by transactions in this queue.
 	pub fn provided_tags(&self) -> &HashMap<Tag, Hash> {
 		&self.provided_tags
@@ -119,7 +129,7 @@ impl<Hash: hash::Hash + Member> ReadyTransactions<Hash> {
 	/// - transactions that are valid for a shorter time go first
 	/// 4. Lastly we sort by the time in the queue
 	/// - transactions that are longer in the queue go first
-	pub fn get<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction<Hash>>> + 'a {
+	pub fn get<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> + 'a {
 		BestIterator {
 			all: &self.ready,
 			best: self.best.clone(),
@@ -134,8 +144,8 @@ impl<Hash: hash::Hash + Member> ReadyTransactions<Hash> {
 	pub fn import(
 		&mut self,
 		block_number: BlockNumber,
-		tx: WaitingTransaction<Hash>,
-	) -> error::Result<Vec<Arc<Transaction<Hash>>>> {
+		tx: WaitingTransaction<Hash, Ex>,
+	) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
 		assert!(tx.is_ready(), "Only ready transactions can be imported.");
 		assert!(!self.ready.contains_key(&tx.transaction.hash), "Transaction is already imported.");
 
@@ -194,7 +204,7 @@ impl<Hash: hash::Hash + Member> ReadyTransactions<Hash> {
 	/// NOTE removing a transaction will also cause a removal of all transactions that depend on that one
 	/// (i.e. the entire subgraph that this transaction is a start of will be removed).
 	/// All removed transactions are returned.
-	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash>>> {
+	pub fn remove_invalid(&mut self, hashes: &[Hash]) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = vec![];
 		let mut to_remove = hashes.iter().cloned().collect::<Vec<_>>();
 
@@ -236,7 +246,7 @@ impl<Hash: hash::Hash + Member> ReadyTransactions<Hash> {
 	/// All transactions that lead to a transaction, which provides this tag
 	/// are going to be removed from the queue, but no other transactions are touched -
 	/// i.e. all other subgraphs starting from given tag are still considered valid & ready.
-	pub fn prune_tags(&mut self, tag: Tag) -> Vec<Arc<Transaction<Hash>>> {
+	pub fn prune_tags(&mut self, tag: Tag) -> Vec<Arc<Transaction<Hash, Ex>>> {
 		let mut removed = vec![];
 		let mut to_remove = vec![tag];
 
@@ -308,7 +318,7 @@ impl<Hash: hash::Hash + Member> ReadyTransactions<Hash> {
 	/// We remove/replace old transactions in case they have lower priority.
 	///
 	/// In case replacement is succesful returns a list of removed transactions.
-	fn replace_previous(&mut self, tx: &Transaction<Hash>) -> error::Result<Vec<Arc<Transaction<Hash>>>> {
+	fn replace_previous(&mut self, tx: &Transaction<Hash, Ex>) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
 		let mut to_remove = {
 			// check if we are replacing a transaction
 			let replace_hashes = tx.provides
@@ -364,23 +374,22 @@ impl<Hash: hash::Hash + Member> ReadyTransactions<Hash> {
 	}
 
 	/// Returns number of transactions in this queue.
-	#[cfg(test)]
 	pub fn len(&self) -> usize {
 		self.ready.len()
 	}
 
 }
 
-pub struct BestIterator<'a, Hash: 'a> {
-	all: &'a HashMap<Hash, ReadyTx<Hash>>,
-	awaiting: HashMap<Hash, (usize, TransactionRef<Hash>)>,
-	best: BTreeSet<TransactionRef<Hash>>,
+pub struct BestIterator<'a, Hash: 'a, Ex: 'a> {
+	all: &'a HashMap<Hash, ReadyTx<Hash, Ex>>,
+	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,
+	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
 
-impl<'a, Hash: 'a + hash::Hash + Member> BestIterator<'a, Hash> {
+impl<'a, Hash: 'a + hash::Hash + Member, Ex: 'a> BestIterator<'a, Hash, Ex> {
 	/// Depending on number of satisfied requirements insert given ref
 	/// either to awaiting set or to best set.
-	fn best_or_awaiting(&mut self, satisfied: usize, tx_ref: TransactionRef<Hash>) {
+	fn best_or_awaiting(&mut self, satisfied: usize, tx_ref: TransactionRef<Hash, Ex>) {
 		if satisfied == tx_ref.transaction.requires.len() {
 			// If we have satisfied all deps insert to best
 			self.best.insert(tx_ref);
@@ -392,8 +401,8 @@ impl<'a, Hash: 'a + hash::Hash + Member> BestIterator<'a, Hash> {
 	}
 }
 
-impl<'a, Hash: 'a + hash::Hash + Member> Iterator for BestIterator<'a, Hash> {
-	type Item = Arc<Transaction<Hash>>;
+impl<'a, Hash: 'a + hash::Hash + Member, Ex: 'a> Iterator for BestIterator<'a, Hash, Ex> {
+	type Item = Arc<Transaction<Hash, Ex>>;
 
 	fn next(&mut self) -> Option<Self::Item> {
 		let best = self.best.iter().next_back()?.clone();
@@ -432,9 +441,9 @@ fn remove_item<T: PartialEq>(vec: &mut Vec<T>, item: &T) {
 mod tests {
 	use super::*;
 
-	fn tx(id: u8) -> Transaction<u64> {
+	fn tx(id: u8) -> Transaction<u64, Vec<u8>> {
 		Transaction {
-			ex: vec![id],
+			data: vec![id],
 			hash: id as u64,
 			priority: 1,
 			longevity: 2,
@@ -494,7 +503,7 @@ mod tests {
 		tx4.provides = vec![];
 		let block_number = 1;
 		let tx5 = Transaction {
-			ex: vec![5],
+			data: vec![5],
 			hash: 5,
 			priority: 1,
 			longevity: u64::max_value(),	// use the max_value() here for testing.
@@ -517,7 +526,7 @@ mod tests {
 		// then
 		assert_eq!(ready.best.len(), 1);
 
-		let mut it = ready.get().map(|tx| tx.ex[0]);
+		let mut it = ready.get().map(|tx| tx.data[0]);
 
 		assert_eq!(it.next(), Some(1));
 		assert_eq!(it.next(), Some(2));

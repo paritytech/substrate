@@ -16,25 +16,25 @@
 
 //! This service uses BFT consensus provided by the substrate.
 
-extern crate parking_lot;
-extern crate node_transaction_pool as transaction_pool;
 extern crate node_runtime;
 extern crate node_primitives;
 
-extern crate substrate_bft as bft;
 extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
 extern crate srml_system;
+extern crate substrate_bft as bft;
 extern crate substrate_client as client;
+extern crate substrate_primitives as primitives;
+extern crate substrate_transaction_pool as transaction_pool;
 
 extern crate exit_future;
-extern crate tokio;
+extern crate futures;
+extern crate parking_lot;
 extern crate rhododendron;
+extern crate tokio;
 
 #[macro_use]
 extern crate error_chain;
-extern crate futures;
 
 #[macro_use]
 extern crate log;
@@ -51,10 +51,10 @@ use codec::{Decode, Encode};
 use node_primitives::{AccountId, Timestamp, SessionKey, InherentData};
 use node_runtime::Runtime;
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As, BlockNumberToHash};
 use runtime_primitives::generic::{BlockId, Era};
 use srml_system::Trait as SystemT;
-use transaction_pool::{TransactionPool, Client as TPClient};
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Delay;
 
@@ -95,7 +95,7 @@ pub trait AuthoringApi:
 	/// The block used for this API type.
 	type Block: BlockT;
 	/// The error used by this API type.
-	type Error;
+	type Error: std::error::Error;
 
 	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
 	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
@@ -166,13 +166,14 @@ pub trait Network {
 }
 
 /// Proposer factory.
-pub struct ProposerFactory<N, C> where
-	C: AuthoringApi + TPClient,
+pub struct ProposerFactory<N, C, A> where
+	C: AuthoringApi,
+	A: txpool::ChainApi,
 {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The transaction pool.
-	pub transaction_pool: Arc<TransactionPool<C>>,
+	pub transaction_pool: Arc<TransactionPool<A>>,
 	/// The backing network handle.
 	pub network: N,
 	/// handle to remote task executor
@@ -183,14 +184,15 @@ pub struct ProposerFactory<N, C> where
 	pub force_delay: Timestamp,
 }
 
-impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C> where
+impl<N, C, A> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C, A> where
 	N: Network<Block=<C as AuthoringApi>::Block>,
-	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
+	C: AuthoringApi + BlockNumberToHash,
+	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
 	Error: From<<C as AuthoringApi>::Error>
 {
-	type Proposer = Proposer<C>;
+	type Proposer = Proposer<C, A>;
 	type Input = N::Input;
 	type Output = N::Output;
 	type Error = Error;
@@ -240,7 +242,7 @@ impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C
 }
 
 /// The proposer logic.
-pub struct Proposer<C: AuthoringApi + TPClient> {
+pub struct Proposer<C: AuthoringApi, A: txpool::ChainApi> {
 	client: Arc<C>,
 	start: Instant,
 	local_key: Arc<ed25519::Pair>,
@@ -248,13 +250,13 @@ pub struct Proposer<C: AuthoringApi + TPClient> {
 	parent_id: BlockId<<C as AuthoringApi>::Block>,
 	parent_number: <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Number,
 	random_seed: <<C as AuthoringApi>::Block as BlockT>::Hash,
-	transaction_pool: Arc<TransactionPool<C>>,
+	transaction_pool: Arc<TransactionPool<A>>,
 	offline: SharedOfflineTracker,
 	validators: Vec<AccountId>,
 	minimum_timestamp: u64,
 }
 
-impl<C: AuthoringApi + TPClient> Proposer<C> {
+impl<C: AuthoringApi, A: txpool::ChainApi> Proposer<C, A> {
 	fn primary_index(&self, round_number: usize, len: usize) -> usize {
 		use primitives::uint::U256;
 
@@ -265,8 +267,9 @@ impl<C: AuthoringApi + TPClient> Proposer<C> {
 	}
 }
 
-impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
-	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
+impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
+	C: AuthoringApi + BlockNumberToHash,
+	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
 		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
 	error::Error: From<<C as AuthoringApi>::Error>
@@ -307,27 +310,26 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 			inherent_data,
 			|block_builder| {
 				let mut unqueue_invalid = Vec::new();
-				let result = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending_iterator| {
+				self.transaction_pool.ready(|pending_iterator| {
 					let mut pending_size = 0;
 					for pending in pending_iterator {
-						if pending_size + pending.verified.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
+						// TODO [ToDr] Probably get rid of it, and validate in runtime.
+						let encoded_size = pending.data.raw.encode().len();
+						if pending_size + encoded_size >= MAX_TRANSACTIONS_SIZE { break }
 
-						match block_builder.push_extrinsic(pending.original.clone()) {
+						match block_builder.push_extrinsic(pending.data.raw.clone()) {
 							Ok(()) => {
-								pending_size += pending.verified.encoded_size();
+								pending_size += encoded_size;
 							}
 							Err(e) => {
 								trace!(target: "transaction-pool", "Invalid transaction: {}", e);
-								unqueue_invalid.push(pending.verified.hash().clone());
+								unqueue_invalid.push(pending.hash.clone());
 							}
 						}
 					}
 				});
-				if let Err(e) = result {
-					warn!("Unable to get the pending set: {:?}", e);
-				}
 
-				self.transaction_pool.remove(&unqueue_invalid, false);
+				self.transaction_pool.remove_invalid(&unqueue_invalid);
 			})?;
 
 		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
@@ -440,24 +442,22 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
 
-		let local_id = self.local_key.public().0.into();
 		let mut next_index = {
-			let cur_index = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending| pending
-				.filter(|tx| tx.verified.sender == local_id)
-				.last()
-				.map(|tx| Ok(tx.verified.index()))
-				.unwrap_or_else(|| self.client.account_nonce(&self.parent_id, &local_id))
-				.map_err(Error::from)
-			);
+			let local_id = self.local_key.public().0;
+			// let cur_index = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending| pending
+			// 	.filter(|tx| tx.verified.sender == local_id)
+			// 	.last()
+			// 	.map(|tx| Ok(tx.verified.index()))
+			// 	.unwrap_or_else(|| self.client.account_nonce(&self.parent_id, local_id))
+			// 	.map_err(Error::from)
+			// );
+			// TODO [ToDr] Use pool data
+			let cur_index: Result<u64> = self.client.account_nonce(&self.parent_id, &local_id).map_err(Error::from);
 
 			match cur_index {
-				Ok(Ok(cur_index)) => cur_index + 1,
-				Ok(Err(e)) => {
-					warn!(target: "consensus", "Error computing next transaction index: {}", e);
-					return;
-				}
+				Ok(cur_index) => cur_index + 1,
 				Err(e) => {
-					warn!(target: "consensus", "Error computing next transaction index: {}", e);
+					warn!(target: "consensus", "Error computing next transaction index: {:?}", e);
 					return;
 				}
 			}
@@ -488,8 +488,9 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 			};
 			let uxt: <<C as AuthoringApi>::Block as BlockT>::Extrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
 			let hash = BlockId::<<C as AuthoringApi>::Block>::hash(self.parent_hash);
-			self.transaction_pool.submit_one(&hash, uxt)
-				.expect("locally signed extrinsic is valid; qed");
+			if let Err(e) = self.transaction_pool.submit_one(&hash, uxt) {
+				warn!("Error importing misbehavior report: {:?}", e);
+			}
 		}
 	}
 

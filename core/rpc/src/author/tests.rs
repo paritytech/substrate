@@ -16,126 +16,66 @@
 
 use super::*;
 
-use std::{sync::Arc, result::Result};
+use std::sync::Arc;
 use codec::Encode;
-use transaction_pool::{VerifiedTransaction, scoring, Transaction, ChainApi, Error as PoolError,
-	Readiness, ExtrinsicFor, VerifiedFor};
-use test_client::runtime::{Block, Extrinsic, Transfer};
+use transaction_pool::{
+	txpool::Pool,
+	ChainApi,
+};
+use primitives::H256;
+use test_client::keyring::Keyring;
+use test_client::runtime::{Extrinsic, Transfer};
 use test_client;
 use tokio::runtime;
-use runtime_primitives::{traits, generic::BlockId};
 
-#[derive(Clone, Debug)]
-pub struct Verified
-{
-	sender: u64,
-	hash: u64,
-}
-
-impl VerifiedTransaction for Verified {
-	type Hash = u64;
-	type Sender = u64;
-
-	fn hash(&self) -> &Self::Hash { &self.hash }
-	fn sender(&self) -> &Self::Sender { &self.sender }
-	fn mem_usage(&self) -> usize { 256 }
-}
-
-struct TestApi;
-
-impl ChainApi for TestApi {
-	type Block = Block;
-	type Hash = u64;
-	type Sender = u64;
-	type Error = PoolError;
-	type VEx = Verified;
-	type Score = u64;
-	type Event = ();
-	type Ready = ();
-
-	fn latest_hash(&self) -> <Block as traits::Block>::Hash {
-		1.into()
-	}
-
-	fn verify_transaction(&self, _at: &BlockId<Block>, uxt: &ExtrinsicFor<Self>) -> Result<Self::VEx, Self::Error> {
-		Ok(Verified {
-			sender: uxt.transfer.from[31] as u64,
-			hash: uxt.transfer.nonce,
-		})
-	}
-
-	fn is_ready(&self, _at: &BlockId<Block>, _c: &mut Self::Ready, _xt: &VerifiedFor<Self>) -> Readiness {
-		Readiness::Ready
-	}
-
-	fn ready(&self) -> Self::Ready { }
-
-	fn compare(old: &VerifiedFor<Self>, other: &VerifiedFor<Self>) -> ::std::cmp::Ordering {
-		old.verified.hash().cmp(&other.verified.hash())
-	}
-
-	fn choose(_old: &VerifiedFor<Self>, _new: &VerifiedFor<Self>) -> scoring::Choice {
-		scoring::Choice::ReplaceOld
-	}
-
-	fn update_scores(xts: &[Transaction<VerifiedFor<Self>>], scores: &mut [Self::Score], _change: scoring::Change<()>) {
-		for i in 0..xts.len() {
-			scores[i] = xts[i].verified.sender
-		}
-	}
-
-	fn should_replace(_old: &VerifiedFor<Self>, _new: &VerifiedFor<Self>) -> scoring::Choice {
-		scoring::Choice::ReplaceOld
-	}
-}
-
-type DummyTxPool = Pool<TestApi>;
-
-fn uxt(sender: u64, hash: u64) -> Extrinsic {
-	Extrinsic {
-		signature: Default::default(),
-		transfer: Transfer {
-			amount: Default::default(),
-			nonce: hash,
-			from: From::from(sender),
-			to: Default::default(),
-		}
-	}
+fn uxt(sender: Keyring, nonce: u64) -> Extrinsic {
+	let tx = Transfer {
+		amount: Default::default(),
+		nonce,
+		from: sender.to_raw_public().into(),
+		to: Default::default(),
+	};
+	let signature = Keyring::from_raw_public(tx.from.0).unwrap().sign(&tx.encode()).into();
+	Extrinsic { transfer: tx, signature }
 }
 
 #[test]
 fn submit_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
 	let p = Author {
-		client: Arc::new(test_client::new()),
-		pool: Arc::new(DummyTxPool::new(Default::default(), TestApi)),
+		client: client.clone(),
+		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client))),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
+	let h: H256 = hex!("e10ad66bce51ef3e2a1167934ce3740d2d8c703810f9b314e89f2e783f75e826").into();
 
 	assert_matches!(
-		AuthorApi::submit_extrinsic(&p, uxt(5, 1).encode().into()),
-		Ok(1)
+		AuthorApi::submit_extrinsic(&p, uxt(Keyring::Alice, 1).encode().into()),
+		Ok(h2) if h == h2
 	);
 	assert!(
-		AuthorApi::submit_extrinsic(&p, uxt(5, 1).encode().into()).is_err()
+		AuthorApi::submit_extrinsic(&p, uxt(Keyring::Alice, 1).encode().into()).is_err()
 	);
 }
 
 #[test]
 fn submit_rich_transaction_should_not_cause_error() {
 	let runtime = runtime::Runtime::new().unwrap();
+	let client = Arc::new(test_client::new());
 	let p = Author {
-		client: Arc::new(test_client::new()),
-		pool: Arc::new(DummyTxPool::new(Default::default(), TestApi)),
+		client: client.clone(),
+		pool: Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone()))),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
+	let h: H256 = hex!("fccc48291473c53746cd267cf848449edd7711ee6511fba96919d5f9f4859e4f").into();
 
 	assert_matches!(
-		AuthorApi::submit_rich_extrinsic(&p, uxt(5, 0)),
-		Ok(0)
+		AuthorApi::submit_rich_extrinsic(&p, uxt(Keyring::Alice, 0)),
+		Ok(h2) if h == h2
 	);
 	assert!(
-		AuthorApi::submit_rich_extrinsic(&p, uxt(5, 0)).is_err()
+		AuthorApi::submit_rich_extrinsic(&p, uxt(Keyring::Alice, 0)).is_err()
 	);
 }
 
@@ -143,40 +83,52 @@ fn submit_rich_transaction_should_not_cause_error() {
 fn should_watch_extrinsic() {
 	//given
 	let mut runtime = runtime::Runtime::new().unwrap();
-	let pool = Arc::new(DummyTxPool::new(Default::default(), TestApi));
+	let client = Arc::new(test_client::new());
+	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
 	let p = Author {
-		client: Arc::new(test_client::new()),
+		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
 	let (subscriber, id_rx, data) = ::jsonrpc_macros::pubsub::Subscriber::new_test("test");
 
 	// when
-	p.watch_extrinsic(Default::default(), subscriber, uxt(5, 5).encode().into());
+	p.watch_extrinsic(Default::default(), subscriber, uxt(Keyring::Alice, 0).encode().into());
 
 	// then
 	assert_eq!(runtime.block_on(id_rx), Ok(Ok(1.into())));
 	// check notifications
-	AuthorApi::submit_rich_extrinsic(&p, uxt(5, 1)).unwrap();
+	let replacement = {
+		let tx = Transfer {
+			amount: 5,
+			nonce: 0,
+			from: Keyring::Alice.to_raw_public().into(),
+			to: Default::default(),
+		};
+		let signature = Keyring::from_raw_public(tx.from.0).unwrap().sign(&tx.encode()).into();
+		Extrinsic { transfer: tx, signature }
+	};
+	AuthorApi::submit_rich_extrinsic(&p, replacement).unwrap();
 	assert_eq!(
 		runtime.block_on(data.into_future()).unwrap().0,
-		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"usurped":1},"subscription":1}}"#.into())
+		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"usurped":"0xed454dcee51431679c2559403187a56567fded1fc50b6ae3aada87c1d412df5c"},"subscription":1}}"#.into())
 	);
 }
 
 #[test]
 fn should_return_pending_extrinsics() {
 	let runtime = runtime::Runtime::new().unwrap();
-	let pool = Arc::new(DummyTxPool::new(Default::default(), TestApi));
+	let client = Arc::new(test_client::new());
+	let pool = Arc::new(Pool::new(Default::default(), ChainApi::new(client.clone())));
 	let p = Author {
-		client: Arc::new(test_client::new()),
+		client,
 		pool: pool.clone(),
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
-	let ex = uxt(5, 1);
+	let ex = uxt(Keyring::Alice, 0);
 	AuthorApi::submit_rich_extrinsic(&p, ex.clone()).unwrap();
  	assert_matches!(
 		p.pending_extrinsics(),
-		Ok(ref expected) if expected.get(&5) == Some(&vec![ex])
+		Ok(ref expected) if expected == &vec![ex]
 	);
 }

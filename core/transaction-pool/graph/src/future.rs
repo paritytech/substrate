@@ -23,23 +23,23 @@ use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
 };
 
-use pool::Transaction;
+use base_pool::Transaction;
 
 /// Transaction with partially satisfied dependencies.
 #[derive(Debug)]
-pub struct WaitingTransaction<Hash> {
+pub struct WaitingTransaction<Hash, Ex> {
 	/// Transaction details.
-	pub transaction: Transaction<Hash>,
+	pub transaction: Transaction<Hash, Ex>,
 	/// Tags that are required and have not been satisfied yet by other transactions in the pool.
 	pub missing_tags: HashSet<Tag>,
 }
 
-impl<Hash> WaitingTransaction<Hash> {
+impl<Hash, Ex> WaitingTransaction<Hash, Ex> {
 	/// Creates a new `WaitingTransaction`.
 	///
 	/// Computes the set of missing tags based on the requirements and tags that
 	/// are provided by all transactions in the ready queue.
-	pub fn new(transaction: Transaction<Hash>, provided: &HashMap<Tag, Hash>) -> Self {
+	pub fn new(transaction: Transaction<Hash, Ex>, provided: &HashMap<Tag, Hash>) -> Self {
 		let missing_tags = transaction.requires
 			.iter()
 			.filter(|tag| !provided.contains_key(&**tag))
@@ -68,14 +68,14 @@ impl<Hash> WaitingTransaction<Hash> {
 /// Contains transactions that are still awaiting for some other transactions that
 /// could provide a tag that they require.
 #[derive(Debug)]
-pub struct FutureTransactions<Hash: hash::Hash + Eq> {
+pub struct FutureTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// tags that are not yet provided by any transaction and we await for them
 	wanted_tags: HashMap<Tag, HashSet<Hash>>,
 	/// Transactions waiting for a particular other transaction
-	waiting: HashMap<Hash, WaitingTransaction<Hash>>,
+	waiting: HashMap<Hash, WaitingTransaction<Hash, Ex>>,
 }
 
-impl<Hash: hash::Hash + Eq> Default for FutureTransactions<Hash> {
+impl<Hash: hash::Hash + Eq, Ex> Default for FutureTransactions<Hash, Ex> {
 	fn default() -> Self {
 		FutureTransactions {
 			wanted_tags: Default::default(),
@@ -91,14 +91,14 @@ every hash from `wanted_tags` is always present in `waiting`;
 qed
 #";
 
-impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
+impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 	/// Import transaction to Future queue.
 	///
 	/// Only transactions that don't have all their tags satisfied should occupy
 	/// the Future queue.
 	/// As soon as required tags are provided by some other transactions that are ready
 	/// we should remove the transactions from here and move them to the Ready queue.
-	pub fn import(&mut self, tx: WaitingTransaction<Hash>) {
+	pub fn import(&mut self, tx: WaitingTransaction<Hash, Ex>) {
 		assert!(!tx.is_ready(), "Transaction is ready.");
 		assert!(!self.waiting.contains_key(&tx.transaction.hash), "Transaction is already imported.");
 
@@ -121,7 +121,7 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 	///
 	/// Returns (and removes) transactions that became ready after their last tag got
 	/// satisfied and now we can remove them from Future and move to Ready queue.
-	pub fn satisfy_tags<T: AsRef<Tag>>(&mut self, tags: impl IntoIterator<Item=T>) -> Vec<WaitingTransaction<Hash>> {
+	pub fn satisfy_tags<T: AsRef<Tag>>(&mut self, tags: impl IntoIterator<Item=T>) -> Vec<WaitingTransaction<Hash, Ex>> {
 		let mut became_ready = vec![];
 
 		for tag in tags {
@@ -148,7 +148,7 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 	/// Removes transactions for given list of hashes.
 	///
 	/// Returns a list of actually removed transactions.
-	pub fn remove(&mut self, hashes: &[Hash]) -> Vec<Transaction<Hash>> {
+	pub fn remove(&mut self, hashes: &[Hash]) -> Vec<Transaction<Hash, Ex>> {
 		let mut removed = vec![];
 		for hash in hashes {
 			if let Some(waiting_tx) = self.waiting.remove(hash) {
@@ -170,7 +170,6 @@ impl<Hash: hash::Hash + Eq + Clone> FutureTransactions<Hash> {
 	}
 
 	/// Returns number of transactions in the Future queue.
-	#[cfg(test)]
 	pub fn len(&self) -> usize {
 		self.waiting.len()
 	}

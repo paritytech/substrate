@@ -25,6 +25,10 @@ use futures::{
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Status<H, H2> {
+	/// Extrinsic is part of the future queue.
+	Future,
+	/// Extrinsic is part of the ready queue.
+	Ready,
 	/// Extrinsic has been finalised in block with given hash.
 	Finalised(H2),
 	/// Some state change (perhaps another extrinsic was included) rendered this extrinsic invalid.
@@ -64,7 +68,7 @@ impl<H, H2> Default for Sender<H, H2> {
 	fn default() -> Self {
 		Sender {
 			receivers: Default::default(),
-			finalised: Default::default(),
+			finalised: false,
 		}
 	}
 }

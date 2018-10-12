@@ -26,9 +26,9 @@ use bft::{self, BftService};
 use client::{BlockchainEvents, ChainHead, BlockBody};
 use ed25519;
 use futures::prelude::*;
-use transaction_pool::{TransactionPool, Client as TPClient};
+use transaction_pool::txpool::{Pool as TransactionPool, ChainApi as PoolChainApi};
 use primitives;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, BlockNumberToHash};
 
 use tokio::executor::current_thread::TaskExecutor as LocalThreadHandle;
 use tokio::runtime::TaskExecutor as ThreadPoolHandle;
@@ -72,18 +72,19 @@ pub struct Service {
 
 impl Service {
 	/// Create and start a new instance.
-	pub fn new<A, C, N>(
+	pub fn new<A, P, C, N>(
 		client: Arc<C>,
 		api: Arc<A>,
 		network: N,
-		transaction_pool: Arc<TransactionPool<A>>,
+		transaction_pool: Arc<TransactionPool<P>>,
 		thread_pool: ThreadPoolHandle,
 		key: ed25519::Pair,
 		block_delay: u64,
 	) -> Service
 		where
-			A: AuthoringApi + TPClient<Block = <A as AuthoringApi>::Block> + 'static,
 			error::Error: From<<A as AuthoringApi>::Error>,
+			A: AuthoringApi + BlockNumberToHash + 'static,
+			P: PoolChainApi<Block = <A as AuthoringApi>::Block> + 'static,
 			C: BlockchainEvents<<A as AuthoringApi>::Block>
 				+ ChainHead<<A as AuthoringApi>::Block>
 				+ BlockBody<<A as AuthoringApi>::Block>,

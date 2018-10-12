@@ -55,7 +55,7 @@ use codec::{Encode, Decode};
 
 use runtime_api::runtime::*;
 use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT};
-use runtime_primitives::{ApplyResult, Ed25519Signature};
+use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
 use primitives::AuthorityId;
@@ -159,6 +159,7 @@ mod test_api {
 		}
 	}
 }
+
 use test_api::runtime::TestAPI;
 
 struct Runtime;
@@ -175,6 +176,12 @@ impl_apis! {
 
 		fn execute_block(block: Block) {
 			system::execute_block(block)
+		}
+	}
+
+	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
+		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+			system::validate_transaction(utx)
 		}
 	}
 

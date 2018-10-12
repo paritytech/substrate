@@ -4,16 +4,16 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-serde = "1.0"
-serde_derive = "1.0"
 error-chain = "0.12"
 futures = "0.1"
 log = "0.4"
+parity-codec = "2.0"
 parking_lot = "0.4"
-transaction-pool = "1.13.3"
-sr-primitives = { path = "../../core/sr-primitives" }
+sr-primitives = { path = "../sr-primitives" }
+substrate-client = { path = "../client" }
+substrate-primitives = { path = "../primitives" }
+substrate-transaction-graph = { path = "./graph" }
 
 [dev-dependencies]
 substrate-test-client = { path = "../../core/test-client" }
 substrate-keyring = { path = "../../core/keyring" }
-parity-codec = "2.0"
