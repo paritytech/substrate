@@ -103,6 +103,10 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		self.inner.get(key).map(|x| x.to_vec())
 	}
 
+	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> Option<Vec<u8>> {
+		None
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		self.changes.set_storage(key.clone(), maybe_value.clone());
 		match maybe_value {

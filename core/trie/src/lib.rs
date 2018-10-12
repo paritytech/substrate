@@ -45,7 +45,7 @@ pub use trie_stream::TrieStream;
 /// The Substrate format implementation of `NodeCodec`.
 pub use node_codec::NodeCodec;
 /// Various re-exports from the `trie-db` crate.
-pub use trie_db::{Trie, TrieMut, DBValue, Recorder};
+pub use trie_db::{Trie, TrieMut, DBValue, Recorder, Query};
 
 /// As in `trie_db`, but less generic, error type for the crate.
 pub type TrieError<H> = trie_db::TrieError<H, Error>;
@@ -93,6 +93,16 @@ pub fn delta_trie_root<H: Hasher, I, A, B>(db: &mut HashDB<H>, mut root: H::Out,
 	Ok(root)
 }
 
+/// Read a value from the trie.
+pub fn read_trie_value<H: Hasher>(db: &HashDB<H>, root: &H::Out, key: &[u8]) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
+	Ok(TrieDB::<H>::new(db, root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+}
+
+/// Read a value from the trie with given Query.
+pub fn read_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>>(db: &HashDB<H>, root: &H::Out, key: &[u8], query: Q) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
+	Ok(TrieDB::<H>::new(db, root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
+}
+
 /// Determine a trie root node's data given its ordered contents, closed form.
 pub fn unhashed_trie<H: Hasher, I, A, B>(input: I) -> Vec<u8> where
 	I: IntoIterator<Item = (A, B)>,
@@ -116,18 +126,18 @@ where
 }
 
 /// Determine whether a child trie key is valid. `child_trie_root` and `child_delta_trie_root` can panic if invalid value is provided to them.
-pub fn is_child_trie_key_valid<H: Hasher>(_key: &[u8]) -> bool {
+pub fn is_child_trie_key_valid<H: Hasher>(_storage_key: &[u8]) -> bool {
 	true
 }
 
 /// Determine the default child trie root.
-pub fn default_child_trie_root<H: Hasher>(_key: &[u8]) -> Vec<u8> {
+pub fn default_child_trie_root<H: Hasher>(_storage_key: &[u8]) -> Vec<u8> {
 	H::Out::default().as_ref().iter().cloned().collect()
 }
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher, but a generic
 /// implementation may ignore this type parameter and use other hashers.
-pub fn child_trie_root<H: Hasher, I, A, B>(_key: &[u8], input: I) -> Vec<u8> where
+pub fn child_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], input: I) -> Vec<u8> where
 	I: IntoIterator<Item = (A, B)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
@@ -136,7 +146,7 @@ pub fn child_trie_root<H: Hasher, I, A, B>(_key: &[u8], input: I) -> Vec<u8> whe
 }
 
 /// Determine a child trie root given a hash DB and delta values. H is the default hasher, but a generic implementation may ignore this type parameter and use other hashers.
-pub fn child_delta_trie_root<H: Hasher, I, A, B>(_key: &[u8], db: &mut HashDB<H>, root_vec: Vec<u8>, delta: I) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
+pub fn child_delta_trie_root<H: Hasher, I, A, B>(_storage_key: &[u8], db: &mut HashDB<H>, root_vec: Vec<u8>, delta: I) -> Result<Vec<u8>, Box<TrieError<H::Out>>> where
 	I: IntoIterator<Item = (A, Option<B>)>,
 	A: AsRef<[u8]> + Ord,
 	B: AsRef<[u8]>,
@@ -156,6 +166,22 @@ pub fn child_delta_trie_root<H: Hasher, I, A, B>(_key: &[u8], db: &mut HashDB<H>
 	}
 
 	Ok(root.as_ref().to_vec())
+}
+
+/// Read a value from the child trie.
+pub fn read_child_trie_value<H: Hasher>(_storage_key: &[u8], db: &HashDB<H>, root_slice: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
+	let mut root = H::Out::default();
+	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
+
+	Ok(TrieDB::<H>::new(db, &root)?.get(key).map(|x| x.map(|val| val.to_vec()))?)
+}
+
+/// Read a value from the child trie with given query.
+pub fn read_child_trie_value_with<H: Hasher, Q: Query<H, Item=DBValue>>(_storage_key: &[u8], db: &HashDB<H>, root_slice: &[u8], key: &[u8], query: Q) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
+	let mut root = H::Out::default();
+	root.as_mut().copy_from_slice(root_slice); // root is fetched from DB, not writable by runtime, so it's always valid.
+
+	Ok(TrieDB::<H>::new(db, &root)?.get_with(key, query).map(|x| x.map(|val| val.to_vec()))?)
 }
 
 // Utilities (not exported):

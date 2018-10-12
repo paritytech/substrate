@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
-use trie::{TrieDB, Trie, Recorder, MemoryDB};
+use trie::{Recorder, MemoryDB, default_child_trie_root, read_trie_value_with, read_child_trie_value_with};
 use trie_backend::TrieBackend;
 use trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use {Error, ExecutionError, Backend};
@@ -48,10 +48,21 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		TrieDB::<H>::new(&eph, self.backend.root()).map_err(map_e)?
-			.get_with(key, &mut *self.proof_recorder)
-			.map(|x| x.map(|val| val.to_vec()))
-			.map_err(map_e)
+		read_trie_value_with(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
+	}
+
+	pub fn child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		let root = self.storage(storage_key)?.unwrap_or(default_child_trie_root::<H>(storage_key));
+
+		let mut read_overlay = MemoryDB::default();
+		let eph = Ephemeral::new(
+			self.backend.backend_storage(),
+			&mut read_overlay,
+		);
+
+		let map_e = |e| format!("Trie lookup error: {}", e);
+
+		read_child_trie_value_with(storage_key, &eph, &root, key, &mut *self.proof_recorder).map_err(map_e)
 	}
 }
 
@@ -97,6 +108,14 @@ impl<S, H> Backend<H> for ProvingBackend<S, H>
 			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
 				.expect("only fails when already borrowed; storage() is non-reentrant; qed"),
 		}.storage(key)
+	}
+
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		ProvingBackendEssence {
+			backend: self.backend.essence(),
+			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
+				.expect("only fails when already borrowed; child_storage() is non-reentrant; qed"),
+		}.child_storage(storage_key, key)
 	}
 
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {

@@ -22,7 +22,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 use hash_db::{self, Hasher};
 use heapsize::HeapSizeOf;
-use trie::{TrieDB, Trie, MemoryDB, DBValue, TrieError};
+use trie::{TrieDB, Trie, MemoryDB, DBValue, TrieError, default_child_trie_root, read_trie_value, read_child_trie_value};
 use changes_trie::Storage as ChangesTrieStorage;
 
 /// Patricia trie-based storage trait.
@@ -66,8 +66,22 @@ impl<S: TrieBackendStorage<H>, H: Hasher> TrieBackendEssence<S, H> where H::Out:
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		TrieDB::<H>::new(&eph, &self.root).map_err(map_e)?
-			.get(key).map(|x| x.map(|val| val.to_vec())).map_err(map_e)
+		read_trie_value(&eph, &self.root, key).map_err(map_e)
+	}
+
+	/// Get the value of child storage at given key.
+	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		let root = self.storage(storage_key)?.unwrap_or(default_child_trie_root::<H>(storage_key));
+
+		let mut read_overlay = MemoryDB::default();
+		let eph = Ephemeral {
+			storage: &self.storage,
+			overlay: &mut read_overlay,
+		};
+
+		let map_e = |e| format!("Trie lookup error: {}", e);
+
+		read_child_trie_value(storage_key, &eph, &root, key).map_err(map_e)
 	}
 
 	/// Execute given closure for all keys starting with prefix.

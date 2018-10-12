@@ -96,6 +96,9 @@ pub trait Externalities<H: Hasher> {
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
+	/// Read child storage of current contract being called.
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 		self.place_storage(key, Some(value));
@@ -106,9 +109,14 @@ pub trait Externalities<H: Hasher> {
 		self.place_storage(key.to_vec(), None);
 	}
 
-	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
+	/// Whether a storage entry exists.
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		self.storage(key).is_some()
+	}
+
+	/// Whether a child storage entry exists.
+	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> bool {
+		self.child_storage(storage_key, key).is_some()
 	}
 
 	/// Clear storage entries which keys are start with the given prefix.
@@ -481,6 +489,7 @@ where
 mod tests {
 	use std::collections::HashMap;
 	use codec::Encode;
+	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
@@ -604,12 +613,12 @@ mod tests {
 		let backend = InMemory::<Blake2Hasher>::from(initial).try_into_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
-				b"aba".to_vec() => Some(b"1312".to_vec()).into(),
-				b"bab".to_vec() => Some(b"228".to_vec()).into()
+				b"aba".to_vec() => OverlayedValue::from(Some(b"1312".to_vec())),
+				b"bab".to_vec() => OverlayedValue::from(Some(b"228".to_vec()))
 			],
 			prospective: map![
-				b"abd".to_vec() => Some(b"69".to_vec()).into(),
-				b"bbd".to_vec() => Some(b"42".to_vec()).into()
+				b"abd".to_vec() => OverlayedValue::from(Some(b"69".to_vec())),
+				b"bbd".to_vec() => OverlayedValue::from(Some(b"42".to_vec()))
 			],
 			..Default::default()
 		};

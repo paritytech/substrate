@@ -201,7 +201,7 @@ impl<Block, S, F, H> StateBackend<H> for OnDemandState<Block, S, F>
 		S: BlockchainStorage<Block>,
 		F: Fetcher<Block>,
 		H: Hasher,
-	
+
 {
 	type Error = ClientError;
 	type Transaction = ();
@@ -232,8 +232,17 @@ impl<Block, S, F, H> StateBackend<H> for OnDemandState<Block, S, F>
 	}
 
 	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
 		(H::Out::default(), ())
+	}
+
+	fn child_storage_root<I>(&self, _key: &[u8], _delta: I) -> (Vec<u8>, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		(H::Out::default().as_ref().to_vec(), ())
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

@@ -274,7 +274,7 @@ mod test {
 		let (backend, storage, mut changes) = prepare_for_build();
 
 		// 110: missing from backend, set to None in overlay
-		changes.prospective.insert(vec![110], OverlayedValue {
+		changes.prospective.top.insert(vec![110], OverlayedValue {
 			value: None,
 			extrinsics: Some(vec![1].into_iter().collect())
 		});

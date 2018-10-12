@@ -16,6 +16,7 @@
 
 //! The overlayed changes to state.
 
+#[cfg(test)] use std::iter::FromIterator;
 use std::collections::{HashMap, HashSet};
 use codec::Decode;
 use changes_trie::{NO_EXTRINSIC_INDEX, Configuration as ChangesTrieConfig};
@@ -49,11 +50,22 @@ pub struct OverlayedValue {
 
 /// Prospective or committed overlayed change set.
 #[derive(Debug, Default, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct OverlayedChangeSet {
 	/// Top level storage changes.
 	pub top: HashMap<Vec<u8>, OverlayedValue>,
 	/// Child storage changes.
 	pub children: HashMap<Vec<u8>, (Option<HashSet<u32>>, HashMap<Vec<u8>, Option<Vec<u8>>>)>,
+}
+
+#[cfg(test)]
+impl FromIterator<(Vec<u8>, OverlayedValue)> for OverlayedChangeSet {
+	fn from_iter<T: IntoIterator<Item = (Vec<u8>, OverlayedValue)>>(iter: T) -> Self {
+		Self {
+			top: iter.into_iter().collect(),
+			children: Default::default(),
+		}
+	}
 }
 
 impl OverlayedChangeSet {
@@ -93,6 +105,25 @@ impl OverlayedChanges {
 		self.prospective.top.get(key)
 			.or_else(|| self.committed.top.get(key))
 			.map(|x| x.value.as_ref().map(AsRef::as_ref))
+	}
+
+	/// Returns a double-Option: None if the key is unknown (i.e. and the query should be refered
+	/// to the backend); Some(None) if the key has been deleted. Some(Some(...)) for a key whose
+	/// value has been set.
+	pub fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Option<&[u8]>> {
+		if let Some(map) = self.prospective.children.get(storage_key) {
+			if let Some(val) = map.1.get(key) {
+				return Some(val.as_ref().map(AsRef::as_ref));
+			}
+		}
+
+		if let Some(map) = self.committed.children.get(storage_key) {
+			if let Some(val) = map.1.get(key) {
+				return Some(val.as_ref().map(AsRef::as_ref));
+			}
+		}
+
+		None
 	}
 
 	/// Inserts the given key-value pair into the prospective change set.
@@ -205,7 +236,7 @@ impl OverlayedChanges {
 	#[cfg(test)]
 	pub(crate) fn set_extrinsic_index(&mut self, extrinsic_index: u32) {
 		use codec::Encode;
-		self.prospective.insert(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
+		self.prospective.top.insert(EXTRINSIC_INDEX.to_vec(), OverlayedValue {
 			value: Some(extrinsic_index.encode()),
 			extrinsics: None,
 		});
@@ -330,7 +361,7 @@ mod tests {
 			digest_interval: 4, digest_levels: 1,
 		}), true);
 		assert_eq!(
-			strip_extrinsic_index(&overlay.prospective),
+			strip_extrinsic_index(&overlay.prospective.top),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![2]), extrinsics: Some(vec![0].into_iter().collect()) }),
 			].into_iter().collect(),
@@ -366,7 +397,7 @@ mod tests {
 		overlay.set_extrinsic_index(2);
 		overlay.set_storage(vec![1], Some(vec![6]));
 
-		assert_eq!(strip_extrinsic_index(&overlay.prospective),
+		assert_eq!(strip_extrinsic_index(&overlay.prospective.top),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![6]), extrinsics: Some(vec![0, 2].into_iter().collect()) }),
 				(vec![3], OverlayedValue { value: Some(vec![4]), extrinsics: Some(vec![1].into_iter().collect()) }),
@@ -381,14 +412,14 @@ mod tests {
 		overlay.set_extrinsic_index(4);
 		overlay.set_storage(vec![1], Some(vec![8]));
 
-		assert_eq!(strip_extrinsic_index(&overlay.committed),
+		assert_eq!(strip_extrinsic_index(&overlay.committed.top),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![6]), extrinsics: Some(vec![0, 2].into_iter().collect()) }),
 				(vec![3], OverlayedValue { value: Some(vec![4]), extrinsics: Some(vec![1].into_iter().collect()) }),
 				(vec![100], OverlayedValue { value: Some(vec![101]), extrinsics: Some(vec![NO_EXTRINSIC_INDEX].into_iter().collect()) }),
 			].into_iter().collect());
 
-		assert_eq!(strip_extrinsic_index(&overlay.prospective),
+		assert_eq!(strip_extrinsic_index(&overlay.prospective.top),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![8]), extrinsics: Some(vec![4].into_iter().collect()) }),
 				(vec![3], OverlayedValue { value: Some(vec![7]), extrinsics: Some(vec![3].into_iter().collect()) }),
@@ -396,7 +427,7 @@ mod tests {
 
 		overlay.commit_prospective();
 
-		assert_eq!(strip_extrinsic_index(&overlay.committed),
+		assert_eq!(strip_extrinsic_index(&overlay.committed.top),
 			vec![
 				(vec![1], OverlayedValue { value: Some(vec![8]), extrinsics: Some(vec![0, 2, 4].into_iter().collect()) }),
 				(vec![3], OverlayedValue { value: Some(vec![7]), extrinsics: Some(vec![1, 3].into_iter().collect()) }),

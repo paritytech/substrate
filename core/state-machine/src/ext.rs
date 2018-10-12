@@ -164,8 +164,8 @@ where
 
 		self.backend.pairs().iter()
 			.map(|&(ref k, ref v)| (k.to_vec(), Some(v.to_vec())))
-			.chain(self.overlay.committed.clone().into_iter().map(|(k, v)| (k, v.value)))
-			.chain(self.overlay.prospective.clone().into_iter().map(|(k, v)| (k, v.value)))
+			.chain(self.overlay.committed.top.clone().into_iter().map(|(k, v)| (k, v.value)))
+			.chain(self.overlay.prospective.top.clone().into_iter().map(|(k, v)| (k, v.value)))
 			.collect::<HashMap<_, _>>()
 			.into_iter()
 			.filter_map(|(k, maybe_val)| maybe_val.map(|val| (k, val)))
@@ -185,6 +185,11 @@ where
 			self.backend.storage(key).expect(EXT_NOT_ALLOWED_TO_FAIL))
 	}
 
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+		self.overlay.child_storage(storage_key, key).map(|x| x.map(|x| x.to_vec())).unwrap_or_else(||
+			self.backend.child_storage(storage_key, key).expect(EXT_NOT_ALLOWED_TO_FAIL))
+	}
+
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		match self.overlay.storage(key) {
 			Some(x) => x.is_some(),
@@ -192,12 +197,29 @@ where
 		}
 	}
 
+	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> bool {
+		match self.overlay.child_storage(storage_key, key) {
+			Some(x) => x.is_some(),
+			_ => self.backend.exists_child_storage(storage_key, key).expect(EXT_NOT_ALLOWED_TO_FAIL),
+		}
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>) {
+		if is_child_storage_key(&key) {
+			warn!(target: "trie", "Refuse to directly set child storage key");
+			return;
+		}
+
 		self.mark_dirty();
 		self.overlay.set_storage(key, value);
 	}
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
+		if is_child_storage_key(prefix) {
+			warn!(target: "trie", "Refuse to directly clear prefix that is part of child storage key");
+			return;
+		}
+
 		self.mark_dirty();
 		self.overlay.clear_prefix(prefix);
 		self.backend.for_keys_with_prefix(prefix, |key| {
@@ -335,7 +357,7 @@ mod tests {
 	#[test]
 	fn storage_changes_root_is_some_when_extrinsic_changes_are_empty() {
 		let mut overlay = prepare_overlay_with_changes();
-		overlay.prospective.get_mut(&vec![1]).unwrap().value = None;
+		overlay.prospective.top.get_mut(&vec![1]).unwrap().value = None;
 		let storage = TestChangesTrieStorage::new();
 		let backend = TestBackend::default();
 		let mut ext = TestExt::new(&mut overlay, &backend, Some(&storage));
