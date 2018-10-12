@@ -132,7 +132,11 @@ pub fn is_child_trie_key_valid<H: Hasher>(_storage_key: &[u8]) -> bool {
 
 /// Determine the default child trie root.
 pub fn default_child_trie_root<H: Hasher>(_storage_key: &[u8]) -> Vec<u8> {
-	H::Out::default().as_ref().iter().cloned().collect()
+	let mut db = MemoryDB::default();
+	let mut root = H::Out::default();
+	let mut empty = TrieDBMut::<H>::new(&mut db, &mut root);
+	empty.commit();
+	empty.root().as_ref().to_vec()
 }
 
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher, but a generic

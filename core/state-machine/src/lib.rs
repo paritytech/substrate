@@ -661,6 +661,19 @@ mod tests {
 	}
 
 	#[test]
+	fn set_child_storage_works() {
+		let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
+		let changes_trie_storage = InMemoryChangesTrieStorage::new();
+		let mut overlay = OverlayedChanges::default();
+		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
+
+		assert!(ext.set_child_storage(b":child_storage:testchild".to_vec(), b"abc".to_vec(), b"def".to_vec()));
+		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), Some(b"def".to_vec()));
+		ext.kill_child_storage(b":child_storage:testchild");
+		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), None);
+	}
+
+	#[test]
 	fn prove_read_and_proof_check_works() {
 		// fetch read proof from 'remote' full node
 		let remote_backend = trie_backend::tests::test_trie();
