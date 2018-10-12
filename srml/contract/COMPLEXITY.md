@@ -1,6 +1,6 @@
-This analysis is on the computing and memory complexity of certain procedures. It accounts for rough estimate of operations performed in general and especially focusing on DB reads and writes. It also accounts for the memory consumption in it's peak.
+This analysis is on the computing and memory complexity of specific procedures. It accounts for a rough estimate of operations performed in general and especially focusing on DB reads and writes. It also accounts for the memory consumption at its peak.
 
-The main purpose is to come up with a decent pricing for functions that can be invoked by user (via extrinsics) or by untrusted code that prevents DoS attacks.
+The primary purpose is to come up with decent pricing for functions that can be invoked by the user (via extrinsics) or by untrusted code that prevents DoS attacks.
 
 # Sandboxing
 
@@ -26,23 +26,23 @@ Copies data from the guest's memory to the supervisor's memory.
 
 Instantiation of a sandbox module consists of the following steps:
 
-1. Loading wasm module in the in-memory representation,
+1. Loading the wasm module in the in-memory representation,
 2. Performing validation of wasm code,
 3. Setting up the environment which will be used to instantiate a module,
 4. Run instantiation process, which includes (but not limited to):
-	1. Allocation of memory requested by the instance,
-	2. Copying static data from the module to newly allocated memory,
-	3. Executing `start` function.
+    1. Allocation of memory requested by the instance,
+    2. Copying static data from the module to newly allocated memory,
+    3. Executing `start` function.
 
 **Note** that `start` function can be viewed as a normal function and can do anything that normal function can do, including allocation of more memory or calling the environment. The complexity of running `start` function should be considered separately.
 
 In order to start the process of instantiation, the supervisor should provide the wasm module code being instantiated and the environment definition (a set of functions, memories (and maybe globals and tables in the future) available for import by the guest module) for that module. While the environment definition typically is of the constant size (unless mechanisms like dynamic linking are used), the size of wasm is not.
 
-The allocation and computational complexity of loading wasm module depends on the underlying wasm VM being used. For example, the size and computing time for JIT compilers can be non-linear, because of compilation. However, for wasmi it should be linear. As per validation and instantiation, in WebAssembly they are designed to be able to be performed in linear time.
+The allocation and computational complexity of loading wasm module depend on the underlying wasm VM being used. For example, the size and computing time for JIT compilers can be non-linear, because of compilation. However, for wasmi, it should be linear. As per validation and instantiation, in WebAssembly they are designed to be able to be performed in linear time.
 
 Since it is the module what requests memory, amount of allocation depends on the module code itself. If an untrusted code is being instantiated, it's up to the supervisor to limit the amount of memory available to allocate.
 
-**complexity**: Compute complexity is *typically* proportional to the size of wasm code. Memory complexity is *typically* proportional to the size of wasm code and the amount of memory requested by the module itself.
+**complexity**: Compute complexity is *typically* proportional to the size of wasm code. Memory complexity is *typically* proportional to the size of wasm code and the amount of memory requested by the module.
 
 ### Preparation to invoke
 
@@ -62,11 +62,11 @@ The size of the arguments and the return value depends on the exact function in 
 
 ### Call from the guest to the supervisor
 
-Each call from the guest is handled by the executor and consists of the following steps:
+The executor handles each call from the guest. The execution of it consists of the following steps:
 
 1. Marshalling, copying and unmarshalling the arguments when passing them between the guest and executor,
 2. Calling into the supervisor,
-3. Marshalling, copying and unmarshalling the result when passing it between the executor and guest.
+3. Marshaling, copying and unmarshalling the result when passing it between the executor and guest.
 
 **Note** that the complexity of running the supervisor handler should be considered separately.
 
@@ -85,19 +85,19 @@ Today `AccountDb` is implemented as a cascade of overlays with the direct storag
 
 ## get_storage, get_code, get_balance
 
-These functions check the local cache for a requested value and if it's there the value is returned. Otherwise, these functions will ask an underlying `AccountDb` about the value. This means that the number of lookups is proportional to the depth of the overlay cascade. If the value is not found before reaching the bottommost `AccountDb`, then a DB read will be performed (in case `get_balance` the function `free_balance` will be invoked).
+These functions check the local cache for a requested value and, if it is there, the value is returned. Otherwise, these functions will ask an underlying `AccountDb`  for the value. This means that the number of lookups is proportional to the depth of the overlay cascade. If the value can't be found before reaching the bottommost `AccountDb`, then a DB read will be performed (in case `get_balance` the function `free_balance` will be invoked).
 
-A lookup in the local cache consists of at least one `Map` lookup, for locating the specificic account. For `get_storage` there is a second lookup: because account's storage is implemented as a nested map, another lookup is required for fetching a storage value by a key.
+A lookup in the local cache consists of at least one `Map` lookup, for locating the specific account. For `get_storage` there is a second lookup: because account's storage is implemented as a nested map, another lookup is required for fetching a storage value by a key.
 
-These functions returns an owned value as the result, so memory usage depends on the value being returned.
+These functions return an owned value as its result, so memory usage depends on the value being returned.
 
-**complexity**: The memory complexity is proportional to the size of the value. The computational complexity is proportional to the depth of the overlay cascade and the size of the value, the cost is dominated by the DB read though.
+**complexity**: The memory complexity is proportional to the size of the value. The computational complexity is proportional to the depth of the overlay cascade and the size of the value; the cost is dominated by the DB read though.
 
 ## set_storage, set_code, set_balance
 
 These functions only modify the local `Map`.
 
-A lookup in the local cache consists of at least one `Map` lookup, for locating the specificic account. For `get_storage` there is a second lookup: because account's storage is implemented as a nested map, another lookup is required for fetching a storage value by a key.
+A lookup in the local cache consists of at least one `Map` lookup, for locating the specific account. For `get_storage` there is a second lookup: because account's storage is implemented as a nested map, another lookup is required for fetching a storage value by a key.
 
 While these functions only modify the local `Map`, if changes made by them are committed to the bottommost `AccountDb`, each changed entry in the `Map` will require a DB write. It should be ensured that pricing accounts for this fact.
 
@@ -105,11 +105,11 @@ While these functions only modify the local `Map`, if changes made by them are c
 
 ## commit
 
-In this function all cached values will be inserted into the underlying `AccountDb` or into the storage.
+In this function, all cached values will be inserted into the underlying `AccountDb` or into the storage.
 
-We are doing `N` inserts into `Map` (`O(log M)` complexity) or into the storage, where `N` is the size of the committed `Map` and `M` is the size of the map of the underyling overlay. Consider adjusting the price of modifying the `AccountDb` to account for this (since pricing for the count of entries in `commit` will make the price of commit way less predictable). No additional memory is required.
+We are doing `N` inserts into `Map` (`O(log M)` complexity) or into the storage, where `N` is the size of the committed `Map` and `M` is the size of the map of the underlying overlay. Consider adjusting the price of modifying the `AccountDb` to account for this (since pricing for the count of entries in `commit` will make the price of commit way less predictable). No additional memory is required.
 
-Note that in case of storage modification we need construct a key in the underlying storage. In order to do that we need:
+Note that in case of storage modification we need to construct a key in the underlying storage. In order to do that we need:
 
 - perform `twox_128` hashing over a concatenation of some prefix literal and the `AccountId` of the storage owner.
 - then perform `blake2_256` hashing of the storage key.
@@ -121,7 +121,7 @@ Note that in case of storage modification we need construct a key in the underly
 
 Consists of dropping (in the Rust sense) of the `AccountDb`.
 
-**complexity**: TODO: What about recursive dropping of all values?
+**complexity**: TODO: What about the recursive dropping of all values?
 
 # Executive
 
@@ -137,48 +137,48 @@ This function performs the following steps:
 
 **Note** that the complexity of executing `ensure_account_liquid` hook should be considered separately.
 
-In the course of the execution this function can perform up to 4 DB reads: 2x `get_balance`, fee and `existential_deposit`. The last two can can be pre-loaded pushing the cost of loading to a higher level and making it a one time. It can also induce up to 2 DB writes via `set_balance` if flushed to the storage.
+In the course of the execution this function can perform up to 4 DB reads: 2x `get_balance`, fee and `existential_deposit`. The last two can be pre-loaded pushing the cost of loading to a higher level and making it a one time. It can also induce up to 2 DB writes via `set_balance` if flushed to the storage.
 
-Assuming marshalled size of a balance value is of constant size we can neglect it's effect on the performance.
+Assuming marshaled size of a balance value is of the constant size we can neglect its effect on the performance.
 
 **complexity**: up to 4 DB reads and up to 2 DB writes. For the current `AccountDb` implementation computing complexity also depends on the depth of the `AccountDb` cascade. Memorywise it can be assumed to be constant.
 
 ## Call
 
-This function receives input data for the contract execution. The executon consists of the following steps:
+This function receives input data for the contract execution. The execution consists of the following steps:
 
 1. Querying `MaxDepth` and `call_base_fee`. (These hit DB unless pre-loaded)
 2. Loading code from the DB.
 3. `transfer`-ing funds between the caller and the destination account.
-4. Execution the code of the destination account.
-5. Commiting overlayed changed to the underyling `AccountDb`.
+4. Executing the code of the destination account.
+5. Committing overlayed changed to the underlying `AccountDb`.
 
 **Note** that the complexity of executing the contract code should be considered separately.
 
 The execution of this function will involve 2 DB reads for querying `MaxDepth` and `MaxDepth` constants. These values can be pre-loaded pushing the cost of loading to a higher level and making it a one time.
 
-Loading code most probably will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless is removed by a suicide).
+Loading code most probably will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it).
 
 Also, `transfer` can make up to 4 DB reads and up to 2 DB writes (if flushed to the storage).
 
 Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the code. Thus, the pricing of storage modification should account for that.
 
-**complexity**: Up to 7 DB reads. DB read of the code is of dynamic size. There can be also up to 2 DB writes (if flushed to the storage).
+**complexity**: Up to 7 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage).
 
 ## Create
 
-This function takes code of the constructor and input data. Creation of a contract consists of the following steps:
+This function takes the code of the constructor and input data. Creation of a contract consists of the following steps:
 
 1. Querying `MaxDepth` and `create_base_fee`. (These hit DB unless pre-loaded)
 2. Calling `DetermineContractAddress` hook to determine an address for the contract,
 3. `transfer`-ing funds between self and the newly created contract.
-4. Execution of the constructor code. This will yield the final code of the code.
-5. Storing the code for the newly created contract in he overlay.
-6. Commiting overlayed changed to the underyling `AccountDb`.
+4. Executing the constructor code. This will yield the final code of the code.
+5. Storing the code for the newly created contract in the overlay.
+6. Committing overlayed changed to the underlying `AccountDb`.
 
 **Note** that the complexity of executing the constructor code should be considered separately.
 
-**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most probably it will use some kind of hashing over code of the constructor and input data. The default `SimpleAddressDeterminator` does exactly that.
+**Note** that the complexity of `DetermineContractAddress` hook should be considered separately as well. Most probably it will use some kind of hashing over the code of the constructor and input data. The default `SimpleAddressDeterminator` does precisely that.
 
 **Note** that the constructor returns code in the owned form and it's obtained via return facilities, which should have take fee for the return value.
 
@@ -214,12 +214,12 @@ This function receives a `key` and `value` as arguments. It consists of the foll
 This function receives a `key` as an argument. It consists of the following steps:
 
 1. Reading the sandbox memory for `key` (see sandboxing memory get).
-2. Reading the storage with the given key (see `get_storage`). Receives back the owned result buffer.
+2. Reading the storage with the given key (see `get_storage`). It receives back the owned result buffer.
 3. Replacing the scratch buffer.
 
-Key is of a constant size therefore the sandbox memory load can be considered to be of constant complexity.
+Key is of a constant size. Therefore, the sandbox memory load can be considered to be of constant complexity.
 
-However, a read from the contract storage can hit the DB and the size of this read is dynamical.
+However, a read from the contract's storage can hit the DB, and the size of this read is dynamical.
 
 **complexity**: The memory and computing complexity is proportional to the size of the fetched value.
 
@@ -227,10 +227,10 @@ However, a read from the contract storage can hit the DB and the size of this re
 
 This function receives the following arguments:
 
-- `callee` buffer of a marshalled `AccountId`
-- `gas` limit which is plain u64
-- `value` buffer of a marshalled `Balance`
-- `input_data`. Arbitrary sized byte vector.
+- `callee` buffer of a marshaled `AccountId`,
+- `gas` limit which is plain u64,
+- `value` buffer of a marshaled `Balance`,
+- `input_data`. An arbitrarily sized byte vector.
 
 It consists of the following steps:
 
@@ -239,7 +239,7 @@ It consists of the following steps:
 3. Loading `input_data` buffer from the sandbox memory.
 4. Invoking `call` executive function.
 
-Loading of `callee` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshalled representations are essentially of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
+Loading of `callee` and `value` buffers should be charged. This is because the sizes of buffers are specified by the calling code, even though marshaled representations are, essentially, of constant size. This can be fixed by assigning an upper bound for sizes of `AccountId` and `Balance`.
 
 Loading `input_data` should be charged in any case.
 
@@ -249,10 +249,10 @@ Loading `input_data` should be charged in any case.
 
 This function receives the following arguments:
 
-- `init_code`, buffer which contains the code of the constructor.
+- `init_code`, a buffer which contains the code of the constructor.
 - `gas` limit which is plain u64
-- `value` buffer of a marshalled `Balance`
-- `input_data`. Arbitrary sized byte vector.
+- `value` buffer of a marshaled `Balance`
+- `input_data`. an arbitrarily sized byte vector.
 
 It consists of the following steps:
 
@@ -261,11 +261,11 @@ It consists of the following steps:
 3. Loading `input_data` buffer from the sandbox memory.
 4. Invoking `create` executive function.
 
-Loading of `value` buffer should be charged. This is because the size of the buffer is specified by the calling code, even though marshalled representation is essentially of constant size. This can be fixed by assigning an upper bound for size for `Balance`.
+Loading of `value` buffer should be charged. This is because the size of the buffer is specified by the calling code, even though marshaled representation is, essentially, of constant size. This can be fixed by assigning an upper bound for size for `Balance`.
 
 Loading `init_code` and `input_data` should be charged in any case.
 
-**complexity**: All complexity comes from loading buffers and executing `create` executive function. The former component is proportional to the sizes of `init_code`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `create` executive function, and also dominated by it.
+**complexity**: All complexity comes from loading buffers and executing `create` executive function. The former component is proportional to the sizes of `init_code`, `value` and `input_data` buffers. The latter component completely depends on the complexity of `create` executive function and also dominated by it.
 
 ## ext_return
 
@@ -282,9 +282,9 @@ This function receives a `data` buffer as an argument. Execution of the function
 
 ## ext_input_copy
 
-This function copies slice of data from the input buffer to the sandbox memory. The slice length is specified by the calling code. Execution of the function consists of the following steps:
+This function copies slice of data from the input buffer to the sandbox memory. The calling code specifies the slice length. Execution of the function consists of the following steps:
 
-1. Storing specified slice of the input data into the sandbox memory (see sandboxing memory set)
+1. Storing a specified slice of the input data into the sandbox memory (see sandboxing memory set)
 
 **complexity**: The computing complexity of this function is proportional to the length of the slice. No additional memory is required.
 
@@ -294,8 +294,8 @@ This function copies slice of data from the input buffer to the sandbox memory. 
 
 ## ext_scratch_copy
 
-This function copies slice of data from the scratch buffer to the sandbox memory. The slice length is specified by the calling code. Execution of the function consists of the following steps:
+This function copies slice of data from the scratch buffer to the sandbox memory. The calling code specifies the slice length. Execution of the function consists of the following steps:
 
-1. Storing specified slice of the sratch buffer into the sandbox memory (see sandboxing memory set)
+1. Storing a specified slice of the scratch buffer into the sandbox memory (see sandboxing memory set)
 
 **complexity**: The computing complexity of this function is proportional to the length of the slice. No additional memory is required.
