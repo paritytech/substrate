@@ -28,7 +28,7 @@ use client::{self, Client};
 use {error, Service};
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use transaction_pool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
+use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
 use config::Configuration;
 use primitives::{Blake2Hasher};
@@ -105,7 +105,7 @@ pub type ComponentClient<C> = Client<
 pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
 
 /// Extrinsic hash type for `Components`
-pub type ComponentExHash<C> = <<C as Components>::TransactionPoolApi as transaction_pool::ChainApi>::Hash;
+pub type ComponentExHash<C> = <<C as Components>::TransactionPoolApi as txpool::ChainApi>::Hash;
 
 /// Extrinsic type.
 pub type ComponentExtrinsic<C> = <ComponentBlock<C> as BlockT>::Extrinsic;
@@ -128,9 +128,9 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool backend type for the full client.
-	type FullTransactionPoolApi: transaction_pool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + Send + 'static;
+	type FullTransactionPoolApi: txpool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + Send + 'static;
 	/// Extrinsic pool backend type for the light client.
-	type LightTransactionPoolApi: transaction_pool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + 'static;
+	type LightTransactionPoolApi: txpool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + 'static;
 	/// Genesis configuration for the runtime.
 	type Genesis: RuntimeGenesis;
 	/// Other configuration for service members.
@@ -169,7 +169,7 @@ pub trait Components: 'static {
 	/// Client executor.
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync;
 	/// Extrinsic pool type.
-	type TransactionPoolApi: 'static + transaction_pool::ChainApi<
+	type TransactionPoolApi: 'static + txpool::ChainApi<
 		Hash = <Self::Factory as ServiceFactory>::ExtrinsicHash,
 		Block = FactoryBlock<Self::Factory>
 	>;

@@ -75,7 +75,7 @@ use codec::{Encode, Decode};
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
 pub use chain_spec::ChainSpec;
-pub use transaction_pool::{Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, VerifiedTransaction, IntoPoolError};
+pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
@@ -116,6 +116,8 @@ pub fn new_client<Factory: components::ServiceFactory>(config: FactoryFullConfig
 impl<Components> Service<Components>
 	where
 		Components: components::Components,
+		txpool::ExHash<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
+		txpool::ExtrinsicFor<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
 {
 	/// Creates a new service.
 	pub fn new(
@@ -196,7 +198,7 @@ impl<Components> Service<Components>
 					if let Some(network) = network.upgrade() {
 						network.on_block_imported(notification.hash, &notification.header);
 					}
-					txpool.cull(&BlockId::hash(notification.hash))
+					txpool.prune_tags(&BlockId::hash(notification.hash), notification.tags)
 						.map_err(|e| warn!("Error removing extrinsics: {:?}", e))?;
 					Ok(())
 				})
@@ -288,7 +290,11 @@ impl<Components> Service<Components>
 			_telemetry: telemetry,
 		})
 	}
+}
 
+impl<Components> Service<Components> where
+	Components: components::Components,
+{
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
@@ -386,21 +392,13 @@ impl<C: Components> TransactionPoolAdapter<C> {
 
 impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
-		let best_block_id = match self.best_block_id() {
-			Some(id) => id,
-			None => return vec![],
-		};
-		self.pool.cull_and_get_pending(&best_block_id, |pending| pending
+		self.pool.ready(|pending| pending
 			.map(|t| {
-				let hash = t.hash().clone();
-				let ex: ComponentExtrinsic<C> = t.original.clone();
+				let hash = t.hash.clone();
+				let ex: ComponentExtrinsic<C> = t.data.raw.clone();
 				(hash, ex)
 			})
-			.collect()
-		).unwrap_or_else(|e| {
-			warn!("Error retrieving pending set: {}", e);
-			vec![]
-		})
+			.collect())
 	}
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
@@ -412,13 +410,12 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 		let encoded = transaction.encode();
 		if let Some(uxt) = Decode::decode(&mut &encoded[..]) {
 			let best_block_id = self.best_block_id()?;
+			let hash = self.pool.hash_of(&uxt);
 			match self.pool.submit_one(&best_block_id, uxt) {
-				Ok(xt) => Some(*xt.hash()),
+				Ok(hash) => Some(hash),
 				Err(e) => match e.into_pool_error() {
 					Ok(e) => match e.kind() {
-						transaction_pool::ErrorKind::AlreadyImported(hash) =>
-							Some(::std::str::FromStr::from_str(&hash[2..]).map_err(|_| {})
-								.expect("Hash string is always valid")),
+						txpool::error::ErrorKind::AlreadyImported => Some(hash),
 						_ => {
 							debug!("Error adding transaction to the pool: {:?}", e);
 							None
@@ -427,7 +424,7 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 					Err(e) => {
 						debug!("Error converting pool error: {:?}", e);
 						None
-					}
+					},
 				}
 			}
 		} else {

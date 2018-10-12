@@ -200,7 +200,7 @@ mod tests {
 
 	const DUMMY_FUNCTION: u64 = 0;
 	const DUMMY_ACCOUNTID: u64 = 0;
-	
+
 	type Ex = UncheckedMortalExtrinsic<u64, u64, u64, TestSig>;
 	type CEx = CheckedExtrinsic<u64, u64, u64>;
 

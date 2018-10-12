@@ -25,7 +25,7 @@ pub extern crate parity_codec as codec;
 extern crate sr_version as runtime_version;
 
 #[doc(hidden)]
-pub use primitives::{traits::Block as BlockT, generic::BlockId, ApplyResult};
+pub use primitives::{traits::Block as BlockT, generic::BlockId, transaction_validity::TransactionValidity, ApplyResult};
 use runtime_version::RuntimeVersion;
 use rstd::vec::Vec;
 #[doc(hidden)]
@@ -485,7 +485,7 @@ decl_apis! {
 /// #[macro_use]
 /// extern crate sr_api as runtime_api;
 ///
-/// use runtime_api::runtime::{Core, OldTxQueue};
+/// use runtime_api::runtime::{Core, TaggedTransactionQueue};
 ///
 /// impl_apis! {
 ///     impl Core<Block, AccountId> for Runtime {
@@ -498,13 +498,10 @@ decl_apis! {
 ///         }
 ///     }
 ///
-///     impl OldTxQueue<AccountId, Index, Address, LookupId> for Runtime {
-///         fn account_nonce(account: AccountId) -> Index {
-///             0
-///         }
-///         fn lookup_address(address: Address) -> Option<LookupId> {
-///             None
-///         }
+///     impl TaggedTransactionQueue<Block> for Runtime {
+///			fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+///				unimplemented!()
+///			}
 ///     }
 /// }
 ///

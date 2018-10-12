@@ -21,7 +21,11 @@ use error::{Error, ErrorKind};
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::{BlockId, SignedBlock, Block as RuntimeBlock}};
+use runtime_primitives::{
+	bft::Justification,
+	generic::{BlockId, SignedBlock, Block as RuntimeBlock},
+	transaction_validity::{TransactionValidity, TransactionTag},
+};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
 use runtime_primitives::{ApplyResult, BuildStorage};
 use runtime_api as api;
@@ -158,6 +162,8 @@ pub struct BlockImportNotification<Block: BlockT> {
 	pub header: Block::Header,
 	/// Is this the new best block.
 	pub is_new_best: bool,
+	/// Tags provided by transactions imported in that block.
+	pub tags: Vec<TransactionTag>,
 }
 
 /// Summary of a finalized block.
@@ -539,6 +545,30 @@ impl<B, E, Block> Client<B, E, Block> where
 		result
 	}
 
+	// TODO [ToDr] Optimize and re-use tags from the pool.
+	fn transaction_tags(&self, at: Block::Hash, body: &Option<Vec<Block::Extrinsic>>) -> error::Result<Vec<TransactionTag>> {
+		let id = BlockId::Hash(at);
+		Ok(match body {
+			None => vec![],
+			Some(ref extrinsics) => {
+				let mut tags = vec![];
+				for tx in extrinsics {
+					let tx = api::TaggedTransactionQueue::validate_transaction(self, &id, &tx)?;
+					match tx {
+						TransactionValidity::Valid(_, _, mut provides, ..) => {
+							tags.append(&mut provides);
+						},
+						// silently ignore invalid extrinsics,
+						// cause they might just be inherent
+						_ => {}
+					}
+
+				}
+				tags
+			},
+		})
+	}
+
 	fn execute_and_import_block(
 		&self,
 		origin: BlockOrigin,
@@ -574,6 +604,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			self.apply_finality(parent_hash, last_best, make_notifications)?;
 		}
 
+		let tags = self.transaction_tags(parent_hash, &body)?;
 		let mut transaction = self.backend.begin_operation(BlockId::Hash(parent_hash))?;
 		let (storage_update, changes_update, storage_changes) = match transaction.state()? {
 			Some(transaction_state) => {
@@ -659,6 +690,7 @@ impl<B, E, Block> Client<B, E, Block> where
 				origin,
 				header,
 				is_new_best,
+				tags,
 			};
 
 			self.import_notification_sinks.lock()

@@ -36,8 +36,8 @@ members = [
 	"core/sr-sandbox",
 	"core/sr-std",
 	"core/sr-version",
-	"core/transaction-graph",
 	"core/transaction-pool",
+	"core/transaction-pool/graph",
 	"srml/support",
 	"srml/balances",
 	"srml/consensus",
@@ -69,7 +69,6 @@ members = [
 	"node/primitives",
 	"node/runtime",
 	"node/service",
-	"node/transaction-pool",
 	"subkey",
 ]
 exclude = [

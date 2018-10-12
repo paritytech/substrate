@@ -247,7 +247,7 @@ where
 	let best_block = BlockId::number(first_service.client().info().unwrap().chain.best_number);
 	first_service.transaction_pool().submit_one(&best_block, extrinsic_factory(&first_service)).unwrap();
 	network.run_until_all_full(|_index, service|
-		service.transaction_pool().all().len() == 1
+		service.transaction_pool().all(usize::max_value()).len() == 1
 	);
 }
 
