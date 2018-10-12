@@ -72,6 +72,12 @@ pub trait Consolidate {
 	fn consolidate(&mut self, other: Self);
 }
 
+impl Consolidate for () {
+	fn consolidate(&mut self, _: Self) {
+		()
+	}
+}
+
 impl Consolidate for Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> {
 	fn consolidate(&mut self, mut other: Self) {
 		self.append(&mut other);

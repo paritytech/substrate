@@ -146,15 +146,6 @@ impl OverlayedChanges {
 		}
 	}
 
-	/// Drain committed changes to an iterator.
-	///
-	/// Panics:
-	/// Will panic if there are any uncommitted prospective changes.
-	pub fn drain<'a>(&'a mut self) -> impl Iterator<Item=(Vec<u8>, OverlayedValue)> + 'a {
-		assert!(self.prospective.is_empty());
-		self.committed.drain()
-	}
-
 	/// Consume `OverlayedChanges` and take committed set.
 	///
 	/// Panics:

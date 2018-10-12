@@ -120,6 +120,11 @@ pub fn is_child_trie_key_valid<H: Hasher>(_key: &[u8]) -> bool {
 	true
 }
 
+/// Determine the default child trie root.
+pub fn default_child_trie_root<H: Hasher>(_key: &[u8]) -> Vec<u8> {
+	H::Out::default().as_ref().iter().cloned().collect()
+}
+
 /// Determine a child trie root given its ordered contents, closed form. H is the default hasher, but a generic
 /// implementation may ignore this type parameter and use other hashers.
 pub fn child_trie_root<H: Hasher, I, A, B>(_key: &[u8], input: I) -> Vec<u8> where
