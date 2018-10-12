@@ -277,7 +277,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(io, who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(io, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(io, who, response),
-			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, other),
+			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, &mut Some(other)),
 		}
 	}
 
@@ -708,4 +708,103 @@ fn send_message<B: BlockT, H: ExHashT>(peers: &RwLock<HashMap<NodeIndex, Peer<B,
 pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
 	let data = message.encode();
 	HashFor::<B>::hash(&data)
+}
+
+/// Construct a simple protocol that is composed of several sub protocols.
+/// Each "sub protocol" needs to implement `Specialization` and needs to provide a `new()` function.
+/// For more fine grained implementations, this macro is not usable.
+///
+/// # Example
+///
+/// ```nocompile
+/// construct_simple_protocol! {
+///     pub struct MyProtocol where Block = MyBlock {
+///         consensus_gossip: ConsensusGossip<MyBlock>,
+///         other_protocol: MyCoolStuff,
+///     }
+/// }
+/// ```
+///
+/// You can also provide an optional parameter after `where Block = MyBlock`, so it looks like
+/// `where Block = MyBlock, Status = consensus_gossip`. This will instruct the implementation to
+/// use the `status()` function from the `ConsensusGossip` protocol. By default, `status()` returns
+/// an empty vector.
+#[macro_export]
+macro_rules! construct_simple_protocol {
+	(
+		$( #[ $attr:meta ] )*
+		pub struct $protocol:ident where
+			Block = $block:ident
+			$( , Status = $status_protocol_name:ident )*
+		{
+			$( $sub_protocol_name:ident : $sub_protocol:ident $( <$protocol_block:ty> )*, )*
+		}
+	) => {
+		$( #[$attr] )*
+		pub struct $protocol {
+			$( $sub_protocol_name: $sub_protocol $( <$protocol_block> )*, )*
+		}
+
+		impl $protocol {
+			/// Instantiate a node protocol handler.
+			pub fn new() -> Self {
+				Self {
+					$( $sub_protocol_name: $sub_protocol::new(), )*
+				}
+			}
+		}
+
+		impl $crate::specialization::Specialization<$block> for $protocol {
+			fn status(&self) -> Vec<u8> {
+				$(
+					let status = self.$status_protocol_name.status();
+
+					if !status.is_empty() {
+						return status;
+					}
+				)*
+
+				Vec::new()
+			}
+
+			fn on_connect(
+				&mut self,
+				ctx: &mut $crate::Context<$block>,
+				who: $crate::NodeIndex,
+				status: $crate::StatusMessage<$block>
+			) {
+				$( self.$sub_protocol_name.on_connect(ctx, who, status); )*
+			}
+
+			fn on_disconnect(&mut self, ctx: &mut $crate::Context<$block>, who: $crate::NodeIndex) {
+				$( self.$sub_protocol_name.on_disconnect(ctx, who); )*
+			}
+
+			fn on_message(
+				&mut self,
+				ctx: &mut $crate::Context<$block>,
+				who: $crate::NodeIndex,
+				message: &mut Option<$crate::message::Message<$block>>
+			) {
+				$( self.$sub_protocol_name.on_message(ctx, who, message); )*
+			}
+
+			fn on_abort(&mut self) {
+				$( self.$sub_protocol_name.on_abort(); )*
+			}
+
+			fn maintain_peers(&mut self, ctx: &mut $crate::Context<$block>) {
+				$( self.$sub_protocol_name.maintain_peers(ctx); )*
+			}
+
+			fn on_block_imported(
+				&mut self,
+				ctx: &mut $crate::Context<$block>,
+				hash: <$block as $crate::BlockT>::Hash,
+				header: &<$block as $crate::BlockT>::Header
+			) {
+				$( self.$sub_protocol_name.on_block_imported(ctx, hash, header); )*
+			}
+		}
+	}
 }
