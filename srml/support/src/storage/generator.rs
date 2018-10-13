@@ -1665,23 +1665,7 @@ macro_rules! __store_functions_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident :
-			map $kty:ty => Option<$ty:ty> $(= $default:expr)*;
-		$( $t:tt )*
-	) => {
-		__store_functions_to_metadata!(
-			$( $metadata, )*
-			__store_function_to_metadata!(
-				$( $doc_attr ),*; $name; __store_type_to_metadata!($kty, $ty);
-				$crate::storage::generator::StorageFunctionModifier::Optional
-			);
-			$( $t )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident :
+		$pub:vis $name:ident :
 			map $kty:ty => Option<$ty:ty> $(= $default:expr)*;
 		$($t:tt)*
 	) => {
@@ -1699,23 +1683,7 @@ macro_rules! __store_functions_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident :
-			map $kty:ty => $ty:ty $(= $default:expr)*;
-		$( $t:tt )*
-	) => {
-		__store_functions_to_metadata!(
-			$( $metadata, )*
-			__store_function_to_metadata!(
-				$( $doc_attr ),*; $name; __store_type_to_metadata!($kty, $ty);
-				$crate::storage::generator::StorageFunctionModifier::Default
-			);
-			$( $t )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident :
+		$pub:vis $name:ident :
 			map $kty:ty => $ty:ty $(= $default:expr)*;
 		$($t:tt)*
 	) => {
@@ -1734,23 +1702,7 @@ macro_rules! __store_functions_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident get($getfn:ident) $(build($build:expr))* :
-			map $kty:ty => Option<$ty:ty> $(= $default:expr)*;
-		$($t:tt)*
-	) => {
-		__store_functions_to_metadata!(
-			$( $metadata, )*
-			__store_function_to_metadata!(
-				$( $doc_attr ),*; $name; __store_type_to_metadata!($kty, $ty);
-				$crate::storage::generator::StorageFunctionModifier::Optional
-			);
-			$( $t )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident get($getfn:ident) $(build($build:expr))* :
+		$pub:vis $name:ident get($getfn:ident) $(build($build:expr))* :
 			map $kty:ty => Option<$ty:ty> $(= $default:expr)*;
 		$($t:tt)*
 	) => {
@@ -1769,23 +1721,7 @@ macro_rules! __store_functions_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident get($getfn:ident) $(build($build:expr))* :
-			map $kty:ty => $ty:ty $(= $default:expr)*;
-		$($t:tt)*
-	) => {
-		__store_functions_to_metadata!(
-			$( $metadata, )*
-			__store_function_to_metadata!(
-				$( $doc_attr ),*; $name; __store_type_to_metadata!($kty, $ty);
-				$crate::storage::generator::StorageFunctionModifier::Default
-			);
-			$( $t )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident get($getfn:ident) $(build($build:expr))* :
+		$pub:vis $name:ident get($getfn:ident) $(build($build:expr))* :
 			map $kty:ty => $ty:ty $(= $default:expr)*;
 		$($t:tt)*
 	) => {
@@ -1803,22 +1739,7 @@ macro_rules! __store_functions_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident : Option<$ty:ty> $(= $default:expr)*;
-		$($t:tt)*
-	) => {
-		__store_functions_to_metadata!(
-			$( $metadata, )*
-			__store_function_to_metadata!(
-				$( $doc_attr ),*; $name; __store_type_to_metadata!($ty);
-				$crate::storage::generator::StorageFunctionModifier::Optional
-			);
-			$( $t )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident : Option<$ty:ty> $(= $default:expr)*;
+		$pub:vis $name:ident : Option<$ty:ty> $(= $default:expr)*;
 		$($t:tt)*
 	) => {
 		__store_functions_to_metadata!(
@@ -1834,22 +1755,7 @@ macro_rules! __store_functions_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident : $ty:ty $(= $default:expr)*;
-		$($t:tt)*
-	) => {
-		__store_functions_to_metadata!(
-			$( $metadata, )*
-			__store_function_to_metadata!(
-				$( $doc_attr ),*; $name; __store_type_to_metadata!($ty);
-				$crate::storage::generator::StorageFunctionModifier::Default
-			);
-			$( $t )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident : $ty:ty $(= $default:expr)*;
+		$pub:vis $name:ident : $ty:ty $(= $default:expr)*;
 		$($t:tt)*
 	) => {
 		__store_functions_to_metadata!(
@@ -1867,23 +1773,7 @@ macro_rules! __store_functions_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident get($getfn:ident) $(config($($myname:ident)*))* $(build($build:expr))* :
-			Option<$ty:ty> $(= $default:expr)*;
-		$($t:tt)*
-	) => {
-		__store_functions_to_metadata!(
-			$( $metadata, )*
-			__store_function_to_metadata!(
-				$( $doc_attr ),*; $name; __store_type_to_metadata!($ty);
-				$crate::storage::generator::StorageFunctionModifier::Optional
-			);
-			$( $t )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident get($getfn:ident) $(config($($myname:ident)*))* $(build($build:expr))* :
+		$pub:vis $name:ident get($getfn:ident) $(config($($myname:ident)*))* $(build($build:expr))* :
 			Option<$ty:ty> $(= $default:expr)*;
 		$($t:tt)*
 	) => {
@@ -1901,23 +1791,7 @@ macro_rules! __store_functions_to_metadata {
 	(
 		$( $metadata:expr ),*;
 		$(#[doc = $doc_attr:tt])*
-		$name:ident get($getfn:ident) $(config($($myname:ident)*))* $(build($build:expr))* :
-			$ty:ty $(= $default:expr)*;
-		$($t:tt)*
-	) => {
-		__store_functions_to_metadata!(
-			$( $metadata, )*
-			__store_function_to_metadata!(
-				$( $doc_attr ),*; $name; __store_type_to_metadata!($ty);
-				$crate::storage::generator::StorageFunctionModifier::Default
-			);
-			$( $t )*
-		)
-	};
-	(
-		$( $metadata:expr ),*;
-		$(#[doc = $doc_attr:tt])*
-		pub $name:ident get($getfn:ident) $(config($($myname:ident)*))* $(build($build:expr))* :
+		$pub:vis $name:ident get($getfn:ident) $(config($($myname:ident)*))* $(build($build:expr))* :
 			$ty:ty $(= $default:expr)*;
 		$($t:tt)*
 	) => {
