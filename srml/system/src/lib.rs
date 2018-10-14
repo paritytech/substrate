@@ -397,7 +397,14 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> Lookup for Module<T> {
+pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
+impl<T> Default for ChainContext<T> {
+	fn default() -> Self {
+		ChainContext(::rstd::marker::PhantomData)
+	}
+}
+
+impl<T: Trait> Lookup for ChainContext<T> {
 	type Source = T::AccountId;
 	type Target = T::AccountId;
 	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, &'static str> {
@@ -405,14 +412,14 @@ impl<T: Trait> Lookup for Module<T> {
 	}
 }
 
-impl<T: Trait> CurrentHeight for Module<T> {
+impl<T: Trait> CurrentHeight for ChainContext<T> {
 	type BlockNumber = T::BlockNumber;
 	fn current_height(&self) -> Self::BlockNumber {
 		<Module<T>>::block_number()
 	}
 }
 
-impl<T: Trait> BlockNumberToHash for Module<T> {
+impl<T: Trait> BlockNumberToHash for ChainContext<T> {
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
 	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {
