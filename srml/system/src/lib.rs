@@ -40,7 +40,7 @@ extern crate sr_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash};
 use substrate_primitives::storage::well_known_keys;
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
@@ -394,6 +394,14 @@ impl<T: Trait> Module<T> {
 		let extrinsics = (0..<ExtrinsicCount<T>>::get().unwrap_or_default()).map(<ExtrinsicData<T>>::take).collect();
 		let xts_root = extrinsics_data_root::<T::Hashing>(extrinsics);
 		<ExtrinsicsRoot<T>>::put(xts_root);
+	}
+}
+
+impl<T: Trait> Lookup for Module<T> {
+	type Source = T::AccountId;
+	type Target = T::AccountId;
+	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, &'static str> {
+		Ok(s)
 	}
 }
 
