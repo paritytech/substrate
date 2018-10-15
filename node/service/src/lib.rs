@@ -59,7 +59,6 @@ use node_network::Protocol as DemoProtocol;
 use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
 use network::import_queue::{BasicQueue, BlockOrigin, ImportBlock, Verifier};
-use network::Error as NetworkError;
 use runtime_primitives::{traits::Block as BlockT};
 use primitives::{Blake2Hasher, storage::StorageKey, twox_128, AuthorityId};
 
@@ -104,13 +103,6 @@ pub trait Components: service::Components {
 	type Backend: 'static + client::backend::Backend<Block, Blake2Hasher>;
 	/// Client executor.
 	type Executor: 'static + client::CallExecutor<Block, Blake2Hasher> + Send + Sync;
-
-	fn build_import_queue(
-		_config: &FactoryFullConfiguration<Self::Factory>,
-		_client: Arc<ComponentClient<Self>>
-	) -> Result<BasicQueue<Block, NoneVerifier>, NetworkError> {
-		Ok(BasicQueue::new(Arc::new(NoneVerifier {})))
-	}
 }
 
 impl Components for service::LightComponents<Factory> {
@@ -144,8 +136,8 @@ impl service::ServiceFactory for Factory {
 	type LightTransactionPoolApi = transaction_pool::ChainApi<service::LightBackend<Self>, service::LightExecutor<Self>, Block>;
 	type Genesis = GenesisConfig;
 	type Configuration = CustomConfiguration;
-	type FullService = Service<FullComponents<Self>>;
-	type LightService = Service<LightComponents<Self>>;
+	type FullService = Service<service::FullComponents<Self>>;
+	type LightService = Service<service::LightComponents<Self>>;
 	/// instance of import queue for clients
 	type ImportQueue = BasicQueue<Block, NoneVerifier>;
 
@@ -165,6 +157,20 @@ impl service::ServiceFactory for Factory {
 		-> Result<DemoProtocol, Error>
 	{
 		Ok(DemoProtocol::new())
+	}
+
+	fn build_full_import_queue(
+		_config: &FactoryFullConfiguration<Self>,
+		_client: Arc<service::FullClient<Self>>,
+	) -> Result<BasicQueue<Block, NoneVerifier>, service::Error> {
+		Ok(BasicQueue::new(Arc::new(NoneVerifier {})))
+	}
+
+	fn build_light_import_queue(
+		_config: &FactoryFullConfiguration<Self>,
+		_client: Arc<service::LightClient<Self>>,
+	) -> Result<BasicQueue<Block, NoneVerifier>, service::Error> {
+		Ok(BasicQueue::new(Arc::new(NoneVerifier {})))
 	}
 
 	fn new_light(config: Configuration, executor: TaskExecutor)

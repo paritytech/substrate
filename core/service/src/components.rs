@@ -160,6 +160,36 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build light service.
 	fn new_light(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
 		-> Result<Self::LightService, error::Error>;
+
+	/// ImportQueue for a full client
+	fn build_full_import_queue(
+		config: &FactoryFullConfiguration<Self>,
+		client: Arc<FullClient<Self>>
+	) -> Result<Self::ImportQueue, error::Error> {
+		if let Some(name) = config.chain_spec.consensus_engine() {
+			match name {
+				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
+			}
+
+		} else {
+			Err("Chain Specification doesn't containg any consensus_engine name".into())
+		}
+	}
+
+	/// ImportQueue for a light client
+	fn build_light_import_queue(
+		config: &FactoryFullConfiguration<Self>,
+		client: Arc<LightClient<Self>>
+	) -> Result<Self::ImportQueue, error::Error> {
+		if let Some(name) = config.chain_spec.consensus_engine() {
+			match name {
+				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
+			}
+
+		} else {
+			Err("Chain Specification doesn't containg any consensus_engine name".into())
+		}
+	}
 }
 
 /// A collection of types and function to generalise over full / light client type.
@@ -193,17 +223,8 @@ pub trait Components: 'static {
 	/// instance of import queue for clients
 	fn build_import_queue(
 		config: &FactoryFullConfiguration<Self::Factory>,
-		_client: Arc<ComponentClient<Self>>
-	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error> {
-		if let Some(name) = config.chain_spec.consensus_engine() {
-			match name {
-				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
-			}
-
-		} else {
-			Err("Chain Specification doesn't containg any consensus_engine name".into())
-		}
-	}
+		client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error>;
 }
 
 /// A struct that implement `Components` for the full client.
@@ -244,6 +265,13 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>
 	{
 		Factory::build_full_transaction_pool(config, client)
+	}
+
+	fn build_import_queue(
+		config: &FactoryFullConfiguration<Self::Factory>,
+		client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error> {
+		Factory::build_full_import_queue(config, client)
 	}
 }
 
@@ -286,5 +314,12 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>
 	{
 		Factory::build_light_transaction_pool(config, client)
+	}
+
+	fn build_import_queue(
+		config: &FactoryFullConfiguration<Self::Factory>,
+		client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error> {
+		Factory::build_light_import_queue(config, client)
 	}
 }
