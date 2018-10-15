@@ -127,20 +127,19 @@ where
 	/// Fetch child storage root together with its transaction.
 	fn child_storage_root_transaction(&mut self, storage_key: &[u8]) -> (Vec<u8>, B::Transaction) {
 		self.mark_dirty();
-		let storage_key = storage_key.to_vec();
 
 		let (root, transaction) = {
-			let delta = self.overlay.committed.children.get(&storage_key)
+			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
-				.chain(self.overlay.prospective.children.get(&storage_key)
+				.chain(self.overlay.prospective.children.get(storage_key)
 					   .into_iter()
 					   .flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone()))));
 
-			self.backend.child_storage_root(&storage_key, delta)
+			self.backend.child_storage_root(storage_key, delta)
 		};
 
-		let root_val = if root == default_child_trie_root::<H>(&storage_key) {
+		let root_val = if root == default_child_trie_root::<H>(storage_key) {
 			None
 		} else {
 			Some(root.clone())

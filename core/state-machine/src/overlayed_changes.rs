@@ -155,11 +155,11 @@ impl OverlayedChanges {
 	}
 
 	/// Sync the child storage root.
-	pub(crate) fn sync_child_storage_root(&mut self, storage_key: Vec<u8>, root: Option<Vec<u8>>) {
-		let entry = self.prospective.top.entry(storage_key.clone()).or_default();
+	pub(crate) fn sync_child_storage_root(&mut self, storage_key: &[u8], root: Option<Vec<u8>>) {
+		let entry = self.prospective.top.entry(storage_key.to_vec()).or_default();
 		entry.value = root;
 
-		if let Some((Some(extrinsics), _)) = self.prospective.children.get(&storage_key) {
+		if let Some((Some(extrinsics), _)) = self.prospective.children.get(storage_key) {
 			for extrinsic in extrinsics {
 				entry.extrinsics.get_or_insert_with(Default::default)
 					.insert(*extrinsic);
