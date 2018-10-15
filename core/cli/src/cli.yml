@@ -82,15 +82,15 @@ args:
       help: Specify a list of reserved node addresses
       takes_value: true
       multiple: true
-  - min-peers:
-      long: min-peers
-      value_name: MIN_PEERS
-      help: Specify the minimum number of peers
+  - out-peers:
+      long: out-peers
+      value_name: OUT_PEERS
+      help: Specify the number of outgoing connections we're trying to maintain
       takes_value: true
-  - max-peers:
-      long: max-peers
-      value_name: MAX_PEERS
-      help: Specify the maximum number of peers
+  - in-peers:
+      long: in-peers
+      value_name: IN_PEERS
+      help: Specify the maximum number of incoming connections we're accepting
       takes_value: true
   - chain:
       long: chain
