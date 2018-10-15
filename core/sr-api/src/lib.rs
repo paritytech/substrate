@@ -405,7 +405,7 @@ macro_rules! decl_apis {
 			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:ident )*, )* > {
 				$(
 					$( #[$fn_attr:meta] )*
-					fn $fn_name:ident($( $param_name:ident : $param_type:ty )*) $( -> $return_ty:ty)*;
+					fn $fn_name:ident($( $param_name:ident : $param_type:ty ),*) $( -> $return_ty:ty)*;
 				)*
 			}
 		)*
