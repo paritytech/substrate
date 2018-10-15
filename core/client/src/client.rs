@@ -154,18 +154,18 @@ pub enum BlockOrigin {
 /// Data required to import a Block
 pub struct ImportBlock<Block: BlockT> {
 	/// Origin of the Block
-    pub origin: BlockOrigin,
-    /// Header
-    pub header: Block::Header,
-    /// Justification provided for this block from the outside
-    pub external_justification: Justification,
-    /// internal Justification for the block
-    pub internal_justification: Vec<u8>, // Block::Digest::DigestItem?
-    /// Block's body
-    pub body: Option<Vec<Block::Extrinsic>>,
-    /// Is this block finalized already?
+	pub origin: BlockOrigin,
+	/// Header
+	pub header: Block::Header,
+	/// Justification provided for this block from the outside
+	pub external_justification: Justification,
+	/// Internal Justification for the block
+	pub internal_justification: Vec<u8>, // Block::Digest::DigestItem?
+	/// Block's body
+	pub body: Option<Vec<Block::Extrinsic>>,
+	/// Is this block finalized already?
 	/// `true` implies instant finality.
-    pub finalized: bool,
+	pub finalized: bool,
 	/// Auxiliary consensus data produced by the block.
 	/// Contains a list of key-value pairs. If values are `None`, the keys
 	/// will be deleted.

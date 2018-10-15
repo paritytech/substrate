@@ -22,45 +22,33 @@ extern crate node_primitives;
 extern crate node_runtime;
 extern crate node_executor;
 extern crate node_network;
-extern crate node_consensus as consensus;
 extern crate substrate_client as client;
 extern crate substrate_network as network;
 extern crate substrate_primitives as primitives;
 extern crate substrate_service as service;
 extern crate substrate_transaction_pool as transaction_pool;
-extern crate parity_codec as codec;
 extern crate tokio;
 #[cfg(test)]
 extern crate substrate_service_test as service_test;
 
 #[macro_use]
-extern crate log;
-#[macro_use]
 extern crate hex_literal;
-#[cfg(test)]
-extern crate parking_lot;
-#[cfg(test)]
+#[cfg(all(test, feature="rhd"))]
 extern crate rhododendron as rhd;
-#[cfg(test)]
-extern crate substrate_test_client;
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
 extern crate sr_primitives as runtime_primitives;
 pub mod chain_spec;
 
 use std::sync::Arc;
-use std::ops::Deref;
-use codec::Decode;
 use transaction_pool::txpool::{Pool as TransactionPool};
-use node_primitives::{Block, Hash, Timestamp, BlockId};
-use node_runtime::{GenesisConfig, BlockPeriod, StorageValue, Runtime};
+use node_primitives::{Block, Hash};
+use node_runtime::GenesisConfig;
 use client::Client;
 use node_network::Protocol as DemoProtocol;
 use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
 use network::import_queue::{BasicQueue, BlockOrigin, ImportBlock, Verifier};
 use runtime_primitives::{traits::Block as BlockT};
-use primitives::{Blake2Hasher, storage::StorageKey, twox_128, AuthorityId};
+use primitives::{Blake2Hasher, AuthorityId};
 
 pub use service::{Roles, PruningMode, TransactionPoolOptions, ServiceFactory,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
@@ -218,22 +206,7 @@ pub fn new_client(config: Configuration)
 
 #[cfg(test)]
 mod tests {
-	use std::sync::Arc;
-	use parking_lot::RwLock;
-	use {service, service_test, Factory, chain_spec};
-	// use consensus::{self, OfflineTracker};
-	use primitives::ed25519;
-	use runtime_primitives::traits::BlockNumberToHash;
-	use runtime_primitives::generic::Era;
-	use node_primitives::Block;
-	// use rhd::{Proposer, Environment};
-	// use node_network::consensus::ConsensusNetwork;
-	use node_primitives::BlockId;
-	use keyring::Keyring;
-	use node_runtime::{UncheckedExtrinsic, Call, BalancesCall};
-	use node_primitives::UncheckedExtrinsic as OpaqueExtrinsic;
-	use codec::{Decode, Encode};
-	use node_runtime::RawAddress;
+	use {service_test, Factory, chain_spec};
 
 	#[test]
 	fn test_connectivity() {

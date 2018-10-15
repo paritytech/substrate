@@ -164,7 +164,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// ImportQueue for a full client
 	fn build_full_import_queue(
 		config: &FactoryFullConfiguration<Self>,
-		client: Arc<FullClient<Self>>
+		_client: Arc<FullClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
@@ -179,7 +179,7 @@ pub trait ServiceFactory: 'static + Sized {
 	/// ImportQueue for a light client
 	fn build_light_import_queue(
 		config: &FactoryFullConfiguration<Self>,
-		client: Arc<LightClient<Self>>
+		_client: Arc<LightClient<Self>>
 	) -> Result<Self::ImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
