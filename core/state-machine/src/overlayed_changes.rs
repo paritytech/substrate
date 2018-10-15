@@ -182,9 +182,7 @@ impl OverlayedChanges {
 				.insert(extrinsic);
 		}
 
-		for (_, entry) in map_entry.1.iter_mut() {
-			*entry = None;
-		}
+		map_entry.1.values_mut().for_each(|e| e = None)
 
 		if let Some((_, committed_map)) = self.committed.children.get(storage_key) {
 			for (key, _) in committed_map.iter() {
