@@ -553,7 +553,7 @@ macro_rules! impl_apis {
 		}
 		impl_apis! {
 			$runtime;
-			$( $fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed )* ); )*
+			$( $fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed ),* ); )*
 			$( $fn_name ( $( $arg_name: $arg_ty ),* ); )*;
 			$( $rest )*
 		}
@@ -601,7 +601,7 @@ macro_rules! impl_apis {
 						$fn_name;
 						$( $arg_name : $arg_ty ),*;
 						input;
-					}};
+					} };
 					let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
 
 					// Leak the output vector to avoid it being freed.
