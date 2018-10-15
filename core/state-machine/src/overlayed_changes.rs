@@ -182,7 +182,7 @@ impl OverlayedChanges {
 				.insert(extrinsic);
 		}
 
-		map_entry.1.values_mut().for_each(|e| e = None)
+		map_entry.1.values_mut().for_each(|e| *e = None);
 
 		if let Some((_, committed_map)) = self.committed.children.get(storage_key) {
 			for (key, _) in committed_map.iter() {
@@ -249,9 +249,7 @@ impl OverlayedChanges {
 			}
 			for (storage_key, map) in self.prospective.children.drain() {
 				let entry = self.committed.children.entry(storage_key).or_default();
-				for (key, val) in map.1 {
-					entry.1.insert(key, val);
-				}
+				entry.1.extend(map.1.iter().map(|(k, v)| (k.clone(), v.clone())));
 
 				if let Some(prospective_extrinsics) = map.0 {
 					entry.0.get_or_insert_with(Default::default)
