@@ -318,7 +318,6 @@ mod tests {
 
 	#[test]
 	fn collects_garbage() {
-		let topic = H256::random();
 		let prev_hash = H256::random();
 		let best_hash = H256::random();
 		let mut consensus = ConsensusGossip::<Block>::new();
@@ -341,10 +340,10 @@ mod tests {
 
 		push_msg!(prev_hash, m1_hash, now, m1);
 		push_msg!(best_hash, m2_hash, now, m2.clone());
-		consensus.known_messages.insert((topic, m1_hash));
-		consensus.known_messages.insert((topic, m2_hash));
+		consensus.known_messages.insert((prev_hash, m1_hash));
+		consensus.known_messages.insert((best_hash, m2_hash));
 
-		// nothing to collech
+		// nothing to collect
 		consensus.collect_garbage(|_t| true);
 		assert_eq!(consensus.messages.len(), 2);
 		assert_eq!(consensus.known_messages.len(), 2);
@@ -358,7 +357,7 @@ mod tests {
 		consensus.collect_garbage(|topic| topic != &prev_hash);
 		assert_eq!(consensus.messages.len(), 1);
 		assert_eq!(consensus.known_messages.len(), 1);
-		assert!(consensus.known_messages.contains(&(topic, m2_hash)));
+		assert!(consensus.known_messages.contains(&(best_hash, m2_hash)));
 
 		// make timestamp expired
 		consensus.messages.clear();
