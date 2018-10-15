@@ -49,6 +49,7 @@ extern crate substrate_test_client as test_client;
 
 mod service;
 mod sync;
+#[macro_use]
 mod protocol;
 mod io;
 mod config;
@@ -74,3 +75,5 @@ pub use message::{generic as generic_message, RequestId, BftMessage, LocalizedBf
 pub use error::Error;
 pub use config::{Roles, ProtocolConfig};
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
+#[doc(hidden)]
+pub use runtime_primitives::traits::Block as BlockT;

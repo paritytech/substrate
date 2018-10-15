@@ -121,7 +121,7 @@ pub struct RouteEntry<Block: BlockT> {
 /// The ancestry sets will include the given blocks, and thus the tree-route is
 /// never empty.
 ///
-/// ```ignore
+/// ```text
 /// Tree route from R1 to E2. Retracted is [R1, R2, R3], Common is C, enacted [E1, E2]
 ///   <- R3 <- R2 <- R1
 ///  /
@@ -129,7 +129,7 @@ pub struct RouteEntry<Block: BlockT> {
 ///  \-> E1 -> E2
 /// ```
 ///
-/// ```ignore
+/// ```text
 /// Tree route from C to E2. Retracted empty. Common is C, enacted [E1, E2]
 /// C -> E1 -> E2
 /// ```

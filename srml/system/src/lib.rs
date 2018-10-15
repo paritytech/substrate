@@ -40,7 +40,7 @@ extern crate sr_primitives as primitives;
 extern crate safe_mix;
 
 use rstd::prelude::*;
-use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded,
+use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
 	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash};
 use substrate_primitives::storage::well_known_keys;
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
@@ -397,14 +397,29 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> CurrentHeight for Module<T> {
+pub struct ChainContext<T>(::rstd::marker::PhantomData<T>);
+impl<T> Default for ChainContext<T> {
+	fn default() -> Self {
+		ChainContext(::rstd::marker::PhantomData)
+	}
+}
+
+impl<T: Trait> Lookup for ChainContext<T> {
+	type Source = T::AccountId;
+	type Target = T::AccountId;
+	fn lookup(&self, s: Self::Source) -> rstd::result::Result<Self::Target, &'static str> {
+		Ok(s)
+	}
+}
+
+impl<T: Trait> CurrentHeight for ChainContext<T> {
 	type BlockNumber = T::BlockNumber;
 	fn current_height(&self) -> Self::BlockNumber {
 		<Module<T>>::block_number()
 	}
 }
 
-impl<T: Trait> BlockNumberToHash for Module<T> {
+impl<T: Trait> BlockNumberToHash for ChainContext<T> {
 	type BlockNumber = T::BlockNumber;
 	type Hash = T::Hash;
 	fn block_number_to_hash(&self, n: Self::BlockNumber) -> Option<Self::Hash> {

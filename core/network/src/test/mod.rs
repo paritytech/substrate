@@ -66,8 +66,8 @@ impl Specialization<Block> for DummySpecialization {
 		self.gossip.peer_disconnected(ctx, peer_id);
 	}
 
-	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, message: ::message::Message<Block>) {
-		if let ::message::generic::Message::ChainSpecific(data) = message {
+	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, message: &mut Option<::message::Message<Block>>) {
+		if let Some(::message::generic::Message::ChainSpecific(data)) = message.take() {
 			let gossip_message = GossipMessage::decode(&mut &data[..])
 				.expect("gossip messages all in known format; qed");
 			self.gossip.on_chain_specific(ctx, peer_id, data, gossip_message.topic)
