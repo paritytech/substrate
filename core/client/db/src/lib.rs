@@ -363,7 +363,7 @@ impl state_machine::Storage<Blake2Hasher> for DbGenesisStorage {
 
 pub struct DbChangesTrieStorage<Block: BlockT> {
 	db: Arc<KeyValueDB>,
-	min_blocks_to_keep: u64,
+	min_blocks_to_keep: Option<u64>,
 	_phantom: ::std::marker::PhantomData<Block>,
 }
 
@@ -377,6 +377,12 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 
 	/// Prune obsolete changes tries.
 	pub fn prune(&self, config: Option<ChangesTrieConfiguration>, tx: &mut DBTransaction, block: NumberFor<Block>) {
+		// never prune on archive nodes
+		let min_blocks_to_keep = match self.min_blocks_to_keep {
+			Some(min_blocks_to_keep) => min_blocks_to_keep,
+			None => return,
+		};
+
 		// read configuration from the database. it is OK to do it here (without checking tx for
 		// modifications), since config can't change
 		let config = match config {
@@ -387,7 +393,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 		state_machine::prune_changes_tries(
 			&config,
 			&*self,
-			self.min_blocks_to_keep,
+			min_blocks_to_keep,
 			block.as_(),
 			|node| tx.delete(columns::CHANGES_TRIE, node.as_ref()));
 	}
@@ -450,6 +456,7 @@ impl<Block: BlockT> Backend<Block> {
 	}
 
 	fn from_kvdb(db: Arc<KeyValueDB>, pruning: PruningMode, canonicalization_delay: u64) -> Result<Self, client::error::Error> {
+		let is_archive_pruning = pruning.is_archive();
 		let blockchain = BlockchainDb::new(db.clone())?;
 		let map_e = |e: state_db::Error<io::Error>| ::client::error::Error::from(format!("State database error: {:?}", e));
 		let state_db: StateDb<Block::Hash, H256> = StateDb::new(pruning, &StateMetaDb(&*db)).map_err(map_e)?;
@@ -459,7 +466,7 @@ impl<Block: BlockT> Backend<Block> {
 		};
 		let changes_tries_storage = DbChangesTrieStorage {
 			db,
-			min_blocks_to_keep: MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR,
+			min_blocks_to_keep: if is_archive_pruning { None } else { Some(MIN_BLOCKS_TO_KEEP_CHANGES_TRIES_FOR) },
 			_phantom: Default::default(),
 		};
 
@@ -1121,11 +1128,10 @@ mod tests {
 		check_changes(&backend, 2, changes2);
 	}
 
-
 	#[test]
 	fn changes_tries_are_pruned_on_finalization() {
 		let mut backend = Backend::<Block>::new_test(1000, 100);
-		backend.changes_tries_storage.min_blocks_to_keep = 8;
+		backend.changes_tries_storage.min_blocks_to_keep = Some(8);
 		let config = ChangesTrieConfiguration {
 			digest_interval: 2,
 			digest_levels: 2,
@@ -1140,19 +1146,29 @@ mod tests {
 		let block5 = insert_header(&backend, 5, block4, vec![(b"key_at_5".to_vec(), b"val_at_5".to_vec())], Default::default());
 		let block6 = insert_header(&backend, 6, block5, vec![(b"key_at_6".to_vec(), b"val_at_6".to_vec())], Default::default());
 		let block7 = insert_header(&backend, 7, block6, vec![(b"key_at_7".to_vec(), b"val_at_7".to_vec())], Default::default());
-		let _ = insert_header(&backend, 8, block7, vec![(b"key_at_8".to_vec(), b"val_at_8".to_vec())], Default::default());
+		let block8 = insert_header(&backend, 8, block7, vec![(b"key_at_8".to_vec(), b"val_at_8".to_vec())], Default::default());
+		let block9 = insert_header(&backend, 9, block8, vec![(b"key_at_9".to_vec(), b"val_at_9".to_vec())], Default::default());
+		let block10 = insert_header(&backend, 10, block9, vec![(b"key_at_10".to_vec(), b"val_at_10".to_vec())], Default::default());
+		let block11 = insert_header(&backend, 11, block10, vec![(b"key_at_11".to_vec(), b"val_at_11".to_vec())], Default::default());
+		let _ = insert_header(&backend, 12, block11, vec![(b"key_at_12".to_vec(), b"val_at_12".to_vec())], Default::default());
 
 		// check that roots of all tries are in the columns::CHANGES_TRIE
-		let read_changes_trie_root = |num| backend.blockchain().header(BlockId::Number(num)).unwrap().unwrap().digest().logs().iter()
-			.find(|i| i.as_changes_trie_root().is_some()).unwrap().as_changes_trie_root().unwrap().clone();
-		let root1 = read_changes_trie_root(1); assert_eq!(backend.changes_tries_storage.root(1).unwrap(), Some(root1));
-		let root2 = read_changes_trie_root(2); assert_eq!(backend.changes_tries_storage.root(2).unwrap(), Some(root2));
-		let root3 = read_changes_trie_root(3); assert_eq!(backend.changes_tries_storage.root(3).unwrap(), Some(root3));
-		let root4 = read_changes_trie_root(4); assert_eq!(backend.changes_tries_storage.root(4).unwrap(), Some(root4));
-		let root5 = read_changes_trie_root(5); assert_eq!(backend.changes_tries_storage.root(5).unwrap(), Some(root5));
-		let root6 = read_changes_trie_root(6); assert_eq!(backend.changes_tries_storage.root(6).unwrap(), Some(root6));
-		let root7 = read_changes_trie_root(7); assert_eq!(backend.changes_tries_storage.root(7).unwrap(), Some(root7));
-		let root8 = read_changes_trie_root(8); assert_eq!(backend.changes_tries_storage.root(8).unwrap(), Some(root8));
+		fn read_changes_trie_root(backend: &Backend<Block>, num: u64) -> H256 {
+			backend.blockchain().header(BlockId::Number(num)).unwrap().unwrap().digest().logs().iter()
+				.find(|i| i.as_changes_trie_root().is_some()).unwrap().as_changes_trie_root().unwrap().clone()
+		}
+		let root1 = read_changes_trie_root(&backend, 1); assert_eq!(backend.changes_tries_storage.root(1).unwrap(), Some(root1));
+		let root2 = read_changes_trie_root(&backend, 2); assert_eq!(backend.changes_tries_storage.root(2).unwrap(), Some(root2));
+		let root3 = read_changes_trie_root(&backend, 3); assert_eq!(backend.changes_tries_storage.root(3).unwrap(), Some(root3));
+		let root4 = read_changes_trie_root(&backend, 4); assert_eq!(backend.changes_tries_storage.root(4).unwrap(), Some(root4));
+		let root5 = read_changes_trie_root(&backend, 5); assert_eq!(backend.changes_tries_storage.root(5).unwrap(), Some(root5));
+		let root6 = read_changes_trie_root(&backend, 6); assert_eq!(backend.changes_tries_storage.root(6).unwrap(), Some(root6));
+		let root7 = read_changes_trie_root(&backend, 7); assert_eq!(backend.changes_tries_storage.root(7).unwrap(), Some(root7));
+		let root8 = read_changes_trie_root(&backend, 8); assert_eq!(backend.changes_tries_storage.root(8).unwrap(), Some(root8));
+		let root9 = read_changes_trie_root(&backend, 9); assert_eq!(backend.changes_tries_storage.root(9).unwrap(), Some(root9));
+		let root10 = read_changes_trie_root(&backend, 10); assert_eq!(backend.changes_tries_storage.root(10).unwrap(), Some(root10));
+		let root11 = read_changes_trie_root(&backend, 11); assert_eq!(backend.changes_tries_storage.root(11).unwrap(), Some(root11));
+		let root12 = read_changes_trie_root(&backend, 12); assert_eq!(backend.changes_tries_storage.root(12).unwrap(), Some(root12));
 
 		// now simulate finalization of block#12, causing prune of tries at #1..#4
 		let mut tx = DBTransaction::new();
@@ -1169,16 +1185,23 @@ mod tests {
 
 		// now simulate finalization of block#16, causing prune of tries at #5..#8
 		let mut tx = DBTransaction::new();
-		backend.changes_tries_storage.prune(Some(config), &mut tx, 16);
+		backend.changes_tries_storage.prune(Some(config.clone()), &mut tx, 16);
 		backend.storage.db.write(tx).unwrap();
-		assert!(backend.changes_tries_storage.get(&root1).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root2).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root3).unwrap().is_none());
-		assert!(backend.changes_tries_storage.get(&root4).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root5).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root6).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root7).unwrap().is_none());
 		assert!(backend.changes_tries_storage.get(&root8).unwrap().is_none());
+
+		// now "change" pruning mode to archive && simulate finalization of block#20
+		// => no changes tries are pruned, because we never prune in archive mode
+		backend.changes_tries_storage.min_blocks_to_keep = None;
+		let mut tx = DBTransaction::new();
+		backend.changes_tries_storage.prune(Some(config), &mut tx, 20);
+		backend.storage.db.write(tx).unwrap();
+		assert!(backend.changes_tries_storage.get(&root9).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root10).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root11).unwrap().is_some());
+		assert!(backend.changes_tries_storage.get(&root12).unwrap().is_some());
 	}
 
 	#[test]
