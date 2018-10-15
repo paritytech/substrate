@@ -218,7 +218,7 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) =>
-							$call_type::$fn_name( $( $param_name.clone() ),* )
+							$call_type::$fn_name( $( (*$param_name).clone() ),* )
 					,)*
 					_ => unreachable!(),
 				}
@@ -233,7 +233,7 @@ macro_rules! decl_module {
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
 							let self_params = ( $( $param_name, )* );
 							if let $call_type::$fn_name( $( ref $param_name ),* ) = *_other {
-								unimplemented!()//self_params == ( $( $param_name, )* )
+								self_params == ( $( $param_name, )* )
 							} else {
 								match *_other {
 									$call_type::__PhantomItem(_) => unreachable!(),
