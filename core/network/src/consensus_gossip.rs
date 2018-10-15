@@ -48,10 +48,10 @@ struct MessageEntry<B: BlockT> {
 
 /// Consensus network protocol handler. Manages statements and candidate requests.
 pub struct ConsensusGossip<B: BlockT> {
-	peers: HashMap<NodeIndex, PeerConsensus<B::Hash>>,
+	peers: HashMap<NodeIndex, PeerConsensus<(B::Hash, B::Hash)>>,
 	live_message_sinks: HashMap<B::Hash, mpsc::UnboundedSender<ConsensusMessage>>,
 	messages: Vec<MessageEntry<B>>,
-	message_hashes: HashSet<B::Hash>,
+	known_messages: HashSet<(B::Hash, B::Hash)>,
 	session_start: Option<B::Hash>,
 }
 
@@ -65,7 +65,7 @@ where
 			peers: HashMap::new(),
 			live_message_sinks: HashMap::new(),
 			messages: Default::default(),
-			message_hashes: Default::default(),
+			known_messages: Default::default(),
 			session_start: None
 		}
 	}
@@ -83,7 +83,7 @@ where
 			// TODO: limit by size
 			let mut known_messages = HashSet::new();
 			for entry in self.messages.iter() {
-				known_messages.insert(entry.topic);
+				known_messages.insert((entry.topic, entry.message_hash));
 				protocol.send_message(who, Message::Consensus(entry.topic.clone(), entry.message.clone()));
 			}
 			self.peers.insert(who, PeerConsensus {
@@ -109,7 +109,7 @@ where
 		where F: Fn() -> ConsensusMessage,
 	{
 		let mut non_authorities: Vec<_> = self.peers.iter()
-			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&message_hash) { Some(*id) } else { None })
+			.filter_map(|(id, ref peer)| if !peer.is_authority && !peer.known_messages.contains(&(topic, message_hash)) { Some(*id) } else { None })
 			.collect();
 
 		rand::thread_rng().shuffle(&mut non_authorities);
@@ -121,7 +121,7 @@ where
 
 		for (id, ref mut peer) in self.peers.iter_mut() {
 			if peer.is_authority {
-				if peer.known_messages.insert(message_hash.clone()) {
+				if peer.known_messages.insert((topic.clone(), message_hash.clone())) {
 					let message = get_message();
 					trace!(target:"gossip", "Propagating to authority {}: {:?}", id, message);
 					protocol.send_message(*id, Message::Consensus(topic, message));
@@ -129,7 +129,7 @@ where
 			} else if non_authorities.contains(&id) {
 				let message = get_message();
 				trace!(target:"gossip", "Propagating to {}: {:?}", id, message);
-				peer.known_messages.insert(message_hash.clone());
+				peer.known_messages.insert((topic.clone(), message_hash.clone()));
 				protocol.send_message(*id, Message::Consensus(topic, message));
 			}
 		}
@@ -138,7 +138,7 @@ where
 	fn register_message<F>(&mut self, message_hash: B::Hash, topic: B::Hash, get_message: F)
 		where F: Fn() -> ConsensusMessage
 	{
-		if self.message_hashes.insert(message_hash) {
+		if self.known_messages.insert((topic, message_hash)) {
 			self.messages.push(MessageEntry {
 				topic,
 				message_hash,
@@ -158,14 +158,14 @@ where
 	pub fn collect_garbage<P: Fn(&B::Hash) -> bool>(&mut self, predicate: P) {
 		self.live_message_sinks.retain(|_, sink| !sink.is_closed());
 
-		let hashes = &mut self.message_hashes;
+		let hashes = &mut self.known_messages;
 		let before = self.messages.len();
 		let now = Instant::now();
 		self.messages.retain(|entry| {
 			if entry.instant + MESSAGE_LIFETIME >= now && predicate(&entry.topic) {
 				true
 			} else {
-				hashes.remove(&entry.message_hash);
+				hashes.remove(&(entry.topic, entry.message_hash));
 				false
 			}
 		});
@@ -199,8 +199,8 @@ where
 	) -> Option<(B::Hash, ConsensusMessage)> {
 		let message_hash = HashFor::<B>::hash(&message[..]);
 
-		if self.message_hashes.contains(&message_hash) {
-			trace!(target:"gossip", "Ignored already known message from {}", who);
+		if self.known_messages.contains(&(topic, message_hash)) {
+			trace!(target:"gossip", "Ignored already known message from {} in {}", who, topic);
 			return None;
 		}
 
@@ -221,9 +221,9 @@ where
 
 		if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			use std::collections::hash_map::Entry;
-			peer.known_messages.insert(message_hash);
+			peer.known_messages.insert((topic, message_hash));
 			if let Entry::Occupied(mut entry) = self.live_message_sinks.entry(topic) {
-				debug!(target: "gossip", "Pushing relevant consensus message to sink.");
+				debug!(target: "gossip", "Pushing consensus message to sink for {}.", topic);
 				if let Err(e) = entry.get().unbounded_send(message.clone()) {
 					trace!(target:"gossip", "Error broadcasting message notification: {:?}", e);
 				}
@@ -318,6 +318,7 @@ mod tests {
 
 	#[test]
 	fn collects_garbage() {
+		let topic = H256::random();
 		let prev_hash = H256::random();
 		let best_hash = H256::random();
 		let mut consensus = ConsensusGossip::<Block>::new();
@@ -340,31 +341,31 @@ mod tests {
 
 		push_msg!(prev_hash, m1_hash, now, m1);
 		push_msg!(best_hash, m2_hash, now, m2.clone());
-		consensus.message_hashes.insert(m1_hash);
-		consensus.message_hashes.insert(m2_hash);
+		consensus.known_messages.insert((topic, m1_hash));
+		consensus.known_messages.insert((topic, m2_hash));
 
-		// nothing to collect
-		consensus.collect_garbage(|_topic| true);
+		// nothing to collech
+		consensus.collect_garbage(|_t| true);
 		assert_eq!(consensus.messages.len(), 2);
-		assert_eq!(consensus.message_hashes.len(), 2);
+		assert_eq!(consensus.known_messages.len(), 2);
 
 		// nothing to collect with default.
 		consensus.collect_garbage(|&topic| topic != Default::default());
 		assert_eq!(consensus.messages.len(), 2);
-		assert_eq!(consensus.message_hashes.len(), 2);
+		assert_eq!(consensus.known_messages.len(), 2);
 
 		// topic that was used in one message.
 		consensus.collect_garbage(|topic| topic != &prev_hash);
 		assert_eq!(consensus.messages.len(), 1);
-		assert_eq!(consensus.message_hashes.len(), 1);
-		assert!(consensus.message_hashes.contains(&m2_hash));
+		assert_eq!(consensus.known_messages.len(), 1);
+		assert!(consensus.known_messages.contains(&(topic, m2_hash)));
 
 		// make timestamp expired
 		consensus.messages.clear();
 		push_msg!(best_hash, m2_hash, now - MESSAGE_LIFETIME, m2);
 		consensus.collect_garbage(|_topic| true);
 		assert!(consensus.messages.is_empty());
-		assert!(consensus.message_hashes.is_empty());
+		assert!(consensus.known_messages.is_empty());
 	}
 
 	#[test]
