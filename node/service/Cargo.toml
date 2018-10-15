@@ -13,7 +13,7 @@ node-executor = { path = "../executor" }
 node-network = { path = "../network" }
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
-parity-codec = { version = "2.0" }
+parity-codec = { version = "2.1" }
 parking_lot = "0.4"
 slog = "^2"
 sr-io = { path = "../../core/sr-io" }

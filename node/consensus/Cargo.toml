@@ -10,7 +10,7 @@ futures = "0.1.17"
 log = "0.4"
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
-parity-codec = "2.0"
+parity-codec = "2.1"
 parking_lot = "0.4"
 rhododendron = "0.3"
 sr-primitives = { path = "../../core/sr-primitives" }

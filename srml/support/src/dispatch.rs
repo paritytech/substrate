@@ -233,7 +233,7 @@ macro_rules! decl_module {
 						$call_type::$fn_name( $( ref $param_name ),* ) => {
 							let self_params = ( $( $param_name, )* );
 							if let $call_type::$fn_name( $( ref $param_name ),* ) = *_other {
-								self_params == ( $( $param_name, )* )
+								unimplemented!()//self_params == ( $( $param_name, )* )
 							} else {
 								match *_other {
 									$call_type::__PhantomItem(_) => unreachable!(),
