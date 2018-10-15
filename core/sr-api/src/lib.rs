@@ -405,7 +405,7 @@ macro_rules! decl_apis {
 			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:ident )*, )* > {
 				$(
 					$( #[$fn_attr:meta] )*
-					fn $fn_name:ident($( $param_name:ident : $param_type:ty )*) $( -> $return_ty:ty)*;
+					fn $fn_name:ident($( $param_name:ident : $param_type:ty ),*) $( -> $return_ty:ty)*;
 				)*
 			}
 		)*
@@ -553,7 +553,7 @@ macro_rules! impl_apis {
 		}
 		impl_apis! {
 			$runtime;
-			$( $fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed )* ); )*
+			$( $fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed ),* ); )*
 			$( $fn_name ( $( $arg_name: $arg_ty ),* ); )*;
 			$( $rest )*
 		}
@@ -601,7 +601,7 @@ macro_rules! impl_apis {
 						$fn_name;
 						$( $arg_name : $arg_ty ),*;
 						input;
-					}};
+					} };
 					let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
 
 					// Leak the output vector to avoid it being freed.
