@@ -127,7 +127,9 @@ impl<B: ChainApi> Pool<B> {
 			.map(|tx| {
 				let imported = self.pool.write().import(tx?)?;
 
-				self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
+				if let base::Imported::Ready { .. } = imported {
+					self.import_notification_sinks.lock().retain(|sink| sink.unbounded_send(()).is_ok());
+				}
 
 				let mut listener = self.listener.write();
 				fire_events(&mut *listener, &imported);
@@ -300,7 +302,6 @@ fn fire_events<H, H2, Ex>(
 {
 	match *imported {
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
-			println!("Ready for {:?}", hash);
 			listener.ready(hash, None);
 			for f in failed {
 				listener.invalid(f);
@@ -321,6 +322,7 @@ fn fire_events<H, H2, Ex>(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::Stream;
 	use test_runtime::{Block, Extrinsic, Transfer};
 
 	#[derive(Debug, Default)]
@@ -343,7 +345,7 @@ mod tests {
 					4,
 					if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
 					vec![vec![nonce as u8]],
-					15,
+					3,
 				))
 			}
 		}
@@ -420,10 +422,84 @@ mod tests {
 		assert_matches!(res.unwrap_err().kind(), error::ErrorKind::TemporarilyBanned);
 	}
 
+	#[test]
+	fn should_notify_about_pool_events() {
+		let stream = {
+			// given
+			let pool = pool();
+			let stream = pool.import_notification_stream();
+
+			// when
+			let _hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 0,
+			})).unwrap();
+			let _hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 1,
+			})).unwrap();
+			// future doesn't count
+			let _hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 3,
+			})).unwrap();
+
+			assert_eq!(pool.status().ready, 2);
+			assert_eq!(pool.status().future, 1);
+			stream
+		};
+
+		// then
+		let mut it = stream.wait();
+		assert_eq!(it.next(), Some(Ok(())));
+		assert_eq!(it.next(), Some(Ok(())));
+		assert_eq!(it.next(), None);
+	}
+
+	#[test]
+	fn should_clear_stale_transactions() {
+		// given
+		let pool = pool();
+		let hash1 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			from: 1.into(),
+			to: 2.into(),
+			amount: 5,
+			nonce: 0,
+		})).unwrap();
+		let hash2 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			from: 1.into(),
+			to: 2.into(),
+			amount: 5,
+			nonce: 1,
+		})).unwrap();
+		let hash3 = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			from: 1.into(),
+			to: 2.into(),
+			amount: 5,
+			nonce: 3,
+		})).unwrap();
+
+		// when
+		pool.clear_stale(&BlockId::Number(5)).unwrap();
+
+		// then
+		assert_eq!(pool.all(3).len(), 0);
+		assert_eq!(pool.status().future, 0);
+		assert_eq!(pool.status().ready, 0);
+		// make sure they are temporarily banned as well
+		assert!(pool.rotator.is_banned(&hash1));
+		assert!(pool.rotator.is_banned(&hash2));
+		assert!(pool.rotator.is_banned(&hash3));
+	}
 
 	mod listener {
 		use super::*;
-		use futures::Stream;
 
 		#[test]
 		fn should_trigger_ready_and_finalised() {
@@ -500,6 +576,32 @@ mod tests {
 			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
 			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Invalid)));
 			assert_eq!(stream.next(), None);
+		}
+
+		#[test]
+		fn should_trigger_broadcasted() {
+			// given
+			let pool = pool();
+			let uxt = uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 0,
+			});
+			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt).unwrap();
+			assert_eq!(pool.status().ready, 1);
+
+			// when
+			let mut map = HashMap::new();
+			let peers = vec!["a".into(), "b".into(), "c".into()];
+			map.insert(*watcher.hash(), peers.clone());
+			pool.on_broadcasted(map);
+
+
+			// then
+			let mut stream = watcher.into_stream().wait();
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Broadcast(peers))));
 		}
 	}
 }
