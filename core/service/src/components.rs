@@ -172,7 +172,7 @@ pub trait ServiceFactory: 'static + Sized {
 			}
 
 		} else {
-			Err("Chain Specification doesn't containg any consensus_engine name".into())
+			Err("Chain Specification doesn't contain any consensus_engine name".into())
 		}
 	}
 
@@ -187,7 +187,7 @@ pub trait ServiceFactory: 'static + Sized {
 			}
 
 		} else {
-			Err("Chain Specification doesn't containg any consensus_engine name".into())
+			Err("Chain Specification doesn't contain any consensus_engine name".into())
 		}
 	}
 }

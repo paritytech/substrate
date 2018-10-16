@@ -114,7 +114,7 @@ pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut 
 				receipt: None,
 				message_queue: None
 			};
-			// import queue handels verification and importing it into the client
+			// import queue handles verification and importing it into the client
 			queue.import_blocks(BlockOrigin::File, vec![BlockData::<F::Block> { block, origin: None }]);
 		} else {
 			warn!("Error reading block data at {}.", b);

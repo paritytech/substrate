@@ -522,7 +522,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	pub fn import_block(
 		&self,
 		import_block: ImportBlock<Block>,
-	    new_authorities: Option<Vec<AuthorityId>>,
+		new_authorities: Option<Vec<AuthorityId>>,
 	) -> error::Result<ImportResult> {
 
 		let (

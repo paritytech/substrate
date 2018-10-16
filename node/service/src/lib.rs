@@ -86,7 +86,7 @@ impl<B: BlockT> Verifier<B> for NoneVerifier {
 /// A collection of type to generalise specific components over full / light client.
 pub trait Components: service::Components {
 	/// Demo API.
-	type Api: 'static +  Send + Sync;
+	type Api: 'static + Send + Sync;
 	/// Client backend.
 	type Backend: 'static + client::backend::Backend<Block, Blake2Hasher>;
 	/// Client executor.

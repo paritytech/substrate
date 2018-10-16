@@ -380,7 +380,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			sync.on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response)
 		};
 
-		if let Some((origin, new_blocks)) =  new_blocks {
+		if let Some((origin, new_blocks)) = new_blocks {
 			let import_queue = self.sync.read().import_queue();
 			import_queue.import_blocks(origin, new_blocks);
 		}
