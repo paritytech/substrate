@@ -307,9 +307,9 @@ impl_apis! {
 				(false, Call::Timestamp(TimestampCall::set(t))) => t,
 				_ => return Err(BlockBuilderError::Generic("No valid timestamp inherent in block".into())),
 			};
-
-			if *t > data.timestamp + MAX_TIMESTAMP_DRIFT {
-				return Err(BlockBuilderError::TimestampInFuture(*t))
+			let t = (*t).into();
+			if t > data.timestamp + MAX_TIMESTAMP_DRIFT {
+				return Err(BlockBuilderError::TimestampInFuture(t))
 			}
 
 			// Offline indices
