@@ -41,7 +41,7 @@ extern crate substrate_primitives;
 
 use rstd::prelude::*;
 use rstd::{cmp, result};
-use codec::{Encode, Decode, Codec, Input, Output};
+use codec::{Encode, Decode, Codec, Input, Output, HasCompact};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
@@ -125,8 +125,8 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: T::Balance) -> Result;
-		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
+		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: <T::Balance as HasCompact>::Type) -> Result;
+		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: <T::Balance as HasCompact>::Type, reserved: <T::Balance as HasCompact>::Type) -> Result;
 	}
 }
 
@@ -288,10 +288,11 @@ impl<T: Trait> Module<T> {
 	// PUBLIC DISPATCH
 
 	/// Transfer some liquid free balance to another staker.
-	pub fn transfer(origin: T::Origin, dest: Address<T>, value: T::Balance) -> Result {
+	pub fn transfer(origin: T::Origin, dest: Address<T>, value: <T::Balance as HasCompact>::Type) -> Result {
 		let transactor = ensure_signed(origin)?;
 
 		let dest = Self::lookup(dest)?;
+		let value = value.into();
 		let from_balance = Self::free_balance(&transactor);
 		let to_balance = Self::free_balance(&dest);
 		let would_create = to_balance.is_zero();
@@ -328,10 +329,10 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the balances of a given account.
-	fn set_balance(who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
+	fn set_balance(who: Address<T>, free: <T::Balance as HasCompact>::Type, reserved: <T::Balance as HasCompact>::Type) -> Result {
 		let who = Self::lookup(who)?;
-		Self::set_free_balance(&who, free);
-		Self::set_reserved_balance(&who, reserved);
+		Self::set_free_balance(&who, free.into());
+		Self::set_reserved_balance(&who, reserved.into());
 		Ok(())
 	}
 

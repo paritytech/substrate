@@ -332,7 +332,7 @@ mod tests {
 			creation_fee: 0,
 			reclaim_rebate: 0,
 		}.build_storage().unwrap());
-		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69));
+		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69.into()));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(),
@@ -402,7 +402,7 @@ mod tests {
 	#[test]
 	fn bad_extrinsic_not_inserted() {
 		let mut t = new_test_ext();
-		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33.into(), 69));
+		let xt = primitives::testing::TestXt(Some(1), 42, Call::transfer(33.into(), 69.into()));
 		with_externalities(&mut t, || {
 			Executive::initialise_block(&Header::new(1, H256::default(), H256::default(), [69u8; 32].into(), Digest::default()));
 			assert!(Executive::apply_extrinsic(xt).is_err());

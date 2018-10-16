@@ -51,6 +51,7 @@ extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
 use rstd::cmp;
+use codec::{HasCompact, Compact};
 use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
@@ -75,14 +76,16 @@ pub enum LockStatus<BlockNumber: Parameter> {
 /// Preference of what happens on a slash event.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct ValidatorPrefs<Balance> {
+pub struct ValidatorPrefs<Balance: HasCompact + Copy> { // TODO: @bkchr shouldn't need this Copy but derive(Encode) breaks otherwise 
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
+	#[codec(compact)]
 	pub unstake_threshold: u32,
 	// Reward that validator takes up-front; only the rest is split between themselves and nominators.
+	#[codec(encoded_as = "<Balance as HasCompact>::Type")]
 	pub validator_payment: Balance,
 }
 
-impl<B: Default> Default for ValidatorPrefs<B> {
+impl<B: Default + HasCompact + Copy> Default for ValidatorPrefs<B> {
 	fn default() -> Self {
 		ValidatorPrefs {
 			unstake_threshold: 3,
@@ -103,16 +106,16 @@ decl_module! {
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn stake(origin) -> Result;
-		fn unstake(origin, intentions_index: u32) -> Result;
+		fn unstake(origin, intentions_index: Compact<u32>) -> Result;
 		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) -> Result;
-		fn unnominate(origin, target_index: u32) -> Result;
-		fn register_preferences(origin, intentions_index: u32, prefs: ValidatorPrefs<T::Balance>) -> Result;
+		fn unnominate(origin, target_index: Compact<u32>) -> Result;
+		fn register_preferences(origin, intentions_index: Compact<u32>, prefs: ValidatorPrefs<T::Balance>) -> Result;
 
-		fn set_sessions_per_era(new: T::BlockNumber) -> Result;
-		fn set_bonding_duration(new: T::BlockNumber) -> Result;
-		fn set_validator_count(new: u32) -> Result;
+		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) -> Result;
+		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) -> Result;
+		fn set_validator_count(new: Compact<u32>) -> Result;
 		fn force_new_era(apply_rewards: bool) -> Result;
-		fn set_offline_slash_grace(new: u32) -> Result;
+		fn set_offline_slash_grace(new: Compact<u32>) -> Result;
 	}
 }
 
@@ -243,8 +246,9 @@ impl<T: Trait> Module<T> {
 	/// Retract the desire to stake for the transactor.
 	///
 	/// Effects will be felt at the beginning of the next era.
-	fn unstake(origin: T::Origin, intentions_index: u32) -> Result {
+	fn unstake(origin: T::Origin, intentions_index: Compact<u32>) -> Result {
 		let who = ensure_signed(origin)?;
+		let intentions_index: u32 = intentions_index.into();
 		// unstake fails in degenerate case of having too few existing staked parties
 		if Self::intentions().len() <= Self::minimum_validator_count() as usize {
 			return Err("cannot unstake when there are too few staked participants")
@@ -275,8 +279,9 @@ impl<T: Trait> Module<T> {
 
 	/// Will panic if called when source isn't currently nominating target.
 	/// Updates Nominating, NominatorsFor and NominationBalance.
-	fn unnominate(origin: T::Origin, target_index: u32) -> Result {
+	fn unnominate(origin: T::Origin, target_index: Compact<u32>) -> Result {
 		let source = ensure_signed(origin)?;
+		let target_index: u32 = target_index.into();
 		let target_index = target_index as usize;
 
 		let target = <Nominating<T>>::get(&source).ok_or("Account must be nominating")?;
@@ -305,10 +310,11 @@ impl<T: Trait> Module<T> {
 	/// An error (no-op) if `Self::intentions()[intentions_index] != origin`.
 	fn register_preferences(
 		origin: T::Origin,
-		intentions_index: u32,
+		intentions_index: Compact<u32>,
 		prefs: ValidatorPrefs<T::Balance>
 	) -> Result {
 		let who = ensure_signed(origin)?;
+		let intentions_index: u32 = intentions_index.into();
 
 		if Self::intentions().get(intentions_index as usize) != Some(&who) {
 			return Err("Invalid index")
@@ -322,20 +328,21 @@ impl<T: Trait> Module<T> {
 	// PRIV DISPATCH
 
 	/// Set the number of sessions in an era.
-	fn set_sessions_per_era(new: T::BlockNumber) -> Result {
-		<NextSessionsPerEra<T>>::put(&new);
+	fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+		<NextSessionsPerEra<T>>::put(new.into());
 		Ok(())
 	}
 
 	/// The length of the bonding duration in eras.
-	fn set_bonding_duration(new: T::BlockNumber) -> Result {
-		<BondingDuration<T>>::put(&new);
+	fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+		<BondingDuration<T>>::put(new.into());
 		Ok(())
 	}
 
 	/// The length of a staking era in sessions.
-	fn set_validator_count(new: u32) -> Result {
-		<ValidatorCount<T>>::put(&new);
+	fn set_validator_count(new: Compact<u32>) -> Result {
+		let new: u32 = new.into();
+		<ValidatorCount<T>>::put(new);
 		Ok(())
 	}
 
@@ -353,8 +360,9 @@ impl<T: Trait> Module<T> {
 
 
 	/// Set the offline slash grace period.
-	fn set_offline_slash_grace(new: u32) -> Result {
-		<OfflineSlashGrace<T>>::put(&new);
+	fn set_offline_slash_grace(new: Compact<u32>) -> Result {
+		let new: u32 = new.into();
+		<OfflineSlashGrace<T>>::put(new);
 		Ok(())
 	}
 

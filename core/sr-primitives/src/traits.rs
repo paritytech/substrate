@@ -23,7 +23,7 @@ use runtime_io;
 #[cfg(feature = "std")] use serde::{Serialize, de::DeserializeOwned};
 use substrate_primitives;
 use substrate_primitives::Blake2Hasher;
-use codec::{Codec, Encode};
+use codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
@@ -160,7 +160,8 @@ pub trait SimpleArithmetic:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord
+	PartialOrd<Self> + Ord +
+	HasCompact
 {}
 impl<T:
 	Zero + One + IntegerSquareRoot + As<u64> +
@@ -174,7 +175,8 @@ impl<T:
 	CheckedSub +
 	CheckedMul +
 	CheckedDiv +
-	PartialOrd<Self> + Ord
+	PartialOrd<Self> + Ord +
+	HasCompact
 > SimpleArithmetic for T {}
 
 /// Trait for things that can be clear (have no bits set). For numeric types, essentially the same

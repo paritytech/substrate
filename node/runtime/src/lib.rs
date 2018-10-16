@@ -284,7 +284,7 @@ impl_apis! {
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
 			let mut inherent = vec![generic::UncheckedMortalExtrinsic::new_unsigned(
-				Call::Timestamp(TimestampCall::set(data.timestamp))
+				Call::Timestamp(TimestampCall::set(data.timestamp.into()))
 			)];
 
 			if !data.offline_indices.is_empty() {
@@ -307,9 +307,9 @@ impl_apis! {
 				(false, Call::Timestamp(TimestampCall::set(t))) => t,
 				_ => return Err(BlockBuilderError::Generic("No valid timestamp inherent in block".into())),
 			};
-
-			if *t > data.timestamp + MAX_TIMESTAMP_DRIFT {
-				return Err(BlockBuilderError::TimestampInFuture(*t))
+			let t = (*t).into();
+			if t > data.timestamp + MAX_TIMESTAMP_DRIFT {
+				return Err(BlockBuilderError::TimestampInFuture(t))
 			}
 
 			// Offline indices
