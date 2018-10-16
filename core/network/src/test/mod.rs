@@ -27,32 +27,38 @@ use client;
 use client::block_builder::BlockBuilder;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
-use protocol::{Context, Protocol};
+use protocol::{Context, Protocol, ProtocolContext};
 use primitives::{Blake2Hasher};
 use config::ProtocolConfig;
 use service::TransactionPool;
 use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
-use codec::{Encode, Decode};
-use import_queue::SyncImportQueue;
+use codec::Encode;
+use import_queue::{SyncImportQueue, PassThroughVerifier};
 use test_client::{self, TestClient};
 use specialization::Specialization;
 use consensus_gossip::ConsensusGossip;
+use import_queue::ImportQueue;
+use service::ExecuteInContext;
 
 pub use test_client::runtime::{Block, Hash, Transfer, Extrinsic};
+
+struct DummyContextExecutor(Arc<Protocol<Block, DummySpecialization, Hash>>, Arc<RwLock<VecDeque<TestPacket>>>);
+unsafe impl Send for DummyContextExecutor {}
+unsafe impl Sync for DummyContextExecutor {}
+
+impl ExecuteInContext<Block> for DummyContextExecutor {
+	fn execute_in_context<F: Fn(&mut Context<Block>)>(&self, closure: F) {
+		let mut io = TestIo::new(&self.1, None);
+		let mut context = ProtocolContext::new(&self.0.context_data(), &mut io);
+		closure(&mut context);
+	}
+}
 
 /// The test specialization.
 pub struct DummySpecialization {
 	/// Consensus gossip handle.
 	pub gossip: ConsensusGossip<Block>,
-}
-
-#[derive(Encode, Decode)]
-pub struct GossipMessage {
-	/// The topic to classify under.
-	pub topic: Hash,
-	/// The data to send.
-	pub data: Vec<u8>,
 }
 
 impl Specialization<Block> for DummySpecialization {
@@ -66,11 +72,14 @@ impl Specialization<Block> for DummySpecialization {
 		self.gossip.peer_disconnected(ctx, peer_id);
 	}
 
-	fn on_message(&mut self, ctx: &mut Context<Block>, peer_id: NodeIndex, message: &mut Option<::message::Message<Block>>) {
-		if let Some(::message::generic::Message::ChainSpecific(data)) = message.take() {
-			let gossip_message = GossipMessage::decode(&mut &data[..])
-				.expect("gossip messages all in known format; qed");
-			self.gossip.on_chain_specific(ctx, peer_id, data, gossip_message.topic)
+	fn on_message(
+		&mut self,
+			ctx: &mut Context<Block>,
+			peer_id: NodeIndex,
+			message: &mut Option<::message::Message<Block>>
+	) {
+		if let Some(::message::generic::Message::Consensus(topic, data)) = message.take() {
+			self.gossip.on_incoming(ctx, peer_id, topic, data);
 		}
 	}
 }
@@ -128,16 +137,31 @@ pub struct TestPacket {
 
 pub struct Peer {
 	client: Arc<client::Client<test_client::Backend, test_client::Executor, Block>>,
-	pub sync: Protocol<Block, DummySpecialization, Hash>,
-	pub queue: RwLock<VecDeque<TestPacket>>,
+	pub sync: Arc<Protocol<Block, DummySpecialization, Hash>>,
+	pub queue: Arc<RwLock<VecDeque<TestPacket>>>,
+	import_queue: Arc<SyncImportQueue<Block, PassThroughVerifier>>,
+	executor: Arc<DummyContextExecutor>,
 }
 
 impl Peer {
+	fn new(
+		client: Arc<client::Client<test_client::Backend, test_client::Executor, Block>>,
+		sync: Arc<Protocol<Block, DummySpecialization, Hash>>,
+		queue: Arc<RwLock<VecDeque<TestPacket>>>,
+		import_queue: Arc<SyncImportQueue<Block, PassThroughVerifier>>,
+	) -> Self {
+		let executor = Arc::new(DummyContextExecutor(sync.clone(), queue.clone()));
+		Peer { client, sync, queue, import_queue, executor}
+	}
 	/// Called after blockchain has been populated to updated current state.
 	fn start(&self) {
 		// Update the sync state to the latest chain state.
 		let info = self.client.info().expect("In-mem client does not fail");
 		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
+		self.import_queue.start(
+				Arc::downgrade(&self.sync.sync()),
+				Arc::downgrade(&self.executor),
+				Arc::downgrade(&self.sync.context_data().chain)).expect("Test ImportQueue always starts");
 		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
 	}
 
@@ -189,8 +213,7 @@ impl Peer {
 	/// `TestNet::sync_step` needs to be called to ensure it's propagated.
 	pub fn gossip_message(&self, topic: Hash, data: Vec<u8>) {
 		self.sync.with_spec(&mut TestIo::new(&self.queue, None), |spec, ctx| {
-			let message = GossipMessage { topic, data }.encode();
-			spec.gossip.multicast_chain_specific(ctx, message, topic);
+			spec.gossip.multicast(ctx, topic, data);
 		})
 	}
 
@@ -284,24 +307,25 @@ impl TestNet {
 	pub fn add_peer(&mut self, config: &ProtocolConfig) {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
-		let import_queue = Arc::new(SyncImportQueue(false));
+		let import_queue = Arc::new(SyncImportQueue::new(Arc::new(PassThroughVerifier(false))));
 		let specialization = DummySpecialization {
 			gossip: ConsensusGossip::new(),
 		};
 		let sync = Protocol::new(
 			config.clone(),
 			client.clone(),
-			import_queue,
+			import_queue.clone(),
 			None,
 			tx_pool,
 			specialization
 		).unwrap();
 
-		self.peers.push(Arc::new(Peer {
-			sync: sync,
-			client: client,
-			queue: RwLock::new(VecDeque::new()),
-		}));
+		self.peers.push(Arc::new(Peer::new(
+			client,
+			Arc::new(sync),
+			Arc::new(RwLock::new(VecDeque::new())),
+			import_queue
+		)));
 	}
 
 	/// Get reference to peer.

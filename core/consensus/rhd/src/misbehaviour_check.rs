@@ -14,28 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Utility for substrate-based runtimes that want to check misbehavior reports.
-// end::description[]
-
-#![cfg_attr(not(feature = "std"), no_std)]
-
-extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
-extern crate sr_io as runtime_io;
-extern crate sr_primitives as runtime_primitives;
-
-#[cfg(test)]
-extern crate substrate_bft;
-#[cfg(test)]
-extern crate substrate_keyring as keyring;
-#[cfg(test)]
-extern crate rhododendron;
 
 use codec::{Codec, Encode};
 use primitives::{AuthorityId, Signature};
 
-use runtime_primitives::bft::{Action, Message, MisbehaviorKind};
+use rhododendron::messages::{Action, Message, MisbehaviorKind};
+use runtime_io;
 
 // check a message signature. returns true if signed by that authority.
 fn check_message_sig<B: Codec, H: Codec>(
@@ -91,13 +76,14 @@ mod tests {
 
 	use keyring::ed25519;
 	use keyring::Keyring;
+	use rhododendron;
 
 	use runtime_primitives::testing::{H256, Block as RawBlock};
 
 	type Block = RawBlock<u64>;
 
 	fn sign_prepare(key: &ed25519::Pair, round: u32, hash: H256, parent_hash: H256) -> (H256, Signature) {
-		let msg = substrate_bft::sign_message::<Block>(
+		let msg = ::sign_message::<Block>(
 			rhododendron::Message::Vote(rhododendron::Vote::Prepare(round as _, hash)),
 			key,
 			parent_hash
@@ -110,7 +96,7 @@ mod tests {
 	}
 
 	fn sign_commit(key: &ed25519::Pair, round: u32, hash: H256, parent_hash: H256) -> (H256, Signature) {
-		let msg = substrate_bft::sign_message::<Block>(
+		let msg = ::sign_message::<Block>(
 			rhododendron::Message::Vote(rhododendron::Vote::Commit(round as _, hash)),
 			key,
 			parent_hash

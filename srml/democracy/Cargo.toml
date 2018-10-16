@@ -16,7 +16,6 @@ sr-io = { path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 srml-balances = { path = "../balances", default-features = false }
-srml-consensus = { path = "../consensus", default-features = false }
 srml-system = { path = "../system", default-features = false }
 
 [features]
@@ -31,7 +30,6 @@ std = [
 	"sr-io/std",
 	"srml-support/std",
 	"sr-primitives/std",
-	"srml-consensus/std",
 	"srml-balances/std",
 	"srml-system/std",
 ]

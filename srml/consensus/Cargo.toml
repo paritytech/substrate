@@ -22,7 +22,6 @@ std = [
 	"serde/std",
 	"serde_derive",
 	"parity-codec/std",
-	"parity-codec-derive/std",
 	"substrate-primitives/std",
 	"sr-std/std",
 	"sr-io/std",

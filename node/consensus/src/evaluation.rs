@@ -19,8 +19,8 @@
 use super::MAX_TRANSACTIONS_SIZE;
 
 use codec::{Decode, Encode};
-use node_runtime::{Block as GenericBlock, CheckedBlock};
-use node_primitives::{Hash, BlockNumber, Timestamp};
+use node_runtime::{Block as GenericBlock};
+use node_primitives::{Hash, BlockNumber};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
 
 
@@ -29,10 +29,6 @@ error_chain! {
 		BadProposalFormat {
 			description("Proposal provided not a block."),
 			display("Proposal provided not a block."),
-		}
-		TimestampInFuture {
-			description("Proposal had timestamp too far in the future."),
-			display("Proposal had timestamp too far in the future."),
 		}
 		WrongParentHash(expected: Hash, got: Hash) {
 			description("Proposal had wrong parent hash."),
@@ -56,19 +52,15 @@ error_chain! {
 /// upon any initial validity checks failing.
 pub fn evaluate_initial<Block: BlockT, Hash>(
 	proposal: &Block,
-	now: Timestamp,
 	parent_hash: &Hash,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
-) -> Result<CheckedBlock>
+) -> Result<()>
 where
 	Hash: PartialEq<<<GenericBlock as BlockT>::Header as HeaderT>::Hash>,
 	Hash: Into<self::Hash> + Clone,
 {
-	const MAX_TIMESTAMP_DRIFT: Timestamp = 60;
-
 	let encoded = Encode::encode(proposal);
 	let proposal = GenericBlock::decode(&mut &encoded[..])
-		.and_then(|b| CheckedBlock::new(b).ok())
 		.ok_or_else(|| ErrorKind::BadProposalFormat)?;
 
 	let transactions_size = proposal.extrinsics.iter().fold(0, |a, tx| {
@@ -87,12 +79,5 @@ where
 		bail!(ErrorKind::WrongNumber(parent_number.as_() + 1, proposal.header.number));
 	}
 
-	let block_timestamp = proposal.timestamp();
-
-	// lenient maximum -- small drifts will just be delayed using a timer.
-	if block_timestamp > now + MAX_TIMESTAMP_DRIFT {
-		bail!(ErrorKind::TimestampInFuture)
-	}
-
-	Ok(proposal)
+	Ok(())
 }
