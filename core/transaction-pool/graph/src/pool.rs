@@ -101,7 +101,8 @@ impl<B: ChainApi> Pool<B> {
 			.map(|xt| -> Result<_, B::Error> {
 				let hash = self.api.hash(&xt);
 				if self.rotator.is_banned(&hash) {
-					return Err(error::ErrorKind::TemporarilyBanned.into())?;
+					self.listener.write().rejected(&hash, false);
+					bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
 				}
 
 				match self.api.validate_transaction(at, &xt)? {
@@ -143,8 +144,10 @@ impl<B: ChainApi> Pool<B> {
 
 	/// Import a single extrinsic and starts to watch their progress in the pool.
 	pub fn submit_and_watch(&self, at: &BlockId<B::Block>, xt: ExtrinsicFor<B>) -> Result<Watcher<ExHash<B>, BlockHash<B>>, B::Error> {
-		let xt = self.submit_one(at, xt)?;
-		Ok(self.listener.write().create_watcher(xt))
+		let hash = self.api.hash(&xt);
+		let watcher = self.listener.write().create_watcher(hash);
+		self.submit_one(at, xt)?;
+		Ok(watcher)
 	}
 
 	/// Prunes ready transactions that provide given list of tags.
@@ -298,6 +301,7 @@ fn fire_events<H, H2, Ex>(
 {
 	match *imported {
 		base::Imported::Ready { ref promoted, ref failed, ref removed, ref hash } => {
+			println!("Ready for {:?}", hash);
 			listener.ready(hash, None);
 			for f in failed {
 				listener.rejected(f, true);
@@ -317,9 +321,140 @@ fn fire_events<H, H2, Ex>(
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use test_runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer};
+
+	#[derive(Debug, Default)]
+	struct TestApi;
+
+	impl ChainApi for TestApi {
+		type Block = Block;
+		type Hash = u64;
+		type Error = error::Error;
+
+		/// Verify extrinsic at given block.
+		fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &ExtrinsicFor<Self>) -> Result<TransactionValidity, Self::Error> {
+			let block_number = self.block_id_to_number(at)?.unwrap();
+			let nonce = uxt.transfer.nonce;
+
+			if nonce < block_number {
+				Ok(TransactionValidity::Invalid)
+			} else {
+				Ok(TransactionValidity::Valid(
+					4,
+					if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
+					vec![vec![nonce as u8]],
+					15,
+				))
+			}
+		}
+
+		/// Returns a block number given the block id.
+		fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> Result<Option<NumberFor<Self>>, Self::Error> {
+			Ok(match at {
+				BlockId::Number(num) => Some(*num),
+				BlockId::Hash(_) => None,
+			})
+		}
+
+		/// Returns a block hash given the block id.
+		fn block_id_to_hash(&self, at: &BlockId<Self::Block>) -> Result<Option<BlockHash<Self>>, Self::Error> {
+			Ok(match at {
+				BlockId::Number(num) => Some((*num).into()),
+				BlockId::Hash(_) => None,
+			})
+		}
+
+		/// Hash the extrinsic.
+		fn hash(&self, uxt: &ExtrinsicFor<Self>) -> Self::Hash {
+			(uxt.transfer.from.low_u64() << 5) + uxt.transfer.nonce
+		}
+	}
+
+	fn uxt(transfer: Transfer) -> Extrinsic {
+		Extrinsic {
+			transfer,
+			signature: Default::default(),
+		}
+	}
+
+	fn pool() -> Pool<TestApi> {
+		Pool::new(Default::default(), TestApi::default())
+	}
+
+
 	#[test]
-	#[ignore]
-	fn should_have_some_basic_tests() {
-		assert_eq!(true, false);
+	fn should_validate_and_import_transaction() {
+		// given
+		let pool = pool();
+
+		// when
+		let hash = pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+			from: 1.into(),
+			to: 2.into(),
+			amount: 5,
+			nonce: 0,
+		})).unwrap();
+
+		// then
+		assert_eq!(pool.ready(|pending| pending.map(|tx| tx.hash.clone()).collect::<Vec<_>>()), vec![hash]);
+	}
+
+	mod listener {
+		use super::*;
+		use futures::Stream;
+
+		#[test]
+		fn should_trigger_ready_and_finalised() {
+			// given
+			let pool = pool();
+			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 0,
+			})).unwrap();
+			assert_eq!(pool.status().ready, 1);
+			assert_eq!(pool.status().future, 0);
+
+			// when
+			pool.prune_tags(&BlockId::Number(2), vec![vec![0u8]]).unwrap();
+			assert_eq!(pool.status().ready, 0);
+			assert_eq!(pool.status().future, 0);
+
+			// then
+			let mut stream = watcher.into_stream().wait();
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Finalised(2.into()))));
+			assert_eq!(stream.next(), None);
+		}
+
+		#[test]
+		fn should_trigger_future_and_ready_after_promoted() {
+			// given
+			let pool = pool();
+			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 1,
+			})).unwrap();
+			assert_eq!(pool.status().ready, 0);
+			assert_eq!(pool.status().future, 1);
+
+			// when
+			pool.submit_one(&BlockId::Number(0), uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 0,
+			})).unwrap();
+			assert_eq!(pool.status().ready, 2);
+
+			// then
+			let mut stream = watcher.into_stream().wait();
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Future)));
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
+		}
 	}
 }

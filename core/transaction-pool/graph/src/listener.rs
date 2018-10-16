@@ -64,13 +64,15 @@ impl<H: hash::Hash + traits::Member, H2: Clone> Listener<H, H2> {
 
 	/// New transaction was added to the ready pool or promoted from the future pool.
 	pub fn ready(&mut self, tx: &H, old: Option<&H>) {
+		self.fire(tx, |watcher| watcher.ready());
 		if let Some(old) = old {
 			self.fire(old, |watcher| watcher.usurped(tx.clone()));
 		}
 	}
 
 	/// New transaction was added to the future pool.
-	pub fn future(&mut self, _tx: &H) {
+	pub fn future(&mut self, tx: &H) {
+		self.fire(tx, |watcher| watcher.future());
 	}
 
 	/// Transaction was dropped from the pool because of the limit.

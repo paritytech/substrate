@@ -37,6 +37,9 @@ extern crate sr_primitives;
 #[macro_use] extern crate log;
 #[macro_use] extern crate serde_derive;
 
+#[cfg(test)]
+extern crate substrate_test_runtime as test_runtime;
+
 mod future;
 mod listener;
 mod pool;
