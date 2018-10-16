@@ -37,6 +37,8 @@ pub enum Status<H, H2> {
 	Broadcast(Vec<String>),
 	/// Extrinsic has been dropped from the pool because of the limit.
 	Dropped,
+	/// Extrinsic was detected as invalid.
+	Invalid,
 }
 
 /// Extrinsic watcher.
@@ -45,9 +47,15 @@ pub enum Status<H, H2> {
 #[derive(Debug)]
 pub struct Watcher<H, H2> {
 	receiver: mpsc::UnboundedReceiver<Status<H, H2>>,
+	hash: H,
 }
 
 impl<H, H2> Watcher<H, H2> {
+	/// Returns the transaction hash.
+	pub fn hash(&self) -> &H {
+		&self.hash
+	}
+
 	/// Pipe the notifications to given sink.
 	///
 	/// Make sure to drive the future to completion.
@@ -75,11 +83,12 @@ impl<H, H2> Default for Sender<H, H2> {
 
 impl<H: Clone, H2: Clone> Sender<H, H2> {
 	/// Add a new watcher to this sender object.
-	pub fn new_watcher(&mut self) -> Watcher<H, H2> {
+	pub fn new_watcher(&mut self, hash: H) -> Watcher<H, H2> {
 		let (tx, receiver) = mpsc::unbounded();
 		self.receivers.push(tx);
 		Watcher {
 			receiver,
+			hash,
 		}
 	}
 
@@ -101,6 +110,13 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 	/// Extrinsic has been finalised in block with given hash.
 	pub fn finalised(&mut self, hash: H2) {
 		self.send(Status::Finalised(hash));
+		self.finalised = true;
+	}
+
+	/// Extrinsic has been marked as invalid by the block builder.
+	pub fn invalid(&mut self) {
+		self.send(Status::Invalid);
+		// we mark as finalised as there are no more notifications
 		self.finalised = true;
 	}
 

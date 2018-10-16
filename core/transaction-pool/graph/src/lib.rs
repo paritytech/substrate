@@ -40,6 +40,9 @@ extern crate sr_primitives;
 
 #[cfg(test)]
 extern crate substrate_test_runtime as test_runtime;
+#[cfg(test)]
+#[macro_use]
+extern crate assert_matches;
 
 mod future;
 mod listener;

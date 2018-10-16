@@ -3259,6 +3259,7 @@ dependencies = [
 name = "substrate-transaction-graph"
 version = "0.1.0"
 dependencies = [
+ "assert_matches 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "futures 0.1.24 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
