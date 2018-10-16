@@ -891,6 +891,100 @@ mod benchmarks {
 	}
 
 	#[bench]
+	fn bench_accountdb_low_depth_inserts_gets(b: &mut Bencher) {
+		let mut direct = DirectAccountDb::default();
+
+		fn aux<'a>(
+			overlay: &mut OverlayAccountDb<'a, Test>,
+			mut accounts_per_level: Vec<u64>,
+			n_accounts: u64,
+		) -> u64 {
+			// checkpoint and insert data into accountdb
+			if let Some(accounts) = accounts_per_level.pop() {
+				overlay.checkpoint();
+
+				for n in 0..accounts {
+					let account = n_accounts + n;
+					overlay.set_balance(
+						&account,
+						42,
+					);
+				}
+
+				aux(overlay, accounts_per_level, n_accounts + accounts)
+
+			} else {
+				// get balance for all touched accounts
+				let mut total_balance = 0;
+				for account in 0..n_accounts {
+					total_balance += overlay.get_balance(&account);
+				}
+				total_balance
+			}
+		}
+
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				b.iter(move || {
+					let mut overlay = OverlayAccountDb::<Test>::new(&mut direct);
+
+					aux(
+						&mut overlay,
+						vec![100, 10, 10],
+						0,
+					);
+				});
+			}
+		);
+	}
+
+	#[bench]
+	fn bench_accountdb_low_depth_inserts_changeset(b: &mut Bencher) {
+		let mut direct = DirectAccountDb::default();
+
+		fn aux<'a>(
+			overlay: &mut OverlayAccountDb<'a, Test>,
+			mut accounts_per_level: Vec<u64>,
+			n_accounts: u64,
+		) {
+			// checkpoint and insert data into accountdb
+			if let Some(accounts) = accounts_per_level.pop() {
+				overlay.checkpoint();
+
+				for n in 0..accounts {
+					let account = n_accounts + n;
+					overlay.set_balance(
+						&account,
+						42,
+					);
+				}
+
+				aux(overlay, accounts_per_level, n_accounts + accounts);
+
+				overlay.commit_checkpoint();
+			}
+		}
+
+		with_externalities(
+			&mut ExtBuilder::default().build(),
+			|| {
+				b.iter(move || {
+					let mut overlay = OverlayAccountDb::<Test>::new(&mut direct);
+
+					aux(
+						&mut overlay,
+						vec![100, 10, 10],
+						0,
+					);
+
+					overlay.commit();
+				});
+			}
+		);
+	}
+
+	#[bench]
 	fn bench_accountdb_snapshot(b: &mut Bencher) {
 		let mut direct = DirectAccountDb::default();
 		let mut overlay = OverlayAccountDb::<Test>::new(&mut direct);
