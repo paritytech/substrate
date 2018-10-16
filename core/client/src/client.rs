@@ -1126,6 +1126,15 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 		self.call_api_at(at, "inherent_extrinsics", &(inherent))
 	}
 
+	fn check_inherents<InherentData: Encode + Decode>(
+		&self,
+		at: &BlockId<Block>,
+		block: &Block,
+		data: &InherentData
+	) -> Result<Result<(), api::BlockBuilderError>, Self::Error> {
+		self.call_api_at(at, "check_inherents", &(block, data))
+	}
+
 	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Hash, Self::Error> {
 		self.call_api_at(at, "random_seed", &())
 	}

@@ -57,13 +57,13 @@ extern crate srml_treasury as treasury;
 extern crate sr_version as version;
 extern crate node_primitives;
 
-#[cfg(feature = "std")]
-mod checked_block;
-
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
-use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
-use runtime_api::runtime::*;
+use node_primitives::{
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
+	SessionKey, Signature, InherentData, Timestamp as TimestampType
+};
+use runtime_api::{BlockBuilderError, runtime::*};
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
@@ -83,8 +83,6 @@ pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
 pub use srml_support::StorageValue;
-#[cfg(any(feature = "std", test))]
-pub use checked_block::CheckedBlock;
 
 const TIMESTAMP_SET_POSITION: u32 = 0;
 const NOTE_OFFLINE_POSITION: u32 = 1;
@@ -271,7 +269,7 @@ impl_apis! {
 		}
 	}
 
-	impl BlockBuilder<Block, InherentData, UncheckedExtrinsic> for Runtime {
+	impl BlockBuilder<Block, InherentData, UncheckedExtrinsic, InherentData> for Runtime {
 		fn initialise_block(header: <Block as BlockT>::Header) {
 			Executive::initialise_block(&header)
 		}
@@ -296,6 +294,38 @@ impl_apis! {
 			}
 
 			inherent
+		}
+
+		fn check_inherents(block: Block, data: InherentData) -> Result<(), BlockBuilderError> {
+			// TODO: v1: should be automatically gathered
+
+			// Timestamp module...
+			const MAX_TIMESTAMP_DRIFT: TimestampType = 60;
+			let xt = block.extrinsics.get(TIMESTAMP_SET_POSITION as usize)
+				.ok_or_else(|| BlockBuilderError::Generic("No valid timestamp inherent in block".into()))?;
+			let t = match (xt.is_signed(), &xt.function) {
+				(false, Call::Timestamp(TimestampCall::set(t))) => t,
+				_ => return Err(BlockBuilderError::Generic("No valid timestamp inherent in block".into())),
+			};
+
+			if *t > data.timestamp + MAX_TIMESTAMP_DRIFT {
+				return Err(BlockBuilderError::TimestampInFuture(*t))
+			}
+
+			// Offline indices
+			let noted_offline =
+				block.extrinsics.get(NOTE_OFFLINE_POSITION as usize).and_then(|xt| match xt.function {
+					Call::Consensus(ConsensusCall::note_offline(ref x)) => Some(&x[..]),
+					_ => None,
+				}).unwrap_or(&[]);
+
+			noted_offline.iter().try_for_each(|n|
+				if !data.offline_indices.contains(n) {
+					Err(BlockBuilderError::Generic("Online node marked offline".into()))
+				} else {
+					Ok(())
+				}
+			)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
