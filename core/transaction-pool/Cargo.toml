@@ -7,7 +7,7 @@ authors = ["Parity Technologies <admin@parity.io>"]
 error-chain = "0.12"
 futures = "0.1"
 log = "0.4"
-parity-codec = "2.0"
+parity-codec = "2.1"
 parking_lot = "0.4"
 sr-primitives = { path = "../sr-primitives" }
 substrate-client = { path = "../client" }

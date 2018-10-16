@@ -43,6 +43,7 @@ extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
 use primitives::traits::{As, Zero, One, OnFinalise, Convert};
+use codec::HasCompact;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use system::ensure_signed;
@@ -68,7 +69,7 @@ decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn set_key(origin, key: T::SessionKey) -> Result;
 
-		fn set_length(new: T::BlockNumber) -> Result;
+		fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result;
 		fn force_new_session(apply_rewards: bool) -> Result;
 	}
 }
@@ -133,8 +134,8 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set a new session length. Won't kick in until the next session change (at current length).
-	fn set_length(new: T::BlockNumber) -> Result {
-		<NextSessionLength<T>>::put(new);
+	fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+		<NextSessionLength<T>>::put(new.into());
 		Ok(())
 	}
 
@@ -309,7 +310,7 @@ mod tests {
 	fn should_work_with_early_exit() {
 		with_externalities(&mut new_test_ext(), || {
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(10));
+			assert_ok!(Session::set_length(10.into()));
 			assert_eq!(Session::blocks_remaining(), 1);
 			Session::check_rotate_session(1);
 
@@ -344,14 +345,14 @@ mod tests {
 		with_externalities(&mut new_test_ext(), || {
 			// Block 1: Change to length 3; no visible change.
 			System::set_block_number(1);
-			assert_ok!(Session::set_length(3));
+			assert_ok!(Session::set_length(3.into()));
 			Session::check_rotate_session(1);
 			assert_eq!(Session::length(), 2);
 			assert_eq!(Session::current_index(), 0);
 
 			// Block 2: Length now changed to 3. Index incremented.
 			System::set_block_number(2);
-			assert_ok!(Session::set_length(3));
+			assert_ok!(Session::set_length(3.into()));
 			Session::check_rotate_session(2);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);
@@ -364,7 +365,7 @@ mod tests {
 
 			// Block 4: Change to length 2; no visible change.
 			System::set_block_number(4);
-			assert_ok!(Session::set_length(2));
+			assert_ok!(Session::set_length(2.into()));
 			Session::check_rotate_session(4);
 			assert_eq!(Session::length(), 3);
 			assert_eq!(Session::current_index(), 1);

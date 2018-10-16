@@ -20,27 +20,50 @@
 use std::fmt;
 
 use rstd::prelude::*;
-use codec::{Decode, Encode, Input};
+use codec::{Decode, Encode, Codec, Input, HasCompact};
 use traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup};
 use super::CheckedExtrinsic;
+
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
+pub struct SignatureContent<Address, Index, Signature>
+where
+	Address: Codec,
+	Index: HasCompact + Codec,
+	Signature: Codec,
+{
+	signed: Address,
+	signature: Signature,
+	index: Index,
+}
 
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct UncheckedExtrinsic<Address, Index, Call, Signature> {
+pub struct UncheckedExtrinsic<Address, Index, Call, Signature>
+where
+	Address: Codec,
+	Index: HasCompact + Codec,
+	Signature: Codec,
+{
 	/// The signature, address and number of extrinsics have come before from
 	/// the same signer, if this is a signed extrinsic.
-	pub signature: Option<(Address, Signature, Index)>,
+	pub signature: Option<SignatureContent<Address, Index, Signature>>,
 	/// The function that should be called.
 	pub function: Call,
 }
 
-impl<Address, Index, Call, Signature> UncheckedExtrinsic<Address, Index, Call, Signature> {
+impl<Address, Index, Signature, Call> UncheckedExtrinsic<Address, Index, Call, Signature>
+where
+	Address: Codec,
+	Index: HasCompact + Codec,
+	Signature: Codec,
+{
 	/// New instance of a signed extrinsic aka "transaction".
 	pub fn new_signed(index: Index, function: Call, signed: Address, signature: Signature) -> Self {
 		UncheckedExtrinsic {
-			signature: Some((signed, signature, index)),
+			signature: Some(SignatureContent{signed, signature, index}),
 			function,
 		}
 	}
@@ -59,13 +82,13 @@ impl<Address, Index, Call, Signature> UncheckedExtrinsic<Address, Index, Call, S
 	}
 }
 
-impl<Address, AccountId, Index, Call, Signature, Context> traits::Checkable<Context>
+impl<Address, Index, Signature, Call, AccountId, Context> traits::Checkable<Context>
 	for UncheckedExtrinsic<Address, Index, Call, Signature>
 where
-	Address: Member + MaybeDisplay,
-	Index: Encode + Member + MaybeDisplay + SimpleArithmetic,
+	Address: Member + MaybeDisplay + Codec,
+	Index: Member + MaybeDisplay + SimpleArithmetic + Codec,
 	Call: Encode + Member,
-	Signature: Member + traits::Verify<Signer=AccountId>,
+	Signature: Member + traits::Verify<Signer=AccountId> + Codec,
 	AccountId: Member + MaybeDisplay,
 	Context: Lookup<Source=Address, Target=AccountId>,
 {
@@ -73,7 +96,7 @@ where
 
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
-			Some((signed, signature, index)) => {
+			Some(SignatureContent{signed, signature, index}) => {
 				let payload = (index, self.function);
 				let signed = context.lookup(signed)?;
 				if !::verify_encoded_lazy(&signature, &payload, &signed) {
@@ -92,13 +115,8 @@ where
 	}
 }
 
-impl<Address, Index, Call, Signature> Decode
+impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Decode> Decode
 	for UncheckedExtrinsic<Address, Index, Call, Signature>
-where
-	Address: Decode,
-	Signature: Decode,
-	Index: Decode,
-	Call: Decode,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
@@ -114,13 +132,8 @@ where
 	}
 }
 
-impl<Address, Index, Call, Signature> Encode
+impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> Encode
 	for UncheckedExtrinsic<Address, Index, Call, Signature>
-where
-	Address: Encode,
-	Signature: Encode,
-	Index: Encode,
-	Call: Encode,
 {
 	fn encode(&self) -> Vec<u8> {
 		super::encode_with_vec_prefix::<Self, _>(|v| {
@@ -132,13 +145,16 @@ where
 
 /// TODO: use derive when possible.
 #[cfg(feature = "std")]
-impl<Address, Index, Call, Signature> fmt::Debug for UncheckedExtrinsic<Address, Index, Call, Signature> where
-	Address: fmt::Debug,
-	Index: fmt::Debug,
+impl<Address, Index, Signature, Call> fmt::Debug
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
+where
+	Address: fmt::Debug + Codec,
+	Index: fmt::Debug + HasCompact + Codec,
+	Signature: Codec,
 	Call: fmt::Debug,
 {
 	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.0, &x.2)), self.function)
+		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.signed, &x.index)), self.function)
 	}
 }
 

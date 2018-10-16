@@ -7,8 +7,8 @@ authors = ["Parity Technologies <admin@parity.io>"]
 parking_lot = "0.5"
 log = "0.4"
 substrate-primitives = { path = "../../core/primitives" }
-parity-codec = "2.0"
-parity-codec-derive = "2.0"
+parity-codec = "2.1"
+parity-codec-derive = "2.1"
 
 [dev-dependencies]
 env_logger = "0.4"

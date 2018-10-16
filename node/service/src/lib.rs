@@ -249,7 +249,7 @@ mod tests {
 			}
 		};
 		let extrinsic_factory = |service: &<Factory as service::ServiceFactory>::FullService| {
-			let payload = (0, Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69)), Era::immortal(), service.client().genesis_hash());
+			let payload = (0, Call::Balances(BalancesCall::transfer(RawAddress::Id(bob.public().0.into()), 69.into())), Era::immortal(), service.client().genesis_hash());
 			let signature = alice.sign(&payload.encode()).into();
 			let id = alice.public().0.into();
 			let xt = UncheckedExtrinsic {

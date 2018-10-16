@@ -19,8 +19,8 @@ rand = "0.5"
 substrate-primitives = { path = "../../core/primitives" }
 substrate-client = { path = "../../core/client" }
 sr-primitives = { path = "../../core/sr-primitives" }
-parity-codec = "2.0"
-parity-codec-derive = "2.0"
+parity-codec = "2.1"
+parity-codec-derive = "2.1"
 substrate-network-libp2p = { path = "../../core/network-libp2p" }
 tokio = "0.1.11"
 

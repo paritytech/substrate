@@ -416,6 +416,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		}
 	}
 
+	#[allow(dead_code)]
 	pub fn peer_info(&self, peer: NodeIndex) -> Option<PeerInfo<B>> {
 		self.context_data.peers.read().get(&peer).map(|p| {
 			PeerInfo {

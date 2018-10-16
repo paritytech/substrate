@@ -13,7 +13,7 @@ futures = "0.1.17"
 slog = "^2"
 heapsize = "0.4"
 substrate-consensus-rhd = { path = "../consensus/rhd" }
-parity-codec = "2.0"
+parity-codec = "2.1"
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }
 sr-primitives = { path = "../sr-primitives" }

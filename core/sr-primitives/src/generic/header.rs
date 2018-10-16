@@ -19,7 +19,7 @@
 #[cfg(feature = "std")]
 use serde::{Deserialize, Deserializer};
 
-use codec::{Decode, Encode, Codec, Input, Output};
+use codec::{Decode, Encode, Codec, Input, Output, HasCompact};
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
 	Hash as HashT, DigestItem as DigestItemT};
 use generic::Digest;
@@ -82,7 +82,7 @@ impl<'a, Number: 'a, Hash: 'a + HashT, DigestItem: 'a> Deserialize<'a> for Heade
 }
 
 impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
-	Number: Decode,
+	Number: HasCompact,
 	Hash: HashT,
 	Hash::Output: Decode,
 	DigestItem: DigestItemT + Decode,
@@ -90,7 +90,7 @@ impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(Header {
 			parent_hash: Decode::decode(input)?,
-			number: Decode::decode(input)?,
+			number: <<Number as HasCompact>::Type>::decode(input)?.into(),
 			state_root: Decode::decode(input)?,
 			extrinsics_root: Decode::decode(input)?,
 			digest: Decode::decode(input)?,
@@ -99,14 +99,14 @@ impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
-	Number: Encode,
+	Number: HasCompact + Copy,
 	Hash: HashT,
 	Hash::Output: Encode,
 	DigestItem: DigestItemT + Encode,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		dest.push(&self.parent_hash);
-		dest.push(&self.number);
+		dest.push(&<<Number as HasCompact>::Type>::from(self.number));
 		dest.push(&self.state_root);
 		dest.push(&self.extrinsics_root);
 		dest.push(&self.digest);
@@ -114,7 +114,7 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
-	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
+	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
 	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
@@ -157,7 +157,7 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 }
 
 impl<Number, Hash, DigestItem> Header<Number, Hash, DigestItem> where
-	Number: Member + ::rstd::hash::Hash + Copy + Codec + MaybeDisplay + SimpleArithmetic + Codec,
+	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
 	DigestItem: DigestItemT + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,

@@ -218,7 +218,7 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) =>
-							$call_type::$fn_name( $( $param_name.clone() ),* )
+							$call_type::$fn_name( $( (*$param_name).clone() ),* )
 					,)*
 					_ => unreachable!(),
 				}
