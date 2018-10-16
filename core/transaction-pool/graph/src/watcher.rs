@@ -22,7 +22,7 @@ use futures::{
 };
 
 /// Possible extrinsic status events
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Status<H, H2> {
 	/// Extrinsic is part of the future queue.
@@ -81,6 +81,16 @@ impl<H: Clone, H2: Clone> Sender<H, H2> {
 		Watcher {
 			receiver,
 		}
+	}
+
+	/// Transaction became ready.
+	pub fn ready(&mut self) {
+		self.send(Status::Ready)
+	}
+
+	/// Transaction was moved to future.
+	pub fn future(&mut self) {
+		self.send(Status::Future)
 	}
 
 	/// Some state change (perhaps another extrinsic was included) rendered this extrinsic invalid.
