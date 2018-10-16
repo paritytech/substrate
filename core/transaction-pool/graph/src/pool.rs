@@ -101,7 +101,6 @@ impl<B: ChainApi> Pool<B> {
 			.map(|xt| -> Result<_, B::Error> {
 				let hash = self.api.hash(&xt);
 				if self.rotator.is_banned(&hash) {
-					self.listener.write().rejected(&hash, false);
 					bail!(error::Error::from(error::ErrorKind::TemporarilyBanned))
 				}
 
@@ -120,7 +119,7 @@ impl<B: ChainApi> Pool<B> {
 						bail!(error::Error::from(error::ErrorKind::InvalidTransaction))
 					},
 					TransactionValidity::Unknown => {
-						self.listener.write().rejected(&hash, false);
+						self.listener.write().invalid(&hash);
 						bail!(error::Error::from(error::ErrorKind::UnknownTransactionValidity))
 					},
 				}
@@ -304,7 +303,7 @@ fn fire_events<H, H2, Ex>(
 			println!("Ready for {:?}", hash);
 			listener.ready(hash, None);
 			for f in failed {
-				listener.rejected(f, true);
+				listener.invalid(f);
 			}
 			for r in removed {
 				listener.dropped(&r.hash, Some(hash));
@@ -322,7 +321,7 @@ fn fire_events<H, H2, Ex>(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use test_runtime::{AccountId, Block, Hash, Index, Extrinsic, Transfer};
+	use test_runtime::{Block, Extrinsic, Transfer};
 
 	#[derive(Debug, Default)]
 	struct TestApi;
@@ -400,6 +399,28 @@ mod tests {
 		assert_eq!(pool.ready(|pending| pending.map(|tx| tx.hash.clone()).collect::<Vec<_>>()), vec![hash]);
 	}
 
+	#[test]
+	fn should_reject_if_temporarily_banned() {
+		// given
+		let pool = pool();
+		let uxt = uxt(Transfer {
+			from: 1.into(),
+			to: 2.into(),
+			amount: 5,
+			nonce: 0,
+		});
+
+		// when
+		pool.rotator.ban(&time::Instant::now(), &[pool.hash_of(&uxt)]);
+		let res = pool.submit_one(&BlockId::Number(0), uxt);
+		assert_eq!(pool.status().ready, 0);
+		assert_eq!(pool.status().future, 0);
+
+		// then
+		assert_matches!(res.unwrap_err().kind(), error::ErrorKind::TemporarilyBanned);
+	}
+
+
 	mod listener {
 		use super::*;
 		use futures::Stream;
@@ -455,6 +476,30 @@ mod tests {
 			let mut stream = watcher.into_stream().wait();
 			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Future)));
 			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
+		}
+
+		#[test]
+		fn should_trigger_invalid_and_ban() {
+			// given
+			let pool = pool();
+			let uxt = uxt(Transfer {
+				from: 1.into(),
+				to: 2.into(),
+				amount: 5,
+				nonce: 0,
+			});
+			let watcher = pool.submit_and_watch(&BlockId::Number(0), uxt).unwrap();
+			assert_eq!(pool.status().ready, 1);
+
+			// when
+			pool.remove_invalid(&[*watcher.hash()]);
+
+
+			// then
+			let mut stream = watcher.into_stream().wait();
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Ready)));
+			assert_eq!(stream.next(), Some(Ok(::watcher::Status::Invalid)));
+			assert_eq!(stream.next(), None);
 		}
 	}
 }

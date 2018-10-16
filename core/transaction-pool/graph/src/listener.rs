@@ -53,8 +53,8 @@ impl<H: hash::Hash + traits::Member, H2: Clone> Listener<H, H2> {
 	///
 	/// The watcher can be used to subscribe to lifecycle events of that extrinsic.
 	pub fn create_watcher(&mut self, hash: H) -> watcher::Watcher<H, H2> {
-		let sender = self.watchers.entry(hash).or_insert_with(watcher::Sender::default);
-		sender.new_watcher()
+		let sender = self.watchers.entry(hash.clone()).or_insert_with(watcher::Sender::default);
+		sender.new_watcher(hash)
 	}
 
 	/// Notify the listeners about extrinsic broadcast.
@@ -83,14 +83,10 @@ impl<H: hash::Hash + traits::Member, H2: Clone> Listener<H, H2> {
 		})
 	}
 
-	/// Transaction was rejected from the pool.
-	pub fn rejected(&mut self, tx: &H, is_invalid: bool) {
-		warn!(target: "transaction-pool", "Extrinsic rejected ({}): {:?}", is_invalid, tx);
-	}
-
 	/// Transaction was removed as invalid.
 	pub fn invalid(&mut self, tx: &H) {
 		warn!(target: "transaction-pool", "Extrinsic invalid: {:?}", tx);
+		self.fire(tx, |watcher| watcher.invalid());
 	}
 
 	/// Transaction was pruned from the pool.
