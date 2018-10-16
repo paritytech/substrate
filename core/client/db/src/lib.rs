@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -69,8 +69,7 @@ use trie::MemoryDB;
 use parking_lot::RwLock;
 use primitives::{H256, AuthorityId, Blake2Hasher, ChangesTrieConfiguration};
 use primitives::storage::well_known_keys;
-use runtime_primitives::generic::BlockId;
-use runtime_primitives::bft::Justification;
+use runtime_primitives::{generic::BlockId, Justification};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
@@ -129,7 +128,7 @@ mod columns {
 
 struct PendingBlock<Block: BlockT> {
 	header: Block::Header,
-	justification: Option<Justification<Block::Hash>>,
+	justification: Option<Justification>,
 	body: Option<Vec<Block::Extrinsic>>,
 	leaf_state: NewBlockState,
 }
@@ -243,7 +242,7 @@ impl<Block: BlockT> client::blockchain::Backend<Block> for BlockchainDb<Block> {
 		}
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification<Block::Hash>>, client::error::Error> {
+	fn justification(&self, id: BlockId<Block>) -> Result<Option<Justification>, client::error::Error> {
 		match read_db(&*self.db, columns::HASH_LOOKUP, columns::JUSTIFICATION, id)? {
 			Some(justification) => match Decode::decode(&mut &justification[..]) {
 				Some(justification) => Ok(Some(justification)),
@@ -288,7 +287,7 @@ where Block: BlockT,
 		&mut self,
 		header: Block::Header,
 		body: Option<Vec<Block::Extrinsic>>,
-		justification: Option<Justification<Block::Hash>>,
+		justification: Option<Justification>,
 		leaf_state: NewBlockState,
 	) -> Result<(), client::error::Error> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
@@ -409,9 +408,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 					.map(Some),
 				None => Ok(None)
 			})?
-			.and_then(|header| header.digest().logs().iter()
-				.find(|log| log.as_changes_trie_root().is_some())
-				.and_then(DigestItem::as_changes_trie_root)
+			.and_then(|header| header.digest().log(DigestItem::as_changes_trie_root)
 				.map(|root| H256::from_slice(root.as_ref()))))
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -32,6 +32,7 @@
 
 extern crate parity_codec as codec;
 extern crate sr_io as runtime_io;
+#[cfg_attr(test, macro_use)]
 extern crate substrate_primitives as primitives;
 extern crate substrate_serializer as serializer;
 extern crate substrate_state_machine as state_machine;

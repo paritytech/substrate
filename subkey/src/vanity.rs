@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use rand::{OsRng, Rng};
-use substrate_primitives::{ed25519::Pair, hexdisplay::HexDisplay};
+use substrate_primitives::ed25519::Pair;
 use std::cmp;
 
 fn good_waypoint(done: u64) -> u64 {

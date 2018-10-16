@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -28,7 +28,7 @@ use client::{self, Client};
 use {error, Service};
 use network::{self, OnDemand};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
-use transaction_pool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
+use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
 use config::Configuration;
 use primitives::{Blake2Hasher};
@@ -105,7 +105,7 @@ pub type ComponentClient<C> = Client<
 pub type ComponentBlock<C> = <<C as Components>::Factory as ServiceFactory>::Block;
 
 /// Extrinsic hash type for `Components`
-pub type ComponentExHash<C> = <<C as Components>::TransactionPoolApi as transaction_pool::ChainApi>::Hash;
+pub type ComponentExHash<C> = <<C as Components>::TransactionPoolApi as txpool::ChainApi>::Hash;
 
 /// Extrinsic type.
 pub type ComponentExtrinsic<C> = <ComponentBlock<C> as BlockT>::Extrinsic;
@@ -128,9 +128,9 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool backend type for the full client.
-	type FullTransactionPoolApi: transaction_pool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + Send + 'static;
+	type FullTransactionPoolApi: txpool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + Send + 'static;
 	/// Extrinsic pool backend type for the light client.
-	type LightTransactionPoolApi: transaction_pool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + 'static;
+	type LightTransactionPoolApi: txpool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + 'static;
 	/// Genesis configuration for the runtime.
 	type Genesis: RuntimeGenesis;
 	/// Other configuration for service members.
@@ -139,6 +139,8 @@ pub trait ServiceFactory: 'static + Sized {
 	type FullService: Deref<Target = Service<FullComponents<Self>>> + Send + Sync + 'static;
 	/// Extended light service type.
 	type LightService: Deref<Target = Service<LightComponents<Self>>> + Send + Sync + 'static;
+	/// ImportQueue
+	type ImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements.
 	/// Extrinsic pool constructor for the full client.
@@ -158,6 +160,36 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Build light service.
 	fn new_light(config: FactoryFullConfiguration<Self>, executor: TaskExecutor)
 		-> Result<Self::LightService, error::Error>;
+
+	/// ImportQueue for a full client
+	fn build_full_import_queue(
+		config: &FactoryFullConfiguration<Self>,
+		_client: Arc<FullClient<Self>>
+	) -> Result<Self::ImportQueue, error::Error> {
+		if let Some(name) = config.chain_spec.consensus_engine() {
+			match name {
+				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
+			}
+
+		} else {
+			Err("Chain Specification doesn't contain any consensus_engine name".into())
+		}
+	}
+
+	/// ImportQueue for a light client
+	fn build_light_import_queue(
+		config: &FactoryFullConfiguration<Self>,
+		_client: Arc<LightClient<Self>>
+	) -> Result<Self::ImportQueue, error::Error> {
+		if let Some(name) = config.chain_spec.consensus_engine() {
+			match name {
+				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
+			}
+
+		} else {
+			Err("Chain Specification doesn't contain any consensus_engine name".into())
+		}
+	}
 }
 
 /// A collection of types and function to generalise over full / light client type.
@@ -169,7 +201,7 @@ pub trait Components: 'static {
 	/// Client executor.
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync;
 	/// Extrinsic pool type.
-	type TransactionPoolApi: 'static + transaction_pool::ChainApi<
+	type TransactionPoolApi: 'static + txpool::ChainApi<
 		Hash = <Self::Factory as ServiceFactory>::ExtrinsicHash,
 		Block = FactoryBlock<Self::Factory>
 	>;
@@ -187,6 +219,12 @@ pub trait Components: 'static {
 	/// Create extrinsic pool.
 	fn build_transaction_pool(config: TransactionPoolOptions, client: Arc<ComponentClient<Self>>)
 		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>;
+
+	/// instance of import queue for clients
+	fn build_import_queue(
+		config: &FactoryFullConfiguration<Self::Factory>,
+		client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error>;
 }
 
 /// A struct that implement `Components` for the full client.
@@ -227,6 +265,13 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>
 	{
 		Factory::build_full_transaction_pool(config, client)
+	}
+
+	fn build_import_queue(
+		config: &FactoryFullConfiguration<Self::Factory>,
+		client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error> {
+		Factory::build_full_import_queue(config, client)
 	}
 }
 
@@ -269,5 +314,12 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 		-> Result<TransactionPool<Self::TransactionPoolApi>, error::Error>
 	{
 		Factory::build_light_transaction_pool(config, client)
+	}
+
+	fn build_import_queue(
+		config: &FactoryFullConfiguration<Self::Factory>,
+		client: Arc<ComponentClient<Self>>
+	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error> {
+		Factory::build_light_import_queue(config, client)
 	}
 }

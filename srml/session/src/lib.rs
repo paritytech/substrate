@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@
 #[macro_use]
 extern crate serde_derive;
 
-#[cfg_attr(feature = "std", macro_use)]
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -43,10 +42,11 @@ extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{Zero, One, OnFinalise, Convert, As};
+use primitives::traits::{As, Zero, One, OnFinalise, Convert};
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use system::ensure_signed;
+use rstd::ops::Mul;
 
 /// A session has changed.
 pub trait OnSessionChange<T> {
@@ -86,23 +86,23 @@ decl_storage! {
 	trait Store for Module<T: Trait> as Session {
 
 		/// The current set of validators.
-		pub Validators get(validators): required Vec<T::AccountId>;
+		pub Validators get(validators) config(): Vec<T::AccountId>;
 		/// Current length of the session.
-		pub SessionLength get(length): required T::BlockNumber;
+		pub SessionLength get(length) config(session_length): T::BlockNumber = T::BlockNumber::sa(1000);
 		/// Current index of the session.
-		pub CurrentIndex get(current_index): required T::BlockNumber;
+		pub CurrentIndex get(current_index) build(|_| T::BlockNumber::sa(0)): T::BlockNumber;
 		/// Timestamp when current session started.
-		pub CurrentStart get(current_start): required T::Moment;
+		pub CurrentStart get(current_start) build(|_| T::Moment::zero()): T::Moment;
 
 		/// New session is being forced is this entry exists; in which case, the boolean value is whether
 		/// the new session should be considered a normal rotation (rewardable) or exceptional (slashable).
-		pub ForcingNewSession get(forcing_new_session): bool;
+		pub ForcingNewSession get(forcing_new_session): Option<bool>;
 		/// Block at which the session length last changed.
-		LastLengthChange: T::BlockNumber;
+		LastLengthChange: Option<T::BlockNumber>;
 		/// The next key for a given validator.
-		NextKeyFor: map [ T::AccountId => T::SessionKey ];
+		NextKeyFor: map T::AccountId => Option<T::SessionKey>;
 		/// The next session length.
-		NextSessionLength: T::BlockNumber;
+		NextSessionLength: Option<T::BlockNumber>;
 	}
 }
 
@@ -153,7 +153,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current set of validators.
 	///
-	/// Called by `staking::next_era()` only. `next_session` should be called after this in order to
+	/// Called by `staking::new_era()` only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
 		<Validators<T>>::put(&new.to_vec());			// TODO: optimise.
@@ -211,9 +211,9 @@ impl<T: Trait> Module<T> {
 
 	/// Get the time that should have elapsed over a session if everything was working perfectly.
 	pub fn ideal_session_duration() -> T::Moment {
-		let block_period = <timestamp::Module<T>>::block_period();
-		let session_length = <T::Moment as As<T::BlockNumber>>::sa(Self::length());
-		session_length * block_period
+		let block_period: T::Moment = <timestamp::Module<T>>::block_period();
+		let session_length: T::BlockNumber = Self::length();
+		Mul::<T::BlockNumber>::mul(block_period, session_length)
 	}
 
 	/// Number of blocks remaining in this session, not counting this one. If the session is
@@ -230,41 +230,6 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	fn on_finalise(n: T::BlockNumber) {
 		Self::check_rotate_session(n);
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-#[serde(deny_unknown_fields)]
-pub struct GenesisConfig<T: Trait> {
-	pub session_length: T::BlockNumber,
-	pub validators: Vec<T::AccountId>,
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> Default for GenesisConfig<T> {
-	fn default() -> Self {
-		use primitives::traits::As;
-		GenesisConfig {
-			session_length: T::BlockNumber::sa(1000),
-			validators: vec![],
-		}
-	}
-}
-
-#[cfg(any(feature = "std", test))]
-impl<T: Trait> primitives::BuildStorage for GenesisConfig<T>
-{
-	fn build_storage(self) -> ::std::result::Result<primitives::StorageMap, String> {
-		use codec::Encode;
-		use primitives::traits::As;
-		Ok(map![
-			Self::hash(<SessionLength<T>>::key()).to_vec() => self.session_length.encode(),
-			Self::hash(<CurrentIndex<T>>::key()).to_vec() => T::BlockNumber::sa(0).encode(),
-			Self::hash(<CurrentStart<T>>::key()).to_vec() => T::Moment::zero().encode(),
-			Self::hash(<Validators<T>>::key()).to_vec() => self.validators.encode()
-		])
 	}
 }
 

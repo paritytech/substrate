@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -168,7 +168,7 @@ fn should_notify_about_latest_block() {
 		api.subscribe_new_head(Default::default(), subscriber);
 
 		// assert id assigned
-		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(0))));
+		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
 
 		let builder = api.client.new_block().unwrap();
 		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();

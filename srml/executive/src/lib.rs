@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -50,7 +50,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	MakePayment, Hash, As};
+	MakePayment, Hash, As, Digest};
 use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -204,10 +204,17 @@ impl<
 		// remove temporaries.
 		let new_header = <system::Module<System>>::finalise();
 
-		// check digest. uncomment next two lines to figure out next digest hash for tests.
-//		runtime_io::print(&header.digest().encode()[..]);
-//		runtime_io::print(&new_header.digest().encode()[..]);
-		assert!(header.digest() == new_header.digest());
+		// check digest.
+		assert_eq!(
+			header.digest().logs().len(),
+			new_header.digest().logs().len(),
+			"Number of digest items must match that calculated."
+		);
+		let items_zip = header.digest().logs().iter().zip(new_header.digest().logs().iter());
+		for (header_item, computed_item) in items_zip {
+			header_item.check_equal(&computed_item);
+			assert!(header_item == computed_item, "Digest item must match that calculated.");
+		}
 
 		// check storage root.
 		let storage_root = System::Hashing::storage_root();
@@ -217,11 +224,11 @@ impl<
 
 	/// Check a given transaction for validity. This doesn't execute any
 	/// side-effects; it merely checks whether the transaction would panic if it were included or not.
-	/// 
+	///
 	/// Changes made to the storage should be discarded.
 	pub fn validate_transaction(uxt: Block::Extrinsic) -> TransactionValidity {
 		let encoded_len = uxt.encode().len();
-		
+
 		let xt = match uxt.check(&Default::default()) {
 			// Checks out. Carry on.
 			Ok(xt) => xt,
@@ -252,8 +259,13 @@ impl<
 				deps.push((sender, expected_index).encode());
 				expected_index = expected_index + One::one();
 			}
-			
-			TransactionValidity::Valid(encoded_len as TransactionPriority, deps, vec![(sender, *index).encode()], TransactionLongevity::max_value())
+
+			TransactionValidity::Valid(
+				/*priority: */encoded_len as TransactionPriority,
+				/*requires: */deps,
+				/*provides: */vec![(sender, *index).encode()],
+				/*longevity: */TransactionLongevity::max_value(),
+			)
 		} else {
 			return TransactionValidity::Invalid
 		}

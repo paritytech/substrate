@@ -7,7 +7,7 @@ description = "Substrate node networking protocol"
 [dependencies]
 node-consensus = { path = "../consensus" }
 node-primitives = { path = "../primitives" }
-substrate-bft = { path = "../../core/bft" }
+substrate-consensus-rhd = { path = "../../core/consensus/rhd" }
 substrate-network = { path = "../../core/network" }
 substrate-primitives = { path = "../../core/primitives" }
 futures = "0.1"

@@ -16,14 +16,10 @@
 
 //! Client extension for tests.
 
-use client::{self, Client};
-use keyring::Keyring;
-use primitives::ed25519;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use client::{self, ImportBlock, Client};
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
 use runtime;
-use bft;
 
 /// Extension trait for a test client.
 pub trait TestClient {
@@ -43,15 +39,16 @@ impl<B, E> TestClient for Client<B, E, runtime::Block>
 		E: client::CallExecutor<runtime::Block, Blake2Hasher>
 {
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
-		let authorities: [ed25519::Pair; 3] = [
-			Keyring::Alice.into(),
-			Keyring::Bob.into(),
-			Keyring::Charlie.into(),
-		];
-		let keys: Vec<&ed25519::Pair> = authorities.iter().collect();
-		let justification = fake_justify::<runtime::Block>(&block.header, &keys);
-		let justified = self.check_justification(block.header, justification)?;
-		self.import_block(origin, justified, Some(block.extrinsics), false)?;
+		let import = ImportBlock {
+			origin,
+			header: block.header,
+			external_justification: vec![],
+			internal_justification: vec![],
+			body: Some(block.extrinsics),
+			finalized: false,
+			auxiliary: Vec::new(),
+		};
+		self.import_block(import, None)?;
 
 		Ok(())
 	}
@@ -63,30 +60,4 @@ impl<B, E> TestClient for Client<B, E, runtime::Block>
 	fn genesis_hash(&self) -> runtime::Hash {
 		self.block_hash(0).unwrap().unwrap()
 	}
-}
-
-/// Prepare fake justification for the header.
-///
-/// since we are in the client module we can create falsely justified
-/// headers.
-/// TODO: remove this in favor of custom verification pipelines for the
-/// client
-pub fn fake_justify<Block: BlockT>(header: &Block::Header, authorities: &[&ed25519::Pair]) -> bft::UncheckedJustification<Block::Hash> {
-	let hash = header.hash();
-	bft::UncheckedJustification::new(
-		hash,
-		authorities.iter().map(|key| {
-			let msg = bft::sign_message::<Block>(
-				::rhododendron::Vote::Commit(1, hash).into(),
-				key,
-				header.parent_hash().clone(),
-			);
-
-			match msg {
-				::rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
-				_ => panic!("signing vote leads to signed vote"),
-			}
-		}).collect(),
-		1,
-	)
 }

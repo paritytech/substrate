@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -21,14 +21,15 @@ use std::sync::Arc;
 use client::{self, Client};
 use codec::Decode;
 use transaction_pool::{
-	Pool,
-	IntoPoolError,
-	ChainApi as PoolChainApi,
-	watcher::Status,
-	VerifiedTransaction,
-	AllExtrinsics,
-	ExHash,
-	ExtrinsicFor,
+	txpool::{
+		ChainApi as PoolChainApi,
+		BlockHash,
+		ExHash,
+		ExtrinsicFor,
+		IntoPoolError,
+		Pool,
+		watcher::Status,
+	},
 };
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
@@ -36,7 +37,6 @@ use primitives::{Bytes, Blake2Hasher};
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
 use subscriptions::Subscriptions;
-use tokio::runtime::TaskExecutor;
 
 pub mod error;
 
@@ -47,7 +47,7 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate authoring RPC API
-	pub trait AuthorApi<Hash, Extrinsic, PendingExtrinsics> {
+	pub trait AuthorApi<Hash, BlockHash, Extrinsic, PendingExtrinsics> {
 		type Metadata;
 
 		/// Submit extrinsic for inclusion in block.
@@ -60,11 +60,11 @@ build_rpc_trait! {
 		/// Returns all pending extrinsics, potentially grouped by sender.
 		#[rpc(name = "author_pendingExtrinsics")]
 		fn pending_extrinsics(&self) -> Result<PendingExtrinsics>;
-	
+
 		#[pubsub(name = "author_extrinsicUpdate")] {
 			/// Submit an extrinsic to watch.
 			#[rpc(name = "author_submitAndWatchExtrinsic")]
-			fn watch_extrinsic(&self, Self::Metadata, pubsub::Subscriber<Status<Hash>>, Bytes);
+			fn watch_extrinsic(&self, Self::Metadata, pubsub::Subscriber<Status<Hash, BlockHash>>, Bytes);
 
 			/// Unsubscribe from extrinsic watching.
 			#[rpc(name = "author_unwatchExtrinsic")]
@@ -90,16 +90,20 @@ impl<B, E, P> Author<B, E, P> where
 	P: PoolChainApi + Sync + Send + 'static,
 {
 	/// Create new instance of Authoring API.
-	pub fn new(client: Arc<Client<B, E, <P as PoolChainApi>::Block>>, pool: Arc<Pool<P>>, executor: TaskExecutor) -> Self {
+	pub fn new(
+		client: Arc<Client<B, E, <P as PoolChainApi>::Block>>,
+		pool: Arc<Pool<P>>,
+		subscriptions: Subscriptions,
+	) -> Self {
 		Author {
 			client,
 			pool,
-			subscriptions: Subscriptions::new(executor),
+			subscriptions,
 		}
 	}
 }
 
-impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author<B, E, P> where
+impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<ExtrinsicFor<P>>> for Author<B, E, P> where
 	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
@@ -120,14 +124,13 @@ impl<B, E, P> AuthorApi<ExHash<P>, ExtrinsicFor<P>, AllExtrinsics<P>> for Author
 				.map(Into::into)
 				.unwrap_or_else(|e| error::ErrorKind::Verification(Box::new(e)).into())
 			)
-			.map(|ex| ex.hash().clone())
 	}
 
-	fn pending_extrinsics(&self) -> Result<AllExtrinsics<P>> {
-		Ok(self.pool.all())
+	fn pending_extrinsics(&self) -> Result<Vec<ExtrinsicFor<P>>> {
+		Ok(self.pool.all(usize::max_value()))
 	}
 
-	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>>>, xt: Bytes) {
+	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {
 		let submit = || -> Result<_> {
 			let best_block_hash = self.client.info()?.chain.best_hash;
 			let dxt = <<P as PoolChainApi>::Block as traits::Block>::Extrinsic::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;

@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -114,6 +114,7 @@ pub use self::uint::U256;
 pub use authority_id::AuthorityId;
 pub use changes_trie::ChangesTrieConfiguration;
 
+pub use hash_db::Hasher;
 // Switch back to Blake after PoC-3 is out
 // pub use self::hasher::blake::BlakeHasher;
 pub use self::hasher::blake2::Blake2Hasher;

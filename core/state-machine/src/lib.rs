@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -32,7 +32,7 @@ extern crate substrate_trie;
 
 extern crate parking_lot;
 extern crate heapsize;
-extern crate substrate_primitives as primitives;
+#[cfg_attr(test, macro_use)] extern crate substrate_primitives as primitives;
 extern crate parity_codec as codec;
 extern crate substrate_trie as trie;
 
@@ -522,12 +522,6 @@ mod tests {
 	}
 
 	impl Error for u8 {}
-
-	macro_rules! map {
-		($( $name:expr => $value:expr ),*) => (
-			vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-		)
-	}
 
 	#[test]
 	fn execute_works() {

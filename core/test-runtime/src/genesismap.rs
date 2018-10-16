@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -66,12 +66,6 @@ impl GenesisConfig {
 		}
 		map
 	}
-}
-
-macro_rules! map {
-	($( $name:expr => $value:expr ),*) => (
-		vec![ $( ( $name, $value ) ),* ].into_iter().collect()
-	)
 }
 
 pub fn additional_storage_with_genesis(genesis_block: &::Block) -> HashMap<Vec<u8>, Vec<u8>> {

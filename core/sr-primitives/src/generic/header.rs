@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -81,7 +81,6 @@ impl<'a, Number: 'a, Hash: 'a + HashT, DigestItem: 'a> Deserialize<'a> for Heade
 	}
 }
 
-// TODO [ToDr] Issue with bounds
 impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 	Number: Decode,
 	Hash: HashT,

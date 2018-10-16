@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -30,8 +30,14 @@ pub type TransactionTag = Vec<u8>;
 
 /// Information on a transaction's validity and, if valid, on how it relates to other transactions.
 #[derive(Clone, PartialEq, Eq, Encode, Decode)]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub enum TransactionValidity {
 	Invalid,
-	Valid(TransactionPriority, Vec<TransactionTag>, Vec<TransactionTag>, TransactionLongevity),
+	Valid(
+		/* priority: */TransactionPriority,
+		/* requires: */Vec<TransactionTag>,
+		/* provides: */Vec<TransactionTag>,
+		/* longevity: */TransactionLongevity
+	),
 	Unknown,
 }

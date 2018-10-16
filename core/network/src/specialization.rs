@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -35,7 +35,7 @@ pub trait Specialization<B: BlockT>: Send + Sync + 'static {
 	fn on_disconnect(&mut self, ctx: &mut Context<B>, who: NodeIndex);
 
 	/// Called when a network-specific message arrives.
-	fn on_message(&mut self, ctx: &mut Context<B>, who: NodeIndex, message: ::message::Message<B>);
+	fn on_message(&mut self, ctx: &mut Context<B>, who: NodeIndex, message: &mut Option<::message::Message<B>>);
 
 	/// Called on abort.
 	fn on_abort(&mut self) { }

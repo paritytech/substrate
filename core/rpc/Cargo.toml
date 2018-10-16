@@ -23,3 +23,4 @@ tokio = "0.1.7"
 assert_matches = "1.1"
 substrate-test-client = { path = "../test-client" }
 rustc-hex = "2.0"
+hex-literal = "0.1"

@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,7 +26,7 @@ use primitives::AuthorityId;
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem};
-use runtime_primitives::bft::Justification;
+use runtime_primitives::Justification;
 use blockchain::{self, BlockStatus, HeaderBackend};
 use state_machine::backend::{Backend as StateBackend, InMemory};
 use state_machine::InMemoryChangesTrieStorage;
@@ -42,12 +42,12 @@ struct PendingBlock<B: BlockT> {
 
 #[derive(PartialEq, Eq, Clone)]
 enum StoredBlock<B: BlockT> {
-	Header(B::Header, Option<Justification<B::Hash>>),
-	Full(B, Option<Justification<B::Hash>>),
+	Header(B::Header, Option<Justification>),
+	Full(B, Option<Justification>),
 }
 
 impl<B: BlockT> StoredBlock<B> {
-	fn new(header: B::Header, body: Option<Vec<B::Extrinsic>>, just: Option<Justification<B::Hash>>) -> Self {
+	fn new(header: B::Header, body: Option<Vec<B::Extrinsic>>, just: Option<Justification>) -> Self {
 		match body {
 			Some(body) => StoredBlock::Full(B::new(header, body), just),
 			None => StoredBlock::Header(header, just),
@@ -61,7 +61,7 @@ impl<B: BlockT> StoredBlock<B> {
 		}
 	}
 
-	fn justification(&self) -> Option<&Justification<B::Hash>> {
+	fn justification(&self) -> Option<&Justification> {
 		match *self {
 			StoredBlock::Header(_, ref j) | StoredBlock::Full(_, ref j) => j.as_ref()
 		}
@@ -74,7 +74,7 @@ impl<B: BlockT> StoredBlock<B> {
 		}
 	}
 
-	fn into_inner(self) -> (B::Header, Option<Vec<B::Extrinsic>>, Option<Justification<B::Hash>>) {
+	fn into_inner(self) -> (B::Header, Option<Vec<B::Extrinsic>>, Option<Justification>) {
 		match self {
 			StoredBlock::Header(header, just) => (header, None, just),
 			StoredBlock::Full(block, just) => {
@@ -159,7 +159,7 @@ impl<Block: BlockT> Blockchain<Block> {
 		&self,
 		hash: Block::Hash,
 		header: <Block as BlockT>::Header,
-		justification: Option<Justification<Block::Hash>>,
+		justification: Option<Justification>,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
 		new_state: NewBlockState,
 	) -> ::error::Result<()> {
@@ -292,7 +292,7 @@ impl<Block: BlockT> blockchain::Backend<Block> for Blockchain<Block> {
 		}))
 	}
 
-	fn justification(&self, id: BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
+	fn justification(&self, id: BlockId<Block>) -> error::Result<Option<Justification>> {
 		Ok(self.id(id).and_then(|hash| self.storage.read().blocks.get(&hash).and_then(|b|
 			b.justification().map(|x| x.clone()))
 		))
@@ -375,7 +375,7 @@ where
 		&mut self,
 		header: <Block as BlockT>::Header,
 		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
-		justification: Option<Justification<Block::Hash>>,
+		justification: Option<Justification>,
 		state: NewBlockState,
 	) -> error::Result<()> {
 		assert!(self.pending_block.is_none(), "Only one block per operation is allowed");
@@ -474,10 +474,7 @@ where
 
 			self.states.write().insert(hash, operation.new_state.unwrap_or_else(|| old_state.clone()));
 
-			let changes_trie_root = header.digest().logs().iter()
-				.find(|log| log.as_changes_trie_root().is_some())
-				.and_then(DigestItem::as_changes_trie_root)
-				.cloned();
+			let changes_trie_root = header.digest().log(DigestItem::as_changes_trie_root).cloned();
 			if let Some(changes_trie_root) = changes_trie_root {
 				if let Some(changes_trie_update) = operation.changes_trie_update {
 					let changes_trie_root: H::Out = changes_trie_root.into();

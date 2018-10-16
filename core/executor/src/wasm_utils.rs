@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -107,7 +107,7 @@ macro_rules! unmarshall_args {
 
 /// Since we can't specify the type of closure directly at binding site:
 ///
-/// ```rust,ignore
+/// ```nocompile
 /// let f: FnOnce() -> Result<<u32 as ConvertibleToWasm>::NativeType, _> = || { /* ... */ };
 /// ```
 ///

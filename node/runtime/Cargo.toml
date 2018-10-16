@@ -8,9 +8,10 @@ rustc-hex = "1.0"
 hex-literal = "0.1.0"
 serde = { version = "1.0", default-features = false }
 serde_derive = { version = "1.0", optional = true }
-safe-mix = { version = "1.0", default-features = false}
+safe-mix = { version = "1.0", default-features = false }
 parity-codec = "2.0"
 parity-codec-derive = "2.0"
+sr-api = { path = "../../core/sr-api", default-features = false }
 sr-std = { path = "../../core/sr-std" }
 sr-io = { path = "../../core/sr-io" }
 srml-support = { path = "../../srml/support" }
@@ -36,6 +37,7 @@ default = ["std"]
 std = [
 	"parity-codec/std",
 	"substrate-primitives/std",
+	"sr-api/std",
 	"sr-std/std",
 	"sr-io/std",
 	"srml-support/std",

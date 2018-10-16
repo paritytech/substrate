@@ -275,7 +275,7 @@ impl<P: AuthoringApi + Send + Sync + 'static> Network for ConsensusNetwork<P> {
 		// spin up a task in the background that processes all incoming statements
 		// TODO: propagate statements on a timer?
 		let process_task = self.network.with_spec(|spec, _ctx| {
-			spec.new_consensus(parent_hash);
+			spec.consensus_gossip.new_session(parent_hash);
 			MessageProcessTask {
 				inner_stream: spec.consensus_gossip.messages_for(parent_hash),
 				bft_messages: bft_send,
@@ -284,18 +284,10 @@ impl<P: AuthoringApi + Send + Sync + 'static> Network for ConsensusNetwork<P> {
 			}
 		});
 
-		match process_task {
-			Some(task) =>
-				if let Err(e) = Executor::spawn(&mut task_executor, Box::new(task)) {
-					debug!(target: "node-network", "Cannot spawn message processing: {:?}", e)
-				},
-			None => warn!(target: "node-network", "Cannot process incoming messages: network appears to be down"),
+		if let Err(e) = Executor::spawn(&mut task_executor, Box::new(process_task)) {
+			debug!(target: "node-network", "Cannot spawn message processing: {:?}", e)
 		}
 
 		(InputAdapter { input: bft_recv }, sink)
 	}
 }
-
-/// Error when the network appears to be down.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NetworkDown;

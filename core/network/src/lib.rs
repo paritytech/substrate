@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -32,38 +32,47 @@ extern crate parity_codec as codec;
 extern crate futures;
 extern crate rustc_hex;
 extern crate rand;
+extern crate tokio;
 #[macro_use] extern crate log;
 #[macro_use] extern crate bitflags;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate parity_codec_derive;
 
-#[cfg(test)] extern crate env_logger;
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate substrate_test_client as test_client;
+#[cfg(test)]
+extern crate env_logger;
+
+#[cfg(any(test, feature = "test-helpers"))]
+extern crate substrate_keyring as keyring;
+
+#[cfg(any(test, feature = "test-helpers"))]
+extern crate substrate_test_client as test_client;
 
 mod service;
 mod sync;
+#[macro_use]
 mod protocol;
 mod io;
 mod config;
 mod chain;
 mod blocks;
 mod on_demand;
-mod import_queue;
+pub mod import_queue;
 pub mod consensus_gossip;
 pub mod error;
 pub mod message;
 pub mod specialization;
 
-#[cfg(test)] mod test;
+#[cfg(any(test, feature = "test-helpers"))]
+pub mod test;
 
 pub use chain::Client as ClientHandle;
-pub use service::{Service, FetchFuture, ConsensusService, BftMessageStream,
-	TransactionPool, Params, ManageNetwork, SyncProvider};
+pub use service::{Service, FetchFuture, TransactionPool, Params, ManageNetwork, SyncProvider};
 pub use protocol::{ProtocolStatus, PeerInfo, Context};
 pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeIndex, ProtocolId, Severity, Protocol};
-pub use message::{generic as generic_message, RequestId, BftMessage, LocalizedBftMessage, ConsensusVote, SignedConsensusVote, SignedConsensusMessage, SignedConsensusProposal, Status as StatusMessage};
+pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use error::Error;
 pub use config::{Roles, ProtocolConfig};
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
+#[doc(hidden)]
+pub use runtime_primitives::traits::Block as BlockT;

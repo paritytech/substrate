@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -200,7 +200,7 @@ mod tests {
 
 	const DUMMY_FUNCTION: u64 = 0;
 	const DUMMY_ACCOUNTID: u64 = 0;
-	
+
 	type Ex = UncheckedMortalExtrinsic<u64, u64, u64, TestSig>;
 	type CEx = CheckedExtrinsic<u64, u64, u64>;
 

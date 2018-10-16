@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -17,14 +17,14 @@
 //! Authoring RPC module errors.
 
 use client;
-use transaction_pool;
+use transaction_pool::txpool;
 use rpc;
 
 use errors;
 
 error_chain! {
 	links {
-		Pool(transaction_pool::Error, transaction_pool::ErrorKind) #[doc = "Pool error"];
+		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
 		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
 	}
 	errors {

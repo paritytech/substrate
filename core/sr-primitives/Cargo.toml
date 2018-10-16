@@ -13,6 +13,7 @@ parity-codec-derive = { version = "2.0", default-features = false }
 substrate-primitives = { path = "../primitives", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
 sr-io = { path = "../sr-io", default-features = false }
+sr-version = { path = "../sr-version", default-features = false }
 log = {version = "0.4", optional = true }
 
 [dev-dependencies]
@@ -27,6 +28,8 @@ std = [
 	"log",
 	"sr-std/std",
 	"sr-io/std",
+	"sr-version/std",
 	"parity-codec/std",
 	"substrate-primitives/std",
 ]
+api-for-runtime = []

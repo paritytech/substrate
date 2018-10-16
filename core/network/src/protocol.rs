@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor, As, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, Zero};
 use runtime_primitives::generic::BlockId;
 use network_libp2p::{NodeIndex, Severity};
 use codec::{Encode, Decode};
@@ -41,11 +41,13 @@ const REQUEST_TIMEOUT_SEC: u64 = 40;
 
 /// Current protocol version.
 pub (crate) const CURRENT_VERSION: u32 = 1;
-/// Current packet count.
-pub (crate) const CURRENT_PACKET_COUNT: u8 = 1;
 
 // Maximum allowed entries in `BlockResponse`
 const MAX_BLOCK_DATA_RESPONSE: u32 = 128;
+/// When light node connects to the full node and the full node is behind light node
+/// for at least `LIGHT_MAXIMAL_BLOCKS_DIFFERENCE` blocks, we consider it unuseful
+/// and disconnect to free connection slot.
+const LIGHT_MAXIMAL_BLOCKS_DIFFERENCE: u64 = 8192;
 
 // Lock must always be taken in order declared here.
 pub struct Protocol<B: BlockT, S: Specialization<B>, H: ExHashT> {
@@ -179,15 +181,15 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: RwLock<HashMap<NodeIndex, Peer<B, H>>>,
-	chain: Arc<Client<B>>,
+	pub chain: Arc<Client<B>>,
 }
 
 impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
-	pub fn new(
+	pub fn new<I: 'static + ImportQueue<B>>(
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		import_queue: Arc<ImportQueue<B>>,
+		import_queue: Arc<I>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
@@ -275,7 +277,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			GenericMessage::RemoteHeaderResponse(response) => self.on_remote_header_response(io, who, response),
 			GenericMessage::RemoteChangesRequest(request) => self.on_remote_changes_request(io, who, request),
 			GenericMessage::RemoteChangesResponse(response) => self.on_remote_changes_response(io, who, response),
-			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, other),
+			other => self.specialization.write().on_message(&mut ProtocolContext::new(&self.context_data, io), who, &mut Some(other)),
 		}
 	}
 
@@ -285,14 +287,14 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 
 	/// Called when a new peer is connected
 	pub fn on_peer_connected(&self, io: &mut SyncIo, who: NodeIndex) {
-		trace!(target: "sync", "Connected {}: {}", who, io.peer_info(who));
+		trace!(target: "sync", "Connected {}: {}", who, io.peer_debug_info(who));
 		self.handshaking_peers.write().insert(who, time::Instant::now());
 		self.send_status(io, who);
 	}
 
 	/// Called by peer when it is disconnecting
 	pub fn on_peer_disconnected(&self, io: &mut SyncIo, peer: NodeIndex) {
-		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_info(peer));
+		trace!(target: "sync", "Disconnecting {}: {}", peer, io.peer_debug_info(peer));
 
 		// lock all the the peer lists so that add/remove peer events are in order
 		let mut sync = self.sync.write();
@@ -371,7 +373,19 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks{}",
 			response.id, peer, response.blocks.len(), blocks_range);
 
-		self.sync.write().on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response);
+		// import_queue.import_blocks also acquires sync.write();
+		// Break the cycle by doing these separately from the outside;
+		let new_blocks = {
+			let mut sync = self.sync.write();
+			sync.on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response)
+		};
+
+		if let Some((origin, new_blocks)) = new_blocks {
+			let import_queue = self.sync.read().import_queue();
+			import_queue.import_blocks(origin, new_blocks);
+		}
+
+
 	}
 
 	/// Perform time based maintenance.
@@ -416,16 +430,12 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Called by peer to report status
 	fn on_status_message(&self, io: &mut SyncIo, who: NodeIndex, status: message::Status<B>) {
 		trace!(target: "sync", "New peer {} {:?}", who, status);
-		if io.is_expired() {
-			trace!(target: "sync", "Status packet from expired session {}:{}", who, io.peer_info(who));
-			return;
-		}
 
 		{
 			let mut peers = self.context_data.peers.write();
 			let mut handshaking_peers = self.handshaking_peers.write();
 			if peers.contains_key(&who) {
-				debug!(target: "sync", "Unexpected status packet from {}:{}", who, io.peer_info(who));
+				debug!(target: "sync", "Unexpected status packet from {}:{}", who, io.peer_debug_info(who));
 				return;
 			}
 			if status.genesis_hash != self.genesis_hash {
@@ -435,6 +445,16 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			if status.version != CURRENT_VERSION {
 				io.report_peer(who, Severity::Bad(&format!("Peer using unsupported protocol version {}", status.version)));
 				return;
+			}
+			if self.config.roles & Roles::LIGHT == Roles::LIGHT {
+				let self_best_block = self.context_data.chain.info().ok()
+					.and_then(|info| info.best_queued_number)
+					.unwrap_or_else(|| Zero::zero());
+				let blocks_difference = self_best_block.as_().checked_sub(status.best_number.as_()).unwrap_or(0);
+				if blocks_difference > LIGHT_MAXIMAL_BLOCKS_DIFFERENCE {
+					io.report_peer(who, Severity::Useless("Peer is far behind us and will unable to serve light requests"));
+					return;
+				}
 			}
 
 			let peer = Peer {
@@ -450,13 +470,13 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 			};
 			peers.insert(who.clone(), peer);
 			handshaking_peers.remove(&who);
-			debug!(target: "sync", "Connected {} {}", who, io.peer_info(who));
+			debug!(target: "sync", "Connected {} {}", who, io.peer_debug_info(who));
 		}
 
 		let mut context = ProtocolContext::new(&self.context_data, io);
+		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles, status.best_number));
 		self.sync.write().new_peer(&mut context, who);
-		self.specialization.write().on_connect(&mut context, who, status.clone());
-		self.on_demand.as_ref().map(|s| s.on_connect(who, status.roles));
+		self.specialization.write().on_connect(&mut context, who, status);
 	}
 
 	/// Called when peer sends us new extrinsics
@@ -500,11 +520,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 				.unzip();
 
 			if !to_send.is_empty() {
-				let node_id = io.peer_session_info(*who).map(|info| match info.id {
-					Some(id) => format!("{}@{:x}", info.remote_address, id),
-					None => info.remote_address.clone(),
-				});
-
+				let node_id = io.peer_id(*who).map(|id| id.to_base58());
 				if let Some(id) = node_id {
 					for hash in hashes {
 						propagated_to.entry(hash).or_insert_with(Vec::new).push(id.clone());
@@ -561,6 +577,7 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 				peer.known_blocks.insert(hash.clone());
 			}
 		}
+		self.on_demand.as_ref().map(|s| s.on_block_announce(who, *header.number()));
 		self.sync.write().on_block_announce(&mut ProtocolContext::new(&self.context_data, io), who, hash, &header);
 	}
 
@@ -699,8 +716,101 @@ fn send_message<B: BlockT, H: ExHashT>(peers: &RwLock<HashMap<NodeIndex, Peer<B,
 	io.send(who, message.encode());
 }
 
-/// Hash a message.
-pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
-	let data = message.encode();
-	HashFor::<B>::hash(&data)
+/// Construct a simple protocol that is composed of several sub protocols.
+/// Each "sub protocol" needs to implement `Specialization` and needs to provide a `new()` function.
+/// For more fine grained implementations, this macro is not usable.
+///
+/// # Example
+///
+/// ```nocompile
+/// construct_simple_protocol! {
+///     pub struct MyProtocol where Block = MyBlock {
+///         consensus_gossip: ConsensusGossip<MyBlock>,
+///         other_protocol: MyCoolStuff,
+///     }
+/// }
+/// ```
+///
+/// You can also provide an optional parameter after `where Block = MyBlock`, so it looks like
+/// `where Block = MyBlock, Status = consensus_gossip`. This will instruct the implementation to
+/// use the `status()` function from the `ConsensusGossip` protocol. By default, `status()` returns
+/// an empty vector.
+#[macro_export]
+macro_rules! construct_simple_protocol {
+	(
+		$( #[ $attr:meta ] )*
+		pub struct $protocol:ident where
+			Block = $block:ident
+			$( , Status = $status_protocol_name:ident )*
+		{
+			$( $sub_protocol_name:ident : $sub_protocol:ident $( <$protocol_block:ty> )*, )*
+		}
+	) => {
+		$( #[$attr] )*
+		pub struct $protocol {
+			$( $sub_protocol_name: $sub_protocol $( <$protocol_block> )*, )*
+		}
+
+		impl $protocol {
+			/// Instantiate a node protocol handler.
+			pub fn new() -> Self {
+				Self {
+					$( $sub_protocol_name: $sub_protocol::new(), )*
+				}
+			}
+		}
+
+		impl $crate::specialization::Specialization<$block> for $protocol {
+			fn status(&self) -> Vec<u8> {
+				$(
+					let status = self.$status_protocol_name.status();
+
+					if !status.is_empty() {
+						return status;
+					}
+				)*
+
+				Vec::new()
+			}
+
+			fn on_connect(
+				&mut self,
+				ctx: &mut $crate::Context<$block>,
+				who: $crate::NodeIndex,
+				status: $crate::StatusMessage<$block>
+			) {
+				$( self.$sub_protocol_name.on_connect(ctx, who, status); )*
+			}
+
+			fn on_disconnect(&mut self, ctx: &mut $crate::Context<$block>, who: $crate::NodeIndex) {
+				$( self.$sub_protocol_name.on_disconnect(ctx, who); )*
+			}
+
+			fn on_message(
+				&mut self,
+				ctx: &mut $crate::Context<$block>,
+				who: $crate::NodeIndex,
+				message: &mut Option<$crate::message::Message<$block>>
+			) {
+				$( self.$sub_protocol_name.on_message(ctx, who, message); )*
+			}
+
+			fn on_abort(&mut self) {
+				$( self.$sub_protocol_name.on_abort(); )*
+			}
+
+			fn maintain_peers(&mut self, ctx: &mut $crate::Context<$block>) {
+				$( self.$sub_protocol_name.maintain_peers(ctx); )*
+			}
+
+			fn on_block_imported(
+				&mut self,
+				ctx: &mut $crate::Context<$block>,
+				hash: <$block as $crate::BlockT>::Hash,
+				header: &<$block as $crate::BlockT>::Header
+			) {
+				$( self.$sub_protocol_name.on_block_imported(ctx, hash, header); )*
+			}
+		}
+	}
 }

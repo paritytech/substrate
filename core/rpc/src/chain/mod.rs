@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -26,7 +26,6 @@ use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use runtime_version::RuntimeVersion;
-use tokio::runtime::TaskExecutor;
 use primitives::{Blake2Hasher};
 
 use subscriptions::Subscriptions;
@@ -48,7 +47,7 @@ build_rpc_trait! {
 
 		/// Get header and body of a relay chain block.
 		#[rpc(name = "chain_getBlock")]
-		fn block(&self, Trailing<Hash>) -> Result<Option<SignedBlock<Header, Extrinsic, Hash>>>;
+		fn block(&self, Trailing<Hash>) -> Result<Option<SignedBlock<Header, Extrinsic>>>;
 
 		/// Get hash of the n-th block in the canon chain.
 		///
@@ -82,10 +81,10 @@ pub struct Chain<B, E, Block: BlockT> {
 
 impl<B, E, Block: BlockT> Chain<B, E, Block> {
 	/// Create new Chain API RPC handler.
-	pub fn new(client: Arc<Client<B, E, Block>>, executor: TaskExecutor) -> Self {
+	pub fn new(client: Arc<Client<B, E, Block>>, subscriptions: Subscriptions) -> Self {
 		Self {
 			client,
-			subscriptions: Subscriptions::new(executor),
+			subscriptions,
 		}
 	}
 }
@@ -115,7 +114,9 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::
 		Ok(self.client.header(&BlockId::Hash(hash))?)
 	}
 
-	fn block(&self, hash: Trailing<Block::Hash>) -> Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+	fn block(&self, hash: Trailing<Block::Hash>)
+		-> Result<Option<SignedBlock<Block::Header, Block::Extrinsic>>>
+	{
 		let hash = self.unwrap_or_best(hash)?;
 		Ok(self.client.block(&BlockId::Hash(hash))?)
 	}

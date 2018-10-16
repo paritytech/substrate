@@ -22,13 +22,13 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 
-use bft::{self, BftService};
+use rhd::{self, BftService};
 use client::{BlockchainEvents, ChainHead, BlockBody};
 use ed25519;
 use futures::prelude::*;
-use transaction_pool::{TransactionPool, Client as TPClient};
+use transaction_pool::txpool::{Pool as TransactionPool, ChainApi as PoolChainApi};
 use primitives;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, BlockNumberToHash};
 
 use tokio::executor::current_thread::TaskExecutor as LocalThreadHandle;
 use tokio::runtime::TaskExecutor as ThreadPoolHandle;
@@ -47,11 +47,11 @@ fn start_bft<F, C, Block>(
 	header: <Block as BlockT>::Header,
 	bft_service: Arc<BftService<Block, F, C>>,
 ) where
-	F: bft::Environment<Block> + 'static,
-	C: bft::BlockImport<Block> + bft::Authorities<Block> + 'static,
+	F: rhd::Environment<Block> + 'static,
+	C: rhd::BlockImport<Block> + rhd::Authorities<Block> + 'static,
 	F::Error: ::std::fmt::Debug,
-	<F::Proposer as bft::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
-	<F as bft::Environment<Block>>::Error: ::std::fmt::Display,
+	<F::Proposer as rhd::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
+	<F as rhd::Environment<Block>>::Error: ::std::fmt::Display,
 	Block: BlockT,
 {
 	let mut handle = LocalThreadHandle::current();
@@ -72,17 +72,19 @@ pub struct Service {
 
 impl Service {
 	/// Create and start a new instance.
-	pub fn new<A, C, N>(
+	pub fn new<A, P, C, N>(
 		client: Arc<C>,
 		api: Arc<A>,
 		network: N,
-		transaction_pool: Arc<TransactionPool<A>>,
+		transaction_pool: Arc<TransactionPool<P>>,
 		thread_pool: ThreadPoolHandle,
 		key: ed25519::Pair,
 		block_delay: u64,
 	) -> Service
 		where
-			A: AuthoringApi + TPClient<Block = <A as AuthoringApi>::Block> + 'static,
+			error::Error: From<<A as AuthoringApi>::Error>,
+			A: AuthoringApi + BlockNumberToHash + 'static,
+			P: PoolChainApi<Block = <A as AuthoringApi>::Block> + 'static,
 			C: BlockchainEvents<<A as AuthoringApi>::Block>
 				+ ChainHead<<A as AuthoringApi>::Block>
 				+ BlockBody<<A as AuthoringApi>::Block>,
