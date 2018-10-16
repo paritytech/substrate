@@ -102,12 +102,12 @@ pub struct Service<Components: components::Components> {
 }
 
 /// Creates bare client without any networking.
-pub fn new_client<Factory: components::ServiceFactory>(config: FactoryFullConfiguration<Factory>)
+pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfiguration<Factory>)
 	-> Result<Arc<ComponentClient<components::FullComponents<Factory>>>, error::Error>
 {
 	let executor = NativeExecutor::new();
 	let (client, _) = components::FullComponents::<Factory>::build_client(
-		&config,
+		config,
 		executor,
 	)?;
 	Ok(client)
@@ -149,6 +149,7 @@ impl<Components> Service<Components>
 		};
 
 		let (client, on_demand) = Components::build_client(&config, executor)?;
+		let import_queue = Components::build_import_queue(&config, client.clone())?;
 		let best_header = client.best_block_header()?;
 
 		let version = config.full_version();
@@ -185,7 +186,7 @@ impl<Components> Service<Components>
 		let id_len = protocol_id_full.len().min(protocol_id.len());
 		&mut protocol_id[0..id_len].copy_from_slice(&protocol_id_full[0..id_len]);
 
-		let network = network::Service::new(network_params, protocol_id)?;
+		let network = network::Service::new(network_params, protocol_id, import_queue)?;
 		on_demand.map(|on_demand| on_demand.set_service_link(Arc::downgrade(&network)));
 
 		{

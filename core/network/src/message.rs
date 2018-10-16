@@ -22,7 +22,7 @@ pub use self::generic::{
 	BlockAnnounce, RemoteCallRequest, RemoteReadRequest,
 	RemoteHeaderRequest, RemoteHeaderResponse,
 	RemoteChangesRequest, RemoteChangesResponse,
-	ConsensusVote, SignedConsensusVote, FromBlock
+	FromBlock
 };
 
 /// A unique ID of a request.
@@ -30,7 +30,6 @@ pub type RequestId = u64;
 
 /// Type alias for using the message type using block type parameters.
 pub type Message<B> = generic::Message<
-	B,
 	<B as BlockT>::Header,
 	<B as BlockT>::Hash,
 	<<B as BlockT>::Header as HeaderT>::Number,
@@ -49,11 +48,6 @@ pub type BlockRequest<B> = generic::BlockRequest<
 	<<B as BlockT>::Header as HeaderT>::Number,
 >;
 
-/// Type alias for using the localized bft message type using block type parameters.
-pub type LocalizedBftMessage<B> = generic::LocalizedBftMessage<
-	B,
-	<B as BlockT>::Hash,
->;
 
 /// Type alias for using the BlockData type using block type parameters.
 pub type BlockData<B> = generic::BlockData<
@@ -67,24 +61,6 @@ pub type BlockResponse<B> = generic::BlockResponse<
 	<B as BlockT>::Header,
 	<B as BlockT>::Hash,
 	<B as BlockT>::Extrinsic,
->;
-
-/// Type alias for using the BftMessage type using block type parameters.
-pub type BftMessage<B> = generic::BftMessage<
-	B,
-	<B as BlockT>::Hash,
->;
-
-/// Type alias for using the SignedConsensusProposal type using block type parameters.
-pub type SignedConsensusProposal<B> = generic::SignedConsensusProposal<
-	B,
-	<B as BlockT>::Hash,
->;
-
-/// Type alias for using the SignedConsensusProposal type using block type parameters.
-pub type SignedConsensusMessage<B> = generic::SignedConsensusProposal<
-	B,
-	<B as BlockT>::Hash,
 >;
 
 /// A set of transactions.
@@ -148,13 +124,14 @@ pub struct RemoteReadResponse {
 
 /// Generic types.
 pub mod generic {
-	use primitives::{AuthorityId, ed25519};
-	use runtime_primitives::bft::Justification;
+	use runtime_primitives::Justification;
 	use service::Roles;
 	use super::{
 		BlockAttributes, RemoteCallResponse, RemoteReadResponse,
 		RequestId, Transactions, Direction
 	};
+	/// Consensus is opaque to us
+	pub type ConsensusMessage = Vec<u8>;
 
 	/// Block data sent in the response.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
@@ -170,7 +147,7 @@ pub mod generic {
 		/// Block message queue if requested.
 		pub message_queue: Option<Vec<u8>>,
 		/// Justification if requested.
-		pub justification: Option<Justification<Hash>>,
+		pub justification: Option<Justification>,
 	}
 
 	/// Identifies starting point of a block sequence.
@@ -182,75 +159,9 @@ pub mod generic {
 		Number(Number),
 	}
 
-	/// Communication that can occur between participants in consensus.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	pub enum BftMessage<Block, Hash> {
-		/// A consensus message (proposal or vote)
-		Consensus(SignedConsensusMessage<Block, Hash>),
-		/// Auxiliary communication (just proof-of-lock for now).
-		Auxiliary(Justification<Hash>),
-	}
-
-	/// BFT Consensus message with parent header hash attached to it.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	pub struct LocalizedBftMessage<Block, Hash> {
-		/// Consensus message.
-		pub message: BftMessage<Block, Hash>,
-		/// Parent header hash.
-		pub parent_hash: Hash,
-	}
-
-	/// A localized proposal message. Contains two signed pieces of data.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	pub struct SignedConsensusProposal<Block, Hash> {
-		/// The round number.
-		pub round_number: u32,
-		/// The proposal sent.
-		pub proposal: Block,
-		/// The digest of the proposal.
-		pub digest: Hash,
-		/// The sender of the proposal
-		pub sender: AuthorityId,
-		/// The signature on the message (propose, round number, digest)
-		pub digest_signature: ed25519::Signature,
-		/// The signature on the message (propose, round number, proposal)
-		pub full_signature: ed25519::Signature,
-	}
-
-	/// A localized vote message, including the sender.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	pub struct SignedConsensusVote<H> {
-		/// The message sent.
-		pub vote: ConsensusVote<H>,
-		/// The sender of the message
-		pub sender: AuthorityId,
-		/// The signature of the message.
-		pub signature: ed25519::Signature,
-	}
-
-	/// Votes during a consensus round.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	pub enum ConsensusVote<H> {
-		/// Prepare to vote for proposal with digest D.
-		Prepare(u32, H),
-		/// Commit to proposal with digest D..
-		Commit(u32, H),
-		/// Propose advancement to a new round.
-		AdvanceRound(u32),
-	}
-
-	/// A localized message.
-	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	pub enum SignedConsensusMessage<Block, Hash> {
-		/// A proposal.
-		Propose(SignedConsensusProposal<Block, Hash>),
-		/// A vote.
-		Vote(SignedConsensusVote<Hash>),
-	}
-
 	/// A network message.
 	#[derive(Debug, PartialEq, Eq, Clone, Encode, Decode)]
-	pub enum Message<Block, Header, Hash, Number, Extrinsic> {
+	pub enum Message<Header, Hash, Number, Extrinsic> {
 		/// Status packet.
 		Status(Status<Hash, Number>),
 		/// Block request.
@@ -261,8 +172,8 @@ pub mod generic {
 		BlockAnnounce(BlockAnnounce<Header>),
 		/// Transactions.
 		Transactions(Transactions<Extrinsic>),
-		/// BFT Consensus statement.
-		BftMessage(LocalizedBftMessage<Block, Hash>),
+		/// Consensus protocol message.
+		Consensus(Hash, ConsensusMessage), // topic, opaque Vec<u8>
 		/// Remote method call request.
 		RemoteCallRequest(RemoteCallRequest<Hash>),
 		/// Remote method call response.

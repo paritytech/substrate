@@ -171,7 +171,13 @@ impl<B: BlockT> ChainSync<B> {
 		}
 	}
 
-	pub(crate) fn on_block_data(&mut self, protocol: &mut Context<B>, who: NodeIndex, _request: message::BlockRequest<B>, response: message::BlockResponse<B>) {
+	pub(crate) fn on_block_data(
+		&mut self,
+		protocol: &mut Context<B>,
+		who: NodeIndex,
+		_request: message::BlockRequest<B>,
+		response: message::BlockResponse<B>
+	) -> Option<(BlockOrigin, Vec<blocks::BlockData<B>>)> {
 		let new_blocks = if let Some(ref mut peer) = self.peers.get_mut(&who) {
 			match peer.state {
 				PeerSyncState::DownloadingNew(start_block) => {
@@ -184,7 +190,7 @@ impl<B: BlockT> ChainSync<B> {
 				PeerSyncState::DownloadingStale(_) => {
 					peer.state = PeerSyncState::Available;
 					response.blocks.into_iter().map(|b| blocks::BlockData {
-						origin: who,
+						origin: Some(who),
 						block: b
 					}).collect()
 				},
@@ -207,23 +213,23 @@ impl<B: BlockT> ChainSync<B> {
 									let n = n - As::sa(1);
 									peer.state = PeerSyncState::AncestorSearch(n);
 									Self::request_ancestry(protocol, who, n);
-									return;
+									return None;
 								},
 								Ok(_) => { // genesis mismatch
 									trace!(target:"sync", "Ancestry search: genesis mismatch for peer {}", who);
 									protocol.report_peer(who, Severity::Bad("Ancestry search: genesis mismatch for peer"));
-									return;
+									return None;
 								},
 								Err(e) => {
 									protocol.report_peer(who, Severity::Useless(&format!("Error answering legitimate blockchain query: {:?}", e)));
-									return;
+									return None;
 								}
 							}
 						},
 						None => {
 							trace!(target:"sync", "Invalid response when searching for ancestor from {}", who);
 							protocol.report_peer(who, Severity::Bad("Invalid response when searching for ancestor"));
-							return;
+							return None;
 						}
 					}
 				},
@@ -236,7 +242,6 @@ impl<B: BlockT> ChainSync<B> {
 		let best_seen = self.best_seen_block();
 		let is_best = new_blocks.first().and_then(|b| b.block.header.as_ref()).map(|h| best_seen.as_ref().map_or(false, |n| h.number() >= n));
 		let origin = if is_best.unwrap_or_default() { BlockOrigin::NetworkBroadcast } else { BlockOrigin::NetworkInitialSync };
-		let import_queue = self.import_queue.clone();
 		if let Some((hash, number)) = new_blocks.last()
 			.and_then(|b| b.block.header.as_ref().map(|h|(b.block.hash.clone(), *h.number())))
 		{
@@ -245,8 +250,8 @@ impl<B: BlockT> ChainSync<B> {
 				self.best_queued_hash = hash;
 			}
 		}
-		import_queue.import_blocks(self, protocol, (origin, new_blocks));
 		self.maintain_sync(protocol);
+		Some((origin, new_blocks))
 	}
 
 	pub fn maintain_sync(&mut self, protocol: &mut Context<B>) {
@@ -263,7 +268,7 @@ impl<B: BlockT> ChainSync<B> {
 		}
 		// Update common blocks
 		for (_, peer) in self.peers.iter_mut() {
-			trace!("Updating peer info ours={}, theirs={}", number, peer.best_number);
+			trace!(target: "sync", "Updating peer info ours={}, theirs={}", number, peer.best_number);
 			if peer.best_number >= number {
 				peer.common_number = number;
 				peer.common_hash = *hash;

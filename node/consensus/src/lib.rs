@@ -16,6 +16,8 @@
 
 //! This service uses BFT consensus provided by the substrate.
 
+#![cfg(feature="rhd")]
+
 extern crate node_runtime;
 extern crate node_primitives;
 
@@ -68,7 +70,6 @@ pub use service::Service;
 
 mod evaluation;
 mod error;
-mod offline_tracker;
 mod service;
 
 /// Shared offline validator tracker.

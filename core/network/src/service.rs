@@ -18,7 +18,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::{io, thread};
 use std::time::Duration;
-use futures::{self, Future, Stream, stream, sync::{oneshot, mpsc}};
+use futures::{self, Future, Stream, stream, sync::oneshot};
 use parking_lot::Mutex;
 use network_libp2p::{ProtocolId, PeerId, NetworkConfiguration, ErrorKind};
 use network_libp2p::{start_service, Service as NetworkService, ServiceEvent as NetworkServiceEvent};
@@ -28,17 +28,14 @@ use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
 use config::{ProtocolConfig};
 use error::Error;
 use chain::Client;
-use message::LocalizedBftMessage;
 use specialization::Specialization;
 use on_demand::OnDemandService;
-use import_queue::AsyncImportQueue;
+use import_queue::ImportQueue;
 use runtime_primitives::traits::{Block as BlockT};
 use tokio::{runtime::Runtime, timer::Interval};
 
 /// Type that represents fetch completion future.
 pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
-/// Type that represents bft messages stream.
-pub type BftMessageStream<B> = mpsc::UnboundedReceiver<LocalizedBftMessage<B>>;
 
 const TICK_TIMEOUT: Duration = Duration::from_millis(1000);
 const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
@@ -90,18 +87,6 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 	fn on_broadcasted(&self, propagations: HashMap<H, Vec<String>>);
 }
 
-/// ConsensusService
-pub trait ConsensusService<B: BlockT>: Send + Sync {
-	/// Maintain connectivity to given addresses.
-	fn connect_to_authorities(&self, addresses: &[String]);
-
-	/// Get BFT message stream for messages corresponding to consensus on given
-	/// parent hash.
-	fn bft_messages(&self, parent_hash: B::Hash) -> BftMessageStream<B>;
-	/// Send out a BFT message.
-	fn send_bft_message(&self, message: LocalizedBftMessage<B>);
-}
-
 /// Service able to execute closure in the network context.
 pub trait ExecuteInContext<B: BlockT>: Send + Sync {
 	/// Execute closure in network context.
@@ -140,10 +125,13 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
 
 impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 	/// Creates and register protocol with the network service
-	pub fn new(params: Params<B, S, H>, protocol_id: ProtocolId) -> Result<Arc<Service<B, S, H>>, Error> {
+	pub fn new<I: 'static + ImportQueue<B>>(
+		params: Params<B, S, H>,
+		protocol_id: ProtocolId,
+		import_queue: I,
+	) -> Result<Arc<Service<B, S, H>>, Error> {	
 		let chain = params.chain.clone();
-		// TODO: non-instant finality.
-		let import_queue = Arc::new(AsyncImportQueue::new(true));
+		let import_queue = Arc::new(import_queue);
 		let handler = Arc::new(Protocol::new(
 			params.config,
 			params.chain,
@@ -155,6 +143,7 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 		let versions = [(protocol::CURRENT_VERSION as u8)];
 		let registered = RegisteredProtocol::new(protocol_id, &versions[..]);
 		let (thread, network) = start_thread(params.network_config, handler.clone(), registered)?;
+
 		let sync = Arc::new(Service {
 			network,
 			protocol_id,

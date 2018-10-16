@@ -22,7 +22,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{
-	bft::Justification,
+	Justification,
 	generic::{BlockId, SignedBlock, Block as RuntimeBlock},
 	transaction_validity::{TransactionValidity, TransactionTag},
 };
@@ -44,7 +44,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {cht, error, in_mem, block_builder, bft, genesis};
+use {cht, error, in_mem, block_builder, genesis};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -151,6 +151,53 @@ pub enum BlockOrigin {
 	File,
 }
 
+/// Data required to import a Block
+pub struct ImportBlock<Block: BlockT> {
+	/// Origin of the Block
+	pub origin: BlockOrigin,
+	/// Header
+	pub header: Block::Header,
+	/// Justification provided for this block from the outside
+	pub external_justification: Justification,
+	/// Internal Justification for the block
+	pub internal_justification: Vec<u8>, // Block::Digest::DigestItem?
+	/// Block's body
+	pub body: Option<Vec<Block::Extrinsic>>,
+	/// Is this block finalized already?
+	/// `true` implies instant finality.
+	pub finalized: bool,
+	/// Auxiliary consensus data produced by the block.
+	/// Contains a list of key-value pairs. If values are `None`, the keys
+	/// will be deleted.
+	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+}
+
+impl<Block: BlockT> ImportBlock<Block> {
+	/// Deconstruct the justified header into parts.
+	pub fn into_inner(self)
+		-> (
+			BlockOrigin,
+			<Block as BlockT>::Header,
+			Justification,
+			Justification,
+			Option<Vec<<Block as BlockT>::Extrinsic>>,
+			bool,
+			Vec<(Vec<u8>, Option<Vec<u8>>)>,
+		) {
+		(
+			self.origin,
+			self.header,
+			self.external_justification,
+			self.internal_justification,
+			self.body,
+			self.finalized,
+			self.auxiliary,
+		)
+	}
+}
+
+
+
 /// Summary of an imported block
 #[derive(Clone, Debug)]
 pub struct BlockImportNotification<Block: BlockT> {
@@ -173,21 +220,6 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub hash: Block::Hash,
 	/// Imported block header.
 	pub header: Block::Header,
-}
-
-/// A header paired with a justification which has already been checked.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct JustifiedHeader<Block: BlockT> {
-	header: <Block as BlockT>::Header,
-	justification: ::bft::Justification<Block::Hash>,
-	authorities: Vec<AuthorityId>,
-}
-
-impl<Block: BlockT> JustifiedHeader<Block> {
-	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self) -> (<Block as BlockT>::Header, ::bft::Justification<Block::Hash>, Vec<AuthorityId>) {
-		(self.header, self.justification, self.authorities)
-	}
 }
 
 /// Create an instance of in-memory client.
@@ -486,37 +518,24 @@ impl<B, E, Block> Client<B, E, Block> where
 		)
 	}
 
-	/// Check a header's justification.
-	pub fn check_justification(
-		&self,
-		header: <Block as BlockT>::Header,
-		justification: ::bft::UncheckedJustification<Block::Hash>,
-	) -> error::Result<JustifiedHeader<Block>> {
-		let parent_hash = header.parent_hash().clone();
-		let authorities = self.authorities_at(&BlockId::Hash(parent_hash))?;
-		let just = ::bft::check_justification::<Block>(&authorities[..], parent_hash, justification)
-			.map_err(|_|
-				error::ErrorKind::BadJustification(
-					format!("{}", header.hash())
-				)
-			)?;
-		Ok(JustifiedHeader {
-			header,
-			justification: just,
-			authorities,
-		})
-	}
-
-	/// Queue a block for import.
+	/// Import a checked and validated block
 	pub fn import_block(
 		&self,
-		origin: BlockOrigin,
-		header: JustifiedHeader<Block>,
-		body: Option<Vec<<Block as BlockT>::Extrinsic>>,
-		finalized: bool,
+		import_block: ImportBlock<Block>,
+		new_authorities: Option<Vec<AuthorityId>>,
 	) -> error::Result<ImportResult> {
-		let (header, justification, authorities) = header.into_inner();
+
+		let (
+			origin,
+			header,
+			_,
+			justification,
+			body,
+			finalized,
+			_aux, // TODO: write this to DB also
+		) = import_block.into_inner();
 		let parent_hash = header.parent_hash().clone();
+
 		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
 			blockchain::BlockStatus::InChain => {},
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
@@ -532,8 +551,8 @@ impl<B, E, Block> Client<B, E, Block> where
 			header,
 			justification,
 			body,
-			authorities,
-			finalized
+			new_authorities,
+			finalized,
 		);
 
 		*self.importing_block.write() = None;
@@ -574,9 +593,9 @@ impl<B, E, Block> Client<B, E, Block> where
 		origin: BlockOrigin,
 		hash: Block::Hash,
 		header: Block::Header,
-		justification: bft::Justification<Block::Hash>,
+		justification: Justification,
 		body: Option<Vec<Block::Extrinsic>>,
-		authorities: Vec<AuthorityId>,
+		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
 	) -> error::Result<ImportResult> {
 		let parent_hash = header.parent_hash().clone();
@@ -650,16 +669,17 @@ impl<B, E, Block> Client<B, E, Block> where
 		};
 
 		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
-		let unchecked: bft::UncheckedJustification<_> = justification.uncheck().into();
 
 		transaction.set_block_data(
 			header.clone(),
 			body,
-			Some(unchecked.into()),
+			Some(justification),
 			leaf_state,
 		)?;
 
-		transaction.update_authorities(authorities);
+		if let Some(authorities) = authorities {
+			transaction.update_authorities(authorities);
+		}
 		if let Some(storage_update) = storage_update {
 			transaction.update_storage(storage_update)?;
 		}
@@ -843,12 +863,14 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 
 	/// Get block justification set by id.
-	pub fn justification(&self, id: &BlockId<Block>) -> error::Result<Option<Justification<Block::Hash>>> {
+	pub fn justification(&self, id: &BlockId<Block>) -> error::Result<Option<Justification>> {
 		self.backend.blockchain().justification(*id)
 	}
 
 	/// Get full block by id.
-	pub fn block(&self, id: &BlockId<Block>) -> error::Result<Option<SignedBlock<Block::Header, Block::Extrinsic, Block::Hash>>> {
+	pub fn block(&self, id: &BlockId<Block>)
+		-> error::Result<Option<SignedBlock<Block::Header, Block::Extrinsic>>>
+	{
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
 			(Some(header), Some(extrinsics), Some(justification)) =>
 				Some(SignedBlock { block: RuntimeBlock { header, extrinsics }, justification }),
@@ -985,57 +1007,6 @@ impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> bft::BlockImport<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
-		Block: BlockT,
-{
-	fn import_block(
-		&self,
-		block: Block,
-		justification: ::bft::Justification<Block::Hash>,
-		authorities: &[AuthorityId],
-	) -> bool {
-		let (header, extrinsics) = block.deconstruct();
-		let justified_header = JustifiedHeader {
-			header: header,
-			justification,
-			authorities: authorities.to_vec(),
-		};
-
-		// TODO [rob]: non-instant finality.
-		self.import_block(
-			BlockOrigin::ConsensusBroadcast,
-			justified_header,
-			Some(extrinsics),
-			true
-		).is_ok()
-	}
-}
-
-impl<B, E, Block> bft::Authorities<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
-		Block: BlockT,
-{
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, bft::Error> {
-		let on_chain_version: Result<_, bft::Error> = self.runtime_version_at(at)
-			.map_err(|e| { trace!("Error getting runtime version {:?}", e); bft::ErrorKind::RuntimeVersionMissing.into() });
-		let on_chain_version = on_chain_version?;
-		let native_version: Result<_, bft::Error> = self.executor.native_runtime_version()
-			.ok_or_else(|| bft::ErrorKind::NativeRuntimeMissing.into());
-		let native_version = native_version?;
-		if !native_version.can_author_with(&on_chain_version) {
-			return Err(bft::ErrorKind::IncompatibleAuthoringRuntime(on_chain_version, native_version.runtime_version.clone()).into())
-		}
-		self.authorities_at(at).map_err(|_| {
-			let descriptor = format!("{:?}", at);
-			bft::ErrorKind::StateUnavailable(descriptor).into()
-		})
-	}
-}
 
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 where
@@ -1095,7 +1066,7 @@ impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 	}
 
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
-		bft::Authorities::authorities(self, at).map_err(Into::into)
+		self.authorities_at(at)
 	}
 
 	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), Self::Error> {
