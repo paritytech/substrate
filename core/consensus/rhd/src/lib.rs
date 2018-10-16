@@ -350,7 +350,7 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 				external_justification: just.into(),
 				body: Some(body),
 				finalized: true,
-				internal_justification: Default::default(),
+				post_runtime_digests: Default::default(),
 				auxiliary: Default::default()
 			};
 

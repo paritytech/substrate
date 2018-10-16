@@ -21,7 +21,7 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::Codec;
-use traits::{self, Member, Block as BlockT, Header as HeaderT};
+use traits::{self, Member, Block as BlockT, Header as HeaderT, DigestItemFor};
 use ::Justification;
 
 /// Something to identify a block.
@@ -140,12 +140,23 @@ pub enum BlockOrigin {
 pub struct ImportBlock<Block: BlockT> {
 	/// Origin of the Block
 	pub origin: BlockOrigin,
-	/// Header
+	/// The header, without consensus post-digests applied. This should be in the same
+	/// state as it comes out of the runtime.
+	///
+	/// Consensus engines which alter the header (by adding post-runtime digests)
+	/// should strip those off in the initial verification process and pass them
+	/// via the `post_runtime_digests` field. During block authorship, they should
+	/// not be pushed to the header directly.
+	///
+	/// The reason for this distinction is so the header can be directly
+	/// re-executed in a runtime that checks digest equivalence -- the
+	/// post-runtime digests are pushed back on after.
 	pub header: Block::Header,
-	/// Justification provided for this block from the outside
+	/// Justification provided for this block from the outside:.
 	pub external_justification: Justification,
-	/// Internal Justification for the block
-	pub internal_justification: Vec<u8>, // Block::Digest::DigestItem?
+	/// Digest items that have been added after the runtime for external
+	/// work, like a consensus signature.
+	pub post_runtime_digests: Vec<DigestItemFor<Block>>,
 	/// Block's body
 	pub body: Option<Vec<Block::Extrinsic>>,
 	/// Is this block finalized already?
@@ -164,7 +175,7 @@ impl<Block: BlockT> ImportBlock<Block> {
 			BlockOrigin,
 			<Block as BlockT>::Header,
 			Justification,
-			Justification,
+			Vec<DigestItemFor<Block>>,
 			Option<Vec<<Block as BlockT>::Extrinsic>>,
 			bool,
 			Vec<(Vec<u8>, Option<Vec<u8>>)>,
@@ -173,7 +184,7 @@ impl<Block: BlockT> ImportBlock<Block> {
 			self.origin,
 			self.header,
 			self.external_justification,
-			self.internal_justification,
+			self.post_runtime_digests,
 			self.body,
 			self.finalized,
 			self.auxiliary,

@@ -65,7 +65,6 @@ pub trait ImportQueue<B: BlockT>: Send + Sync {
 	///
 	/// This is called automatically by the network service when synchronization
 	/// begins.
-
 	fn start<E>(
 		&self,
 		_sync: Weak<RwLock<ChainSync<B>>>,
@@ -284,7 +283,7 @@ struct SyncLink<'a, B: 'a + BlockT, E: 'a + ExecuteInContext<B>> {
 }
 
 impl<'a, B: 'static + BlockT, E: 'a + ExecuteInContext<B>> SyncLink<'a, B, E> {
-	/// Execute closure with locked ChainSync. 
+	/// Execute closure with locked ChainSync.
 	fn with_sync<F: Fn(&mut ChainSync<B>, &mut Context<B>)>(&mut self, closure: F) {
 		let service = self.context;
 		let sync = self.chain;
@@ -440,7 +439,6 @@ fn import_single_block<B: BlockT, V: Verifier<B>>(
 				trace!(target: "sync", "Verifying {}({}) failed: {}", number, hash, msg);
 			}
 			BlockImportError::VerificationFailed(peer, msg)
-
 		})?;
 
 	match chain.import(import_block, new_authorities) {
@@ -545,7 +543,7 @@ unsafe impl<B: BlockT> Sync for ImportCB<B> {}
 
 #[cfg(any(test, feature = "test-helpers"))]
 /// A Verifier that accepts all blocks and passes them on with the configured
-/// finality to be imported. 
+/// finality to be imported.
 pub struct PassThroughVerifier(pub bool);
 
 #[cfg(any(test, feature = "test-helpers"))]
@@ -564,7 +562,7 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 			body,
 			finalized: self.0,
 			external_justification: justification,
-			internal_justification: vec![],
+			post_runtime_digests: vec![],
 			auxiliary: Vec::new(),
 		}, None))
 	}

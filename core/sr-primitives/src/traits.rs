@@ -429,6 +429,8 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	fn set_parent_hash(&mut self, Self::Hash);
 
 	fn digest(&self) -> &Self::Digest;
+	/// Get a mutable reference to the digest.
+	fn digest_mut(&mut self) -> &mut Self::Digest;
 	fn set_digest(&mut self, Self::Digest);
 
 	fn hash(&self) -> Self::Hash {
@@ -458,6 +460,10 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stati
 pub type HashFor<B> = <<B as Block>::Header as Header>::Hashing;
 /// Extract the number type for a block.
 pub type NumberFor<B> = <<B as Block>::Header as Header>::Number;
+/// Extract the digest type for a block.
+pub type DigestFor<B> = <<B as Block>::Header as Header>::Digest;
+/// Extract the digest item type for a block.
+pub type DigestItemFor<B> = <DigestFor<B> as Digest>::Item;
 
 /// A "checkable" piece of information, used by the standard Substrate Executive in order to
 /// check the validity of a piece of extrinsic information, usually by verifying the signature.
@@ -516,6 +522,8 @@ pub trait Digest: Member + Default {
 	fn logs(&self) -> &[Self::Item];
 	/// Push new digest item.
 	fn push(&mut self, item: Self::Item);
+	/// Pop a digest item.
+	fn pop(&mut self) -> Option<Self::Item>;
 
 	/// Get reference to the first digest item that matches the passed predicate.
 	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {

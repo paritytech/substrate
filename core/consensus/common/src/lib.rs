@@ -38,7 +38,6 @@ pub mod error;
 
 pub use self::error::{Error, ErrorKind};
 
-
 /// Block import trait.
 pub trait BlockImport<B: Block> {
 	type Error: ::std::error::Error + Send + 'static;

@@ -40,6 +40,7 @@ pub struct LocalizedSignature {
 }
 
 /// Verify a message without type checking the parameters' types for the right size.
+/// Returns true if the signature is good.
 pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], public: P) -> bool {
 	let public_key = untrusted::Input::from(public.as_ref());
 	let msg = untrusted::Input::from(message);
@@ -246,7 +247,7 @@ impl Pair {
 	}
 }
 
-/// Verify a signature on a message.
+/// Verify a signature on a message. Returns true if the signature is good.
 pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: P) -> bool {
 	let public_key = untrusted::Input::from(&pubkey.as_ref().0[..]);
 	let msg = untrusted::Input::from(message);

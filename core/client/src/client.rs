@@ -119,8 +119,6 @@ pub enum BlockStatus {
 	Unknown,
 }
 
-
-
 /// Summary of an imported block
 #[derive(Clone, Debug)]
 pub struct BlockImportNotification<Block: BlockT> {
@@ -143,6 +141,41 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub hash: Block::Hash,
 	/// Imported block header.
 	pub header: Block::Header,
+}
+
+// used in importing a block, where additional changes are made after the runtime
+// executed.
+enum PrePostHeader<H> {
+	// they are the same: no post-runtime digest items.
+	Same(H),
+	// different headers (pre, post).
+	Different(H, H),
+}
+
+impl<H> PrePostHeader<H> {
+	// get a reference to the "pre-header" -- the header as it should be just after the runtime.
+	fn pre(&self) -> &H {
+		match *self {
+			PrePostHeader::Same(ref h) => h,
+			PrePostHeader::Different(ref h, _) => h,
+		}
+	}
+
+	// get a reference to the "post-header" -- the header as it should be after all changes are applied.
+	fn post(&self) -> &H {
+		match *self {
+			PrePostHeader::Same(ref h) => h,
+			PrePostHeader::Different(_, ref h) => h,
+		}
+	}
+
+	// convert to the "post-header" -- the header as it should be after all changes are applied.
+	fn into_post(self) -> H {
+		match self {
+			PrePostHeader::Same(h) => h,
+			PrePostHeader::Different(_, h) => h,
+		}
+	}
 }
 
 /// Create an instance of in-memory client.
@@ -469,13 +502,13 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self,
 		origin: BlockOrigin,
 		hash: Block::Hash,
-		header: Block::Header,
+		import_headers: PrePostHeader<Block::Header>,
 		justification: Justification,
 		body: Option<Vec<Block::Extrinsic>>,
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
 	) -> error::Result<ImportResult> {
-		let parent_hash = header.parent_hash().clone();
+		let parent_hash = import_headers.post().parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
 			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
 			blockchain::BlockStatus::Unknown => {},
@@ -509,12 +542,13 @@ impl<B, E, Block> Client<B, E, Block> where
 					transaction_state,
 					&mut overlay,
 					"execute_block",
-					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode(),
+					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
 					match (origin, self.block_execution_strategy) {
 						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
 							ExecutionManager::NativeWhenPossible,
 						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
 						_ => ExecutionManager::Both(|wasm_result, native_result| {
+							let header = import_headers.post();
 							warn!("Consensus error between wasm and native block execution at block {}", hash);
 							warn!("   Header {:?}", header);
 							warn!("   Native result {:?}", native_result);
@@ -536,7 +570,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		};
 
 		// TODO: non longest-chain rule.
-		let is_new_best = finalized || header.number() > &last_best_number;
+		let is_new_best = finalized || import_headers.post().number() > &last_best_number;
 		let leaf_state = if finalized {
 			::backend::NewBlockState::Final
 		} else if is_new_best {
@@ -545,10 +579,10 @@ impl<B, E, Block> Client<B, E, Block> where
 			::backend::NewBlockState::Normal
 		};
 
-		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
+		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, import_headers.post().number(), is_new_best, origin);
 
 		transaction.set_block_data(
-			header.clone(),
+			import_headers.post().clone(),
 			body,
 			Some(justification),
 			leaf_state,
@@ -575,7 +609,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			if finalized {
 				let notification = FinalityNotification::<Block> {
 					hash,
-					header: header.clone(),
+					header: import_headers.post().clone(),
 				};
 
 				self.finality_notification_sinks.lock()
@@ -585,7 +619,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			let notification = BlockImportNotification::<Block> {
 				hash,
 				origin,
-				header,
+				header: import_headers.into_post(),
 				is_new_best,
 				tags,
 			};
@@ -875,31 +909,43 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 		import_block: ImportBlock<Block>,
 		new_authorities: Option<Vec<AuthorityId>>,
 	) -> Result<ImportResult, Self::Error> {
+		use runtime_primitives::traits::Digest;
 
 		let (
 			origin,
-			header,
-			_,
+			pre_header,
 			justification,
+			post_runtime_digests,
 			body,
 			finalized,
 			_aux, // TODO: write this to DB also
 		) = import_block.into_inner();
-		let parent_hash = header.parent_hash().clone();
+		let parent_hash = pre_header.parent_hash().clone();
 
 		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
 			blockchain::BlockStatus::InChain => {},
 			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
 		}
-		let hash = header.hash();
+
+		let import_headers = if post_runtime_digests.is_empty() {
+			PrePostHeader::Same(pre_header)
+		} else {
+			let mut post_header = pre_header.clone();
+			for item in post_runtime_digests {
+				post_header.digest_mut().push(item);
+			}
+			PrePostHeader::Different(pre_header, post_header)
+		};
+
+		let hash = import_headers.post().hash();
 		let _import_lock = self.import_lock.lock();
-		let height: u64 = header.number().as_();
+		let height: u64 = import_headers.post().number().as_();
 		*self.importing_block.write() = Some(hash);
 
 		let result = self.execute_and_import_block(
 			origin,
 			hash,
-			header,
+			import_headers,
 			justification,
 			body,
 			new_authorities,

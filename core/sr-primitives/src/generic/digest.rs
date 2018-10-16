@@ -46,6 +46,10 @@ impl<Item> traits::Digest for Digest<Item> where
 	fn push(&mut self, item: Self::Item) {
 		self.logs.push(item);
 	}
+
+	fn pop(&mut self) -> Option<Self::Item> {
+		self.logs.pop()
+	}
 }
 
 /// Digest item that is able to encode/decode 'system' digest items and
