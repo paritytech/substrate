@@ -29,7 +29,8 @@ extern crate error_chain;
 use std::sync::Arc;
 
 use primitives::{ed25519, AuthorityId};
-use runtime_primitives::{generic::BlockId, traits::Block, Justification};
+use runtime_primitives::generic::{BlockId, ImportBlock, ImportResult};
+use runtime_primitives::traits::Block;
 use futures::prelude::*;
 
 pub mod offline_tracker;
@@ -37,19 +38,24 @@ pub mod error;
 
 pub use self::error::{Error, ErrorKind};
 
+
 /// Block import trait.
 pub trait BlockImport<B: Block> {
-	/// Import a block alongside its corresponding justification.
-	fn import_block(&self, block: B, justification: Justification, authorities: &[AuthorityId]) -> bool;
+	type Error: ::std::error::Error + Send + 'static;
+	/// Import a Block alongside the new authorities valid form this block forward
+	fn import_block(&self,
+		block: ImportBlock<B>,
+		new_authorities: Option<Vec<AuthorityId>>
+	) -> Result<ImportResult, Self::Error>;
 }
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {
-	/// Get the authorities at the given block.
-	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityId>, Error>;
+	type Error: ::std::error::Error + Send + 'static;	/// Get the authorities at the given block.
+	fn authorities(&self, at: &BlockId<B>) -> Result<Vec<AuthorityId>, Self::Error>;
 }
 
-/// Environment producer for a BFT instance. Creates proposer instance and communication streams.
+/// Environment producer for a Consensus instance. Creates proposer instance and communication streams.
 pub trait Environment<B: Block> {
 	/// The proposer type this creates.
 	type Proposer: Proposer<B>;

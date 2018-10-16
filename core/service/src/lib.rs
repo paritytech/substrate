@@ -118,6 +118,7 @@ pub fn new_client<Factory: components::ServiceFactory>(config: &FactoryFullConfi
 impl<Components> Service<Components>
 	where
 		Components: components::Components,
+		<Components as components::Components>::Executor: std::clone::Clone,
 		txpool::ExHash<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
 		txpool::ExtrinsicFor<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
 {

@@ -33,7 +33,7 @@ pub use self::unchecked_mortal_extrinsic::UncheckedMortalExtrinsic;
 pub use self::era::Era;
 pub use self::checked_extrinsic::CheckedExtrinsic;
 pub use self::header::Header;
-pub use self::block::{Block, SignedBlock, BlockId};
+pub use self::block::{Block, SignedBlock, BlockId, ImportBlock, BlockOrigin, ImportResult};
 pub use self::digest::{Digest, DigestItem, DigestItemRef};
 
 use codec::Encode;

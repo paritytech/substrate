@@ -66,8 +66,9 @@ use std::time::{Instant, Duration};
 use codec::{Decode, Encode};
 use consensus_common::error::{ErrorKind as CommonErrorKind};
 use consensus_common::{Authorities, BlockImport, Environment, Proposer as BaseProposer};
-use runtime_primitives::{generic::BlockId, Justification};
+use runtime_primitives::generic::{BlockId, ImportResult, ImportBlock, BlockOrigin};
 use runtime_primitives::traits::{Block, Header};
+use runtime_primitives::Justification;
 use primitives::{AuthorityId, ed25519, ed25519::LocalizedSignature};
 
 use futures::prelude::*;
@@ -342,20 +343,33 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 			info!(target: "bft", "Importing block #{} ({}) directly from BFT consensus",
 				justified_block.header().number(), hash);
 			let just: Justification = UncheckedJustification(committed.justification.uncheck()).into();
+			let (header, body) = justified_block.deconstruct();
+			let import_block = ImportBlock {
+				origin: BlockOrigin::ConsensusBroadcast,
+				header: header,
+				external_justification: just.into(),
+				body: Some(body),
+				finalized: true,
+				internal_justification: Default::default(),
+				auxiliary: Default::default()
+			};
 
-			let import_ok = self.import.import_block(
-				justified_block,
-				just,
-				&self.inner.context().authorities
-			);
+			let new_status = match self.import.import_block(import_block, None) {
+				Err(e) => {
+					warn!(target: "rhd", "Error importing block {:?} in round #{}: {:?}",
+						hash, committed.round_number, e);
+					status::BAD
+				}
+				Ok(ImportResult::KnownBad) => {
+					warn!(target: "rhd", "{:?} was bad block agreed on in round #{}",
+						hash, committed.round_number);
+					status::BAD
+				}
+				_ => status::GOOD
+			};
 
-			if !import_ok {
-				warn!(target: "bft", "{:?} was bad block agreed on in round #{}",
-					hash, committed.round_number);
-				self.status.store(status::BAD, Ordering::Release);
-			} else {
-				self.status.store(status::GOOD, Ordering::Release);
-			}
+			self.status.store(new_status, Ordering::Release);
+
 		} else {
 			// assume good unless we received the proposal.
 			self.status.store(status::GOOD, Ordering::Release);
@@ -478,7 +492,8 @@ impl<B, P, I> BftService<B, P, I>
 			return Ok(None)
 		}
 
-		let authorities = self.client.authorities(&BlockId::Hash(hash.clone()))?;
+		let authorities = self.client.authorities(&BlockId::Hash(hash.clone()))
+			.map_err(|e| CommonErrorKind::Other(Box::new(e)).into())?;
 
 		let n = authorities.len();
 		let max_faulty = max_faulty_of(n);
@@ -859,14 +874,21 @@ mod tests {
 	}
 
 	impl BlockImport<TestBlock> for FakeClient {
-		fn import_block(&self, block: TestBlock, _justification: Justification, _authorities: &[AuthorityId]) -> bool {
+		type Error = Error;
+
+		fn import_block(&self,
+			block: ImportBlock<TestBlock>,
+			_new_authorities: Option<Vec<AuthorityId>>
+		) -> Result<ImportResult, Self::Error> {
 			assert!(self.imported_heights.lock().insert(block.header.number));
-			true
+			Ok(ImportResult::Queued)
 		}
 	}
 
 	impl Authorities<TestBlock> for FakeClient {
-		fn authorities(&self, _at: &BlockId<TestBlock>) -> Result<Vec<AuthorityId>, ::consensus_common::Error> {
+		type Error = Error;
+
+		fn authorities(&self, _at: &BlockId<TestBlock>) -> Result<Vec<AuthorityId>, Self::Error> {
 			Ok(self.authorities.clone())
 		}
 	}

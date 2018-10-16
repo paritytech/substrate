@@ -23,7 +23,7 @@ use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{
 	Justification,
-	generic::{BlockId, SignedBlock, Block as RuntimeBlock},
+	generic::{BlockId, SignedBlock, Block as RuntimeBlock, ImportBlock, ImportResult, BlockOrigin},
 	transaction_validity::{TransactionValidity, TransactionTag},
 };
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
@@ -44,7 +44,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {cht, error, in_mem, block_builder, genesis};
+use {cht, error, in_mem, block_builder, genesis, consensus};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -106,21 +106,6 @@ pub struct ClientInfo<Block: BlockT> {
 	pub best_queued_hash: Option<Block::Hash>,
 }
 
-/// Block import result.
-#[derive(Debug)]
-pub enum ImportResult {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the import queue.
-	AlreadyQueued,
-	/// Already in the blockchain.
-	AlreadyInChain,
-	/// Block or parent is known to be bad.
-	KnownBad,
-	/// Block parent is not in the chain.
-	UnknownParent,
-}
-
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
 pub enum BlockStatus {
@@ -132,68 +117,6 @@ pub enum BlockStatus {
 	KnownBad,
 	/// Not in the queue or the blockchain.
 	Unknown,
-}
-
-/// Block data origin.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum BlockOrigin {
-	/// Genesis block built into the client.
-	Genesis,
-	/// Block is part of the initial sync with the network.
-	NetworkInitialSync,
-	/// Block was broadcasted on the network.
-	NetworkBroadcast,
-	/// Block that was received from the network and validated in the consensus process.
-	ConsensusBroadcast,
-	/// Block that was collated by this node.
-	Own,
-	/// Block was imported from a file.
-	File,
-}
-
-/// Data required to import a Block
-pub struct ImportBlock<Block: BlockT> {
-	/// Origin of the Block
-	pub origin: BlockOrigin,
-	/// Header
-	pub header: Block::Header,
-	/// Justification provided for this block from the outside
-	pub external_justification: Justification,
-	/// Internal Justification for the block
-	pub internal_justification: Vec<u8>, // Block::Digest::DigestItem?
-	/// Block's body
-	pub body: Option<Vec<Block::Extrinsic>>,
-	/// Is this block finalized already?
-	/// `true` implies instant finality.
-	pub finalized: bool,
-	/// Auxiliary consensus data produced by the block.
-	/// Contains a list of key-value pairs. If values are `None`, the keys
-	/// will be deleted.
-	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-}
-
-impl<Block: BlockT> ImportBlock<Block> {
-	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self)
-		-> (
-			BlockOrigin,
-			<Block as BlockT>::Header,
-			Justification,
-			Justification,
-			Option<Vec<<Block as BlockT>::Extrinsic>>,
-			bool,
-			Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		) {
-		(
-			self.origin,
-			self.header,
-			self.external_justification,
-			self.internal_justification,
-			self.body,
-			self.finalized,
-			self.auxiliary,
-		)
-	}
 }
 
 
@@ -516,52 +439,6 @@ impl<B, E, Block> Client<B, E, Block> where
 			R::decode(&mut &res.0[..])
 				.ok_or_else(|| Error::from(ErrorKind::CallResultDecode(function)))
 		)
-	}
-
-	/// Import a checked and validated block
-	pub fn import_block(
-		&self,
-		import_block: ImportBlock<Block>,
-		new_authorities: Option<Vec<AuthorityId>>,
-	) -> error::Result<ImportResult> {
-
-		let (
-			origin,
-			header,
-			_,
-			justification,
-			body,
-			finalized,
-			_aux, // TODO: write this to DB also
-		) = import_block.into_inner();
-		let parent_hash = header.parent_hash().clone();
-
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
-			blockchain::BlockStatus::InChain => {},
-			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
-		}
-		let hash = header.hash();
-		let _import_lock = self.import_lock.lock();
-		let height: u64 = header.number().as_();
-		*self.importing_block.write() = Some(hash);
-
-		let result = self.execute_and_import_block(
-			origin,
-			hash,
-			header,
-			justification,
-			body,
-			new_authorities,
-			finalized,
-		);
-
-		*self.importing_block.write() = None;
-		telemetry!("block.import";
-			"height" => height,
-			"best" => ?hash,
-			"origin" => ?origin
-		);
-		result
 	}
 
 	// TODO [ToDr] Optimize and re-use tags from the pool.
@@ -981,6 +858,72 @@ impl<B, E, Block> Client<B, E, Block> where
 		}
 
 		unreachable!("this is a bug. `target_hash` is in blockchain but wasn't found following all leaves backwards");
+	}
+}
+
+
+impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	Block: BlockT,
+{
+	type Error = Error;
+
+	/// Import a checked and validated block
+	fn import_block(
+		&self,
+		import_block: ImportBlock<Block>,
+		new_authorities: Option<Vec<AuthorityId>>,
+	) -> Result<ImportResult, Self::Error> {
+
+		let (
+			origin,
+			header,
+			_,
+			justification,
+			body,
+			finalized,
+			_aux, // TODO: write this to DB also
+		) = import_block.into_inner();
+		let parent_hash = header.parent_hash().clone();
+
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
+			blockchain::BlockStatus::InChain => {},
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+		let hash = header.hash();
+		let _import_lock = self.import_lock.lock();
+		let height: u64 = header.number().as_();
+		*self.importing_block.write() = Some(hash);
+
+		let result = self.execute_and_import_block(
+			origin,
+			hash,
+			header,
+			justification,
+			body,
+			new_authorities,
+			finalized,
+		);
+
+		*self.importing_block.write() = None;
+		telemetry!("block.import";
+			"height" => height,
+			"best" => ?hash,
+			"origin" => ?origin
+		);
+		result.map_err(|e| e.into())
+	}
+}
+
+impl<B, E, Block> consensus::Authorities<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	Block: BlockT,
+{
+	type Error = Error;
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+		self.authorities_at(at).map_err(|e| e.into())
 	}
 }
 
