@@ -47,7 +47,7 @@ use service::{
 	FactoryExtrinsic,
 };
 use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
-use client::{BlockOrigin, JustifiedHeader};
+use client::ImportBlock;
 use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
 
@@ -216,7 +216,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, block_factory: B, extrinsic_factory: E)
 where
 	F: ServiceFactory,
-	B: Fn(&F::FullService) -> (JustifiedHeader<F::Block>, Option<Vec<FactoryExtrinsic<F>>>),
+	B: Fn(&F::FullService) -> ImportBlock<F::Block>,
 	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
 {
 	const NUM_NODES: u32 = 10;
@@ -230,8 +230,8 @@ where
 			if i % 128 == 0 {
 				info!("Generating #{}", i);
 			}
-			let (header, body) = block_factory(&first_service);
-			first_service.client().import_block(BlockOrigin::File, header, body, true).expect("Error importing test block");
+			let import_data = block_factory(&first_service);
+			first_service.client().import_block(import_data, None).expect("Error importing test block");
 		}
 		first_service.network().node_id().unwrap()
 	};

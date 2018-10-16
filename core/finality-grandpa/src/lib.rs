@@ -625,22 +625,12 @@ mod tests {
 		type In = Box<Stream<Item=Vec<u8>,Error=()>>;
 
 		fn messages_for(&self, round: u64) -> Self::In {
-			use network::consensus_gossip::ConsensusMessage;
-
 			let messages = self.inner.lock().peer(self.peer_id)
 				.with_spec(|spec, _| spec.gossip.messages_for(round_to_topic(round)));
 
-			let messages = messages
-				.map_err(
-					move |_| panic!("Messages for round {} dropped too early", round)
-				)
-				.map(|msg| match msg {
-					ConsensusMessage::ChainSpecific(raw, _) => {
-						let message = GossipMessage::decode(&mut &raw[..]).unwrap();
-						message.data
-					}
-					_ => panic!("Only chain-specific messages come under this stream"),
-				});
+			let messages = messages.map_err(
+				move |_| panic!("Messages for round {} dropped too early", round)
+			);
 
 			Box::new(messages)
 		}

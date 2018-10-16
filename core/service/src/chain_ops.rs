@@ -22,8 +22,10 @@ use serde_json;
 
 use client::BlockOrigin;
 use runtime_primitives::generic::{SignedBlock, BlockId};
-use runtime_primitives::traits::{As};
-use components::{ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber, RuntimeGenesis};
+use runtime_primitives::traits::{As, Block, Header};
+use network::import_queue::{ImportQueue, BlockData};
+use network::message;
+use components::{self, Components, ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber, RuntimeGenesis};
 use new_client;
 use codec::{Decode, Encode};
 use error;
@@ -33,7 +35,7 @@ use chain_spec::ChainSpec;
 pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut output: W, from: FactoryBlockNumber<F>, to: Option<FactoryBlockNumber<F>>, json: bool) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, W: Write,
 {
-	let client = new_client::<F>(config)?;
+	let client = new_client::<F>(&config)?;
 	let mut block = from;
 
 	let last = match to {
@@ -85,7 +87,8 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut input: R) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
-	let client = new_client::<F>(config)?;
+	let client = new_client::<F>(&config)?;
+	let queue = components::FullComponents::<F>::build_import_queue(&config, client.clone())?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
@@ -95,28 +98,35 @@ pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut 
 
 	let count: u32 = Decode::decode(&mut input).ok_or("Error reading file")?;
 	info!("Importing {} blocks", count);
-	let mut block = 0;
-	for _ in 0 .. count {
+	let mut block_count = 0; 
+	for b in 0 .. count {
 		if exit_recv.try_recv().is_ok() {
 			break;
 		}
-		match SignedBlock::decode(&mut input) {
-			Some(block) => {
-				// TODO: non-instant finality.
-				let header = client.check_justification(block.block.header, block.justification.into())?;
-				client.import_block(BlockOrigin::File, header, Some(block.block.extrinsics), true)?;
-			},
-			None => {
-				warn!("Error reading block data.");
-				break;
-			}
+		if let Some(signed) = SignedBlock::<<F::Block as Block>::Header, <F::Block as Block>::Extrinsic>::decode(&mut input) {
+			let header = signed.block.header;
+			let hash = header.hash();
+			let block  = message::BlockData::<F::Block> {
+				hash: hash,
+				justification: Some(signed.justification),
+				header: Some(header),
+				body: Some(signed.block.extrinsics),
+				receipt: None,
+				message_queue: None
+			};
+			// import queue handles verification and importing it into the client
+			queue.import_blocks(BlockOrigin::File, vec![BlockData::<F::Block> { block, origin: None }]);
+		} else {
+			warn!("Error reading block data at {}.", b);
+			break;
 		}
-		block += 1;
-		if block % 1000 == 0 {
-			info!("#{}", block);
+
+		block_count = b;
+		if b % 1000 == 0 {
+			info!("#{}", b);
 		}
 	}
-	info!("Imported {} blocks. Best: #{}", block, client.info()?.chain.best_number);
+	info!("Imported {} blocks. Best: #{}", block_count, client.info()?.chain.best_number);
 
 	Ok(())
 }
@@ -125,7 +135,7 @@ pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut 
 pub fn revert_chain<F>(config: FactoryFullConfiguration<F>, blocks: FactoryBlockNumber<F>) -> error::Result<()>
 	where F: ServiceFactory,
 {
-	let client = new_client::<F>(config)?;
+	let client = new_client::<F>(&config)?;
 	let reverted = client.revert(blocks)?;
 	let info = client.info()?.chain;
 	info!("Reverted {} blocks. Best: #{} ({})", reverted, info.best_number, info.best_hash);

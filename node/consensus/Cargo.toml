@@ -15,7 +15,6 @@ parking_lot = "0.4"
 rhododendron = "0.3"
 sr-primitives = { path = "../../core/sr-primitives" }
 srml-system = { path = "../../srml/system" }
-substrate-bft = { path = "../../core/bft" }
 substrate-client = { path = "../../core/client" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
