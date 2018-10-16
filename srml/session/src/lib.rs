@@ -153,7 +153,7 @@ impl<T: Trait> Module<T> {
 
 	/// Set the current set of validators.
 	///
-	/// Called by `staking::next_era()` only. `next_session` should be called after this in order to
+	/// Called by `staking::new_era()` only. `next_session` should be called after this in order to
 	/// update the session keys to the next validator set.
 	pub fn set_validators(new: &[T::AccountId]) {
 		<Validators<T>>::put(&new.to_vec());			// TODO: optimise.
