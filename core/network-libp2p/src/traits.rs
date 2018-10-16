@@ -44,10 +44,10 @@ pub struct NetworkConfiguration {
 	pub boot_nodes: Vec<String>,
 	/// Use provided node key instead of default
 	pub use_secret: Option<Secret>,
-	/// Minimum number of connected peers to maintain
-	pub min_peers: u32,
-	/// Maximum allowed number of peers
-	pub max_peers: u32,
+	/// Maximum allowed number of incoming connections
+	pub in_peers: u32,
+	/// Number of outgoing connections we're trying to maintain
+	pub out_peers: u32,
 	/// List of reserved node addresses.
 	pub reserved_nodes: Vec<String>,
 	/// The non-reserved peer mode.
@@ -76,8 +76,8 @@ impl NetworkConfiguration {
 			public_addresses: Vec::new(),
 			boot_nodes: Vec::new(),
 			use_secret: None,
-			min_peers: 25,
-			max_peers: 100,
+			in_peers: 25,
+			out_peers: 75,
 			reserved_nodes: Vec::new(),
 			non_reserved_mode: NonReservedPeerMode::Accept,
 			client_version: "Parity-network".into(),		// TODO: meh
