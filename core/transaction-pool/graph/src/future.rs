@@ -169,6 +169,11 @@ impl<Hash: hash::Hash + Eq + Clone, Ex> FutureTransactions<Hash, Ex> {
 		removed
 	}
 
+	/// Returns iterator over all future transactions
+	pub fn all(&self) -> impl Iterator<Item=&Transaction<Hash, Ex>> {
+		self.waiting.values().map(|waiting| &waiting.transaction)
+	}
+
 	/// Returns number of transactions in the Future queue.
 	pub fn len(&self) -> usize {
 		self.waiting.len()
