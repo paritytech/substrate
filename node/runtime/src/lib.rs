@@ -57,9 +57,6 @@ extern crate srml_treasury as treasury;
 extern crate sr_version as version;
 extern crate node_primitives;
 
-#[cfg(feature = "std")]
-mod checked_block;
-
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
@@ -86,8 +83,6 @@ pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
 pub use srml_support::StorageValue;
-#[cfg(any(feature = "std", test))]
-pub use checked_block::CheckedBlock;
 
 const TIMESTAMP_SET_POSITION: u32 = 0;
 const NOTE_OFFLINE_POSITION: u32 = 1;
