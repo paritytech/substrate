@@ -29,7 +29,7 @@ extern crate sr_version as runtime_version;
 #[doc(hidden)]
 pub use primitives::{traits::Block as BlockT, generic::BlockId, transaction_validity::TransactionValidity, ApplyResult};
 use runtime_version::RuntimeVersion;
-use rstd::{borrow::Cow, vec::Vec};
+use rstd::vec::Vec;
 #[doc(hidden)]
 pub use rstd::slice;
 #[doc(hidden)]
@@ -430,10 +430,13 @@ macro_rules! decl_apis {
 }
 
 //TODO: Move into runtime!
-#[derive(Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug))]
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Debug, Decode))]
 pub enum BlockBuilderError {
-	Generic(Cow<'static, str>),
+	#[cfg(not(feature = "std"))]
+	Generic(&'static str),
+	#[cfg(feature = "std")]
+	Generic(String),
 	TimestampInFuture(u64),
 }
 
