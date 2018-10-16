@@ -1131,7 +1131,7 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 		at: &BlockId<Block>,
 		block: &Block,
 		data: &InherentData
-	) -> Result<Result<(), sr_api::BlockBuilderError>, Self::Error> {
+	) -> Result<Result<(), api::BlockBuilderError>, Self::Error> {
 		self.call_api_at(at, "check_inherents", &(block, data))
 	}
 
