@@ -59,8 +59,9 @@ pub mod testing;
 
 pub mod traits;
 pub mod generic;
-pub mod bft;
 pub mod transaction_validity;
+
+pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
 

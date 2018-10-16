@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::time;
 use parking_lot::RwLock;
 use rustc_hex::ToHex;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashFor, NumberFor, As, Zero};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, As, Zero};
 use runtime_primitives::generic::BlockId;
 use network_libp2p::{NodeIndex, Severity};
 use codec::{Encode, Decode};
@@ -181,15 +181,15 @@ impl<'a, B: BlockT + 'a, H: ExHashT + 'a> Context<B> for ProtocolContext<'a, B, 
 pub(crate) struct ContextData<B: BlockT, H: ExHashT> {
 	// All connected peers
 	peers: RwLock<HashMap<NodeIndex, Peer<B, H>>>,
-	chain: Arc<Client<B>>,
+	pub chain: Arc<Client<B>>,
 }
 
 impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 	/// Create a new instance.
-	pub fn new(
+	pub fn new<I: 'static + ImportQueue<B>>(
 		config: ProtocolConfig,
 		chain: Arc<Client<B>>,
-		import_queue: Arc<ImportQueue<B>>,
+		import_queue: Arc<I>,
 		on_demand: Option<Arc<OnDemandService<B>>>,
 		transaction_pool: Arc<TransactionPool<H, B>>,
 		specialization: S,
@@ -373,7 +373,19 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		trace!(target: "sync", "BlockResponse {} from {} with {} blocks{}",
 			response.id, peer, response.blocks.len(), blocks_range);
 
-		self.sync.write().on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response);
+		// import_queue.import_blocks also acquires sync.write();
+		// Break the cycle by doing these separately from the outside;
+		let new_blocks = {
+			let mut sync = self.sync.write();
+			sync.on_block_data(&mut ProtocolContext::new(&self.context_data, io), peer, request, response)
+		};
+
+		if let Some((origin, new_blocks)) = new_blocks {
+			let import_queue = self.sync.read().import_queue();
+			import_queue.import_blocks(origin, new_blocks);
+		}
+
+
 	}
 
 	/// Perform time based maintenance.
@@ -702,12 +714,6 @@ fn send_message<B: BlockT, H: ExHashT>(peers: &RwLock<HashMap<NodeIndex, Peer<B,
 		_ => (),
 	}
 	io.send(who, message.encode());
-}
-
-/// Hash a message.
-pub(crate) fn hash_message<B: BlockT>(message: &Message<B>) -> B::Hash {
-	let data = message.encode();
-	HashFor::<B>::hash(&data)
 }
 
 /// Construct a simple protocol that is composed of several sub protocols.

@@ -12,7 +12,7 @@ hex-literal = "0.1"
 futures = "0.1.17"
 slog = "^2"
 heapsize = "0.4"
-substrate-bft = { path = "../bft" }
+substrate-consensus-rhd = { path = "../consensus/rhd" }
 parity-codec = "2.0"
 substrate-executor = { path = "../executor" }
 substrate-primitives = { path = "../primitives" }

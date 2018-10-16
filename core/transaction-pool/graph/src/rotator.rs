@@ -27,7 +27,6 @@ use std::{
 use parking_lot::RwLock;
 
 use base_pool::Transaction;
-use pool::TxData;
 
 /// Expected size of the banned extrinsics cache.
 const EXPECTED_SIZE: usize = 2048;
@@ -79,12 +78,9 @@ impl<Hash: hash::Hash + Eq + Clone> PoolRotator<Hash> {
 	/// Bans extrinsic if it's stale.
 	///
 	/// Returns `true` if extrinsic is stale and got banned.
-	pub fn ban_if_stale<Ex>(&self, now: &Instant, xt: &Transaction<Hash, TxData<Ex>>) -> bool {
-		match xt.data.valid_till {
-			Some(ref valid_till) if valid_till > now => {
-				return false;
-			}
-			_ => {},
+	pub fn ban_if_stale<Ex>(&self, now: &Instant, current_block: u64, xt: &Transaction<Hash, Ex>) -> bool {
+		if xt.valid_till > current_block {
+			return false;
 		}
 
 		self.ban(now, &[xt.hash.clone()]);
@@ -113,16 +109,13 @@ mod tests {
 		}
 	}
 
-	fn tx() -> (Hash, Transaction<Hash, TxData<Ex>>) {
+	fn tx() -> (Hash, Transaction<Hash, Ex>) {
 		let hash = 5u64;
 		let tx = Transaction {
-			data: TxData {
-				raw: (),
-				valid_till: Some(Instant::now()),
-			},
+			data: (),
 			hash: hash.clone(),
 			priority: 5,
-			longevity: 3,
+			valid_till: 1,
 			requires: vec![],
 			provides: vec![],
 		};
@@ -136,10 +129,11 @@ mod tests {
 		let (hash, tx) = tx();
 		let rotator = rotator();
 		assert!(!rotator.is_banned(&hash));
-		let past = Instant::now() - Duration::from_millis(1000);
+		let now = Instant::now();
+		let past_block = 0;
 
 		// when
-		assert!(!rotator.ban_if_stale(&past, &tx));
+		assert!(!rotator.ban_if_stale(&now, past_block, &tx));
 
 		// then
 		assert!(!rotator.is_banned(&hash));
@@ -153,7 +147,7 @@ mod tests {
 		assert!(!rotator.is_banned(&hash));
 
 		// when
-		assert!(rotator.ban_if_stale(&Instant::now(), &tx));
+		assert!(rotator.ban_if_stale(&Instant::now(), 1, &tx));
 
 		// then
 		assert!(rotator.is_banned(&hash));
@@ -165,7 +159,7 @@ mod tests {
 		// given
 		let (hash, tx) = tx();
 		let rotator = rotator();
-		assert!(rotator.ban_if_stale(&Instant::now(), &tx));
+		assert!(rotator.ban_if_stale(&Instant::now(), 1, &tx));
 		assert!(rotator.is_banned(&hash));
 
 		// when
@@ -179,16 +173,13 @@ mod tests {
 	#[test]
 	fn should_garbage_collect() {
 		// given
-		fn tx_with(i: u64, time: Instant) -> Transaction<Hash, TxData<Ex>> {
+		fn tx_with(i: u64, valid_till: u64) -> Transaction<Hash, Ex> {
 			let hash = i;
 			Transaction {
-				data: TxData {
-					raw: (),
-					valid_till: Some(time),
-				},
+				data: (),
 				hash,
 				priority: 5,
-				longevity: 3,
+				valid_till,
 				requires: vec![],
 				provides: vec![],
 			}
@@ -197,19 +188,19 @@ mod tests {
 		let rotator = rotator();
 
 		let now = Instant::now();
-		let past = now - Duration::from_secs(1);
+		let past_block = 0;
 
 		// when
 		for i in 0..2*EXPECTED_SIZE {
-			let tx = tx_with(i as u64, past);
-			assert!(rotator.ban_if_stale(&now, &tx));
+			let tx = tx_with(i as u64, past_block);
+			assert!(rotator.ban_if_stale(&now, past_block, &tx));
 		}
 		assert_eq!(rotator.banned_until.read().len(), 2*EXPECTED_SIZE);
 
 		// then
-		let tx = tx_with(2*EXPECTED_SIZE as u64, past);
+		let tx = tx_with(2*EXPECTED_SIZE as u64, past_block);
 		// trigger a garbage collection
-		assert!(rotator.ban_if_stale(&now, &tx));
+		assert!(rotator.ban_if_stale(&now, past_block, &tx));
 		assert_eq!(rotator.banned_until.read().len(), EXPECTED_SIZE);
 	}
 }

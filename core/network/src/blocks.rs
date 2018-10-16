@@ -28,8 +28,10 @@ const MAX_PARALLEL_DOWNLOADS: u32 = 1;
 /// Block data with origin.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockData<B: BlockT> {
+	/// The Block Message from the wire
 	pub block: message::BlockData<B>,
-	pub origin: NodeIndex,
+	/// The peer, we received this from
+	pub origin: Option<NodeIndex>,
 }
 
 #[derive(Debug)]
@@ -92,7 +94,8 @@ impl<B: BlockT> BlockCollection<B> {
 			_ => (),
 		}
 
-		self.blocks.insert(start, BlockRangeState::Complete(blocks.into_iter().map(|b| BlockData { origin: who, block: b }).collect()));
+		self.blocks.insert(start, BlockRangeState::Complete(blocks.into_iter()
+			.map(|b| BlockData { origin: Some(who), block: b }).collect()));
 	}
 
 	/// Returns a set of block hashes that require a header download. The returned set is marked as being downloaded.
@@ -244,14 +247,14 @@ mod test {
 		bc.insert(1, blocks[1..11].to_vec(), peer0);
 
 		assert_eq!(bc.needed_blocks(peer0, 40, 150, 0), Some(11 .. 41));
-		assert_eq!(bc.drain(1), blocks[1..11].iter().map(|b| BlockData { block: b.clone(), origin: 0 }).collect::<Vec<_>>());
+		assert_eq!(bc.drain(1), blocks[1..11].iter().map(|b| BlockData { block: b.clone(), origin: Some(0) }).collect::<Vec<_>>());
 
 		bc.clear_peer_download(peer0);
 		bc.insert(11, blocks[11..41].to_vec(), peer0);
 
 		let drained = bc.drain(12);
-		assert_eq!(drained[..30], blocks[11..41].iter().map(|b| BlockData { block: b.clone(), origin: 0 }).collect::<Vec<_>>()[..]);
-		assert_eq!(drained[30..], blocks[41..81].iter().map(|b| BlockData { block: b.clone(), origin: 1 }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[..30], blocks[11..41].iter().map(|b| BlockData { block: b.clone(), origin: Some(0) }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[30..], blocks[41..81].iter().map(|b| BlockData { block: b.clone(), origin: Some(1) }).collect::<Vec<_>>()[..]);
 
 		bc.clear_peer_download(peer2);
 		assert_eq!(bc.needed_blocks(peer2, 40, 150, 80), Some(81 .. 121));
@@ -262,8 +265,8 @@ mod test {
 
 		assert_eq!(bc.drain(80), vec![]);
 		let drained = bc.drain(81);
-		assert_eq!(drained[..40], blocks[81..121].iter().map(|b| BlockData { block: b.clone(), origin: 2 }).collect::<Vec<_>>()[..]);
-		assert_eq!(drained[40..], blocks[121..150].iter().map(|b| BlockData { block: b.clone(), origin: 1 }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[..40], blocks[81..121].iter().map(|b| BlockData { block: b.clone(), origin: Some(2) }).collect::<Vec<_>>()[..]);
+		assert_eq!(drained[40..], blocks[121..150].iter().map(|b| BlockData { block: b.clone(), origin: Some(1) }).collect::<Vec<_>>()[..]);
 	}
 
 	#[test]
@@ -273,7 +276,7 @@ mod test {
 			len: 128,
 			downloading: 1,
 		});
-		let blocks = generate_blocks(10).into_iter().map(|b| BlockData { block: b, origin: 0 }).collect();
+		let blocks = generate_blocks(10).into_iter().map(|b| BlockData { block: b, origin: None }).collect();
 		bc.blocks.insert(114305, BlockRangeState::Complete(blocks));
 
 		assert_eq!(bc.needed_blocks(0, 128, 10000, 000), Some(1 .. 100));

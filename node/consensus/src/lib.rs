@@ -16,6 +16,8 @@
 
 //! This service uses BFT consensus provided by the substrate.
 
+#![cfg(feature="rhd")]
+
 extern crate node_runtime;
 extern crate node_primitives;
 
@@ -68,7 +70,6 @@ pub use service::Service;
 
 mod evaluation;
 mod error;
-mod offline_tracker;
 mod service;
 
 /// Shared offline validator tracker.
@@ -314,10 +315,10 @@ impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 					let mut pending_size = 0;
 					for pending in pending_iterator {
 						// TODO [ToDr] Probably get rid of it, and validate in runtime.
-						let encoded_size = pending.data.raw.encode().len();
+						let encoded_size = pending.data.encode().len();
 						if pending_size + encoded_size >= MAX_TRANSACTIONS_SIZE { break }
 
-						match block_builder.push_extrinsic(pending.data.raw.clone()) {
+						match block_builder.push_extrinsic(pending.data.clone()) {
 							Ok(()) => {
 								pending_size += encoded_size;
 							}

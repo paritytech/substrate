@@ -23,7 +23,6 @@
 //! graph in the correct order taking into account priorities and dependencies.
 //!
 //! TODO [ToDr]
-//! - [ ] Longevity handling (remove obsolete transactions periodically)
 //! - [ ] Multi-threading (getting ready transactions should not block the pool)
 // end::description[]
 
