@@ -56,7 +56,7 @@ impl CheckedBlock {
 	/// Extract the timestamp from the block.
 	pub fn timestamp(&self) -> ::node_primitives::Timestamp {
 		let x = self.inner.extrinsics.get(TIMESTAMP_SET_POSITION as usize).and_then(|xt| match xt.function {
-			Call::Timestamp(TimestampCall::set(x)) => Some(x),
+			Call::Timestamp(TimestampCall::set(x)) => Some(x.into()),
 			_ => None
 		});
 

@@ -284,7 +284,7 @@ impl_apis! {
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
 			let mut inherent = vec![generic::UncheckedMortalExtrinsic::new_unsigned(
-				Call::Timestamp(TimestampCall::set(data.timestamp))
+				Call::Timestamp(TimestampCall::set(data.timestamp.into()))
 			)];
 
 			if !data.offline_indices.is_empty() {

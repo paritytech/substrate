@@ -303,7 +303,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
@@ -317,12 +317,12 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("9ea9efa24dc48c3da9093c02e6ceb8a0dac704eb901e322025f4ed6e9f74120d").into(),
+			hex!("788a2e8b23e4b30e1bce347ca6415fd0080e989d40741c86995b9ad539bb76b3").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(52)),
+					function: Call::Timestamp(timestamp::Call::set(52.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((bob(), 0)),
@@ -345,7 +345,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
@@ -627,18 +627,18 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 0)),
 					function: Call::Contract(
-						contract::Call::create::<Runtime>(10, 10_000, code_ctor_transfer, Vec::new())
+						contract::Call::create::<Runtime>(10.into(), 10_000.into(), code_ctor_transfer, Vec::new())
 					),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 1)),
 					function: Call::Contract(
-						contract::Call::call::<Runtime>(addr, 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
+						contract::Call::call::<Runtime>(addr, 10.into(), 10_000.into(), vec![0x00, 0x01, 0x02, 0x03])
 					),
 				},
 			]
