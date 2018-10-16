@@ -28,12 +28,11 @@ use sr_primitives::transaction_validity::{
 
 use error;
 use future::WaitingTransaction;
-use base_pool::{BlockNumber, Transaction};
+use base_pool::Transaction;
 
 #[derive(Debug)]
 pub struct TransactionRef<Hash, Ex> {
 	pub transaction: Arc<Transaction<Hash, Ex>>,
-	pub valid_till: BlockNumber,
 	pub insertion_id: u64,
 }
 
@@ -41,7 +40,6 @@ impl<Hash, Ex> Clone for TransactionRef<Hash, Ex> {
 	fn clone(&self) -> Self {
 		TransactionRef {
 			transaction: self.transaction.clone(),
-			valid_till: self.valid_till,
 			insertion_id: self.insertion_id,
 		}
 	}
@@ -50,7 +48,7 @@ impl<Hash, Ex> Clone for TransactionRef<Hash, Ex> {
 impl<Hash, Ex> Ord for TransactionRef<Hash, Ex> {
 	fn cmp(&self, other: &Self) -> cmp::Ordering {
 		self.transaction.priority.cmp(&other.transaction.priority)
-			.then(other.valid_till.cmp(&self.valid_till))
+			.then(other.transaction.valid_till.cmp(&self.transaction.valid_till))
 			.then(other.insertion_id.cmp(&self.insertion_id))
 	}
 }
@@ -143,7 +141,6 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 	/// that are in this queue.
 	pub fn import(
 		&mut self,
-		block_number: BlockNumber,
 		tx: WaitingTransaction<Hash, Ex>,
 	) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
 		assert!(tx.is_ready(), "Only ready transactions can be imported.");
@@ -175,7 +172,6 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 
 		let transaction = TransactionRef {
 			insertion_id,
-			valid_till: block_number.saturating_add(tx.longevity),
 			transaction: Arc::new(tx),
 		};
 
@@ -446,7 +442,7 @@ mod tests {
 			data: vec![id],
 			hash: id as u64,
 			priority: 1,
-			longevity: 2,
+			valid_till: 2,
 			requires: vec![vec![1], vec![2]],
 			provides: vec![vec![3], vec![4]],
 		}
@@ -456,7 +452,6 @@ mod tests {
 	fn should_replace_transaction_that_provides_the_same_tag() {
 		// given
 		let mut ready = ReadyTransactions::default();
-		let block_number = 1;
 		let mut tx1 = tx(1);
 		tx1.requires.clear();
 		let mut tx2 = tx(2);
@@ -468,18 +463,18 @@ mod tests {
 
 		// when
 		let x = WaitingTransaction::new(tx2, &ready.provided_tags());
-		ready.import(block_number, x).unwrap();
+		ready.import(x).unwrap();
 		let x = WaitingTransaction::new(tx3, &ready.provided_tags());
-		ready.import(block_number, x).unwrap();
+		ready.import(x).unwrap();
 		assert_eq!(ready.get().count(), 2);
 
 		// too low priority
 		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags());
-		ready.import(block_number, x).unwrap_err();
+		ready.import(x).unwrap_err();
 
 		tx1.priority = 10;
 		let x = WaitingTransaction::new(tx1.clone(), &ready.provided_tags());
-		ready.import(block_number, x).unwrap();
+		ready.import(x).unwrap();
 
 		// then
 		assert_eq!(ready.get().count(), 1);
@@ -501,27 +496,26 @@ mod tests {
 		let mut tx4 = tx(4);
 		tx4.requires = vec![tx1.provides[0].clone()];
 		tx4.provides = vec![];
-		let block_number = 1;
 		let tx5 = Transaction {
 			data: vec![5],
 			hash: 5,
 			priority: 1,
-			longevity: u64::max_value(),	// use the max_value() here for testing.
+			valid_till: u64::max_value(),	// use the max_value() here for testing.
 			requires: vec![tx1.provides[0].clone()],
 			provides: vec![],
 		};
 
 		// when
 		let x = WaitingTransaction::new(tx1, &ready.provided_tags());
-		ready.import(block_number, x).unwrap();
+		ready.import(x).unwrap();
 		let x = WaitingTransaction::new(tx2, &ready.provided_tags());
-		ready.import(block_number, x).unwrap();
+		ready.import(x).unwrap();
 		let x = WaitingTransaction::new(tx3, &ready.provided_tags());
-		ready.import(block_number, x).unwrap();
+		ready.import(x).unwrap();
 		let x = WaitingTransaction::new(tx4, &ready.provided_tags());
-		ready.import(block_number, x).unwrap();
+		ready.import(x).unwrap();
 		let x = WaitingTransaction::new(tx5, &ready.provided_tags());
-		ready.import(block_number, x).unwrap();
+		ready.import(x).unwrap();
 
 		// then
 		assert_eq!(ready.best.len(), 1);
@@ -539,40 +533,35 @@ mod tests {
 	#[test]
 	fn should_order_refs() {
 		let mut id = 1;
-		let mut with_priority = |priority| {
+		let mut with_priority = |priority, longevity| {
 			id += 1;
 			let mut tx = tx(id);
 			tx.priority = priority;
+			tx.valid_till = longevity;
 			tx
 		};
 		// higher priority = better
 		assert!(TransactionRef {
-			transaction: Arc::new(with_priority(3)),
-			valid_till: 3,
+			transaction: Arc::new(with_priority(3, 3)),
 			insertion_id: 1,
 		} > TransactionRef {
-			transaction: Arc::new(with_priority(2)),
-			valid_till: 3,
+			transaction: Arc::new(with_priority(2, 3)),
 			insertion_id: 2,
 		});
 		// lower validity = better
 		assert!(TransactionRef {
-			transaction: Arc::new(with_priority(3)),
-			valid_till: 2,
+			transaction: Arc::new(with_priority(3, 2)),
 			insertion_id: 1,
 		} > TransactionRef {
-			transaction: Arc::new(with_priority(3)),
-			valid_till: 3,
+			transaction: Arc::new(with_priority(3, 3)),
 			insertion_id: 2,
 		});
 		// lower insertion_id = better
 		assert!(TransactionRef {
-			transaction: Arc::new(with_priority(3)),
-			valid_till: 3,
+			transaction: Arc::new(with_priority(3, 3)),
 			insertion_id: 1,
 		} > TransactionRef {
-			transaction: Arc::new(with_priority(3)),
-			valid_till: 3,
+			transaction: Arc::new(with_priority(3, 3)),
 			insertion_id: 2,
 		});
 	}
