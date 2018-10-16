@@ -99,7 +99,7 @@ impl<Number, Hash, DigestItem> Decode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
-	Number: HasCompact,
+	Number: HasCompact + Copy,
 	Hash: HashT,
 	Hash::Output: Encode,
 	DigestItem: DigestItemT + Encode,

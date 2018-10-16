@@ -126,7 +126,7 @@ pub trait Trait: system::Trait {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: <T::Balance as HasCompact>::Type) -> Result;
-		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: T::Balance, reserved: T::Balance) -> Result;
+		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: <T::Balance as HasCompact>::Type, reserved: <T::Balance as HasCompact>::Type) -> Result;
 	}
 }
 
@@ -329,7 +329,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the balances of a given account.
-	fn set_balance(who: Address<T>, free: T::Balance, reserved: T::Balance) -> Result {
+	fn set_balance(who: Address<T>, free: <T::Balance as HasCompact>::Type, reserved: <T::Balance as HasCompact>::Type) -> Result {
 		let who = Self::lookup(who)?;
 		Self::set_free_balance(&who, free.into());
 		Self::set_reserved_balance(&who, reserved.into());
