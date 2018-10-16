@@ -112,11 +112,7 @@ impl<TSubstream> RegisteredProtocolSubstream<TSubstream> {
 
 	/// Sends a message to the substream.
 	pub fn send_message(&mut self, data: Bytes) {
-		// TODO: remove the packet id system
-		let mut message = Bytes::with_capacity(1 + data.len());
-		message.extend_from_slice(&[0]);
-		message.extend_from_slice(&data);
-		self.send_queue.push_back(message);
+		self.send_queue.push_back(data);
 
 		// If the length of the queue goes over a certain arbitrary threshold, we print a warning.
 		// TODO: figure out a good threshold
@@ -165,16 +161,8 @@ where TSubstream: AsyncRead + AsyncWrite,
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
 		loop {
 			match self.inner.poll()? {
-				Async::Ready(Some(mut data)) => {
-					// The `data` should be prefixed by the packet ID, therefore an empty
-					// packet is invalid.
-					// TODO: remove the packet id system
-					if data.is_empty() {
-						return Err(io::Error::new(io::ErrorKind::Other, "bad packet"));
-					}
-					let data = data.split_off(1);
-					return Ok(Async::Ready(Some(data.freeze())))
-				},
+				Async::Ready(Some(mut data)) =>
+					return Ok(Async::Ready(Some(data.freeze()))),
 				Async::Ready(None) =>
 					if !self.requires_poll_complete && self.send_queue.is_empty() {
 						return Ok(Async::Ready(None))
