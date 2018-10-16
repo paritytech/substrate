@@ -236,7 +236,7 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value, 0))
+		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value.into(), 0.into()))
 	}
 
 	#[test]
@@ -253,7 +253,7 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 3))
 				}
 			]);
 		});
@@ -306,11 +306,11 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 2))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(1, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 0, 1))
+					event: OuterEvent::motions(RawEvent::Voted(1, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), false, 0, 1))
 				}
 			]);
 		});
@@ -328,15 +328,15 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 3))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 3))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false, 1, 1))
+					event: OuterEvent::motions(RawEvent::Voted(2, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), false, 1, 1))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Disapproved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
+					event: OuterEvent::motions(RawEvent::Disapproved(hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into()))
 				}
 			]);
 		});
@@ -354,19 +354,19 @@ mod tests {
 			assert_eq!(System::events(), vec![
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), 2))
+					event: OuterEvent::motions(RawEvent::Proposed(1, 0, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), 2))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Voted(2, hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), true, 2, 0))
+					event: OuterEvent::motions(RawEvent::Voted(2, hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), true, 2, 0))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Approved(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into()))
+					event: OuterEvent::motions(RawEvent::Approved(hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into()))
 				},
 				EventRecord {
 					phase: Phase::ApplyExtrinsic(0),
-					event: OuterEvent::motions(RawEvent::Executed(hex!["a900ca23832b1f42a5d4af5d0ece88da63fbb4049cc00bac3f741eabb5a79c45"].into(), false))
+					event: OuterEvent::motions(RawEvent::Executed(hex!["35282aeb9f95795dc1be91b748cec2d210338f2c9c1a85d98e7a3619b6187d22"].into(), false))
 				}
 			]);
 		});

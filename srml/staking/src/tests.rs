@@ -269,7 +269,7 @@ fn staking_should_work() {
 
 		// Block 5: Transfer stake from highest to lowest. No change yet.
 		System::set_block_number(5);
-		assert_ok!(Balances::transfer(Origin::signed(4), 1.into(), 40));
+		assert_ok!(Balances::transfer(Origin::signed(4), 1.into(), 40.into()));
 		Session::check_rotate_session(System::block_number());
 
 		// Block 6: Lowest now validator.
@@ -487,7 +487,7 @@ fn staking_balance_transfer_when_bonded_should_not_work() {
 	with_externalities(&mut new_test_ext(0, 1, 3, 1, false, 0), || {
 		Balances::set_free_balance(&1, 111);
 		assert_ok!(Staking::stake(Origin::signed(1)));
-		assert_noop!(Balances::transfer(Origin::signed(1), 2.into(), 69), "cannot transfer illiquid funds");
+		assert_noop!(Balances::transfer(Origin::signed(1), 2.into(), 69.into()), "cannot transfer illiquid funds");
 	});
 }
 

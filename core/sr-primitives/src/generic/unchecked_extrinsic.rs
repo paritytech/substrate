@@ -41,7 +41,7 @@ where
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
-pub struct UncheckedExtrinsic<Address, Index, Signature, Call>
+pub struct UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: Codec,
 	Index: HasCompact + Codec,
@@ -54,7 +54,7 @@ where
 	pub function: Call,
 }
 
-impl<Address, Index, Signature, Call> UncheckedExtrinsic<Address, Index, Signature, Call>
+impl<Address, Index, Signature, Call> UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: Codec,
 	Index: HasCompact + Codec,
@@ -83,7 +83,7 @@ where
 }
 
 impl<Address, Index, Signature, Call, AccountId, Context> traits::Checkable<Context>
-	for UncheckedExtrinsic<Address, Index, Signature, Call>
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: Member + MaybeDisplay + Codec,
 	Index: Member + MaybeDisplay + SimpleArithmetic + Codec,
@@ -116,7 +116,7 @@ where
 }
 
 impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Decode> Decode
-	for UncheckedExtrinsic<Address, Index, Signature, Call>
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		// This is a little more complicated than usual since the binary format must be compatible
@@ -133,7 +133,7 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Decode> 
 }
 
 impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> Encode
-	for UncheckedExtrinsic<Address, Index, Signature, Call>
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
 {
 	fn encode(&self) -> Vec<u8> {
 		super::encode_with_vec_prefix::<Self, _>(|v| {
@@ -146,7 +146,7 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> 
 /// TODO: use derive when possible.
 #[cfg(feature = "std")]
 impl<Address, Index, Signature, Call> fmt::Debug
-	for UncheckedExtrinsic<Address, Index, Signature, Call>
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: fmt::Debug + Codec,
 	Index: fmt::Debug + HasCompact + Codec,

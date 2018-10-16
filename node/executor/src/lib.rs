@@ -103,7 +103,7 @@ mod tests {
 	fn xt() -> UncheckedExtrinsic {
 		sign(CheckedExtrinsic {
 			signed: Some((alice(), 0)),
-			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69)),
+			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69.into())),
 		})
 	}
 
@@ -307,7 +307,7 @@ mod tests {
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
-					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+					function: Call::Balances(balances::Call::transfer(bob().into(), 69.into())),
 				},
 			]
 		)
@@ -317,7 +317,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("eef4ca8018e0511f89b7cee1e07796aa710a50accc8b1e52082d05cd8c8b6e24").into(),
+			hex!("9ea9efa24dc48c3da9093c02e6ceb8a0dac704eb901e322025f4ed6e9f74120d").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -326,11 +326,11 @@ mod tests {
 				},
 				CheckedExtrinsic {
 					signed: Some((bob(), 0)),
-					function: Call::Balances(balances::Call::transfer(alice().into(), 5)),
+					function: Call::Balances(balances::Call::transfer(alice().into(), 5.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 1)),
-					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
+					function: Call::Balances(balances::Call::transfer(bob().into(), 15.into())),
 				}
 			]
 		)
