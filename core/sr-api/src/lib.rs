@@ -22,6 +22,8 @@ extern crate sr_std as rstd;
 extern crate sr_primitives as primitives;
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
+#[macro_use]
+extern crate parity_codec_derive;
 extern crate sr_version as runtime_version;
 
 #[doc(hidden)]
@@ -427,6 +429,17 @@ macro_rules! decl_apis {
 	};
 }
 
+//TODO: Move into runtime!
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Debug, Decode))]
+pub enum BlockBuilderError {
+	#[cfg(not(feature = "std"))]
+	Generic(&'static str),
+	#[cfg(feature = "std")]
+	Generic(String),
+	TimestampInFuture(u64),
+}
+
 decl_apis! {
 	/// The `Core` api trait that is mandantory for each runtime.
 	pub trait Core<Block: BlockT, AuthorityId> {
@@ -468,6 +481,8 @@ decl_apis! {
 		fn finalise_block() ExtraClientSide(changes: &mut Self::OverlayedChanges) -> <Block as BlockT>::Header;
 		/// Generate inherent extrinsics.
 		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
+		/// Check that the inherents are valid.
+		fn check_inherents<InherentData>(block: Block, data: InherentData) -> Result<(), BlockBuilderError>;
 		/// Generate a random seed.
 		fn random_seed() -> <Block as BlockT>::Hash;
 	}

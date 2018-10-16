@@ -185,7 +185,7 @@ impl_apis! {
 		}
 	}
 
-	impl BlockBuilder<Block, u32, u32> for Runtime {
+	impl BlockBuilder<Block, u32, u32, u32> for Runtime {
 		fn initialise_block(header: <Block as BlockT>::Header) {
 			system::initialise_block(header)
 		}
@@ -199,6 +199,10 @@ impl_apis! {
 		}
 
 		fn inherent_extrinsics(_data: u32) -> Vec<u32> {
+			unimplemented!()
+		}
+
+		fn check_inherents(_block: Block, _data: u32) -> Result<(), runtime_api::BlockBuilderError> {
 			unimplemented!()
 		}
 
