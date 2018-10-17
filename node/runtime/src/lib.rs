@@ -61,7 +61,7 @@ use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
-	SessionKey, Signature, InherentData
+	SessionKey, Signature
 };
 use runtime_api::runtime::*;
 use runtime_primitives::ApplyResult;
@@ -249,12 +249,12 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
 
 pub type TimestampInherentError = <Timestamp as ProvideInherent>::Error;
-pub type ConsensusInherentError = <Consensus as ProvideInherent>::Error;
 
-#[derive(Encode, Decode)]
-enum InherentError {
-	Timestamp(TimestampInherentError),
-	Consensus(ConsensusInherentError),
+impl_outer_inherent! {
+	pub struct InherentData where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
+		timestamp: Timestamp,
+		consensus: Consensus,
+	}
 }
 
 impl_apis! {
@@ -292,32 +292,11 @@ impl_apis! {
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
-			let mut inherent = Vec::with_capacity(2);
-			inherent.extend(
-				Timestamp::create_inherent_extrinsics(data.timestamp)
-					.into_iter()
-					.map(|v| (v.0, generic::UncheckedMortalExtrinsic::new_unsigned(Call::Timestamp(v.1))))
-			);
-			inherent.extend(
-				Consensus::create_inherent_extrinsics(data.offline_indices)
-					.into_iter()
-					.map(|v| (v.0, generic::UncheckedMortalExtrinsic::new_unsigned(Call::Consensus(v.1))))
-			);
-
-			inherent.as_mut_slice().sort_unstable_by_key(|v| v.0);
-			inherent.into_iter().map(|v| v.1).collect()
+			data.create_inherent_extrinsics()
 		}
 
 		fn check_inherents(block: Block, data: InherentData) -> Result<(), InherentError> {
-			Timestamp::check_inherent(&block, data.timestamp, &|xt| match xt.function {
-				Call::Timestamp(ref data) => Some(data),
-				_ => None,
-			}).map_err(InherentError::Timestamp)?;
-
-			Consensus::check_inherent(&block, data.offline_indices, &|xt| match xt.function {
-				Call::Consensus(ref data) => Some(data),
-				_ => None,
-			}).map_err(InherentError::Consensus)
+			data.check_inherents(block)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {
