@@ -91,7 +91,7 @@ pub struct Fork<Block: BlockT, T> {
 	head: Entry<Block, T>,
 }
 
-/// Outcome of Fork::try_append_or_fork. 
+/// Outcome of Fork::try_append_or_fork.
 #[derive(Debug)]
 #[cfg_attr(test, derive(PartialEq))]
 pub enum ForkAppendResult<Block: BlockT> {
@@ -356,7 +356,7 @@ impl<Block: BlockT, T: CacheItemT, S: Storage<Block, T>> ListCache<Block, T, S> 
 
 			// if there's an entry at this block:
 			// - remove reference from this entry to the previous entry
-			// - destroy fork starting with previous entry 
+			// - destroy fork starting with previous entry
 			let current_entry = match self.storage.read_entry(&ancient_block)? {
 				Some(current_entry) => current_entry,
 				None => return Ok(()),
@@ -583,12 +583,12 @@ fn read_forks<Block: BlockT, T: CacheItemT, S: Storage<Block, T>>(
 
 #[cfg(test)]
 pub mod tests {
-	use runtime_primitives::testing::{Header, Block as RawBlock};
+	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use runtime_primitives::traits::Header as HeaderT;
 	use cache::list_storage::tests::{DummyStorage, FaultyStorage, DummyTransaction};
 	use super::*;
 
-	type Block = RawBlock<u64>;
+	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	pub fn test_id(number: u64) -> ComplexBlockId<Block> {
 		ComplexBlockId::new(From::from(number), number)
@@ -834,7 +834,7 @@ pub mod tests {
 		// when trying to insert block @ finalized number
 		assert!(ListCache::new(DummyStorage::new(), 1024, test_id(100))
 			.on_block_insert(&mut DummyTransaction::new(), test_id(99), test_id(100), Some(100), false).unwrap().is_none());
-	
+
 		// when trying to insert non-final block AND it appends to the best block of unfinalized fork
 		// AND new value is the same as in the fork' best block
 		let mut cache = ListCache::new(

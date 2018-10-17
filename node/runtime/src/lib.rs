@@ -61,13 +61,13 @@ use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
-	SessionKey, Signature, InherentData, Timestamp as TimestampType
+	SessionKey, Signature, InherentData
 };
-use runtime_api::{BlockBuilderError, runtime::*};
+use runtime_api::runtime::*;
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem, Block as BlockT};
+use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem, Block as BlockT, ProvideInherent};
 use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
@@ -248,6 +248,15 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
 
+pub type TimestampInherentError = <Timestamp as ProvideInherent>::Error;
+pub type ConsensusInherentError = <Consensus as ProvideInherent>::Error;
+
+#[derive(Encode, Decode)]
+enum InherentError {
+	Timestamp(TimestampInherentError),
+	Consensus(ConsensusInherentError),
+}
+
 impl_apis! {
 	impl Core<Block, SessionKey> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -269,7 +278,7 @@ impl_apis! {
 		}
 	}
 
-	impl BlockBuilder<Block, InherentData, UncheckedExtrinsic, InherentData> for Runtime {
+	impl BlockBuilder<Block, InherentData, UncheckedExtrinsic, InherentData, InherentError> for Runtime {
 		fn initialise_block(header: <Block as BlockT>::Header) {
 			Executive::initialise_block(&header)
 		}
@@ -283,49 +292,32 @@ impl_apis! {
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
-			let mut inherent = vec![generic::UncheckedMortalExtrinsic::new_unsigned(
-				Call::Timestamp(TimestampCall::set(data.timestamp.into()))
-			)];
+			let mut inherent = Vec::with_capacity(2);
+			inherent.extend(
+				Timestamp::create_inherent_extrinsics(data.timestamp)
+					.into_iter()
+					.map(|v| (v.0, generic::UncheckedMortalExtrinsic::new_unsigned(Call::Timestamp(v.1))))
+			);
+			inherent.extend(
+				Consensus::create_inherent_extrinsics(data.offline_indices)
+					.into_iter()
+					.map(|v| (v.0, generic::UncheckedMortalExtrinsic::new_unsigned(Call::Consensus(v.1))))
+			);
 
-			if !data.offline_indices.is_empty() {
-				inherent.push(generic::UncheckedMortalExtrinsic::new_unsigned(
-					Call::Consensus(ConsensusCall::note_offline(data.offline_indices))
-				));
-			}
-
-			inherent
+			inherent.as_mut_slice().sort_unstable_by_key(|v| v.0);
+			inherent.into_iter().map(|v| v.1).collect()
 		}
 
-		fn check_inherents(block: Block, data: InherentData) -> Result<(), BlockBuilderError> {
-			// TODO: v1: should be automatically gathered
+		fn check_inherents(block: Block, data: InherentData) -> Result<(), InherentError> {
+			Timestamp::check_inherent(&block, data.timestamp, &|xt| match xt.function {
+				Call::Timestamp(ref data) => Some(data),
+				_ => None,
+			}).map_err(InherentError::Timestamp)?;
 
-			// Timestamp module...
-			const MAX_TIMESTAMP_DRIFT: TimestampType = 60;
-			let xt = block.extrinsics.get(TIMESTAMP_SET_POSITION as usize)
-				.ok_or_else(|| BlockBuilderError::Generic("No valid timestamp inherent in block".into()))?;
-			let t = match (xt.is_signed(), &xt.function) {
-				(false, Call::Timestamp(TimestampCall::set(t))) => t,
-				_ => return Err(BlockBuilderError::Generic("No valid timestamp inherent in block".into())),
-			};
-			let t = (*t).into();
-			if t > data.timestamp + MAX_TIMESTAMP_DRIFT {
-				return Err(BlockBuilderError::TimestampInFuture(t))
-			}
-
-			// Offline indices
-			let noted_offline =
-				block.extrinsics.get(NOTE_OFFLINE_POSITION as usize).and_then(|xt| match xt.function {
-					Call::Consensus(ConsensusCall::note_offline(ref x)) => Some(&x[..]),
-					_ => None,
-				}).unwrap_or(&[]);
-
-			noted_offline.iter().try_for_each(|n|
-				if !data.offline_indices.contains(n) {
-					Err(BlockBuilderError::Generic("Online node marked offline".into()))
-				} else {
-					Ok(())
-				}
-			)
+			Consensus::check_inherent(&block, data.offline_indices, &|xt| match xt.function {
+				Call::Consensus(ref data) => Some(data),
+				_ => None,
+			}).map_err(InherentError::Consensus)
 		}
 
 		fn random_seed() -> <Block as BlockT>::Hash {

@@ -430,7 +430,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
-	type Extrinsic: Member + Codec;
+	type Extrinsic: Member + Codec + Extrinsic;
 	type Header: Header<Hash=Self::Hash>;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
@@ -531,4 +531,33 @@ pub trait DigestItem: Codec + Member {
 	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
 		None
 	}
+}
+
+/// Something that provides an inherent for a runtime.
+pub trait ProvideInherent {
+	/// The inherent that is provided.
+	type Inherent: Codec;
+	/// The error used by this trait.
+	type Error: Codec;
+	/// The call for setting the inherent.
+	type Call: Codec;
+
+	/// Create the inherent extrinsics.
+	///
+	/// # Return
+	///
+	/// Returns a vector with tuples containing the index for the extrinsic and the extrinsic itself.
+	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)>;
+
+	/// Check that the given inherent is valid.
+	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
+		block: &Block, data: Self::Inherent, extract_function: &F
+	) -> Result<(), Self::Error>;
+}
+
+/// Something that acts like an `Extrinsic`.
+pub trait Extrinsic {
+	/// Is this `Extrinsic` signed?
+	/// If no information are available about signed/unsigned, `None` should be returned.
+	fn is_signed(&self) -> Option<bool>;
 }
