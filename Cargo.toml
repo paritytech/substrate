@@ -39,6 +39,7 @@ members = [
 	"core/transaction-pool",
 	"core/transaction-pool/graph",
 	"srml/support",
+	"srml/assets",
 	"srml/balances",
 	"srml/consensus",
 	"srml/contract",
