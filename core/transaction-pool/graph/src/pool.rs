@@ -193,11 +193,12 @@ impl<B: ChainApi> Pool<B> {
 				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?
 				.as_();
 		let now = time::Instant::now();
-		let to_remove = self.ready(|pending| pending
-			.filter(|tx| self.rotator.ban_if_stale(&now, block_number, &tx))
-			.map(|tx| tx.hash.clone())
-			.collect::<Vec<_>>()
-		);
+		let to_remove = {
+			self.ready()
+				.filter(|tx| self.rotator.ban_if_stale(&now, block_number, &tx))
+				.map(|tx| tx.hash.clone())
+				.collect::<Vec<_>>()
+		};
 		let futures_to_remove: Vec<ExHash<B>> = {
 			let p = self.pool.read();
 			let mut hashes = Vec::new();
@@ -262,20 +263,9 @@ impl<B: ChainApi> Pool<B> {
 		invalid
 	}
 
-	/// Get ready transactions ordered by priority
-	pub fn ready<F, X>(&self, f: F) -> X where
-		F: FnOnce(&mut Iterator<Item=TransactionFor<B>>) -> X,
-	{
-		let pool = self.pool.read();
-		let mut ready = pool.ready();
-		f(&mut ready)
-	}
-
-	/// Returns all transactions in the pool.
-	///
-	/// Be careful with large limit values, as querying the entire pool might be time consuming.
-	pub fn all(&self, limit: usize) -> Vec<ExtrinsicFor<B>> {
-		self.ready(|it| it.take(limit).map(|ex| ex.data.clone()).collect())
+	/// Get an iterator for ready transactions ordered by priority
+	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
+		self.pool.read().ready()
 	}
 
 	/// Returns pool status.
