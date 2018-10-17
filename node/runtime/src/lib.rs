@@ -67,7 +67,7 @@ use runtime_api::runtime::*;
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem, Block as BlockT, ProvideInherent};
+use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem, Block as BlockT};
 use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
@@ -248,11 +248,9 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
 
-pub type TimestampInherentError = <Timestamp as ProvideInherent>::Error;
-
 impl_outer_inherent! {
 	pub struct InherentData where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
-		timestamp: Timestamp,
+		timestamp: Timestamp export Error as TimestampInherentError,
 		consensus: Consensus,
 	}
 }

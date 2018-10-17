@@ -20,48 +20,77 @@ pub use rstd::{result::Result, vec::Vec};
 pub use runtime_primitives::traits::ProvideInherent;
 
 
+/// Implement the outer inherent.
+/// All given modules need to implement `ProvideInherent`.
+///
+/// # Example
+///
+/// ```rust
+/// impl_outer_inherent! {
+///     pub struct InherentData where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
+///         timestamp: Timestamp export Error as TimestampInherentError,
+///         consensus: Consensus,
+///     }
+/// }
+/// ```
+///
+/// Additional parameters after `UncheckedExtrinsic` are `Error` and `Call`.
 #[macro_export]
 macro_rules! impl_outer_inherent {
 	(
 		$(#[$attr:meta])*
 		pub struct $name:ident where Block = $block:ident, UncheckedExtrinsic = $unchecked:ident {
-			$( $module:ident: $module_ty:ident, )*
+			$( $module:ident: $module_ty:ident $(export Error as $error_name:ident)*, )*
 		}
 	) => {
 		impl_outer_inherent!(
 			$( #[$attr] )*
 			pub struct $name where Block = $block, UncheckedExtrinsic = $unchecked, Error = InherentError, Call = Call {
-				$( $module: $module_ty, )*
+				$( $module: $module_ty $(export Error as $error_name)*, )*
 			}
 		);
 	};
 	(
 		$(#[$attr:meta])*
 		pub struct $name:ident where Block = $block:ident, UncheckedExtrinsic = $unchecked:ident, Error = $error:ident {
-			$( $module:ident: $module_ty:ident, )*
+			$( $module:ident: $module_ty:ident $(export Error as $error_name:ident)*, )*
 		}
 	) => {
 		impl_outer_inherent!(
 			$( #[$attr] )*
 			pub struct $name where Block = $block, UncheckedExtrinsic = $unchecked, Error = $error, Call = Call {
-				$( $module: $module_ty, )*
+				$( $module: $module_ty $(export Error as $error_name)*, )*
 			}
 		);
 	};
 	(
 		$(#[$attr:meta])*
 		pub struct $name:ident where Block = $block:ident, UncheckedExtrinsic = $unchecked:ident, Error = $error:ident, Call = $call:ident {
-			$( $module:ident: $module_ty:ident, )*
+			$( $module:ident: $module_ty:ident $(export Error as $error_name:ident)*, )*
 		}
 	) => {
 		$( #[$attr] )*
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Encode, Decode)]
+		/// Inherent data to include in a block.
 		pub struct $name {
 			$( $module: <$module_ty as $crate::inherent::ProvideInherent>::Inherent, )*
 		}
 
+		$(
+			$(
+				pub type $error_name =<$module_ty as $crate::inherent::ProvideInherent>::Error;
+			)*
+		)*
+
 		impl $name {
+			/// Create a new instance.
+			pub fn new( $( $module: <$module_ty as $crate::inherent::ProvideInherent>::Inherent ),* ) -> Self {
+				Self {
+					$( $module, )*
+				}
+			}
+
 			fn create_inherent_extrinsics(self) -> Vec<$unchecked> {
 				let mut inherent = $crate::inherent::Vec::new();
 

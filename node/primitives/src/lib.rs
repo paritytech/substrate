@@ -85,23 +85,3 @@ impl traits::Extrinsic for UncheckedExtrinsic {
 		None
 	}
 }
-
-///
-/// Inherent data to include in a block.
-#[derive(Encode, Decode)]
-pub struct InherentData {
-	/// Current timestamp.
-	pub timestamp: Timestamp,
-	/// Indices of offline validators.
-	pub offline_indices: Vec<u32>,
-}
-
-impl InherentData {
-	/// Create a new `InherentData` instance.
-	pub fn new(timestamp: Timestamp, offline_indices: Vec<u32>) -> Self {
-		Self {
-			timestamp,
-			offline_indices
-		}
-	}
-}
