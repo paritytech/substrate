@@ -13,4 +13,4 @@ substrate-primitives = { path = "../../core/primitives" }
 futures = "0.1"
 tokio = "0.1.7"
 log = "0.4"
-rhododendron = "0.3"
+rhododendron = "0.3.5"

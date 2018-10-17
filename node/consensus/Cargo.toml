@@ -8,6 +8,7 @@ error-chain = "0.12"
 exit-future = "0.1"
 futures = "0.1.17"
 log = "0.4"
+rhododendron = "0.3.5"
 node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 parity-codec = "2.1"
