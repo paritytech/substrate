@@ -532,7 +532,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			justification,
 			body,
 			finalized,
-			_aux, // TODO: write this to DB also
+			aux,
 		) = import_block.into_inner();
 		let parent_hash = header.parent_hash().clone();
 
@@ -553,6 +553,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			body,
 			new_authorities,
 			finalized,
+			aux,
 		);
 
 		*self.importing_block.write() = None;
@@ -597,6 +598,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		body: Option<Vec<Block::Extrinsic>>,
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
+		aux: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> error::Result<ImportResult> {
 		let parent_hash = header.parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
@@ -686,6 +688,8 @@ impl<B, E, Block> Client<B, E, Block> where
 		if let Some(Some(changes_update)) = changes_update {
 			transaction.update_changes_trie(changes_update)?;
 		}
+
+		transaction.set_aux(aux)?;
 		self.backend.commit_operation(transaction)?;
 
 		if make_notifications {
