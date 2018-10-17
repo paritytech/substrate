@@ -89,6 +89,10 @@ pub(crate) fn to_execution_result<E: Ext>(
 	}
 }
 
+// ***********************************************************
+// * AFTER MAKING A CHANGE MAKE SURE TO UPDATE COMPLEXITY.MD *
+// ***********************************************************
+
 // TODO: ext_balance, ext_address, ext_callvalue, etc.
 
 // Define a function `fn init_env<E: Ext>() -> HostFunctionSet<E>` that returns

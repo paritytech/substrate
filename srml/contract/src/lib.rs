@@ -270,7 +270,7 @@ impl<T: Trait> Module<T> {
 
 	/// Create a new contract, optionally transfering some balance to the created account.
 	///
-	/// Creation is executed as follows:ExecutionContext
+	/// Creation is executed as follows:
 	///
 	/// - the destination address is computed based on the sender and hash of the code.
 	/// - account is created at the computed address.
