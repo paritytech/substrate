@@ -76,6 +76,9 @@ where
 	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
+	/// Update auxiliary keys. Values are `None` if should be deleted.
+	fn set_aux<I>(&mut self, ops: I) -> error::Result<()>
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>;
 }
 
 /// Client backend. Manages the data layer.
