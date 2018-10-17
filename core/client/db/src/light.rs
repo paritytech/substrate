@@ -177,10 +177,7 @@ impl<Block> BlockchainHeaderBackend<Block> for LightStorage<Block>
 	}
 
 	fn hash(&self, number: <<Block as BlockT>::Header as HeaderT>::Number) -> ClientResult<Option<Block::Hash>> {
-		self.header(BlockId::Number(number)).and_then(|maybe_header| match maybe_header {
-			Some(header) => Ok(Some(header.hash().clone())),
-			None => Ok(None),
-		})
+		Ok(self.header(BlockId::Number(number))?.map(|header| header.hash().clone()))
 	}
 }
 
