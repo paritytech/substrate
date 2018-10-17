@@ -33,11 +33,11 @@ pub type TransactionTag = Vec<u8>;
 #[cfg_attr(feature = "std", derive(Debug))]
 pub enum TransactionValidity {
 	Invalid,
-	Valid(
-		/* priority: */TransactionPriority,
-		/* requires: */Vec<TransactionTag>,
-		/* provides: */Vec<TransactionTag>,
-		/* longevity: */TransactionLongevity
-	),
+	Valid {
+		priority: TransactionPriority,
+		requires: Vec<TransactionTag>,
+		provides: Vec<TransactionTag>,
+		longevity: TransactionLongevity
+	},
 	Unknown,
 }
