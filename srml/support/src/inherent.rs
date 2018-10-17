@@ -25,7 +25,7 @@ pub use runtime_primitives::traits::ProvideInherent;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```nocompile
 /// impl_outer_inherent! {
 ///     pub struct InherentData where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
 ///         timestamp: Timestamp export Error as TimestampInherentError,

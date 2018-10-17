@@ -212,11 +212,14 @@ impl DigestItem for Log {
 }
 
 construct_runtime!(
-	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) {
+	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
+		Block = Block,
+		UncheckedExtrinsic = UncheckedExtrinsic
+	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Consensus: consensus::{Module, Call, Storage, Config, Log(AuthoritiesChange)},
+		Consensus: consensus::{Module, Call, Storage, Config, Log(AuthoritiesChange), Inherent},
 		Balances: balances,
-		Timestamp: timestamp::{Module, Call, Storage, Config},
+		Timestamp: timestamp::{Module, Call, Storage, Config, Inherent},
 		Session: session,
 		Staking: staking,
 		Democracy: democracy,
@@ -247,13 +250,6 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalExtrinsic<Address, Index, 
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
-
-impl_outer_inherent! {
-	pub struct InherentData where Block = Block, UncheckedExtrinsic = UncheckedExtrinsic {
-		timestamp: Timestamp export Error as TimestampInherentError,
-		consensus: Consensus,
-	}
-}
 
 impl_apis! {
 	impl Core<Block, SessionKey> for Runtime {
