@@ -46,6 +46,7 @@ use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
+use primitives::RuntimeString;
 use primitives::traits::{
 	MaybeSerializeDebug, OnFinalise, Member, ProvideInherent, Block as BlockT
 };
@@ -241,7 +242,7 @@ impl<T: Trait> Module<T> {
 impl<T: Trait> ProvideInherent for Module<T> {
 	type Inherent = Vec<u32>;
 	type Call = Call<T>;
-	type Error = String;
+	type Error = RuntimeString;
 
 	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
 		vec![(T::NOTE_OFFLINE_POSITION, Call::note_offline(data))]

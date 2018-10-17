@@ -33,6 +33,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[macro_use]
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -56,13 +57,12 @@ extern crate parity_codec_derive;
 use codec::HasCompact;
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
+use runtime_primitives::RuntimeString;
 use runtime_primitives::traits::{
 	As, OnFinalise, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
 };
 use system::ensure_inherent;
-use rstd::ops::{Mul, Div};
-use rstd::result;
-
+use rstd::{result, ops::{Mul, Div}, vec::Vec};
 
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The position of the required timestamp-set extrinsic.
@@ -134,12 +134,10 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-#[derive(Encode, Decode)]
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Decode))]
 pub enum InherentError {
-	#[cfg(feature = "std")]
-	Other(String),
-	#[cfg(not(feature = "std"))]
-	Other(&'static str),
+	Other(RuntimeString),
 	TimestampInFuture(u64),
 }
 

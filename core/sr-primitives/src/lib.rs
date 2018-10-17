@@ -65,6 +65,12 @@ pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
 
+/// A String that is a `&'static str` on `no_std` and a `String` on `std`.
+#[cfg(not(feature = "std"))]
+pub type RuntimeString = &'static str;
+#[cfg(feature = "std")]
+pub type RuntimeString = String;
+
 #[cfg(feature = "std")]
 pub use serde::{Serialize, de::DeserializeOwned};
 

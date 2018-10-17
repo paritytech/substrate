@@ -90,7 +90,8 @@ macro_rules! impl_outer_inherent {
 		}
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-		#[derive(Encode, Decode)]
+		#[derive(Encode)]
+		#[cfg_attr(feature = "std", derive(Decode))]
 		pub enum $error {
 			$( $module_ty(<$module_ty as $crate::inherent::ProvideInherent>::Error), )*
 		}

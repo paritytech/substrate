@@ -383,6 +383,17 @@ pub trait MaybeDisplay {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDisplay for T {}
 
+#[cfg(feature = "std")]
+pub trait MaybeDecode: ::codec::Decode {}
+#[cfg(feature = "std")]
+impl<T: ::codec::Decode> MaybeDecode for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeDecode {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeDecode for T {}
+
+
 pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
@@ -536,11 +547,11 @@ pub trait DigestItem: Codec + Member {
 /// Something that provides an inherent for a runtime.
 pub trait ProvideInherent {
 	/// The inherent that is provided.
-	type Inherent: Codec;
+	type Inherent: Encode + MaybeDecode;
 	/// The error used by this trait.
-	type Error: Codec;
+	type Error: Encode + MaybeDecode;
 	/// The call for setting the inherent.
-	type Call: Codec;
+	type Call: Encode + MaybeDecode;
 
 	/// Create the inherent extrinsics.
 	///
