@@ -43,6 +43,7 @@ pub(crate) mod columns {
 	pub const HEADER: Option<u32> = Some(2);
 	pub const CACHE: Option<u32> = Some(3);
 	pub const CHT: Option<u32> = Some(4);
+	pub const AUX: Option<u32> = Some(5);
 }
 
 /// Light blockchain storage. Stores most recent headers + CHTs for older headers.
@@ -235,6 +236,7 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		header: Block::Header,
 		authorities: Option<Vec<AuthorityId>>,
 		leaf_state: NewBlockState,
+		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()> {
 		let mut transaction = DBTransaction::new();
 
@@ -243,6 +245,13 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		let parent_hash = *header.parent_hash();
 
 		transaction.put(columns::HEADER, hash.as_ref(), &header.encode());
+
+		for (key, maybe_val) in aux_ops {
+			match maybe_val {
+				Some(val) => transaction.put_vec(columns::AUX, &key, val),
+				None => transaction.delete(columns::AUX, &key),
+			}
+		}
 
 		if leaf_state.is_best() {
 			// handle reorg.
@@ -398,7 +407,7 @@ pub(crate) mod tests {
 	) -> Hash {
 		let header = prepare_header(parent, number, extrinsics_root);
 		let hash = header.hash();
-		db.import_header(header, authorities, NewBlockState::Best).unwrap();
+		db.import_header(header, authorities, NewBlockState::Best, Vec::new()).unwrap();
 		hash
 	}
 
@@ -410,7 +419,7 @@ pub(crate) mod tests {
 	) -> Hash {
 		let header = prepare_header(parent, number, Default::default());
 		let hash = header.hash();
-		db.import_header(header, authorities, NewBlockState::Best).unwrap();
+		db.import_header(header, authorities, NewBlockState::Best, Vec::new()).unwrap();
 		hash
 	}
 
@@ -422,7 +431,7 @@ pub(crate) mod tests {
 	) -> Hash {
 		let header = prepare_header(parent, number, Default::default());
 		let hash = header.hash();
-		db.import_header(header, authorities, NewBlockState::Final).unwrap();
+		db.import_header(header, authorities, NewBlockState::Final, Vec::new()).unwrap();
 		hash
 	}
 
@@ -434,7 +443,7 @@ pub(crate) mod tests {
 	) -> Hash {
 		let header = prepare_header(parent, number, Default::default());
 		let hash = header.hash();
-		db.import_header(header, authorities, NewBlockState::Normal).unwrap();
+		db.import_header(header, authorities, NewBlockState::Normal, Vec::new()).unwrap();
 		hash
 	}
 
