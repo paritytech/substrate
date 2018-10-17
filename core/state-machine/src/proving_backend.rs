@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
-use trie::{TrieDB, Trie, Recorder, MemoryDB};
+use trie::{TrieDB, Trie, Recorder, MemoryDB, TrieError};
 use trie_backend::TrieBackend;
 use trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use {Error, ExecutionError, Backend};
@@ -37,7 +37,6 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 		S: TrieBackendStorage<H>,
 		H: Hasher,
 		H::Out: HeapSizeOf,
-	
 {
 	pub fn storage(&mut self, key: &[u8]) -> Result<Option<Vec<u8>>, String> {
 		let mut read_overlay = MemoryDB::default();
@@ -52,6 +51,36 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 			.get_with(key, &mut *self.proof_recorder)
 			.map(|x| x.map(|val| val.to_vec()))
 			.map_err(map_e)
+	}
+
+	pub fn record_all_keys(&mut self) {
+		let mut read_overlay = MemoryDB::default();
+		let eph = Ephemeral::new(
+			self.backend.backend_storage(),
+			&mut read_overlay,
+		);
+
+		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
+			let root = self.backend.root();
+			let trie = TrieDB::<H>::new(&eph, root)?;
+			let iter = trie.iter()?;
+
+			for x in iter {
+				let (key, _) = x?;
+
+				// there's currently no API like iter_with()
+				// => use iter to enumerate all keys AND lookup each
+				// key using get_with
+				trie.get_with(&key, &mut *self.proof_recorder)
+					.map(|x| x.map(|val| val.to_vec()))?;
+			}
+
+			Ok(())
+		};
+
+		if let Err(e) = iter() {
+			debug!(target: "trie", "Error while recording all keys: {}", e);
+		}
 	}
 }
 
