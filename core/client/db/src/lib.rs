@@ -277,6 +277,18 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 	updates: MemoryDB<H>,
 	changes_trie_updates: MemoryDB<H>,
 	pending_block: Option<PendingBlock<Block>>,
+	aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
+}
+
+impl<Block: BlockT, H: Hasher> BlockImportOperation<Block, H> {
+	fn apply_aux(&mut self, transaction: &mut DBTransaction) {
+		for (key, maybe_val) in self.aux_ops.drain(..) {
+			match maybe_val {
+				Some(val) => transaction.put_vec(columns::AUX, &key, val),
+				None => transaction.delete(columns::AUX, &key),
+			}
+		}
+	}
 }
 
 impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
@@ -324,6 +336,13 @@ where Block: BlockT,
 
 	fn update_changes_trie(&mut self, update: MemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
 		self.changes_trie_updates = update;
+		Ok(())
+	}
+
+	fn set_aux<I>(&mut self, ops: I) -> Result<(), client::error::Error>
+		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		self.aux_ops = ops.into_iter().collect();
 		Ok(())
 	}
 }
@@ -581,6 +600,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			old_state: state,
 			updates: MemoryDB::default(),
 			changes_trie_updates: MemoryDB::default(),
+			aux_ops: Vec::new(),
 		})
 	}
 
@@ -588,6 +608,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		-> Result<(), client::error::Error>
 	{
 		let mut transaction = DBTransaction::new();
+		operation.apply_aux(&mut transaction);
 
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
