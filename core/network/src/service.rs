@@ -129,7 +129,7 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
 		import_queue: I,
-	) -> Result<Arc<Service<B, S, H>>, Error> {	
+	) -> Result<Arc<Service<B, S, H>>, Error> {
 		let chain = params.chain.clone();
 		let import_queue = Arc::new(import_queue);
 		let handler = Arc::new(Protocol::new(
@@ -144,20 +144,23 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 		let registered = RegisteredProtocol::new(protocol_id, &versions[..]);
 		let (thread, network) = start_thread(params.network_config, handler.clone(), registered)?;
 
-		let sync = Arc::new(Service {
+		let service = Arc::new(Service {
 			network,
 			protocol_id,
 			handler,
 			bg_thread: Some(thread),
 		});
 
-		import_queue.start(
-			Arc::downgrade(sync.handler.sync()),
-			Arc::downgrade(&sync),
-			Arc::downgrade(&chain)
-		)?;
+		// connect the import-queue to the network service.
+		let link = ::import_queue::NetworkLink {
+			client: chain,
+			sync: Arc::downgrade(service.handler.sync()),
+			context: Arc::downgrade(&service),
+		};
 
-		Ok(sync)
+		import_queue.start(link)?;
+
+		Ok(service)
 	}
 
 	/// Called when a new block is imported by the client.
