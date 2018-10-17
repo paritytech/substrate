@@ -443,7 +443,7 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, B
 // doesn't have to be implemented by users.
 pub trait CompatibleDigestItem<N> {
 	/// If this digest item notes a GRANDPA set change, return the number of
-	/// blocks the change should occur after.
+	/// blocks the change should occur after. Can be zero for instant changes.
 	fn scheduled_change_in(&self) -> Option<N> { None }
 }
 

@@ -35,11 +35,15 @@ use light::fetcher::{Fetcher, RemoteHeaderRequest};
 /// Light client blockchain storage.
 pub trait Storage<Block: BlockT>: BlockchainHeaderBackend<Block> {
 	/// Store new header. Should refuse to revert any finalized blocks.
+	///
+	/// Takes new authorities, the leaf state of the new block, and
+	/// any auxiliary storage updates to place in the same operation.
 	fn import_header(
 		&self,
 		header: Block::Header,
 		authorities: Option<Vec<AuthorityId>>,
 		state: NewBlockState,
+		aux_ops: Vec<(Vec<u8>, Option<Vec<u8>>)>,
 	) -> ClientResult<()>;
 
 	/// Mark historic header as finalized.
