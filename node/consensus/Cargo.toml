@@ -13,7 +13,6 @@ node-primitives = { path = "../primitives" }
 node-runtime = { path = "../runtime" }
 parity-codec = "2.1"
 parking_lot = "0.4"
-rhododendron = "0.3"
 sr-primitives = { path = "../../core/sr-primitives" }
 srml-system = { path = "../../srml/system" }
 substrate-client = { path = "../../core/client" }
