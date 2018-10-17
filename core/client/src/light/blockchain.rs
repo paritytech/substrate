@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,8 +22,8 @@ use futures::{Future, IntoFuture};
 use parking_lot::Mutex;
 
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
+use runtime_primitives::{Justification, generic::BlockId};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT,NumberFor, Zero};
 
 use backend::NewBlockState;
 use blockchain::{Backend as BlockchainBackend, BlockStatus, Cache as BlockchainCache,
@@ -143,7 +143,7 @@ impl<S, F, Block> BlockchainBackend<Block> for Blockchain<S, F> where Block: Blo
 		Ok(None)
 	}
 
-	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification<Block::Hash>>> {
+	fn justification(&self, _id: BlockId<Block>) -> ClientResult<Option<Justification>> {
 		Ok(None)
 	}
 

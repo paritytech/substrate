@@ -132,6 +132,7 @@ pub fn staging_testnet_config() -> ChainSpec<GenesisConfig> {
 		boot_nodes,
 		Some(STAGING_TELEMETRY_URL.into()),
 		None,
+		None,
 	)
 }
 
@@ -227,7 +228,7 @@ fn development_config_genesis() -> GenesisConfig {
 
 /// Development config (single validator Alice)
 pub fn development_config() -> ChainSpec<GenesisConfig> {
-	ChainSpec::from_genesis("Development", "development", development_config_genesis, vec![], None, None)
+	ChainSpec::from_genesis("Development", "development", development_config_genesis, vec![], None, None, None)
 }
 
 fn local_testnet_genesis() -> GenesisConfig {
@@ -245,10 +246,10 @@ fn local_testnet_genesis_instant() -> GenesisConfig {
 
 /// Local testnet config (multivalidator Alice + Bob)
 pub fn local_testnet_config() -> ChainSpec<GenesisConfig> {
-	ChainSpec::from_genesis("Local Testnet", "local_testnet", local_testnet_genesis, vec![], None, None)
+	ChainSpec::from_genesis("Local Testnet", "local_testnet", local_testnet_genesis, vec![], None, None, None)
 }
 
 /// Local testnet config (multivalidator Alice + Bob)
 pub fn integration_test_config() -> ChainSpec<GenesisConfig> {
-	ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None)
+	ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None)
 }

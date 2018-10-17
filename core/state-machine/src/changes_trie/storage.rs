@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -25,6 +25,8 @@ use parking_lot::RwLock;
 use changes_trie::{RootsStorage, Storage};
 use trie_backend_essence::TrieBackendStorage;
 
+#[cfg(test)]
+use std::collections::HashSet;
 #[cfg(test)]
 use backend::insert_into_memory_db;
 #[cfg(test)]
@@ -84,6 +86,19 @@ impl<H: Hasher> InMemoryStorage<H> where H::Out: HeapSizeOf {
 	#[cfg(test)]
 	pub fn clear_storage(&self) {
 		self.data.write().mdb = MemoryDB::default();	// use new to be more correct
+	}
+
+	#[cfg(test)]
+	pub fn remove_from_storage(&self, keys: &HashSet<H::Out>) {
+		let mut data = self.data.write();
+		for key in keys {
+			data.mdb.remove_and_purge(key);
+		}
+	}
+
+	#[cfg(test)]
+	pub fn into_mdb(self) -> MemoryDB<H> {
+		self.data.into_inner().mdb
 	}
 
 	/// Insert changes trie for given block.

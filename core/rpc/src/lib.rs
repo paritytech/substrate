@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -41,6 +41,9 @@ extern crate log;
 #[cfg(test)]
 #[macro_use]
 extern crate assert_matches;
+#[cfg(test)]
+#[macro_use]
+extern crate hex_literal;
 #[cfg(test)]
 extern crate substrate_test_client as test_client;
 #[cfg(test)]

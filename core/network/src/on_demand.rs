@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -820,7 +820,7 @@ pub mod tests {
 		});
 		let thread = ::std::thread::spawn(move || {
 			let result = response.wait().unwrap();
-			assert_eq!(result.hash(), "0x950856031909d22d42b7e11a837051fbde05beaa3ffb793d6e8e373c646459b1".into());
+			assert_eq!(result.hash(), "0x6443a0b46e0412e626363028115a9f2cf963eeed526b8b33e5316f08b50d0dc3".into());
 		});
 
 		on_demand.on_remote_header_response(&mut network, 0, message::RemoteHeaderResponse {

@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -46,7 +46,6 @@ use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member};
-use primitives::bft::MisbehaviorReport;
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
 
@@ -140,7 +139,7 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn report_misbehavior(origin, report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result;
+		fn report_misbehavior(origin, report: Vec<u8>) -> Result;
 		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result;
 		fn remark(origin, remark: Vec<u8>) -> Result;
 		fn set_code(new: Vec<u8>) -> Result;
@@ -169,7 +168,7 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Report some misbehaviour.
-	fn report_misbehavior(origin: T::Origin, _report: MisbehaviorReport<T::Hash, T::BlockNumber>) -> Result {
+	fn report_misbehavior(origin: T::Origin, _report: Vec<u8>) -> Result {
 		ensure_signed(origin)?;
 		// TODO.
 		Ok(())

@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -108,8 +108,6 @@ decl_module! {
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result;
-
-		fn accumulate_foo(origin, increase_by: T::Balance) -> Result;
 
 		/// A privileged call; in this case it resets our dummy value to something new.
 		fn set_dummy(new_dummy: T::Balance) -> Result;

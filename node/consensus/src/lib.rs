@@ -16,25 +16,27 @@
 
 //! This service uses BFT consensus provided by the substrate.
 
-extern crate parking_lot;
-extern crate node_transaction_pool as transaction_pool;
+#![cfg(feature="rhd")]
+
 extern crate node_runtime;
 extern crate node_primitives;
 
-extern crate substrate_bft as bft;
 extern crate parity_codec as codec;
-extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
 extern crate srml_system;
+extern crate substrate_bft as bft;
 extern crate substrate_client as client;
+extern crate substrate_primitives as primitives;
+extern crate substrate_transaction_pool as transaction_pool;
 
 extern crate exit_future;
-extern crate tokio;
+extern crate futures;
+extern crate parking_lot;
 extern crate rhododendron;
+extern crate tokio;
 
 #[macro_use]
 extern crate error_chain;
-extern crate futures;
 
 #[macro_use]
 extern crate log;
@@ -46,14 +48,15 @@ use std::sync::Arc;
 use std::time::{self, Duration, Instant};
 
 use client::{Client as SubstrateClient, CallExecutor};
+use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, Miscellaneous, OldTxQueue, BlockBuilderError};
 use codec::{Decode, Encode};
 use node_primitives::{AccountId, Timestamp, SessionKey, InherentData};
 use node_runtime::Runtime;
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As, BlockNumberToHash};
 use runtime_primitives::generic::{BlockId, Era};
 use srml_system::Trait as SystemT;
-use transaction_pool::{TransactionPool, Client as TPClient};
+use transaction_pool::txpool::{self, Pool as TransactionPool};
 use tokio::runtime::TaskExecutor;
 use tokio::timer::Delay;
 
@@ -67,7 +70,6 @@ pub use service::Service;
 
 mod evaluation;
 mod error;
-mod offline_tracker;
 mod service;
 
 /// Shared offline validator tracker.
@@ -80,40 +82,32 @@ const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 pub trait BlockBuilder<Block: BlockT> {
 	/// Push an extrinsic onto the block. Fails if the extrinsic is invalid.
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<()>;
-
-	/// Bake the block with provided extrinsics.
-	fn bake(self) -> Result<Block>;
 }
 
 /// Local client abstraction for the consensus.
-pub trait AuthoringApi: Send + Sync {
+pub trait AuthoringApi:
+	Send
+	+ Sync
+	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
+	+ Miscellaneous<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+	+ OldTxQueue<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+{
 	/// The block used for this API type.
 	type Block: BlockT;
-	/// The block builder for this API type.
-	type BlockBuilder: BlockBuilder<Self::Block>;
-
-	/// Get the value of the randomness beacon at a given block.
-	fn random_seed(&self, at: &BlockId<Self::Block>) -> Result<<Self::Block as BlockT>::Hash>;
-
-	/// Get validators at a given block.
-	fn validators(&self, at: &BlockId<Self::Block>) -> Result<Vec<AccountId>>;
+	/// The error used by this API type.
+	type Error: std::error::Error;
 
 	/// Build a block on top of the given, with inherent extrinsics pre-pushed.
-	fn build_block(&self, at: &BlockId<Self::Block>, inherent_data: InherentData) -> Result<Self::BlockBuilder>;
-
-	/// Get the nonce (né index) of an account at a block.
-	fn index(&self, at: &BlockId<Self::Block>, account: AccountId) -> Result<u64>;
-
-	/// Attempt to produce the (encoded) inherent extrinsics for a block being built upon the given.
-	/// This may vary by runtime and will fail if a runtime doesn't follow the same API.
-	fn inherent_extrinsics(&self, at: &BlockId<Self::Block>, inherent_data: InherentData) -> Result<Vec<<Self::Block as BlockT>::Extrinsic>>;
-
-	/// Evaluate a block. Returns true if the block is good, false if it is known to be bad,
-	/// and an error if we can't evaluate for some reason.
-	fn evaluate_block(&self, at: &BlockId<Self::Block>, block: Self::Block) -> Result<bool>;
+	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+		&self,
+		at: &BlockId<Self::Block>,
+		inherent_data: InherentData,
+		build_ctx: F,
+	) -> Result<Self::Block>;
 }
 
-impl<B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<B, E, Block, Blake2Hasher> where
+impl<'a, B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<'a, B, E, Block, Blake2Hasher> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT
@@ -121,57 +115,34 @@ impl<B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<B,
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<()> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
 	}
-
-	fn bake(self) -> Result<Block> {
-		client::block_builder::BlockBuilder::bake(self).map_err(Into::into)
-	}
 }
 
-impl<B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
+impl<'a, B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT,
 {
 	type Block = Block;
-	type BlockBuilder = client::block_builder::BlockBuilder<B, E, Block, Blake2Hasher>;
+	type Error = client::error::Error;
 
-	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Self::Block as BlockT>::Hash> {
-		self.call_api_at(at, "random_seed", &()).map_err(Into::into)
-	}
-
-	fn validators(&self, at: &BlockId<Block>) -> Result<Vec<AccountId>> {
-		self.call_api_at(at, "validators", &()).map_err(Into::into)
-	}
-
-	fn build_block(&self, at: &BlockId<Block>, inherent_data: InherentData) -> Result<Self::BlockBuilder> {
+	fn build_block<F: FnMut(&mut BlockBuilder<Self::Block>) -> ()>(
+		&self,
+		at: &BlockId<Self::Block>,
+		inherent_data: InherentData,
+		mut build_ctx: F,
+	) -> Result<Self::Block> {
 		let runtime_version = self.runtime_version_at(at)?;
 
 		let mut block_builder = self.new_block_at(at)?;
 		if runtime_version.has_api(*b"inherent", 1) {
-			for inherent in self.inherent_extrinsics(at, inherent_data)? {
+			for inherent in self.inherent_extrinsics(at, &inherent_data)? {
 				block_builder.push(inherent)?;
 			}
 		}
-		Ok(block_builder)
-	}
 
-	fn index(&self, at: &BlockId<Block>, account: AccountId) -> Result<u64> {
-		self.call_api_at(at, "account_nonce", &account).map_err(Into::into)
-	}
+		build_ctx(&mut block_builder);
 
-	fn inherent_extrinsics(&self, at: &BlockId<Self::Block>, inherent_data: InherentData) -> Result<Vec<<Block as BlockT>::Extrinsic>> {
-		self.call_api_at(at, "inherent_extrinsics", &inherent_data).map_err(Into::into)
-	}
-
-	fn evaluate_block(&self, at: &BlockId<Self::Block>, block: Self::Block) -> Result<bool> {
-		let res: client::error::Result<()> = self.call_api_at(at, "execute_block", &block);
-		match res {
-			Ok(()) => Ok(true),
-			Err(err) => match err.kind() {
-				&client::error::ErrorKind::Execution(_) => Ok(false),
-				_ => Err(err.into())
-			}
-		}
+		block_builder.bake().map_err(Into::into)
 	}
 }
 
@@ -196,13 +167,14 @@ pub trait Network {
 }
 
 /// Proposer factory.
-pub struct ProposerFactory<N, C> where
-	C: AuthoringApi + TPClient,
+pub struct ProposerFactory<N, C, A> where
+	C: AuthoringApi,
+	A: txpool::ChainApi,
 {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The transaction pool.
-	pub transaction_pool: Arc<TransactionPool<C>>,
+	pub transaction_pool: Arc<TransactionPool<A>>,
 	/// The backing network handle.
 	pub network: N,
 	/// handle to remote task executor
@@ -213,13 +185,15 @@ pub struct ProposerFactory<N, C> where
 	pub force_delay: Timestamp,
 }
 
-impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C> where
+impl<N, C, A> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C, A> where
 	N: Network<Block=<C as AuthoringApi>::Block>,
-	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
+	C: AuthoringApi + BlockNumberToHash,
+	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
-		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
+		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
+	Error: From<<C as AuthoringApi>::Error>
 {
-	type Proposer = Proposer<C>;
+	type Proposer = Proposer<C, A>;
 	type Input = N::Input;
 	type Output = N::Output;
 	type Error = Error;
@@ -269,7 +243,7 @@ impl<N, C> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N, C
 }
 
 /// The proposer logic.
-pub struct Proposer<C: AuthoringApi + TPClient> {
+pub struct Proposer<C: AuthoringApi, A: txpool::ChainApi> {
 	client: Arc<C>,
 	start: Instant,
 	local_key: Arc<ed25519::Pair>,
@@ -277,13 +251,13 @@ pub struct Proposer<C: AuthoringApi + TPClient> {
 	parent_id: BlockId<<C as AuthoringApi>::Block>,
 	parent_number: <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Number,
 	random_seed: <<C as AuthoringApi>::Block as BlockT>::Hash,
-	transaction_pool: Arc<TransactionPool<C>>,
+	transaction_pool: Arc<TransactionPool<A>>,
 	offline: SharedOfflineTracker,
 	validators: Vec<AccountId>,
 	minimum_timestamp: u64,
 }
 
-impl<C: AuthoringApi + TPClient> Proposer<C> {
+impl<C: AuthoringApi, A: txpool::ChainApi> Proposer<C, A> {
 	fn primary_index(&self, round_number: usize, len: usize) -> usize {
 		use primitives::uint::U256;
 
@@ -294,10 +268,12 @@ impl<C: AuthoringApi + TPClient> Proposer<C> {
 	}
 }
 
-impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
-	C: AuthoringApi + TPClient<Block=<C as AuthoringApi>::Block>,
+impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
+	C: AuthoringApi + BlockNumberToHash,
+	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	<<C as AuthoringApi>::Block as BlockT>::Hash:
-		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>
+		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
+	error::Error: From<<C as AuthoringApi>::Error>
 {
 	type Create = Result<<C as AuthoringApi>::Block>;
 	type Error = Error;
@@ -330,34 +306,32 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 			offline_indices,
 		};
 
-		let mut block_builder = self.client.build_block(&self.parent_id, inherent_data)?;
+		let block = self.client.build_block(
+			&self.parent_id,
+			inherent_data,
+			|block_builder| {
+				let mut unqueue_invalid = Vec::new();
+				self.transaction_pool.ready(|pending_iterator| {
+					let mut pending_size = 0;
+					for pending in pending_iterator {
+						// TODO [ToDr] Probably get rid of it, and validate in runtime.
+						let encoded_size = pending.data.encode().len();
+						if pending_size + encoded_size >= MAX_TRANSACTIONS_SIZE { break }
 
-		{
-			let mut unqueue_invalid = Vec::new();
-			let result = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending_iterator| {
-				let mut pending_size = 0;
-				for pending in pending_iterator {
-					if pending_size + pending.verified.encoded_size() >= MAX_TRANSACTIONS_SIZE { break }
-
-					match block_builder.push_extrinsic(pending.original.clone()) {
-						Ok(()) => {
-							pending_size += pending.verified.encoded_size();
-						}
-						Err(e) => {
-							trace!(target: "transaction-pool", "Invalid transaction: {}", e);
-							unqueue_invalid.push(pending.verified.hash().clone());
+						match block_builder.push_extrinsic(pending.data.clone()) {
+							Ok(()) => {
+								pending_size += encoded_size;
+							}
+							Err(e) => {
+								trace!(target: "transaction-pool", "Invalid transaction: {}", e);
+								unqueue_invalid.push(pending.hash.clone());
+							}
 						}
 					}
-				}
-			});
-			if let Err(e) = result {
-				warn!("Unable to get the pending set: {:?}", e);
-			}
+				});
 
-			self.transaction_pool.remove(&unqueue_invalid, false);
-		}
-
-		let block = block_builder.bake()?;
+				self.transaction_pool.remove_invalid(&unqueue_invalid);
+			})?;
 
 		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
 			  block.header().number(),
@@ -374,7 +348,6 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 
 		assert!(evaluation::evaluate_initial(
 			&substrate_block,
-			timestamp,
 			&self.parent_hash,
 			self.parent_number,
 		).is_ok());
@@ -385,58 +358,70 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 	fn evaluate(&self, unchecked_proposal: &<C as AuthoringApi>::Block) -> Self::Evaluate {
 		debug!(target: "bft", "evaluating block on top of parent ({}, {:?})", self.parent_number, self.parent_hash);
 
-		let current_timestamp = current_timestamp();
-
 		// do initial serialization and structural integrity checks.
-		let maybe_proposal = evaluation::evaluate_initial(
+		match evaluation::evaluate_initial(
 			unchecked_proposal,
-			current_timestamp,
 			&self.parent_hash,
 			self.parent_number,
-		);
-
-		let proposal = match maybe_proposal {
+		) {
 			Ok(p) => p,
 			Err(e) => {
 				// TODO: these errors are easily re-checked in runtime.
-				debug!(target: "bft", "Invalid proposal: {:?}", e);
+				debug!(target: "bft", "Invalid proposal (initial evaluation failed): {:?}", e);
+				return Box::new(future::ok(false));
+			}
+		};
+
+		let current_timestamp = current_timestamp();
+		let inherent = InherentData::new(
+			current_timestamp,
+			self.offline.read().reports(&self.validators)
+		);
+		let proposed_timestamp = match self.client.check_inherents(
+			&self.parent_id,
+			&unchecked_proposal,
+			&inherent
+		) {
+			Ok(Ok(())) => None,
+			Ok(Err(BlockBuilderError::TimestampInFuture(timestamp))) => Some(timestamp),
+			Ok(Err(e)) => {
+				debug!(target: "bft", "Invalid proposal (check_inherents): {:?}", e);
+				return Box::new(future::ok(false));
+			},
+			Err(e) => {
+				debug!(target: "bft", "Could not call into runtime: {:?}", e);
 				return Box::new(future::ok(false));
 			}
 		};
 
 		let vote_delays = {
-			let now = Instant::now();
-
 			// the duration until the given timestamp is current
-			let proposed_timestamp = ::std::cmp::max(self.minimum_timestamp, proposal.timestamp());
+			let proposed_timestamp = ::std::cmp::max(self.minimum_timestamp, proposed_timestamp.unwrap_or(0));
 			let timestamp_delay = if proposed_timestamp > current_timestamp {
 				let delay_s = proposed_timestamp - current_timestamp;
 				debug!(target: "bft", "Delaying evaluation of proposal for {} seconds", delay_s);
-				Some(now + Duration::from_secs(delay_s))
+				Some(Instant::now() + Duration::from_secs(delay_s))
 			} else {
 				None
 			};
 
 			match timestamp_delay {
 				Some(duration) => future::Either::A(
-					Delay::new(duration).map_err(|e| Error::from(ErrorKind::Timer(e)))
+					Delay::new(duration).map_err(|e| ErrorKind::Timer(e).into())
 				),
 				None => future::Either::B(future::ok(())),
 			}
 		};
 
-		// refuse to vote if this block says a validator is offline that we
-		// think isn't.
-		let offline = proposal.noted_offline();
-		if !self.offline.read().check_consistency(&self.validators[..], offline) {
-			return Box::new(futures::empty());
-		}
-
 		// evaluate whether the block is actually valid.
 		// TODO: is it better to delay this until the delays are finished?
-		let evaluated = self.client
-			.evaluate_block(&self.parent_id, unchecked_proposal.clone())
-			.map_err(Into::into);
+		let evaluated = match self.client.execute_block(&self.parent_id, &unchecked_proposal.clone()).map_err(Error::from) {
+			Ok(()) => Ok(true),
+			Err(err) => match err.kind() {
+				error::ErrorKind::Client(client::error::ErrorKind::Execution(_)) => Ok(false),
+				_ => Err(err)
+			}
+		};
 
 		let future = future::result(evaluated).and_then(move |good| {
 			let end_result = future::ok(good);
@@ -465,23 +450,22 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
 
-		let local_id = self.local_key.public().0.into();
 		let mut next_index = {
-			let cur_index = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending| pending
-				.filter(|tx| tx.verified.sender == local_id)
-				.last()
-				.map(|tx| Ok(tx.verified.index()))
-				.unwrap_or_else(|| AuthoringApi::index(self.client.as_ref(), &self.parent_id, local_id))
-			);
+			let local_id = self.local_key.public().0;
+			// let cur_index = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending| pending
+			// 	.filter(|tx| tx.verified.sender == local_id)
+			// 	.last()
+			// 	.map(|tx| Ok(tx.verified.index()))
+			// 	.unwrap_or_else(|| self.client.account_nonce(&self.parent_id, local_id))
+			// 	.map_err(Error::from)
+			// );
+			// TODO [ToDr] Use pool data
+			let cur_index: Result<u64> = self.client.account_nonce(&self.parent_id, &local_id).map_err(Error::from);
 
 			match cur_index {
-				Ok(Ok(cur_index)) => cur_index + 1,
-				Ok(Err(e)) => {
-					warn!(target: "consensus", "Error computing next transaction index: {}", e);
-					return;
-				}
+				Ok(cur_index) => cur_index + 1,
 				Err(e) => {
-					warn!(target: "consensus", "Error computing next transaction index: {}", e);
+					warn!(target: "consensus", "Error computing next transaction index: {:?}", e);
 					return;
 				}
 			}
@@ -512,8 +496,9 @@ impl<C> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C> where
 			};
 			let uxt: <<C as AuthoringApi>::Block as BlockT>::Extrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
 			let hash = BlockId::<<C as AuthoringApi>::Block>::hash(self.parent_hash);
-			self.transaction_pool.submit_one(&hash, uxt)
-				.expect("locally signed extrinsic is valid; qed");
+			if let Err(e) = self.transaction_pool.submit_one(&hash, uxt) {
+				warn!("Error importing misbehavior report: {:?}", e);
+			}
 		}
 	}
 

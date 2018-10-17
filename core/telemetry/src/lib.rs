@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -126,6 +126,8 @@ impl TelemetryWriter {
 				trace!(target: "telemetry", "Connecting to Telemetry...");
 
 				let _ = ws::connect(config.url.as_str(), |out| Connection::new(out, &*out_sync, &config));
+
+				thread::sleep(time::Duration::from_millis(5000));
 			}
 		});
 

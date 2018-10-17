@@ -14,20 +14,23 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! External Error trait for extrinsic pool.
+//! Transaction pool error.
 
+use client;
 use txpool;
 
-/// Extrinsic pool error.
-pub trait IntoPoolError: ::std::error::Error + Send + Sized {
-	/// Try to extract original `txpool::Error`
-	///
-	/// This implementation is optional and used only to
-	/// provide more descriptive error messages for end users
-	/// of RPC API.
-	fn into_pool_error(self) -> Result<txpool::Error, Self> { Err(self) }
+error_chain! {
+	links {
+		Client(client::error::Error, client::error::ErrorKind) #[doc = "Client error"];
+		Pool(txpool::error::Error, txpool::error::ErrorKind) #[doc = "Pool error"];
+	}
 }
 
-impl IntoPoolError for txpool::Error {
-	fn into_pool_error(self) -> Result<txpool::Error, Self> { Ok(self) }
+impl txpool::IntoPoolError for Error {
+	fn into_pool_error(self) -> ::std::result::Result<txpool::error::Error, Self> {
+		match self {
+			Error(ErrorKind::Pool(e), c) => Ok(txpool::error::Error(e, c)),
+			e => Err(e),
+		}
+	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -22,7 +22,7 @@ use codec::Codec;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 use generic::DigestItem as GenDigestItem;
 
-pub use substrate_primitives::H256;
+pub use substrate_primitives::{H256, AuthorityId};
 
 pub type DigestItem = GenDigestItem<H256, u64>;
 

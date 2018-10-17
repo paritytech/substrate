@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -36,10 +36,12 @@ mod build;
 mod build_iterator;
 mod changes_iterator;
 mod input;
+mod prune;
 mod storage;
 
 pub use self::storage::InMemoryStorage;
 pub use self::changes_iterator::{key_changes, key_changes_proof, key_changes_proof_check};
+pub use self::prune::prune;
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;

@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2017-2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -218,7 +218,7 @@ macro_rules! decl_module {
 				match *self {
 					$(
 						$call_type::$fn_name( $( ref $param_name ),* ) =>
-							$call_type::$fn_name( $( $param_name.clone() ),* )
+							$call_type::$fn_name( $( (*$param_name).clone() ),* )
 					,)*
 					_ => unreachable!(),
 				}

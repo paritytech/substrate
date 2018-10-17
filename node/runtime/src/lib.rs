@@ -20,8 +20,10 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-#[macro_use]
 extern crate sr_io as runtime_io;
+
+#[macro_use]
+extern crate sr_api as runtime_api;
 
 #[macro_use]
 extern crate srml_support;
@@ -55,14 +57,17 @@ extern crate srml_treasury as treasury;
 extern crate sr_version as version;
 extern crate node_primitives;
 
-#[cfg(feature = "std")]
-mod checked_block;
-
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
-use node_primitives::{AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature, InherentData};
+use node_primitives::{
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
+	SessionKey, Signature, InherentData, Timestamp as TimestampType
+};
+use runtime_api::{BlockBuilderError, runtime::*};
+use runtime_primitives::ApplyResult;
+use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem};
+use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem, Block as BlockT};
 use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
@@ -78,8 +83,6 @@ pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
 pub use srml_support::StorageValue;
-#[cfg(any(feature = "std", test))]
-pub use checked_block::CheckedBlock;
 
 const TIMESTAMP_SET_POSITION: u32 = 0;
 const NOTE_OFFLINE_POSITION: u32 = 1;
@@ -234,6 +237,8 @@ pub type Address = balances::Address<Runtime>;
 pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
+/// A Block signed with a Justification
+pub type SignedBlock = generic::SignedBlock<Header, UncheckedExtrinsic>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.
@@ -243,37 +248,118 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
 
-pub mod api {
-	impl_stubs!(
-		version => |()| super::VERSION,
-		metadata => |()| super::Runtime::metadata(),
-		authorities => |()| super::Consensus::authorities(),
-		initialise_block => |header| super::Executive::initialise_block(&header),
-		apply_extrinsic => |extrinsic| super::Executive::apply_extrinsic(extrinsic),
-		execute_block => |block| super::Executive::execute_block(block),
-		finalise_block => |()| super::Executive::finalise_block(),
-		inherent_extrinsics => |inherent| super::inherent_extrinsics(inherent),
-		validator_count => |()| super::Session::validator_count(),
-		validators => |()| super::Session::validators(),
-		timestamp => |()| super::Timestamp::get(),
-		random_seed => |()| super::System::random_seed(),
-		account_nonce => |account| super::System::account_nonce(&account),
-		lookup_address => |address| super::Balances::lookup_address(address),
-		validate_transaction => |tx| super::Executive::validate_transaction(tx)
-	);
-}
+impl_apis! {
+	impl Core<Block, SessionKey> for Runtime {
+		fn version() -> RuntimeVersion {
+			VERSION
+		}
 
-/// Produces the list of inherent extrinsics.
-fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
-	let mut inherent = vec![generic::UncheckedMortalExtrinsic::new_unsigned(
-		Call::Timestamp(TimestampCall::set(data.timestamp))
-	)];
+		fn authorities() -> Vec<SessionKey> {
+			Consensus::authorities()
+		}
 
-	if !data.offline_indices.is_empty() {
-		inherent.push(generic::UncheckedMortalExtrinsic::new_unsigned(
-			Call::Consensus(ConsensusCall::note_offline(data.offline_indices))
-		));
+		fn execute_block(block: Block) {
+			Executive::execute_block(block)
+		}
 	}
 
-	inherent
+	impl Metadata for Runtime {
+		fn metadata() -> Vec<u8> {
+			Runtime::metadata()
+		}
+	}
+
+	impl BlockBuilder<Block, InherentData, UncheckedExtrinsic, InherentData> for Runtime {
+		fn initialise_block(header: <Block as BlockT>::Header) {
+			Executive::initialise_block(&header)
+		}
+
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
+			Executive::apply_extrinsic(extrinsic)
+		}
+
+		fn finalise_block() -> <Block as BlockT>::Header {
+			Executive::finalise_block()
+		}
+
+		fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {
+			let mut inherent = vec![generic::UncheckedMortalExtrinsic::new_unsigned(
+				Call::Timestamp(TimestampCall::set(data.timestamp.into()))
+			)];
+
+			if !data.offline_indices.is_empty() {
+				inherent.push(generic::UncheckedMortalExtrinsic::new_unsigned(
+					Call::Consensus(ConsensusCall::note_offline(data.offline_indices))
+				));
+			}
+
+			inherent
+		}
+
+		fn check_inherents(block: Block, data: InherentData) -> Result<(), BlockBuilderError> {
+			// TODO: v1: should be automatically gathered
+
+			// Timestamp module...
+			const MAX_TIMESTAMP_DRIFT: TimestampType = 60;
+			let xt = block.extrinsics.get(TIMESTAMP_SET_POSITION as usize)
+				.ok_or_else(|| BlockBuilderError::Generic("No valid timestamp inherent in block".into()))?;
+			let t = match (xt.is_signed(), &xt.function) {
+				(false, Call::Timestamp(TimestampCall::set(t))) => t,
+				_ => return Err(BlockBuilderError::Generic("No valid timestamp inherent in block".into())),
+			};
+			let t = (*t).into();
+			if t > data.timestamp + MAX_TIMESTAMP_DRIFT {
+				return Err(BlockBuilderError::TimestampInFuture(t))
+			}
+
+			// Offline indices
+			let noted_offline =
+				block.extrinsics.get(NOTE_OFFLINE_POSITION as usize).and_then(|xt| match xt.function {
+					Call::Consensus(ConsensusCall::note_offline(ref x)) => Some(&x[..]),
+					_ => None,
+				}).unwrap_or(&[]);
+
+			noted_offline.iter().try_for_each(|n|
+				if !data.offline_indices.contains(n) {
+					Err(BlockBuilderError::Generic("Online node marked offline".into()))
+				} else {
+					Ok(())
+				}
+			)
+		}
+
+		fn random_seed() -> <Block as BlockT>::Hash {
+			System::random_seed()
+		}
+	}
+
+	impl OldTxQueue<AccountId, Index, Address, AccountId> for Runtime {
+		fn account_nonce(account: AccountId) -> Index {
+			System::account_nonce(&account)
+		}
+
+		fn lookup_address(address: Address) -> Option<AccountId> {
+			Balances::lookup_address(address)
+		}
+	}
+
+	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
+		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+			Executive::validate_transaction(tx)
+		}
+	}
+
+	impl Miscellaneous<AccountId, u64> for Runtime {
+		fn validator_count() -> u32 {
+			Session::validator_count()
+		}
+
+		fn validators() -> Vec<AccountId> {
+			Session::validators()
+		}
+
+		fn timestamp() -> u64 {
+			Timestamp::get()
+		}
+	}
 }

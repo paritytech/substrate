@@ -15,35 +15,31 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // tag::description[]
-//! Generic extrinsic pool.
+//! Substrate transaction pool.
 // end::description[]
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]
 
-extern crate futures;
-extern crate parking_lot;
-extern crate sr_primitives as runtime_primitives;
+extern crate parity_codec;
+extern crate sr_primitives;
+extern crate substrate_client as client;
+extern crate substrate_primitives;
+
+pub extern crate substrate_transaction_graph as txpool;
 
 #[macro_use]
-extern crate log;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate transaction_pool as txpool;
-#[cfg(test)] extern crate substrate_test_client as test_client;
-#[cfg(test)] extern crate substrate_keyring as keyring;
-#[cfg(test)] extern crate parity_codec as codec;
+extern crate error_chain;
 
-pub mod watcher;
-mod error;
-mod listener;
-mod pool;
-mod rotator;
+#[cfg(test)]
+extern crate substrate_test_client as test_client;
+#[cfg(test)]
+extern crate substrate_keyring as keyring;
 
-pub use listener::Listener;
-pub use pool::{Pool, ChainApi, EventStream, Verified, VerifiedFor, ExtrinsicFor, ExHash, AllExtrinsics, HashOf};
-pub use txpool::scoring;
-pub use txpool::{Error, ErrorKind};
-pub use error::IntoPoolError;
-pub use txpool::{Options, Status, LightStatus, VerifiedTransaction, Readiness, Transaction};
+mod api;
+#[cfg(test)]
+mod tests;
+
+pub mod error;
+
+pub use api::ChainApi;
