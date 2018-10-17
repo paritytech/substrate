@@ -1,6 +1,6 @@
-This analysis is on the computing and memory complexity of specific procedures. It accounts for a rough estimate of operations performed in general and especially focusing on DB reads and writes. It also accounts for the memory consumption at its peak.
+This analysis is on the computing and memory complexity of specific procedures. It provides a rough estimate of operations performed in general and especially focusing on DB reads and writes. It is also an attempt to estimate the memory consumption at its peak.
 
-The primary purpose is to come up with decent pricing for functions that can be invoked by the user (via extrinsics) or by untrusted code that prevents DoS attacks.
+The primary goal is to come up with decent pricing for functions that can be invoked by a user (via extrinsics) or by untrusted code that prevents DoS attacks.
 
 # Sandboxing
 
@@ -12,13 +12,13 @@ It makes sense to describe the sandboxing module first because the smart-contrac
 
 Copies data from the supervisor's memory to the guest's memory.
 
-**complexity** It doesn't allocate, and computational complexity is proportional to the number of bytes to copy.
+**complexity**: It doesn't allocate, and the computational complexity is proportional to the number of bytes to copy.
 
 ### get
 
 Copies data from the guest's memory to the supervisor's memory.
 
-**complexity**: It doesn't allocate, and computational complexity is proportional to the number of bytes to copy.
+**complexity**: It doesn't allocate, and the computational complexity is proportional to the number of bytes to copy.
 
 ## Instance
 
@@ -27,22 +27,22 @@ Copies data from the guest's memory to the supervisor's memory.
 Instantiation of a sandbox module consists of the following steps:
 
 1. Loading the wasm module in the in-memory representation,
-2. Performing validation of wasm code,
-3. Setting up the environment which will be used to instantiate a module,
-4. Run instantiation process, which includes (but not limited to):
-    1. Allocation of memory requested by the instance,
+2. Performing validation of the wasm code,
+3. Setting up the environment which will be used to instantiate the module,
+4. Performing the standard wasm instantiation process, which includes (but is not limited to):
+    1. Allocating of memory requested by the instance,
     2. Copying static data from the module to newly allocated memory,
-    3. Executing `start` function.
+    3. Executing the `start` function.
 
-**Note** that `start` function can be viewed as a normal function and can do anything that normal function can do, including allocation of more memory or calling the environment. The complexity of running `start` function should be considered separately.
+**Note** that the `start` function can be viewed as a normal function and can do anything that a normal function can do, including allocation of more memory or calling the host environment. The complexity of running the `start` function should be considered separately.
 
 In order to start the process of instantiation, the supervisor should provide the wasm module code being instantiated and the environment definition (a set of functions, memories (and maybe globals and tables in the future) available for import by the guest module) for that module. While the environment definition typically is of the constant size (unless mechanisms like dynamic linking are used), the size of wasm is not.
 
-Validation and instantiation in WebAssembly are designed to be able to be performed in linear time. The allocation and computational complexity of loading wasm module depend on the underlying wasm VM being used. For example, for JIT compilers it can be non-linear because of compilation. However, for wasmi, it should be linear. We can try to use other VMs that are able to compile code with memory and time consumption proportional to the size of the code.
+Validation and instantiation in WebAssembly are designed to be able to be performed in linear time. The allocation and computational complexity of loading a wasm module depend on the underlying wasm VM being used. For example, for JIT compilers it can and probably will be non-linear because of compilation. However, for wasmi, it should be linear. We can try to use other VMs that are able to compile code with memory and time consumption proportional to the size of the code.
 
-Since it is the module what requests memory, amount of allocation depends on the module code itself. If an untrusted code is being instantiated, it's up to the supervisor to limit the amount of memory available to allocate.
+Since the module itself requests memory, the amount of allocation depends on the module code itself. If untrusted code is being instantiated, it's up to the supervisor to limit the amount of memory available to allocate.
 
-**complexity**: Compute complexity is proportional to the size of wasm code. Memory complexity is proportional to the size of wasm code and the amount of memory requested by the module.
+**complexity**: The computational complexity is proportional to the size of wasm code. Memory complexity is proportional to the size of wasm code and the amount of memory requested by the module.
 
 ### Preparation to invoke
 
