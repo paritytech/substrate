@@ -37,7 +37,6 @@ extern crate num_traits;
 extern crate integer_sqrt;
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
-extern crate sr_version as runtime_version;
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
 extern crate substrate_primitives;
@@ -69,7 +68,7 @@ use traits::{Verify, Lazy};
 #[cfg(not(feature = "std"))]
 pub type RuntimeString = &'static str;
 #[cfg(feature = "std")]
-pub type RuntimeString = String;
+pub type RuntimeString = ::std::borrow::Cow<'static, str>;
 
 #[cfg(feature = "std")]
 pub use serde::{Serialize, de::DeserializeOwned};
