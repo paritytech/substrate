@@ -892,7 +892,9 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// TODO [snd] possibly implement this on blockchain::Backend and just redirect here
 	/// Returns `Ok(None)` if `target_hash` is not found in search space.
 	/// TODO [snd] write down time complexity
-	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>) -> error::Result<Option<Block::Hash>> {
+	pub fn best_containing(&self, target_hash: Block::Hash, maybe_max_number: Option<NumberFor<Block>>)
+		-> error::Result<Option<Block::Hash>>
+	{
 		let target_header = {
 			match self.backend.blockchain().header(BlockId::Hash(target_hash))? {
 				Some(x) => x,

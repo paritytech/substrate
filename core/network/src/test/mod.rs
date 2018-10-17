@@ -158,10 +158,13 @@ impl Peer {
 		// Update the sync state to the latest chain state.
 		let info = self.client.info().expect("In-mem client does not fail");
 		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
-		self.import_queue.start(
-				Arc::downgrade(&self.sync.sync()),
-				Arc::downgrade(&self.executor),
-				Arc::downgrade(&self.sync.context_data().chain)).expect("Test ImportQueue always starts");
+		let network_link = ::import_queue::NetworkLink {
+			client: self.sync.context_data().chain.clone(),
+			sync: Arc::downgrade(self.sync.sync()),
+			context: Arc::downgrade(&self.executor),
+		};
+
+		self.import_queue.start(network_link).expect("Test ImportQueue always starts");
 		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
 	}
 
