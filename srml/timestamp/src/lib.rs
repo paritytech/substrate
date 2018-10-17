@@ -111,7 +111,7 @@ impl<T: Trait> Module<T> {
 	fn set(origin: T::Origin, now: <T::Moment as HasCompact>::Type) -> Result {
 		ensure_inherent(origin)?;
 		let now = now.into();
-		
+
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
 			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
@@ -147,7 +147,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	type Error = InherentError;
 
 	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
-		vec![(T::TIMESTAMP_SET_POSITION, Call::set(data))]
+		vec![(T::TIMESTAMP_SET_POSITION, Call::set(data.into()))]
 	}
 
 	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
@@ -161,7 +161,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		let t = match (xt.is_signed(), extract_function(&xt)) {
 			(Some(false), Some(Call::set(ref t))) => t.clone(),
 			_ => return Err(InherentError::Other("No valid timestamp inherent in block".into())),
-		}.as_();
+		}.into().as_();
 
 		if t > data.as_() + MAX_TIMESTAMP_DRIFT {
 			Err(InherentError::TimestampInFuture(t))
