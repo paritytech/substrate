@@ -298,9 +298,15 @@ impl<I, N: Network> Drop for ClearOnDrop<I, N> {
 	}
 }
 
+fn round_localized_payload<E: Encode>(round: u64, message: &E) -> Vec<u8> {
+	let mut v = message.encode();
+	round.using_encoded(|s| v.extend(s));
+	v
+}
+
 // converts a message stream into a stream of signed messages.
 // the output stream checks signatures also.
-fn checked_message_stream<Block: BlockT, S>(inner: S, voters: Vec<AuthorityId>)
+fn checked_message_stream<Block: BlockT, S>(inner: S, round: u64, voters: Vec<AuthorityId>)
 	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>
 {
@@ -320,7 +326,7 @@ fn checked_message_stream<Block: BlockT, S>(inner: S, voters: Vec<AuthorityId>)
 			}
 
 			let as_public = ::ed25519::Public::from_raw(msg.id.0);
-			let encoded_raw = msg.message.encode();
+			let encoded_raw = round_localized_payload(round, &msg.message);
 			if ::ed25519::verify_strong(&msg.signature, &encoded_raw, as_public) {
 				Ok(Some(msg))
 			} else {
@@ -349,9 +355,9 @@ fn outgoing_messages<Block: BlockT, N: Network>(
 	let (tx, rx) = mpsc::unbounded();
 	let rx = rx
 		.map(move |msg: Message<Block>| {
-			// when locals exist. sign messages on import
+			// when locals exist, sign messages on import
 			if let Some((ref pair, local_id)) = locals {
-				let encoded = msg.encode();
+				let encoded = round_localized_payload(round, &msg);
 				let signature = pair.sign(&encoded[..]);
 				let signed = SignedMessage::<Block> {
 					message: msg,
@@ -477,6 +483,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 		// TODO: dispatch this with `mpsc::spawn`.
 		let incoming = checked_message_stream::<Block, _>(
 			self.network.messages_for(round),
+			round,
 			self.config.voters.clone(),
 		);
 
