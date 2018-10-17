@@ -39,6 +39,17 @@ extern crate tokio;
 
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
+#[cfg(test)]
+extern crate substrate_service as service;
+#[cfg(test)]
+extern crate substrate_test_client as test_client;
+#[cfg(test)]
+extern crate env_logger;
+
+#[cfg(test)]
+#[macro_use]
+extern crate parity_codec_derive;
+
 extern crate parking_lot;
 
 #[macro_use]
@@ -59,6 +70,19 @@ use primitives::{AuthorityId, ed25519};
 
 use futures::{Stream, Future, IntoFuture};
 use tokio::timer::Interval;
+
+
+/// A handle to the network. This is generally implemented by providing some
+/// handle to a gossip service or similar.
+///
+/// Intended to be a lightweight handle such as an `Arc`.
+pub trait Network: Clone {
+	/// A stream of input messages for a topic.
+	type In: Stream<Item=Vec<u8>,Error=()>;
+
+	/// Send a message at a specific round out.
+	fn send_message(&self, slot: u64, message: Vec<u8>);
+}
 
 /// Configuration for Aura consensus.
 pub struct Config {
@@ -197,7 +221,7 @@ pub fn start_aura<B, C, E, Error>(config: Config, client: Arc<C>, env: Arc<E>)
 					};
 
 					if let Err(e) = block_import.import_block(import_block, None) {
-						warn!("Error with block built on {:?}: {:?}", parent_hash, e);
+						warn!(target: "aura", "Error with block built on {:?}: {:?}", parent_hash, e);
 					}
 				})
 				.map_err(|e| warn!("Failed to construct block: {:?}", e))
@@ -258,7 +282,7 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 	}
 }
 
-struct AuraVerifier<C> {
+pub struct AuraVerifier<C> {
 	config: Config,
 	client: Arc<C>,
 }
@@ -287,6 +311,8 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
 				let item = <DigestItemFor<B>>::aura_seal(slot_num, sig);
 
+				debug!(target: "aura", "Checked {:?}; importing.", pre_header);
+
 				let import_block = ImportBlock {
 					origin,
 					header: pre_header,
@@ -299,8 +325,10 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 
 				Ok((import_block, None)) // TODO: extract authorities item.
 			}
-			CheckedHeader::Deferred(_, _) =>
-				Err(format!("Header {:?} rejected: too far in the future", hash)),
+			CheckedHeader::Deferred(a, b) => {
+				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
+				Err(format!("Header {:?} rejected: too far in the future", hash))
+			}
 		}
 	}
 }
@@ -313,4 +341,179 @@ pub fn import_queue<B, C>(config: Config, client: Arc<C>) -> impl ImportQueue<B>
 {
 	let verifier = Arc::new(AuraVerifier { config, client });
 	BasicQueue::new(verifier)
+}
+
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use codec::{Decode, Encode};
+	use std::time::{Duration, Instant};
+	use network::test::*;
+	use network::test::{Block as TestBlock, PeersClient};
+	use runtime_primitives::traits::Block as BlockT;
+	use service::Roles;
+	use network::ProtocolConfig;
+	use parking_lot::Mutex;
+	use tokio::runtime::current_thread;
+	use keyring::Keyring;
+	use client::BlockchainEvents;
+	use primitives::H256;
+	use test_client;
+
+	type Error = client::error::Error;
+
+	type TestClient = client::Client<test_client::Backend, test_client::Executor, TestBlock>;
+
+	struct DummyFactory(Arc<TestClient>);
+	struct DummyProposer(u64, Arc<TestClient>);
+
+	impl Environment<TestBlock> for DummyFactory {
+		type Proposer = DummyProposer;
+		type Error = Error;
+
+		fn init(&self, parent_header: &<TestBlock as BlockT>::Header, _authorities: &[AuthorityId], _sign_with: Arc<ed25519::Pair>)
+			-> Result<DummyProposer, Error>
+		{
+			Ok(DummyProposer(parent_header.number + 1, self.0.clone()))
+		}
+	}
+
+	impl Proposer<TestBlock> for DummyProposer {
+		type Error = Error;
+		type Create = Result<TestBlock, Error>;
+		type Evaluate = Result<bool, Error>;
+
+		fn propose(&self) -> Result<TestBlock, Error> {
+			self.1.new_block().unwrap().bake().map_err(|e| e.into())
+		}
+
+		fn evaluate(&self, _proposal: &TestBlock) -> Result<bool, Error> {
+			Ok(true)
+		}
+	}
+
+	#[derive(Encode, Decode)]
+	pub struct AuraSeal(u64, ed25519::Signature);
+
+	impl CompatibleDigestItem for runtime_primitives::generic::DigestItem<primitives::H256, u64> {
+		/// Construct a digest item which is a slot number and a signature on the
+		/// hash.
+		fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
+			runtime_primitives::generic::DigestItem::Seal(slot_number, signature)
+		}
+
+		/// If this item is an Aura seal, return the slot number and signature.
+		fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)> {
+			match self {
+				runtime_primitives::generic::DigestItem::Seal(slot, ref sign) => Some((*slot, sign)),
+				_ => None
+			}
+		}
+
+	}
+
+	const SLOT_DURATION: u64 = 1;
+	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
+
+	pub struct AuraTestNet {
+		peers: Vec<Arc<Peer<AuraVerifier<PeersClient>>>>,
+		started: bool
+	}
+
+	impl TestNetFactory for AuraTestNet {
+		type Verifier = AuraVerifier<PeersClient>;
+
+		/// Create new test network with peers and given config.
+		fn from_config(_config: &ProtocolConfig) -> Self {
+			AuraTestNet {
+				peers: Vec::new(),
+				started: false
+			}
+		}
+		
+		fn make_verifier(&self, client: Arc<PeersClient>, _cfg: &ProtocolConfig)
+			-> Arc<Self::Verifier>
+		{
+			let config = Config { local_key: None, slot_duration: SLOT_DURATION };
+			Arc::new(AuraVerifier { client, config })
+		}
+
+		fn peer(&self, i: usize) -> &Peer<Self::Verifier> {
+			&self.peers[i]
+		}
+
+		fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier>>> {
+			&self.peers
+		}
+
+		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier>>>)>(&mut self, closure: F ) {
+			closure(&mut self.peers);
+		}
+
+		fn started(&self) -> bool {
+			self.started
+		}
+
+		fn set_started(&mut self, new: bool) {
+			self.started = new;
+		}
+	}
+
+	#[test]
+	fn authoring_blocks() {
+		::env_logger::init().ok();
+		let net = AuraTestNet::new(3);
+
+		let peers = &[
+			(0, Keyring::Alice),
+			(1, Keyring::Bob),
+			(2, Keyring::Charlie),
+		];
+
+		let net = Arc::new(Mutex::new(net));
+		let mut import_notifications = Vec::new();
+
+		let mut runtime = current_thread::Runtime::new().unwrap();
+		for (peer_id, key) in peers {
+			let mut client = net.lock().peer(*peer_id).client().clone();
+			let environ = Arc::new(DummyFactory(client.clone()));
+			import_notifications.push(
+				client.import_notification_stream()
+					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
+					.for_each(move |_| Ok(()))
+			);
+			let aura = start_aura(
+				Config {
+					local_key: Some(Arc::new(key.clone().into())),
+					slot_duration: SLOT_DURATION
+				},
+				client,
+				environ.clone()
+			);
+
+			runtime.spawn(aura);
+		}
+
+
+		// wait for all finalized on each.
+		let wait_for = ::futures::future::join_all(import_notifications)
+			.map(|_| ())
+			.map_err(|_| ());
+
+		// FIXME: due to a bug in the testnet we aren't seeing our import announces published
+		// past calling `sync()` the first time - so wait until all rounds have passed and 
+		// call it only onces after
+
+		let drive_to_completion = ::tokio::timer::Delay::new(
+				Instant::now() + Duration::new(SLOT_DURATION * 10, 0))
+		// let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+			.then(move |_| { net.lock().sync(); Ok(()) })
+			.map(|_| ());
+
+		// let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		// 		.for_each(move |_| { net.lock().sync(); println!("synced"); Ok(()) })
+
+		runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	}
 }

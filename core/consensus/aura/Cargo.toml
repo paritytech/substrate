@@ -24,7 +24,14 @@ log = "0.3"
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
+substrate-service = { path = "../../service" }
+substrate-test-client = { path = "../../test-client" }
+parity-codec-derive = { version = "2.0" }
+env_logger = { version = "0.4" }
 
+[target.'cfg(test)'.dependencies]
+substrate-network = { path = "../../network", features = ["test-helpers"] }
+sr-primitives = { path = "../../sr-primitives", features = ["test-helpers"] }
 
 [features]
 default = ["std"]
@@ -34,3 +41,4 @@ std = [
 	"sr-primitives/std",
 	"sr-version/std",
 ]
+

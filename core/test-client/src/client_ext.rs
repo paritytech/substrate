@@ -23,7 +23,7 @@ use consensus::BlockImport;
 use runtime;
 
 /// Extension trait for a test client.
-pub trait TestClient {
+pub trait TestClient: Sized {
 	/// Justify and import block to the chain. No finality.
 	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block)
 		-> client::error::Result<()>;
