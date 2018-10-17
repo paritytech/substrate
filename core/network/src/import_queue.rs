@@ -251,15 +251,15 @@ pub trait Link<B: BlockT>: Send {
 	/// Get chain reference.
 	fn chain(&self) -> &Client<B>;
 	/// Block imported.
-	fn block_imported(&self, hash: &B::Hash, number: NumberFor<B>);
+	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
 	/// Maintain sync.
-	fn maintain_sync(&self);
+	fn maintain_sync(&self) { }
 	/// Disconnect from peer.
-	fn useless_peer(&self, who: NodeIndex, reason: &str);
+	fn useless_peer(&self, _who: NodeIndex, _reason: &str) { }
 	/// Disconnect from peer and restart sync.
-	fn note_useless_and_restart_sync(&self, who: NodeIndex, reason: &str);
+	fn note_useless_and_restart_sync(&self, _who: NodeIndex, _reason: &str) { }
 	/// Restart sync.
-	fn restart(&self);
+	fn restart(&self) { }
 }
 
 /// A link implementation that connects to the network.
