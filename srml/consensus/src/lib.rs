@@ -249,7 +249,7 @@ impl<T: Trait> ProvideInherent for Module<T> {
 	}
 
 	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
-			block: &Block, data: Self::Inherent, extract_function: &F
+		block: &Block, data: Self::Inherent, extract_function: &F
 	) -> result::Result<(), Self::Error> {
 		let noted_offline = block
 			.extrinsics().get(T::NOTE_OFFLINE_POSITION as usize)
