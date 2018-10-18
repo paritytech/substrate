@@ -22,13 +22,18 @@
 extern crate tokio;
 
 extern crate substrate_cli as cli;
+extern crate substrate_primitives as primitives;
 extern crate node_service as service;
+extern crate node_runtime;
 extern crate exit_future;
+#[macro_use]
+extern crate hex_literal;
 
 #[macro_use]
 extern crate log;
 
 pub use cli::error;
+mod chain_spec;
 
 use tokio::runtime::Runtime;
 pub use service::{Components as ServiceComponents, Service, CustomConfiguration, ServiceFactory};
@@ -49,12 +54,12 @@ pub enum ChainSpec {
 
 /// Get a chain config from a spec setting.
 impl ChainSpec {
-	pub(crate) fn load(self) -> Result<service::ChainSpec, String> {
+	pub(crate) fn load(self) -> Result<chain_spec::ChainSpec, String> {
 		Ok(match self {
-			ChainSpec::BbqBirch => service::chain_spec::bbq_birch_config()?,
-			ChainSpec::Development => service::chain_spec::development_config(),
-			ChainSpec::LocalTestnet => service::chain_spec::local_testnet_config(),
-			ChainSpec::StagingTestnet => service::chain_spec::staging_testnet_config(),
+			ChainSpec::BbqBirch => chain_spec::bbq_birch_config()?,
+			ChainSpec::Development => chain_spec::development_config(),
+			ChainSpec::LocalTestnet => chain_spec::local_testnet_config(),
+			ChainSpec::StagingTestnet => chain_spec::staging_testnet_config(),
 		})
 	}
 
@@ -69,7 +74,7 @@ impl ChainSpec {
 	}
 }
 
-fn load_spec(id: &str) -> Result<Option<service::ChainSpec>, String> {
+fn load_spec(id: &str) -> Result<Option<chain_spec::ChainSpec>, String> {
 	Ok(match ChainSpec::from(id) {
 		Some(spec) => Some(spec.load()?),
 		None => None,

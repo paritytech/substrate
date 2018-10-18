@@ -36,7 +36,6 @@ extern crate hex_literal;
 #[cfg(all(test, feature="rhd"))]
 extern crate rhododendron as rhd;
 extern crate sr_primitives as runtime_primitives;
-pub mod chain_spec;
 
 use std::sync::Arc;
 use transaction_pool::txpool::{Pool as TransactionPool};
@@ -54,8 +53,6 @@ pub use service::{Roles, PruningMode, TransactionPoolOptions, ServiceFactory,
 	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
 pub use client::ExecutionStrategy;
 
-/// Specialised `ChainSpec`.
-pub type ChainSpec = service::ChainSpec<GenesisConfig>;
 /// Client type for specialised `Components`.
 pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, Block>;
 pub type NetworkService = network::Service<Block, <Factory as service::ServiceFactory>::NetworkProtocol, Hash>;
