@@ -331,12 +331,12 @@ mod tests {
 			if nonce < block_number {
 				Ok(TransactionValidity::Invalid)
 			} else {
-				Ok(TransactionValidity::Valid(
-					4,
-					if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
-					vec![vec![nonce as u8]],
-					3,
-				))
+				Ok(TransactionValidity::Valid {
+					priority: 4,
+					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
+					provides: vec![vec![nonce as u8]],
+					longevity: 3,
+				})
 			}
 		}
 
@@ -388,7 +388,7 @@ mod tests {
 		})).unwrap();
 
 		// then
-		assert_eq!(pool.ready(|pending| pending.map(|tx| tx.hash.clone()).collect::<Vec<_>>()), vec![hash]);
+		assert_eq!(pool.ready().map(|v| v.hash).collect::<Vec<_>>(), vec![hash]);
 	}
 
 	#[test]
@@ -479,7 +479,7 @@ mod tests {
 		pool.clear_stale(&BlockId::Number(5)).unwrap();
 
 		// then
-		assert_eq!(pool.all(3).len(), 0);
+		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.status().future, 0);
 		assert_eq!(pool.status().ready, 0);
 		// make sure they are temporarily banned as well
