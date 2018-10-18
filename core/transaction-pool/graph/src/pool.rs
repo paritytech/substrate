@@ -388,7 +388,7 @@ mod tests {
 		})).unwrap();
 
 		// then
-		assert_eq!(pool.ready().next().unwrap().hash, hash);
+		assert_eq!(pool.ready().map(|v| v.hash).collect::<Vec<_>>(), vec![hash]);
 	}
 
 	#[test]
@@ -479,7 +479,7 @@ mod tests {
 		pool.clear_stale(&BlockId::Number(5)).unwrap();
 
 		// then
-		assert_eq!(pool.ready().next(), None);
+		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.status().future, 0);
 		assert_eq!(pool.status().ready, 0);
 		// make sure they are temporarily banned as well

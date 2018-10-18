@@ -402,10 +402,10 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 #[cfg(test)]
 pub(crate) mod tests {
 	use client::cht;
-	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock};
+	use runtime_primitives::testing::{H256 as Hash, Header, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 
-	type Block = RawBlock<u32>;
+	type Block = RawBlock<ExtrinsicWrapper<u32>>;
 
 	fn prepare_header(parent: &Hash, number: u64, extrinsics_root: Hash) -> Header {
 		Header {

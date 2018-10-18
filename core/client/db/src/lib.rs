@@ -865,11 +865,11 @@ mod tests {
 	use client::backend::Backend as BTrait;
 	use client::backend::BlockImportOperation as Op;
 	use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
-	use runtime_primitives::testing::{Header, Block as RawBlock};
+	use runtime_primitives::testing::{Header, Block as RawBlock, ExtrinsicWrapper};
 	use state_machine::{TrieMut, TrieDBMut, ChangesTrieRootsStorage, ChangesTrieStorage};
 	use test_client;
 
-	type Block = RawBlock<u64>;
+	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	fn prepare_changes(changes: Vec<(Vec<u8>, Vec<u8>)>) -> (H256, MemoryDB<Blake2Hasher>) {
 		let mut changes_root = H256::default();
