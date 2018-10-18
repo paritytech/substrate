@@ -241,6 +241,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
+	#[allow(dead_code)]
 	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
 		let _sender = ensure_signed(origin)?;
 
