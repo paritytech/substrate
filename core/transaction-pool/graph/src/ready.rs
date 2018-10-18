@@ -417,35 +417,37 @@ impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 	type Item = Arc<Transaction<Hash, Ex>>;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let best = self.best.iter().next_back()?.clone();
-		let best = self.best.take(&best)?;
+		loop {
+			let best = self.best.iter().next_back()?.clone();
+			let best = self.best.take(&best)?;
 
-		let next = self.all.read().get(&best.transaction.hash).cloned();
-		let ready = match next {
-			Some(ready) => ready,
-			// The transaction is not in all, maybe it was removed in the meantime?
-			None => return self.next(),
-		};
-
-		// Insert transactions that just got unlocked.
-		for hash in &ready.unlocks {
-			// first check local awaiting transactions
-			let res = if let Some((mut satisfied, tx_ref)) = self.awaiting.remove(hash) {
-				satisfied += 1;
-				Some((satisfied, tx_ref))
-			// then get from the pool
-			} else if let Some(next) = self.all.read().get(hash) {
-				Some((next.requires_offset + 1, next.transaction.clone()))
-			} else {
-				None
+			let next = self.all.read().get(&best.transaction.hash).cloned();
+			let ready = match next {
+				Some(ready) => ready,
+				// The transaction is not in all, maybe it was removed in the meantime?
+				None => continue,
 			};
 
-			if let Some((satisfied, tx_ref)) = res {
-				self.best_or_awaiting(satisfied, tx_ref)
-			}
-		}
+			// Insert transactions that just got unlocked.
+			for hash in &ready.unlocks {
+				// first check local awaiting transactions
+				let res = if let Some((mut satisfied, tx_ref)) = self.awaiting.remove(hash) {
+					satisfied += 1;
+					Some((satisfied, tx_ref))
+				// then get from the pool
+				} else if let Some(next) = self.all.read().get(hash) {
+					Some((next.requires_offset + 1, next.transaction.clone()))
+				} else {
+					None
+				};
 
-		Some(best.transaction.clone())
+				if let Some((satisfied, tx_ref)) = res {
+					self.best_or_awaiting(satisfied, tx_ref)
+				}
+			}
+
+			return Some(best.transaction.clone())
+		}
 	}
 }
 
