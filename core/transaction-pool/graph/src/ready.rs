@@ -21,6 +21,7 @@ use std::{
 	sync::Arc,
 };
 
+use parking_lot::RwLock;
 use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
@@ -79,6 +80,16 @@ struct ReadyTx<Hash, Ex> {
 	pub requires_offset: usize,
 }
 
+impl<Hash: Clone, Ex> Clone for ReadyTx<Hash, Ex> {
+	fn clone(&self) -> Self {
+		ReadyTx {
+			transaction: self.transaction.clone(),
+			unlocks: self.unlocks.clone(),
+			requires_offset: self.requires_offset,
+		}
+	}
+}
+
 const HASH_READY: &str = r#"
 Every time transaction is imported its hash is placed in `ready` map and tags in `provided_tags`;
 Every time transaction is removed from the queue we remove the hash from `ready` map and from `provided_tags`;
@@ -93,8 +104,7 @@ pub struct ReadyTransactions<Hash: hash::Hash + Eq, Ex> {
 	/// tags that are provided by Ready transactions
 	provided_tags: HashMap<Tag, Hash>,
 	/// Transactions that are ready (i.e. don't have any requirements external to the pool)
-	ready: HashMap<Hash, ReadyTx<Hash, Ex>>,
-	// ^^ TODO [ToDr] Consider wrapping this into `Arc<RwLock<>>` and allow multiple concurrent iterators
+	ready: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
 	/// Best transactions that are ready to be included to the block without any other previous transaction.
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
@@ -127,9 +137,9 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 	/// - transactions that are valid for a shorter time go first
 	/// 4. Lastly we sort by the time in the queue
 	/// - transactions that are longer in the queue go first
-	pub fn get<'a>(&'a self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> + 'a {
+	pub fn get(&self) -> impl Iterator<Item=Arc<Transaction<Hash, Ex>>> {
 		BestIterator {
-			all: &self.ready,
+			all: self.ready.clone(),
 			best: self.best.clone(),
 			awaiting: Default::default(),
 		}
@@ -144,7 +154,7 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 		tx: WaitingTransaction<Hash, Ex>,
 	) -> error::Result<Vec<Arc<Transaction<Hash, Ex>>>> {
 		assert!(tx.is_ready(), "Only ready transactions can be imported.");
-		assert!(!self.ready.contains_key(&tx.transaction.hash), "Transaction is already imported.");
+		assert!(!self.ready.read().contains_key(&tx.transaction.hash), "Transaction is already imported.");
 
 		self.insertion_id += 1;
 		let insertion_id = self.insertion_id;
@@ -154,11 +164,12 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 		let replaced = self.replace_previous(&tx)?;
 
 		let mut goes_to_best = true;
+		let mut ready = self.ready.write();
 		// Add links to transactions that unlock the current one
 		for tag in &tx.requires {
 			// Check if the transaction that satisfies the tag is still in the queue.
 			if let Some(other) = self.provided_tags.get(tag) {
-				let mut tx = self.ready.get_mut(other).expect(HASH_READY);
+				let mut tx = ready.get_mut(other).expect(HASH_READY);
 				tx.unlocks.push(hash.clone());
 				// this transaction depends on some other, so it doesn't go to best directly.
 				goes_to_best = false;
@@ -181,7 +192,7 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 		}
 
 		// insert to Ready
-		self.ready.insert(hash, ReadyTx {
+		ready.insert(hash, ReadyTx {
 			transaction,
 			unlocks: vec![],
 			requires_offset: 0,
@@ -192,7 +203,7 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 
 	/// Returns true if given hash is part of the queue.
 	pub fn contains(&self, hash: &Hash) -> bool {
-		self.ready.contains_key(hash)
+		self.ready.read().contains_key(hash)
 	}
 
 	/// Removes invalid transactions from the ready pool.
@@ -204,13 +215,14 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 		let mut removed = vec![];
 		let mut to_remove = hashes.iter().cloned().collect::<Vec<_>>();
 
+		let mut ready = self.ready.write();
 		loop {
 			let hash = match to_remove.pop() {
 				Some(hash) => hash,
 				None => return removed,
 			};
 
-			if let Some(mut tx) = self.ready.remove(&hash) {
+			if let Some(mut tx) = ready.remove(&hash) {
 				// remove entries from provided_tags
 				for tag in &tx.transaction.transaction.provides {
 					self.provided_tags.remove(tag);
@@ -218,7 +230,7 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 				// remove from unlocks
 				for tag in &tx.transaction.transaction.requires {
 					if let Some(hash) = self.provided_tags.get(tag) {
-						if let Some(tx) = self.ready.get_mut(hash) {
+						if let Some(tx) = ready.get_mut(hash) {
 							remove_item(&mut tx.unlocks, &hash);
 						}
 					}
@@ -253,7 +265,7 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 			};
 
 			let res = self.provided_tags.remove(&tag)
-					.and_then(|hash| self.ready.remove(&hash));
+					.and_then(|hash| self.ready.write().remove(&hash));
 
 			if let Some(tx) = res {
 				let unlocks = tx.unlocks;
@@ -262,9 +274,10 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 				// prune previous transactions as well
 				{
 					let hash = &tx.hash;
+					let mut ready = self.ready.write();
 					let mut find_previous = |tag| -> Option<Vec<Tag>> {
 						let prev_hash = self.provided_tags.get(tag)?;
-						let tx2 = self.ready.get_mut(&prev_hash)?;
+						let tx2 = ready.get_mut(&prev_hash)?;
 						remove_item(&mut tx2.unlocks, hash);
 						// We eagerly prune previous transactions as well.
 						// But it might not always be good.
@@ -292,7 +305,7 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 
 				// add the transactions that just got unlocked to `best`
 				for hash in unlocks {
-					if let Some(tx) = self.ready.get_mut(&hash) {
+					if let Some(tx) = self.ready.write().get_mut(&hash) {
 						tx.requires_offset += 1;
 						// this transaction is ready
 						if tx.requires_offset == tx.transaction.transaction.requires.len() {
@@ -328,10 +341,13 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 			}
 
 			// now check if collective priority is lower than the replacement transaction.
-			let old_priority = replace_hashes
-				.iter()
-				.filter_map(|hash| self.ready.get(hash))
-				.fold(0u64, |total, tx| total.saturating_add(tx.transaction.transaction.priority));
+			let old_priority = {
+				let ready = self.ready.read();
+				replace_hashes
+					.iter()
+					.filter_map(|hash| ready.get(hash))
+					.fold(0u64, |total, tx| total.saturating_add(tx.transaction.transaction.priority))
+			};
 
 			// bail - the transaction has too low priority to replace the old ones
 			if old_priority >= tx.priority {
@@ -349,7 +365,7 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 				None => return Ok(removed),
 			};
 
-			let tx = self.ready.remove(&hash).expect(HASH_READY);
+			let tx = self.ready.write().remove(&hash).expect(HASH_READY);
 			// check if this transaction provides stuff that is not provided by the new one.
 			let (mut unlocks, tx) = (tx.unlocks, tx.transaction.transaction);
 			{
@@ -371,18 +387,18 @@ impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
 
 	/// Returns number of transactions in this queue.
 	pub fn len(&self) -> usize {
-		self.ready.len()
+		self.ready.read().len()
 	}
 
 }
 
-pub struct BestIterator<'a, Hash: 'a, Ex: 'a> {
-	all: &'a HashMap<Hash, ReadyTx<Hash, Ex>>,
+pub struct BestIterator<Hash, Ex> {
+	all: Arc<RwLock<HashMap<Hash, ReadyTx<Hash, Ex>>>>,
 	awaiting: HashMap<Hash, (usize, TransactionRef<Hash, Ex>)>,
 	best: BTreeSet<TransactionRef<Hash, Ex>>,
 }
 
-impl<'a, Hash: 'a + hash::Hash + Member, Ex: 'a> BestIterator<'a, Hash, Ex> {
+impl<Hash: hash::Hash + Member, Ex> BestIterator<Hash, Ex> {
 	/// Depending on number of satisfied requirements insert given ref
 	/// either to awaiting set or to best set.
 	fn best_or_awaiting(&mut self, satisfied: usize, tx_ref: TransactionRef<Hash, Ex>) {
@@ -397,32 +413,41 @@ impl<'a, Hash: 'a + hash::Hash + Member, Ex: 'a> BestIterator<'a, Hash, Ex> {
 	}
 }
 
-impl<'a, Hash: 'a + hash::Hash + Member, Ex: 'a> Iterator for BestIterator<'a, Hash, Ex> {
+impl<Hash: hash::Hash + Member, Ex> Iterator for BestIterator<Hash, Ex> {
 	type Item = Arc<Transaction<Hash, Ex>>;
 
 	fn next(&mut self) -> Option<Self::Item> {
-		let best = self.best.iter().next_back()?.clone();
-		let best = self.best.take(&best)?;
+		loop {
+			let best = self.best.iter().next_back()?.clone();
+			let best = self.best.take(&best)?;
 
-		let ready = match self.all.get(&best.transaction.hash) {
-			Some(ready) => ready,
-			// The transaction is not in all, maybe it was removed in the meantime?
-			None => return self.next(),
-		};
+			let next = self.all.read().get(&best.transaction.hash).cloned();
+			let ready = match next {
+				Some(ready) => ready,
+				// The transaction is not in all, maybe it was removed in the meantime?
+				None => continue,
+			};
 
-		// Insert transactions that just got unlocked.
-		for hash in &ready.unlocks {
-			// first check local awaiting transactions
-			if let Some((mut satisfied, tx_ref)) = self.awaiting.remove(hash) {
-				satisfied += 1;
-				self.best_or_awaiting(satisfied, tx_ref);
-			// then get from the pool
-			} else if let Some(next) = self.all.get(hash) {
-				self.best_or_awaiting(next.requires_offset + 1, next.transaction.clone());
+			// Insert transactions that just got unlocked.
+			for hash in &ready.unlocks {
+				// first check local awaiting transactions
+				let res = if let Some((mut satisfied, tx_ref)) = self.awaiting.remove(hash) {
+					satisfied += 1;
+					Some((satisfied, tx_ref))
+				// then get from the pool
+				} else if let Some(next) = self.all.read().get(hash) {
+					Some((next.requires_offset + 1, next.transaction.clone()))
+				} else {
+					None
+				};
+
+				if let Some((satisfied, tx_ref)) = res {
+					self.best_or_awaiting(satisfied, tx_ref)
+				}
 			}
-		}
 
-		Some(best.transaction.clone())
+			return Some(best.transaction.clone())
+		}
 	}
 }
 

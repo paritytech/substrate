@@ -49,12 +49,12 @@ impl txpool::ChainApi for TestApi {
 		};
 		let provides = vec![vec![uxt.transfer.nonce as u8]];
 
-		Ok(TransactionValidity::Valid(
-			/* priority: */1,
+		Ok(TransactionValidity::Valid {
+			priority: 1,
 			requires,
 			provides,
-			/* longevity: */64
-		))
+			longevity: 64
+		})
 	}
 
 	fn block_id_to_number(&self, at: &BlockId<Self::Block>) -> error::Result<Option<txpool::NumberFor<Self>>> {
@@ -109,7 +109,7 @@ fn submission_should_work() {
 	assert_eq!(209, index(&BlockId::number(0)));
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
 
-	let pending: Vec<_> = pool.ready(|p| p.map(|a| a.data.transfer.nonce).collect());
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
 	assert_eq!(pending, vec![209]);
 }
 
@@ -119,7 +119,7 @@ fn multiple_submission_should_work() {
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 210)).unwrap();
 
-	let pending: Vec<_> = pool.ready(|p| p.map(|a| a.data.transfer.nonce).collect());
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 }
 
@@ -128,7 +128,7 @@ fn early_nonce_should_be_culled() {
 	let pool = pool();
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 208)).unwrap();
 
-	let pending: Vec<_> = pool.ready(|p| p.map(|a| a.data.transfer.nonce).collect());
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
 	assert_eq!(pending, Vec::<Index>::new());
 }
 
@@ -137,11 +137,11 @@ fn late_nonce_should_be_queued() {
 	let pool = pool();
 
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 210)).unwrap();
-	let pending: Vec<_> = pool.ready(|p| p.map(|a| a.data.transfer.nonce).collect());
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
-	let pending: Vec<_> = pool.ready(|p| p.map(|a| a.data.transfer.nonce).collect());
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 }
 
@@ -151,12 +151,12 @@ fn prune_tags_should_work() {
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 209)).unwrap();
 	pool.submit_one(&BlockId::number(0), uxt(Alice, 210)).unwrap();
 
-	let pending: Vec<_> = pool.ready(|p| p.map(|a| a.data.transfer.nonce).collect());
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
 	assert_eq!(pending, vec![209, 210]);
 
 	pool.prune_tags(&BlockId::number(1), vec![vec![209]]).unwrap();
 
-	let pending: Vec<_> = pool.ready(|p| p.map(|a| a.data.transfer.nonce).collect());
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
 	assert_eq!(pending, vec![210]);
 }
 
@@ -169,7 +169,7 @@ fn should_ban_invalid_transactions() {
 	pool.submit_one(&BlockId::number(0), uxt.clone()).unwrap_err();
 
 	// when
-	let pending: Vec<_> = pool.ready(|p| p.map(|a| a.data.transfer.nonce).collect());
+	let pending: Vec<_> = pool.ready().map(|a| a.data.transfer.nonce).collect();
 	assert_eq!(pending, Vec::<Index>::new());
 
 	// then

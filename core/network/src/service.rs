@@ -129,7 +129,7 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 		params: Params<B, S, H>,
 		protocol_id: ProtocolId,
 		import_queue: I,
-	) -> Result<Arc<Service<B, S, H>>, Error> {	
+	) -> Result<Arc<Service<B, S, H>>, Error> {
 		let chain = params.chain.clone();
 		let import_queue = Arc::new(import_queue);
 		let handler = Arc::new(Protocol::new(

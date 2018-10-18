@@ -260,12 +260,12 @@ impl<
 				expected_index = expected_index + One::one();
 			}
 
-			TransactionValidity::Valid(
-				/*priority: */encoded_len as TransactionPriority,
-				/*requires: */deps,
-				/*provides: */vec![(sender, *index).encode()],
-				/*longevity: */TransactionLongevity::max_value(),
-			)
+			TransactionValidity::Valid {
+				priority: encoded_len as TransactionPriority,
+				requires: deps,
+				provides: vec![(sender, *index).encode()],
+				longevity: TransactionLongevity::max_value(),
+			}
 		} else {
 			return TransactionValidity::Invalid
 		}
