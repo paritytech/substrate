@@ -186,9 +186,21 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_set_child_storage"))?;
 		let value = this.memory.get(value_data, value_len as usize).map_err(|_| UserError("Invalid attempt to determine value in ext_set_child_storage"))?;
 		if let Some(_preimage) = this.hash_lookup.get(&key) {
-			debug_trace!(target: "wasm-trace", "*** Setting child storage: {} -> %{} -> {}   [k={}]", ::primitives::hexdisplay::ascii_format(&storage_key), ::primitives::hexdisplay::ascii_format(&_preimage), HexDisplay::from(&value), HexDisplay::from(&key));
+			debug_trace!(
+				target: "wasm-trace", "*** Setting child storage: {} -> %{} -> {}   [k={}]",
+				::primitives::hexdisplay::ascii_format(&storage_key),
+				::primitives::hexdisplay::ascii_format(&_preimage),
+				HexDisplay::from(&value),
+				HexDisplay::from(&key)
+			);
 		} else {
-			debug_trace!(target: "wasm-trace", "*** Setting child storage: {} ->  {} -> {}   [k={}]", ::primitives::hexdisplay::ascii_format(&storage_key), ::primitives::hexdisplay::ascii_format(&key), HexDisplay::from(&value), HexDisplay::from(&key));
+			debug_trace!(
+				target: "wasm-trace", "*** Setting child storage: {} ->  {} -> {}   [k={}]",
+				::primitives::hexdisplay::ascii_format(&storage_key),
+				::primitives::hexdisplay::ascii_format(&key),
+				HexDisplay::from(&value),
+				HexDisplay::from(&key)
+			);
 		}
 		this.ext.set_child_storage(storage_key, key, value);
 		Ok(())
