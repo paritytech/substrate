@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use bytes::Bytes;
-use libp2p::core::{Multiaddr, ConnectionUpgrade, Endpoint};
+use libp2p::core::{ConnectionUpgrade, Endpoint};
 use libp2p::tokio_codec::Framed;
 use std::{collections::VecDeque, io, vec::IntoIter as VecIntoIter};
 use futures::{prelude::*, future, stream, task};
@@ -203,8 +203,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 		self,
 		socket: TSubstream,
 		protocol_version: Self::UpgradeIdentifier,
-		_: Endpoint,
-		_: &Multiaddr
+		_: Endpoint
 	) -> Self::Future {
 		let framed = Framed::new(socket, UviBytes::default());
 
@@ -273,13 +272,12 @@ where TSubstream: AsyncRead + AsyncWrite,
 		self,
 		socket: TSubstream,
 		upgrade_identifier: Self::UpgradeIdentifier,
-		endpoint: Endpoint,
-		remote_addr: &Multiaddr
+		endpoint: Endpoint
 	) -> Self::Future {
 		let (protocol_index, inner_proto_id) = upgrade_identifier;
 		self.0.into_iter()
 			.nth(protocol_index)
 			.expect("invalid protocol index ; programmer logic error")
-			.upgrade(socket, inner_proto_id, endpoint, remote_addr)
+			.upgrade(socket, inner_proto_id, endpoint)
 	}
 }
