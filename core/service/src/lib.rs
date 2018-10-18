@@ -393,13 +393,13 @@ impl<C: Components> TransactionPoolAdapter<C> {
 
 impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
-		self.pool.ready(|pending| pending
+		self.pool.ready()
 			.map(|t| {
 				let hash = t.hash.clone();
 				let ex: ComponentExtrinsic<C> = t.data.clone();
 				(hash, ex)
 			})
-			.collect())
+			.collect()
 	}
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {

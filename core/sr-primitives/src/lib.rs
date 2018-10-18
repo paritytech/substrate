@@ -37,7 +37,6 @@ extern crate num_traits;
 extern crate integer_sqrt;
 extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
-extern crate sr_version as runtime_version;
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
 extern crate substrate_primitives;
@@ -64,6 +63,12 @@ pub mod transaction_validity;
 pub type Justification = Vec<u8>;
 
 use traits::{Verify, Lazy};
+
+/// A String that is a `&'static str` on `no_std` and a `String` on `std`.
+#[cfg(not(feature = "std"))]
+pub type RuntimeString = &'static str;
+#[cfg(feature = "std")]
+pub type RuntimeString = ::std::borrow::Cow<'static, str>;
 
 #[cfg(feature = "std")]
 pub use serde::{Serialize, de::DeserializeOwned};
