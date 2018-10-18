@@ -378,13 +378,13 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		let r = this.ext.child_storage_root(&storage_key);
 		if let Some(value) = r {
 			let offset = this.heap.allocate(value.len() as u32) as u32;
-			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_get_allocated_child_storage"))?;
+			this.memory.set(offset, &value).map_err(|_| UserError("Invalid attempt to set memory in ext_child_storage_root"))?;
 			this.memory.write_primitive(written_out, value.len() as u32)
-				.map_err(|_| UserError("Invalid attempt to write written_out in ext_get_allocated_child_storage"))?;
+				.map_err(|_| UserError("Invalid attempt to write written_out in ext_child_storage_root"))?;
 			Ok(offset)
 		} else {
 			this.memory.write_primitive(written_out, u32::max_value())
-				.map_err(|_| UserError("Invalid attempt to write failed written_out in ext_get_allocated_child_storage"))?;
+				.map_err(|_| UserError("Invalid attempt to write failed written_out in ext_child_storage_root"))?;
 			Ok(0)
 		}
 	},
