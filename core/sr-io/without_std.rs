@@ -111,7 +111,7 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 		if length == u32::max_value() {
 			None
 		} else {
-			Some(Vec::from_raw_parts(ptr, length as usize, length as usize))
+			Some(slice::from_raw_parts(ptr, length as usize).to_vec())
 		}
 	}
 }
@@ -124,7 +124,7 @@ pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		if length == u32::max_value() {
 			None
 		} else {
-			Some(Vec::from_raw_parts(ptr, length as usize, length as usize))
+			Some(slice::from_raw_parts(ptr, length as usize).to_vec())
 		}
 	}
 }
@@ -256,7 +256,7 @@ pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
 		if length == u32::max_value() {
 			None
 		} else {
-			Some(Vec::from_raw_parts(ptr, length as usize, length as usize))
+			Some(slice::from_raw_parts(ptr, length as usize).to_vec())
 		}
 	}
 }
