@@ -5,7 +5,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 error-chain = "0.12"
-hex-literal = "0.1"
 lazy_static = "1.0"
 log = "0.4"
 node-consensus = { path = "../consensus" }
@@ -27,7 +26,6 @@ substrate-transaction-pool = { path = "../../core/transaction-pool" }
 tokio = "0.1.7"
 
 [dev-dependencies]
-substrate-service-test = { path = "../../core/service/test" }
 substrate-test-client = { path = "../../core/test-client" }
 substrate-keyring = { path = "../../core/keyring" }
 rhododendron = "0.3"

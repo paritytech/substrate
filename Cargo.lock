@@ -1601,6 +1601,7 @@ dependencies = [
  "substrate-cli 0.3.0",
  "substrate-primitives 0.1.0",
  "substrate-service 0.3.0",
+ "substrate-service-test 0.3.0",
  "tokio 0.1.11 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -1722,7 +1723,6 @@ name = "node-service"
 version = "0.1.0"
 dependencies = [
  "error-chain 0.12.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "node-consensus 0.1.0",
@@ -1741,7 +1741,6 @@ dependencies = [
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
  "substrate-service 0.3.0",
- "substrate-service-test 0.3.0",
  "substrate-telemetry 0.3.0",
  "substrate-test-client 0.1.0",
  "substrate-transaction-pool 0.1.0",

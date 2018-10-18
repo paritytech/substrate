@@ -28,6 +28,8 @@ extern crate node_runtime;
 extern crate exit_future;
 #[macro_use]
 extern crate hex_literal;
+#[cfg(test)]
+extern crate substrate_service_test as service_test;
 
 #[macro_use]
 extern crate log;

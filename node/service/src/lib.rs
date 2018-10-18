@@ -28,11 +28,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_service as service;
 extern crate substrate_transaction_pool as transaction_pool;
 extern crate tokio;
-#[cfg(test)]
-extern crate substrate_service_test as service_test;
 
-#[macro_use]
-extern crate hex_literal;
 #[cfg(all(test, feature="rhd"))]
 extern crate rhododendron as rhd;
 extern crate sr_primitives as runtime_primitives;
@@ -203,16 +199,9 @@ pub fn new_client(config: Configuration)
 
 #[cfg(test)]
 mod tests {
-	use {service_test, Factory, chain_spec};
-
-	#[test]
-	fn test_connectivity() {
-		service_test::connectivity::<Factory>(chain_spec::integration_test_config());
-	}
-
-	#[test]
 	#[cfg(feature = "rhd")]
 	fn test_sync() {
+		use {service_test, Factory};
 		use client::{ImportBlock, BlockOrigin};
 
 		let alice: Arc<ed25519::Pair> = Arc::new(Keyring::Alice.into());
