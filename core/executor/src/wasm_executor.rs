@@ -248,9 +248,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
-				format!("{}", HexDisplay::from(b))
+				&format!("{}", HexDisplay::from(b))
 			} else {
-				"<empty>".to_owned()
+				"<empty>"
 			},
 			HexDisplay::from(&key)
 		);
@@ -281,9 +281,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
-				format!("{}", HexDisplay::from(b))
+				&format!("{}", HexDisplay::from(b))
 			} else {
-				"<empty>".to_owned()
+				"<empty>"
 			},
 			HexDisplay::from(&key)
 		);
@@ -311,9 +311,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
-				format!("{}", HexDisplay::from(b))
+				&format!("{}", HexDisplay::from(b))
 			} else {
-				"<empty>".to_owned()
+				"<empty>"
 			},
 			HexDisplay::from(&key)
 		);
@@ -412,9 +412,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 			let hashed_key = twox_128(&key);
 			debug_trace!(target: "xxhash", "XXhash: {} -> {}",
 				if let Ok(_skey) = ::std::str::from_utf8(&key) {
-					_skey.to_owned()
+					_skey
 				} else {
-					format!("{}", HexDisplay::from(&key))
+					&format!("{}", HexDisplay::from(&key))
 				},
 				HexDisplay::from(&hashed_key)
 			);
