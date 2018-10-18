@@ -103,6 +103,10 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 		self.inner.get(key).map(|x| x.to_vec())
 	}
 
+	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> Option<Vec<u8>> {
+		None
+	}
+
 	fn place_storage(&mut self, key: Vec<u8>, maybe_value: Option<Vec<u8>>) {
 		self.changes.set_storage(key.clone(), maybe_value.clone());
 		match maybe_value {
@@ -110,6 +114,12 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 			None => { self.inner.remove(&key); }
 		}
 	}
+
+	fn place_child_storage(&mut self, _storage_key: Vec<u8>, _key: Vec<u8>, _value: Option<Vec<u8>>) -> bool {
+		false
+	}
+
+	fn kill_child_storage(&mut self, _storage_key: &[u8]) { }
 
 	fn clear_prefix(&mut self, prefix: &[u8]) {
 		self.changes.clear_prefix(prefix);
@@ -120,6 +130,10 @@ impl<H: Hasher> Externalities<H> for TestExternalities<H> where H::Out: Ord + He
 
 	fn storage_root(&mut self) -> H::Out {
 		trie_root::<H, _, _, _>(self.inner.clone())
+	}
+
+	fn child_storage_root(&mut self, _storage_key: &[u8]) -> Option<Vec<u8>> {
+		None
 	}
 
 	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> {

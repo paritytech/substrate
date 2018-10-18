@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
-use trie::{TrieDB, Trie, Recorder, MemoryDB, TrieError};
+use trie::{Recorder, MemoryDB, TrieError, default_child_trie_root, read_trie_value_with, read_child_trie_value_with, record_all_keys};
 use trie_backend::TrieBackend;
 use trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use {Error, ExecutionError, Backend};
@@ -47,10 +47,21 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let map_e = |e| format!("Trie lookup error: {}", e);
 
-		TrieDB::<H>::new(&eph, self.backend.root()).map_err(map_e)?
-			.get_with(key, &mut *self.proof_recorder)
-			.map(|x| x.map(|val| val.to_vec()))
-			.map_err(map_e)
+		read_trie_value_with(&eph, self.backend.root(), key, &mut *self.proof_recorder).map_err(map_e)
+	}
+
+	pub fn child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, String> {
+		let root = self.storage(storage_key)?.unwrap_or(default_child_trie_root::<H>(storage_key));
+
+		let mut read_overlay = MemoryDB::default();
+		let eph = Ephemeral::new(
+			self.backend.backend_storage(),
+			&mut read_overlay,
+		);
+
+		let map_e = |e| format!("Trie lookup error: {}", e);
+
+		read_child_trie_value_with(storage_key, &eph, &root, key, &mut *self.proof_recorder).map_err(map_e)
 	}
 
 	pub fn record_all_keys(&mut self) {
@@ -62,20 +73,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
 			let root = self.backend.root();
-			let trie = TrieDB::<H>::new(&eph, root)?;
-			let iter = trie.iter()?;
-
-			for x in iter {
-				let (key, _) = x?;
-
-				// there's currently no API like iter_with()
-				// => use iter to enumerate all keys AND lookup each
-				// key using get_with
-				trie.get_with(&key, &mut *self.proof_recorder)
-					.map(|x| x.map(|val| val.to_vec()))?;
-			}
-
-			Ok(())
+			record_all_keys::<H>(&eph, root, &mut *self.proof_recorder)
 		};
 
 		if let Err(e) = iter() {
@@ -128,6 +126,18 @@ impl<S, H> Backend<H> for ProvingBackend<S, H>
 		}.storage(key)
 	}
 
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		ProvingBackendEssence {
+			backend: self.backend.essence(),
+			proof_recorder: &mut *self.proof_recorder.try_borrow_mut()
+				.expect("only fails when already borrowed; child_storage() is non-reentrant; qed"),
+		}.child_storage(storage_key, key)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+		self.backend.for_keys_in_child_storage(storage_key, f)
+	}
+
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.backend.for_keys_with_prefix(prefix, f)
 	}
@@ -140,6 +150,14 @@ impl<S, H> Backend<H> for ProvingBackend<S, H>
 		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
 	{
 		self.backend.storage_root(delta)
+	}
+
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord
+	{
+		self.backend.child_storage_root(storage_key, delta)
 	}
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {
@@ -211,7 +229,7 @@ mod tests {
 
 	#[test]
 	fn proof_recorded_and_checked() {
-		let contents = (0..64).map(|i| (vec![i], Some(vec![i]))).collect::<Vec<_>>();
+		let contents = (0..64).map(|i| (None, vec![i], Some(vec![i]))).collect::<Vec<_>>();
 		let in_memory = InMemory::<Blake2Hasher>::default();
 		let in_memory = in_memory.update(contents);
 		let in_memory_root = in_memory.storage_root(::std::iter::empty()).0;
