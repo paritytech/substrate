@@ -19,7 +19,6 @@ use custom_proto::{RegisteredProtocols, RegisteredProtocolSubstream};
 use futures::{prelude::*, task};
 use libp2p::core::{ConnectionUpgrade, Endpoint, PeerId, PublicKey, upgrade};
 use libp2p::core::nodes::handled_node::{NodeHandler, NodeHandlerEndpoint, NodeHandlerEvent};
-use libp2p::core::nodes::swarm::ConnectedPoint;
 use libp2p::kad::{KadConnecConfig, KadFindNodeRespond, KadIncomingRequest, KadConnecController};
 use libp2p::{identify, ping};
 use parking_lot::Mutex;
@@ -53,9 +52,6 @@ pub struct SubstrateNodeHandler<TSubstream> {
 	registered_custom: Arc<RegisteredProtocols>,
 	/// Substreams open for "custom" protocols (eg. dot).
 	custom_protocols_substreams: Vec<RegisteredProtocolSubstream<TSubstream>>,
-
-	/// Address of the node.
-	address: Multiaddr,
 
 	/// Substream open for Kademlia, if any.
 	kademlia_substream: Option<(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>)>,
@@ -260,20 +256,14 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
 	/// Creates a new node handler.
 	#[inline]
-	pub fn new(registered_custom: Arc<RegisteredProtocols>, endpoint: ConnectedPoint) -> Self {
+	pub fn new(registered_custom: Arc<RegisteredProtocols>) -> Self {
 		let registered_custom_len = registered_custom.len();
 		let queued_dial_upgrades = registered_custom.0
 			.iter()
 			.map(|proto| UpgradePurpose::Custom(proto.id()))
 			.collect();
 
-		let address = match endpoint {
-			ConnectedPoint::Dialer { address } => address.clone(),
-			ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr.clone(),
-		};
-
 		SubstrateNodeHandler {
-			address,
 			custom_protocols_substreams: Vec::with_capacity(registered_custom_len),
 			kademlia_substream: None,
 			need_report_kad_open: false,
@@ -294,18 +284,19 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	}
 }
 
-impl<TSubstream> NodeHandler<TSubstream> for SubstrateNodeHandler<TSubstream>
+impl<TSubstream> NodeHandler for SubstrateNodeHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
 	type InEvent = SubstrateInEvent;
 	type OutEvent = SubstrateOutEvent<TSubstream>;
 	type OutboundOpenInfo = ();
+	type Substream = TSubstream;
 
 	fn inject_substream(&mut self, substream: TSubstream, endpoint: NodeHandlerEndpoint<Self::OutboundOpenInfo>) {
 		// For listeners, propose all the possible upgrades.
 		if endpoint == NodeHandlerEndpoint::Listener {
 			let listener_upgrade = listener_upgrade!(self);
-			let upgrade = upgrade::apply(substream, listener_upgrade, Endpoint::Listener, &self.address);
+			let upgrade = upgrade::apply(substream, listener_upgrade, Endpoint::Listener);
 			self.upgrades_in_progress_listen.push(Box::new(upgrade) as Box<_>);
 			// Since we pushed to `upgrades_in_progress_listen`, we have to notify the task.
 			if let Some(task) = self.to_notify.take() {
@@ -338,26 +329,22 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					return;
 				};
 
-				// TODO: shouldn't be &self.address ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Kad => {
 				let wanted = upgrade::map(KadConnecConfig::new(), move |(c, s)| FinalUpgrade::Kad(c, s));
-				// TODO: shouldn't be &self.address ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Identify => {
 				let wanted = upgrade::map(identify::IdentifyProtocolConfig, move |i| FinalUpgrade::from(i));
-				// TODO: shouldn't be &self.address ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Ping => {
 				let wanted = upgrade::map(ping::Ping::default(), move |p| FinalUpgrade::from(p));
-				// TODO: shouldn't be &self.address ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 		};
@@ -733,6 +720,9 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					},
 					// We don't care about Kademlia pings, they are unused.
 					Ok(Async::Ready(Some(KadIncomingRequest::PingPong))) => {},
+					// Other Kademlia messages are unimplemented.
+					Ok(Async::Ready(Some(KadIncomingRequest::GetProviders { .. }))) => {},
+					Ok(Async::Ready(Some(KadIncomingRequest::AddProvider { .. }))) => {},
 					Ok(Async::NotReady) => {
 						self.kademlia_substream = Some((controller, stream));
 						break;
