@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use hash_db::HashDB;
-use trie::{Recorder, MemoryDB, TrieError, default_child_trie_root, read_trie_value_with, read_child_trie_value_with};
+use trie::{Recorder, MemoryDB, TrieError, default_child_trie_root, read_trie_value_with, read_child_trie_value_with, record_all_keys};
 use trie_backend::TrieBackend;
 use trie_backend_essence::{Ephemeral, TrieBackendEssence, TrieBackendStorage};
 use {Error, ExecutionError, Backend};
@@ -73,20 +73,7 @@ impl<'a, S, H> ProvingBackendEssence<'a, S, H>
 
 		let mut iter = move || -> Result<(), Box<TrieError<H::Out>>> {
 			let root = self.backend.root();
-			let trie = TrieDB::<H>::new(&eph, root)?;
-			let iter = trie.iter()?;
-
-			for x in iter {
-				let (key, _) = x?;
-
-				// there's currently no API like iter_with()
-				// => use iter to enumerate all keys AND lookup each
-				// key using get_with
-				trie.get_with(&key, &mut *self.proof_recorder)
-					.map(|x| x.map(|val| val.to_vec()))?;
-			}
-
-			Ok(())
+			record_all_keys::<H>(&eph, root, &mut *self.proof_recorder)
 		};
 
 		if let Err(e) = iter() {

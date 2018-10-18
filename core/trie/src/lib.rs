@@ -188,6 +188,24 @@ pub fn for_keys_in_child_trie<H: Hasher, F: FnMut(&[u8])>(_storage_key: &[u8], d
 	Ok(())
 }
 
+/// Record all keys for a given root.
+pub fn record_all_keys<H: Hasher>(db: &HashDB<H>, root: &H::Out, recorder: &mut Recorder<H::Out>) -> Result<(), Box<TrieError<H::Out>>> {
+	let trie = TrieDB::<H>::new(db, root)?;
+	let iter = trie.iter()?;
+
+	for x in iter {
+		let (key, _) = x?;
+
+		// there's currently no API like iter_with()
+		// => use iter to enumerate all keys AND lookup each
+		// key using get_with
+		trie.get_with(&key, &mut *recorder)
+			.map(|x| x.map(|val| val.to_vec()))?;
+	}
+
+	Ok(())
+}
+
 /// Read a value from the child trie.
 pub fn read_child_trie_value<H: Hasher>(_storage_key: &[u8], db: &HashDB<H>, root_slice: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Box<TrieError<H::Out>>> {
 	let mut root = H::Out::default();
