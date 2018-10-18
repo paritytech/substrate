@@ -161,7 +161,7 @@ where TSubstream: AsyncRead + AsyncWrite,
 		// Note that `inner` is wrapped in a `Fuse`, therefore we can poll it forever.
 		loop {
 			match self.inner.poll()? {
-				Async::Ready(Some(mut data)) =>
+				Async::Ready(Some(data)) =>
 					return Ok(Async::Ready(Some(data.freeze()))),
 				Async::Ready(None) =>
 					if !self.requires_poll_complete && self.send_queue.is_empty() {
