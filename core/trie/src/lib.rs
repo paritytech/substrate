@@ -199,8 +199,7 @@ pub fn record_all_keys<H: Hasher>(db: &HashDB<H>, root: &H::Out, recorder: &mut 
 		// there's currently no API like iter_with()
 		// => use iter to enumerate all keys AND lookup each
 		// key using get_with
-		trie.get_with(&key, &mut *recorder)
-			.map(|x| x.map(|val| val.to_vec()))?;
+		trie.get_with(&key, &mut *recorder)?;
 	}
 
 	Ok(())
