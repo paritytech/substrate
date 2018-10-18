@@ -88,6 +88,20 @@ fn sync_after_fork_works() {
 }
 
 #[test]
+fn own_blocks_are_announced() {
+	::env_logger::init().ok();
+	let mut net = TestNet::new(3);
+	net.sync(); // connect'em
+	net.peer(0).generate_blocks(1, client::BlockOrigin::Own, |_| ());
+	net.sync();
+	assert_eq!(net.peer(0).client.backend().blockchain().info().unwrap().best_number, 1);
+	assert_eq!(net.peer(1).client.backend().blockchain().info().unwrap().best_number, 1);
+	let peer0_chain = net.peer(0).client.backend().blockchain().clone();
+	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer0_chain));
+	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer0_chain));
+}
+
+#[test]
 fn blocks_are_not_announced_by_light_nodes() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(0);

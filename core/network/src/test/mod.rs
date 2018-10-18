@@ -218,7 +218,7 @@ impl Peer {
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&self, count: usize, mut edit_block: F)
+	pub fn generate_blocks<F>(&self, count: usize, origin: client::BlockOrigin, mut edit_block: F)
 	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>)
 	{
 		for _ in 0 .. count {
@@ -226,7 +226,7 @@ impl Peer {
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
 			trace!("Generating {}, (#{}, parent={})", block.header.hash(), block.header.number, block.header.parent_hash);
-			self.client.justify_and_import(client::BlockOrigin::File, block).unwrap();
+			self.client.justify_and_import(origin, block).unwrap();
 		}
 	}
 
@@ -234,7 +234,7 @@ impl Peer {
 	pub fn push_blocks(&self, count: usize, with_tx: bool) {
 		let mut nonce = 0;
 		if with_tx {
-			self.generate_blocks(count, |builder| {
+			self.generate_blocks(count, client::BlockOrigin::File, |builder| {
 				let transfer = Transfer {
 					from: Keyring::Alice.to_raw_public().into(),
 					to: Keyring::Alice.to_raw_public().into(),
@@ -246,7 +246,7 @@ impl Peer {
 				nonce = nonce + 1;
 			});
 		} else {
-			self.generate_blocks(count, |_| ());
+			self.generate_blocks(count, client::BlockOrigin::File, |_| ());
 		}
 	}
 
