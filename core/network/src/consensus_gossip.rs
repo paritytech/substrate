@@ -310,11 +310,11 @@ impl<Block: BlockT> Specialization<Block> for ConsensusGossip<Block> where
 
 #[cfg(test)]
 mod tests {
-	use runtime_primitives::testing::{H256, Block as RawBlock};
+	use runtime_primitives::testing::{H256, Block as RawBlock, ExtrinsicWrapper};
 	use std::time::Instant;
 	use super::*;
 
-	type Block = RawBlock<u64>;
+	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	#[test]
 	fn collects_garbage() {

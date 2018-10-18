@@ -47,12 +47,16 @@
 #[macro_export]
 macro_rules! construct_runtime {
 	(
-		pub enum $runtime:ident with Log ($log_internal:ident: DigestItem<$( $log_genarg:ty ),+>) {
+		pub enum $runtime:ident with Log ($log_internal:ident: DigestItem<$( $log_genarg:ty ),+>)
+			where Block = $block:ident, UncheckedExtrinsic = $unchecked:ident
+		{
 			$( $rest:tt )*
 		}
 	) => {
 		construct_runtime!(
 			$runtime;
+			$block;
+			$unchecked;
 			$log_internal < $( $log_genarg ),* >;
 			;
 			$( $rest )*
@@ -60,6 +64,8 @@ macro_rules! construct_runtime {
 	};
 	(
 		$runtime:ident;
+		$block:ident;
+		$unchecked:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$expanded_name:ident: $expanded_module:ident::{
@@ -85,6 +91,8 @@ macro_rules! construct_runtime {
 	) => {
 		construct_runtime!(
 			$runtime;
+			$block;
+			$unchecked;
 			$log_internal < $( $log_genarg ),* >;
 			$(
 				$expanded_name: $expanded_module::{
@@ -110,6 +118,8 @@ macro_rules! construct_runtime {
 	};
 	(
 		$runtime:ident;
+		$block:ident;
+		$unchecked:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$expanded_name:ident: $expanded_module:ident::{
@@ -142,6 +152,8 @@ macro_rules! construct_runtime {
 	) => {
 		construct_runtime!(
 			$runtime;
+			$block;
+			$unchecked;
 			$log_internal < $( $log_genarg ),* >;
 			$(
 				$expanded_name: $expanded_module::{
@@ -173,6 +185,8 @@ macro_rules! construct_runtime {
 	};
 	(
 		$runtime:ident;
+		$block:ident;
+		$unchecked:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$expanded_name:ident: $expanded_module:ident::{
@@ -204,6 +218,8 @@ macro_rules! construct_runtime {
 	) => {
 		construct_runtime!(
 			$runtime;
+			$block;
+			$unchecked;
 			$log_internal < $( $log_genarg ),* >;
 			$(
 				$expanded_name: $expanded_module::{
@@ -234,6 +250,8 @@ macro_rules! construct_runtime {
 	};
 	(
 		$runtime:ident;
+		$block:ident;
+		$unchecked:ident;
 		$log_internal:ident <$( $log_genarg:ty ),+>;
 		$(
 			$name:ident: $module:ident::{
@@ -245,6 +263,13 @@ macro_rules! construct_runtime {
 			}
 		),*;
 	) => {
+		mashup! {
+			$(
+				substrate_generate_ident_name["config-ident" $name] = $name Config;
+				substrate_generate_ident_name["inherent-error-ident" $name] = $name InherentError;
+			)*
+		}
+
 		#[derive(Clone, Copy, PartialEq, Eq)]
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		pub struct $runtime;
@@ -293,6 +318,15 @@ macro_rules! construct_runtime {
 		);
 		__decl_outer_config!(
 			$runtime;
+			;
+			$(
+				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
+			),*;
+		);
+		__decl_outer_inherent!(
+			$runtime;
+			$block;
+			$unchecked;
 			;
 			$(
 				$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
@@ -980,17 +1014,104 @@ macro_rules! __decl_outer_config {
 		$( $parsed_modules:ident :: $parsed_name:ident ),*;
 		;
 	) => {
-		mashup! {
-			$(
-				substrate_generate_config_name["config-name" $parsed_name] = $parsed_name Config;
-			)*
-		}
-
-		substrate_generate_config_name! {
+		substrate_generate_ident_name! {
 			impl_outer_config!(
 				pub struct GenesisConfig for $runtime {
 					$(
-						"config-name" $parsed_name => $parsed_modules,
+						"config-ident" $parsed_name => $parsed_modules,
+					)*
+				}
+			);
+		}
+	};
+}
+
+#[macro_export]
+#[doc(hidden)]
+macro_rules! __decl_outer_inherent {
+	(
+		$runtime:ident;
+		$block:ident;
+		$unchecked:ident;
+		$( $parsed_modules:ident :: $parsed_name:ident ),*;
+		$name:ident: $module:ident::{
+			Inherent $(, $modules:ident $( <$modules_generic:ident> )* )*
+		}
+		$(, $rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
+		})*;
+	) => {
+		__decl_outer_inherent!(
+			$runtime;
+			$block;
+			$unchecked;
+			$( $parsed_modules :: $parsed_name, )* $module::$name;
+			$(
+				$rest_name: $rest_module::{
+					$( $rest_modules $( <$rest_modules_generic> )* ),*
+				}
+			),*;
+		);
+	};
+	(
+		$runtime:ident;
+		$block:ident;
+		$unchecked:ident;
+		$( $parsed_modules:ident :: $parsed_name:ident ),*;
+		$name:ident: $module:ident::{
+			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
+		}
+		$(, $rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
+		})*;
+	) => {
+		__decl_outer_inherent!(
+			$runtime;
+			$block;
+			$unchecked;
+			$( $parsed_modules :: $parsed_name ),*;
+			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
+			$(
+				, $rest_name: $rest_module::{
+					$( $rest_modules $( <$rest_modules_generic> )* ),*
+				}
+			)*;
+		);
+	};
+	(
+		$runtime:ident;
+		$block:ident;
+		$unchecked:ident;
+		$( $parsed_modules:ident :: $parsed_name:ident ),*;
+		$name:ident: $module:ident::{}
+		$(, $rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
+		})*;
+	) => {
+		__decl_outer_inherent!(
+			$runtime;
+			$block;
+			$unchecked;
+			$( $parsed_modules :: $parsed_name ),*;
+			$(
+				$rest_name: $rest_module::{
+					$( $rest_modules $( <$rest_modules_generic> )* ),*
+				}
+			),*;
+		);
+	};
+	(
+		$runtime:ident;
+		$block:ident;
+		$unchecked:ident;
+		$( $parsed_modules:ident :: $parsed_name:ident ),*;
+		;
+	) => {
+		substrate_generate_ident_name! {
+			impl_outer_inherent!(
+				pub struct InherentData where Block = $block, UncheckedExtrinsic = $unchecked {
+					$(
+						$parsed_modules: $parsed_name export Error as "inherent-error-ident" $parsed_name,
 					)*
 				}
 			);
