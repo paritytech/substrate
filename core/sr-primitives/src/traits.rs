@@ -534,10 +534,14 @@ pub trait DigestItem: Codec + Member {
 	type AuthorityId: Member;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
-	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
+	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+		None
+	}
 
 	/// Returns Some if the entry is the `ChangesTrieRoot` entry.
-	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
+	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
+		None
+	}
 }
 
 /// Something that provides an inherent for a runtime.
