@@ -335,34 +335,17 @@ macro_rules! impl_outer_log {
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
-		pub struct $name($internal::InternalLog);
+		pub struct $name($internal);
 
-		#[allow(non_snake_case)]
-		mod $internal {
-			use super::*;
-
-			/// Type alias for corresponding generic::DigestItem.
-			pub type GenericDigestItem = $crate::generic::DigestItem<$($genarg),*>;
-
-			/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
-			/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
-			#[derive(Clone, PartialEq, Eq, Encode, Decode)]
-			#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
-			$(#[$attr])*
-			#[allow(non_camel_case_types)]
-			pub enum InternalLog {
-				$(
-					$module($module::Log<$trait>),
-				)*
-			}
-
+		/// All possible log entries for the `$trait` runtime. `Encode`/`Decode` implementations
+		/// are auto-generated => it is not binary-compatible with `generic::DigestItem`.
+		#[derive(Clone, PartialEq, Eq, Encode, Decode)]
+		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		$(#[$attr])*
+		#[allow(non_camel_case_types)]
+		pub enum InternalLog {
 			$(
-				impl From<$module::Log<$trait>> for InternalLog {
-					/// Converts single module log item into `$internal`.
-					fn from(x: $module::Log<$trait>) -> Self {
-						InternalLog::$module(x)
-					}
-				}
+				$module($module::Log<$trait>),
 			)*
 		}
 
@@ -374,7 +357,7 @@ macro_rules! impl_outer_log {
 			fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
 				match self.0 {
 					$($(
-					$internal::InternalLog::$module($module::RawLog::$sitem(ref v)) =>
+					$internal::$module($module::RawLog::$sitem(ref v)) =>
 						Some($crate::generic::DigestItemRef::$sitem(v)),
 					)*)*
 					_ => None,
@@ -383,8 +366,8 @@ macro_rules! impl_outer_log {
 		}
 
 		impl $crate::traits::DigestItem for $name {
-			type Hash = <$internal::GenericDigestItem as $crate::traits::DigestItem>::Hash;
-			type AuthorityId = <$internal::GenericDigestItem as $crate::traits::DigestItem>::AuthorityId;
+			type Hash = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::Hash;
+			type AuthorityId = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::AuthorityId;
 
 			fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
 				self.dref().and_then(|dref| dref.as_authorities_change())
@@ -406,7 +389,7 @@ macro_rules! impl_outer_log {
 				match gen {
 					$($(
 					$crate::generic::DigestItem::$sitem(value) =>
-						$name($internal::InternalLog::$module($module::RawLog::$sitem(value))),
+						$name($internal::$module($module::RawLog::$sitem(value))),
 					)*)*
 					_ => gen.as_other()
 						.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
@@ -444,6 +427,13 @@ macro_rules! impl_outer_log {
 				/// Converts single module log item into `$name`.
 				fn from(x: $module::Log<$trait>) -> Self {
 					$name(x.into())
+				}
+			}
+
+			impl From<$module::Log<$trait>> for InternalLog {
+				/// Converts single module log item into `$internal`.
+				fn from(x: $module::Log<$trait>) -> Self {
+					InternalLog::$module(x)
 				}
 			}
 		)*
