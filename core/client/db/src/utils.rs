@@ -110,11 +110,11 @@ pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: 
 /// block lookup key is the DB-key header, block and justification are stored under.
 /// looks up lookup key by hash from DB as necessary.
 pub fn block_id_to_lookup_key<Block>(
-    db: &KeyValueDB,
-    hash_lookup_col: Option<u32>,
-    id: BlockId<Block>
+	db: &KeyValueDB,
+	hash_lookup_col: Option<u32>,
+	id: BlockId<Block>
 ) -> Result<Option<Vec<u8>>, client::error::Error> where
-    Block: BlockT,
+	Block: BlockT,
 {
 	match id {
 		// numbers are solely looked up in canonical chain
