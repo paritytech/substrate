@@ -47,7 +47,7 @@ use service::{
 	FactoryExtrinsic,
 };
 use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
-use client::{BlockOrigin, JustifiedHeader};
+use client::ImportBlock;
 use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
 
@@ -105,8 +105,8 @@ fn node_config<F: ServiceFactory> (
 		public_addresses: vec![],
 		boot_nodes: vec![],
 		use_secret: Some(blake2_256(node_private_key_string(index).as_bytes())),
-		min_peers: 50,
-		max_peers: 500,
+		in_peers: 50,
+		out_peers: 450,
 		reserved_nodes: vec![],
 		non_reserved_mode: NonReservedPeerMode::Accept,
 		client_version: "network/test/0.1".to_owned(),
@@ -216,7 +216,7 @@ pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 pub fn sync<F, B, E>(spec: FactoryChainSpec<F>, block_factory: B, extrinsic_factory: E)
 where
 	F: ServiceFactory,
-	B: Fn(&F::FullService) -> (JustifiedHeader<F::Block>, Option<Vec<FactoryExtrinsic<F>>>),
+	B: Fn(&F::FullService) -> ImportBlock<F::Block>,
 	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
 {
 	const NUM_NODES: u32 = 10;
@@ -230,8 +230,8 @@ where
 			if i % 128 == 0 {
 				info!("Generating #{}", i);
 			}
-			let (header, body) = block_factory(&first_service);
-			first_service.client().import_block(BlockOrigin::File, header, body, true).expect("Error importing test block");
+			let import_data = block_factory(&first_service);
+			first_service.client().import_block(import_data, None).expect("Error importing test block");
 		}
 		first_service.network().node_id().unwrap()
 	};
@@ -247,7 +247,7 @@ where
 	let best_block = BlockId::number(first_service.client().info().unwrap().chain.best_number);
 	first_service.transaction_pool().submit_one(&best_block, extrinsic_factory(&first_service)).unwrap();
 	network.run_until_all_full(|_index, service|
-		service.transaction_pool().all().len() == 1
+		service.transaction_pool().ready().count() == 1
 	);
 }
 

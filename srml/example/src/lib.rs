@@ -109,8 +109,6 @@ decl_module! {
 		/// world.
 		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result;
 
-		fn accumulate_foo(origin, increase_by: T::Balance) -> Result;
-
 		/// A privileged call; in this case it resets our dummy value to something new.
 		fn set_dummy(new_dummy: T::Balance) -> Result;
 	}

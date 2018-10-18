@@ -142,6 +142,15 @@ impl PruningMode {
 			max_mem: None,
 		})
 	}
+
+	/// Is this an archive (either ArchiveAll or ArchiveCanonical) pruning mode?
+	pub fn is_archive(&self) -> bool {
+		match *self {
+			PruningMode::ArchiveAll | PruningMode::ArchiveCanonical => true,
+			PruningMode::Constrained(_) => false
+		}
+	}
+
 }
 
 impl Default for PruningMode {

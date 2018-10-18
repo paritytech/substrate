@@ -1,5 +1,5 @@
 
-= Substrate BFT
+= transaction-graph
 
 .Summary
 [source, toml]

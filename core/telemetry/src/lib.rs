@@ -126,6 +126,8 @@ impl TelemetryWriter {
 				trace!(target: "telemetry", "Connecting to Telemetry...");
 
 				let _ = ws::connect(config.url.as_str(), |out| Connection::new(out, &*out_sync, &config));
+
+				thread::sleep(time::Duration::from_millis(5000));
 			}
 		});
 

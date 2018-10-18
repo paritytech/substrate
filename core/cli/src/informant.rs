@@ -58,7 +58,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				(SyncState::Downloading, Some(n)) => (format!("Syncing{}", speed()), format!(", target=#{}", n)),
 			};
 			last_number = Some(best_number);
-			let txpool_status = txpool.light_status();
+			let txpool_status = txpool.status();
 			info!(
 				target: "substrate",
 				"{}{} ({} peers), best: #{} ({})",
@@ -81,7 +81,7 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 				"peers" => num_peers,
 				"height" => best_number,
 				"best" => ?hash,
-				"txcount" => txpool_status.transaction_count,
+				"txcount" => txpool_status.ready,
 				"cpu" => cpu_usage,
 				"memory" => memory
 			);
@@ -100,8 +100,8 @@ pub fn start<C>(service: &Service<C>, exit: ::exit_future::Exit, handle: TaskExe
 
 	let txpool = service.transaction_pool();
 	let display_txpool_import = txpool.import_notification_stream().for_each(move |_| {
-		let status = txpool.light_status();
-		telemetry!("txpool.import"; "mem_usage" => status.mem_usage, "count" => status.transaction_count, "sender" => status.senders);
+		let status = txpool.status();
+		telemetry!("txpool.import"; "ready" => status.ready, "future" => status.future);
 		Ok(())
 	});
 

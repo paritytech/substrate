@@ -22,10 +22,12 @@ extern crate sr_std as rstd;
 extern crate sr_primitives as primitives;
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
+#[macro_use]
+extern crate parity_codec_derive;
 extern crate sr_version as runtime_version;
 
 #[doc(hidden)]
-pub use primitives::{traits::Block as BlockT, generic::BlockId, ApplyResult};
+pub use primitives::{traits::Block as BlockT, generic::BlockId, transaction_validity::TransactionValidity, ApplyResult};
 use runtime_version::RuntimeVersion;
 use rstd::vec::Vec;
 #[doc(hidden)]
@@ -405,7 +407,7 @@ macro_rules! decl_apis {
 			pub trait $name:ident < $( $generic_param:ident $( : $generic_bound:ident )*, )* > {
 				$(
 					$( #[$fn_attr:meta] )*
-					fn $fn_name:ident($( $param_name:ident : $param_type:ty )*) $( -> $return_ty:ty)*;
+					fn $fn_name:ident($( $param_name:ident : $param_type:ty ),*) $( -> $return_ty:ty)*;
 				)*
 			}
 		)*
@@ -425,6 +427,17 @@ macro_rules! decl_apis {
 			)*
 		}
 	};
+}
+
+//TODO: Move into runtime!
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Debug, Decode))]
+pub enum BlockBuilderError {
+	#[cfg(not(feature = "std"))]
+	Generic(&'static str),
+	#[cfg(feature = "std")]
+	Generic(String),
+	TimestampInFuture(u64),
 }
 
 decl_apis! {
@@ -468,6 +481,8 @@ decl_apis! {
 		fn finalise_block() ExtraClientSide(changes: &mut Self::OverlayedChanges) -> <Block as BlockT>::Header;
 		/// Generate inherent extrinsics.
 		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
+		/// Check that the inherents are valid.
+		fn check_inherents<InherentData>(block: Block, data: InherentData) -> Result<(), BlockBuilderError>;
 		/// Generate a random seed.
 		fn random_seed() -> <Block as BlockT>::Hash;
 	}
@@ -485,7 +500,7 @@ decl_apis! {
 /// #[macro_use]
 /// extern crate sr_api as runtime_api;
 ///
-/// use runtime_api::runtime::{Core, OldTxQueue};
+/// use runtime_api::runtime::{Core, TaggedTransactionQueue};
 ///
 /// impl_apis! {
 ///     impl Core<Block, AccountId> for Runtime {
@@ -498,13 +513,10 @@ decl_apis! {
 ///         }
 ///     }
 ///
-///     impl OldTxQueue<AccountId, Index, Address, LookupId> for Runtime {
-///         fn account_nonce(account: AccountId) -> Index {
-///             0
-///         }
-///         fn lookup_address(address: Address) -> Option<LookupId> {
-///             None
-///         }
+///     impl TaggedTransactionQueue<Block> for Runtime {
+///			fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
+///				unimplemented!()
+///			}
 ///     }
 /// }
 ///
@@ -556,7 +568,7 @@ macro_rules! impl_apis {
 		}
 		impl_apis! {
 			$runtime;
-			$( $fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed )* ); )*
+			$( $fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed ),* ); )*
 			$( $fn_name ( $( $arg_name: $arg_ty ),* ); )*;
 			$( $rest )*
 		}
@@ -604,7 +616,7 @@ macro_rules! impl_apis {
 						$fn_name;
 						$( $arg_name : $arg_ty ),*;
 						input;
-					}};
+					} };
 					let res = output.as_ptr() as u64 + ((output.len() as u64) << 32);
 
 					// Leak the output vector to avoid it being freed.

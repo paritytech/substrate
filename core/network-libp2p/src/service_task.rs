@@ -150,8 +150,8 @@ where TProtos: IntoIterator<Item = RegisteredProtocol> {
 
 	Ok(Service {
 		swarm,
-		max_incoming_connections: config.max_peers.saturating_sub(config.min_peers) as usize,
-		max_outgoing_connections: config.min_peers as usize,
+		max_incoming_connections: config.in_peers as usize,
+		max_outgoing_connections: config.out_peers as usize,
 		topology,
 		nodes_addresses: Default::default(),
 		disabled_peers: Default::default(),

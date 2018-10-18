@@ -22,7 +22,7 @@ use codec::Codec;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 use generic::DigestItem as GenDigestItem;
 
-pub use substrate_primitives::H256;
+pub use substrate_primitives::{H256, AuthorityId};
 
 pub type DigestItem = GenDigestItem<H256, u64>;
 

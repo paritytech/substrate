@@ -22,9 +22,9 @@ use futures::{Future, IntoFuture};
 use parking_lot::RwLock;
 
 use primitives::AuthorityId;
-use runtime_primitives::{bft::Justification, generic::BlockId};
-use runtime_primitives::traits::{Block as BlockT, NumberFor};
+use runtime_primitives::{generic::BlockId, Justification};
 use state_machine::{Backend as StateBackend, InMemoryChangesTrieStorage, TrieBackend};
+use runtime_primitives::traits::{Block as BlockT, NumberFor};
 
 use backend::{Backend as ClientBackend, BlockImportOperation, RemoteBackend, NewBlockState};
 use blockchain::HeaderBackend as BlockchainHeaderBackend;
@@ -167,7 +167,7 @@ where
 		&mut self,
 		header: Block::Header,
 		_body: Option<Vec<Block::Extrinsic>>,
-		_justification: Option<Justification<Block::Hash>>,
+		_justification: Option<Justification>,
 		state: NewBlockState,
 	) -> ClientResult<()> {
 		self.leaf_state = state;

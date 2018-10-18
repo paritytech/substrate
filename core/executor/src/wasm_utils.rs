@@ -107,7 +107,7 @@ macro_rules! unmarshall_args {
 
 /// Since we can't specify the type of closure directly at binding site:
 ///
-/// ```rust,ignore
+/// ```nocompile
 /// let f: FnOnce() -> Result<<u32 as ConvertibleToWasm>::NativeType, _> = || { /* ... */ };
 /// ```
 ///

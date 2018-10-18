@@ -51,6 +51,7 @@ extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 extern crate parity_codec as codec;
 
+use codec::HasCompact;
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_primitives::traits::{As, OnFinalise, SimpleArithmetic, Zero};
@@ -68,7 +69,7 @@ pub trait Trait: consensus::Trait + system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn set(origin, now: T::Moment) -> Result;
+		fn set(origin, now: <T::Moment as HasCompact>::Type) -> Result;
 	}
 }
 
@@ -102,8 +103,10 @@ impl<T: Trait> Module<T> {
 	/// if this call hasn't been invoked by that time.
 	///
 	/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-	fn set(origin: T::Origin, now: T::Moment) -> Result {
+	fn set(origin: T::Origin, now: <T::Moment as HasCompact>::Type) -> Result {
 		ensure_inherent(origin)?;
+		let now = now.into();
+		
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
 			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
@@ -179,7 +182,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
+			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
 			assert_eq!(Timestamp::now(), 69);
 		});
 	}
@@ -192,8 +195,8 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			assert_ok!(Timestamp::dispatch(Call::set(69), Origin::INHERENT));
-			let _ = Timestamp::dispatch(Call::set(70), Origin::INHERENT);
+			assert_ok!(Timestamp::dispatch(Call::set(69.into()), Origin::INHERENT));
+			let _ = Timestamp::dispatch(Call::set(70.into()), Origin::INHERENT);
 		});
 	}
 
@@ -205,7 +208,7 @@ mod tests {
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
-			let _ = Timestamp::dispatch(Call::set(46), Origin::INHERENT);
+			let _ = Timestamp::dispatch(Call::set(46.into()), Origin::INHERENT);
 		});
 	}
 }

@@ -18,6 +18,7 @@
 
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
+use codec::HasCompact;
 use primitives::traits::{OnFinalise, Hash, As};
 use runtime_io::print;
 use srml_support::dispatch::Result;
@@ -36,8 +37,8 @@ decl_module! {
 		fn vote(origin, proposal: T::Hash, approve: bool) -> Result;
 		fn veto(origin, proposal_hash: T::Hash) -> Result;
 
-		fn set_cooloff_period(blocks: T::BlockNumber) -> Result;
-		fn set_voting_period(blocks: T::BlockNumber) -> Result;
+		fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result;
+		fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result;
 	}
 }
 
@@ -153,13 +154,13 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
-	fn set_cooloff_period(blocks: T::BlockNumber) -> Result {
-		<CooloffPeriod<T>>::put(blocks);
+	fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result {
+		<CooloffPeriod<T>>::put(blocks.into());
 		Ok(())
 	}
 
-	fn set_voting_period(blocks: T::BlockNumber) -> Result {
-		<VotingPeriod<T>>::put(blocks);
+	fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result {
+		<VotingPeriod<T>>::put(blocks.into());
 		Ok(())
 	}
 
@@ -209,7 +210,7 @@ impl<T: Trait> Module<T> {
 			if let Some(&democracy::Call::cancel_referendum(ref_index)) = IsSubType::<democracy::Module<T>>::is_aux_sub_type(&proposal) {
 				Self::deposit_event(RawEvent::TallyCancelation(proposal_hash, tally.0, tally.1, tally.2));
 				if let (_, 0, 0) = tally {
-					<democracy::Module<T>>::internal_cancel_referendum(ref_index);
+					<democracy::Module<T>>::internal_cancel_referendum(ref_index.into());
 				}
 			} else {
 				Self::deposit_event(RawEvent::TallyReferendum(proposal_hash.clone(), tally.0, tally.1, tally.2));
@@ -264,11 +265,11 @@ mod tests {
 	}
 
 	fn set_balance_proposal(value: u64) -> Call {
-		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value, 0))
+		Call::Balances(balances::Call::set_balance(balances::address::Address::Id(42), value.into(), 0.into()))
 	}
 
 	fn cancel_referendum_proposal(id: u32) -> Call {
-		Call::Democracy(democracy::Call::cancel_referendum(id))
+		Call::Democracy(democracy::Call::cancel_referendum(id.into()))
 	}
 
 	#[test]

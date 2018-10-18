@@ -216,8 +216,8 @@ mod tests {
 
 	#[test]
 	fn is_build_required_works() {
-		assert_eq!(is_build_required(SIZE, 0), None);
-		assert_eq!(is_build_required(SIZE, 1), None);
+		assert_eq!(is_build_required(SIZE, 0u64), None);
+		assert_eq!(is_build_required(SIZE, 1u64), None);
 		assert_eq!(is_build_required(SIZE, SIZE), None);
 		assert_eq!(is_build_required(SIZE, SIZE + 1), None);
 		assert_eq!(is_build_required(SIZE, 2 * SIZE), None);
@@ -228,16 +228,16 @@ mod tests {
 
 	#[test]
 	fn start_number_works() {
-		assert_eq!(start_number(SIZE, 0), 1);
-		assert_eq!(start_number(SIZE, 1), SIZE + 1);
-		assert_eq!(start_number(SIZE, 2), SIZE + SIZE + 1);
+		assert_eq!(start_number(SIZE, 0u64), 1u64);
+		assert_eq!(start_number(SIZE, 1u64), SIZE + 1);
+		assert_eq!(start_number(SIZE, 2u64), SIZE + SIZE + 1);
 	}
 
 	#[test]
 	fn end_number_works() {
-		assert_eq!(end_number(SIZE, 0), SIZE);
-		assert_eq!(end_number(SIZE, 1), SIZE + SIZE);
-		assert_eq!(end_number(SIZE, 2), SIZE + SIZE + SIZE);
+		assert_eq!(end_number(SIZE, 0u64), SIZE);
+		assert_eq!(end_number(SIZE, 1u64), SIZE + SIZE);
+		assert_eq!(end_number(SIZE, 2u64), SIZE + SIZE + SIZE);
 	}
 
 	#[test]

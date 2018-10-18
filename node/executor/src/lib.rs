@@ -103,7 +103,7 @@ mod tests {
 	fn xt() -> UncheckedExtrinsic {
 		sign(CheckedExtrinsic {
 			signed: Some((alice(), 0)),
-			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69)),
+			function: Call::Balances(balances::Call::transfer::<Runtime>(bob().into(), 69.into())),
 		})
 	}
 
@@ -303,11 +303,11 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
-					function: Call::Balances(balances::Call::transfer(bob().into(), 69)),
+					function: Call::Balances(balances::Call::transfer(bob().into(), 69.into())),
 				},
 			]
 		)
@@ -317,20 +317,20 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("eef4ca8018e0511f89b7cee1e07796aa710a50accc8b1e52082d05cd8c8b6e24").into(),
+			hex!("788a2e8b23e4b30e1bce347ca6415fd0080e989d40741c86995b9ad539bb76b3").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(52)),
+					function: Call::Timestamp(timestamp::Call::set(52.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((bob(), 0)),
-					function: Call::Balances(balances::Call::transfer(alice().into(), 5)),
+					function: Call::Balances(balances::Call::transfer(alice().into(), 5.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 1)),
-					function: Call::Balances(balances::Call::transfer(bob().into(), 15)),
+					function: Call::Balances(balances::Call::transfer(bob().into(), 15.into())),
 				}
 			]
 		)
@@ -345,7 +345,7 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((alice(), 0)),
@@ -627,18 +627,18 @@ mod tests {
 			vec![
 				CheckedExtrinsic {
 					signed: None,
-					function: Call::Timestamp(timestamp::Call::set(42)),
+					function: Call::Timestamp(timestamp::Call::set(42.into())),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 0)),
 					function: Call::Contract(
-						contract::Call::create::<Runtime>(10, 10_000, code_ctor_transfer, Vec::new())
+						contract::Call::create::<Runtime>(10.into(), 10_000.into(), code_ctor_transfer, Vec::new())
 					),
 				},
 				CheckedExtrinsic {
 					signed: Some((charlie(), 1)),
 					function: Call::Contract(
-						contract::Call::call::<Runtime>(addr, 10, 10_000, vec![0x00, 0x01, 0x02, 0x03])
+						contract::Call::call::<Runtime>(addr, 10.into(), 10_000.into(), vec![0x00, 0x01, 0x02, 0x03])
 					),
 				},
 			]

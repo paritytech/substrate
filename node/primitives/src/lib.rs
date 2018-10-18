@@ -88,3 +88,13 @@ pub struct InherentData {
 	/// Indices of offline validators.
 	pub offline_indices: Vec<u32>,
 }
+
+impl InherentData {
+	/// Create a new `InherentData` instance.
+	pub fn new(timestamp: Timestamp, offline_indices: Vec<u32>) -> Self {
+		Self {
+			timestamp,
+			offline_indices
+		}
+	}
+}
