@@ -340,9 +340,9 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 				format!(" {}", ::primitives::hexdisplay::ascii_format(&key))
 			},
 			if let Some(ref b) = maybe_value {
-				format!("{}", HexDisplay::from(b))
+				&format!("{}", HexDisplay::from(b))
 			} else {
-				"<empty>".to_owned()
+				"<empty>"
 			},
 			HexDisplay::from(&key)
 		);
