@@ -113,17 +113,11 @@ impl<Hash: Codec + Member, AuthorityId: Codec + Member> traits::DigestItem for D
 	type AuthorityId = AuthorityId;
 
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-		match *self {
-			DigestItem::AuthoritiesChange(ref authorities) => Some(authorities),
-			_ => None,
-		}
+		self.dref().as_authorities_change()
 	}
 
 	fn as_changes_trie_root(&self) -> Option<&Hash> {
-		match *self {
-			DigestItem::ChangesTrieRoot(ref changes_trie_root) => Some(changes_trie_root),
-			_ => None,
-		}
+		self.dref().as_changes_trie_root()
 	}
 }
 
@@ -146,6 +140,22 @@ impl<Hash: Decode, AuthorityId: Decode> Decode for DigestItem<Hash, AuthorityId>
 			DigestItemType::Other => Some(DigestItem::Other(
 				Decode::decode(input)?,
 			)),
+		}
+	}
+}
+
+impl<'a, Hash: Codec + Member, AuthorityId: Codec + Member> DigestItemRef<'a, Hash, AuthorityId> {
+	pub fn as_authorities_change(&self) -> Option<&'a [AuthorityId]> {
+		match *self {
+			DigestItemRef::AuthoritiesChange(ref authorities) => Some(authorities),
+			_ => None,
+		}
+	}
+
+	pub fn as_changes_trie_root(&self) -> Option<&'a Hash> {
+		match *self {
+			DigestItemRef::ChangesTrieRoot(ref changes_trie_root) => Some(changes_trie_root),
+			_ => None,
 		}
 	}
 }
