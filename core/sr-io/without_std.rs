@@ -54,16 +54,24 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 }
 
 extern "C" {
+	fn ext_free(addr: *mut u8);
 	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
 	fn ext_print_hex(data: *const u8, len: u32);
 	fn ext_print_num(value: u64);
 	fn ext_set_storage(key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
+	fn ext_set_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *const u8, value_len: u32);
 	fn ext_clear_storage(key_data: *const u8, key_len: u32);
+	fn ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32);
 	fn ext_exists_storage(key_data: *const u8, key_len: u32) -> u32;
+	fn ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32;
 	fn ext_clear_prefix(prefix_data: *const u8, prefix_len: u32);
+	fn ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32);
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
+	fn ext_get_allocated_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
+	fn ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
+	fn ext_child_storage_root(storage_key_data: *const u8, storage_key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_storage_changes_root(block: u64, result: *mut u8) -> u32;
 	fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
 	fn ext_chain_id() -> u64;
@@ -104,7 +112,24 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 		if length == u32::max_value() {
 			None
 		} else {
-			Some(Vec::from_raw_parts(ptr, length as usize, length as usize))
+			let ret = slice::from_raw_parts(ptr, length as usize).to_vec();
+			ext_free(ptr);
+			Some(ret)
+		}
+	}
+}
+
+/// Get `key` from child storage and return a `Vec`, empty if there's a problem.
+pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	let mut length: u32 = 0;
+	unsafe {
+		let ptr = ext_get_allocated_child_storage(storage_key.as_ptr(), storage_key.len() as u32, key.as_ptr(), key.len() as u32, &mut length);
+		if length == u32::max_value() {
+			None
+		} else {
+			let ret = slice::from_raw_parts(ptr, length as usize).to_vec();
+			ext_free(ptr);
+			Some(ret)
 		}
 	}
 }
@@ -113,6 +138,17 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 pub fn set_storage(key: &[u8], value: &[u8]) {
 	unsafe {
 		ext_set_storage(
+			key.as_ptr(), key.len() as u32,
+			value.as_ptr(), value.len() as u32
+		);
+	}
+}
+
+/// Set the child storage of some particular key to Some value.
+pub fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
+	unsafe {
+		ext_set_child_storage(
+			storage_key.as_ptr(), key.len() as u32,
 			key.as_ptr(), key.len() as u32,
 			value.as_ptr(), value.len() as u32
 		);
@@ -128,10 +164,30 @@ pub fn clear_storage(key: &[u8]) {
 	}
 }
 
+/// Clear the storage of some particular key.
+pub fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
+	unsafe {
+		ext_clear_child_storage(
+			storage_key.as_ptr(), storage_key.len() as u32,
+			key.as_ptr(), key.len() as u32
+		);
+	}
+}
+
 /// Determine whether a particular key exists in storage.
 pub fn exists_storage(key: &[u8]) -> bool {
 	unsafe {
 		ext_exists_storage(
+			key.as_ptr(), key.len() as u32
+		) != 0
+	}
+}
+
+/// Determine whether a particular key exists in storage.
+pub fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
+	unsafe {
+		ext_exists_child_storage(
+			storage_key.as_ptr(), storage_key.len() as u32,
 			key.as_ptr(), key.len() as u32
 		) != 0
 	}
@@ -143,6 +199,16 @@ pub fn clear_prefix(prefix: &[u8]) {
 		ext_clear_prefix(
 			prefix.as_ptr(),
 			prefix.len() as u32
+		);
+	}
+}
+
+/// Clear an entire child storage.
+pub fn kill_child_storage(storage_key: &[u8]) {
+	unsafe {
+		ext_kill_child_storage(
+			storage_key.as_ptr(),
+			storage_key.len() as u32
 		);
 	}
 }
@@ -162,6 +228,22 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 	}
 }
 
+/// Get `key` from child storage, placing the value into `value_out` (as much as possible) and return
+/// the number of bytes that the key in storage was beyond the offset.
+pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+	unsafe {
+		match ext_get_child_storage_into(
+			storage_key.as_ptr(), storage_key.len() as u32,
+			key.as_ptr(), key.len() as u32,
+			value_out.as_mut_ptr(), value_out.len() as u32,
+			value_offset as u32
+		) {
+			none if none == u32::max_value() => None,
+			length => Some(length as usize),
+		}
+	}
+}
+
 /// The current storage's root.
 pub fn storage_root() -> [u8; 32] {
 	let mut result: [u8; 32] = Default::default();
@@ -169,6 +251,21 @@ pub fn storage_root() -> [u8; 32] {
 		ext_storage_root(result.as_mut_ptr());
 	}
 	result
+}
+
+/// "Commit" all existing operations and compute the resultant child storage root.
+pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
+	let mut length: u32 = 0;
+	unsafe {
+		let ptr = ext_child_storage_root(storage_key.as_ptr(), storage_key.len() as u32, &mut length);
+		if length == u32::max_value() {
+			None
+		} else {
+			let ret = slice::from_raw_parts(ptr, length as usize).to_vec();
+			ext_free(ptr);
+			Some(ret)
+		}
+	}
 }
 
 /// The current storage' changes root.

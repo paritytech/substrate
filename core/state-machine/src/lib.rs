@@ -97,9 +97,17 @@ pub trait Externalities<H: Hasher> {
 	/// Read storage of current contract being called.
 	fn storage(&self, key: &[u8]) -> Option<Vec<u8>>;
 
+	/// Read child storage of current contract being called.
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>>;
+
 	/// Set storage entry `key` of current contract being called (effective immediately).
 	fn set_storage(&mut self, key: Vec<u8>, value: Vec<u8>) {
 		self.place_storage(key, Some(value));
+	}
+
+	/// Set child storage entry `key` of current contract being called (effective immediately).
+	fn set_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Vec<u8>) -> bool {
+		self.place_child_storage(storage_key, key, Some(value))
 	}
 
 	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
@@ -107,10 +115,23 @@ pub trait Externalities<H: Hasher> {
 		self.place_storage(key.to_vec(), None);
 	}
 
-	/// Clear a storage entry (`key`) of current contract being called (effective immediately).
+	/// Clear a child storage entry (`key`) of current contract being called (effective immediately).
+	fn clear_child_storage(&mut self, storage_key: &[u8], key: &[u8]) -> bool {
+		self.place_child_storage(storage_key.to_vec(), key.to_vec(), None)
+	}
+
+	/// Whether a storage entry exists.
 	fn exists_storage(&self, key: &[u8]) -> bool {
 		self.storage(key).is_some()
 	}
+
+	/// Whether a child storage entry exists.
+	fn exists_child_storage(&self, storage_key: &[u8], key: &[u8]) -> bool {
+		self.child_storage(storage_key, key).is_some()
+	}
+
+	/// Clear an entire child storage.
+	fn kill_child_storage(&mut self, storage_key: &[u8]);
 
 	/// Clear storage entries which keys are start with the given prefix.
 	fn clear_prefix(&mut self, prefix: &[u8]);
@@ -118,11 +139,19 @@ pub trait Externalities<H: Hasher> {
 	/// Set or clear a storage entry (`key`) of current contract being called (effective immediately).
 	fn place_storage(&mut self, key: Vec<u8>, value: Option<Vec<u8>>);
 
+	/// Set or clear a child storage entry. Return whether the operation succeeds.
+	fn place_child_storage(&mut self, storage_key: Vec<u8>, key: Vec<u8>, value: Option<Vec<u8>>) -> bool;
+
 	/// Get the identity of the chain.
 	fn chain_id(&self) -> u64;
 
-	/// Get the trie root of the current storage map.
+	/// Get the trie root of the current storage map. This will also update all child storage keys in the top-level storage map.
 	fn storage_root(&mut self) -> H::Out where H::Out: Ord;
+
+	/// Get the trie root of a child storage map. This will also update the value of the child storage keys in the top-level storage map. If the storage root equals default hash as defined by trie, the key in top-level storage map will be removed.
+	///
+	/// Returns None if key provided is not a storage key. This can due to not being started with CHILD_STORAGE_KEY_PREFIX, or the trie implementation regards the key as invalid.
+	fn child_storage_root(&mut self, storage_key: &[u8]) -> Option<Vec<u8>>;
 
 	/// Get the change trie root of the current storage overlay at given block.
 	fn storage_changes_root(&mut self, block: u64) -> Option<H::Out> where H::Out: Ord;
@@ -477,6 +506,7 @@ where
 mod tests {
 	use std::collections::HashMap;
 	use codec::Encode;
+	use overlayed_changes::OverlayedValue;
 	use super::*;
 	use super::backend::InMemory;
 	use super::ext::Ext;
@@ -600,12 +630,12 @@ mod tests {
 		let backend = InMemory::<Blake2Hasher>::from(initial).try_into_trie_backend().unwrap();
 		let mut overlay = OverlayedChanges {
 			committed: map![
-				b"aba".to_vec() => Some(b"1312".to_vec()).into(),
-				b"bab".to_vec() => Some(b"228".to_vec()).into()
+				b"aba".to_vec() => OverlayedValue::from(Some(b"1312".to_vec())),
+				b"bab".to_vec() => OverlayedValue::from(Some(b"228".to_vec()))
 			],
 			prospective: map![
-				b"abd".to_vec() => Some(b"69".to_vec()).into(),
-				b"bbd".to_vec() => Some(b"42".to_vec()).into()
+				b"abd".to_vec() => OverlayedValue::from(Some(b"69".to_vec())),
+				b"bbd".to_vec() => OverlayedValue::from(Some(b"42".to_vec()))
 			],
 			..Default::default()
 		};
@@ -629,6 +659,19 @@ mod tests {
 				b"bbd".to_vec() => Some(b"42".to_vec()).into()
 			],
 		);
+	}
+
+	#[test]
+	fn set_child_storage_works() {
+		let backend = InMemory::<Blake2Hasher>::default().try_into_trie_backend().unwrap();
+		let changes_trie_storage = InMemoryChangesTrieStorage::new();
+		let mut overlay = OverlayedChanges::default();
+		let mut ext = Ext::new(&mut overlay, &backend, Some(&changes_trie_storage));
+
+		assert!(ext.set_child_storage(b":child_storage:testchild".to_vec(), b"abc".to_vec(), b"def".to_vec()));
+		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), Some(b"def".to_vec()));
+		ext.kill_child_storage(b":child_storage:testchild");
+		assert_eq!(ext.child_storage(b":child_storage:testchild", b"abc"), None);
 	}
 
 	#[test]

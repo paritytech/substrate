@@ -18,7 +18,7 @@
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use trie::{TrieDB, TrieDBMut, TrieError, Trie, TrieMut, MemoryDB};
+use trie::{TrieDB, TrieError, Trie, MemoryDB, delta_trie_root, default_child_trie_root, child_delta_trie_root};
 use trie_backend_essence::{TrieBackendEssence, TrieBackendStorage, Ephemeral};
 use {Backend};
 
@@ -64,8 +64,16 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		self.essence.storage(key)
 	}
 
+	fn child_storage(&self, storage_key: &[u8], key: &[u8]) -> Result<Option<Vec<u8>>, Self::Error> {
+		self.essence.child_storage(storage_key, key)
+	}
+
 	fn for_keys_with_prefix<F: FnMut(&[u8])>(&self, prefix: &[u8], f: F) {
 		self.essence.for_keys_with_prefix(prefix, f)
+	}
+
+	fn for_keys_in_child_storage<F: FnMut(&[u8])>(&self, storage_key: &[u8], f: F) {
+		self.essence.for_keys_in_child_storage(storage_key, f)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
@@ -97,22 +105,45 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 	{
 		let mut write_overlay = MemoryDB::default();
 		let mut root = *self.essence.root();
+
 		{
 			let mut eph = Ephemeral::new(
 				self.essence.backend_storage(),
 				&mut write_overlay,
 			);
 
-			let mut trie = TrieDBMut::<H>::from_existing(&mut eph, &mut root).expect("prior state root to exist"); // TODO: handle gracefully
-			for (key, change) in delta {
-				let result = match change {
-					Some(val) => trie.insert(&key, &val),
-					None => trie.remove(&key), // TODO: archive mode
-				};
+			match delta_trie_root::<H, _, _, _>(&mut eph, root, delta) {
+				Ok(ret) => root = ret,
+				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
+			}
+		}
 
-				if let Err(e) = result {
-					warn!(target: "trie", "Failed to write to trie: {}", e);
-				}
+		(root, write_overlay)
+	}
+
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
+		H::Out: Ord
+	{
+		let mut write_overlay = MemoryDB::default();
+		let mut root = match self.storage(storage_key) {
+			Ok(value) => value.unwrap_or(default_child_trie_root::<H>(storage_key)),
+			Err(e) => {
+				warn!(target: "trie", "Failed to read child storage root: {}", e);
+				default_child_trie_root::<H>(storage_key)
+			},
+		};
+
+		{
+			let mut eph = Ephemeral::new(
+				self.essence.backend_storage(),
+				&mut write_overlay,
+			);
+
+			match child_delta_trie_root::<H, _, _, _>(storage_key, &mut eph, root.clone(), delta) {
+				Ok(ret) => root = ret,
+				Err(e) => warn!(target: "trie", "Failed to write to trie: {}", e),
 			}
 		}
 
@@ -128,6 +159,7 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 pub mod tests {
 	use std::collections::HashSet;
 	use primitives::{Blake2Hasher, H256};
+	use trie::{TrieMut, TrieDBMut};
 	use super::*;
 
 	fn test_db() -> (MemoryDB<Blake2Hasher>, H256) {

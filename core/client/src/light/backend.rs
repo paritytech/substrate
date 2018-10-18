@@ -201,7 +201,7 @@ impl<Block, S, F, H> StateBackend<H> for OnDemandState<Block, S, F>
 		S: BlockchainStorage<Block>,
 		F: Fetcher<Block>,
 		H: Hasher,
-	
+
 {
 	type Error = ClientError;
 	type Transaction = ();
@@ -227,13 +227,30 @@ impl<Block, S, F, H> StateBackend<H> for OnDemandState<Block, S, F>
 			.into_future().wait()
 	}
 
+	fn child_storage(&self, _storage_key: &[u8], _key: &[u8]) -> ClientResult<Option<Vec<u8>>> {
+		Err(ClientErrorKind::NotAvailableOnLightClient.into())
+	}
+
 	fn for_keys_with_prefix<A: FnMut(&[u8])>(&self, _prefix: &[u8], _action: A) {
 		// whole state is not available on light node
 	}
 
+	fn for_keys_in_child_storage<A: FnMut(&[u8])>(&self, _storage_key: &[u8], _action: A) {
+		// whole state is not available on light node
+	}
+
 	fn storage_root<I>(&self, _delta: I) -> (H::Out, Self::Transaction)
-		where I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)> {
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
 		(H::Out::default(), ())
+	}
+
+	fn child_storage_root<I>(&self, _key: &[u8], _delta: I) -> (Vec<u8>, Self::Transaction)
+	where
+		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>
+	{
+		(H::Out::default().as_ref().to_vec(), ())
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {

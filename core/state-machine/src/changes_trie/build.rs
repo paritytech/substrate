@@ -73,10 +73,10 @@ fn prepare_extrinsics_input<B, H>(
 	where
 		B: Backend<H>,
 		H: Hasher,
-	
+
 {
 	let mut extrinsic_map = BTreeMap::<Vec<u8>, BTreeSet<u32>>::new();
-	for (key, val) in changes.prospective.iter().chain(changes.committed.iter()) {
+	for (key, val) in changes.prospective.top.iter().chain(changes.committed.top.iter()) {
 		let extrinsics = match val.extrinsics {
 			Some(ref extrinsics) => extrinsics,
 			None => continue,
@@ -274,7 +274,7 @@ mod test {
 		let (backend, storage, mut changes) = prepare_for_build();
 
 		// 110: missing from backend, set to None in overlay
-		changes.prospective.insert(vec![110], OverlayedValue {
+		changes.prospective.top.insert(vec![110], OverlayedValue {
 			value: None,
 			extrinsics: Some(vec![1].into_iter().collect())
 		});
