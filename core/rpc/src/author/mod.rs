@@ -127,7 +127,7 @@ impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<ExtrinsicF
 	}
 
 	fn pending_extrinsics(&self) -> Result<Vec<ExtrinsicFor<P>>> {
-		Ok(self.pool.all(usize::max_value()))
+		Ok(self.pool.ready().map(|tx| tx.data.clone()).collect())
 	}
 
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {

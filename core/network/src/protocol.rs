@@ -516,8 +516,8 @@ impl<B: BlockT, S: Specialization<B>, H: ExHashT> Protocol<B, S, H> {
 		for (who, ref mut peer) in peers.iter_mut() {
 			let (hashes, to_send): (Vec<_>, Vec<_>) = extrinsics
 				.iter()
-				.cloned()
 				.filter(|&(ref hash, _)| peer.known_extrinsics.insert(hash.clone()))
+				.cloned()
 				.unzip();
 
 			if !to_send.is_empty() {
