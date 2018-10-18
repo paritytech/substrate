@@ -54,6 +54,7 @@ pub extern fn oom(_: ::core::alloc::Layout) -> ! {
 }
 
 extern "C" {
+	fn ext_free(addr: *mut u8);
 	fn ext_print_utf8(utf8_data: *const u8, utf8_len: u32);
 	fn ext_print_hex(data: *const u8, len: u32);
 	fn ext_print_num(value: u64);
@@ -111,7 +112,9 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 		if length == u32::max_value() {
 			None
 		} else {
-			Some(slice::from_raw_parts(ptr, length as usize).to_vec())
+			let ret = slice::from_raw_parts(ptr, length as usize).to_vec();
+			ext_free(ptr);
+			Some(ret)
 		}
 	}
 }
@@ -124,7 +127,9 @@ pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
 		if length == u32::max_value() {
 			None
 		} else {
-			Some(slice::from_raw_parts(ptr, length as usize).to_vec())
+			let ret = slice::from_raw_parts(ptr, length as usize).to_vec();
+			ext_free(ptr);
+			Some(ret)
 		}
 	}
 }
@@ -256,7 +261,9 @@ pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
 		if length == u32::max_value() {
 			None
 		} else {
-			Some(slice::from_raw_parts(ptr, length as usize).to_vec())
+			let ret = slice::from_raw_parts(ptr, length as usize).to_vec();
+			ext_free(ptr);
+			Some(ret)
 		}
 	}
 }
