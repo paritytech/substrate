@@ -293,8 +293,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
 	ext_get_allocated_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_allocated_child_storage"))?;
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_allocated_child_storage"))?;
+		let key = this.memory.get(
+			key_data,
+			key_len as usize
+		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_child_storage"))?;
 		let maybe_value = this.ext.child_storage(&storage_key, &key);
 
 		debug_trace!(target: "wasm-trace", "*** Getting child storage: {} -> {} == {}   [k={}]",
