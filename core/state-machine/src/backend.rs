@@ -275,7 +275,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		}
 		let root = match root {
 			Some(root) => root,
-			None => insert_into_memory_db::<H, _>(&mut mdb, HashMap::new().into_iter())?,
+			None => insert_into_memory_db::<H, _>(&mut mdb, ::std::iter::empty())?,
 		};
 		Some(TrieBackend::new(mdb, root))
 	}
