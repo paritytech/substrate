@@ -206,7 +206,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_clear_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_clear_child_storage"))?;
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_clear_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_clear_child_storage"))?;
 		debug_trace!(target: "wasm-trace", "*** Clearing child storage: {} -> {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
@@ -234,7 +237,10 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(if this.ext.exists_storage(&key) { 1 } else { 0 })
 	},
 	ext_exists_child_storage(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32) -> u32 => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_exists_child_storage"))?;
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_exists_child_storage"))?;
 		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_exists_child_storage"))?;
 		Ok(if this.ext.exists_child_storage(&storage_key, &key) { 1 } else { 0 })
 	},
@@ -244,13 +250,19 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 		Ok(())
 	},
 	ext_kill_child_storage(storage_key_data: *const u8, storage_key_len: u32) => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_kill_child_storage"))?;
 		this.ext.kill_child_storage(&storage_key);
 		Ok(())
 	},
 	// return 0 and place u32::max_value() into written_out if no value exists for the key.
 	ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8 => {
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_storage"))?;
+		let key = this.memory.get(
+			key_data,
+			key_len as usize
+		).map_err(|_| UserError("Invalid attempt to determine key in ext_get_allocated_storage"))?;
 		let maybe_value = this.ext.storage(&key);
 
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} == {}   [k={}]",
@@ -341,8 +353,14 @@ impl_function_executor!(this: FunctionExecutor<'e, E>,
 	},
 	// return u32::max_value() if no value exists for the key.
 	ext_get_child_storage_into(storage_key_data: *const u8, storage_key_len: u32, key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32 => {
-		let storage_key = this.memory.get(storage_key_data, storage_key_len as usize).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_child_storage_into"))?;
-		let key = this.memory.get(key_data, key_len as usize).map_err(|_| UserError("Invalid attempt to get key in ext_get_child_storage_into"))?;
+		let storage_key = this.memory.get(
+			storage_key_data,
+			storage_key_len as usize
+		).map_err(|_| UserError("Invalid attempt to determine storage_key in ext_get_child_storage_into"))?;
+		let key = this.memory.get(
+			key_data,
+			key_len as usize
+		).map_err(|_| UserError("Invalid attempt to get key in ext_get_child_storage_into"))?;
 		let maybe_value = this.ext.child_storage(&storage_key, &key);
 		debug_trace!(target: "wasm-trace", "*** Getting storage: {} -> {} == {}   [k={}]",
 			::primitives::hexdisplay::ascii_format(&storage_key),
