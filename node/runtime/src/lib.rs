@@ -40,7 +40,6 @@ extern crate substrate_primitives;
 #[macro_use]
 extern crate parity_codec_derive;
 
-#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 extern crate srml_balances as balances;
 extern crate srml_consensus as consensus;
@@ -67,7 +66,7 @@ use runtime_api::runtime::*;
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem, Block as BlockT};
+use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT};
 use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
@@ -190,25 +189,6 @@ impl contract::Trait for Runtime {
 	type Gas = u64;
 	type DetermineContractAddress = contract::SimpleAddressDeterminator<Runtime>;
 	type Event = Event;
-}
-
-impl DigestItem for Log {
-	type Hash = Hash;
-	type AuthorityId = SessionKey;
-
-	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-		match self.0 {
-			InternalLog::consensus(ref item) => item.as_authorities_change(),
-			_ => None,
-		}
-	}
-
-	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
-		match self.0 {
-			InternalLog::system(ref item) => item.as_changes_trie_root(),
-			_ => None,
-		}
-	}
 }
 
 construct_runtime!(
