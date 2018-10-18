@@ -61,7 +61,7 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 	ext::with(|ext| ext.storage(key).map(|value| {
 		let value = &value[value_offset..];
 		let written = ::std::cmp::min(value.len(), value_out.len());
-		value_out[0..written].copy_from_slice(&value[0..written]);
+		value_out[..written].copy_from_slice(&value[..written]);
 		value.len()
 	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
@@ -74,7 +74,7 @@ pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], 
 	ext::with(|ext| ext.child_storage(storage_key, key).map(|value| {
 		let value = &value[value_offset..];
 		let written = ::std::cmp::min(value.len(), value_out.len());
-		value_out[0..written].copy_from_slice(&value[0..written]);
+		value_out[..written].copy_from_slice(&value[..written]);
 		value.len()
 	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
