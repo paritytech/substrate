@@ -195,10 +195,10 @@ impl<B: BlockT> BlockCollection<B> {
 mod test {
 	use super::{BlockCollection, BlockData, BlockRangeState};
 	use message;
-	use runtime_primitives::testing::Block as RawBlock;
+	use runtime_primitives::testing::{Block as RawBlock, ExtrinsicWrapper};
 	use primitives::H256;
 
-	type Block = RawBlock<u64>;
+	type Block = RawBlock<ExtrinsicWrapper<u64>>;
 
 	fn is_empty(bc: &BlockCollection<Block>) -> bool {
 		bc.blocks.is_empty() &&
