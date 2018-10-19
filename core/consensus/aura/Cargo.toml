@@ -31,7 +31,6 @@ env_logger = { version = "0.4" }
 
 [target.'cfg(test)'.dependencies]
 substrate-network = { path = "../../network", features = ["test-helpers"] }
-sr-primitives = { path = "../../sr-primitives", features = ["test-helpers"] }
 
 [features]
 default = ["std"]

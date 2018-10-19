@@ -67,13 +67,14 @@ use futures::prelude::*;
 use parking_lot::Mutex;
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
-use runtime_primitives::traits::{Header, As};
+use runtime_primitives::traits::{Header, Block as BlockT, As};
 use runtime_primitives::generic::BlockId;
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
 use substrate_executor::NativeExecutor;
 use codec::{Encode, Decode};
+use primitives::{AuthorityId, ed25519};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
@@ -325,6 +326,46 @@ impl<Components> Service<Components> where
 		self.exit.clone()
 	}
 }
+pub struct ConsensusProposer<Components: components::Components>(Arc<ComponentClient<Components>>);
+
+impl<Components> consensus::Proposer<ComponentBlock<Components>> for ConsensusProposer<Components>
+where
+	Components: components::Components,
+	<Components as components::Components>::Executor: std::clone::Clone
+{
+	type Error = client::error::Error;
+	type Create = Result<ComponentBlock<Components>, Self::Error>;
+	type Evaluate = Result<bool, Self::Error>;
+
+	fn propose(&self) -> Self::Create {
+		match self.0.new_block() {
+			Ok(b) => b.bake().map_err(|e| e.into()),
+			Err(e) => Err(e.into())
+		}
+	}
+
+	fn evaluate(&self, _proposal: &ComponentBlock<Components>) -> Self::Evaluate {
+		// doesn't actually do anything, do we still need this?
+		Ok(true)
+	}
+}
+
+impl<Components> consensus::Environment<ComponentBlock<Components>> for Service<Components>
+where
+	Components: components::Components,
+	<Components as components::Components>::Executor: std::clone::Clone
+{
+	type Proposer = ConsensusProposer<Components>;
+	type Error = client::error::Error;
+
+	fn init(&self,
+		_parent_header: &<ComponentBlock<Components> as BlockT>::Header,
+		_authorities: &[AuthorityId],
+		_sign_with: Arc<ed25519::Pair>
+	) -> Result<Self::Proposer, Self::Error> {
+		Ok(ConsensusProposer(self.client.clone()))
+	}
+}
 
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {
@@ -452,7 +493,7 @@ macro_rules! construct_simple_service {
 		$name: ident
 	) => {
 		pub struct $name<C: $crate::Components> {
-			inner: $crate::Service<C>,
+			inner: Arc<$crate::Service<C>>,
 		}
 
 		impl<C: $crate::Components> $name<C> {
@@ -462,7 +503,7 @@ macro_rules! construct_simple_service {
 			) -> $crate::Result<Self, $crate::Error> {
 				Ok(
 					Self {
-						inner: $crate::Service::new(config, executor)?
+						inner: Arc::new($crate::Service::new(config, executor)?)
 					}
 				)
 			}
@@ -527,8 +568,9 @@ macro_rules! construct_service_factory {
 			Configuration = $config:ty,
 			FullService = $full_service:ty { $( $full_service_init:tt )* },
 			LightService = $light_service:ty { $( $light_service_init:tt )* },
-			ImportQueue = $import_queue:ty
-				{ $( $full_import_queue_init:tt )* }
+			FullImportQueue = $full_import_queue:ty
+				{ $( $full_import_queue_init:tt )* },
+			LightImportQueue = $light_import_queue:ty
 				{ $( $light_import_queue_init:tt )* },
 		}
 	) => {
@@ -546,7 +588,8 @@ macro_rules! construct_service_factory {
 			type Configuration = $config;
 			type FullService = $full_service;
 			type LightService = $light_service;
-			type ImportQueue = $import_queue;
+			type FullImportQueue = $full_import_queue;
+			type LightImportQueue = $light_import_queue;
 
 			fn build_full_transaction_pool(
 				config: $crate::TransactionPoolOptions,
@@ -573,14 +616,14 @@ macro_rules! construct_service_factory {
 			fn build_full_import_queue(
 				config: &$crate::FactoryFullConfiguration<Self>,
 				client: $crate::Arc<$crate::FullClient<Self>>,
-			) -> $crate::Result<Self::ImportQueue, $crate::Error> {
+			) -> $crate::Result<Self::FullImportQueue, $crate::Error> {
 				( $( $full_import_queue_init )* ) (config, client)
 			}
 
 			fn build_light_import_queue(
 				config: &FactoryFullConfiguration<Self>,
 				client: Arc<$crate::LightClient<Self>>,
-			) -> Result<Self::ImportQueue, $crate::Error> {
+			) -> Result<Self::LightImportQueue, $crate::Error> {
 				( $( $light_import_queue_init )* ) (config, client)
 			}
 

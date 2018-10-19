@@ -19,21 +19,21 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
-use client::Client;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_primitives::Block;
 use node_runtime::GenesisConfig;
-use node_network::Protocol as DemoProtocol;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	LightBackend, FullExecutor, LightExecutor
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor
 };
-use network::import_queue::BasicQueue;
 use runtime_primitives::{traits::Block as BlockT};
-use primitives::AuthorityId;
 use node_executor;
-use consensus::{import_queue, start_arau, Config as AuraConfig, AuraImportQueue};
+use consensus::{import_queue, run_aura, Config as AuraConfig, AuraImportQueue};
 
+construct_simple_protocol! {
+	/// Demo protocol attachment for substrate.
+	pub struct DemoProtocol where Block = Block { }
+}
 
 construct_simple_service!(Service);
 
@@ -49,13 +49,29 @@ construct_service_factory! {
 		Genesis = GenesisConfig,
 		Configuration = (),
 		FullService = Service<FullComponents<Self>>
-			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
+			{ |config, executor| {
+				Service::<FullComponents<Factory>>::new(config, executor).map(|service|{
+					run_aura(AuraConfig {
+						local_key: None,
+						slot_duration: 5
+					}, service.client().clone(), service.inner.clone());
+
+					service
+				})
+			}
+		},
 		LightService = Service<LightComponents<Self>>
 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
-		FullImportQueue = AuraImportQueue<Self::Block, FullComponents<Self>>
-			{ |config, client| Ok(import_queue(config, client)) },
-		LightImportQueue = AuraImportQueue<Self::Block, LightComponents<Self>>
-			{ |config, client| Ok(import_queue(config, client)) },
+		FullImportQueue = AuraImportQueue<Self::Block, FullClient<Self>>
+			{ |config, client| Ok(import_queue(AuraConfig {
+						local_key: None,
+						slot_duration: 5
+					}, client)) },
+		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>>
+			{ |config, client| Ok(import_queue(AuraConfig {
+						local_key: None,
+						slot_duration: 5
+					}, client)) },
 	}
 }
 

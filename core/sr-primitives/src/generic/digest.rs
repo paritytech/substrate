@@ -21,7 +21,6 @@ use rstd::prelude::*;
 use codec::{Decode, Encode, Codec, Input};
 use traits::{self, Member, DigestItem as DigestItemT};
 
-#[cfg(feature="test-helpers")]
 use substrate_primitives::ed25519;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
@@ -67,7 +66,6 @@ pub enum DigestItem<Hash, AuthorityId> {
 	/// block. It is created for every block iff runtime supports changes
 	/// trie creation.
 	ChangesTrieRoot(Hash),
-	#[cfg(feature="test-helpers")]
 	/// A sealed signature for testing
 	Seal(u64, ed25519::Signature),
 	/// Any 'non-system' digest item, opaque to the native code.
@@ -84,7 +82,6 @@ pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a> {
 	AuthoritiesChange(&'a [AuthorityId]),
 	/// Reference to `DigestItem::ChangesTrieRoot`.
 	ChangesTrieRoot(&'a Hash),
-	#[cfg(feature="test-helpers")]
 	/// A sealed signature for testing
 	Seal(&'a u64, &'a ed25519::Signature),
 	/// Any 'non-system' digest item, opaque to the native code.
@@ -102,7 +99,6 @@ enum DigestItemType {
 	Other = 0,
 	AuthoritiesChange,
 	ChangesTrieRoot,
-	#[cfg(feature="test-helpers")]
 	Seal,
 }
 
@@ -120,7 +116,6 @@ impl<Hash, AuthorityId> DigestItem<Hash, AuthorityId> {
 		match *self {
 			DigestItem::AuthoritiesChange(ref v) => DigestItemRef::AuthoritiesChange(v),
 			DigestItem::ChangesTrieRoot(ref v) => DigestItemRef::ChangesTrieRoot(v),
-			#[cfg(feature="test-helpers")]
 			DigestItem::Seal(ref v, ref s) => DigestItemRef::Seal(v, s),
 			DigestItem::Other(ref v) => DigestItemRef::Other(v),
 		}
@@ -156,7 +151,6 @@ impl<Hash: Decode, AuthorityId: Decode> Decode for DigestItem<Hash, AuthorityId>
 			DigestItemType::ChangesTrieRoot => Some(DigestItem::ChangesTrieRoot(
 				Decode::decode(input)?,
 			)),
-			#[cfg(feature="test-helpers")]
 			DigestItemType::Seal => {
 				let vals: (u64, ed25519::Signature) = Decode::decode(input)?;
 				Some(DigestItem::Seal(vals.0, vals.1))
@@ -197,7 +191,6 @@ impl<'a, Hash: Encode, AuthorityId: Encode> Encode for DigestItemRef<'a, Hash, A
 				DigestItemType::ChangesTrieRoot.encode_to(&mut v);
 				changes_trie_root.encode_to(&mut v);
 			},
-			#[cfg(feature="test-helpers")]
 			DigestItemRef::Seal(val, sig) => {
 				DigestItemType::Seal.encode_to(&mut v);
 				(val, sig).encode_to(&mut v);

@@ -64,9 +64,9 @@ use codec::Encode;
 use consensus_common::{Authorities, BlockImport, Environment, Proposer};
 use client::ChainHead;
 use consensus_common::{ImportBlock, BlockOrigin};
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::{generic, generic::BlockId};
 use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor};
-use network::import_queue::{ImportQueue, Verifier as Verifier, BasicQueue};
+use network::import_queue::{Verifier, BasicQueue};
 use primitives::{AuthorityId, ed25519};
 
 use futures::{Stream, Future, IntoFuture};
@@ -137,6 +137,36 @@ pub trait CompatibleDigestItem: Sized {
 
 	/// If this item is an Aura seal, return the slot number and signature.
 	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)>;
+}
+
+impl CompatibleDigestItem for generic::DigestItem<primitives::H256, u64> {
+	/// Construct a digest item which is a slot number and a signature on the
+	/// hash.
+	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
+		generic::DigestItem::Seal(slot_number, signature)
+	}
+	/// If this item is an Aura seal, return the slot number and signature.
+	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)> {
+		match self {
+			generic::DigestItem::Seal(slot, ref sign) => Some((*slot, sign)),
+			_ => None
+		}
+	}
+}
+
+impl CompatibleDigestItem for generic::DigestItem<primitives::H256, primitives::AuthorityId> {
+	/// Construct a digest item which is a slot number and a signature on the
+	/// hash.
+	fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
+		generic::DigestItem::Seal(slot_number, signature)
+	}
+	/// If this item is an Aura seal, return the slot number and signature.
+	fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)> {
+		match self {
+			generic::DigestItem::Seal(slot, ref sign) => Some((*slot, sign)),
+			_ => None
+		}
+	}
 }
 
 /// Start the aura worker. This should be run in a tokio runtime.
@@ -228,6 +258,25 @@ pub fn start_aura<B, C, E, Error>(config: Config, client: Arc<C>, env: Arc<E>)
 				.map_err(|e| warn!("Failed to construct block: {:?}", e))
 			)
 		})
+}
+/// Start the aura worker. This should be run in a tokio runtime.
+pub fn run_aura<B, C, E, Error>(config: Config, client: Arc<C>, env: Arc<E>)
+where
+	B: Block,
+	C: Authorities<B, Error=Error> + BlockImport<B, Error=Error> + ChainHead<B> + 'static,
+	E: Environment<B, Error=Error> + 'static,
+	E::Proposer: Proposer<B, Error=Error>,
+	DigestItemFor<B>: CompatibleDigestItem,
+	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
+{
+	use tokio::runtime::current_thread;
+	let aura = start_aura(config, client, env);
+	match current_thread::Runtime::new() {
+		Ok(mut runtime) => {
+			runtime.spawn(aura);
+		},
+		Err(e) => warn!(target: "aura", "Failed to start aura block proposing: {:?}", e)
+	};
 }
 
 // a header which has been checked
@@ -334,8 +383,10 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 	}
 }
 
+pub type AuraImportQueue<B, C> = BasicQueue<B, AuraVerifier<C>>;
+
 /// Start an import queue for the Aura consensus algorithm.
-pub fn import_queue<B, C>(config: Config, client: Arc<C>) -> impl ImportQueue<B> where
+pub fn import_queue<B, C>(config: Config, client: Arc<C>) -> AuraImportQueue<B, C> where
 	B: Block,
 	C: Authorities<B> + BlockImport<B> + Send + Sync,
 	DigestItemFor<B>: CompatibleDigestItem,
@@ -343,6 +394,7 @@ pub fn import_queue<B, C>(config: Config, client: Arc<C>) -> impl ImportQueue<B>
 	let verifier = Arc::new(AuraVerifier { config, client });
 	BasicQueue::new(verifier)
 }
+
 
 
 #[cfg(test)]
@@ -391,26 +443,6 @@ mod tests {
 		fn evaluate(&self, _proposal: &TestBlock) -> Result<bool, Error> {
 			Ok(true)
 		}
-	}
-
-	#[derive(Encode, Decode)]
-	pub struct AuraSeal(u64, ed25519::Signature);
-
-	impl CompatibleDigestItem for runtime_primitives::generic::DigestItem<primitives::H256, u64> {
-		/// Construct a digest item which is a slot number and a signature on the
-		/// hash.
-		fn aura_seal(slot_number: u64, signature: ed25519::Signature) -> Self {
-			runtime_primitives::generic::DigestItem::Seal(slot_number, signature)
-		}
-
-		/// If this item is an Aura seal, return the slot number and signature.
-		fn as_aura_seal(&self) -> Option<(u64, &ed25519::Signature)> {
-			match self {
-				runtime_primitives::generic::DigestItem::Seal(slot, ref sign) => Some((*slot, sign)),
-				_ => None
-			}
-		}
-
 	}
 
 	const SLOT_DURATION: u64 = 1;

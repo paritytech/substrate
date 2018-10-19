@@ -198,7 +198,7 @@ pub trait Components: 'static {
 	/// Client backend.
 	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, Blake2Hasher>;
 	/// Client executor.
-	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync;
+	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync + Clone;
 	/// Extrinsic pool type.
 	type TransactionPoolApi: 'static + txpool::ChainApi<
 		Hash = <<Self::Factory as ServiceFactory>::Block as BlockT>::Hash,

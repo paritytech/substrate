@@ -19,14 +19,12 @@
 use ::NodeIndex;
 use runtime_primitives::traits::Block as BlockT;
 use protocol::Context;
+use config::ProtocolConfig;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
 pub trait Specialization<B: BlockT>: Send + Sync + 'static {
 	/// Get the current specialization-status.
 	fn status(&self) -> Vec<u8>;
-
-	/// Called on start-up.
-	fn on_start(&mut self) { }
 
 	/// Called when a peer successfully handshakes.
 	fn on_connect(&mut self, ctx: &mut Context<B>, who: NodeIndex, status: ::message::Status<B>);
