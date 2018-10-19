@@ -23,23 +23,30 @@ extern crate tokio;
 
 extern crate substrate_cli as cli;
 extern crate substrate_primitives as primitives;
-extern crate node_service as service;
 extern crate node_runtime;
 extern crate exit_future;
 #[macro_use]
 extern crate hex_literal;
 #[cfg(test)]
 extern crate substrate_service_test as service_test;
+extern crate substrate_transaction_pool as transaction_pool;
+extern crate substrate_network as network;
+extern crate node_network;
+extern crate sr_primitives as runtime_primitives;
+extern crate node_primitives;
+#[macro_use]
+extern crate substrate_service;
 
 #[macro_use]
 extern crate log;
 
 pub use cli::error;
 mod chain_spec;
+mod service;
 
 use tokio::runtime::Runtime;
-pub use service::{Components as ServiceComponents, Service, CustomConfiguration, ServiceFactory};
 pub use cli::{VersionInfo, IntoExit};
+use substrate_service::{ServiceFactory, Roles as ServiceRoles};
 
 /// The chain specification option.
 #[derive(Clone, Debug)]
@@ -100,7 +107,7 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 			info!("Roles: {:?}", config.roles);
 			let mut runtime = Runtime::new()?;
 			let executor = runtime.executor();
-			match config.roles == service::Roles::LIGHT {
+			match config.roles == ServiceRoles::LIGHT {
 				true => run_until_exit(&mut runtime, service::Factory::new_light(config, executor)?, exit)?,
 				false => run_until_exit(&mut runtime, service::Factory::new_full(config, executor)?, exit)?,
 			}
@@ -115,7 +122,7 @@ fn run_until_exit<C, E>(
 	e: E,
 ) -> error::Result<()>
 	where
-		C: service::Components,
+		C: substrate_service::Components,
 		E: IntoExit,
 {
 	let (exit_send, exit) = exit_future::signal();

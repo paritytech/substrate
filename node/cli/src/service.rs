@@ -15,35 +15,21 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #![warn(unused_extern_crates)]
-#![feature(trace_macros)]
 
 //! Substrate service. Specialized wrapper over substrate service.
 
-extern crate node_primitives;
-extern crate node_runtime;
-extern crate node_executor;
-extern crate node_network;
-extern crate substrate_network as network;
-extern crate substrate_primitives as primitives;
-#[macro_use]
-extern crate substrate_service as service;
-extern crate substrate_transaction_pool as transaction_pool;
-
-#[cfg(all(test, feature="rhd"))]
-extern crate rhododendron as rhd;
-extern crate sr_primitives as runtime_primitives;
-
 use std::sync::Arc;
-use transaction_pool::txpool::{Pool as TransactionPool};
+use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_primitives::Block;
 use node_runtime::GenesisConfig;
 use node_network::Protocol as DemoProtocol;
-use service::FactoryFullConfiguration;
+use substrate_service::{
+	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
+	LightBackend, FullExecutor, LightExecutor
+};
 use network::import_queue::{BasicQueue, BlockOrigin, ImportBlock, Verifier};
 use runtime_primitives::{traits::Block as BlockT};
 use primitives::AuthorityId;
-
-use service::{LightComponents, FullComponents};
 
 /// A verifier that doesn't actually do any checks
 pub struct NoneVerifier;
@@ -77,23 +63,23 @@ construct_service_factory! {
 		RuntimeDispatch = node_executor::Executor,
 		FullTransactionPoolApi =
 			transaction_pool::ChainApi<
-				service::FullBackend<Self>,
-				service::FullExecutor<Self>,
+				FullBackend<Self>,
+				FullExecutor<Self>,
 				Block
 			>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		LightTransactionPoolApi =
 			transaction_pool::ChainApi<
-				service::LightBackend<Self>,
-				service::LightExecutor<Self>,
+				LightBackend<Self>,
+				LightExecutor<Self>,
 				Block
 			>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
 		Configuration = (),
-		FullService = Service<service::FullComponents<Self>>
+		FullService = Service<FullComponents<Self>>
 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
-		LightService = Service<service::LightComponents<Self>>
+		LightService = Service<LightComponents<Self>>
 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
 		ImportQueue = BasicQueue<Block, NoneVerifier>
 			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) }
