@@ -17,13 +17,11 @@ parking_lot = "0.4"
 slog = "^2"
 sr-io = { path = "../../core/sr-io" }
 sr-primitives = { path = "../../core/sr-primitives" }
-substrate-client = { path = "../../core/client" }
 substrate-network = { path = "../../core/network" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-service = { path = "../../core/service" }
 substrate-telemetry = { path = "../../core/telemetry" }
 substrate-transaction-pool = { path = "../../core/transaction-pool" }
-tokio = "0.1.7"
 
 [dev-dependencies]
 substrate-test-client = { path = "../../core/test-client" }

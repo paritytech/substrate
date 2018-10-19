@@ -15,6 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #![warn(unused_extern_crates)]
+#![feature(trace_macros)]
 
 //! Substrate service. Specialized wrapper over substrate service.
 
@@ -22,12 +23,11 @@ extern crate node_primitives;
 extern crate node_runtime;
 extern crate node_executor;
 extern crate node_network;
-extern crate substrate_client as client;
 extern crate substrate_network as network;
 extern crate substrate_primitives as primitives;
+#[macro_use]
 extern crate substrate_service as service;
 extern crate substrate_transaction_pool as transaction_pool;
-extern crate tokio;
 
 #[cfg(all(test, feature="rhd"))]
 extern crate rhododendron as rhd;
@@ -35,23 +35,15 @@ extern crate sr_primitives as runtime_primitives;
 
 use std::sync::Arc;
 use transaction_pool::txpool::{Pool as TransactionPool};
-use node_primitives::{Block, Hash};
+use node_primitives::Block;
 use node_runtime::GenesisConfig;
-use client::Client;
 use node_network::Protocol as DemoProtocol;
-use tokio::runtime::TaskExecutor;
 use service::FactoryFullConfiguration;
 use network::import_queue::{BasicQueue, BlockOrigin, ImportBlock, Verifier};
 use runtime_primitives::{traits::Block as BlockT};
-use primitives::{Blake2Hasher, AuthorityId};
+use primitives::AuthorityId;
 
-pub use service::{Roles, PruningMode, TransactionPoolOptions, ServiceFactory,
-	ErrorKind, Error, ComponentBlock, LightComponents, FullComponents};
-pub use client::ExecutionStrategy;
-
-/// Client type for specialised `Components`.
-pub type ComponentClient<C> = Client<<C as Components>::Backend, <C as Components>::Executor, Block>;
-pub type NetworkService = network::Service<Block, <Factory as service::ServiceFactory>::NetworkProtocol, Hash>;
+use service::{LightComponents, FullComponents};
 
 /// A verifier that doesn't actually do any checks
 pub struct NoneVerifier;
@@ -76,125 +68,37 @@ impl<B: BlockT> Verifier<B> for NoneVerifier {
 	}
 }
 
-/// A collection of type to generalise specific components over full / light client.
-pub trait Components: service::Components {
-	/// Demo API.
-	type Api: 'static + Send + Sync;
-	/// Client backend.
-	type Backend: 'static + client::backend::Backend<Block, Blake2Hasher>;
-	/// Client executor.
-	type Executor: 'static + client::CallExecutor<Block, Blake2Hasher> + Send + Sync;
-}
+construct_simple_service!(Service);
 
-impl Components for service::LightComponents<Factory> {
-	type Api = service::LightClient<Factory>;
-	type Executor = service::LightExecutor<Factory>;
-	type Backend = service::LightBackend<Factory>;
-}
-
-impl Components for service::FullComponents<Factory> {
-	type Api = service::FullClient<Factory>;
-	type Executor = service::FullExecutor<Factory>;
-	type Backend = service::FullBackend<Factory>;
-}
-
-/// All configuration for the node.
-pub type Configuration = FactoryFullConfiguration<Factory>;
-
-/// Demo-specific configuration.
-#[derive(Default)]
-pub struct CustomConfiguration;
-
-/// Config for the substrate service.
-pub struct Factory;
-
-impl service::ServiceFactory for Factory {
-	type Block = Block;
-	type ExtrinsicHash = Hash;
-	type NetworkProtocol = DemoProtocol;
-	type RuntimeDispatch = node_executor::Executor;
-	type FullTransactionPoolApi = transaction_pool::ChainApi<service::FullBackend<Self>, service::FullExecutor<Self>, Block>;
-	type LightTransactionPoolApi = transaction_pool::ChainApi<service::LightBackend<Self>, service::LightExecutor<Self>, Block>;
-	type Genesis = GenesisConfig;
-	type Configuration = CustomConfiguration;
-	type FullService = Service<service::FullComponents<Self>>;
-	type LightService = Service<service::LightComponents<Self>>;
-	/// instance of import queue for clients
-	type ImportQueue = BasicQueue<Block, NoneVerifier>;
-
-	fn build_full_transaction_pool(config: TransactionPoolOptions, client: Arc<service::FullClient<Self>>)
-		-> Result<TransactionPool<Self::FullTransactionPoolApi>, Error>
-	{
-		Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
+construct_service_factory! {
+	struct Factory {
+		Block = Block,
+		NetworkProtocol = DemoProtocol { |config| Ok(DemoProtocol::new()) },
+		RuntimeDispatch = node_executor::Executor,
+		FullTransactionPoolApi =
+			transaction_pool::ChainApi<
+				service::FullBackend<Self>,
+				service::FullExecutor<Self>,
+				Block
+			>
+			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+		LightTransactionPoolApi =
+			transaction_pool::ChainApi<
+				service::LightBackend<Self>,
+				service::LightExecutor<Self>,
+				Block
+			>
+			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+		Genesis = GenesisConfig,
+		Configuration = (),
+		FullService = Service<service::FullComponents<Self>>
+			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
+		LightService = Service<service::LightComponents<Self>>
+			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
+		ImportQueue = BasicQueue<Block, NoneVerifier>
+			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) }
+			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) },
 	}
-
-	fn build_light_transaction_pool(config: TransactionPoolOptions, client: Arc<service::LightClient<Self>>)
-		-> Result<TransactionPool<Self::LightTransactionPoolApi>, Error>
-	{
-		Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client)))
-	}
-
-	fn build_network_protocol(_config: &Configuration)
-		-> Result<DemoProtocol, Error>
-	{
-		Ok(DemoProtocol::new())
-	}
-
-	fn build_full_import_queue(
-		_config: &FactoryFullConfiguration<Self>,
-		_client: Arc<service::FullClient<Self>>,
-	) -> Result<BasicQueue<Block, NoneVerifier>, service::Error> {
-		Ok(BasicQueue::new(Arc::new(NoneVerifier {})))
-	}
-
-	fn build_light_import_queue(
-		_config: &FactoryFullConfiguration<Self>,
-		_client: Arc<service::LightClient<Self>>,
-	) -> Result<BasicQueue<Block, NoneVerifier>, service::Error> {
-		Ok(BasicQueue::new(Arc::new(NoneVerifier {})))
-	}
-
-	fn new_light(config: Configuration, executor: TaskExecutor)
-		-> Result<Service<LightComponents<Factory>>, Error>
-	{
-		let service = service::Service::<LightComponents<Factory>>::new(config, executor.clone())?;
-		Ok(Service {
-			inner: service,
-			_consensus: None,
-		})
-	}
-
-	fn new_full(config: Configuration, executor: TaskExecutor)
-		-> Result<Service<FullComponents<Factory>>, Error>
-	{
-		let service = service::Service::<FullComponents<Factory>>::new(config, executor.clone())?;
-		// FIXME: Spin consensus service if configured
-		let consensus = None;
-		Ok(Service {
-			inner: service,
-			_consensus: consensus,
-		})
-	}
-}
-/// Demo service.
-pub struct Service<C: Components> {
-	inner: service::Service<C>,
-	_consensus: Option<bool>,  // FIXME: add actual consensus engine
-}
-
-impl<C: Components> ::std::ops::Deref for Service<C> {
-	type Target = service::Service<C>;
-	fn deref(&self) -> &Self::Target {
-		&self.inner
-	}
-}
-
-
-/// Creates bare client without any networking.
-pub fn new_client(config: Configuration)
-	-> Result<Arc<service::ComponentClient<FullComponents<Factory>>>, Error>
-{
-	service::new_client::<Factory>(&config)
 }
 
 #[cfg(test)]
