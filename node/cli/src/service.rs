@@ -19,6 +19,7 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
+use client::Client;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_primitives::Block;
 use node_runtime::GenesisConfig;
@@ -27,34 +28,12 @@ use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	LightBackend, FullExecutor, LightExecutor
 };
-use network::import_queue::{BasicQueue, BlockOrigin, ImportBlock, Verifier};
+use network::import_queue::BasicQueue;
 use runtime_primitives::{traits::Block as BlockT};
 use primitives::AuthorityId;
 use node_executor;
+use consensus::{import_queue, start_arau, Config as AuraConfig, AuraImportQueue};
 
-// TODO: Remove me, when we have a functional consensus.
-/// A verifier that doesn't actually do any checks
-pub struct NoneVerifier;
-/// This Verifiyer accepts all data as valid
-impl<B: BlockT> Verifier<B> for NoneVerifier {
-	fn verify(
-		&self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justification: Vec<u8>,
-		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
-		Ok((ImportBlock {
-			origin,
-			header,
-			body,
-			finalized: true,
-			external_justification: justification,
-			internal_justification: vec![],
-			auxiliary: Vec::new(),
-		}, None))
-	}
-}
 
 construct_simple_service!(Service);
 
@@ -73,11 +52,13 @@ construct_service_factory! {
 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
 		LightService = Service<LightComponents<Self>>
 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
-		ImportQueue = BasicQueue<Block, NoneVerifier>
-			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) }
-			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) },
+		FullImportQueue = AuraImportQueue<Self::Block, FullComponents<Self>>
+			{ |config, client| Ok(import_queue(config, client)) },
+		LightImportQueue = AuraImportQueue<Self::Block, LightComponents<Self>>
+			{ |config, client| Ok(import_queue(config, client)) },
 	}
 }
+
 
 #[cfg(test)]
 mod tests {
