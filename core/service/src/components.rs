@@ -16,7 +16,6 @@
 
 //! Substrate service components.
 
-use std::fmt;
 use std::sync::Arc;
 use std::marker::PhantomData;
 use std::ops::Deref;
@@ -39,7 +38,7 @@ use primitives::{Blake2Hasher};
 pub type NetworkService<F> = network::Service<
 	<F as ServiceFactory>::Block,
 	<F as ServiceFactory>::NetworkProtocol,
-	<F as ServiceFactory>::ExtrinsicHash,
+	<<F as ServiceFactory>::Block as BlockT>::Hash,
 >;
 
 /// Code executor type for a factory.
@@ -121,16 +120,14 @@ impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 pub trait ServiceFactory: 'static + Sized {
 	/// Block type.
 	type Block: BlockT;
-	/// Extrinsic hash type.
-	type ExtrinsicHash: ::std::hash::Hash + Eq + Copy + fmt::Debug + fmt::LowerHex + Serialize + DeserializeOwned + ::std::str::FromStr + Send + Sync + Default + 'static;
 	/// Network protocol extensions.
 	type NetworkProtocol: network::specialization::Specialization<Self::Block>;
 	/// Chain runtime.
 	type RuntimeDispatch: NativeExecutionDispatch + Send + Sync + 'static;
 	/// Extrinsic pool backend type for the full client.
-	type FullTransactionPoolApi: txpool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + Send + 'static;
+	type FullTransactionPoolApi: txpool::ChainApi<Hash = <Self::Block as BlockT>::Hash, Block = Self::Block> + Send + 'static;
 	/// Extrinsic pool backend type for the light client.
-	type LightTransactionPoolApi: txpool::ChainApi<Hash = Self::ExtrinsicHash, Block = Self::Block> + 'static;
+	type LightTransactionPoolApi: txpool::ChainApi<Hash = <Self::Block as BlockT>::Hash, Block = Self::Block> + 'static;
 	/// Genesis configuration for the runtime.
 	type Genesis: RuntimeGenesis;
 	/// Other configuration for service members.
@@ -202,7 +199,7 @@ pub trait Components: 'static {
 	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync;
 	/// Extrinsic pool type.
 	type TransactionPoolApi: 'static + txpool::ChainApi<
-		Hash = <Self::Factory as ServiceFactory>::ExtrinsicHash,
+		Hash = <<Self::Factory as ServiceFactory>::Block as BlockT>::Hash,
 		Block = FactoryBlock<Self::Factory>
 	>;
 
