@@ -208,10 +208,10 @@ pub fn new_client(config: Configuration)
 mod tests {
 	use {service_test, Factory, chain_spec};
 
-	#[test]
+/*	#[test]
 	fn test_connectivity() {
 		service_test::connectivity::<Factory>(chain_spec::integration_test_config());
-	}
+	}*/
 
 	#[test]
 	#[cfg(feature = "rhd")]
