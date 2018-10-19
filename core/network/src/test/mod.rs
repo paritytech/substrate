@@ -205,6 +205,13 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 		self.sync.tick(&mut TestIo::new(&self.queue, None));
 	}
 
+	/// Send block import notifications.
+	fn send_import_notifications(&self) {
+		let info = self.client.info().expect("In-mem client does not fail");
+		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
+		self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), info.chain.best_hash, &header);
+	}
+
 	/// Restart sync for a peer.
 	fn restart_sync(&self) {
 		self.sync.abort();
@@ -402,6 +409,15 @@ pub trait TestNetFactory: Sized {
 		self.mut_peers(|peers| {
 			for peer in peers {
 				peer.sync_step();
+			}
+		})
+	}
+
+	/// Send block import notifications for all peers.
+	fn send_import_notifications(&mut self) {
+		self.mut_peers(|peers| {
+			for peer in peers {
+				peer.send_import_notifications();
 			}
 		})
 	}

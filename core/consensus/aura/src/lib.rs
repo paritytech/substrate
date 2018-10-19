@@ -513,7 +513,12 @@ mod tests {
 		// let drive_to_completion = ::tokio::timer::Delay::new(
 		// 		Instant::now() + Duration::new(SLOT_DURATION * 10, 0))
 		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-			.for_each(move |_| { net.lock().sync_step(); println!("synced"); Ok(()) })
+			.for_each(move |_| {
+				net.lock().send_import_notifications();
+				net.lock().sync();
+				println!("synced");
+				Ok(())
+			})
 			.map(|_| ())
 			.map_err(|_| ());
 
