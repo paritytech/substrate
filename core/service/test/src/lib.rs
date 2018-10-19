@@ -181,33 +181,41 @@ impl<F: ServiceFactory> TestNet<F> {
 pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) {
 	const NUM_NODES: u32 = 10;
 	{
+println!("=== connectivity1");
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		{
 			let mut network = TestNet::<F>::new(&temp, spec.clone(), NUM_NODES, 0, vec![], 30400);
 			info!("Checking star topology");
+println!("=== connectivity2");
 			let first_address = network.full_nodes[0].1.network().node_id().expect("No node address");
 			for (_, service) in network.full_nodes.iter().skip(1) {
 				service.network().add_reserved_peer(first_address.clone()).expect("Error adding reserved peer");
 			}
+println!("=== connectivity3");
 			network.run_until_all_full(|_index, service|
 				service.network().status().num_peers == NUM_NODES as usize - 1
 			);
+println!("=== connectivity4");
 		}
 		temp.close().expect("Error removing temp dir");
 	}
 	{
 		let temp = TempDir::new("substrate-connectivity-test").expect("Error creating test dir");
 		{
+println!("=== connectivity5");
 			let mut network = TestNet::<F>::new(&temp, spec, NUM_NODES as u32, 0, vec![], 30400);
 			info!("Checking linked topology");
+println!("=== connectivity6");
 			let mut address = network.full_nodes[0].1.network().node_id().expect("No node address");
 			for (_, service) in network.full_nodes.iter().skip(1) {
 				service.network().add_reserved_peer(address.clone()).expect("Error adding reserved peer");
 				address = service.network().node_id().expect("No node address");
 			}
+println!("=== connectivity7");
 			network.run_until_all_full(|_index, service| {
 				service.network().status().num_peers == NUM_NODES as usize - 1
 			});
+println!("=== connectivity8");
 		}
 		temp.close().expect("Error removing temp dir");
 	}
