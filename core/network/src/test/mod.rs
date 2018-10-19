@@ -229,8 +229,11 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 			let mut builder = self.client.new_block().unwrap();
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
-			trace!("Generating {}, (#{}, parent={})", block.header.hash(), block.header.number, block.header.parent_hash);
+			let hash = block.header.hash();
+			trace!("Generating {}, (#{}, parent={})", hash, block.header.number, block.header.parent_hash);
+			let header = block.header.clone();
 			self.client.justify_and_import(origin, block).unwrap();
+			self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), hash, &header);
 		}
 	}
 
