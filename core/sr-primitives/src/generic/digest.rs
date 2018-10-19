@@ -21,7 +21,7 @@ use rstd::prelude::*;
 use codec::{Decode, Encode, Codec, Input};
 use traits::{self, Member, DigestItem as DigestItemT};
 
-use substrate_primitives::ed25519;
+use substrate_primitives::hash::H512 as Signature;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
@@ -66,8 +66,8 @@ pub enum DigestItem<Hash, AuthorityId> {
 	/// block. It is created for every block iff runtime supports changes
 	/// trie creation.
 	ChangesTrieRoot(Hash),
-	/// A sealed signature for testing
-	Seal(u64, ed25519::Signature),
+	/// Put a Seal on it
+	Seal(u64, Signature),
 	/// Any 'non-system' digest item, opaque to the native code.
 	Other(Vec<u8>),
 }
@@ -83,7 +83,7 @@ pub enum DigestItemRef<'a, Hash: 'a, AuthorityId: 'a> {
 	/// Reference to `DigestItem::ChangesTrieRoot`.
 	ChangesTrieRoot(&'a Hash),
 	/// A sealed signature for testing
-	Seal(&'a u64, &'a ed25519::Signature),
+	Seal(&'a u64, &'a Signature),
 	/// Any 'non-system' digest item, opaque to the native code.
 	/// Reference to `DigestItem::Other`.
 	Other(&'a Vec<u8>),
@@ -152,7 +152,7 @@ impl<Hash: Decode, AuthorityId: Decode> Decode for DigestItem<Hash, AuthorityId>
 				Decode::decode(input)?,
 			)),
 			DigestItemType::Seal => {
-				let vals: (u64, ed25519::Signature) = Decode::decode(input)?;
+				let vals: (u64, Signature) = Decode::decode(input)?;
 				Some(DigestItem::Seal(vals.0, vals.1))
 			},
 			DigestItemType::Other => Some(DigestItem::Other(
