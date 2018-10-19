@@ -349,7 +349,6 @@ pub fn import_queue<B, C>(config: Config, client: Arc<C>) -> impl ImportQueue<B>
 mod tests {
 	use super::*;
 	use codec::{Decode, Encode};
-	use std::time::{Duration, Instant};
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};
 	use runtime_primitives::traits::Block as BlockT;
@@ -464,7 +463,9 @@ mod tests {
 	#[test]
 	fn authoring_blocks() {
 		::env_logger::init().ok();
-		let net = AuraTestNet::new(3);
+		let mut net = AuraTestNet::new(3);
+
+		net.start();
 
 		let peers = &[
 			(0, Keyring::Alice),
@@ -481,7 +482,10 @@ mod tests {
 			let environ = Arc::new(DummyFactory(client.clone()));
 			import_notifications.push(
 				client.import_notification_stream()
-					.take_while(|n| Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5)))
+					.take_while(|n| {
+						println!("notification: {:?}", n);
+						Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5))
+					})
 					.for_each(move |_| Ok(()))
 			);
 			let aura = start_aura(
@@ -506,11 +510,12 @@ mod tests {
 		// past calling `sync()` the first time - so wait until all rounds have passed and 
 		// call it only onces after
 
-		let drive_to_completion = ::tokio::timer::Delay::new(
-				Instant::now() + Duration::new(SLOT_DURATION * 10, 0))
-		// let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-			.then(move |_| { net.lock().sync(); Ok(()) })
-			.map(|_| ());
+		// let drive_to_completion = ::tokio::timer::Delay::new(
+		// 		Instant::now() + Duration::new(SLOT_DURATION * 10, 0))
+		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+			.for_each(move |_| { net.lock().sync_step(); println!("synced"); Ok(()) })
+			.map(|_| ())
+			.map_err(|_| ());
 
 		// let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 		// 		.for_each(move |_| { net.lock().sync(); println!("synced"); Ok(()) })
