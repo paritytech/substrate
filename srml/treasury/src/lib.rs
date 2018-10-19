@@ -85,7 +85,7 @@ decl_module! {
 		fn configure(proposal_bond: Permill, proposal_bond_minimum: <T::Balance as HasCompact>::Type, spend_period: <T::BlockNumber as HasCompact>::Type, burn: Permill) -> Result;
 
 		// Reject a proposed spend. The original deposit will be slashed.
-		fn reject_proposal(origin, roposal_id: Compact<ProposalIndex>) -> Result;
+		fn reject_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result;
 
 		// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
 		// and the original deposit will be returned.
