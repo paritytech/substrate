@@ -16,6 +16,7 @@
 
 use client::backend::Backend;
 use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
+use consensus::BlockOrigin;
 use sync::SyncState;
 use Roles;
 use super::*;
@@ -92,8 +93,8 @@ fn sync_after_fork_works() {
 fn own_blocks_are_announced() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(3);
-	net.sync_step(); // connect'em
-	net.peer(0).generate_blocks(1, client::BlockOrigin::Own, |_| ());
+	net.sync(); // connect'em
+	net.peer(0).generate_blocks(1, BlockOrigin::Own, |_| ());
 	net.sync();
 	assert_eq!(net.peer(0).client.backend().blockchain().info().unwrap().best_number, 1);
 	assert_eq!(net.peer(1).client.backend().blockchain().info().unwrap().best_number, 1);

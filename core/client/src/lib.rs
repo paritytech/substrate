@@ -65,7 +65,6 @@ pub use client::{
 	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
 	Client, ClientInfo, ChainHead,
 };
-pub use runtime_primitives::generic::{ImportBlock, ImportResult, BlockOrigin}; // re-export
 pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
 pub use leaves::LeafSet;

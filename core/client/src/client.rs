@@ -23,9 +23,10 @@ use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{
 	Justification,
-	generic::{BlockId, SignedBlock, Block as RuntimeBlock, ImportBlock, ImportResult, BlockOrigin},
+	generic::{BlockId, SignedBlock, Block as RuntimeBlock},
 	transaction_validity::{TransactionValidity, TransactionTag},
 };
+use consensus::{ImportBlock, ImportResult, BlockOrigin};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
 use runtime_primitives::{ApplyResult, BuildStorage};
 use runtime_api as api;
@@ -1196,7 +1197,7 @@ pub(crate) mod tests {
 	use runtime_primitives::traits::{Digest as DigestT, DigestItem as DigestItemT};
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
-	use test_client::client::BlockOrigin;
+	use consensus::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer};

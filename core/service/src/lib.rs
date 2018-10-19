@@ -29,6 +29,7 @@ extern crate parking_lot;
 extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
+extern crate substrate_consensus_common as consensus;
 extern crate substrate_network as network;
 extern crate substrate_executor;
 extern crate substrate_client as client;

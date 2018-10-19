@@ -48,10 +48,9 @@ use service::{
 	FactoryExtrinsic,
 };
 use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
-use client::ImportBlock;
 use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
-use consensus::BlockImport;
+use consensus::{ImportBlock, BlockImport};
 
 struct TestNet<F: ServiceFactory> {
 	runtime: Runtime,

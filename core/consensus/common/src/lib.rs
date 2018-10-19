@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Consensus Common.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Tracks offline validators.
+//! Consensus Basics and common features
 #![recursion_limit="128"]
 
 extern crate substrate_primitives as primitives;
@@ -29,24 +29,16 @@ extern crate error_chain;
 use std::sync::Arc;
 
 use primitives::{ed25519, AuthorityId};
-use runtime_primitives::generic::{BlockId, ImportBlock, ImportResult};
+use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::Block;
 use futures::prelude::*;
 
 pub mod offline_tracker;
 pub mod error;
+mod block_import;
 
 pub use self::error::{Error, ErrorKind};
-
-/// Block import trait.
-pub trait BlockImport<B: Block> {
-	type Error: ::std::error::Error + Send + 'static;
-	/// Import a Block alongside the new authorities valid form this block forward
-	fn import_block(&self,
-		block: ImportBlock<B>,
-		new_authorities: Option<Vec<AuthorityId>>
-	) -> Result<ImportResult, Self::Error>;
-}
+pub use block_import::{BlockImport, ImportBlock, BlockOrigin, ImportResult};
 
 /// Trait for getting the authorities at a given block.
 pub trait Authorities<B: Block> {

@@ -62,7 +62,8 @@ use std::time::Duration;
 
 use codec::Encode;
 use consensus_common::{Authorities, BlockImport, Environment, Proposer};
-use client::{ChainHead, ImportBlock, BlockOrigin};
+use client::ChainHead;
+use consensus_common::{ImportBlock, BlockOrigin};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor};
 use network::import_queue::{ImportQueue, Verifier as Verifier, BasicQueue};

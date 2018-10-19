@@ -16,16 +16,16 @@
 
 //! Client extension for tests.
 
-use client::{self, ImportBlock, Client};
+use client::{self, Client};
+use consensus::{ImportBlock, BlockImport, BlockOrigin};
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
-use consensus::BlockImport;
 use runtime;
 
 /// Extension trait for a test client.
 pub trait TestClient: Sized {
 	/// Justify and import block to the chain. No finality.
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block)
+	fn justify_and_import(&self, origin: BlockOrigin, block: runtime::Block)
 		-> client::error::Result<()>;
 
 	/// Finalize a block.
@@ -41,7 +41,7 @@ impl<B, E> TestClient for Client<B, E, runtime::Block>
 		E: client::CallExecutor<runtime::Block, Blake2Hasher>,
 		Self: BlockImport<runtime::Block, Error=client::error::Error>
 {
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block)
+	fn justify_and_import(&self, origin: BlockOrigin, block: runtime::Block)
 		-> client::error::Result<()>
 	{
 		let import = ImportBlock {

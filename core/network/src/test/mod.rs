@@ -35,6 +35,7 @@ use network_libp2p::{NodeIndex, PeerId, Severity};
 use keyring::Keyring;
 use codec::Encode;
 use import_queue::{SyncImportQueue, PassThroughVerifier, Verifier};
+use consensus::BlockOrigin;
 use specialization::Specialization;
 use consensus_gossip::ConsensusGossip;
 use import_queue::ImportQueue;
@@ -221,7 +222,7 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 	}
 
 	/// Add blocks to the peer -- edit the block before adding
-	pub fn generate_blocks<F>(&self, count: usize, origin: client::BlockOrigin, mut edit_block: F)
+	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
 	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>)
 	{
 		for _ in 0 .. count {
@@ -237,7 +238,7 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 	pub fn push_blocks(&self, count: usize, with_tx: bool) {
 		let mut nonce = 0;
 		if with_tx {
-			self.generate_blocks(count, client::BlockOrigin::File, |builder| {
+			self.generate_blocks(count, BlockOrigin::File, |builder| {
 				let transfer = Transfer {
 					from: Keyring::Alice.to_raw_public().into(),
 					to: Keyring::Alice.to_raw_public().into(),
@@ -249,7 +250,7 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 				nonce = nonce + 1;
 			});
 		} else {
-			self.generate_blocks(count, client::BlockOrigin::File, |_| ());
+			self.generate_blocks(count, BlockOrigin::File, |_| ());
 		}
 	}
 

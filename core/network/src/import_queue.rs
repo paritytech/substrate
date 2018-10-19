@@ -28,8 +28,6 @@ use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, Weak};
 use std::sync::atomic::{AtomicBool, Ordering};
 use parking_lot::{Condvar, Mutex, RwLock};
-
-pub use client::{BlockOrigin, ImportBlock, ImportResult};
 use network_libp2p::{NodeIndex, Severity};
 use primitives::AuthorityId;
 
@@ -41,6 +39,9 @@ use error::{ErrorKind, Error};
 use protocol::Context;
 use service::ExecuteInContext;
 use sync::ChainSync;
+
+pub use consensus::{ImportBlock, ImportResult, BlockOrigin};
+
 
 #[cfg(any(test, feature = "test-helpers"))]
 use std::cell::RefCell;

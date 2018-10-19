@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Error types in the BFT service.
+//! Error types in Consensus
 use runtime_version::RuntimeVersion;
 
 error_chain! {
