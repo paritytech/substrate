@@ -72,7 +72,7 @@ pub struct Block<Header, Extrinsic> {
 impl<Header, Extrinsic> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
-	Extrinsic: Member + Codec,
+	Extrinsic: Member + Codec + traits::Extrinsic,
 {
 	type Extrinsic = Extrinsic;
 	type Header = Header;

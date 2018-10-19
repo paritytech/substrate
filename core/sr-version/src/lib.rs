@@ -29,15 +29,14 @@ extern crate sr_std as rstd;
 #[macro_use]
 extern crate parity_codec_derive;
 
+extern crate sr_primitives as runtime_primitives;
+
 #[cfg(feature = "std")]
 use std::fmt;
 #[cfg(feature = "std")]
 use std::collections::HashSet;
 
-#[cfg(feature = "std")]
-pub type VersionString = ::std::borrow::Cow<'static, str>;
-#[cfg(not(feature = "std"))]
-pub type VersionString = &'static str;
+use runtime_primitives::RuntimeString;
 
 /// The identity of a particular API interface that the runtime might provide.
 pub type ApiId = [u8; 8];
@@ -80,14 +79,14 @@ pub struct RuntimeVersion {
 	/// Identifies the different Substrate runtimes. There'll be at least polkadot and node.
 	/// A different on-chain spec_name to that of the native runtime would normally result
 	/// in node not attempting to sync or author blocks.
-	pub spec_name: VersionString,
+	pub spec_name: RuntimeString,
 
 	/// Name of the implementation of the spec. This is of little consequence for the node
 	/// and serves only to differentiate code of different implementation teams. For this
 	/// codebase, it will be parity-polkadot. If there were a non-Rust implementation of the
 	/// Polkadot runtime (e.g. C++), then it would identify itself with an accordingly different
 	/// `impl_name`.
-	pub impl_name: VersionString,
+	pub impl_name: RuntimeString,
 
 	/// `authoring_version` is the version of the authorship interface. An authoring node
 	/// will not attempt to author blocks unless this is equal to its native runtime.

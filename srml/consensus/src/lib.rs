@@ -41,11 +41,15 @@ extern crate substrate_primitives;
 extern crate sr_io as runtime_io;
 
 use rstd::prelude::*;
+use rstd::result;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::traits::{MaybeSerializeDebug, OnFinalise, Member};
+use primitives::RuntimeString;
+use primitives::traits::{
+	MaybeSerializeDebug, OnFinalise, Member, ProvideInherent, Block as BlockT
+};
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
 
@@ -235,6 +239,35 @@ impl<T: Trait> Module<T> {
 	}
 }
 
+impl<T: Trait> ProvideInherent for Module<T> {
+	type Inherent = Vec<u32>;
+	type Call = Call<T>;
+	type Error = RuntimeString;
+
+	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
+		vec![(T::NOTE_OFFLINE_POSITION, Call::note_offline(data))]
+	}
+
+	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
+		block: &Block, data: Self::Inherent, extract_function: &F
+	) -> result::Result<(), Self::Error> {
+		let noted_offline = block
+			.extrinsics().get(T::NOTE_OFFLINE_POSITION as usize)
+			.and_then(|xt| match extract_function(&xt) {
+				Some(Call::note_offline(ref x)) => Some(&x[..]),
+				_ => None,
+			}).unwrap_or(&[]);
+
+		noted_offline.iter().try_for_each(|n|
+			if !data.contains(n) {
+				Err("Online node marked offline".into())
+			} else {
+				Ok(())
+			}
+		)
+	}
+}
+
 /// Finalization hook for the consensus module.
 impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 	fn on_finalise(_n: T::BlockNumber) {
@@ -246,4 +279,3 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 		}
 	}
 }
-

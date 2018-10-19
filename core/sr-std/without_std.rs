@@ -15,7 +15,8 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 #[cfg(feature = "nightly")]
-extern crate alloc;
+#[doc(hidden)]
+pub extern crate alloc;
 
 extern "C" {
 	fn ext_malloc(size: usize) -> *mut u8;

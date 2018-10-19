@@ -36,7 +36,7 @@ use rstd::prelude::*;
 use runtime_primitives::generic;
 #[cfg(feature = "std")]
 use primitives::bytes;
-use runtime_primitives::traits::BlakeTwo256;
+use runtime_primitives::traits::{BlakeTwo256, self};
 
 /// An index to a block.
 pub type BlockNumber = u64;
@@ -79,22 +79,9 @@ pub type BlockId = generic::BlockId<Block>;
 #[derive(PartialEq, Eq, Clone, Default, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 pub struct UncheckedExtrinsic(#[cfg_attr(feature = "std", serde(with="bytes"))] pub Vec<u8>);
-///
-/// Inherent data to include in a block.
-#[derive(Encode, Decode)]
-pub struct InherentData {
-	/// Current timestamp.
-	pub timestamp: Timestamp,
-	/// Indices of offline validators.
-	pub offline_indices: Vec<u32>,
-}
 
-impl InherentData {
-	/// Create a new `InherentData` instance.
-	pub fn new(timestamp: Timestamp, offline_indices: Vec<u32>) -> Self {
-		Self {
-			timestamp,
-			offline_indices
-		}
+impl traits::Extrinsic for UncheckedExtrinsic {
+	fn is_signed(&self) -> Option<bool> {
+		None
 	}
 }

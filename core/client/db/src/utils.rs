@@ -67,10 +67,11 @@ pub struct Meta<N, H> {
 }
 
 /// A block lookup key: used for canonical lookup from block number to hash
-pub type BlockLookupKey = [u8; 4];
+pub type ShortBlockLookupKey = [u8; 4];
 
-/// Convert block number into lookup key (LE representation).
-pub fn number_to_lookup_key<N>(n: N) -> BlockLookupKey where N: As<u64> {
+/// Convert block number into short lookup key (LE representation) for
+/// blocks that are in the canonical chain.
+pub fn number_to_lookup_key<N>(n: N) -> ShortBlockLookupKey where N: As<u64> {
 	let n: u64 = n.as_();
 	assert!(n & 0xffffffff00000000 == 0);
 
@@ -81,6 +82,49 @@ pub fn number_to_lookup_key<N>(n: N) -> BlockLookupKey where N: As<u64> {
 		(n & 0xff) as u8
 	]
 }
+
+/// Convert number and hash into long lookup key for blocks that are
+/// not in the canonical chain.
+pub fn number_and_hash_to_lookup_key<N, H>(number: N, hash: H) -> Vec<u8> where
+	N: As<u64>,
+	H: AsRef<[u8]>
+{
+	let mut lookup_key = number_to_lookup_key(number).to_vec();
+	lookup_key.extend_from_slice(hash.as_ref());
+	lookup_key
+}
+
+/// Convert block lookup key into block number.
+/// all block lookup keys start with the block number.
+pub fn lookup_key_to_number<N>(key: &[u8]) -> client::error::Result<N> where N: As<u64> {
+	if key.len() < 4 {
+		return Err(client::error::ErrorKind::Backend("Invalid block key".into()).into());
+	}
+	Ok((key[0] as u64) << 24
+		| (key[1] as u64) << 16
+		| (key[2] as u64) << 8
+		| (key[3] as u64)).map(As::sa)
+}
+
+/// Convert block id to block lookup key.
+/// block lookup key is the DB-key header, block and justification are stored under.
+/// looks up lookup key by hash from DB as necessary.
+pub fn block_id_to_lookup_key<Block>(
+	db: &KeyValueDB,
+	hash_lookup_col: Option<u32>,
+	id: BlockId<Block>
+) -> Result<Option<Vec<u8>>, client::error::Error> where
+	Block: BlockT,
+{
+	match id {
+		// numbers are solely looked up in canonical chain
+		BlockId::Number(n) => Ok(Some(number_to_lookup_key(n).to_vec())),
+		BlockId::Hash(h) => db.get(hash_lookup_col, h.as_ref()).map(|v|
+			v.map(|v| { v.into_vec() })
+		).map_err(db_err),
+	}
+}
+
 
 /// Maps database error to client error
 pub fn db_err(err: io::Error) -> client::error::Error {
@@ -113,33 +157,12 @@ pub fn open_database(config: &DatabaseSettings, col_meta: Option<u32>, db_type: 
 	Ok(Arc::new(db))
 }
 
-/// Convert block id to block key, looking up canonical hash by number from DB as necessary.
-pub fn read_id<Block>(db: &KeyValueDB, col_index: Option<u32>, id: BlockId<Block>) -> Result<Option<Block::Hash>, client::error::Error>
-	where
-		Block: BlockT,
-{
-	match id {
-		BlockId::Hash(h) => Ok(Some(h)),
-		BlockId::Number(n) => db.get(col_index, &number_to_lookup_key(n)).map(|v|
-			v.map(|v| {
-				let mut h = <Block::Hash>::default();
-				{
-					let h = h.as_mut();
-					let len = ::std::cmp::min(v.len(), h.len());
-					h.as_mut().copy_from_slice(&v[..len]);
-				}
-				h
-			})
-		).map_err(db_err),
-	}
-}
-
 /// Read database column entry for the given block.
 pub fn read_db<Block>(db: &KeyValueDB, col_index: Option<u32>, col: Option<u32>, id: BlockId<Block>) -> client::error::Result<Option<DBValue>>
 	where
 		Block: BlockT,
 {
-	read_id(db, col_index, id).and_then(|key| match key {
+	block_id_to_lookup_key(db, col_index, id).and_then(|key| match key {
 		Some(key) => db.get(col, key.as_ref()).map_err(db_err),
 		None => Ok(None),
 	})

@@ -109,6 +109,11 @@ fn should_watch_extrinsic() {
 		Extrinsic { transfer: tx, signature }
 	};
 	AuthorApi::submit_rich_extrinsic(&p, replacement).unwrap();
+	let (res, data) = runtime.block_on(data.into_future()).unwrap();
+	assert_eq!(
+		res,
+		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":"ready","subscription":1}}"#.into())
+	);
 	assert_eq!(
 		runtime.block_on(data.into_future()).unwrap().0,
 		Some(r#"{"jsonrpc":"2.0","method":"test","params":{"result":{"usurped":"0xed454dcee51431679c2559403187a56567fded1fc50b6ae3aada87c1d412df5c"},"subscription":1}}"#.into())

@@ -54,7 +54,7 @@ use rstd::prelude::*;
 use codec::{Encode, Decode};
 
 use runtime_api::runtime::*;
-use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT};
+use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT};
 use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
@@ -112,6 +112,12 @@ impl BlindCheckable for Extrinsic {
 		} else {
 			Err("bad signature")
 		}
+	}
+}
+
+impl ExtrinsicT for Extrinsic {
+	fn is_signed(&self) -> Option<bool> {
+		Some(true)
 	}
 }
 
@@ -185,7 +191,7 @@ impl_apis! {
 		}
 	}
 
-	impl BlockBuilder<Block, u32, u32, u32> for Runtime {
+	impl BlockBuilder<Block, u32, u32, u32, u32> for Runtime {
 		fn initialise_block(header: <Block as BlockT>::Header) {
 			system::initialise_block(header)
 		}
@@ -202,7 +208,7 @@ impl_apis! {
 			unimplemented!()
 		}
 
-		fn check_inherents(_block: Block, _data: u32) -> Result<(), runtime_api::BlockBuilderError> {
+		fn check_inherents(_block: Block, _data: u32) -> Result<(), u32> {
 			unimplemented!()
 		}
 
