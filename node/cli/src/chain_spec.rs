@@ -20,11 +20,14 @@ use primitives::{AuthorityId, ed25519};
 use node_runtime::{GenesisConfig, ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
 	ContractConfig, Permill, Perbill};
-use service::ChainSpec;
+use substrate_service;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
-pub fn bbq_birch_config() -> Result<ChainSpec<GenesisConfig>, String> {
+/// Specialised `ChainSpec`.
+pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
+
+pub fn bbq_birch_config() -> Result<ChainSpec, String> {
 	ChainSpec::from_embedded(include_bytes!("../res/bbq-birch.json"))
 }
 
@@ -122,7 +125,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 }
 
 /// Staging testnet config.
-pub fn staging_testnet_config() -> ChainSpec<GenesisConfig> {
+pub fn staging_testnet_config() -> ChainSpec {
 	let boot_nodes = vec![
 	];
 	ChainSpec::from_genesis(
@@ -227,7 +230,7 @@ fn development_config_genesis() -> GenesisConfig {
 }
 
 /// Development config (single validator Alice)
-pub fn development_config() -> ChainSpec<GenesisConfig> {
+pub fn development_config() -> ChainSpec {
 	ChainSpec::from_genesis("Development", "development", development_config_genesis, vec![], None, None, None)
 }
 
@@ -238,18 +241,30 @@ fn local_testnet_genesis() -> GenesisConfig {
 	])
 }
 
-fn local_testnet_genesis_instant() -> GenesisConfig {
-	let mut genesis = local_testnet_genesis();
-	genesis.timestamp = Some(TimestampConfig { period: 0 });
-	genesis
-}
-
 /// Local testnet config (multivalidator Alice + Bob)
-pub fn local_testnet_config() -> ChainSpec<GenesisConfig> {
+pub fn local_testnet_config() -> ChainSpec {
 	ChainSpec::from_genesis("Local Testnet", "local_testnet", local_testnet_genesis, vec![], None, None, None)
 }
 
-/// Local testnet config (multivalidator Alice + Bob)
-pub fn integration_test_config() -> ChainSpec<GenesisConfig> {
-	ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None)
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use service_test;
+	use service::Factory;
+
+	fn local_testnet_genesis_instant() -> GenesisConfig {
+		let mut genesis = local_testnet_genesis();
+		genesis.timestamp = Some(TimestampConfig { period: 0 });
+		genesis
+	}
+
+	/// Local testnet config (multivalidator Alice + Bob)
+	pub fn integration_test_config() -> ChainSpec {
+		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None)
+	}
+
+	#[test]
+	fn test_connectivity() {
+		service_test::connectivity::<Factory>(integration_test_config());
+	}
 }

@@ -68,7 +68,6 @@ members = [
 	"node/network",
 	"node/primitives",
 	"node/runtime",
-	"node/service",
 	"subkey",
 ]
 exclude = [
