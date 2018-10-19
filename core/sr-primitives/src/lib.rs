@@ -326,7 +326,7 @@ macro_rules! impl_outer_log {
 	(
 		$(#[$attr:meta])*
 		pub enum $name:ident ($internal:ident: DigestItem<$( $genarg:ty ),*>) for $trait:ident {
-			$( $module:ident($( $item:ident ),*) ),*
+			$( $module:ident( $( $sitem:ident ),* ) ),*
 		}
 	) => {
 		/// Wrapper for all possible log entries for the `$trait` runtime. Provides binary-compatible
@@ -343,7 +343,7 @@ macro_rules! impl_outer_log {
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		$(#[$attr])*
 		#[allow(non_camel_case_types)]
-		enum $internal {
+		pub enum InternalLog {
 			$(
 				$module($module::Log<$trait>),
 			)*
@@ -357,11 +357,24 @@ macro_rules! impl_outer_log {
 			fn dref<'a>(&'a self) -> Option<$crate::generic::DigestItemRef<'a, $($genarg),*>> {
 				match self.0 {
 					$($(
-					$internal::$module($module::RawLog::$item(ref v)) =>
-						Some($crate::generic::DigestItemRef::$item(v)),
+					$internal::$module($module::RawLog::$sitem(ref v)) =>
+						Some($crate::generic::DigestItemRef::$sitem(v)),
 					)*)*
 					_ => None,
 				}
+			}
+		}
+
+		impl $crate::traits::DigestItem for $name {
+			type Hash = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::Hash;
+			type AuthorityId = <$crate::generic::DigestItem<$($genarg),*> as $crate::traits::DigestItem>::AuthorityId;
+
+			fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
+				self.dref().and_then(|dref| dref.as_authorities_change())
+			}
+
+			fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
+				self.dref().and_then(|dref| dref.as_changes_trie_root())
 			}
 		}
 
@@ -375,8 +388,8 @@ macro_rules! impl_outer_log {
 			fn from(gen: $crate::generic::DigestItem<$($genarg),*>) -> Self {
 				match gen {
 					$($(
-					$crate::generic::DigestItem::$item(value) =>
-						$name($internal::$module($module::RawLog::$item(value))),
+					$crate::generic::DigestItem::$sitem(value) =>
+						$name($internal::$module($module::RawLog::$sitem(value))),
 					)*)*
 					_ => gen.as_other()
 						.and_then(|value| $crate::codec::Decode::decode(&mut &value[..]))
@@ -417,10 +430,10 @@ macro_rules! impl_outer_log {
 				}
 			}
 
-			impl From<$module::Log<$trait>> for $internal {
+			impl From<$module::Log<$trait>> for InternalLog {
 				/// Converts single module log item into `$internal`.
 				fn from(x: $module::Log<$trait>) -> Self {
-					$internal::$module(x)
+					InternalLog::$module(x)
 				}
 			}
 		)*
@@ -431,6 +444,7 @@ macro_rules! impl_outer_log {
 mod tests {
 	use substrate_primitives::hash::H256;
 	use codec::{Encode as EncodeHidden, Decode as DecodeHidden};
+	use traits::DigestItem;
 
 	pub trait RuntimeT {
 		type AuthorityId;
@@ -442,31 +456,31 @@ mod tests {
 		type AuthorityId = u64;
 	}
 
+	mod a {
+		use super::RuntimeT;
+		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
+
+		#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		pub enum RawLog<AuthorityId> { A1(AuthorityId), AuthoritiesChange(Vec<AuthorityId>), A3(AuthorityId) }
+	}
+
+	mod b {
+		use super::RuntimeT;
+		pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
+
+		#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
+		pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
+	}
+
+	// TODO try to avoid redundant brackets: a(AuthoritiesChange), b
+	impl_outer_log! {
+		pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
+			a(AuthoritiesChange), b()
+		}
+	}
+
 	#[test]
 	fn impl_outer_log_works() {
-		mod a {
-			use super::RuntimeT;
-			pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
-
-			#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
-			pub enum RawLog<AuthorityId> { A1(AuthorityId), AuthoritiesChange(Vec<AuthorityId>), A3(AuthorityId) }
-		}
-
-		mod b {
-			use super::RuntimeT;
-			pub type Log<R> = RawLog<<R as RuntimeT>::AuthorityId>;
-
-			#[derive(Serialize, Deserialize, Debug, Encode, Decode, PartialEq, Eq, Clone)]
-			pub enum RawLog<AuthorityId> { B1(AuthorityId), B2(AuthorityId) }
-		}
-
-		// TODO try to avoid redundant brackets: a(AuthoritiesChange), b
-		impl_outer_log! {
-			pub enum Log(InternalLog: DigestItem<H256, u64>) for Runtime {
-				a(AuthoritiesChange), b()
-			}
-		}
-
 		// encode/decode regular item
 		let b1: Log = b::RawLog::B1::<u64>(777).into();
 		let encoded_b1 = b1.encode();
@@ -492,5 +506,11 @@ mod tests {
 			super::generic::DigestItem::AuthoritiesChange::<H256, u64>(authorities) => assert_eq!(authorities, vec![100, 200, 300]),
 			_ => panic!("unexpected generic_auth_change: {:?}", generic_auth_change),
 		}
+
+		// check that as-style methods are working with system items
+		assert!(auth_change.as_authorities_change().is_some());
+
+		// check that as-style methods are not working with regular items
+		assert!(b1.as_authorities_change().is_none());
 	}
 }
