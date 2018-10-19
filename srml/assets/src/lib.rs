@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! A simple, secure module for dealing with fungible assets. 
+//! A simple, secure module for dealing with fungible assets.
 
 // Ensure we're `no_std` when compiling for Wasm.
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -103,9 +103,6 @@ decl_storage! {
 		Balances: map (AssetId, T::AccountId) => T::Balance;
 		/// The next asset identifier up for grabs.
 		NextAssetId get(next_asset_id): AssetId;
-
-		// Required for compailation @bkchr needs fixing! :)
-		Foo get(foo) config(): T::Balance;
 	}
 }
 
@@ -208,7 +205,7 @@ mod tests {
 	// our desired mockup.
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test>::default().build_storage().unwrap());
+		t.extend(GenesisConfig::default().build_storage().unwrap());
 		t.into()
 	}
 
