@@ -476,6 +476,41 @@ macro_rules! construct_simple_service {
 	}
 }
 
+/// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
+/// The required parameters are required to be given in the exact order. Some parameters are followed
+/// by `{}` blocks. These blocks are required and used to initialize the given parameter.
+/// In these block it is required to write a closure that takes the same number of arguments,
+/// the corresponding function in the `ServiceFactory` trait provides.
+///
+/// # Example
+///
+/// ```nocompile
+/// construct_service_factory! {
+/// 	struct Factory {
+///         // Declare the block type
+/// 		Block = Block,
+///         // Declare the network protocol and give an initializer.
+/// 		NetworkProtocol = DemoProtocol { |config| Ok(DemoProtocol::new()) },
+/// 		RuntimeDispatch = node_executor::Executor,
+/// 		FullTransactionPoolApi = transaction_pool::ChainApi<FullBackend<Self>, FullExecutor<Self>, Block>
+/// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+/// 		LightTransactionPoolApi = transaction_pool::ChainApi<LightBackend<Self>, LightExecutor<Self>, Block>
+/// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+/// 		Genesis = GenesisConfig,
+/// 		Configuration = (),
+/// 		FullService = Service<FullComponents<Self>>
+/// 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
+/// 		LightService = Service<LightComponents<Self>>
+/// 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
+///         // Declare the import queue. The import queue is special as it takes two initializers.
+///         // The first one is for the initializing the full import queue and the second for the
+///         // light import queue.
+/// 		ImportQueue = BasicQueue<Block, NoneVerifier>
+/// 			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) }
+/// 			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) },
+/// 	}
+/// }
+/// ```
 #[macro_export]
 macro_rules! construct_service_factory {
 	(

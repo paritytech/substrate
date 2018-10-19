@@ -16,7 +16,7 @@
 
 #![warn(unused_extern_crates)]
 
-//! Substrate service. Specialized wrapper over substrate service.
+//! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
 use std::sync::Arc;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
@@ -31,6 +31,7 @@ use network::import_queue::{BasicQueue, BlockOrigin, ImportBlock, Verifier};
 use runtime_primitives::{traits::Block as BlockT};
 use primitives::AuthorityId;
 
+// TODO: Remove me, when we have a functional consensus.
 /// A verifier that doesn't actually do any checks
 pub struct NoneVerifier;
 /// This Verifiyer accepts all data as valid
@@ -61,19 +62,9 @@ construct_service_factory! {
 		Block = Block,
 		NetworkProtocol = DemoProtocol { |config| Ok(DemoProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
-		FullTransactionPoolApi =
-			transaction_pool::ChainApi<
-				FullBackend<Self>,
-				FullExecutor<Self>,
-				Block
-			>
+		FullTransactionPoolApi = transaction_pool::ChainApi<FullBackend<Self>, FullExecutor<Self>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
-		LightTransactionPoolApi =
-			transaction_pool::ChainApi<
-				LightBackend<Self>,
-				LightExecutor<Self>,
-				Block
-			>
+		LightTransactionPoolApi = transaction_pool::ChainApi<LightBackend<Self>, LightExecutor<Self>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
 		Genesis = GenesisConfig,
 		Configuration = (),
