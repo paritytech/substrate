@@ -30,6 +30,7 @@ use substrate_service::{
 use network::import_queue::{BasicQueue, BlockOrigin, ImportBlock, Verifier};
 use runtime_primitives::{traits::Block as BlockT};
 use primitives::AuthorityId;
+use node_executor;
 
 // TODO: Remove me, when we have a functional consensus.
 /// A verifier that doesn't actually do any checks

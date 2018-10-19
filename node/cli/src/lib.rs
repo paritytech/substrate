@@ -36,6 +36,7 @@ extern crate sr_primitives as runtime_primitives;
 extern crate node_primitives;
 #[macro_use]
 extern crate substrate_service;
+extern crate node_executor;
 
 #[macro_use]
 extern crate log;
