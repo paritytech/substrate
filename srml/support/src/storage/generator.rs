@@ -590,6 +590,7 @@ macro_rules! __generate_genesis_config {
 		);
 	};
 
+	// Do not generate any `GenesisConfig`, if we not require it.
 	(@GEN
 		[$traittype:ident $traitinstance:ident]
 		// normal getters
@@ -602,41 +603,7 @@ macro_rules! __generate_genesis_config {
 		[]
 		// final build storage call
 		[$call:expr]
-	) => {
-		#[cfg(feature = "std")]
-		#[derive(Serialize, Deserialize, Default)]
-		#[serde(rename_all = "camelCase")]
-		#[serde(deny_unknown_fields)]
-		pub struct GenesisConfig {}
-
-		#[cfg(feature = "std")]
-		impl $crate::runtime_primitives::BuildStorage for GenesisConfig {
-			fn build_storage(self) -> ::std::result::Result<$crate::runtime_primitives::StorageMap, String> {
-				let mut r: $crate::runtime_primitives::StorageMap = Default::default();
-
-				// normal getters
-				$({
-					use $crate::codec::Encode;
-					let v = ($normalbuild)(&self);
-					r.insert(Self::hash(<$normalclassname<$traitinstance>>::key()).to_vec(), v.encode());
-				})*
-
-				// for maps
-				$({
-					use $crate::codec::Encode;
-					let data = ($mapbuild)(&self);
-					for (k, v) in data.into_iter() {
-						r.insert(Self::hash(&<$mapclassname<$traitinstance>>::key_for(k)).to_vec(), v.encode());
-					}
-				})*
-
-				// extra call
-				$call(&mut r, &self);
-
-				Ok(r)
-			}
-		}
-	};
+	) => {};
 
 	(@GEN
 		[$traittype:ident $traitinstance:ident]
