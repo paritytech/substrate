@@ -83,7 +83,7 @@ pub fn generate_key(_desired: &str) -> Result<KeyPair, &str> {
 				seed: seed.clone(),
 				score: score,
 			};
-			if best == top {
+			if best >= top {
 				println!("best: {} == top: {}", best, top);
 				return Ok(keypair);
 			}
@@ -92,7 +92,7 @@ pub fn generate_key(_desired: &str) -> Result<KeyPair, &str> {
 		done += 1;
 
 		if done % good_waypoint(done) == 0 {
-			println!("{} keys searched", done);
+			println!("{} keys searched; best is {}/{} complete", done, best, top);
 		}
 	}
 }
