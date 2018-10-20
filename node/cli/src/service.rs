@@ -60,8 +60,8 @@ construct_service_factory! {
 							info!("Using authority key {}", key.public());
 							run_aura(AuraConfig {
 								local_key:  Some(Arc::new(key)),
-								slot_duration: 1
-							}, service.client().clone(), service.inner.clone());
+								slot_duration: 5
+							}, service.client(), service.proposer());
 						}
 					}
 

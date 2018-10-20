@@ -435,17 +435,12 @@ mod tests {
 		}
 	}
 
-	impl Proposer<TestBlock> for DummyProposer {
+	impl Proposer<TestBlock> for TestC {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
-		type Evaluate = Result<bool, Error>;
 
 		fn propose(&self) -> Result<TestBlock, Error> {
 			self.1.new_block().unwrap().bake().map_err(|e| e.into())
-		}
-
-		fn evaluate(&self, _proposal: &TestBlock) -> Result<bool, Error> {
-			Ok(true)
 		}
 	}
 

@@ -29,7 +29,7 @@ extern crate parking_lot;
 extern crate substrate_keystore as keystore;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
-extern crate substrate_consensus_common as consensus;
+extern crate substrate_consensus_common as consensus_common;
 extern crate substrate_network as network;
 extern crate substrate_executor;
 extern crate substrate_client as client;
@@ -57,6 +57,7 @@ mod error;
 mod chain_spec;
 pub mod config;
 pub mod chain_ops;
+pub mod consensus;
 
 use std::io;
 use std::net::SocketAddr;
@@ -64,7 +65,7 @@ use std::collections::HashMap;
 #[doc(hidden)]
 pub use std::{ops::Deref, result::Result, sync::Arc};
 use futures::prelude::*;
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, Block as BlockT, As};
@@ -82,6 +83,8 @@ pub use chain_spec::ChainSpec;
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
+use consensus_common::offline_tracker::OfflineTracker;
+pub use consensus::ProposerFactory;
 pub use components::{ServiceFactory, FullBackend, FullExecutor, LightBackend,
 	LightExecutor, Components, PoolApi, ComponentClient,
 	ComponentBlock, FullClient, LightClient, FullComponents, LightComponents,
@@ -100,6 +103,7 @@ pub struct Service<Components: components::Components> {
 	keystore: Keystore,
 	exit: ::exit_future::Exit,
 	signal: Option<Signal>,
+	proposer: Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>,
 	_rpc_http: Option<rpc::HttpServer>,
 	_rpc_ws: Option<Mutex<rpc::WsServer>>, // WsServer is not `Sync`, but the service needs to be.
 	_telemetry: Option<tel::Telemetry>,
@@ -257,6 +261,13 @@ impl<Components> Service<Components>
 			)
 		};
 
+		let proposer = Arc::new(ProposerFactory {
+			client: client.clone(),
+			transaction_pool: transaction_pool.clone(),
+			offline: Arc::new(RwLock::new(OfflineTracker::new())),
+			force_delay: 0 // FIXME: allow this to be configured
+		});
+
 		// Telemetry
 		let telemetry = match config.telemetry_url {
 			Some(url) => {
@@ -290,6 +301,7 @@ impl<Components> Service<Components>
 			transaction_pool: transaction_pool,
 			signal: Some(signal),
 			keystore: keystore,
+			proposer,
 			exit,
 			_rpc_http: rpc_http,
 			_rpc_ws: rpc_ws.map(Mutex::new),
@@ -304,6 +316,13 @@ impl<Components> Service<Components> where
 	/// Get shared client instance.
 	pub fn client(&self) -> Arc<ComponentClient<Components>> {
 		self.client.clone()
+	}
+
+	/// Get shared proposer instance
+	pub fn proposer(&self)
+		-> Arc<ProposerFactory<ComponentClient<Components>, Components::TransactionPoolApi>>
+	{
+		self.proposer.clone()
 	}
 
 	/// Get shared network instance.
@@ -326,46 +345,7 @@ impl<Components> Service<Components> where
 		self.exit.clone()
 	}
 }
-pub struct ConsensusProposer<Components: components::Components>(Arc<ComponentClient<Components>>);
 
-impl<Components> consensus::Proposer<ComponentBlock<Components>> for ConsensusProposer<Components>
-where
-	Components: components::Components,
-	<Components as components::Components>::Executor: std::clone::Clone
-{
-	type Error = client::error::Error;
-	type Create = Result<ComponentBlock<Components>, Self::Error>;
-	type Evaluate = Result<bool, Self::Error>;
-
-	fn propose(&self) -> Self::Create {
-		match self.0.new_block() {
-			Ok(b) => b.bake().map_err(|e| e.into()),
-			Err(e) => Err(e.into())
-		}
-	}
-
-	fn evaluate(&self, _proposal: &ComponentBlock<Components>) -> Self::Evaluate {
-		// doesn't actually do anything, do we still need this?
-		Ok(true)
-	}
-}
-
-impl<Components> consensus::Environment<ComponentBlock<Components>> for Service<Components>
-where
-	Components: components::Components,
-	<Components as components::Components>::Executor: std::clone::Clone
-{
-	type Proposer = ConsensusProposer<Components>;
-	type Error = client::error::Error;
-
-	fn init(&self,
-		_parent_header: &<ComponentBlock<Components> as BlockT>::Header,
-		_authorities: &[AuthorityId],
-		_sign_with: Arc<ed25519::Pair>
-	) -> Result<Self::Proposer, Self::Error> {
-		Ok(ConsensusProposer(self.client.clone()))
-	}
-}
 
 impl<Components> Drop for Service<Components> where Components: components::Components {
 	fn drop(&mut self) {

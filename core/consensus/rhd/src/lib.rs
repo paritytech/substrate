@@ -98,7 +98,6 @@ pub use self::error::{Error, ErrorKind};
 
 // pub mod misbehaviour_check;
 mod error;
-mod evaluation;
 mod service;
 
 // statuses for an agreement
@@ -174,9 +173,6 @@ pub type Misbehavior<H> = rhododendron::Misbehavior<H, LocalizedSignature>;
 /// Shared offline validator tracker.
 pub type SharedOfflineTracker = Arc<RwLock<OfflineTracker>>;
 
-// block size limit.
-const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
-
 /// A proposer for a rhododendron instance. This must implement the base proposer logic.
 pub trait LocalProposer<B: Block>: BaseProposer<B, Error=Error> {
 	/// Import witnessed rhododendron misbehavior.
@@ -188,25 +184,6 @@ pub trait LocalProposer<B: Block>: BaseProposer<B, Error=Error> {
 
 	/// Hook called when a BFT round advances without a proposal.
 	fn on_round_end(&self, _round_number: u32, _proposed: bool) { }
-}
-
-/// Inherent data to include in a block.
-#[derive(Encode, Decode)]
-pub struct InherentData {
-	/// Current timestamp.
-	pub timestamp: Timestamp,
-	/// Indices of offline validators.
-	pub offline_indices: Vec<u32>,
-}
-
-impl InherentData {
-	/// Create a new `InherentData` instance.
-	pub fn new(timestamp: Timestamp, offline_indices: Vec<u32>) -> Self {
-		Self {
-			timestamp,
-			offline_indices
-		}
-	}
 }
 
 

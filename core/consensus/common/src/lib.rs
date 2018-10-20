@@ -23,6 +23,10 @@ extern crate sr_version as runtime_version;
 extern crate sr_primitives as runtime_primitives;
 extern crate tokio;
 
+extern crate parity_codec as codec;
+#[macro_use]
+extern crate parity_codec_derive;
+
 #[macro_use]
 extern crate error_chain;
 
@@ -36,6 +40,11 @@ use futures::prelude::*;
 pub mod offline_tracker;
 pub mod error;
 mod block_import;
+pub mod evaluation;
+
+
+// block size limit.
+const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
 
 pub use self::error::{Error, ErrorKind};
 pub use block_import::{BlockImport, ImportBlock, BlockOrigin, ImportResult};
@@ -67,12 +76,25 @@ pub trait Proposer<B: Block> {
 	type Error: From<Error> + ::std::fmt::Debug + 'static;
 	/// Future that resolves to a committed proposal.
 	type Create: IntoFuture<Item=B,Error=Self::Error>;
-	/// Future that resolves when a proposal is evaluated.
-	type Evaluate: IntoFuture<Item=bool,Error=Self::Error>;
-
 	/// Create a proposal.
 	fn propose(&self) -> Self::Create;
+}
 
-	/// Evaluate proposal. True means valid.
-	fn evaluate(&self, proposal: &B) -> Self::Evaluate;
+/// Inherent data to include in a block.
+#[derive(Encode, Decode)]
+pub struct InherentData {
+	/// Current timestamp.
+	pub timestamp: u64,
+	/// Indices of offline validators.
+	pub offline_indices: Vec<u32>,
+}
+
+impl InherentData {
+	/// Create a new `InherentData` instance.
+	pub fn new(timestamp: u64, offline_indices: Vec<u32>) -> Self {
+		Self {
+			timestamp,
+			offline_indices
+		}
+	}
 }
