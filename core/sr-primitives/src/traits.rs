@@ -566,5 +566,5 @@ pub trait ProvideInherent {
 pub trait Extrinsic {
 	/// Is this `Extrinsic` signed?
 	/// If no information are available about signed/unsigned, `None` should be returned.
-	fn is_signed(&self) -> Option<bool>;
+	fn is_signed(&self) -> Option<bool> { None }
 }
