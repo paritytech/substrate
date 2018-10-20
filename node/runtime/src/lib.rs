@@ -197,9 +197,9 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
+		Timestamp: timestamp::{Module, Call, Storage, Config, Inherent},
 		Consensus: consensus::{Module, Call, Storage, Config, Log(AuthoritiesChange), Inherent},
 		Balances: balances,
-		Timestamp: timestamp::{Module, Call, Storage, Config, Inherent},
 		Session: session,
 		Staking: staking,
 		Democracy: democracy,
