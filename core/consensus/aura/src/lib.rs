@@ -202,7 +202,7 @@ pub fn start_aura<B, C, E, Error>(config: Config, client: Arc<C>, env: Arc<E>)
 			let chain_head = match client.best_block_header() {
 				Ok(x) => x,
 				Err(e) => {
-					warn!("Unable to author block in slot {}. no best block header: {:?}", slot_num, e);
+					warn!(target:"aura", "Unable to author block in slot {}. no best block header: {:?}", slot_num, e);
 					return Either::B(future::ok(()))
 				}
 			};
@@ -259,25 +259,29 @@ pub fn start_aura<B, C, E, Error>(config: Config, client: Arc<C>, env: Arc<E>)
 			)
 		})
 }
-/// Start the aura worker. This should be run in a tokio runtime.
+
+/// Start the aura worker. This should be run in a separate thread!
 pub fn run_aura<B, C, E, Error>(config: Config, client: Arc<C>, env: Arc<E>)
 where
 	B: Block,
-	C: Authorities<B, Error=Error> + BlockImport<B, Error=Error> + ChainHead<B> + 'static,
-	E: Environment<B, Error=Error> + 'static,
+	C: Authorities<B, Error=Error> + BlockImport<B, Error=Error> + ChainHead<B> + 'static + Sync + Send,
+	E: Environment<B, Error=Error> + 'static + Sync + Send,
 	E::Proposer: Proposer<B, Error=Error>,
 	DigestItemFor<B>: CompatibleDigestItem,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
-	use tokio::runtime::current_thread;
-	let aura = start_aura(config, client, env);
-	match current_thread::Runtime::new() {
-		Ok(mut runtime) => {
-			runtime.spawn(aura);
-		},
-		Err(e) => warn!(target: "aura", "Failed to start aura block proposing: {:?}", e)
-	};
+	::std::thread::Builder::new().name("Aura Producer".into()).spawn(move || {
+		trace!(target: "aura", "Starting aura block production");
+		use tokio::runtime::current_thread;
+		let aura = start_aura(config, client, env);
+		current_thread::Runtime::new()
+			.map(|mut runtime| runtime.block_on(aura))
+			.map_err(|e| {
+				warn!(target: "aura", "Failed to start aura block proposing: {:?}", e)
+			});
+	});
 }
+
 
 // a header which has been checked
 enum CheckedHeader<H> {
@@ -515,7 +519,6 @@ mod tests {
 			import_notifications.push(
 				client.import_notification_stream()
 					.take_while(|n| {
-						println!("notification: {:?}", n);
 						Ok(!(n.origin != BlockOrigin::Own && n.header.number() < &5))
 					})
 					.for_each(move |_| Ok(()))
@@ -538,24 +541,14 @@ mod tests {
 			.map(|_| ())
 			.map_err(|_| ());
 
-		// FIXME: due to a bug in the testnet we aren't seeing our import announces published
-		// past calling `sync()` the first time - so wait until all rounds have passed and 
-		// call it only onces after
-
-		// let drive_to_completion = ::tokio::timer::Delay::new(
-		// 		Instant::now() + Duration::new(SLOT_DURATION * 10, 0))
 		let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
 			.for_each(move |_| {
 				net.lock().send_import_notifications();
 				net.lock().sync();
-				println!("synced");
 				Ok(())
 			})
 			.map(|_| ())
 			.map_err(|_| ());
-
-		// let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-		// 		.for_each(move |_| { net.lock().sync(); println!("synced"); Ok(()) })
 
 		runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 	}

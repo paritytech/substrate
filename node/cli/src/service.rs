@@ -24,7 +24,8 @@ use node_primitives::Block;
 use node_runtime::GenesisConfig;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
+	Roles
 };
 use runtime_primitives::{traits::Block as BlockT};
 use node_executor;
@@ -49,12 +50,20 @@ construct_service_factory! {
 		Genesis = GenesisConfig,
 		Configuration = (),
 		FullService = Service<FullComponents<Self>>
-			{ |config, executor| {
+			{ |config: FactoryFullConfiguration<Self>, executor| {
+				let is_auth = config.roles == Roles::AUTHORITY;
 				Service::<FullComponents<Factory>>::new(config, executor).map(|service|{
-					run_aura(AuraConfig {
-						local_key: None,
-						slot_duration: 5
-					}, service.client().clone(), service.inner.clone());
+					if  is_auth {
+						if let Ok(Some(Ok(key))) = service.keystore().contents()
+							.map(|keys| keys.get(0).map(|k| service.keystore().load(k, "")))
+						{
+							info!("Using authority key {}", key.public());
+							run_aura(AuraConfig {
+								local_key:  Some(Arc::new(key)),
+								slot_duration: 1
+							}, service.client().clone(), service.inner.clone());
+						}
+					}
 
 					service
 				})
