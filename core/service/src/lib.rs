@@ -490,7 +490,7 @@ macro_rules! construct_simple_service {
 ///         // Declare the block type
 /// 		Block = Block,
 ///         // Declare the network protocol and give an initializer.
-/// 		NetworkProtocol = DemoProtocol { |config| Ok(DemoProtocol::new()) },
+/// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 /// 		RuntimeDispatch = node_executor::Executor,
 /// 		FullTransactionPoolApi = transaction_pool::ChainApi<FullBackend<Self>, FullExecutor<Self>, Block>
 /// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
