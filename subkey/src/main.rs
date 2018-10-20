@@ -35,8 +35,9 @@ fn main() {
 		("vanity", Some(matches)) => {
 			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
 			let key = vanity::generate_key(&desired).expect("Key generation failed");
-			println!("{} - {} ({}%)",
+			println!("Seed {} (hex: 0x{}) - {} ({}%)",
 				key.pair.public().to_ss58check(),
+				HexDisplay::from(&key.pair.public().0),
 				HexDisplay::from(&key.seed),
 				key.score);
 		}
@@ -57,7 +58,11 @@ fn main() {
 			seed[..len].copy_from_slice(&raw_seed[..len]);
 			let pair = Pair::from_seed(&seed);
 
-			println!("{}: {}", HexDisplay::from(&seed), pair.public().to_ss58check());
+			println!("Seed 0x{} is account:\n    SS58: {}\n    Hex: 0x{}",
+				HexDisplay::from(&seed),
+				pair.public().to_ss58check(),
+				HexDisplay::from(&pair.public().0)
+			);
 		},
 		_ => print_usage(&matches),
 	}
