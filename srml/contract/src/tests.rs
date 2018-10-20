@@ -204,7 +204,7 @@ fn contract_transfer() {
 		assert_eq!(
 			Balances::free_balance(&0),
 			// 3 - value sent with the transaction
-			// 2 * 10 - gas used by the contract (10) multiplied by gas price (2)
+			// 2 * 26 - gas used by the contract (26) multiplied by gas price (2)
 			// 2 * 135 - base gas fee for call (by transaction)
 			// 2 * 135 - base gas fee for call (by the contract)
 			100_000_000 - 3 - (2 * 10) - (2 * 135) - (2 * 135),

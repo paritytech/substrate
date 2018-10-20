@@ -164,6 +164,12 @@ pub struct Config<T: Trait> {
 	/// Gas cost per one byte returned.
 	return_data_per_byte_cost: T::Gas,
 
+	/// Gas cost per one byte read from the sandbox memory.
+	sandbox_data_read_cost: T::Gas,
+
+	/// Gas cost per one byte written to the sandbox memory.
+	sandbox_data_write_cost: T::Gas,
+
 	/// How tall the stack is allowed to grow?
 	///
 	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
@@ -181,6 +187,8 @@ impl<T: Trait> Default for Config<T> {
 			grow_mem_cost: T::Gas::sa(1),
 			regular_op_cost: T::Gas::sa(1),
 			return_data_per_byte_cost: T::Gas::sa(1),
+			sandbox_data_read_cost: T::Gas::sa(1),
+			sandbox_data_write_cost: T::Gas::sa(1),
 			max_stack_height: 64 * 1024,
 			max_memory_pages: 16,
 		}
