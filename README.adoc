@@ -147,6 +147,22 @@ Now, edit `~/chainspec.json` in your editor. There are a lot of individual field
       },
 ----
 
+[source, shell]
+----
+substrate build-spec --chain ~/chainspec.json --raw > ~/mychain.json
+----
+
+[source, shell]
+----
+substrate --chain ~/mychain.json
+----
+
+[source, shell]
+----
+substrate --chain ~/mychain.json --validator --key ...
+----
+
+
 == Building
 
 === Hacking on Substrate
