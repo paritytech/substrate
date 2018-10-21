@@ -199,7 +199,7 @@ pub trait AuthoringApi:
 	+ Sync
 	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
-	+ Miscellaneous<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+//	+ Miscellaneous<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 	+ OldTxQueue<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 {
 	/// The block used for this API type.

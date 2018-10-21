@@ -47,7 +47,8 @@ use std;
 use client::{self, error, Client as SubstrateClient, CallExecutor};
 use client::runtime_api::{
 	Core, BlockBuilder as BlockBuilderAPI,
-	Miscellaneous, OldTxQueue,
+//	Miscellaneous,
+	OldTxQueue,
 };
 use codec::{Decode, Encode};
 use consensus_common::{self, InherentData, evaluation, offline_tracker::OfflineTracker};
@@ -77,7 +78,7 @@ pub trait AuthoringApi:
 	+ Sync
 	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
-	+ Miscellaneous<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
+//	+ Miscellaneous<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 	+ OldTxQueue<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 {
 	/// The block used for this API type.
@@ -165,8 +166,8 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 
 		let id = BlockId::hash(parent_hash);
 
-		let validators : Vec<AuthorityId> = self.client.validators(&id)?;
-		self.offline.write().note_new_block(&validators[..]);
+		let authorities: Vec<AuthorityId> = self.client.authorities(&id)?;
+		self.offline.write().note_new_block(&authorities[..]);
 
 		info!("Starting consensus session on top of parent {:?}", parent_hash);
 
@@ -179,7 +180,7 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 			parent_number: *parent_header.number(),
 			transaction_pool: self.transaction_pool.clone(),
 			offline: self.offline.clone(),
-			validators,
+			authorities,
 			minimum_timestamp: current_timestamp() + self.force_delay,
 		};
 
@@ -196,7 +197,7 @@ pub struct Proposer<C: AuthoringApi, A: txpool::ChainApi> {
 	parent_number: <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
 	offline: SharedOfflineTracker,
-	validators: Vec<AuthorityId>,
+	authorities: Vec<AuthorityId>,
 	minimum_timestamp: u64,
 }
 
@@ -220,14 +221,13 @@ impl<C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<C
 		let offline_indices = if elapsed_since_start > MAX_VOTE_OFFLINE_SECONDS {
 			Vec::new()
 		} else {
-			self.offline.read().reports(&self.validators[..])
+			self.offline.read().reports(&self.authorities[..])
 		};
 
 		if !offline_indices.is_empty() {
-			info!(
-				"Submitting offline validators {:?} for slash-vote",
-				offline_indices.iter().map(|&i| self.validators[i as usize]).collect::<Vec<_>>(),
-				)
+			info!("Submitting offline authorities {:?} for slash-vote",
+				offline_indices.iter().map(|&i| self.authorities[i as usize]).collect::<Vec<_>>(),
+			)
 		}
 
 		let inherent_data = InherentData {

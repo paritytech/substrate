@@ -1163,7 +1163,7 @@ impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> whe
 		self.call_api_at(at, "validate_transaction", &(tx))
 	}
 }
-
+/*
 impl<B, E, Block> api::Miscellaneous<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
@@ -1178,7 +1178,7 @@ impl<B, E, Block> api::Miscellaneous<Block> for Client<B, E, Block> where
 	fn validators<AccountId: Encode + Decode>(
 		&self, at: &BlockId<Block>
 	) -> Result<Vec<AccountId>, Self::Error> {
-		self.call_api_at(at, "validators", &())
+		self.call_api_at(at, "authorities", &())
 	}
 
 	fn timestamp<Moment: Encode + Decode>(
@@ -1187,7 +1187,7 @@ impl<B, E, Block> api::Miscellaneous<Block> for Client<B, E, Block> where
 		self.call_api_at(at, "timestamp", &())
 	}
 }
-
+*/
 #[cfg(test)]
 pub(crate) mod tests {
 	use std::collections::HashMap;
