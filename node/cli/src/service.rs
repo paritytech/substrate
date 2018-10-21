@@ -66,6 +66,7 @@ construct_service_factory! {
 								},
 								service.client(),
 								service.proposer(),
+								service.network(),
 							);
 
 							executor.spawn(task);

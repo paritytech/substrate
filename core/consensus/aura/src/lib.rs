@@ -47,7 +47,6 @@ extern crate substrate_test_client as test_client;
 extern crate env_logger;
 
 #[cfg(test)]
-#[macro_use]
 extern crate parity_codec_derive;
 
 extern crate parking_lot;
@@ -72,6 +71,7 @@ use primitives::{AuthorityId, ed25519};
 use futures::{Stream, Future, IntoFuture};
 use tokio::timer::Interval;
 
+pub use consensus_common::SyncOracle;
 
 /// A handle to the network. This is generally implemented by providing some
 /// handle to a gossip service or similar.
@@ -116,17 +116,22 @@ fn slot_author<B: Block, C: Authorities<B>>(slot_num: u64, client: &C, header: &
 	}
 }
 
-/// Get the slot for now.
-fn slot_now(slot_duration: u64) -> Result<u64, ()> {
+fn duration_now() -> Result<Duration, ()> {
 	use std::time::SystemTime;
+
 	let now = SystemTime::now();
 	match now.duration_since(SystemTime::UNIX_EPOCH) {
-		Ok(dur) => Ok(dur.as_secs() / slot_duration),
+		Ok(dur) => Ok(dur),
 		Err(_) => {
 			warn!("Current time {:?} is before unix epoch. Something is wrong.", now);
 			return Err(())
 		}
 	}
+}
+
+/// Get the slot for now.
+fn slot_now(slot_duration: u64) -> Result<u64, ()> {
+	duration_now().map(|s| s.as_secs() / slot_duration)
 }
 
 /// A digest item which is usable with aura consensus.
@@ -170,22 +175,37 @@ impl CompatibleDigestItem for generic::DigestItem<primitives::H256, primitives::
 }
 
 /// Start the aura worker. This should be run in a tokio runtime.
-pub fn start_aura<B, C, E, Error>(config: Config, client: Arc<C>, env: Arc<E>)
+pub fn start_aura<B, C, E, SO, Error>(
+	config: Config,
+	client: Arc<C>,
+	env: Arc<E>,
+	sync_oracle: SO,
+)
 	-> impl Future<Item=(),Error=()> where
 	B: Block,
 	C: Authorities<B, Error=Error> + BlockImport<B, Error=Error> + ChainHead<B>,
 	E: Environment<B, Error=Error>,
 	E::Proposer: Proposer<B, Error=Error>,
+	SO: SyncOracle + Send,
 	DigestItemFor<B>: CompatibleDigestItem,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
 	use futures::future::Either;
+	use std::time::Instant;
 
 	let local_keys = config.local_key.map(|pair| (pair.public(), pair));
 	let slot_duration = config.slot_duration;
 	let mut last_authored_slot = 0;
 
-	Interval::new_interval(Duration::from_secs(slot_duration))
+	// wait until the next full slot has started before authoring anything
+	let next_slot_start = duration_now().map(|now| {
+		let remaining_full_secs = slot_duration - (now.as_secs() % slot_duration) - 1;
+		let remaining_nanos = 1_000_000_000 - now.subsec_nanos();
+		Instant::now() + Duration::new(remaining_full_secs, remaining_nanos)
+	}).unwrap_or_else(|()| Instant::now());
+
+	Interval::new(next_slot_start, Duration::from_secs(slot_duration))
+		.filter(move |_| !sync_oracle.is_major_syncing()) // only propose when we are not syncing.
 		.filter_map(move |_| local_keys.clone()) // skip if not authoring.
 		.map_err(|e|  debug!(target: "aura", "Faulty timer: {:?}", e))
 		.for_each(move |(public_key, key)| {
@@ -383,17 +403,15 @@ pub fn import_queue<B, C>(config: Config, client: Arc<C>) -> AuraImportQueue<B, 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::{Decode, Encode};
+	use consensus_common::NoNetwork as DummyOracle;
 	use network::test::*;
 	use network::test::{Block as TestBlock, PeersClient};
 	use runtime_primitives::traits::Block as BlockT;
-	use service::Roles;
 	use network::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::Keyring;
 	use client::BlockchainEvents;
-	use primitives::H256;
 	use test_client;
 
 	type Error = client::error::Error;
@@ -414,7 +432,7 @@ mod tests {
 		}
 	}
 
-	impl Proposer<TestBlock> for TestC {
+	impl Proposer<TestBlock> for DummyProposer {
 		type Error = Error;
 		type Create = Result<TestBlock, Error>;
 
@@ -503,7 +521,8 @@ mod tests {
 					slot_duration: SLOT_DURATION
 				},
 				client,
-				environ.clone()
+				environ.clone(),
+				DummyOracle,
 			);
 
 			runtime.spawn(aura);

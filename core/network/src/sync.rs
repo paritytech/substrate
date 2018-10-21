@@ -78,6 +78,17 @@ pub struct Status<B: BlockT> {
 	pub best_seen_block: Option<NumberFor<B>>,
 }
 
+impl<B: BlockT> Status<B> {
+	/// Whether the synchronization status is doing major downloading work or
+	/// is near the head of the chain.
+	pub fn is_major_syncing(&self) -> bool {
+		match self.state {
+			SyncState::Idle => false,
+			SyncState::Downloading => true,
+		}
+	}
+}
+
 impl<B: BlockT> ChainSync<B> {
 	/// Create a new instance.
 	pub(crate) fn new(role: Roles, info: &ClientInfo<B>, import_queue: Arc<ImportQueue<B>>) -> Self {

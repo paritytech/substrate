@@ -62,7 +62,9 @@ pub trait Environment<B: Block> {
 	/// Error which can occur upon creation.
 	type Error: From<Error>;
 
-	/// Initialize the proposal logic on top of a specific header.
+	/// Initialize the proposal logic on top of a specific header. Provide
+	/// the authorities at that header, and a local key to sign any additional
+	/// consensus messages with as well.
 	fn init(&self, parent_header: &B::Header, authorities: &[AuthorityId], sign_with: Arc<ed25519::Pair>)
 		-> Result<Self::Proposer, Self::Error>;
 }
@@ -96,5 +98,28 @@ impl InherentData {
 			timestamp,
 			offline_indices
 		}
+	}
+}
+
+/// An oracle for when major synchronization work is being undertaken.
+///
+/// Generally, consensus authoring work isn't undertaken while well behind
+/// the head of the chain.
+pub trait SyncOracle {
+	/// Whether the synchronization service is undergoing major sync.
+	/// Returns true if so.
+	fn is_major_syncing(&self) -> bool;
+}
+
+/// A synchronization oracle for when there is no network.
+pub struct NoNetwork;
+
+impl SyncOracle for NoNetwork {
+	fn is_major_syncing(&self) -> bool { false }
+}
+
+impl<T: SyncOracle> SyncOracle for Arc<T> {
+	fn is_major_syncing(&self) -> bool {
+		T::is_major_syncing(&*self)
 	}
 }
