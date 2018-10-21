@@ -22,7 +22,6 @@ use std::sync::Arc;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_primitives::Block;
 use node_runtime::GenesisConfig;
-use node_network::Protocol as NodeProtocol;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
@@ -34,7 +33,7 @@ use consensus::{import_queue, run_aura, Config as AuraConfig, AuraImportQueue};
 
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
-	pub struct DemoProtocol where Block = Block { }
+	pub struct NodeProtocol where Block = Block { }
 }
 
 construct_simple_service!(Service);
