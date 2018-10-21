@@ -114,6 +114,38 @@ Inherent extrinsic knowledge is again somewhat generic, and the actual construct
 - DAO runtime module
 - Audit
 
+== Trying out Substrate Node
+
+Substate Node is Substrate's pre-baked blockchain client. You can run a development node locally or configure a new chain and launch your own global testnet.
+
+=== On Mac
+
+To get going as fast as possible, there is a simple script that installs all required dependencies and installs Substrate into your path. Just open a terminal and run:
+
+[source, shell]
+----
+curl https://raw.githubusercontent.com/paritytech/substrate/master/scripts/getgoing.sh -sSf | sh
+----
+
+You can start a local Substrate development chain with running `substrate --dev`.
+
+To create your own global testnet, you'll need to make a new Substrate Node chain specification file ("chainspec").
+
+First let's get a template chainspec that you can edit. We'll use the "staging" chain, a sort of default chain that the node comes pre-configured with:
+
+[source, shell]
+----
+substrate build-spec --chain=staging > ~/chainspec.json
+----
+
+Now, edit `~/chainspec.json` in your editor. There are a lot of individual fields for each module, and one very large one which contains the Webassembly code blob for this chain. The easiest field to edit is the block `period`. Change it to 10 (seconds):
+
+[source, json]
+----
+     "timestamp": {
+        "period": 10
+      },
+----
 
 == Building
 
