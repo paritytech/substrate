@@ -278,33 +278,9 @@ impl_apis! {
 		}
 	}
 
-	impl OldTxQueue<AccountId, Index, Address, AccountId> for Runtime {
-		fn account_nonce(account: AccountId) -> Index {
-			System::account_nonce(&account)
-		}
-
-		fn lookup_address(address: Address) -> Option<AccountId> {
-			Balances::lookup_address(address)
-		}
-	}
-
 	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
-		}
-	}
-
-	impl Miscellaneous<AccountId, u64> for Runtime {
-		fn validator_count() -> u32 {
-			Session::validator_count()
-		}
-
-		fn validators() -> Vec<AccountId> {
-			Session::validators()
-		}
-
-		fn timestamp() -> u64 {
-			Timestamp::get()
 		}
 	}
 }

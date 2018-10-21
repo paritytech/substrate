@@ -440,22 +440,9 @@ decl_apis! {
 		fn metadata() -> Vec<u8>;
 	}
 
-	/// The `OldTxQueue` api trait for interfering with the old transaction queue.
-	pub trait OldTxQueue {
-		fn account_nonce<AccountId, Index>(account: AccountId) -> Index;
-		fn lookup_address<Address, LookupId>(address: Address) -> Option<LookupId>;
-	}
-
 	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
 	pub trait TaggedTransactionQueue<Block: BlockT> {
 		fn validate_transaction<TransactionValidity>(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
-	}
-
-	/// The `Miscellaneous` api trait for getting miscellaneous information from the runtime.
-	pub trait Miscellaneous {
-		fn validator_count() -> u32;
-		fn validators<AccountId>() -> Vec<AccountId>;
-		fn timestamp<Moment>() -> Moment;
 	}
 
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.

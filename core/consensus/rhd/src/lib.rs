@@ -72,7 +72,7 @@ use consensus::offline_tracker::OfflineTracker;
 use consensus::error::{ErrorKind as CommonErrorKind};
 use consensus::{Authorities, BlockImport, Environment, Proposer as BaseProposer};
 use client::{Client as SubstrateClient, CallExecutor};
-use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, Miscellaneous, OldTxQueue, BlockBuilderError};
+use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, OldTxQueue, BlockBuilderError};
 use runtime_primitives::generic::{BlockId, Era, ImportResult, ImportBlock, BlockOrigin};
 use runtime_primitives::traits::{Block, Header};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As, BlockNumberToHash};
@@ -199,7 +199,6 @@ pub trait AuthoringApi:
 	+ Sync
 	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
-//	+ Miscellaneous<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 	+ OldTxQueue<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 {
 	/// The block used for this API type.

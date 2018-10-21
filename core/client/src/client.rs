@@ -1130,26 +1130,6 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> api::OldTxQueue<Block> for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
-{
-	type Error = Error;
-
-	fn account_nonce<AccountId: Encode + Decode, Index: Encode + Decode>(
-		&self, at: &BlockId<Block>, account: &AccountId
-	) -> Result<Index, Self::Error> {
-		self.call_api_at(at, "account_nonce", &(account))
-	}
-
-	fn lookup_address<Address: Encode + Decode, AccountId: Encode + Decode>(
-		&self, at: &BlockId<Block>, address: &Address
-	) -> Result<Option<AccountId>, Self::Error> {
-		self.call_api_at(at, "lookup_address", &(address))
-	}
-}
-
 impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
@@ -1163,31 +1143,7 @@ impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> whe
 		self.call_api_at(at, "validate_transaction", &(tx))
 	}
 }
-/*
-impl<B, E, Block> api::Miscellaneous<Block> for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
-{
-	type Error = Error;
 
-	fn validator_count(&self, at: &BlockId<Block>) -> Result<u32, Self::Error> {
-		self.call_api_at(at, "validator_count", &())
-	}
-
-	fn validators<AccountId: Encode + Decode>(
-		&self, at: &BlockId<Block>
-	) -> Result<Vec<AccountId>, Self::Error> {
-		self.call_api_at(at, "authorities", &())
-	}
-
-	fn timestamp<Moment: Encode + Decode>(
-		&self, at: &BlockId<Block>
-	) -> Result<Moment, Self::Error> {
-		self.call_api_at(at, "timestamp", &())
-	}
-}
-*/
 #[cfg(test)]
 pub(crate) mod tests {
 	use std::collections::HashMap;

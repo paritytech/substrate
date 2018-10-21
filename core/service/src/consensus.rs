@@ -45,11 +45,7 @@ use std::time::{self, Duration, Instant};
 use std;
 
 use client::{self, error, Client as SubstrateClient, CallExecutor};
-use client::runtime_api::{
-	Core, BlockBuilder as BlockBuilderAPI,
-//	Miscellaneous,
-	OldTxQueue,
-};
+use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI};
 use codec::{Decode, Encode};
 use consensus_common::{self, InherentData, evaluation, offline_tracker::OfflineTracker};
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
@@ -78,8 +74,6 @@ pub trait AuthoringApi:
 	+ Sync
 	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
-//	+ Miscellaneous<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
-	+ OldTxQueue<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
 {
 	/// The block used for this API type.
 	type Block: BlockT;
