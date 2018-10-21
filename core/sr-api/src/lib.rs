@@ -26,7 +26,7 @@ extern crate sr_version as runtime_version;
 
 #[doc(hidden)]
 pub use primitives::{traits::Block as BlockT, generic::BlockId, transaction_validity::TransactionValidity, ApplyResult};
-use runtime_version::RuntimeVersion;
+use runtime_version::{ApiId, RuntimeVersion};
 use rstd::vec::Vec;
 #[doc(hidden)]
 pub use rstd::slice;
@@ -425,6 +425,20 @@ macro_rules! decl_apis {
 			)*
 		}
 	};
+}
+
+/// The ApiIds for the various standard runtime APIs.
+pub mod id {
+	use super::ApiId;
+	
+	/// ApiId for the BlockBuilder trait.
+	pub const BLOCK_BUILDER: ApiId = *b"blkbuild";
+
+	/// ApiId for the TaggedTransactionQueue trait.
+	pub const TAGGED_TRANSACTION_QUEUE: ApiId = *b"validatx";
+
+	/// ApiId for the Metadata trait.
+	pub const METADATA: ApiId = *b"metadata";
 }
 
 decl_apis! {

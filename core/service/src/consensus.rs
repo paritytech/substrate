@@ -45,7 +45,7 @@ use std::time::{self, Duration, Instant};
 use std;
 
 use client::{self, error, Client as SubstrateClient, CallExecutor};
-use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI};
+use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, id::BLOCK_BUILDER};
 use codec::{Decode, Encode};
 use consensus_common::{self, InherentData, evaluation, offline_tracker::OfflineTracker};
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
@@ -116,7 +116,7 @@ impl<'a, B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
 		let runtime_version = self.runtime_version_at(at)?;
 
 		let mut block_builder = self.new_block_at(at)?;
-		if runtime_version.has_api(*b"inherent", 1) {
+		if runtime_version.has_api(BLOCK_BUILDER, 1) {
 			self.inherent_extrinsics(at, &inherent_data)?
 				.into_iter().try_for_each(|i| block_builder.push(i))?;
 		}

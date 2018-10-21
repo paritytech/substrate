@@ -62,12 +62,12 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	SessionKey, Signature
 };
-use runtime_api::runtime::*;
+use runtime_api::{runtime::*, id::*};
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
 use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT};
-use version::{RuntimeVersion, ApiId};
+use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
 use council::seats as council_seats;
@@ -86,9 +86,6 @@ pub use srml_support::StorageValue;
 const TIMESTAMP_SET_POSITION: u32 = 0;
 const NOTE_OFFLINE_POSITION: u32 = 1;
 
-const INHERENT: ApiId = *b"inherent";
-const VALIDATX: ApiId = *b"validatx";
-
 /// Runtime version.
 pub const VERSION: RuntimeVersion = RuntimeVersion {
 	spec_name: ver_str!("node"),
@@ -96,7 +93,11 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	authoring_version: 1,
 	spec_version: 1,
 	impl_version: 0,
-	apis: apis_vec!([(INHERENT, 1), (VALIDATX, 1)]),
+	apis: apis_vec!([
+		(BLOCK_BUILDER, 1),
+		(TAGGED_TRANSACTION_QUEUE, 1),
+		(METADATA, 1)
+	]),
 };
 
 /// Native version.
