@@ -23,6 +23,7 @@ extern crate futures;
 extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_primitives;
+extern crate substrate_network as network;
 extern crate tokio;
 extern crate parity_codec as codec;
 
@@ -37,6 +38,9 @@ extern crate parking_lot;
 
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
+
+#[macro_use]
+extern crate parity_codec_derive;
 
 use futures::prelude::*;
 use futures::stream::Fuse;
@@ -57,7 +61,13 @@ use std::collections::{VecDeque, HashMap};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
 
+mod authorities;
+
 const LAST_COMPLETED_KEY: &[u8] = b"grandpa_completed_round";
+const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
+
+/// round-number, round-state, set indicator
+type LastCompleted<H> = (u64, RoundState<H>, u64);
 
 /// A GRANDPA message for a substrate chain.
 pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash>;
@@ -69,8 +79,7 @@ pub struct Config {
 	/// The expected duration for a message to be gossiped across the network.
 	pub gossip_duration: Duration,
 	/// The voters.
-	// TODO: make dynamic
-	pub voters: Vec<AuthorityId>,
+	pub genesis_voters: Vec<AuthorityId>,
 	/// The local signing key.
 	pub local_key: Option<Arc<ed25519::Pair>>,
 }
@@ -298,15 +307,23 @@ impl<I, N: Network> Drop for ClearOnDrop<I, N> {
 	}
 }
 
-fn round_localized_payload<E: Encode>(round: u64, message: &E) -> Vec<u8> {
+fn localized_payload<E: Encode>(round: u64, set_id: u64, message: &E) -> Vec<u8> {
 	let mut v = message.encode();
+
 	round.using_encoded(|s| v.extend(s));
+	set_id.using_encoded(|s| v.extend(s));
+
 	v
 }
 
 // converts a message stream into a stream of signed messages.
 // the output stream checks signatures also.
-fn checked_message_stream<Block: BlockT, S>(inner: S, round: u64, voters: Vec<AuthorityId>)
+fn checked_message_stream<Block: BlockT, S>(
+	round: u64,
+	set_id: u64,
+	inner: S,
+	voters: Vec<AuthorityId>,
+)
 	-> impl Stream<Item=SignedMessage<Block>,Error=Error> where
 	S: Stream<Item=Vec<u8>,Error=()>
 {
@@ -326,7 +343,7 @@ fn checked_message_stream<Block: BlockT, S>(inner: S, round: u64, voters: Vec<Au
 			}
 
 			let as_public = ::ed25519::Public::from_raw(msg.id.0);
-			let encoded_raw = round_localized_payload(round, &msg.message);
+			let encoded_raw = localized_payload(round, set_id, &msg.message);
 			if ::ed25519::verify_strong(&msg.signature, &encoded_raw, as_public) {
 				Ok(Some(msg))
 			} else {
@@ -339,9 +356,10 @@ fn checked_message_stream<Block: BlockT, S>(inner: S, round: u64, voters: Vec<Au
 }
 
 fn outgoing_messages<Block: BlockT, N: Network>(
+	round: u64,
+	set_id: u64,
 	local_key: Option<Arc<ed25519::Pair>>,
 	voters: Vec<AuthorityId>,
-	round: u64,
 	network: N,
 ) -> (
 	impl Stream<Item=SignedMessage<Block>,Error=Error>,
@@ -357,7 +375,7 @@ fn outgoing_messages<Block: BlockT, N: Network>(
 		.map(move |msg: Message<Block>| {
 			// when locals exist, sign messages on import
 			if let Some((ref pair, local_id)) = locals {
-				let encoded = round_localized_payload(round, &msg);
+				let encoded = localized_payload(round, set_id, &msg);
 				let signature = pair.sign(&encoded[..]);
 				let signed = SignedMessage::<Block> {
 					message: msg,
@@ -480,17 +498,20 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
+		let set_id = unimplemented!();
 		// TODO: dispatch this with `mpsc::spawn`.
 		let incoming = checked_message_stream::<Block, _>(
-			self.network.messages_for(round),
 			round,
-			self.config.voters.clone(),
+			set_id,
+			self.network.messages_for(round),
+			self.config.genesis_voters.clone(),
 		);
 
 		let (out_rx, outgoing) = outgoing_messages::<Block, _>(
+			round,
+			set_id,
 			self.config.local_key.clone(),
 			self.config.voters.clone(),
-			round,
 			self.network.clone(),
 		);
 
