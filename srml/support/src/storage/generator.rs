@@ -119,7 +119,7 @@ pub trait StorageValue<T: codec::Codec> {
 	}
 
 	/// Mutate this value
-	fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(f: F, storage: &S);
+	fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(f: F, storage: &S) -> Self::Query;
 
 	/// Clear the storage value.
 	fn kill<S: Storage>(storage: &S) {
@@ -190,7 +190,7 @@ pub trait StorageMap<K: codec::Codec, V: codec::Codec> {
 	}
 
 	/// Mutate the value under a key.
-	fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(key: &K, f: F, storage: &S);
+	fn mutate<F: FnOnce(&mut Self::Query), S: Storage>(key: &K, f: F, storage: &S) -> Self::Query;
 }
 
 // TODO: Remove this in favour of `decl_storage` macro.
@@ -342,7 +342,7 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Mutate this value.
-			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) -> Self::Query {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
 
 				f(&mut val);
@@ -353,10 +353,12 @@ macro_rules! __storage_items_internal {
 				} {
 					// Option<> type case
 					match val {
-						Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
+						Some(ref val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
 						None => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
 					}
 				});
+
+				val
 			}
 		}
 	};
@@ -398,7 +400,7 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Mutate the value under a key.
-			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) -> Self::Query {
 				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
 
 				f(&mut val);
@@ -409,10 +411,12 @@ macro_rules! __storage_items_internal {
 				} {
 					// Option<> type case
 					match val {
-						Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						Some(ref val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
 						None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
 					}
 				});
+
+				val
 			}
 		}
 	};
@@ -1900,7 +1904,7 @@ macro_rules! __decl_storage_item {
 			}
 
 			/// Mutate the value under a key
-			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) {
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(key: &$kty, f: F, storage: &S) -> Self::Query {
 				let mut val = <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::take(key, storage);
 
 				f(&mut val);
@@ -1911,10 +1915,12 @@ macro_rules! __decl_storage_item {
 				} {
 					// Option<> type case
 					match val {
-						Some(val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
+						Some(ref val) => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::insert(key, &val, storage),
 						None => <Self as $crate::storage::generator::StorageMap<$kty, $ty>>::remove(key, storage),
 					}
 				});
+
+				val
 			}
 		}
 	};
@@ -1959,7 +1965,7 @@ macro_rules! __decl_storage_item {
 			}
 
 			/// Mutate the value under a key.
-			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) {
+			fn mutate<F: FnOnce(&mut Self::Query), S: $crate::GenericStorage>(f: F, storage: &S) -> Self::Query {
 				let mut val = <Self as $crate::storage::generator::StorageValue<$ty>>::get(storage);
 
 				f(&mut val);
@@ -1970,10 +1976,12 @@ macro_rules! __decl_storage_item {
 				} {
 					// Option<> type case
 					match val {
-						Some(val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
+						Some(ref val) => <Self as $crate::storage::generator::StorageValue<$ty>>::put(&val, storage),
 						None => <Self as $crate::storage::generator::StorageValue<$ty>>::kill(storage),
 					}
 				});
+
+				val
 			}
 		}
 	};
