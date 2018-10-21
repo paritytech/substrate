@@ -25,11 +25,14 @@ extern crate sr_std;
 
 // Needed for tests (`with_externalities`).
 #[cfg(test)]
-extern crate sr_io as runtime_io;
+extern crate sr_io;
 
 // Needed for the set of mock primitives used in our tests.
 #[cfg(test)]
 extern crate substrate_primitives;
+
+// Needed for various traits. In our case, `OnFinalise`.
+extern crate sr_primitives;
 
 // Needed for deriving `Serialize` and `Deserialize` for various types.
 // We only implement the serde traits for std builds - they're unneeded
@@ -45,10 +48,7 @@ extern crate parity_codec as codec;
 
 // Needed for type-safe access to storage DB.
 #[macro_use]
-extern crate srml_support as runtime_support;
-
-// Needed for various traits. In our case, `OnFinalise`.
-extern crate sr_primitives as runtime_primitives;
+extern crate srml_support as support;
 // `system` module provides us with all sorts of useful stuff and macros
 // depend on it being around.
 extern crate srml_system as system;
@@ -57,8 +57,8 @@ extern crate srml_system as system;
 // might find it useful).
 extern crate srml_balances as balances;
 
-use runtime_primitives::traits::OnFinalise;
-use runtime_support::{StorageValue, dispatch::Result};
+use sr_primitives::traits::OnFinalise;
+use support::{StorageValue, dispatch::Result};
 use system::ensure_signed;
 
 /// Our module's configuration trait. All our types and consts go in here. If the
@@ -147,8 +147,8 @@ decl_storage! {
 		// e.g. pub Bar get(bar): map T::AccountId => Vec<(T::Balance, u64)>;
 		//
 		// For basic value items, you'll get a type which implements
-		// `runtime_support::StorageValue`. For map items, you'll get a type which
-		// implements `runtime_support::StorageMap`.
+		// `support::StorageValue`. For map items, you'll get a type which
+		// implements `support::StorageMap`.
 		//
 		// If they have a getter (`get(getter_name)`), then your module will come
 		// equipped with `fn getter_name() -> Type` for basic value items or
@@ -241,6 +241,7 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 
+	#[allow(dead_code)]
 	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
 		let _sender = ensure_signed(origin)?;
 
@@ -278,15 +279,11 @@ impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
 mod tests {
 	use super::*;
 
-	use runtime_io::with_externalities;
+	use sr_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
-	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256};
-	use runtime_primitives::testing::DigestItem;
-
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
-	use runtime_primitives::testing::{Digest, Header};
+	use sr_primitives::{BuildStorage, traits::{BlakeTwo256}, testing::{Digest, DigestItem, Header}};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
@@ -323,7 +320,7 @@ mod tests {
 
 	// This function basically just builds a genesis storage key/value store according to
 	// our desired mockup.
-	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
+	fn new_test_ext() -> sr_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
 		// We use default for brevity, but you can configure as desired if needed.
 		t.extend(balances::GenesisConfig::<Test>::default().build_storage().unwrap());

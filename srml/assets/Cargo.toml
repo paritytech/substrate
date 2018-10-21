@@ -1,5 +1,5 @@
 [package]
-name = "srml-example"
+name = "srml-assets"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
@@ -15,7 +15,6 @@ sr-io = { path = "../../core/sr-io", default-features = false }
 sr-primitives = { path = "../../core/sr-primitives", default-features = false }
 srml-support = { path = "../support", default-features = false }
 srml-system = { path = "../system", default-features = false }
-srml-balances = { path = "../balances", default-features = false }
 
 [features]
 default = ["std"]
@@ -24,11 +23,10 @@ std = [
 	"serde_derive",
 	"parity-codec/std",
 	"parity-codec-derive/std",
+	"substrate-primitives/std",
 	"sr-std/std",
 	"sr-io/std",
 	"sr-primitives/std",
-	"substrate-primitives/std",
 	"srml-support/std",
 	"srml-system/std",
-	"srml-balances/std",
 ]

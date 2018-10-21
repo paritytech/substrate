@@ -197,8 +197,8 @@ construct_runtime!(
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Timestamp: timestamp::{Module, Call, Storage, Config, Inherent},
-		Consensus: consensus::{Module, Call, Storage, Config, Log(AuthoritiesChange), Inherent},
+		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
+		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Balances: balances,
 		Session: session,
 		Staking: staking,
@@ -206,9 +206,9 @@ construct_runtime!(
 		Council: council::{Module, Call, Storage, Event<T>},
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
-		CouncilSeats: council_seats::{Config},
+		CouncilSeats: council_seats::{Config<T>},
 		Treasury: treasury,
-		Contract: contract::{Module, Call, Config, Event<T>},
+		Contract: contract::{Module, Call, Config<T>, Event<T>},
 	}
 );
 
