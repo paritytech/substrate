@@ -45,7 +45,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	const CENTS: u128 = 1_000 * MILLICENTS;	// assume this is worth about a cent.
 	const DOLLARS: u128 = 100 * CENTS;
 
-	const SECS_PER_BLOCK: u64 = 5;
+	const SECS_PER_BLOCK: u64 = 4;
 	const MINUTES: u64 = 60 / SECS_PER_BLOCK;
 	const HOURS: u64 = MINUTES * 60;
 	const DAYS: u64 = HOURS * 24;

@@ -31,6 +31,8 @@ use runtime_primitives::{traits::Block as BlockT};
 use node_executor;
 use consensus::{import_queue, run_aura, Config as AuraConfig, AuraImportQueue};
 
+const AURA_SLOT_DURATION: u64 = 6;
+
 construct_simple_protocol! {
 	/// Demo protocol attachment for substrate.
 	pub struct NodeProtocol where Block = Block { }
@@ -60,7 +62,7 @@ construct_service_factory! {
 							info!("Using authority key {}", key.public());
 							run_aura(AuraConfig {
 								local_key:  Some(Arc::new(key)),
-								slot_duration: 5
+								slot_duration: AURA_SLOT_DURATION
 							}, service.client(), service.proposer());
 						}
 					}
