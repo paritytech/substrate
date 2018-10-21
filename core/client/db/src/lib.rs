@@ -534,7 +534,9 @@ impl<Block: BlockT> Backend<Block> {
 						meta.finalized_hash, f_hash),
 				).into())
 			}
-			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, f_hash.as_ref());
+
+			let lookup_key = ::utils::number_to_lookup_key(f_num);
+			transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 			let commit = self.storage.state_db.canonicalize_block(&f_hash);
 			apply_state_commit(transaction, commit);
@@ -586,10 +588,19 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		-> Result<(), client::error::Error>
 	{
 		let mut transaction = DBTransaction::new();
+
 		if let Some(pending_block) = operation.pending_block {
 			let hash = pending_block.header.hash();
 			let parent_hash = *pending_block.header.parent_hash();
 			let number = pending_block.header.number().clone();
+
+			// blocks in longest chain are keyed by number
+			let lookup_key = if pending_block.leaf_state.is_best() {
+				::utils::number_to_lookup_key(number).to_vec()
+			} else {
+				// other blocks are keyed by number + hash
+				::utils::number_and_hash_to_lookup_key(number, hash)
+			};
 
 			if pending_block.leaf_state.is_best() {
 				let meta = self.blockchain.meta.read();
@@ -678,16 +689,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					}
 				}
 
-				transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
+				transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
 			}
-
-			// blocks in longest chain are keyed by number
-			let lookup_key = if pending_block.leaf_state.is_best() {
-				::utils::number_to_lookup_key(number).to_vec()
-			} else {
-			// other blocks are keyed by number + hash
-				::utils::number_and_hash_to_lookup_key(number, hash)
-			};
 
 			transaction.put(columns::HEADER, &lookup_key, &pending_block.header.encode());
 			if let Some(body) = pending_block.body {
@@ -700,7 +703,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);
 
 			if number == Zero::zero() {
-				transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, hash.as_ref());
+				transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 				transaction.put(columns::META, meta_keys::GENESIS_HASH, hash.as_ref());
 			}
 
@@ -797,7 +800,8 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 						|| client::error::ErrorKind::UnknownBlock(
 							format!("Error reverting to {}. Block header not found.", best)))?;
 
-					transaction.put(columns::META, meta_keys::BEST_BLOCK, header.hash().as_ref());
+					let lookup_key = ::utils::number_to_lookup_key(header.number().clone());
+					transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
 					transaction.delete(columns::HASH_LOOKUP, header.hash().as_ref());
 					self.storage.db.write(transaction).map_err(db_err)?;
 					self.blockchain.update_meta(header.hash().clone(), best.clone(), true, false);
@@ -927,40 +931,49 @@ mod tests {
 
 	#[test]
 	fn block_hash_inserted_correctly() {
-		let db = Backend::<Block>::new_test(1, 0);
-		for i in 0..10 {
-			assert!(db.blockchain().hash(i).unwrap().is_none());
+		let backing = {
+			let db = Backend::<Block>::new_test(1, 0);
+			for i in 0..10 {
+				assert!(db.blockchain().hash(i).unwrap().is_none());
 
-			{
-				let id = if i == 0 {
-					BlockId::Hash(Default::default())
-				} else {
-					BlockId::Number(i - 1)
-				};
-
-				let mut op = db.begin_operation(id).unwrap();
-				let header = Header {
-					number: i,
-					parent_hash: if i == 0 {
-						Default::default()
+				{
+					let id = if i == 0 {
+						BlockId::Hash(Default::default())
 					} else {
-						db.blockchain.hash(i - 1).unwrap().unwrap()
-					},
-					state_root: Default::default(),
-					digest: Default::default(),
-					extrinsics_root: Default::default(),
-				};
+						BlockId::Number(i - 1)
+					};
 
-				op.set_block_data(
-					header,
-					Some(vec![]),
-					None,
-					NewBlockState::Best,
-				).unwrap();
-				db.commit_operation(op).unwrap();
+					let mut op = db.begin_operation(id).unwrap();
+					let header = Header {
+						number: i,
+						parent_hash: if i == 0 {
+							Default::default()
+						} else {
+							db.blockchain.hash(i - 1).unwrap().unwrap()
+						},
+						state_root: Default::default(),
+						digest: Default::default(),
+						extrinsics_root: Default::default(),
+					};
+
+					op.set_block_data(
+						header,
+						Some(vec![]),
+						None,
+						NewBlockState::Best,
+					).unwrap();
+					db.commit_operation(op).unwrap();
+				}
+
+				assert!(db.blockchain().hash(i).unwrap().is_some())
 			}
+			db.storage.db.clone()
+		};
 
-			assert!(db.blockchain().hash(i).unwrap().is_some())
+		let backend = Backend::<Block>::from_kvdb(backing, PruningMode::keep_blocks(1), 0).unwrap();
+		assert_eq!(backend.blockchain().info().unwrap().best_number, 9);
+		for i in 0..10 {
+			assert!(backend.blockchain().hash(i).unwrap().is_some())
 		}
 	}
 
