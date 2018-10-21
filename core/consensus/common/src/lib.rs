@@ -112,6 +112,7 @@ pub trait SyncOracle {
 }
 
 /// A synchronization oracle for when there is no network.
+#[derive(Clone, Copy, Debug)]
 pub struct NoNetwork;
 
 impl SyncOracle for NoNetwork {
