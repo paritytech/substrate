@@ -44,22 +44,18 @@ use std::sync::Arc;
 use std::time::{self, Duration, Instant};
 use std;
 
-use client::{self, error, Client as SubstrateClient, CallExecutor, error::Error as BlockBuilderError};
+use client::{self, error, Client as SubstrateClient, CallExecutor};
 use client::runtime_api::{
 	Core, BlockBuilder as BlockBuilderAPI,
-	Miscellaneous, OldTxQueue, 
+	Miscellaneous, OldTxQueue,
 };
 use codec::{Decode, Encode};
 use consensus_common::{self, InherentData, evaluation, offline_tracker::OfflineTracker};
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As, BlockNumberToHash};
-use runtime_primitives::generic::{BlockId, Era};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use runtime_primitives::generic::BlockId;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
-use tokio::runtime::TaskExecutor;
-use tokio::timer::Delay;
 
-use futures::prelude::*;
-use futures::future;
 use parking_lot::RwLock;
 
 /// Shared offline validator tracker.
@@ -162,10 +158,9 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 	fn init(
 		&self,
 		parent_header: &<<C as AuthoringApi>::Block as BlockT>::Header,
-		authorities: &[AuthorityId],
-		sign_with: Arc<ed25519::Pair>,
+		_: &[AuthorityId],
+		_: Arc<ed25519::Pair>,
 	) -> Result<Self::Proposer, error::Error> {
-		use runtime_primitives::traits::Hash as HashT;
 		let parent_hash = parent_header.hash();
 
 		let id = BlockId::hash(parent_hash);
@@ -179,7 +174,6 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 		let proposer = Proposer {
 			client: self.client.clone(),
 			start: now,
-			local_key: sign_with,
 			parent_hash,
 			parent_id: id,
 			parent_number: *parent_header.number(),
@@ -197,7 +191,6 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 pub struct Proposer<C: AuthoringApi, A: txpool::ChainApi> {
 	client: Arc<C>,
 	start: Instant,
-	local_key: Arc<ed25519::Pair>,
 	parent_hash: <<C as AuthoringApi>::Block as BlockT>::Hash,
 	parent_id: BlockId<<C as AuthoringApi>::Block>,
 	parent_number: <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Number,

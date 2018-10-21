@@ -16,6 +16,8 @@
 
 //! Substrate client possible errors.
 
+#![allow(missing_docs)]
+
 use std;
 use state_machine;
 use runtime_primitives::ApplyError;

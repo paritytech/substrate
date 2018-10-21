@@ -68,14 +68,13 @@ use futures::prelude::*;
 use parking_lot::{Mutex, RwLock};
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
-use runtime_primitives::traits::{Header, Block as BlockT, As};
+use runtime_primitives::traits::{Header, As};
 use runtime_primitives::generic::BlockId;
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
 use substrate_executor::NativeExecutor;
 use codec::{Encode, Decode};
-use primitives::{AuthorityId, ed25519};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};

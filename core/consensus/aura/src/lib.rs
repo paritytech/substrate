@@ -260,29 +260,6 @@ pub fn start_aura<B, C, E, Error>(config: Config, client: Arc<C>, env: Arc<E>)
 		})
 }
 
-/// Start the aura worker. This should be run in a separate thread!
-pub fn run_aura<B, C, E, Error>(config: Config, client: Arc<C>, env: Arc<E>)
-where
-	B: Block,
-	C: Authorities<B, Error=Error> + BlockImport<B, Error=Error> + ChainHead<B> + 'static + Sync + Send,
-	E: Environment<B, Error=Error> + 'static + Sync + Send,
-	E::Proposer: Proposer<B, Error=Error>,
-	DigestItemFor<B>: CompatibleDigestItem,
-	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
-{
-	::std::thread::Builder::new().name("Aura Producer".into()).spawn(move || {
-		trace!(target: "aura", "Starting aura block production");
-		use tokio::runtime::current_thread;
-		let aura = start_aura(config, client, env);
-		current_thread::Runtime::new()
-			.map(|mut runtime| runtime.block_on(aura))
-			.map_err(|e| {
-				warn!(target: "aura", "Failed to start aura block proposing: {:?}", e)
-			});
-	});
-}
-
-
 // a header which has been checked
 enum CheckedHeader<H> {
 	// a header which has slot in the future. this is the full header (not stripped)
@@ -336,6 +313,7 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 	}
 }
 
+/// A verifier for Aura blocks.
 pub struct AuraVerifier<C> {
 	config: Config,
 	client: Arc<C>,
@@ -387,6 +365,7 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 	}
 }
 
+/// The Aura import queue type.
 pub type AuraImportQueue<B, C> = BasicQueue<B, AuraVerifier<C>>;
 
 /// Start an import queue for the Aura consensus algorithm.
@@ -462,7 +441,7 @@ mod tests {
 				started: false
 			}
 		}
-		
+
 		fn make_verifier(&self, client: Arc<PeersClient>, _cfg: &ProtocolConfig)
 			-> Arc<Self::Verifier>
 		{

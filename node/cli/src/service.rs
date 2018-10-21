@@ -25,11 +25,10 @@ use node_runtime::GenesisConfig;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
-	Roles
+	Roles, TaskExecutor,
 };
-use runtime_primitives::{traits::Block as BlockT};
 use node_executor;
-use consensus::{import_queue, run_aura, Config as AuraConfig, AuraImportQueue};
+use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue};
 
 const AURA_SLOT_DURATION: u64 = 6;
 
@@ -52,18 +51,24 @@ construct_service_factory! {
 		Genesis = GenesisConfig,
 		Configuration = (),
 		FullService = Service<FullComponents<Self>>
-			{ |config: FactoryFullConfiguration<Self>, executor| {
+			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor| {
 				let is_auth = config.roles == Roles::AUTHORITY;
-				Service::<FullComponents<Factory>>::new(config, executor).map(|service|{
-					if  is_auth {
+				Service::<FullComponents<Factory>>::new(config, executor.clone()).map(move |service|{
+					if is_auth {
 						if let Ok(Some(Ok(key))) = service.keystore().contents()
 							.map(|keys| keys.get(0).map(|k| service.keystore().load(k, "")))
 						{
 							info!("Using authority key {}", key.public());
-							run_aura(AuraConfig {
-								local_key:  Some(Arc::new(key)),
-								slot_duration: AURA_SLOT_DURATION
-							}, service.client(), service.proposer());
+							let task = start_aura(
+								AuraConfig {
+									local_key:  Some(Arc::new(key)),
+									slot_duration: AURA_SLOT_DURATION,
+								},
+								service.client(),
+								service.proposer(),
+							);
+
+							executor.spawn(task);
 						}
 					}
 

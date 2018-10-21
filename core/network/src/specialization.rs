@@ -19,7 +19,6 @@
 use ::NodeIndex;
 use runtime_primitives::traits::Block as BlockT;
 use protocol::Context;
-use config::ProtocolConfig;
 
 /// A specialization of the substrate network protocol. Handles events and sends messages.
 pub trait Specialization<B: BlockT>: Send + Sync + 'static {
