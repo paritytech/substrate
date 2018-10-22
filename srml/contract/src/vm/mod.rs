@@ -330,7 +330,7 @@ mod tests {
 				data: vec![
 					1, 2, 3, 4,
 				],
-				gas_left: 49990,
+				gas_left: 49970,
 			}]
 		);
 	}
@@ -393,7 +393,7 @@ mod tests {
 				data: vec![
 					1, 2, 3, 4,
 				],
-				gas_left: 49990,
+				gas_left: 49970,
 			}]
 		);
 	}
