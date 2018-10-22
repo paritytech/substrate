@@ -197,11 +197,13 @@ impl<T: Default + Eq + PartialEq> Clear for T {
 pub trait SimpleBitOps:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitXor<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitXor<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
