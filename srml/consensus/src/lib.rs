@@ -158,13 +158,13 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the new code.
-	fn set_code(new: Vec<u8>) -> Result {
+	pub fn set_code(new: Vec<u8>) -> Result {
 		storage::unhashed::put_raw(well_known_keys::CODE, &new);
 		Ok(())
 	}
 
 	/// Set some items of storage.
-	fn set_storage(items: Vec<KeyValue>) -> Result {
+	pub fn set_storage(items: Vec<KeyValue>) -> Result {
 		for i in &items {
 			storage::unhashed::put_raw(&i.0, &i.1);
 		}
