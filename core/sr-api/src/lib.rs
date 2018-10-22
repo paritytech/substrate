@@ -450,8 +450,8 @@ decl_apis! {
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
-	pub trait Metadata {
-		fn metadata() -> Vec<u8>;
+	pub trait Metadata<Data> {
+		fn metadata() -> Data;
 	}
 
 	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
