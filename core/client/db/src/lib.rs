@@ -791,7 +791,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			match self.storage.state_db.revert_one() {
 				Some(commit) => {
 					apply_state_commit(&mut transaction, commit);
-					let removed = best.clone();
+					let _removed = best.clone();
 					best -= As::sa(1);
 					let header = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::ErrorKind::UnknownBlock(

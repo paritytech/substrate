@@ -34,17 +34,12 @@ fn main() {
 	match matches.subcommand() {
 		("vanity", Some(matches)) => {
 			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
-			let amount_of_keys = matches.value_of("number")
-				.expect("`number` has a default value; thus it can't be None; qed");
-			let amount_of_keys: usize = amount_of_keys.parse::<usize>().expect("Failed to parse number");
-
-			let keys = vanity::generate_key(&desired, amount_of_keys, true).expect("Key generation failed");
-			for key in keys {
-				println!("{} - {} ({}%)",
-					key.pair.public().to_ss58check(),
-					HexDisplay::from(&key.seed),
-					key.score);
-			}
+			let key = vanity::generate_key(&desired).expect("Key generation failed");
+			println!("Seed {} (hex: 0x{}) - {} ({}%)",
+				key.pair.public().to_ss58check(),
+				HexDisplay::from(&key.pair.public().0),
+				HexDisplay::from(&key.seed),
+				key.score);
 		}
 		("restore", Some(matches)) => {
 			let mut raw_seed = matches.value_of("seed")
@@ -63,7 +58,11 @@ fn main() {
 			seed[..len].copy_from_slice(&raw_seed[..len]);
 			let pair = Pair::from_seed(&seed);
 
-			println!("{}: {}", HexDisplay::from(&seed), pair.public().to_ss58check());
+			println!("Seed 0x{} is account:\n    SS58: {}\n    Hex: 0x{}",
+				HexDisplay::from(&seed),
+				pair.public().to_ss58check(),
+				HexDisplay::from(&pair.public().0)
+			);
 		},
 		_ => print_usage(&matches),
 	}

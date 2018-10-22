@@ -22,7 +22,7 @@ use std::sync::Arc;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_primitives::Block;
 use node_runtime::GenesisConfig;
-use node_network::Protocol as DemoProtocol;
+use node_network::Protocol as NodeProtocol;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
 	LightBackend, FullExecutor, LightExecutor
@@ -61,7 +61,7 @@ construct_simple_service!(Service);
 construct_service_factory! {
 	struct Factory {
 		Block = Block,
-		NetworkProtocol = DemoProtocol { |config| Ok(DemoProtocol::new()) },
+		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
 		RuntimeDispatch = node_executor::Executor,
 		FullTransactionPoolApi = transaction_pool::ChainApi<FullBackend<Self>, FullExecutor<Self>, Block>
 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
