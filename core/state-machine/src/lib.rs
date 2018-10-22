@@ -291,7 +291,7 @@ where
 		.to_vec();
 
 	let heap_pages = try_read_overlay_value(overlay, backend, well_known_keys::HEAP_PAGES)?
-		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(8) as usize;
+		.and_then(|v| u64::decode(&mut &v[..])).unwrap_or(1024) as usize;
 
 	// read changes trie configuration. The reason why we're doing it here instead of the
 	// `OverlayedChanges` constructor is that we need proofs for this read as a part of
