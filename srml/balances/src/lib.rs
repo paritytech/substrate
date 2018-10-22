@@ -44,7 +44,7 @@ use rstd::{cmp, result};
 use codec::{Encode, Decode, Codec, Input, Output, HasCompact};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
+use primitives::traits::{Zero, One, SimpleArithmetic, MakePayment,
 	As, Lookup, Member, CheckedAdd, CheckedSub, CurrentHeight, BlockNumberToHash};
 use address::Address as RawAddress;
 use system::ensure_signed;
@@ -649,11 +649,6 @@ impl<T: Trait> Module<T> {
 			address::Address::Id(i) => Ok(i),
 			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
 		}
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 

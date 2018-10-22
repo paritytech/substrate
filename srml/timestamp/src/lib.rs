@@ -59,7 +59,7 @@ use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_primitives::RuntimeString;
 use runtime_primitives::traits::{
-	As, OnFinalise, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
+	As, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
 };
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, vec::Vec};
@@ -75,6 +75,9 @@ pub trait Trait: consensus::Trait + system::Trait {
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn set(origin, now: <T::Moment as HasCompact>::Type) -> Result;
+		fn on_finalise() {
+			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+		}
 	}
 }
 
@@ -168,12 +171,6 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		} else {
 			Ok(())
 		}
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
-		assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 	}
 }
 

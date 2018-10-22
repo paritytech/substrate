@@ -433,6 +433,7 @@ mod tests {
 	mod system {
 		pub trait Trait {
 			type Origin;
+			type BlockNumber;
 		}
 
 		decl_module! {
@@ -449,6 +450,7 @@ mod tests {
 	mod system_renamed {
 		pub trait Trait {
 			type Origin;
+			type BlockNumber;
 		}
 
 		decl_module! {
@@ -466,6 +468,7 @@ mod tests {
 		pub trait Trait {
 			type Origin;
 			type Balance;
+			type BlockNumber;
 		}
 
 		decl_module! {
@@ -488,6 +491,7 @@ mod tests {
 		pub trait Trait {
 			type Origin;
 			type Balance;
+			type BlockNumber;
 		}
 
 		decl_module! {
@@ -539,29 +543,35 @@ mod tests {
 	impl event_module::Trait for TestRuntime {
 		type Origin = u32;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime {
 		type Origin = u32;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl system::Trait for TestRuntime {
 		type Origin = u32;
+		type BlockNumber = u32;
 	}
 
 	impl event_module::Trait for TestRuntime2 {
 		type Origin = u32;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime2 {
 		type Origin = u32;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl system_renamed::Trait for TestRuntime2 {
 		type Origin = u32;
+		type BlockNumber = u32;
 	}
 
 	const EXPECTED_METADATA: OuterEventMetadata = OuterEventMetadata {
