@@ -72,4 +72,13 @@ pub mod well_known_keys {
 
 	/// Changes trie configuration is stored under this key.
 	pub const CHANGES_TRIE_CONFIG: &'static [u8] = b":changes_trie";
+
+	/// Prefix of child storage keys.
+	pub const CHILD_STORAGE_KEY_PREFIX: &'static [u8] = b":child_storage:";
+
+	/// Whether a key is a child storage key.
+	pub fn is_child_storage_key(key: &[u8]) -> bool {
+		key.starts_with(CHILD_STORAGE_KEY_PREFIX)
+	}
+
 }

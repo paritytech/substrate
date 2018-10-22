@@ -9,4 +9,16 @@ log = "0.4"
 tokio = "0.1.7"
 exit-future = "0.1"
 substrate-cli = { path = "../../core/cli" }
-node-service = { path = "../service" }
+substrate-primitives = { path = "../../core/primitives" }
+node-runtime = { path = "../runtime" }
+node-primitives = { path = "../primitives" }
+node-network = { path = "../network" }
+hex-literal = "0.1"
+substrate-service = { path = "../../core/service" }
+substrate-transaction-pool = { path = "../../core/transaction-pool" }
+substrate-network = { path = "../../core/network" }
+sr-primitives = { path = "../../core/sr-primitives" }
+node-executor = { path = "../executor" }
+
+[dev-dependencies]
+substrate-service-test = { path = "../../core/service/test" }

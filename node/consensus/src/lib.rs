@@ -48,10 +48,10 @@ use std::sync::Arc;
 use std::time::{self, Duration, Instant};
 
 use client::{Client as SubstrateClient, CallExecutor};
-use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, Miscellaneous, OldTxQueue, BlockBuilderError};
+use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, Miscellaneous, OldTxQueue};
 use codec::{Decode, Encode};
-use node_primitives::{AccountId, Timestamp, SessionKey, InherentData};
-use node_runtime::Runtime;
+use node_primitives::{AccountId, Timestamp, SessionKey};
+use node_runtime::{Runtime, InherentError, TimestampInherentError, InherentData};
 use primitives::{AuthorityId, ed25519, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As, BlockNumberToHash};
 use runtime_primitives::generic::{BlockId, Era};
@@ -135,9 +135,8 @@ impl<'a, B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
 
 		let mut block_builder = self.new_block_at(at)?;
 		if runtime_version.has_api(*b"inherent", 1) {
-			for inherent in self.inherent_extrinsics(at, &inherent_data)? {
-				block_builder.push(inherent)?;
-			}
+			self.inherent_extrinsics(at, &inherent_data)?
+				.into_iter().try_for_each(|i| block_builder.push(i))?;
 		}
 
 		build_ctx(&mut block_builder);
@@ -383,7 +382,7 @@ impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 			&inherent
 		) {
 			Ok(Ok(())) => None,
-			Ok(Err(BlockBuilderError::TimestampInFuture(timestamp))) => Some(timestamp),
+			Ok(Err(InherentError::Timestamp(TimestampInherentError::TimestampInFuture(timestamp)))) => Some(timestamp),
 			Ok(Err(e)) => {
 				debug!(target: "bft", "Invalid proposal (check_inherents): {:?}", e);
 				return Box::new(future::ok(false));

@@ -33,6 +33,7 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 
 #[macro_use]
@@ -50,14 +51,18 @@ extern crate sr_primitives as runtime_primitives;
 extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 extern crate parity_codec as codec;
+#[macro_use]
+extern crate parity_codec_derive;
 
 use codec::HasCompact;
 use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
-use runtime_primitives::traits::{As, OnFinalise, SimpleArithmetic, Zero};
+use runtime_primitives::RuntimeString;
+use runtime_primitives::traits::{
+	As, OnFinalise, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
+};
 use system::ensure_inherent;
-use rstd::ops::{Mul, Div};
-
+use rstd::{result, ops::{Mul, Div}, vec::Vec};
 
 pub trait Trait: consensus::Trait + system::Trait {
 	/// The position of the required timestamp-set extrinsic.
@@ -106,7 +111,7 @@ impl<T: Trait> Module<T> {
 	fn set(origin: T::Origin, now: <T::Moment as HasCompact>::Type) -> Result {
 		ensure_inherent(origin)?;
 		let now = now.into();
-		
+
 		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
 		assert!(
 			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
@@ -123,9 +128,46 @@ impl<T: Trait> Module<T> {
 	}
 
 	/// Set the timestamp to something in particular. Only used for tests.
-	#[cfg(any(feature = "std", test))]
+	#[cfg(feature = "std")]
 	pub fn set_timestamp(now: T::Moment) {
 		<Self as Store>::Now::put(now);
+	}
+}
+
+#[derive(Encode)]
+#[cfg_attr(feature = "std", derive(Decode))]
+pub enum InherentError {
+	Other(RuntimeString),
+	TimestampInFuture(u64),
+}
+
+impl<T: Trait> ProvideInherent for Module<T> {
+	type Inherent = T::Moment;
+	type Call = Call<T>;
+	type Error = InherentError;
+
+	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)> {
+		vec![(T::TIMESTAMP_SET_POSITION, Call::set(data.into()))]
+	}
+
+	fn check_inherent<Block: BlockT, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
+			block: &Block, data: Self::Inherent, extract_function: &F
+	) -> result::Result<(), Self::Error> {
+		const MAX_TIMESTAMP_DRIFT: u64 = 60;
+
+		let xt = block.extrinsics().get(T::TIMESTAMP_SET_POSITION as usize)
+			.ok_or_else(|| InherentError::Other("No valid timestamp inherent in block".into()))?;
+
+		let t = match (xt.is_signed(), extract_function(&xt)) {
+			(Some(false), Some(Call::set(ref t))) => t.clone(),
+			_ => return Err(InherentError::Other("No valid timestamp inherent in block".into())),
+		}.into().as_();
+
+		if t > data.as_() + MAX_TIMESTAMP_DRIFT {
+			Err(InherentError::TimestampInFuture(t))
+		} else {
+			Ok(())
+		}
 	}
 }
 

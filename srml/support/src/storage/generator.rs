@@ -590,6 +590,21 @@ macro_rules! __generate_genesis_config {
 		);
 	};
 
+	// Do not generate any `GenesisConfig`, if we not require it.
+	(@GEN
+		[$traittype:ident $traitinstance:ident]
+		// normal getters
+		[]
+		// for normal builders
+		[$( $normalclassname:ident ($normalbuild:expr) ;)*]
+		// for map builders
+		[$( $mapclassname:ident ($mapbuild:expr) ;)*]
+		// extra genesis fields
+		[]
+		// final build storage call
+		[$call:expr]
+	) => {};
+
 	(@GEN
 		[$traittype:ident $traitinstance:ident]
 		// normal getters

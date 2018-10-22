@@ -47,6 +47,12 @@ pub fn storage(key: &[u8]) -> Option<Vec<u8>> {
 		.expect("storage cannot be called outside of an Externalities-provided environment.")
 }
 
+/// Get `key` from child storage and return a `Vec`, empty if there's a problem.
+pub fn child_storage(storage_key: &[u8], key: &[u8]) -> Option<Vec<u8>> {
+	ext::with(|ext| ext.child_storage(storage_key, key).map(|s| s.to_vec()))
+		.expect("storage cannot be called outside of an Externalities-provided environment.")
+}
+
 /// Get `key` from storage, placing the value into `value_out` (as much of it as possible) and return
 /// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
 /// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
@@ -55,7 +61,20 @@ pub fn read_storage(key: &[u8], value_out: &mut [u8], value_offset: usize) -> Op
 	ext::with(|ext| ext.storage(key).map(|value| {
 		let value = &value[value_offset..];
 		let written = ::std::cmp::min(value.len(), value_out.len());
-		value_out[0..written].copy_from_slice(&value[0..written]);
+		value_out[..written].copy_from_slice(&value[..written]);
+		value.len()
+	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
+}
+
+/// Get `key` from child storage, placing the value into `value_out` (as much of it as possible) and return
+/// the number of bytes that the entry in storage had beyond the offset or None if the storage entry
+/// doesn't exist at all. Note that if the buffer is smaller than the storage entry length, the returned
+/// number of bytes is not equal to the number of bytes written to the `value_out`.
+pub fn read_child_storage(storage_key: &[u8], key: &[u8], value_out: &mut [u8], value_offset: usize) -> Option<usize> {
+	ext::with(|ext| ext.child_storage(storage_key, key).map(|value| {
+		let value = &value[value_offset..];
+		let written = ::std::cmp::min(value.len(), value_out.len());
+		value_out[..written].copy_from_slice(&value[..written]);
 		value.len()
 	})).expect("read_storage cannot be called outside of an Externalities-provided environment.")
 }
@@ -67,10 +86,24 @@ pub fn set_storage(key: &[u8], value: &[u8]) {
 	);
 }
 
+/// Set the child storage of a key to some value.
+pub fn set_child_storage(storage_key: &[u8], key: &[u8], value: &[u8]) {
+	ext::with(|ext|
+		ext.set_child_storage(storage_key.to_vec(), key.to_vec(), value.to_vec())
+	);
+}
+
 /// Clear the storage of a key.
 pub fn clear_storage(key: &[u8]) {
 	ext::with(|ext|
 		ext.clear_storage(key)
+	);
+}
+
+/// Clear the storage of a key.
+pub fn clear_child_storage(storage_key: &[u8], key: &[u8]) {
+	ext::with(|ext|
+		ext.clear_child_storage(storage_key, key)
 	);
 }
 
@@ -81,10 +114,24 @@ pub fn exists_storage(key: &[u8]) -> bool {
 	).unwrap_or(false)
 }
 
+/// Check whether a given `key` exists in storage.
+pub fn exists_child_storage(storage_key: &[u8], key: &[u8]) -> bool {
+	ext::with(|ext|
+		ext.exists_child_storage(storage_key, key)
+	).unwrap_or(false)
+}
+
 /// Clear the storage entries with a key that starts with the given prefix.
 pub fn clear_prefix(prefix: &[u8]) {
 	ext::with(|ext|
 		ext.clear_prefix(prefix)
+	);
+}
+
+/// Clear an entire child storage.
+pub fn kill_child_storage(storage_key: &[u8]) {
+	ext::with(|ext|
+		ext.kill_child_storage(storage_key)
 	);
 }
 
@@ -100,6 +147,13 @@ pub fn storage_root() -> H256 {
 	ext::with(|ext|
 		ext.storage_root()
 	).unwrap_or(H256::new())
+}
+
+/// "Commit" all existing operations and compute the resultant child storage root.
+pub fn child_storage_root(storage_key: &[u8]) -> Option<Vec<u8>> {
+	ext::with(|ext|
+		ext.child_storage_root(storage_key)
+	).unwrap_or(None)
 }
 
 /// "Commit" all existing operations and get the resultant storage change root.

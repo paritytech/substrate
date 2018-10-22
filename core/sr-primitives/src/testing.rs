@@ -17,7 +17,7 @@
 //! Testing utilities.
 
 use serde::{Serialize, de::DeserializeOwned};
-use std::fmt::Debug;
+use std::{fmt::Debug, ops::Deref};
 use codec::Codec;
 use traits::{self, Checkable, Applyable, BlakeTwo256};
 use generic::DigestItem as GenDigestItem;
@@ -94,12 +94,35 @@ impl traits::Header for Header {
 }
 
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
+pub struct ExtrinsicWrapper<Xt>(Xt);
+
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
+	fn is_signed(&self) -> Option<bool> {
+		None
+	}
+}
+
+impl<Xt> From<Xt> for ExtrinsicWrapper<Xt> {
+	fn from(xt: Xt) -> Self {
+		ExtrinsicWrapper(xt)
+	}
+}
+
+impl<Xt> Deref for ExtrinsicWrapper<Xt> {
+	type Target = Xt;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+#[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 pub struct Block<Xt> {
 	pub header: Header,
 	pub extrinsics: Vec<Xt>,
 }
 
-impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug> traits::Block for Block<Xt> {
+impl<Xt: 'static + Codec + Sized + Send + Sync + Serialize + DeserializeOwned + Clone + Eq + Debug + traits::Extrinsic> traits::Block for Block<Xt> {
 	type Extrinsic = Xt;
 	type Header = Header;
 	type Hash = <Header as traits::Header>::Hash;
@@ -124,6 +147,11 @@ pub struct TestXt<Call>(pub Option<u64>, pub u64, pub Call);
 impl<Call: Codec + Sync + Send + Serialize, Context> Checkable<Context> for TestXt<Call> {
 	type Checked = Self;
 	fn check(self, _: &Context) -> Result<Self::Checked, &'static str> { Ok(self) }
+}
+impl<Call: Codec + Sync + Send + Serialize> traits::Extrinsic for TestXt<Call> {
+	fn is_signed(&self) -> Option<bool> {
+		None
+	}
 }
 impl<Call> Applyable for TestXt<Call> where
 	Call: 'static + Sized + Send + Sync + Clone + Eq + Codec + Debug + Serialize + DeserializeOwned,

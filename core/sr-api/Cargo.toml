@@ -5,7 +5,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
 parity-codec = { version = "2.1", default-features = false }
-parity-codec-derive = { version = "2.1", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
 sr-primitives = { path = "../sr-primitives", default-features = false }
 sr-version = { path = "../sr-version", default-features = false }
@@ -15,7 +14,6 @@ default = ["std"]
 std = [
 	"sr-std/std",
 	"parity-codec/std",
-	"parity-codec-derive/std",
 	"sr-primitives/std",
 	"sr-version/std",
 ]

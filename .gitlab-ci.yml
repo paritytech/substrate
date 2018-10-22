@@ -32,7 +32,7 @@ variables:
     when:                          on_success
     expire_in:                     1 mos
     paths:
-    - target/release/polkadot
+    - target/release/substrate
 
 .determine_version: &determine_version |
   export VERSION=$(grep -m 1 "version =" Cargo.toml | awk '{print $3}' | tr -d '"' | tr -d "\n")
@@ -49,6 +49,7 @@ test:rust:stable:                  &test
   script:
     - ./scripts/init.sh
     - export PATH="${CI_PROJECT_DIR}/cargo/bin/:$PATH"
+    - export RUST_BACKTRACE=1
     - ./scripts/build.sh
     - time cargo test --all --release --locked
   tags:
