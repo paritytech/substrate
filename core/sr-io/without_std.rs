@@ -64,7 +64,7 @@ extern "C" {
 	fn ext_get_allocated_storage(key_data: *const u8, key_len: u32, written_out: *mut u32) -> *mut u8;
 	fn ext_get_storage_into(key_data: *const u8, key_len: u32, value_data: *mut u8, value_len: u32, value_offset: u32) -> u32;
 	fn ext_storage_root(result: *mut u8);
-	fn ext_storage_changes_root(block: u64, result: *mut u8) -> u32;
+	fn ext_storage_changes_root(parent_hash_data: *const u8, parent_hash_len: u32, parent_num: u64, result: *mut u8) -> u32;
 	fn ext_blake2_256_enumerated_trie_root(values_data: *const u8, lens_data: *const u32, lens_len: u32, result: *mut u8);
 	fn ext_chain_id() -> u64;
 	fn ext_blake2_256(data: *const u8, len: u32, out: *mut u8);
@@ -172,10 +172,10 @@ pub fn storage_root() -> [u8; 32] {
 }
 
 /// The current storage' changes root.
-pub fn storage_changes_root(block: u64) -> Option<[u8; 32]> {
+pub fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<[u8; 32]> {
 	let mut result: [u8; 32] = Default::default();
 	let is_set = unsafe {
-		ext_storage_changes_root(block, result.as_mut_ptr())
+		ext_storage_changes_root(parent_hash.as_ptr(), parent_hash.len() as u32, parent_num, result.as_mut_ptr())
 	};
 
 	if is_set != 0 {

@@ -35,8 +35,8 @@ use primitives::storage::well_known_keys;
 use codec::{Encode, Decode};
 use state_machine::{
 	Backend as StateBackend, CodeExecutor,
-	ExecutionStrategy, ExecutionManager, prove_read,
-	key_changes, key_changes_proof, OverlayedChanges
+	ExecutionStrategy, ExecutionManager, ChangesTrieAnchorBlockId,
+	prove_read, key_changes, key_changes_proof, OverlayedChanges
 };
 
 use backend::{self, BlockImportOperation};
@@ -404,7 +404,10 @@ impl<B, E, Block> Client<B, E, Block> where
 			config,
 			storage,
 			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
-			self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+			&ChangesTrieAnchorBlockId {
+				hash: convert_hash(&last),
+				number: self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+			},
 			self.backend.blockchain().info()?.best_number.as_(),
 			key)
 		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
@@ -437,7 +440,10 @@ impl<B, E, Block> Client<B, E, Block> where
 			config,
 			storage,
 			self.require_block_number_from_id(&BlockId::Hash(first))?.as_(),
-			self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+			&ChangesTrieAnchorBlockId {
+				hash: convert_hash(&last),
+				number: self.require_block_number_from_id(&BlockId::Hash(last))?.as_(),
+			},
 			max_number.as_(),
 			key)
 		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
@@ -1196,6 +1202,14 @@ impl<B, E, Block> api::Miscellaneous<Block> for Client<B, E, Block> where
 	) -> Result<Moment, Self::Error> {
 		self.call_api_at(at, "timestamp", &())
 	}
+}
+
+/// Converts one hash type into another.
+pub(crate) fn convert_hash<H1: Default + AsMut<[u8]>, H2: AsRef<[u8]>>(src: &H2) -> H1 {
+	let mut dest = H1::default();
+	let len = ::std::cmp::min(dest.as_mut().len(), src.as_ref().len());
+	dest.as_mut().copy_from_slice(&src.as_ref()[..len]);
+	dest
 }
 
 #[cfg(test)]

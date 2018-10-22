@@ -186,6 +186,17 @@ pub fn read_header<Block: BlockT>(
 	}
 }
 
+/// Required header from the database.
+pub fn require_header<Block: BlockT>(
+	db: &KeyValueDB,
+	col_index: Option<u32>,
+	col: Option<u32>,
+	id: BlockId<Block>,
+) -> client::error::Result<Block::Header> {
+	read_header(db, col_index, col, id)
+		.and_then(|header| header.ok_or_else(|| client::error::ErrorKind::UnknownBlock(format!("{}", id)).into()))
+}
+
 /// Read meta from the database.
 pub fn read_meta<Block>(db: &KeyValueDB, col_meta: Option<u32>, col_header: Option<u32>) -> Result<
 	Meta<<<Block as BlockT>::Header as HeaderT>::Number, Block::Hash>,
@@ -233,4 +244,12 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_meta: Option<u32>, col_header: Opti
 		finalized_number,
 		genesis_hash,
 	})
+}
+
+/// Converts one hash type into another.
+pub(crate) fn convert_hash<H1: Default + AsMut<[u8]>, H2: AsRef<[u8]>>(src: &H2) -> H1 {
+	let mut dest = H1::default();
+	let len = ::std::cmp::min(dest.as_mut().len(), src.as_ref().len());
+	dest.as_mut().copy_from_slice(&src.as_ref()[..len]);
+	dest
 }

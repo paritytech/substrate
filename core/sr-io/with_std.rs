@@ -103,9 +103,9 @@ pub fn storage_root() -> H256 {
 }
 
 /// "Commit" all existing operations and get the resultant storage change root.
-pub fn storage_changes_root(block: u64) -> Option<H256> {
+pub fn storage_changes_root(parent_hash: [u8; 32], parent_num: u64) -> Option<H256> {
 	ext::with(|ext|
-		ext.storage_changes_root(block)
+		ext.storage_changes_root(parent_hash.into(), parent_num)
 	).unwrap_or(None)
 }
 
