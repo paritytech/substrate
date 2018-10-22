@@ -101,5 +101,3 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 }
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {}
