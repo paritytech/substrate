@@ -45,7 +45,7 @@ extern crate srml_balances as balances;
 use rstd::prelude::*;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
-use runtime_primitives::{Permill, traits::{OnFinalise, Zero, EnsureOrigin}};
+use runtime_primitives::{Permill, traits::{Zero, EnsureOrigin}};
 use codec::{HasCompact, Compact};
 use balances::{OnDilution, address::Address};
 use system::ensure_signed;
@@ -90,6 +90,13 @@ decl_module! {
 		// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
 		// and the original deposit will be returned.
 		fn approve_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result;
+
+		fn on_finalise(n: T::BlockNumber) {
+			// Check to see if we should spend some funds!
+			if (n % Self::spend_period()).is_zero() {
+				Self::spend_funds();
+			}
+		}
 	}
 }
 
@@ -284,15 +291,6 @@ impl<T: Trait> OnDilution<T::Balance> for Module<T> {
 	}
 }
 
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(n: T::BlockNumber) {
-		// Check to see if we should spend some funds!
-		if (n % Self::spend_period()).is_zero() {
-			Self::spend_funds();
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -300,7 +298,7 @@ mod tests {
 	use runtime_io::with_externalities;
 	use substrate_primitives::{H256, Blake2Hasher};
 	use runtime_primitives::BuildStorage;
-	use runtime_primitives::traits::{BlakeTwo256};
+	use runtime_primitives::traits::{BlakeTwo256, OnFinalise};
 	use runtime_primitives::testing::{Digest, DigestItem, Header};
 
 	impl_outer_origin! {

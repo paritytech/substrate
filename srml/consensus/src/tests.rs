@@ -18,8 +18,7 @@
 
 #![cfg(test)]
 
-use super::*;
-use primitives::{generic, testing};
+use primitives::{generic, testing, traits::OnFinalise};
 use runtime_io::with_externalities;
 use substrate_primitives::H256;
 use mock::{Consensus, System, new_test_ext};

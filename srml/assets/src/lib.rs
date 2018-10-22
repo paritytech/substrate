@@ -52,7 +52,6 @@ extern crate sr_primitives as primitives;
 // depend on it being around.
 extern crate srml_system as system;
 
-use primitives::traits::OnFinalise;
 use runtime_support::{StorageValue, StorageMap, dispatch::Result, Parameter};
 use primitives::traits::{Member, SimpleArithmetic, Zero};
 use system::ensure_signed;
@@ -160,9 +159,6 @@ impl<T: Trait> Module<T> {
 		Ok(())
 	}
 }
-
-// This trait expresses what should happen when the block is finalised.
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {}
 
 #[cfg(test)]
 mod tests {

@@ -50,7 +50,7 @@ use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::RuntimeString;
 use primitives::traits::{
-	MaybeSerializeDebug, OnFinalise, Member, ProvideInherent, Block as BlockT
+	MaybeSerializeDebug, Member, ProvideInherent, Block as BlockT
 };
 use substrate_primitives::storage::well_known_keys;
 use system::{ensure_signed, ensure_inherent};
@@ -151,6 +151,14 @@ decl_module! {
 		fn set_code(new: Vec<u8>) -> Result;
 		fn set_storage(items: Vec<KeyValue>) -> Result;
 		fn set_heap_pages(pages: u64) -> Result;
+		fn on_finalise() {
+			if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
+				let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
+				if current_authorities != original_authorities {
+					Self::deposit_log(RawLog::AuthoritiesChange(current_authorities));
+				}
+			}
+		}
 	}
 }
 
@@ -274,17 +282,5 @@ impl<T: Trait> ProvideInherent for Module<T> {
 				Ok(())
 			}
 		)
-	}
-}
-
-/// Finalization hook for the consensus module.
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
-		if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
-			let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
-			if current_authorities != original_authorities {
-				Self::deposit_log(RawLog::AuthoritiesChange(current_authorities));
-			}
-		}
 	}
 }

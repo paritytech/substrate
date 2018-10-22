@@ -18,7 +18,7 @@
 
 use rstd::prelude::*;
 use codec::{Compact, HasCompact};
-use primitives::traits::{Zero, One, As, OnFinalise};
+use primitives::traits::{Zero, One, As};
 use runtime_io::print;
 use srml_support::{StorageValue, StorageMap, dispatch::Result};
 use democracy;
@@ -97,6 +97,12 @@ decl_module! {
 		fn remove_member(who: Address<T::AccountId, T::AccountIndex>) -> Result;
 		fn set_presentation_duration(count: <T::BlockNumber as HasCompact>::Type) -> Result;
 		fn set_term_duration(count: <T::BlockNumber as HasCompact>::Type) -> Result;
+		fn on_finalise(n: T::BlockNumber) {
+			if let Err(e) = Self::end_block(n) {
+				print("Guru meditation");
+				print(e);
+			}
+		}
 	}
 }
 
@@ -557,15 +563,6 @@ impl<T: Trait> Module<T> {
 		<CandidateCount<T>>::put(count);
 		<VoteCount<T>>::put(Self::vote_index() + 1);
 		Ok(())
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(n: T::BlockNumber) {
-		if let Err(e) = Self::end_block(n) {
-			print("Guru meditation");
-			print(e);
-		}
 	}
 }
 
