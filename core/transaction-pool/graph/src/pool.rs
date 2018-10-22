@@ -105,7 +105,7 @@ impl<B: ChainApi> Pool<B> {
 				}
 
 				match self.api.validate_transaction(at, &xt)? {
-					TransactionValidity::Valid(priority, requires, provides, longevity) => {
+					TransactionValidity::Valid { priority, requires, provides, longevity } => {
 						Ok(base::Transaction {
 							data:  xt,
 							hash,
@@ -197,11 +197,12 @@ impl<B: ChainApi> Pool<B> {
 				.ok_or_else(|| error::ErrorKind::Msg(format!("Invalid block id: {:?}", at)).into())?
 				.as_();
 		let now = time::Instant::now();
-		let to_remove = self.ready(|pending| pending
-			.filter(|tx| self.rotator.ban_if_stale(&now, block_number, &tx))
-			.map(|tx| tx.hash.clone())
-			.collect::<Vec<_>>()
-		);
+		let to_remove = {
+			self.ready()
+				.filter(|tx| self.rotator.ban_if_stale(&now, block_number, &tx))
+				.map(|tx| tx.hash.clone())
+				.collect::<Vec<_>>()
+		};
 		let futures_to_remove: Vec<ExHash<B>> = {
 			let p = self.pool.read();
 			let mut hashes = Vec::new();
@@ -266,20 +267,9 @@ impl<B: ChainApi> Pool<B> {
 		invalid
 	}
 
-	/// Get ready transactions ordered by priority
-	pub fn ready<F, X>(&self, f: F) -> X where
-		F: FnOnce(&mut Iterator<Item=TransactionFor<B>>) -> X,
-	{
-		let pool = self.pool.read();
-		let mut ready = pool.ready();
-		f(&mut ready)
-	}
-
-	/// Returns all transactions in the pool.
-	///
-	/// Be careful with large limit values, as querying the entire pool might be time consuming.
-	pub fn all(&self, limit: usize) -> Vec<ExtrinsicFor<B>> {
-		self.ready(|it| it.take(limit).map(|ex| ex.data.clone()).collect())
+	/// Get an iterator for ready transactions ordered by priority
+	pub fn ready(&self) -> impl Iterator<Item=TransactionFor<B>> {
+		self.pool.read().ready()
 	}
 
 	/// Returns pool status.
@@ -341,12 +331,12 @@ mod tests {
 			if nonce < block_number {
 				Ok(TransactionValidity::Invalid)
 			} else {
-				Ok(TransactionValidity::Valid(
-					4,
-					if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
-					vec![vec![nonce as u8]],
-					3,
-				))
+				Ok(TransactionValidity::Valid {
+					priority: 4,
+					requires: if nonce > block_number { vec![vec![nonce as u8 - 1]] } else { vec![] },
+					provides: vec![vec![nonce as u8]],
+					longevity: 3,
+				})
 			}
 		}
 
@@ -398,7 +388,7 @@ mod tests {
 		})).unwrap();
 
 		// then
-		assert_eq!(pool.ready(|pending| pending.map(|tx| tx.hash.clone()).collect::<Vec<_>>()), vec![hash]);
+		assert_eq!(pool.ready().map(|v| v.hash).collect::<Vec<_>>(), vec![hash]);
 	}
 
 	#[test]
@@ -489,7 +479,7 @@ mod tests {
 		pool.clear_stale(&BlockId::Number(5)).unwrap();
 
 		// then
-		assert_eq!(pool.all(3).len(), 0);
+		assert_eq!(pool.ready().count(), 0);
 		assert_eq!(pool.status().future, 0);
 		assert_eq!(pool.status().ready, 0);
 		// make sure they are temporarily banned as well

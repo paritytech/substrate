@@ -383,6 +383,17 @@ pub trait MaybeDisplay {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDisplay for T {}
 
+#[cfg(feature = "std")]
+pub trait MaybeDecode: ::codec::Decode {}
+#[cfg(feature = "std")]
+impl<T: ::codec::Decode> MaybeDecode for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeDecode {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeDecode for T {}
+
+
 pub trait Member: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + MaybeSerializeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
 
@@ -430,7 +441,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
 pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
-	type Extrinsic: Member + Codec;
+	type Extrinsic: Member + Codec + Extrinsic;
 	type Header: Header<Hash=Self::Hash>;
 	type Hash: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
@@ -527,12 +538,37 @@ pub trait DigestItem: Codec + Member {
 	type AuthorityId: Member;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
-	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-		None
-	}
+	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;
 
 	/// Returns Some if the entry is the `ChangesTrieRoot` entry.
-	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
-		None
-	}
+	fn as_changes_trie_root(&self) -> Option<&Self::Hash>;
+}
+
+/// Something that provides an inherent for a runtime.
+pub trait ProvideInherent {
+	/// The inherent that is provided.
+	type Inherent: Encode + MaybeDecode;
+	/// The error used by this trait.
+	type Error: Encode + MaybeDecode;
+	/// The call for setting the inherent.
+	type Call: Encode + MaybeDecode;
+
+	/// Create the inherent extrinsics.
+	///
+	/// # Return
+	///
+	/// Returns a vector with tuples containing the index for the extrinsic and the extrinsic itself.
+	fn create_inherent_extrinsics(data: Self::Inherent) -> Vec<(u32, Self::Call)>;
+
+	/// Check that the given inherent is valid.
+	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
+		block: &Block, data: Self::Inherent, extract_function: &F
+	) -> Result<(), Self::Error>;
+}
+
+/// Something that acts like an `Extrinsic`.
+pub trait Extrinsic {
+	/// Is this `Extrinsic` signed?
+	/// If no information are available about signed/unsigned, `None` should be returned.
+	fn is_signed(&self) -> Option<bool> { None }
 }

@@ -179,10 +179,9 @@ impl<Block: BlockT> StorageNotifications<Block> {
 
 #[cfg(test)]
 mod tests {
-	use runtime_primitives::testing::{H256 as Hash, Block as RawBlock};
+	use runtime_primitives::testing::{H256 as Hash, Block as RawBlock, ExtrinsicWrapper};
 	use super::*;
 	use futures::Stream;
-
 
 	#[cfg(test)]
 	impl From<Vec<(StorageKey, Option<StorageData>)>> for StorageChangeSet {
@@ -201,7 +200,7 @@ mod tests {
 		}
 	}
 
-	type Block = RawBlock<Hash>;
+	type Block = RawBlock<ExtrinsicWrapper<Hash>>;
 
 	#[test]
 	fn triggering_change_should_notify_wildcard_listeners() {

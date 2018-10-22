@@ -59,8 +59,9 @@ pub mod chain_ops;
 
 use std::io;
 use std::net::SocketAddr;
-use std::sync::Arc;
 use std::collections::HashMap;
+#[doc(hidden)]
+pub use std::{ops::Deref, result::Result, sync::Arc};
 use futures::prelude::*;
 use parking_lot::Mutex;
 use keystore::Store as Keystore;
@@ -68,7 +69,8 @@ use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
 use runtime_primitives::generic::BlockId;
 use exit_future::Signal;
-use tokio::runtime::TaskExecutor;
+#[doc(hidden)]
+pub use tokio::runtime::TaskExecutor;
 use substrate_executor::NativeExecutor;
 use codec::{Encode, Decode};
 
@@ -393,13 +395,13 @@ impl<C: Components> TransactionPoolAdapter<C> {
 
 impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<C>> for TransactionPoolAdapter<C> {
 	fn transactions(&self) -> Vec<(ComponentExHash<C>, ComponentExtrinsic<C>)> {
-		self.pool.ready(|pending| pending
+		self.pool.ready()
 			.map(|t| {
 				let hash = t.hash.clone();
 				let ex: ComponentExtrinsic<C> = t.data.clone();
 				(hash, ex)
 			})
-			.collect())
+			.collect()
 	}
 
 	fn import(&self, transaction: &ComponentExtrinsic<C>) -> Option<ComponentExHash<C>> {
@@ -436,5 +438,165 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 
 	fn on_broadcasted(&self, propagations: HashMap<ComponentExHash<C>, Vec<String>>) {
 		self.pool.on_broadcasted(propagations)
+	}
+}
+
+/// Creates a simple `Service` implementation.
+/// This `Service` just holds an instance to a `service::Service` and implements `Deref`.
+/// It also provides a `new` function that takes a `config` and a `TaskExecutor`.
+#[macro_export]
+macro_rules! construct_simple_service {
+	(
+		$name: ident
+	) => {
+		pub struct $name<C: $crate::Components> {
+			inner: $crate::Service<C>,
+		}
+
+		impl<C: $crate::Components> $name<C> {
+			fn new(
+				config: FactoryFullConfiguration<C::Factory>,
+				executor: $crate::TaskExecutor
+			) -> $crate::Result<Self, $crate::Error> {
+				Ok(
+					Self {
+						inner: $crate::Service::new(config, executor)?
+					}
+				)
+			}
+		}
+
+		impl<C: $crate::Components> $crate::Deref for $name<C> {
+			type Target = $crate::Service<C>;
+
+			fn deref(&self) -> &Self::Target {
+				&self.inner
+			}
+		}
+	}
+}
+
+/// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
+/// The required parameters are required to be given in the exact order. Some parameters are followed
+/// by `{}` blocks. These blocks are required and used to initialize the given parameter.
+/// In these block it is required to write a closure that takes the same number of arguments,
+/// the corresponding function in the `ServiceFactory` trait provides.
+///
+/// # Example
+///
+/// ```nocompile
+/// construct_service_factory! {
+/// 	struct Factory {
+///         // Declare the block type
+/// 		Block = Block,
+///         // Declare the network protocol and give an initializer.
+/// 		NetworkProtocol = NodeProtocol { |config| Ok(NodeProtocol::new()) },
+/// 		RuntimeDispatch = node_executor::Executor,
+/// 		FullTransactionPoolApi = transaction_pool::ChainApi<FullBackend<Self>, FullExecutor<Self>, Block>
+/// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+/// 		LightTransactionPoolApi = transaction_pool::ChainApi<LightBackend<Self>, LightExecutor<Self>, Block>
+/// 			{ |config, client| Ok(TransactionPool::new(config, transaction_pool::ChainApi::new(client))) },
+/// 		Genesis = GenesisConfig,
+/// 		Configuration = (),
+/// 		FullService = Service<FullComponents<Self>>
+/// 			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
+/// 		LightService = Service<LightComponents<Self>>
+/// 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
+///         // Declare the import queue. The import queue is special as it takes two initializers.
+///         // The first one is for the initializing the full import queue and the second for the
+///         // light import queue.
+/// 		ImportQueue = BasicQueue<Block, NoneVerifier>
+/// 			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) }
+/// 			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) },
+/// 	}
+/// }
+/// ```
+#[macro_export]
+macro_rules! construct_service_factory {
+	(
+		$(#[$attr:meta])*
+		struct $name:ident {
+			Block = $block:ty,
+			NetworkProtocol = $protocol:ty { $( $protocol_init:tt )* },
+			RuntimeDispatch = $dispatch:ty,
+			FullTransactionPoolApi = $full_transaction:ty { $( $full_transaction_init:tt )* },
+			LightTransactionPoolApi = $light_transaction:ty { $( $light_transaction_init:tt )* },
+			Genesis = $genesis:ty,
+			Configuration = $config:ty,
+			FullService = $full_service:ty { $( $full_service_init:tt )* },
+			LightService = $light_service:ty { $( $light_service_init:tt )* },
+			ImportQueue = $import_queue:ty
+				{ $( $full_import_queue_init:tt )* }
+				{ $( $light_import_queue_init:tt )* },
+		}
+	) => {
+		$( #[$attr] )*
+		pub struct $name {}
+
+		#[allow(unused_variables)]
+		impl $crate::ServiceFactory for $name {
+			type Block = $block;
+			type NetworkProtocol = $protocol;
+			type RuntimeDispatch = $dispatch;
+			type FullTransactionPoolApi = $full_transaction;
+			type LightTransactionPoolApi = $light_transaction;
+			type Genesis = $genesis;
+			type Configuration = $config;
+			type FullService = $full_service;
+			type LightService = $light_service;
+			type ImportQueue = $import_queue;
+
+			fn build_full_transaction_pool(
+				config: $crate::TransactionPoolOptions,
+				client: $crate::Arc<$crate::FullClient<Self>>
+			) -> $crate::Result<$crate::TransactionPool<Self::FullTransactionPoolApi>, $crate::Error>
+			{
+				( $( $full_transaction_init )* ) (config, client)
+			}
+
+			fn build_light_transaction_pool(
+				config: $crate::TransactionPoolOptions,
+				client: $crate::Arc<$crate::LightClient<Self>>
+			) -> $crate::Result<$crate::TransactionPool<Self::LightTransactionPoolApi>, $crate::Error>
+			{
+				( $( $light_transaction_init )* ) (config, client)
+			}
+
+			fn build_network_protocol(config: &$crate::FactoryFullConfiguration<Self>)
+				-> $crate::Result<Self::NetworkProtocol, $crate::Error>
+			{
+				( $( $protocol_init )* ) (config)
+			}
+
+			fn build_full_import_queue(
+				config: &$crate::FactoryFullConfiguration<Self>,
+				client: $crate::Arc<$crate::FullClient<Self>>,
+			) -> $crate::Result<Self::ImportQueue, $crate::Error> {
+				( $( $full_import_queue_init )* ) (config, client)
+			}
+
+			fn build_light_import_queue(
+				config: &FactoryFullConfiguration<Self>,
+				client: Arc<$crate::LightClient<Self>>,
+			) -> Result<Self::ImportQueue, $crate::Error> {
+				( $( $light_import_queue_init )* ) (config, client)
+			}
+
+			fn new_light(
+				config: $crate::FactoryFullConfiguration<Self>,
+				executor: $crate::TaskExecutor
+			) -> $crate::Result<Self::LightService, $crate::Error>
+			{
+				( $( $light_service_init )* ) (config, executor)
+			}
+
+			fn new_full(
+				config: $crate::FactoryFullConfiguration<Self>,
+				executor: $crate::TaskExecutor
+			) -> Result<Self::FullService, $crate::Error>
+			{
+				( $( $full_service_init )* ) (config, executor)
+			}
+		}
 	}
 }

@@ -574,7 +574,7 @@ impl<B, E, Block> Client<B, E, Block> where
 				for tx in extrinsics {
 					let tx = api::TaggedTransactionQueue::validate_transaction(self, &id, &tx)?;
 					match tx {
-						TransactionValidity::Valid(_, _, mut provides, ..) => {
+						TransactionValidity::Valid { mut provides, .. } => {
 							tags.append(&mut provides);
 						},
 						// silently ignore invalid extrinsics,
@@ -1128,12 +1128,12 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 		self.call_api_at(at, "inherent_extrinsics", &(inherent))
 	}
 
-	fn check_inherents<InherentData: Encode + Decode>(
+	fn check_inherents<InherentData: Encode + Decode, InherentError: Encode + Decode>(
 		&self,
 		at: &BlockId<Block>,
 		block: &Block,
 		data: &InherentData
-	) -> Result<Result<(), api::BlockBuilderError>, Self::Error> {
+	) -> Result<Result<(), InherentError>, Self::Error> {
 		self.call_api_at(at, "check_inherents", &(block, data))
 	}
 

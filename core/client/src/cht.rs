@@ -89,7 +89,7 @@ pub fn build_proof<Header, Hasher, I>(
 {
 	let transaction = build_pairs::<Header, I>(cht_size, cht_num, hashes)?
 		.into_iter()
-		.map(|(k, v)| (k, Some(v)))
+		.map(|(k, v)| (None, k, Some(v)))
 		.collect::<Vec<_>>();
 	let storage = InMemoryState::<Hasher>::default().update(transaction);
 	let (value, proof) = prove_read(storage, &encode_cht_key(block_num)).ok()?;
@@ -205,7 +205,7 @@ pub fn decode_cht_value(value: &[u8]) -> Option<H256> {
 		32 => Some(H256::from_slice(&value[0..32])),
 		_ => None,
 	}
-	
+
 }
 
 #[cfg(test)]
