@@ -346,11 +346,6 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self.executor
 	}
 
-	/// Returns the runtime metadata.
-	pub fn metadata(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		self.executor.call(id, "metadata",&[]).map(|v| v.return_data)
-	}
-
 	/// Reads storage value at a given block + key, returning read proof.
 	pub fn read_proof(&self, id: &BlockId<Block>, key: &[u8]) -> error::Result<Vec<Vec<u8>>> {
 		self.state_at(id)
@@ -1074,7 +1069,7 @@ impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> api::Metadata<Block> for Client<B, E, Block> where
+impl<B, E, Block> api::Metadata<Block, Vec<u8>> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT,
@@ -1082,7 +1077,7 @@ impl<B, E, Block> api::Metadata<Block> for Client<B, E, Block> where
 	type Error = Error;
 
 	fn metadata(&self, at: &BlockId<Block>) -> Result<Vec<u8>, Self::Error> {
-		self.call_api_at(at, "metadata", &())
+		self.executor.call(at, "metadata",&[]).map(|v| v.return_data)
 	}
 }
 

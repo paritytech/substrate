@@ -81,7 +81,7 @@ pub use timestamp::Call as TimestampCall;
 pub use balances::Call as BalancesCall;
 pub use runtime_primitives::{Permill, Perbill};
 pub use timestamp::BlockPeriod;
-pub use srml_support::StorageValue;
+pub use srml_support::{StorageValue, RuntimeMetadata};
 
 const TIMESTAMP_SET_POSITION: u32 = 0;
 const NOTE_OFFLINE_POSITION: u32 = 1;
@@ -246,8 +246,8 @@ impl_apis! {
 		}
 	}
 
-	impl Metadata for Runtime {
-		fn metadata() -> Vec<u8> {
+	impl Metadata<RuntimeMetadata> for Runtime {
+		fn metadata() -> RuntimeMetadata {
 			Runtime::metadata()
 		}
 	}
