@@ -2702,7 +2702,8 @@ mod tests {
 	}
 
 	pub trait Trait {
-		 type Origin: codec::Encode + codec::Decode + ::std::default::Default;
+		type Origin: codec::Encode + codec::Decode + ::std::default::Default;
+		type BlockNumber;
 	}
 
 	decl_module! {
@@ -2754,6 +2755,7 @@ mod tests {
 
 	impl Trait for TraitImpl {
 		type Origin = u32;
+		type BlockNumber = u32;
 	}
 
 	const EXPECTED_METADATA: StorageMetadata = StorageMetadata {
@@ -2932,7 +2934,8 @@ mod tests {
 #[allow(dead_code)]
 mod test2 {
 	pub trait Trait {
-		 type Origin;
+		type Origin;
+		type BlockNumber;
 	}
 
 	decl_module! {
@@ -2959,5 +2962,6 @@ mod test2 {
 
 	impl Trait for TraitImpl {
 		type Origin = u32;
+		type BlockNumber = u32;
 	}
 }

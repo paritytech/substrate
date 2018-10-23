@@ -57,7 +57,6 @@ extern crate srml_system as system;
 // might find it useful).
 extern crate srml_balances as balances;
 
-use sr_primitives::traits::OnFinalise;
 use support::{StorageValue, dispatch::Result};
 use system::ensure_signed;
 
@@ -111,6 +110,13 @@ decl_module! {
 
 		/// A privileged call; in this case it resets our dummy value to something new.
 		fn set_dummy(new_dummy: T::Balance) -> Result;
+
+		// The signature could also look like: `fn on_finalise()`
+		fn on_finalise(_n: T::BlockNumber) {
+			// Anything that needs to be done at the end of the block.
+			// We just kill our dummy storage item.
+			<Dummy<T>>::kill();
+		}
 	}
 }
 
@@ -266,15 +272,6 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-// This trait expresses what should happen when the block is finalised.
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_: T::BlockNumber) {
-		// Anything that needs to be done at the end of the block.
-		// We just kill our dummy storage item.
-		<Dummy<T>>::kill();
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -283,7 +280,9 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
-	use sr_primitives::{BuildStorage, traits::{BlakeTwo256}, testing::{Digest, DigestItem, Header}};
+	use sr_primitives::{
+		BuildStorage, traits::{BlakeTwo256, OnFinalise}, testing::{Digest, DigestItem, Header}
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}
