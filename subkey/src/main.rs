@@ -1,3 +1,9 @@
+//! # subkey
+//!
+//! `subkey` is is a cli utility that allows operations on keys such as
+//! restoration of keys from their seed, generation of vanity addresses, etc...
+//! You can find the documentation [here](https://github.com/paritytech/substrate/blob/master/subkey/README.adoc).
+
 // Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
@@ -16,12 +22,17 @@
 
 #![cfg_attr(feature = "bench", feature(test))]
 #[cfg(feature = "bench")]
+
 extern crate test;
 extern crate substrate_primitives;
 extern crate rand;
+extern crate ansi_term;
+extern crate num_cpus;
+extern crate ctrlc;
 
 #[macro_use]
 extern crate clap;
+extern crate pbr;
 
 use substrate_primitives::{ed25519::Pair, hexdisplay::HexDisplay};
 
@@ -33,14 +44,27 @@ fn main() {
 
 	match matches.subcommand() {
 		("vanity", Some(matches)) => {
-			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
-			let key = vanity::generate_key(&desired).expect("Key generation failed");
-			println!("Seed {} (hex: 0x{}) - {} ({}%)",
-				key.pair.public().to_ss58check(),
-				HexDisplay::from(&key.pair.public().0),
-				HexDisplay::from(&key.seed),
-				key.score);
-		}
+				let desired_pattern:String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
+				let number: u32 = matches.value_of("number").map(str::to_string).unwrap_or_default().parse::<u32>().unwrap();
+				let minscore: u8 = matches.value_of("minscore").map(str::to_string).unwrap_or_default().parse::<u8>().unwrap();
+				let case_sensitive: bool = matches.is_present("case_sensitive");
+				let paranoiac: bool = matches.is_present("paranoiac");
+
+				let minscore = match minscore {
+					0...100  => minscore,
+					m if m >= 100 => 100,
+					_ => 75,
+				};
+
+				let keys = vanity::generate_keys(
+						desired_pattern,
+						case_sensitive,
+						paranoiac,
+						minscore as f32,
+						number as usize);
+				vanity::print_keys(keys);
+			}
+
 		("restore", Some(matches)) => {
 			let mut raw_seed = matches.value_of("seed")
 				.map(str::as_bytes)
@@ -65,6 +89,7 @@ fn main() {
 			);
 		},
 		_ => print_usage(&matches),
+
 	}
 }
 

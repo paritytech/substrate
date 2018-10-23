@@ -23,3 +23,19 @@ subcommands:
             help: Number of keys to generate
             takes_value: true
             default_value: "1"
+        - minscore:
+            short: m
+            long: minscore
+            help: Minimum score for the results (between 0 and 100)
+            takes_value: true
+            default_value: "75"
+        - case_sensitive:
+            short: c
+            long: case-sensitive
+            help: Whether the patten case is important or not
+            takes_value: false
+        - paranoiac:
+            short: p
+            long: paranoiac
+            help: Sacrifice speed for better randomness (~7% slower)
+            takes_value: false
