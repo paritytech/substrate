@@ -68,6 +68,7 @@ decl_event!(
 decl_module! {
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "<T as Trait>::Proposal: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
+		fn deposit_event() = default;
 		fn propose(origin, threshold: Compact<u32>, proposal: Box<<T as Trait>::Proposal>) -> Result;
 		fn vote(origin, proposal: T::Hash, index: Compact<ProposalIndex>, approve: bool) -> Result;
 	}
@@ -91,12 +92,6 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	pub fn is_councillor(who: &T::AccountId) -> bool {
 		<Council<T>>::active_council().iter()
 			.any(|&(ref a, _)| a == who)

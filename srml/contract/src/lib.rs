@@ -151,6 +151,7 @@ where
 decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		// TODO: Change AccountId to staking::Address
 		fn call(
 			origin,
@@ -221,11 +222,6 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 }
 
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	/// Make a call to a specified account, optionally transferring some balance.
 	fn call(
 		origin: <T as system::Trait>::Origin,

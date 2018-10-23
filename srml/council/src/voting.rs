@@ -33,6 +33,7 @@ pub trait Trait: CouncilTrait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		fn propose(origin, proposal: Box<T::Proposal>) -> Result;
 		fn vote(origin, proposal: T::Hash, approve: bool) -> Result;
 		fn veto(origin, proposal_hash: T::Hash) -> Result;
@@ -73,12 +74,6 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	pub fn is_vetoed<B: Borrow<T::Hash>>(proposal: B) -> bool {
 		Self::veto_of(proposal.borrow())
 			.map(|(expiry, _): (T::BlockNumber, Vec<T::AccountId>)| <system::Module<T>>::block_number() < expiry)

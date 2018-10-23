@@ -87,6 +87,7 @@ pub trait Trait: democracy::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		fn set_approvals(origin, votes: Vec<bool>, index: Compact<VoteIndex>) -> Result;
 		fn reap_inactive_voter(origin, reporter_index: Compact<u32>, who: Address<T::AccountId, T::AccountIndex>, who_index: Compact<u32>, assumed_vote_index: Compact<VoteIndex>) -> Result;
 		fn retract_voter(origin, index: Compact<u32>) -> Result;
@@ -176,12 +177,6 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// exposed immutables.
 
 	/// True if we're currently in a presentation period.

@@ -73,6 +73,7 @@ type ProposalIndex = u32;
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		// Put forward a suggestion for spending. A deposit proportional to the value
 		// is reserved and slashed if the proposal is rejected. It is returned once the
 		// proposal is awarded.
@@ -160,11 +161,6 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// Implement Calls and add public immutables and private mutables.
 
 	fn propose_spend(origin: T::Origin, value: <T::Balance as HasCompact>::Type, beneficiary: Address<T::AccountId, T::AccountIndex>) -> Result {

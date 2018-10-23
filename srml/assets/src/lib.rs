@@ -69,6 +69,7 @@ type AssetId = u32;
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
@@ -107,12 +108,6 @@ decl_storage! {
 
 // The main implementation block for the module.
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	// TODO: move into `decl_module` macro.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// Public immutables
 
 	/// Get the asset `id` balance of `who`.

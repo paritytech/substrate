@@ -77,6 +77,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = system
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -93,6 +94,7 @@ macro_rules! decl_module {
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
 			{}
+			{}
 			[]
 			$($t)*
 		);
@@ -102,7 +104,50 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{}
 		{ $( $on_finalise:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		$vis:vis fn deposit_event() = default;
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $vis fn deposit_event() = default; }
+			{ $( $on_finalise )* }
+			[ $($t)* ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{}
+		{ $( $on_finalise:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		$vis:vis fn deposit_event($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $vis fn deposit_event($( $param_name: $param ),* ) { $( $impl )* } }
+			{ $( $on_finalise )* }
+			[ $($t)* ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+	    { $( $deposit_event:tt )* }
+		{}
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -112,6 +157,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
 			{ fn on_finalise( $( $param_name : $param ),* ) { $( $impl )* } }
 			[ $($t)* ]
 			$($rest)*
@@ -121,6 +167,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -131,6 +178,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
 			{ $( $on_finalise )* }
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(origin $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
@@ -140,6 +188,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -150,6 +199,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
 			{ $( $on_finalise )* }
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(root $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
@@ -159,6 +209,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 	) => {
@@ -168,6 +219,7 @@ macro_rules! decl_module {
 			for enum $call_type where origin: $origin_type, system = $system {
 				$($t)*
 			}
+			{ $( $deposit_event )* }
 			{ $( $on_finalise )* }
 		);
 	};
@@ -185,6 +237,38 @@ macro_rules! decl_module {
 		{
 			$system::ensure_root($origin)?;
 			<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* )
+		}
+	};
+
+	// no `deposit_event` function wanted
+	(@impl_deposit_event
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$system:ident;
+	) => {};
+
+	(@impl_deposit_event
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$system:ident;
+		$vis:vis fn deposit_event() = default;
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$vis fn deposit_event(event: Event<$trait_instance>) {
+				<$system::Module<$trait_instance>>::deposit_event(
+					<$trait_instance as $trait_name>::Event::from(event).into()
+				);
+			}
+		}
+	};
+
+	(@impl_deposit_event
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$system:ident;
+		$vis:vis fn deposit_event($param:ident : $param_ty:ty) { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$vis fn deposit_event($param: $param_ty) {
+				$( $impl )*
+			}
 		}
 	};
 
@@ -227,6 +311,7 @@ macro_rules! decl_module {
 				fn $fn_name:ident($from:ident $( , $param_name:ident : $param:ty)*) -> $result:ty;
 			)*
 		}
+		{ $( $deposit_event:tt )* }
 		{ $( $on_finalise:tt )* }
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -248,6 +333,13 @@ macro_rules! decl_module {
 			@impl_on_finalise
 			$mod_type<$trait_instance: $trait_name>;
 			$( $on_finalise )*
+		}
+
+		decl_module! {
+			@impl_deposit_event
+			$mod_type<$trait_instance: $trait_name>;
+			$system;
+			$( $deposit_event )*
 		}
 
 		#[cfg(feature = "std")]

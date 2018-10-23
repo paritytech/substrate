@@ -105,6 +105,7 @@ pub trait Trait: balances::Trait + session::Trait {
 decl_module! {
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		fn stake(origin) -> Result;
 		fn unstake(origin, intentions_index: Compact<u32>) -> Result;
 		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) -> Result;
@@ -189,12 +190,6 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// PUBLIC IMMUTABLES
 
 	/// The length of a staking era in blocks.
