@@ -254,6 +254,7 @@ mod tests {
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
+			upgrade_key: Some(Default::default()),
 		}.build_storage().unwrap())
 	}
 
