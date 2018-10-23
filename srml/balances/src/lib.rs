@@ -125,6 +125,7 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: <T::Balance as HasCompact>::Type) -> Result;
 		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: <T::Balance as HasCompact>::Type, reserved: <T::Balance as HasCompact>::Type) -> Result;
 	}
@@ -232,12 +233,6 @@ pub enum UpdateBalanceOutcome {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// PUBLIC IMMUTABLES
 
 	/// The combined balance of `who`.

@@ -62,6 +62,7 @@ pub trait Trait: balances::Trait + Sized {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		fn propose(origin, proposal: Box<T::Proposal>, value: <T::Balance as HasCompact>::Type) -> Result;
 		fn second(origin, proposal: Compact<PropIndex>) -> Result;
 		fn vote(origin, ref_index: Compact<ReferendumIndex>, approve_proposal: bool) -> Result;
@@ -121,12 +122,6 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// exposed immutables.
 
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal

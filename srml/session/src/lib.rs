@@ -67,6 +67,7 @@ pub trait Trait: timestamp::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		fn set_key(origin, key: T::SessionKey) -> Result;
 
 		fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result;
@@ -111,12 +112,6 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	/// The number of validators currently.
 	pub fn validator_count() -> u32 {
 		<Validators<T>>::get().len() as u32	// TODO: can probably optimised

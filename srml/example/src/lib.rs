@@ -103,6 +103,9 @@ pub trait Trait: balances::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Deposit one of this module's events by using the default implementation.
+		/// It is also possible to provide a custom implementation.
+		fn deposit_event() = default;
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.
@@ -174,12 +177,6 @@ decl_storage! {
 // functions that do not write to storage and operation functions that do.
 // - Private functions. These are your usual private utilities unavailable to other modules.
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	// TODO: move into `decl_module` macro.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// Implement Calls and add public immutables and private mutables.
 
 	// Implement dispatched function `accumulate_dummy`. This just increases the value
