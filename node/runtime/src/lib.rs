@@ -52,6 +52,7 @@ extern crate srml_staking as staking;
 extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 extern crate srml_treasury as treasury;
+extern crate srml_upgrade_key as upgrade_key;
 #[macro_use]
 extern crate sr_version as version;
 extern crate node_primitives;
@@ -192,6 +193,10 @@ impl contract::Trait for Runtime {
 	type Event = Event;
 }
 
+impl upgrade_key::Trait for Runtime {
+	type Event = Event;
+}
+
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
@@ -210,6 +215,7 @@ construct_runtime!(
 		CouncilSeats: council_seats::{Config<T>},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
+		UpgradeKey: upgrade_key,
 	}
 );
 

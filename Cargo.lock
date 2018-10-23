@@ -1687,6 +1687,7 @@ dependencies = [
  "srml-system 0.1.0",
  "srml-timestamp 0.1.0",
  "srml-treasury 0.1.0",
+ "srml-upgrade-key 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-primitives 0.1.0",
 ]

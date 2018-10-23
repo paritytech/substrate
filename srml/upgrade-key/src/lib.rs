@@ -37,7 +37,6 @@ extern crate srml_system as system;
 extern crate srml_consensus as consensus;
 
 use sr_std::prelude::*;
-use sr_primitives::traits::OnFinalise;
 use support::{StorageValue, dispatch::Result};
 use system::ensure_signed;
 
