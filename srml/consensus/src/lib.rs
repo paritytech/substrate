@@ -143,11 +143,51 @@ decl_storage! {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn report_misbehavior(origin, report: Vec<u8>) -> Result;
-		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result;
-		fn remark(origin, remark: Vec<u8>) -> Result;
-		fn set_code(new: Vec<u8>) -> Result;
-		fn set_storage(items: Vec<KeyValue>) -> Result;
+		/// Report some misbehaviour.
+		fn report_misbehavior(origin, _report: Vec<u8>) -> Result {
+			ensure_signed(origin)?;
+			// TODO.
+			Ok(())
+		}
+
+		/// Note the previous block's validator missed their opportunity to propose a block.
+		/// This only comes in if 2/3+1 of the validators agree that no proposal was submitted.
+		/// It's only relevant for the previous block.
+		fn note_offline(origin, offline_val_indices: Vec<u32>) -> Result {
+			ensure_inherent(origin)?;
+			assert!(
+				<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
+				"note_offline extrinsic must be at position {} in the block",
+				T::NOTE_OFFLINE_POSITION
+			);
+
+			for validator_index in offline_val_indices.into_iter() {
+				T::OnOfflineValidator::on_offline_validator(validator_index as usize);
+			}
+
+			Ok(())
+		}
+
+		/// Make some on-chain remark.
+		fn remark(origin, _remark: Vec<u8>) -> Result {
+			ensure_signed(origin)?;
+			Ok(())
+		}
+
+		/// Set the new code.
+		fn set_code(new: Vec<u8>) -> Result {
+			storage::unhashed::put_raw(well_known_keys::CODE, &new);
+			Ok(())
+		}
+
+		/// Set some items of storage.
+		fn set_storage(items: Vec<KeyValue>) -> Result {
+			for i in &items {
+				storage::unhashed::put_raw(&i.0, &i.1);
+			}
+			Ok(())
+		}
+
 		fn on_finalise() {
 			if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
 				let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
@@ -163,51 +203,6 @@ impl<T: Trait> Module<T> {
 	/// Get the current set of authorities. These are the session keys.
 	pub fn authorities() -> Vec<T::SessionKey> {
 		AuthorityStorageVec::<T::SessionKey>::items()
-	}
-
-	/// Set the new code.
-	fn set_code(new: Vec<u8>) -> Result {
-		storage::unhashed::put_raw(well_known_keys::CODE, &new);
-		Ok(())
-	}
-
-	/// Set some items of storage.
-	fn set_storage(items: Vec<KeyValue>) -> Result {
-		for i in &items {
-			storage::unhashed::put_raw(&i.0, &i.1);
-		}
-		Ok(())
-	}
-
-	/// Report some misbehaviour.
-	fn report_misbehavior(origin: T::Origin, _report: Vec<u8>) -> Result {
-		ensure_signed(origin)?;
-		// TODO.
-		Ok(())
-	}
-
-	/// Note the previous block's validator missed their opportunity to propose a block. This only comes in
-	/// if 2/3+1 of the validators agree that no proposal was submitted. It's only relevant
-	/// for the previous block.
-	fn note_offline(origin: T::Origin, offline_val_indices: Vec<u32>) -> Result {
-		ensure_inherent(origin)?;
-		assert!(
-			<system::Module<T>>::extrinsic_index() == Some(T::NOTE_OFFLINE_POSITION),
-			"note_offline extrinsic must be at position {} in the block",
-			T::NOTE_OFFLINE_POSITION
-		);
-
-		for validator_index in offline_val_indices.into_iter() {
-			T::OnOfflineValidator::on_offline_validator(validator_index as usize);
-		}
-
-		Ok(())
-	}
-
-	/// Make some on-chain remark.
-	fn remark(origin: T::Origin, _remark: Vec<u8>) -> Result {
-		ensure_signed(origin)?;
-		Ok(())
 	}
 
 	/// Set the current set of authorities' session keys.
