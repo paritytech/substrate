@@ -617,6 +617,10 @@ fn top_level_create() {
 				phase: Phase::ApplyExtrinsic(0),
 				event: MetaEvent::contract(RawEvent::Transfer(0, derived_address, 11)),
 			},
+			EventRecord {
+				phase: Phase::ApplyExtrinsic(0),
+				event: MetaEvent::contract(RawEvent::Created(0, 1)),
+			},
 		]);
 	});
 }

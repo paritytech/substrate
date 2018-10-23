@@ -181,6 +181,9 @@ decl_event! {
 	{
 		/// Transfer happened `from` -> `to` with given `value` as part of a `message-call` or `create`.
 		Transfer(AccountId, AccountId, Balance),
+
+		/// Contract deployed by address at the specified address.
+		Created(AccountId, AccountId),
 	}
 }
 
@@ -305,12 +308,14 @@ impl<T: Trait> Module<T> {
 		};
 		let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
 
-		if let Ok(_) = result {
+		if let Ok(ref r) = result {
 			// Commit all changes that made it thus far into the persistant storage.
 			account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
 
 			// Then deposit all events produced.
 			ctx.events.into_iter().for_each(Self::deposit_event);
+
+			Self::deposit_event(RawEvent::Created(origin.clone(), r.address.clone()));
 		}
 
 		// Refund cost of the unused gas.
