@@ -73,13 +73,43 @@ decl_module! {
 		/// Issue a new class of fungible assets. There are, and will only ever be, `total`
 		/// such assets and they'll all belong to the `origin` initially. It will have an
 		/// identifier `AssetId` instance: this will be specified in the `Issued` event.
-		fn issue(origin, total: T::Balance) -> Result;
+		fn issue(origin, total: T::Balance) -> Result {
+			let origin = ensure_signed(origin)?;
+
+			let id = Self::next_asset_id();
+			<NextAssetId<T>>::mutate(|id| *id += 1);
+
+			<Balances<T>>::insert((id, origin.clone()), total);
+
+			Self::deposit_event(RawEvent::Issued(id, origin, total));
+			Ok(())
+		}
 
 		/// Move some assets from one holder to another.
-		fn transfer(origin, id: AssetId, target: T::AccountId, total: T::Balance) -> Result;
+		fn transfer(origin, id: AssetId, target: T::AccountId, amount: T::Balance) -> Result {
+			let origin = ensure_signed(origin)?;
+			let origin_account = (id, origin.clone());
+			let origin_balance = <Balances<T>>::get(&origin_account);
+			ensure!(origin_balance >= amount, "origin account balance must be greater than amount");
+
+			Self::deposit_event(RawEvent::Transfered(id, origin, target.clone(), amount));
+			<Balances<T>>::insert(origin_account, origin_balance - amount);
+			<Balances<T>>::mutate((id, target), |balance| *balance += amount);
+
+			Ok(())
+		}
 
 		/// Destroy any assets of `id` owned by `origin`.
-		fn destroy(origin, id: AssetId) -> Result;
+		fn destroy(origin, id: AssetId) -> Result {
+			let origin = ensure_signed(origin)?;
+
+			let balance = <Balances<T>>::take((id, origin.clone()));
+			ensure!(!balance.is_zero(), "origin balance should be non-zero");
+
+			Self::deposit_event(RawEvent::Destroyed(id, origin, balance));
+
+			Ok(())
+		}
 	}
 }
 
@@ -113,45 +143,6 @@ impl<T: Trait> Module<T> {
 	/// Get the asset `id` balance of `who`.
 	pub fn balance(id: AssetId, who: T::AccountId) -> T::Balance {
 		<Balances<T>>::get((id, who))
-	}
-
-	// Implement Calls and add public immutables and private mutables.
-
-	fn issue(origin: T::Origin, total: T::Balance) -> Result {
-		let origin = ensure_signed(origin)?;
-
-		let id = Self::next_asset_id();
-		<NextAssetId<T>>::mutate(|id| *id += 1);
-
-
-		<Balances<T>>::insert((id, origin.clone()), total);
-
-		Self::deposit_event(RawEvent::Issued(id, origin, total));
-		Ok(())
-	}
-
-	fn transfer(origin: T::Origin, id: AssetId, target: T::AccountId, amount: T::Balance) -> Result {
-		let origin = ensure_signed(origin)?;
-		let origin_account = (id, origin.clone());
-		let origin_balance = <Balances<T>>::get(&origin_account);
-		ensure!(origin_balance >= amount, "origin account balance must be greater than amount");
-
-		Self::deposit_event(RawEvent::Transfered(id, origin, target.clone(), amount));
-		<Balances<T>>::insert(origin_account, origin_balance - amount);
-		<Balances<T>>::mutate((id, target), |balance| *balance += amount);
-
-		Ok(())
-	}
-
-	fn destroy(origin: T::Origin, id: AssetId) -> Result {
-		let origin = ensure_signed(origin)?;
-
-		let balance = <Balances<T>>::take((id, origin.clone()));
-		ensure!(!balance.is_zero(), "origin balance should be non-zero");
-
-		Self::deposit_event(RawEvent::Destroyed(id, origin, balance));
-
-		Ok(())
 	}
 }
 
