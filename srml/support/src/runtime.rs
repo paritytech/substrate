@@ -42,7 +42,7 @@
 /// - `Storage`
 /// - `Event` or `Event<T>` (if the event is generic)
 /// - `Origin` or `Origin<T>` (if the origin is generic)
-/// - `Config`
+/// - `Config` or `Config<T>` (if the config is generic)
 /// - `Log( $(IDENT),* )`
 #[macro_export]
 macro_rules! construct_runtime {
@@ -102,7 +102,7 @@ macro_rules! construct_runtime {
 							$( ( $( $expanded_modules_args ),* ) )*
 					),*
 				},
-			)* $name: $module::{Module, Call, Storage, Event<T>, Config};
+			)* $name: $module::{Module, Call, Storage, Event<T>, Config<T>};
 			$(
 				$rest_name: $rest_module $(
 					::{
@@ -165,7 +165,7 @@ macro_rules! construct_runtime {
 				},
 			)*
 			$name: $module::{
-				Module, Call, Storage, Event<T>, Config,
+				Module, Call, Storage, Event<T>, Config<T>,
 				$(
 					$modules $( <$modules_generic> )* $( ( $( $modules_args ),* ) )*
 				),*
@@ -952,7 +952,7 @@ macro_rules! __decl_outer_log {
 macro_rules! __decl_outer_config {
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
+		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
 		$name:ident: $module:ident::{
 			Config $(, $modules:ident $( <$modules_generic:ident> )* )*
 		}
@@ -962,7 +962,7 @@ macro_rules! __decl_outer_config {
 	) => {
 		__decl_outer_config!(
 			$runtime;
-			$( $parsed_modules :: $parsed_name, )* $module::$name;
+			$( $parsed_modules :: $parsed_name $( < $parsed_generic > )*, )* $module::$name;
 			$(
 				$rest_name: $rest_module::{
 					$( $rest_modules $( <$rest_modules_generic> )* ),*
@@ -972,7 +972,27 @@ macro_rules! __decl_outer_config {
 	};
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
+		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
+		$name:ident: $module:ident::{
+			Config<T> $(, $modules:ident $( <$modules_generic:ident> )* )*
+		}
+		$(, $rest_name:ident : $rest_module:ident::{
+			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
+		})*;
+	) => {
+		__decl_outer_config!(
+			$runtime;
+			$( $parsed_modules :: $parsed_name $( < $parsed_generic > )*, )* $module::$name<T>;
+			$(
+				$rest_name: $rest_module::{
+					$( $rest_modules $( <$rest_modules_generic> )* ),*
+				}
+			),*;
+		);
+	};
+	(
+		$runtime:ident;
+		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
 		$name:ident: $module:ident::{
 			$ingore:ident $( <$ignor:ident> )* $(, $modules:ident $( <$modules_generic:ident> )* )*
 		}
@@ -982,7 +1002,7 @@ macro_rules! __decl_outer_config {
 	) => {
 		__decl_outer_config!(
 			$runtime;
-			$( $parsed_modules :: $parsed_name ),*;
+			$( $parsed_modules :: $parsed_name $( < $parsed_generic > )*),*;
 			$name: $module::{ $( $modules $( <$modules_generic> )* ),* }
 			$(
 				, $rest_name: $rest_module::{
@@ -993,7 +1013,7 @@ macro_rules! __decl_outer_config {
 	};
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
+		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
 		$name:ident: $module:ident::{}
 		$(, $rest_name:ident : $rest_module:ident::{
 			$( $rest_modules:ident $( <$rest_modules_generic:ident> )* ),*
@@ -1001,7 +1021,7 @@ macro_rules! __decl_outer_config {
 	) => {
 		__decl_outer_config!(
 			$runtime;
-			$( $parsed_modules :: $parsed_name ),*;
+			$( $parsed_modules :: $parsed_name $( < $parsed_generic > )*),*;
 			$(
 				$rest_name: $rest_module::{
 					$( $rest_modules $( <$rest_modules_generic> )* ),*
@@ -1011,14 +1031,14 @@ macro_rules! __decl_outer_config {
 	};
 	(
 		$runtime:ident;
-		$( $parsed_modules:ident :: $parsed_name:ident ),*;
+		$( $parsed_modules:ident :: $parsed_name:ident $( < $parsed_generic:ident > )* ),*;
 		;
 	) => {
 		substrate_generate_ident_name! {
 			impl_outer_config!(
 				pub struct GenesisConfig for $runtime {
 					$(
-						"config-ident" $parsed_name => $parsed_modules,
+						"config-ident" $parsed_name => $parsed_modules $( < $parsed_generic > )*,
 					)*
 				}
 			);

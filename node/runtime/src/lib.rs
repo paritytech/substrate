@@ -40,7 +40,6 @@ extern crate substrate_primitives;
 #[macro_use]
 extern crate parity_codec_derive;
 
-#[cfg_attr(not(feature = "std"), macro_use)]
 extern crate sr_std as rstd;
 extern crate srml_balances as balances;
 extern crate srml_consensus as consensus;
@@ -67,7 +66,7 @@ use runtime_api::runtime::*;
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, DigestItem, Block as BlockT};
+use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT};
 use version::{RuntimeVersion, ApiId};
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
@@ -192,43 +191,24 @@ impl contract::Trait for Runtime {
 	type Event = Event;
 }
 
-impl DigestItem for Log {
-	type Hash = Hash;
-	type AuthorityId = SessionKey;
-
-	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]> {
-		match self.0 {
-			InternalLog::consensus(ref item) => item.as_authorities_change(),
-			_ => None,
-		}
-	}
-
-	fn as_changes_trie_root(&self) -> Option<&Self::Hash> {
-		match self.0 {
-			InternalLog::system(ref item) => item.as_changes_trie_root(),
-			_ => None,
-		}
-	}
-}
-
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
 		UncheckedExtrinsic = UncheckedExtrinsic
 	{
 		System: system::{default, Log(ChangesTrieRoot)},
-		Consensus: consensus::{Module, Call, Storage, Config, Log(AuthoritiesChange), Inherent},
+		Consensus: consensus::{Module, Call, Storage, Config<T>, Log(AuthoritiesChange), Inherent},
 		Balances: balances,
-		Timestamp: timestamp::{Module, Call, Storage, Config, Inherent},
+		Timestamp: timestamp::{Module, Call, Storage, Config<T>, Inherent},
 		Session: session,
 		Staking: staking,
 		Democracy: democracy,
 		Council: council::{Module, Call, Storage, Event<T>},
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
-		CouncilSeats: council_seats::{Config},
+		CouncilSeats: council_seats::{Config<T>},
 		Treasury: treasury,
-		Contract: contract::{Module, Call, Config, Event<T>},
+		Contract: contract::{Module, Call, Config<T>, Event<T>},
 	}
 );
 

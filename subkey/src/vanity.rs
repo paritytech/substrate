@@ -16,7 +16,6 @@
 
 use rand::{OsRng, Rng};
 use substrate_primitives::ed25519::Pair;
-use std::cmp;
 
 fn good_waypoint(done: u64) -> u64 {
 	match done {
@@ -52,29 +51,25 @@ fn calculate_score(_desired: &str, key: &str) -> usize {
 		let snip_size = _desired.len() - truncate;
 		let truncated = &_desired[0..snip_size];
 		if let Some(pos) = key.find(truncated) {
-			let score = cmp::min(100, (51 - pos) + (snip_size * 50 / _desired.len()));
-			return score;
+			return (47 - pos) + (snip_size * 48);
 		}
 	}
 	0
 }
 
-pub fn generate_key(_desired: &str, _amount: usize, paranoiac: bool) -> Result<Vec<KeyPair>, &str> {
-	println!("Generating {} keys with pattern '{}'", _amount, &_desired);
+pub fn generate_key(_desired: &str) -> Result<KeyPair, &str> {
+	println!("Generating key containing pattern '{}'", _desired);
 
-	let top = 30 + (_desired.len() * 32);
+	let top = 45 + (_desired.len() * 48);
 	let mut best = 0;
 	let mut seed = [0u8; 32];
 	let mut done = 0;
-	let mut res = vec![];
 
 	OsRng::new().unwrap().fill_bytes(&mut seed[..]);
 
 	loop {
-		if res.len() >= _amount { break; }
-
-		// reset to a new random seed at beginning and regularly after for paranoia.
-		if paranoiac || done % 100000 == 0 {
+		// reset to a new random seed at beginning and regularly thereafter
+		if done % 100000 == 0 {
 			OsRng::new().unwrap().fill_bytes(&mut seed[..]);
 		}
 
@@ -88,22 +83,18 @@ pub fn generate_key(_desired: &str, _amount: usize, paranoiac: bool) -> Result<V
 				seed: seed.clone(),
 				score: score,
 			};
-			res.push(keypair);
-			if best == top {
+			if best >= top {
 				println!("best: {} == top: {}", best, top);
-				break;
+				return Ok(keypair);
 			}
 		}
 		seed = next_seed(seed);
 		done += 1;
 
 		if done % good_waypoint(done) == 0 {
-			println!("Stopping after {} keys searched", done);
-			break;
+			println!("{} keys searched; best is {}/{} complete", done, best, top);
 		}
 	}
-	res.sort_unstable_by(|a, b| b.score.cmp(&a.score));
-	Ok(res)
 }
 
 #[cfg(test)]
@@ -113,48 +104,38 @@ mod tests {
 	use test::Bencher;
 
 	#[test]
-	fn test_generation_no_args() {
-		assert!(generate_key("",1, false).unwrap().len() == 1);
-	}
-
-	#[test]
 	fn test_generation_with_single_char() {
-		assert!(generate_key("j", 1, false).unwrap().len() == 1);
-	}
-
-	#[test]
-	fn test_generation_with_args() {
-		assert!(generate_key("polka", 2, false).unwrap().len() == 2);
+		assert!(generate_key("j").unwrap().pair.public().to_ss58check().contains("j"));
 	}
 
 	#[test]
 	fn test_score_1_char_100() {
 		let score = calculate_score("j", "5jolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
-		assert!(score == 100, format!("Wrong score, we found {}", score));
+		assert_eq!(score, 94);
 	}
 
 	#[test]
 	fn test_score_100() {
 		let score = calculate_score("Polkadot", "5PolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
-		assert!( score == 100, format!("Wrong score, we found {}", score));
+		assert_eq!(score, 430);
 	}
 
 	#[test]
 	fn test_score_50_2() {
 		// 50% for the position + 50% for the size
-		assert!(calculate_score("Polkadot", "5PolkXXXXwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim") == 75);
+		assert_eq!(calculate_score("Polkadot", "5PolkXXXXwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim"), 238);
 	}
 
 	#[test]
 	fn test_score_0() {
-		assert!(calculate_score("Polkadot", "5GUWv4bLCchGUHJrzULXnh4JgXsMpTKRnjuXTY7Qo1Kh9uYK") == 0);
+		assert_eq!(calculate_score("Polkadot", "5GUWv4bLCchGUHJrzULXnh4JgXsMpTKRnjuXTY7Qo1Kh9uYK"), 0);
 	}
 
 	#[cfg(feature = "bench")]
 	#[bench]
 	fn bench_paranoiac(b: &mut Bencher) {
 		b.iter(|| {
-			generate_key("polka", 3, true)
+			generate_key("polk")
 		});
 	}
 
@@ -162,7 +143,7 @@ mod tests {
 	#[bench]
 	fn bench_not_paranoiac(b: &mut Bencher) {
 		b.iter(|| {
-			generate_key("polka", 3, false)
+			generate_key("polk")
 		});
 	}
 }
