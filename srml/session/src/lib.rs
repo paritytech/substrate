@@ -42,7 +42,7 @@ extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{As, Zero, One, OnFinalise, Convert};
+use primitives::traits::{As, Zero, One, Convert};
 use codec::HasCompact;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
@@ -71,6 +71,9 @@ decl_module! {
 
 		fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result;
 		fn force_new_session(apply_rewards: bool) -> Result;
+		fn on_finalise(n: T::BlockNumber) {
+			Self::check_rotate_session(n);
+		}
 	}
 }
 
@@ -225,12 +228,6 @@ impl<T: Trait> Module<T> {
 		let length_minus_1 = length - One::one();
 		let block_number = <system::Module<T>>::block_number();
 		length_minus_1 - (block_number - Self::last_length_change() + length_minus_1) % length
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(n: T::BlockNumber) {
-		Self::check_rotate_session(n);
 	}
 }
 

@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use codec::HasCompact;
-use primitives::traits::{OnFinalise, Hash, As};
+use primitives::traits::{Hash, As};
 use runtime_io::print;
 use srml_support::dispatch::Result;
 use srml_support::{StorageValue, StorageMap, IsSubType};
@@ -39,6 +39,12 @@ decl_module! {
 
 		fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result;
 		fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result;
+		fn on_finalise(n: T::BlockNumber) {
+			if let Err(e) = Self::end_block(n) {
+				print("Guru meditation");
+				print(e);
+			}
+		}
 	}
 }
 
@@ -224,15 +230,6 @@ impl<T: Trait> Module<T> {
 			}
 		}
 		Ok(())
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(n: T::BlockNumber) {
-		if let Err(e) = Self::end_block(n) {
-			print("Guru meditation");
-			print(e);
-		}
 	}
 }
 

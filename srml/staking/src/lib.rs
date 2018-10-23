@@ -55,7 +55,7 @@ use codec::{HasCompact, Compact};
 use runtime_support::{Parameter, StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
 use session::OnSessionChange;
-use primitives::{Perbill, traits::{Zero, One, Bounded, OnFinalise, As}};
+use primitives::{Perbill, traits::{Zero, One, Bounded, As}};
 use balances::{address::Address, OnDilution};
 use system::ensure_signed;
 
@@ -76,7 +76,7 @@ pub enum LockStatus<BlockNumber: Parameter> {
 /// Preference of what happens on a slash event.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
-pub struct ValidatorPrefs<Balance: HasCompact + Copy> { // TODO: @bkchr shouldn't need this Copy but derive(Encode) breaks otherwise 
+pub struct ValidatorPrefs<Balance: HasCompact + Copy> { // TODO: @bkchr shouldn't need this Copy but derive(Encode) breaks otherwise
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	#[codec(compact)]
 	pub unstake_threshold: u32,
@@ -522,11 +522,6 @@ impl<T: Trait> Module<T> {
 		// Update the balances for slashing/rewarding according to the stakes.
 		<CurrentOfflineSlash<T>>::put(Self::offline_slash().times(stake_range.1));
 		<CurrentSessionReward<T>>::put(Self::session_reward().times(stake_range.1));
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 

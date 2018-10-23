@@ -103,7 +103,7 @@ use double_map::StorageDoubleMap;
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use codec::{Codec, HasCompact};
-use runtime_primitives::traits::{Hash, As, SimpleArithmetic, OnFinalise};
+use runtime_primitives::traits::{Hash, As, SimpleArithmetic};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
 use system::ensure_signed;
@@ -167,6 +167,9 @@ decl_module! {
 			init_code: Vec<u8>,
 			data: Vec<u8>
 		) -> Result;
+		fn on_finalise() {
+			<GasSpent<T>>::kill();
+		}
 	}
 }
 
@@ -324,12 +327,5 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	fn on_free_balance_zero(who: &T::AccountId) {
 		<CodeOf<T>>::remove(who);
 		<StorageOf<T>>::remove_prefix(who.clone());
-	}
-}
-
-/// Finalization hook for the smart-contract module.
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
-		<GasSpent<T>>::kill();
 	}
 }

@@ -111,6 +111,7 @@ mod tests {
 		pub trait Trait {
 			type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
 			type AccountId;
+			type BlockNumber;
 		}
 
 		decl_module! {
@@ -148,6 +149,7 @@ mod tests {
 		pub trait Trait {
 			type Origin;
 			type Balance;
+			type BlockNumber;
 		}
 
 		decl_event!(
@@ -175,6 +177,7 @@ mod tests {
 		pub trait Trait {
 			type Origin;
 			type Balance;
+			type BlockNumber;
 		}
 
 		decl_event!(
@@ -226,16 +229,19 @@ mod tests {
 	impl event_module::Trait for TestRuntime {
 		type Origin = Origin;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl event_module2::Trait for TestRuntime {
 		type Origin = Origin;
 		type Balance = u32;
+		type BlockNumber = u32;
 	}
 
 	impl system::Trait for TestRuntime {
 		type Origin = Origin;
 		type AccountId = u32;
+		type BlockNumber = u32;
 	}
 
 	impl_runtime_metadata!(

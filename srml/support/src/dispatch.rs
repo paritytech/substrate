@@ -76,6 +76,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type where system = system
+			{}
 			[]
 			$($t)*
 		);
@@ -91,6 +92,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type where system = $system
+			{}
 			[]
 			$($t)*
 		);
@@ -100,6 +102,26 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		{ $( $on_finalise:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		fn on_finalise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type where system = $system
+			{ fn on_finalise( $( $param_name : $param ),* ) { $( $impl )* } }
+			[ $($t)* ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn $fn_name:ident(origin $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
@@ -109,6 +131,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type where system = $system
+			{ $( $on_finalise )* }
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(origin $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
 		);
@@ -117,6 +140,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn $fn_name:ident($( $param_name:ident : $param:ty),* ) -> $result:ty ;
@@ -126,6 +150,7 @@ macro_rules! decl_module {
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
 			for enum $call_type where origin: $origin_type where system = $system
+			{ $( $on_finalise )* }
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(root $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
 		);
@@ -134,6 +159,7 @@ macro_rules! decl_module {
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 	) => {
 		decl_module!(@imp
@@ -142,6 +168,7 @@ macro_rules! decl_module {
 			for enum $call_type where origin: $origin_type where system = $system {
 				$($t)*
 			}
+			{ $( $on_finalise )* }
 		);
 	};
 
@@ -161,14 +188,46 @@ macro_rules! decl_module {
 		}
 	};
 
+	(@impl_on_finalise
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		fn on_finalise() { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name>
+			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
+			for $module<$trait_instance> {
+			fn on_finalise(_block_number_not_used: $trait_instance::BlockNumber) { $( $impl )* }
+		}
+	};
+
+	(@impl_on_finalise
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		fn on_finalise($param:ident : $param_ty:ty) { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name>
+			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
+			for $module<$trait_instance> {
+			fn on_finalise($param: $param_ty) { $( $impl )* }
+		}
+	};
+
+	(@impl_on_finalise
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+	) => {
+		impl<$trait_instance: $trait_name>
+			$crate::runtime_primitives::traits::OnFinalise<$trait_instance::BlockNumber>
+			for $module<$trait_instance> {}
+	};
+
 	(@imp
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
 		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
-		$(
-			$(#[doc = $doc_attr:tt])*
-			fn $fn_name:ident($from:ident $( , $param_name:ident : $param:ty)*) -> $result:ty;
-		)*}
+			$(
+				$(#[doc = $doc_attr:tt])*
+				fn $fn_name:ident($from:ident $( , $param_name:ident : $param:ty)*) -> $result:ty;
+			)*
+		}
+		{ $( $on_finalise:tt )* }
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
@@ -184,6 +243,12 @@ macro_rules! decl_module {
 		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 		#[cfg(not(feature = "std"))]
 		pub struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
+
+		decl_module! {
+			@impl_on_finalise
+			$mod_type<$trait_instance: $trait_name>;
+			$( $on_finalise )*
+		}
 
 		#[cfg(feature = "std")]
 		$(#[$attr])*
@@ -615,6 +680,7 @@ mod tests {
 
 	pub trait Trait {
 		type Origin;
+		type BlockNumber;
 	}
 
 	pub mod system {
@@ -722,6 +788,7 @@ mod tests {
 
 	impl Trait for TraitImpl {
 		type Origin = u32;
+		type BlockNumber = u32;
 	}
 
 	#[test]

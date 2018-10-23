@@ -41,7 +41,7 @@ extern crate srml_system as system;
 use rstd::prelude::*;
 use rstd::result;
 use codec::{HasCompact, Compact};
-use primitives::traits::{Zero, OnFinalise, As, MaybeSerializeDebug};
+use primitives::traits::{Zero, As, MaybeSerializeDebug};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
@@ -68,6 +68,11 @@ decl_module! {
 
 		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result;
 		fn cancel_referendum(ref_index: Compact<ReferendumIndex>) -> Result;
+		fn on_finalise(n: T::BlockNumber) {
+			if let Err(e) = Self::end_block(n) {
+				runtime_io::print(e);
+			}
+		}
 	}
 }
 
@@ -305,14 +310,6 @@ impl<T: Trait> Module<T> {
 			<NextTally<T>>::put(index + 1);
 		}
 		Ok(())
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(n: T::BlockNumber) {
-		if let Err(e) = Self::end_block(n) {
-			runtime_io::print(e);
-		}
 	}
 }
 
