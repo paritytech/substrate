@@ -75,7 +75,7 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = system
+			for enum $call_type where origin: $origin_type, system = system
 			{}
 			[]
 			$($t)*
@@ -84,14 +84,14 @@ macro_rules! decl_module {
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident {
 			$($t:tt)*
 		}
 	) => {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type, system = $system
 			{}
 			[]
 			$($t)*
@@ -101,7 +101,7 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -111,7 +111,7 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type, system = $system
 			{ fn on_finalise( $( $param_name : $param ),* ) { $( $impl )* } }
 			[ $($t)* ]
 			$($rest)*
@@ -120,7 +120,7 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -130,7 +130,7 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $on_finalise )* }
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(origin $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
@@ -139,7 +139,7 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
@@ -149,7 +149,7 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type, system = $system
 			{ $( $on_finalise )* }
 			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(root $( , $param_name : $param )* ) -> $result; ]
 			$($rest)*
@@ -158,14 +158,14 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 	) => {
 		decl_module!(@imp
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system {
+			for enum $call_type where origin: $origin_type, system = $system {
 				$($t)*
 			}
 			{ $( $on_finalise )* }
@@ -221,7 +221,7 @@ macro_rules! decl_module {
 	(@imp
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident {
 			$(
 				$(#[doc = $doc_attr:tt])*
 				fn $fn_name:ident($from:ident $( , $param_name:ident : $param:ty)*) -> $result:ty;
