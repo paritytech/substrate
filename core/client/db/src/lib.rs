@@ -1333,7 +1333,7 @@ mod tests {
 	}
 
 	#[test]
-	fn changes_tries_are_pruned_on_finalization() {
+	fn changes_tries_with_digest_are_pruned_on_finalization() {
 		let mut backend = Backend::<Block>::new_test(1000, 100);
 		backend.changes_tries_storage.meta.write().finalized_number = 1000;
 		backend.changes_tries_storage.min_blocks_to_keep = Some(8);
@@ -1408,6 +1408,51 @@ mod tests {
 		assert!(backend.changes_tries_storage.get(&root10).unwrap().is_some());
 		assert!(backend.changes_tries_storage.get(&root11).unwrap().is_some());
 		assert!(backend.changes_tries_storage.get(&root12).unwrap().is_some());
+	}
+
+	#[test]
+	fn changes_tries_without_digest_are_pruned_on_finalization() {
+		let mut backend = Backend::<Block>::new_test(1000, 100);
+		backend.changes_tries_storage.min_blocks_to_keep = Some(4);
+		let config = ChangesTrieConfiguration {
+			digest_interval: 0,
+			digest_levels: 0,
+		};
+
+		// insert some blocks
+		let block0 = insert_header(&backend, 0, Default::default(), vec![(b"key_at_0".to_vec(), b"val_at_0".to_vec())], Default::default());
+		let block1 = insert_header(&backend, 1, block0, vec![(b"key_at_1".to_vec(), b"val_at_1".to_vec())], Default::default());
+		let block2 = insert_header(&backend, 2, block1, vec![(b"key_at_2".to_vec(), b"val_at_2".to_vec())], Default::default());
+		let block3 = insert_header(&backend, 3, block2, vec![(b"key_at_3".to_vec(), b"val_at_3".to_vec())], Default::default());
+		let block4 = insert_header(&backend, 4, block3, vec![(b"key_at_4".to_vec(), b"val_at_4".to_vec())], Default::default());
+		let block5 = insert_header(&backend, 5, block4, vec![(b"key_at_5".to_vec(), b"val_at_5".to_vec())], Default::default());
+		let block6 = insert_header(&backend, 6, block5, vec![(b"key_at_6".to_vec(), b"val_at_6".to_vec())], Default::default());
+
+		// check that roots of all tries are in the columns::CHANGES_TRIE
+		fn read_changes_trie_root(backend: &Backend<Block>, num: u64) -> H256 {
+			backend.blockchain().header(BlockId::Number(num)).unwrap().unwrap().digest().logs().iter()
+				.find(|i| i.as_changes_trie_root().is_some()).unwrap().as_changes_trie_root().unwrap().clone()
+		}
+		let root1 = read_changes_trie_root(&backend, 1); assert_eq!(backend.changes_tries_storage.root(1).unwrap(), Some(root1));
+		let root2 = read_changes_trie_root(&backend, 2); assert_eq!(backend.changes_tries_storage.root(2).unwrap(), Some(root2));
+		let root3 = read_changes_trie_root(&backend, 3); assert_eq!(backend.changes_tries_storage.root(3).unwrap(), Some(root3));
+		let root4 = read_changes_trie_root(&backend, 4); assert_eq!(backend.changes_tries_storage.root(4).unwrap(), Some(root4));
+		let root5 = read_changes_trie_root(&backend, 5); assert_eq!(backend.changes_tries_storage.root(5).unwrap(), Some(root5));
+		let root6 = read_changes_trie_root(&backend, 6); assert_eq!(backend.changes_tries_storage.root(6).unwrap(), Some(root6));
+
+		// now simulate finalization of block#5, causing prune of trie at #1
+		let mut tx = DBTransaction::new();
+		backend.changes_tries_storage.prune(Some(config.clone()), &mut tx, 5);
+		backend.storage.db.write(tx).unwrap();
+		assert!(backend.changes_tries_storage.get(&root1).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root2).unwrap().is_some());
+
+		// now simulate finalization of block#6, causing prune of tries at #2
+		let mut tx = DBTransaction::new();
+		backend.changes_tries_storage.prune(Some(config.clone()), &mut tx, 6);
+		backend.storage.db.write(tx).unwrap();
+		assert!(backend.changes_tries_storage.get(&root2).unwrap().is_none());
+		assert!(backend.changes_tries_storage.get(&root3).unwrap().is_some());
 	}
 
 	#[test]
