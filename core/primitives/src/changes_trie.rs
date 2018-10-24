@@ -54,7 +54,7 @@ impl ChangesTrieConfiguration {
 		for _ in 1..self.digest_levels {
 			max_digest_interval = match max_digest_interval.checked_mul(self.digest_interval) {
 				Some(max_digest_interval) => max_digest_interval,
-				None => return 0xffffffffffffffff,
+				None => return u64::max_value(),
 			}
 		}
 
