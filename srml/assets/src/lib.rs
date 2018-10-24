@@ -55,6 +55,7 @@ extern crate srml_system as system;
 use runtime_support::{StorageValue, StorageMap, dispatch::Result, Parameter};
 use primitives::traits::{Member, SimpleArithmetic, Zero};
 use system::ensure_signed;
+use sr_std::prelude::Vec;
 
 pub trait Trait: system::Trait {
 	/// The overarching event type.
