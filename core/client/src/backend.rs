@@ -18,7 +18,7 @@
 
 use error;
 use primitives::AuthorityId;
-use runtime_primitives::{generic::BlockId, Justification};
+use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
 use runtime_primitives::traits::{Block as BlockT, NumberFor};
 use state_machine::backend::Backend as StateBackend;
 use state_machine::ChangesTrieStorage as StateChangesTrieStorage;
@@ -50,8 +50,7 @@ impl NewBlockState {
 pub trait BlockImportOperation<Block, H>
 where
 	Block: BlockT,
-	H: Hasher,
-
+	H: Hasher<Out=Block::Hash>,
 {
 	/// Associated state backend type.
 	type State: StateBackend<H>;
@@ -73,7 +72,7 @@ where
 	/// Inject storage data into the database.
 	fn update_storage(&mut self, update: <Self::State as StateBackend<H>>::Transaction) -> error::Result<()>;
 	/// Inject storage data into the database replacing any existing data.
-	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()>;
+	fn reset_storage(&mut self, top: StorageMap, children: ChildrenStorageMap) -> error::Result<H::Out>;
 	/// Inject changes trie data into the database.
 	fn update_changes_trie(&mut self, update: MemoryDB<H>) -> error::Result<()>;
 }
@@ -89,7 +88,7 @@ where
 pub trait Backend<Block, H>: Send + Sync
 where
 	Block: BlockT,
-	H: Hasher,
+	H: Hasher<Out=Block::Hash>,
 
 {
 	/// Associated block insertion operation type.
@@ -128,14 +127,12 @@ where
 pub trait LocalBackend<Block, H>: Backend<Block, H>
 where
 	Block: BlockT,
-	H: Hasher,
-
+	H: Hasher<Out=Block::Hash>,
 {}
 
 /// Mark for all Backend implementations, that are fetching required state data from remote nodes.
 pub trait RemoteBackend<Block, H>: Backend<Block, H>
 where
 	Block: BlockT,
-	H: Hasher,
-
+	H: Hasher<Out=Block::Hash>,
 {}

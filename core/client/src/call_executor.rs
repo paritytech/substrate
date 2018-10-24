@@ -24,7 +24,7 @@ use executor::{RuntimeVersion, RuntimeInfo, NativeVersion};
 use hash_db::Hasher;
 use trie::MemoryDB;
 use codec::Decode;
-use primitives::{Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 use primitives::storage::well_known_keys;
 
 use backend;
@@ -43,7 +43,7 @@ pub struct CallResult {
 pub trait CallExecutor<B, H>
 where
 	B: BlockT,
-	H: Hasher,
+	H: Hasher<Out=B::Hash>,
 	H::Out: Ord,
 
 {
@@ -119,7 +119,7 @@ impl<B, E, Block> CallExecutor<Block, Blake2Hasher> for LocalCallExecutor<B, E>
 where
 	B: backend::LocalBackend<Block, Blake2Hasher>,
 	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = E::Error;
 

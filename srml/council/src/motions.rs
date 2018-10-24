@@ -86,7 +86,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(_marker): ::std::marker::PhantomData<T>;
-		build(|_, _| {});
+		build(|_, _, _| {});
 	}
 }
 

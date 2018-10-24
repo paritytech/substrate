@@ -121,7 +121,7 @@ impl ExtBuilder {
 	fn build(self) -> runtime_io::TestExternalities<Blake2Hasher> {
 		let mut t = system::GenesisConfig::<Test>::default()
 			.build_storage()
-			.unwrap();
+			.unwrap().0;
 		t.extend(
 			balances::GenesisConfig::<Test> {
 				balances: vec![],
@@ -132,7 +132,7 @@ impl ExtBuilder {
 				creation_fee: self.creation_fee,
 				reclaim_rebate: 0,
 			}.build_storage()
-			.unwrap(),
+			.unwrap().0,
 		);
 		t.extend(
 			GenesisConfig::<Test> {
@@ -143,7 +143,7 @@ impl ExtBuilder {
 				max_depth: 100,
 				block_gas_limit: self.block_gas_limit,
 			}.build_storage()
-			.unwrap(),
+			.unwrap().0,
 		);
 		runtime_io::TestExternalities::new(t)
 	}

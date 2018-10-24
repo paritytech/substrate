@@ -227,11 +227,10 @@ pub fn new_in_mem<E, Block, S>(
 	executor: E,
 	genesis_storage: S,
 ) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>, Block>>
-	where
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-		S: BuildStorage,
-		Block: BlockT,
-		H256: From<Block::Hash>,
+where
+	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	S: BuildStorage,
+	Block: BlockT<Hash=H256>,
 {
 	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
 }
@@ -243,12 +242,11 @@ pub fn new_with_backend<B, E, Block, S>(
 	executor: E,
 	build_genesis_storage: S,
 ) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block>>
-	where
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-		S: BuildStorage,
-		Block: BlockT,
-		H256: From<Block::Hash>,
-		B: backend::LocalBackend<Block, Blake2Hasher>
+where
+	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	S: BuildStorage,
+	Block: BlockT<Hash=H256>,
+	B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
@@ -257,7 +255,7 @@ pub fn new_with_backend<B, E, Block, S>(
 impl<B, E, Block> Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new<S: BuildStorage>(
@@ -268,11 +266,12 @@ impl<B, E, Block> Client<B, E, Block> where
 		api_execution_strategy: ExecutionStrategy,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			let genesis_storage = build_genesis_storage.build_storage()?;
-			let genesis_block = genesis::construct_genesis_block::<Block>(&genesis_storage);
-			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
+			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
-			op.reset_storage(genesis_storage.into_iter())?;
+			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
+
+			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
+			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			op.set_block_data(
 				genesis_block.deconstruct().0,
 				Some(vec![]),
@@ -987,7 +986,7 @@ impl<B, E, Block> Client<B, E, Block> where
 impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
 	fn current_height(&self) -> Self::BlockNumber {
@@ -998,7 +997,7 @@ impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
 impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
 	type Hash = Block::Hash;
@@ -1011,7 +1010,7 @@ impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 where
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
@@ -1036,18 +1035,17 @@ impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
 	}
 }
 
-impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
-		Block: BlockT,
+impl<B, E, Block> BlockBody<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
@@ -1057,7 +1055,7 @@ impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 
@@ -1077,7 +1075,7 @@ impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 impl<B, E, Block> api::Metadata<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 
@@ -1089,7 +1087,7 @@ impl<B, E, Block> api::Metadata<Block> for Client<B, E, Block> where
 impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 	type OverlayedChanges = OverlayedChanges;
@@ -1143,7 +1141,7 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 impl<B, E, Block> api::OldTxQueue<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 
@@ -1163,7 +1161,7 @@ impl<B, E, Block> api::OldTxQueue<Block> for Client<B, E, Block> where
 impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 
@@ -1177,7 +1175,7 @@ impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> whe
 impl<B, E, Block> api::Miscellaneous<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 

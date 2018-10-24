@@ -50,11 +50,11 @@ impl system::Trait for Test {
 }
 
 pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
-	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 	t.extend(GenesisConfig::<Test>{
 		code: vec![],
 		authorities,
-	}.build_storage().unwrap());
+	}.build_storage().unwrap().0);
 	t.into()
 }
 

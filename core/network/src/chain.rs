@@ -21,7 +21,7 @@ use client::error::Error;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::Justification;
-use primitives::{Blake2Hasher, AuthorityId};
+use primitives::{H256, Blake2Hasher, AuthorityId};
 
 /// Local client abstraction for the network.
 pub trait Client<Block: BlockT>: Send + Sync {
@@ -69,7 +69,7 @@ pub trait Client<Block: BlockT>: Send + Sync {
 impl<B, E, Block> Client<Block> for SubstrateClient<B, E, Block> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	fn import(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>) -> Result<ImportResult, Error> {
 		(self as &SubstrateClient<B, E, Block>).import_block(block, new_authorities)
