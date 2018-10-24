@@ -215,7 +215,7 @@ substrate-state-machine, substrate-telemetry, substrate-test-client,
 substrate-test-runtime, substrate-transaction-graph, substrate-transaction-pool,
 substrate-trie
 
-=== Authoring documentation for Substrate packages
+=== Contributing to documentation for Substrate packages
 
 https://doc.rust-lang.org/1.9.0/book/documentation.html[Document source code] for Substrate packages by annotating the source code with documentation comments.
 
@@ -241,9 +241,9 @@ Example (generic):
 /// 
 ```
 
-Important notes:
-* Documentation comments must use annotations with a triple slash `///`
-* Modules are documented using `//!` 
+* Important notes:
+** Documentation comments must use annotations with a triple slash `///`
+** Modules are documented using `//!` 
 ```
 /// Summary (of module)
 ///
@@ -263,14 +263,14 @@ after the triple graves, alternative annotations include the `ignore`, `text`, `
 or errors `#![deny(missing_docs)]`
 * Hide documentation for items with `#[doc(hidden)]`
 
-=== Authoring documentation (as tests, for extended examples, and for macros) for Substrate packages
+=== Contributing to documentation (as tests, for extended examples, and for macros) for Substrate packages
 
 The code block annotations in the `# Example` section may be used as https://doc.rust-lang.org/1.9.0/book/documentation.html#documentation-as-tests[documentation as tests and for extended examples].
 
-Important notes:
-* Rustdoc will automatically add a `main()` wrapper around the code block to test it
-* https://doc.rust-lang.org/1.9.0/book/documentation.html#documenting-macros[Documentating macros].
-* Documentation as tests examples are included when running `cargo test`
+* Important notes:
+** Rustdoc will automatically add a `main()` wrapper around the code block to test it
+** https://doc.rust-lang.org/1.9.0/book/documentation.html#documenting-macros[Documentating macros].
+** Documentation as tests examples are included when running `cargo test`
 
 == License
 ----
