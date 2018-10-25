@@ -150,7 +150,6 @@ decl_module! {
 		fn remark(origin, remark: Vec<u8>) -> Result;
 		fn set_code(new: Vec<u8>) -> Result;
 		fn set_storage(items: Vec<KeyValue>) -> Result;
-		fn set_heap_pages(pages: u64) -> Result;
 		fn on_finalise() {
 			if let Some(original_authorities) = <OriginalAuthorities<T>>::take() {
 				let current_authorities = AuthorityStorageVec::<T::SessionKey>::items();
