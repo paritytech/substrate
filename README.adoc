@@ -221,10 +221,6 @@ cargo run
 
 include::doc/packages/packages.adoc[]
 
-include::CONTRIBUTING.adoc[leveloffset=+1]
-
-include::CODE_OF_CONDUCT.adoc[leveloffset=+1]
-
 == Documentation
 
 === Viewing documentation for Substrate packages
@@ -320,6 +316,16 @@ The code block annotations in the `# Example` section may be used as https://doc
 ** Rustdoc will automatically add a `main()` wrapper around the code block to test it
 ** https://doc.rust-lang.org/1.9.0/book/documentation.html#documenting-macros[Documentating macros].
 ** Documentation as tests examples are included when running `cargo test`
+
+== Contributing
+
+=== Contributing Guidelines
+
+include::CONTRIBUTING.adoc[]
+
+=== Contributor Code of Conduct
+
+include::CODE_OF_CONDUCT.adoc[]
 
 == License
 
