@@ -238,21 +238,7 @@ cargo doc --package <spec> --open
 
 Replacing `<spec>` with one of the following (i.e. `cargo doc --package node-cli --open`):
 
-* Node
-[source, shell]
-node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime, node-service
-* Substrate Runtime
-[source, shell]
-sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
-* Substrate Runtime Module Library
-[source, shell]
-srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
-srml-executive, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
-srml-treasury
-* Subkey
-[source, shell]
-subkey
-* Substrate
+* Substrate Core
 [source, shell]
 substrate, substrate-bft, substrate-cli, substrate-client, substrate-client-db,
 substrate-executor, substrate-finality-grandpa, substrate-keyring, substrate-keystore,
@@ -262,6 +248,21 @@ substrate-serializer, substrate-service, substrate-service-test, substrate-state
 substrate-state-machine, substrate-telemetry, substrate-test-client,
 substrate-test-runtime, substrate-transaction-graph, substrate-transaction-pool,
 substrate-trie
+* Substrate Runtime
+[source, shell]
+sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
+* Substrate Runtime Module Library (SRML)
+[source, shell]
+srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
+srml-executive, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
+srml-treasury
+* Node
+[source, shell]
+node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime, node-service
+* Subkey
+[source, shell]
+subkey
+
 
 === Contributing to documentation for Substrate packages
 
@@ -293,9 +294,9 @@ Example (generic):
 ** Documentation comments must use annotations with a triple slash `///`
 ** Modules are documented using `//!` 
 ```
-/// Summary (of module)
-///
-/// Description (of module)
+//! Summary (of module)
+//!
+//! Description (of module)
 ```
 * Special section header is indicated with a hash `#`. 
 ** `Panics` section requires an explanation if the function triggers a panic
@@ -311,7 +312,7 @@ after the triple graves, alternative annotations include the `ignore`, `text`, `
 or errors `#![deny(missing_docs)]`
 * Hide documentation for items with `#[doc(hidden)]`
 
-=== Contributing to documentation (as tests, for extended examples, and for macros) for Substrate packages
+=== Contributing to documentation (tests, extended examples, macros) for Substrate packages
 
 The code block annotations in the `# Example` section may be used as https://doc.rust-lang.org/1.9.0/book/documentation.html#documentation-as-tests[documentation as tests and for extended examples].
 
