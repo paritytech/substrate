@@ -252,7 +252,7 @@ srml-treasury
 * Subkey
 [source, shell]
 subkey
-* Substrate
+* Substrate Core
 [source, shell]
 substrate, substrate-bft, substrate-cli, substrate-client, substrate-client-db,
 substrate-executor, substrate-finality-grandpa, substrate-keyring, substrate-keystore,
@@ -293,9 +293,9 @@ Example (generic):
 ** Documentation comments must use annotations with a triple slash `///`
 ** Modules are documented using `//!` 
 ```
-/// Summary (of module)
-///
-/// Description (of module)
+//! Summary (of module)
+//!
+//! Description (of module)
 ```
 * Special section header is indicated with a hash `#`. 
 ** `Panics` section requires an explanation if the function triggers a panic
