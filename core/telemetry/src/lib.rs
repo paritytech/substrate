@@ -17,7 +17,7 @@
 // tag::description[]
 //! Telemetry utils.
 //!
-//! `telemetry` macro be used from whereever in the Substrate codebase
+//! `telemetry` macro may be used anywhere in the Substrate codebase
 //! in order to send real-time logging information to the telemetry
 //! server (if there is one). We use the async drain adapter of `slog`
 //! so that the logging thread doesn't get held up at all.
