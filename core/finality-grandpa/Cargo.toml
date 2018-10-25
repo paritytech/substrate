@@ -8,14 +8,17 @@ futures = "0.1.17"
 parity-codec = "2.1"
 parity-codec-derive = "2.0"
 sr-primitives = { path = "../sr-primitives" }
+substrate-consensus-common = { path = "../consensus/common" }
 substrate-primitives = { path = "../primitives" }
 substrate-client = { path = "../client" }
 substrate-network = { path = "../network" }
 log = "0.4"
+parking_lot = "0.4"
 tokio = "0.1.7"
 
 [dependencies.finality-grandpa]
-version = "0.2.0"
+#version = "0.3.0"
+git = "https://github.com/paritytech/finality-grandpa"
 features = ["derive-codec"]
 
 [dev-dependencies]

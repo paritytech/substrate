@@ -17,12 +17,13 @@
 //! Tracks offline validators.
 #![allow(dead_code)]
 
-#![cfg(feature="rhd")]
-
 extern crate substrate_primitives as primitives;
+extern crate sr_primitives;
 
-use primitives::{generic::BlockId, Justification};
-use primitives::traits::{Block, Header};
+use sr_primitives::{generic::BlockId};
+use sr_primitives::traits::{Block, Header};
+use sr_primitives::Justification;
+use primitives::AuthorityId;
 
 /// Block import trait.
 pub trait BlockImport<B: Block> {

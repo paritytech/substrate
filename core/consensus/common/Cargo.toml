@@ -4,5 +4,6 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Common utilities for substrate consensus"
 
-[dev-dependencies]
-substrate-primitives = { path= "../../primitives"}
+[dependencies]
+substrate-primitives = { path = "../../primitives"}
+sr-primitives = { path = "../../sr-primitives" }
