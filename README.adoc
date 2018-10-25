@@ -312,7 +312,7 @@ after the triple graves, alternative annotations include the `ignore`, `text`, `
 or errors `#![deny(missing_docs)]`
 * Hide documentation for items with `#[doc(hidden)]`
 
-=== Contributing to documentation (as tests, for extended examples, and for macros) for Substrate packages
+=== Contributing to documentation (tests, extended examples, macros) for Substrate packages
 
 The code block annotations in the `# Example` section may be used as https://doc.rust-lang.org/1.9.0/book/documentation.html#documentation-as-tests[documentation as tests and for extended examples].
 
