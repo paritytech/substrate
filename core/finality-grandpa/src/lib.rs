@@ -22,9 +22,11 @@ extern crate finality_grandpa as grandpa;
 extern crate futures;
 extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
+extern crate substrate_consensus_common as consensus_common;
 extern crate substrate_primitives;
 extern crate substrate_network as network;
 extern crate tokio;
+extern crate parking_lot;
 extern crate parity_codec as codec;
 
 #[macro_use]
@@ -47,10 +49,11 @@ use futures::stream::Fuse;
 use futures::sync::mpsc;
 use client::{Client, ImportNotifications, backend::Backend, CallExecutor};
 use codec::{Encode, Decode};
+use consensus_common::BlockImport;
 use runtime_primitives::traits::{
 	As, NumberFor, Block as BlockT, Header as HeaderT, DigestItemFor,
 };
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::{generic::BlockId, Justification};
 use substrate_primitives::{ed25519, AuthorityId, Blake2Hasher};
 use tokio::timer::Interval;
 
@@ -60,6 +63,8 @@ use grandpa::{voter, round::State as RoundState, Prevote, Precommit, Equivocatio
 use std::collections::{VecDeque, HashMap};
 use std::sync::Arc;
 use std::time::{Instant, Duration};
+
+use authorities::SharedAuthoritySet;
 
 mod authorities;
 
@@ -404,8 +409,9 @@ fn outgoing_messages<Block: BlockT, N: Network>(
 /// The environment we run GRANDPA in.
 pub struct Environment<B, E, Block: BlockT, N: Network> {
 	inner: Arc<Client<B, E, Block>>,
-	voters: HashMap<AuthorityId, usize>,
+	voters: HashMap<AuthorityId, u64>,
 	config: Config,
+	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	network: N,
 }
 
@@ -461,14 +467,23 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, B
 	}
 }
 
+/// A scheduled change of authority set.
+#[derive(Debug, PartialEq)]
+pub struct ScheduledChange<N> {
+	/// The new authorities after the change, along with their respective weights.
+	pub next_authorities: Vec<(AuthorityId, u64)>,
+	/// The number of blocks to delay.
+	pub delay: N,
+}
+
 /// A GRANDPA-compatible DigestItem. This can describe when GRANDPA set changes
 /// are scheduled.
 // TODO: with specialization, do a blanket implementation so this trait
 // doesn't have to be implemented by users.
 pub trait CompatibleDigestItem<N> {
-	/// If this digest item notes a GRANDPA set change, return the number of
-	/// blocks the change should occur after.
-	fn scheduled_change_in(&self) -> Option<N> { None }
+	/// If this digest item notes a GRANDPA set change, return information about
+	/// the scheduled change.
+	fn scheduled_change(&self) -> Option<ScheduledChange<N>> { None }
 }
 
 impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, E, Block, N> where
@@ -487,6 +502,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 	type Out = Box<Sink<SinkItem = ::grandpa::Message<Block::Hash>, SinkError = Self::Error>>;
 	type Error = Error;
 
+	#[allow(unreachable_code)]
 	fn round_data(
 		&self,
 		round: u64
@@ -498,7 +514,9 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
+		// TODO [now]: Get from shared authority set.
 		let set_id = unimplemented!();
+
 		// TODO: dispatch this with `mpsc::spawn`.
 		let incoming = checked_message_stream::<Block, _>(
 			round,
@@ -511,7 +529,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 			round,
 			set_id,
 			self.config.local_key.clone(),
-			self.config.voters.clone(),
+			self.config.genesis_voters.clone(),
 			self.network.clone(),
 		);
 
@@ -584,13 +602,57 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 	}
 }
 
-/// Run a GRANDPA voter as a task. The returned future should be executed in a tokio runtime.
+/// A block-import handler for GRANDPA.
+///
+/// This scans each imported block for signals of changing authority set.
+/// When using GRANDPA, the block import worker should be using this block import
+/// object.
+pub struct GrandpaBlockImport<B, E, Block: BlockT> {
+	inner: Arc<Client<B, E, Block>>,
+	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+}
+
+impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block> where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
+{
+	fn import_block(&self, block: Block, _justification: Justification, _authorities: &[AuthorityId]) -> bool {
+		use runtime_primitives::traits::Digest;
+		use authorities::PendingChange;
+
+		let maybe_event = block.header().digest().logs().iter()
+			.filter_map(|log| log.scheduled_change())
+			.next()
+			.map(|change| (block.header().hash(), *block.header().number(), change));
+
+		// TODO [now]: use import-block trait for client when implemented
+		let result = self.inner.import_block(unimplemented!(), unimplemented!()).is_ok();
+		if let (true, Some((hash, number, change))) = (result, maybe_event) {
+			self.authority_set.add_pending_change(PendingChange {
+				next_authorities: change.next_authorities,
+				finalization_depth: number + change.delay,
+				canon_height: number,
+				canon_hash: hash,
+			});
+
+			// TODO [now]: write to DB, and what to do on failure?
+		}
+		result
+	}
+}
+
+/// Run a GRANDPA voter as a task. This returns two pieces of data: a task to run,
+/// and a `BlockImport` implementation.
 pub fn run_grandpa<B, E, Block: BlockT, N>(
 	config: Config,
 	client: Arc<Client<B, E, Block>>,
-	voters: HashMap<AuthorityId, usize>,
+	voters: HashMap<AuthorityId, u64>,
 	network: N,
-) -> Result<impl Future<Item=(),Error=()>,client::error::Error> where
+) -> ::client::error::Result<(
+	impl Future<Item=(),Error=()>,
+	GrandpaBlockImport<B, E, Block>,
+)> where
 	Block::Hash: Ord,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
@@ -614,11 +676,22 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 			))?
 	};
 
+	// TODO: attempt to load from disk.
+	let authority_set = SharedAuthoritySet::genesis(
+		voters.iter().map(|(&id, &weight)| (id, weight)).collect(),
+	);
+
+	let block_import = GrandpaBlockImport {
+		inner: client.clone(),
+		authority_set: authority_set.clone(),
+	};
+
 	let environment = Arc::new(Environment {
 		inner: client,
 		config,
 		voters,
 		network,
+		authority_set,
 	});
 
 	let voter = voter::Voter::new(
@@ -628,7 +701,9 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 		last_finalized,
 	);
 
-	Ok(voter.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e)))
+	let work = voter.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
+
+	Ok((work, block_import))
 }
 
 #[cfg(test)]

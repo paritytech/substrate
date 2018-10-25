@@ -580,8 +580,8 @@ dependencies = [
 
 [[package]]
 name = "finality-grandpa"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+version = "0.3.0"
+source = "git+https://github.com/paritytech/finality-grandpa#fffce2dc450e72ff8b3f43818f8aceb5cfacc2d7"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -2965,6 +2965,7 @@ dependencies = [
 name = "substrate-consensus-common"
 version = "0.1.0"
 dependencies = [
+ "sr-primitives 0.1.0",
  "substrate-primitives 0.1.0",
 ]
 
@@ -3019,7 +3020,7 @@ dependencies = [
 name = "substrate-finality-grandpa"
 version = "0.1.0"
 dependencies = [
- "finality-grandpa 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "finality-grandpa 0.3.0 (git+https://github.com/paritytech/finality-grandpa)",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -3027,6 +3028,7 @@ dependencies = [
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
+ "substrate-consensus-common 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",
@@ -4179,7 +4181,7 @@ dependencies = [
 "checksum failure_derive 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "946d0e98a50d9831f5d589038d2ca7f8f455b1c21028c0db0e84116a12696426"
 "checksum fake-simd 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "e88a8acf291dafb59c2d96e8f59828f3838bb1a70398823ade51a84de6a6deed"
 "checksum fdlimit 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)" = "b1ee15a7050e5580b3712877157068ea713b245b080ff302ae2ca973cfcd9baa"
-"checksum finality-grandpa 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "20d8cf871510f0d57630e75f9e65f87cba29581ccab1f78666d8b2e422d0baa6"
+"checksum finality-grandpa 0.3.0 (git+https://github.com/paritytech/finality-grandpa)" = "<none>"
 "checksum fixed-hash 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)" = "0d5ec8112f00ea8a483e04748a85522184418fd1cf02890b626d8fc28683f7de"
 "checksum fnv 1.0.6 (registry+https://github.com/rust-lang/crates.io-index)" = "2fad85553e09a6f881f739c29f0b00b0f01357c743266d478b68951ce23285f3"
 "checksum foreign-types 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)" = "f6f339eb8adc052cd2ca78910fda869aefa38d22d5cb648e6485e4d3fc06f3b1"
