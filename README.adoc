@@ -251,7 +251,7 @@ substrate-trie
 * Substrate Runtime
 [source, shell]
 sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
-* Substrate Runtime Module Library
+* Substrate Runtime Module Library (SRML)
 [source, shell]
 srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
 srml-executive, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
