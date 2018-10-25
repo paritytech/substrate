@@ -322,6 +322,5 @@ The code block annotations in the `# Example` section may be used as https://doc
 ** Documentation as tests examples are included when running `cargo test`
 
 == License
-----
-include::LICENSE[]
-----
+
+https://github.com/paritytech/substrate/blob/master/LICENSE[LICENSE]
