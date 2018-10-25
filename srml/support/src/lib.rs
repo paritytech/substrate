@@ -24,7 +24,8 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
-extern crate sr_std as rstd;
+#[doc(hidden)]
+pub extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[doc(hidden)]
 pub extern crate sr_primitives as runtime_primitives;

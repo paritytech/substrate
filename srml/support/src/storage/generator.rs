@@ -379,7 +379,7 @@ macro_rules! __storage_items_internal {
 			}
 
 			/// Get the storage key used to fetch a value corresponding to a specific key.
-			fn key_for(x: &$kty) -> Vec<u8> {
+			fn key_for(x: &$kty) -> $crate::rstd::vec::Vec<u8> {
 				let mut key = $prefix.to_vec();
 				$crate::codec::Encode::encode_to(x, &mut key);
 				key
@@ -441,21 +441,21 @@ macro_rules! __storage_items_internal {
 
 			/// Get the key used to put the length field.
 			// TODO: concat macro should accept byte literals.
-			fn len_key() -> Vec<u8> {
+			fn len_key() -> $crate::rstd::vec::Vec<u8> {
 				let mut key = $prefix.to_vec();
 				key.extend(b"len");
 				key
 			}
 
 			/// Get the storage key used to fetch a value at a given index.
-			fn key_for(index: u32) -> Vec<u8> {
+			fn key_for(index: u32) -> $crate::rstd::vec::Vec<u8> {
 				let mut key = $prefix.to_vec();
 				$crate::codec::Encode::encode_to(&index, &mut key);
 				key
 			}
 
 			/// Read out all the items.
-			fn items<S: $crate::GenericStorage>(storage: &S) -> Vec<$ty> {
+			fn items<S: $crate::GenericStorage>(storage: &S) -> $crate::rstd::vec::Vec<$ty> {
 				(0..<$name as $crate::storage::generator::StorageList<$ty>>::len(storage))
 					.map(|i| <$name as $crate::storage::generator::StorageList<$ty>>::get(i, storage).expect("all items within length are set; qed"))
 					.collect()
@@ -1867,7 +1867,7 @@ macro_rules! __decl_storage_item {
 			}
 
 			/// Get the storage key used to fetch a value corresponding to a specific key.
-			fn key_for(x: &$kty) -> Vec<u8> {
+			fn key_for(x: &$kty) -> $crate::rstd::vec::Vec<u8> {
 				let mut key = <$name<$traitinstance> as $crate::storage::generator::StorageMap<$kty, $ty>>::prefix().to_vec();
 				$crate::codec::Encode::encode_to(x, &mut key);
 				key
