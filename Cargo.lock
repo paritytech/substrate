@@ -581,10 +581,11 @@ dependencies = [
 [[package]]
 name = "finality-grandpa"
 version = "0.3.0"
-source = "git+https://github.com/paritytech/finality-grandpa#fffce2dc450e72ff8b3f43818f8aceb5cfacc2d7"
+source = "git+https://github.com/paritytech/finality-grandpa#f1ad8d7ca020e5db0e51e32cd62e8cd3c578d121"
 dependencies = [
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "num-traits 0.2.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",

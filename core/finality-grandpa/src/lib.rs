@@ -58,7 +58,7 @@ use substrate_primitives::{ed25519, AuthorityId, Blake2Hasher};
 use tokio::timer::Interval;
 
 use grandpa::Error as GrandpaError;
-use grandpa::{voter, round::State as RoundState, Prevote, Precommit, Equivocation};
+use grandpa::{voter, round::State as RoundState, Equivocation, BlockNumberOps};
 
 use std::collections::{VecDeque, HashMap};
 use std::sync::Arc;
@@ -72,12 +72,21 @@ const LAST_COMPLETED_KEY: &[u8] = b"grandpa_completed_round";
 const AUTHORITY_SET_KEY: &[u8] = b"grandpa_voters";
 
 /// round-number, round-state, set indicator
-type LastCompleted<H> = (u64, RoundState<H>, u64);
+type LastCompleted<H, N> = (u64, RoundState<H, N>, u64);
 
 /// A GRANDPA message for a substrate chain.
-pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash>;
+pub type Message<Block> = grandpa::Message<<Block as BlockT>::Hash, NumberFor<Block>>;
 /// A signed message.
-pub type SignedMessage<Block> = grandpa::SignedMessage<<Block as BlockT>::Hash, ed25519::Signature, AuthorityId>;
+pub type SignedMessage<Block> = grandpa::SignedMessage<
+	<Block as BlockT>::Hash,
+	NumberFor<Block>,
+	ed25519::Signature,
+	AuthorityId,
+>;
+/// A prevote message for this chain's block type.
+pub type Prevote<Block> = grandpa::Prevote<<Block as BlockT>::Hash, NumberFor<Block>>;
+/// A precommit message for this chain's block type.
+pub type Precommit<Block> = grandpa::Precommit<<Block as BlockT>::Hash, NumberFor<Block>>;
 
 /// Configuration for the GRANDPA service.
 pub struct Config {
@@ -134,18 +143,17 @@ pub trait BlockStatus<Block: BlockT> {
 	/// Return `Ok(Some(number))` or `Ok(None)` depending on whether the block
 	/// is definitely known and has been imported.
 	/// If an unexpected error occurs, return that.
-	fn block_number(&self, hash: Block::Hash) -> Result<Option<u32>, Error>;
+	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error>;
 }
 
 impl<B, E, Block: BlockT> BlockStatus<Block> for Arc<Client<B, E, Block>> where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	NumberFor<Block>: As<u32>,
+	NumberFor<Block>: BlockNumberOps,
 {
-	fn block_number(&self, hash: Block::Hash) -> Result<Option<u32>, Error> {
+	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error> {
 		self.block_number_from_id(&BlockId::Hash(hash))
 			.map_err(|e| Error::Blockchain(format!("{:?}", e)))
-			.map(|num| num.map(|n| n.as_()))
 	}
 }
 
@@ -415,13 +423,13 @@ pub struct Environment<B, E, Block: BlockT, N: Network> {
 	network: N,
 }
 
-impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, Block, N> where
+impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	N: Network + 'static,
 	N::In: 'static,
-	NumberFor<Block>: As<u32>,
+	NumberFor<Block>: BlockNumberOps,
 	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
@@ -450,13 +458,13 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, B
 		Ok(tree_route.retracted().iter().skip(1).map(|e| e.hash).collect())
 	}
 
-	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, u32)> {
+	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
 		match self.inner.best_containing(block, None) {
 			Ok(Some(hash)) => {
 				let header = self.inner.header(&BlockId::Hash(hash)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
-				Some((hash, header.number().as_()))
+				Some((hash, header.number().clone()))
 			}
 			Ok(None) => None,
 			Err(e) => {
@@ -486,20 +494,26 @@ pub trait CompatibleDigestItem<N> {
 	fn scheduled_change(&self) -> Option<ScheduledChange<N>> { None }
 }
 
-impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, E, Block, N> where
+impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	N: Network + 'static,
 	N::In: 'static,
-	NumberFor<Block>: As<u32>,
+	NumberFor<Block>: BlockNumberOps,
 	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
 {
 	type Timer = Box<Future<Item = (), Error = Self::Error>>;
 	type Id = AuthorityId;
 	type Signature = ed25519::Signature;
-	type In = Box<Stream<Item = ::grandpa::SignedMessage<Block::Hash, Self::Signature, Self::Id>, Error = Self::Error>>;
-	type Out = Box<Sink<SinkItem = ::grandpa::Message<Block::Hash>, SinkError = Self::Error>>;
+	type In = Box<Stream<
+		Item = ::grandpa::SignedMessage<Block::Hash, NumberFor<Block>, Self::Signature, Self::Id>,
+		Error = Self::Error,
+	>>;
+	type Out = Box<Sink<
+		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
+		SinkError = Self::Error,
+	>>;
 	type Error = Error;
 
 	#[allow(unreachable_code)]
@@ -560,7 +574,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 		}
 	}
 
-	fn completed(&self, round: u64, state: RoundState<Block::Hash>) -> Result<(), Self::Error> {
+	fn completed(&self, round: u64, state: RoundState<Block::Hash, NumberFor<Block>>) -> Result<(), Self::Error> {
 		let encoded_state = (round, state).encode();
 		if let Err(e) = self.inner.backend()
 			.insert_aux(&[(LAST_COMPLETED_KEY, &encoded_state[..])], &[])
@@ -572,7 +586,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 		}
 	}
 
-	fn finalize_block(&self, hash: Block::Hash, number: u32) -> Result<(), Self::Error> {
+	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>) -> Result<(), Self::Error> {
 		// TODO: don't unconditionally notify.
 		if let Err(e) = self.inner.finalize_block(BlockId::Hash(hash), true) {
 			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
@@ -586,7 +600,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 	fn prevote_equivocation(
 		&self,
 		_round: u64,
-		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block::Hash>, Self::Signature>
+		equivocation: ::grandpa::Equivocation<Self::Id, Prevote<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected prevote equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet; this could craft misbehavior reports of some kind.
@@ -595,7 +609,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 	fn precommit_equivocation(
 		&self,
 		_round: u64,
-		equivocation: Equivocation<Self::Id, Precommit<Block::Hash>, Self::Signature>
+		equivocation: Equivocation<Self::Id, Precommit<Block>, Self::Signature>
 	) {
 		warn!(target: "afg", "Detected precommit equivocation in the finality worker: {:?}", equivocation);
 		// nothing yet
@@ -658,19 +672,21 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
 	N: Network + 'static,
 	N::In: 'static,
-	NumberFor<Block>: As<u32>,
+	NumberFor<Block>: BlockNumberOps,
 	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
 {
+	use runtime_primitives::traits::Zero;
+
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
 	let last_finalized = (
 		chain_info.chain.finalized_hash,
-		chain_info.chain.finalized_number.as_()
+		chain_info.chain.finalized_number,
 	);
 
 	let (last_round_number, last_state) = match client.backend().get_aux(LAST_COMPLETED_KEY)? {
-		None => (0, RoundState::genesis((genesis_hash, 0))),
-		Some(raw) => <(u64, RoundState<Block::Hash>)>::decode(&mut &raw[..])
+		None => (0, RoundState::genesis((genesis_hash, <NumberFor<Block>>::zero()))),
+		Some(raw) => <(u64, RoundState<Block::Hash, NumberFor<Block>>)>::decode(&mut &raw[..])
 			.ok_or_else(|| ::client::error::ErrorKind::Backend(
 				format!("Last GRANDPA round state kept in invalid format")
 			))?
