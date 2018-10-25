@@ -238,20 +238,6 @@ cargo doc --package <spec> --open
 
 Replacing `<spec>` with one of the following (i.e. `cargo doc --package node-cli --open`):
 
-* Node
-[source, shell]
-node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime, node-service
-* Substrate Runtime
-[source, shell]
-sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
-* Substrate Runtime Module Library
-[source, shell]
-srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
-srml-executive, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
-srml-treasury
-* Subkey
-[source, shell]
-subkey
 * Substrate Core
 [source, shell]
 substrate, substrate-bft, substrate-cli, substrate-client, substrate-client-db,
@@ -262,6 +248,21 @@ substrate-serializer, substrate-service, substrate-service-test, substrate-state
 substrate-state-machine, substrate-telemetry, substrate-test-client,
 substrate-test-runtime, substrate-transaction-graph, substrate-transaction-pool,
 substrate-trie
+* Substrate Runtime
+[source, shell]
+sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
+* Substrate Runtime Module Library
+[source, shell]
+srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
+srml-executive, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
+srml-treasury
+* Node
+[source, shell]
+node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime, node-service
+* Subkey
+[source, shell]
+subkey
+
 
 === Contributing to documentation for Substrate packages
 
