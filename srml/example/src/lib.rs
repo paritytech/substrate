@@ -253,7 +253,10 @@ impl<T: Trait> Module<T> {
 
 		let prev = <Foo<T>>::get();
 		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
-		let result = <Foo<T>>::mutate(|foo| *foo = *foo + increase_by);
+		let result = <Foo<T>>::mutate(|foo| {
+			*foo = *foo + increase_by;
+			*foo
+		});
 		assert!(prev + increase_by == result);
 
 		Ok(())
