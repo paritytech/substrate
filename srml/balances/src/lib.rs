@@ -435,7 +435,7 @@ impl<T: Trait> Module<T> {
 	) -> result::Result<UpdateBalanceOutcome, &'static str> {
 		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
 		let b = Self::free_balance(who);
-		if Self::free_balance(who) < value {
+		if b < value {
 			return Err("account has too few funds")
 		}
 		Ok(Self::set_free_balance(who, b - value))

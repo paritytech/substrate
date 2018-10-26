@@ -472,7 +472,7 @@ macro_rules! construct_simple_service {
 		$name: ident
 	) => {
 		pub struct $name<C: $crate::Components> {
-			inner: Arc<$crate::Service<C>>,
+			inner: $crate::Arc<$crate::Service<C>>,
 		}
 
 		impl<C: $crate::Components> $name<C> {
@@ -482,7 +482,7 @@ macro_rules! construct_simple_service {
 			) -> $crate::Result<Self, $crate::Error> {
 				Ok(
 					Self {
-						inner: Arc::new($crate::Service::new(config, executor)?)
+						inner: $crate::Arc::new($crate::Service::new(config, executor)?)
 					}
 				)
 			}

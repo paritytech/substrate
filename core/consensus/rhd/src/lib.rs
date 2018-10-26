@@ -93,7 +93,7 @@ use tokio::timer::Delay;
 use parking_lot::{RwLock, Mutex};
 
 pub use rhododendron::{
-	InputStreamConcluded, AdvanceRoundReason, Message as RhdMessage,
+	self, InputStreamConcluded, AdvanceRoundReason, Message as RhdMessage,
 	Vote as RhdMessageVote, Communication as RhdCommunication,
 };
 pub use self::error::{Error, ErrorKind};
@@ -337,7 +337,7 @@ impl<B: Block, P: LocalProposer<B>> rhododendron::Context for BftInstance<B, P>
 
 	fn on_advance_round(
 		&self,
-		accumulator: &::rhododendron::Accumulator<B, B::Hash, Self::AuthorityId, Self::Signature>,
+		accumulator: &rhododendron::Accumulator<B, B::Hash, Self::AuthorityId, Self::Signature>,
 		round: u32,
 		next_round: u32,
 		reason: AdvanceRoundReason,
@@ -838,7 +838,7 @@ pub fn check_prepare_justification<B: Block>(authorities: &[AuthorityId], parent
 pub fn check_proposal<B: Block + Clone>(
 	authorities: &[AuthorityId],
 	parent_hash: &B::Hash,
-	propose: &::rhododendron::LocalizedProposal<B, B::Hash, AuthorityId, LocalizedSignature>)
+	propose: &rhododendron::LocalizedProposal<B, B::Hash, AuthorityId, LocalizedSignature>)
 	-> Result<(), Error>
 {
 	if !authorities.contains(&propose.sender) {
@@ -856,7 +856,7 @@ pub fn check_proposal<B: Block + Clone>(
 pub fn check_vote<B: Block>(
 	authorities: &[AuthorityId],
 	parent_hash: &B::Hash,
-	vote: &::rhododendron::LocalizedVote<B::Hash, AuthorityId, LocalizedSignature>)
+	vote: &rhododendron::LocalizedVote<B::Hash, AuthorityId, LocalizedSignature>)
 	-> Result<(), Error>
 {
 	if !authorities.contains(&vote.sender) {
@@ -864,9 +864,9 @@ pub fn check_vote<B: Block>(
 	}
 
 	let action = match vote.vote {
-		::rhododendron::Vote::Prepare(r, ref h) => Action::Prepare(r as u32, h.clone()),
-		::rhododendron::Vote::Commit(r, ref h) => Action::Commit(r as u32, h.clone()),
-		::rhododendron::Vote::AdvanceRound(r) => Action::AdvanceRound(r as u32),
+		rhododendron::Vote::Prepare(r, ref h) => Action::Prepare(r as u32, h.clone()),
+		rhododendron::Vote::Commit(r, ref h) => Action::Commit(r as u32, h.clone()),
+		rhododendron::Vote::AdvanceRound(r) => Action::AdvanceRound(r as u32),
 	};
 	check_action::<B>(action, parent_hash, &vote.signature)
 }
@@ -903,7 +903,7 @@ pub fn sign_message<B: Block + Clone>(
 			let action_header = Action::ProposeHeader(r as u32, header_hash.clone());
 			let action_propose = Action::Propose(r as u32, proposal.clone());
 
-			::rhododendron::LocalizedMessage::Propose(::rhododendron::LocalizedProposal {
+			rhododendron::LocalizedMessage::Propose(rhododendron::LocalizedProposal {
 				round_number: r,
 				proposal,
 				digest: header_hash,
@@ -912,14 +912,14 @@ pub fn sign_message<B: Block + Clone>(
 				full_signature: sign_action(action_propose),
 			})
 		}
-		RhdMessage::Vote(vote) => ::rhododendron::LocalizedMessage::Vote({
+		RhdMessage::Vote(vote) => rhododendron::LocalizedMessage::Vote({
 			let action = match vote {
 				RhdMessageVote::Prepare(r, h) => Action::Prepare(r as u32, h),
 				RhdMessageVote::Commit(r, h) => Action::Commit(r as u32, h),
 				RhdMessageVote::AdvanceRound(r) => Action::AdvanceRound(r as u32),
 			};
 
-			::rhododendron::LocalizedVote {
+			rhododendron::LocalizedVote {
 				vote: vote,
 				sender: signer.clone().into(),
 				signature: sign_action(action),
@@ -1017,13 +1017,13 @@ impl<N, C, A> consensus::Environment<<C as AuthoringApi>::Block> for ProposerFac
 
 		info!("Starting consensus session on top of parent {:?}", parent_hash);
 
-		// let local_id = sign_with.public().0.into();
-		// let (input, output) = self.network.communication_for(
-		// 	authorities,
-		// 	local_id,
-		// 	parent_hash.clone(),
-		// 	self.handle.clone(),
-		// );
+		let local_id = sign_with.public().0.into();
+		let (input, output) = self.network.communication_for(
+			authorities,
+			local_id,
+			parent_hash.clone(),
+			self.handle.clone(),
+		);
 		let now = Instant::now();
 		let proposer = Proposer {
 			client: self.client.clone(),
@@ -1316,7 +1316,6 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 			self.primary_index(round_number, self.validators.len())
 		];
 
-
 		// alter the message based on whether we think the empty proposer was forced to skip the round.
 		// this is determined by checking if our local validator would have been forced to skip the round.
 		if !was_proposed {
@@ -1459,9 +1458,9 @@ mod tests {
 		}
 	}
 
-	fn sign_vote(vote: ::rhododendron::Vote<H256>, key: &ed25519::Pair, parent_hash: H256) -> LocalizedSignature {
+	fn sign_vote(vote: rhododendron::Vote<H256>, key: &ed25519::Pair, parent_hash: H256) -> LocalizedSignature {
 		match sign_message::<TestBlock>(vote.into(), key, parent_hash) {
-			::rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
+			rhododendron::LocalizedMessage::Vote(vote) => vote.signature,
 			_ => panic!("signing vote leads to signed vote"),
 		}
 	}
@@ -1597,8 +1596,8 @@ mod tests {
 			extrinsics: Default::default()
 		};
 
-		let proposal = sign_message(::rhododendron::Message::Propose(1, block.clone()), &Keyring::Alice.pair(), parent_hash);;
-		if let ::rhododendron::LocalizedMessage::Propose(proposal) = proposal {
+		let proposal = sign_message(rhododendron::Message::Propose(1, block.clone()), &Keyring::Alice.pair(), parent_hash);;
+		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_ok());
 			let mut invalid_round = proposal.clone();
 			invalid_round.round_number = 0;
@@ -1611,8 +1610,8 @@ mod tests {
 		}
 
 		// Not an authority
-		let proposal = sign_message::<TestBlock>(::rhododendron::Message::Propose(1, block), &Keyring::Bob.pair(), parent_hash);;
-		if let ::rhododendron::LocalizedMessage::Propose(proposal) = proposal {
+		let proposal = sign_message::<TestBlock>(rhododendron::Message::Propose(1, block), &Keyring::Bob.pair(), parent_hash);;
+		if let rhododendron::LocalizedMessage::Propose(proposal) = proposal {
 			assert!(check_proposal(&authorities, &parent_hash, &proposal).is_err());
 		} else {
 			assert!(false);
@@ -1629,8 +1628,8 @@ mod tests {
 			Keyring::Eve.to_raw_public().into(),
 		];
 
-		let vote = sign_message::<TestBlock>(::rhododendron::Message::Vote(::rhododendron::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
-		if let ::rhododendron::LocalizedMessage::Vote(vote) = vote {
+		let vote = sign_message::<TestBlock>(rhododendron::Message::Vote(rhododendron::Vote::Prepare(1, hash)), &Keyring::Alice.pair(), parent_hash);;
+		if let rhododendron::LocalizedMessage::Vote(vote) = vote {
 			assert!(check_vote::<TestBlock>(&authorities, &parent_hash, &vote).is_ok());
 			let mut invalid_sender = vote.clone();
 			invalid_sender.signature.signer = Keyring::Eve.into();
@@ -1640,8 +1639,8 @@ mod tests {
 		}
 
 		// Not an authority
-		let vote = sign_message::<TestBlock>(::rhododendron::Message::Vote(::rhododendron::Vote::Prepare(1, hash)), &Keyring::Bob.pair(), parent_hash);;
-		if let ::rhododendron::LocalizedMessage::Vote(vote) = vote {
+		let vote = sign_message::<TestBlock>(rhododendron::Message::Vote(rhododendron::Vote::Prepare(1, hash)), &Keyring::Bob.pair(), parent_hash);;
+		if let rhododendron::LocalizedMessage::Vote(vote) = vote {
 			assert!(check_vote::<TestBlock>(&authorities, &parent_hash, &vote).is_err());
 		} else {
 			assert!(false);

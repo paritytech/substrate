@@ -54,7 +54,7 @@ impl<B, E> TestClient for Client<B, E, runtime::Block>
 			auxiliary: Vec::new(),
 		};
 
-		self.import_block(import, None).map(|_i| ())
+		self.import_block(import, None).map(|_| ())
 	}
 
 	fn finalize_block(&self, id: BlockId<runtime::Block>) -> client::error::Result<()> {

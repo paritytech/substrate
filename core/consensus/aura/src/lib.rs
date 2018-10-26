@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -54,7 +54,7 @@ extern crate log;
 extern crate futures;
 
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use codec::Encode;
 use consensus_common::{Authorities, BlockImport, Environment, Proposer};
@@ -65,7 +65,7 @@ use runtime_primitives::traits::{Block, Header, Digest, DigestItemFor};
 use network::import_queue::{Verifier, BasicQueue};
 use primitives::{AuthorityId, ed25519};
 
-use futures::{Stream, Future, IntoFuture};
+use futures::{Stream, Future, IntoFuture, future::{self, Either}};
 use tokio::timer::Interval;
 
 pub use consensus_common::SyncOracle;
@@ -188,8 +188,6 @@ pub fn start_aura<B, C, E, SO, Error>(
 	DigestItemFor<B>: CompatibleDigestItem,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
-	use futures::future::Either;
-	use std::time::Instant;
 
 	// wait until the next full slot has started before authoring anything
 	let make_authorship = move || {
@@ -283,17 +281,13 @@ pub fn start_aura<B, C, E, SO, Error>(
 			})
 	};
 
-	::futures::future::loop_fn((), move |()| {
+	future::loop_fn((), move |()| {
 		let authorship_task = ::std::panic::AssertUnwindSafe(make_authorship());
 		authorship_task.catch_unwind().then(|res| {
 			match res {
 				Ok(Ok(())) => (),
 				Ok(Err(())) => warn!("Aura authorship task terminated unexpectedly. Restarting"),
 				Err(e) => {
-					if let Some(s) = e.downcast_ref::<String>() {
-						warn!("Aura authorship task panicked at {:?}", s);
-					}
-
 					if let Some(s) = e.downcast_ref::<&'static str>() {
 						warn!("Aura authorship task panicked at {:?}", s);
 					}
@@ -302,7 +296,7 @@ pub fn start_aura<B, C, E, SO, Error>(
 				}
 			}
 
-			Ok(::futures::future::Loop::Continue(()))
+			Ok(future::Loop::Continue(()))
 		})
 	})
 }
@@ -321,7 +315,7 @@ enum CheckedHeader<H> {
 /// check a header has been signed by the right key. If the slot is too far in the future, an error will be returned.
 /// if it's successful, returns the pre-header, the slot number, and the signat.
 //
-// TODO: misbehavior types.
+// FIXME: needs misbehavior types - https://github.com/paritytech/substrate/issues/1018
 fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, authorities: &[AuthorityId])
 	-> Result<CheckedHeader<B::Header>, String>
 	where DigestItemFor<B>: CompatibleDigestItem
@@ -384,7 +378,8 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 			.map_err(|e| format!("Could not fetch authorities at {:?}: {:?}", parent_hash, e))?;
 
 		// we add one to allow for some small drift.
-		// TODO: in the future, alter this queue to allow deferring of headers.
+		// FIXME: in the future, alter this queue to allow deferring of headers
+		// https://github.com/paritytech/substrate/issues/1019
 		let checked_header = check_header::<B>(slot_now + 1, header, hash, &authorities[..])?;
 		match checked_header {
 			CheckedHeader::Checked(pre_header, slot_num, sig) => {
@@ -402,7 +397,8 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 					auxiliary: Vec::new(),
 				};
 
-				Ok((import_block, None)) // TODO: extract authorities item.
+				// FIXME: extract authorities - https://github.com/paritytech/substrate/issues/1019
+				Ok((import_block, None)) 
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
