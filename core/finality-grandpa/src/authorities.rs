@@ -54,12 +54,14 @@ impl<H, N> SharedAuthoritySet<H, N> {
 	}
 }
 
-impl<H, N: Add<Output=N> + Ord + Clone> SharedAuthoritySet<H, N> {
+impl<H: Eq, N: Add<Output=N> + Ord + Clone> SharedAuthoritySet<H, N> {
 	/// Note an upcoming pending transition.
 	pub(crate) fn add_pending_change(&self, pending: PendingChange<H, N>) {
+		// ordered first by effective number and then by signal-block number.
 		let mut inner = self.inner.write();
+		let key = (pending.effective_number(), pending.canon_height);
 		let idx = inner.pending_changes
-			.binary_search_by_key(&pending.effective_number(), |change| change.effective_number())
+			.binary_search_by_key(&key, |change| (change.effective_number(), change.canon_height))
 			.unwrap_or_else(|i| i);
 
 		inner.pending_changes.insert(idx, pending);
@@ -67,7 +69,17 @@ impl<H, N: Add<Output=N> + Ord + Clone> SharedAuthoritySet<H, N> {
 
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
-		self.inner.read().pending_changes.get(0).map(|change| change.effective_number().clone())
+		self.inner.read().current_limit()
+	}
+
+	/// Get the current set ID. This is incremented every time the set changes.
+	pub(crate) fn set_id(&self) -> u64 {
+		self.inner.read().set_id
+	}
+
+	/// Execute a closure with the inner set mutably.
+	pub(crate) fn with_mut<F, U>(&self, f: F) -> U where F: FnOnce(&mut AuthoritySet<H, N>) -> U {
+		f(&mut *self.inner.write())
 	}
 }
 
@@ -78,18 +90,81 @@ impl<H, N> From<AuthoritySet<H, N>> for SharedAuthoritySet<H, N> {
 }
 
 /// A set of authorities.
-#[derive(Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub(crate) struct AuthoritySet<H, N> {
 	current_authorities: Vec<(AuthorityId, u64)>,
 	set_id: u64,
 	pending_changes: Vec<PendingChange<H, N>>,
 }
 
+impl<H, N> AuthoritySet<H, N> {
+	/// Get the earliest limit-block number, if any.
+	pub(crate) fn current_limit(&self) -> Option<N> {
+		self.pending_changes.get(0).map(|change| change.effective_number().clone())
+	}
+
+	/// Get the set identifier.
+	pub(crate) fn set_id(&self) -> u64 {
+		self.set_id
+	}
+
+	/// Get the current set id and a reference to the current authority set.
+	pub(crate) fn current(&self) -> (u64, &[(AuthorityId, u64)]) {
+		(self.set_id, &self.current_authorities[..])
+	}
+}
+
+impl<H: Eq, N: Ord + Debug> AuthoritySet<H, N> {
+	/// Apply or prune any pending transitions. Provide a closure that can be used to check for the
+	/// finalized block with given number.
+	///
+	/// Returns true when the set's representation has changed.
+	pub(crate) fn apply_changes<F, E>(&mut self, just_finalized: N, canonical: F) -> Result<bool, E>
+		where F: FnMut(N) -> Result<H, E>
+	{
+		let mut changed = false;
+		loop {
+			let remove_up_to = match self.pending_changes.first() {
+				None => break,
+				Some(change) => {
+					let effective_number = change.effective_number();
+					if effective_number > just_finalized { break }
+
+					// check if the block that signalled the change is canonical in
+					// our chain.
+					if canonical(change.canon_height)? == change.canon_hash {
+						// apply this change: make the set canonical
+						info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
+							change.canon_height);
+
+						self.current_authorities = change.next_authorities.clone();
+						self.set_id += 1;
+
+						// discard any signalled changes
+						// that happened before or equal to the effective number of the change.
+						self.pending_changes.iter()
+							.take_while(|c| c.canon_height <= effective_number)
+							.count()
+					} else {
+						1 // prune out this entry; it's no longer relevant.
+					}
+				}
+			};
+
+			let remove_up_to = ::std::cmp::min(remove_up_to, self.pending_changes.len());
+			self.pending_changes.drain(..remove_up_to);
+			changed = true; // always changed because we strip at least the first change.
+		}
+
+		Ok(changed)
+	}
+}
+
 /// A pending change to the authority set.
 ///
 /// This will be applied when the announcing block is at some depth within
 /// the finalized chain.
-#[derive(Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode)]
 pub(crate) struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
 	pub(crate) next_authorities: Vec<(AuthorityId, u64)>,
@@ -103,7 +178,7 @@ pub(crate) struct PendingChange<H, N> {
 }
 
 impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
-	/// Returns the effective number.
+	/// Returns the effective number this change will be applied at.
 	fn effective_number(&self) -> N {
 		self.canon_height.clone() + self.finalization_depth.clone()
 	}
