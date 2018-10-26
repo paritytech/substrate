@@ -21,8 +21,6 @@
 #![recursion_limit="128"]
 #![allow(dead_code)]
 
-#![cfg(feature="rhd")]
-
 extern crate substrate_primitives as primitives;
 extern crate futures;
 extern crate sr_version as runtime_version;
@@ -47,7 +45,6 @@ pub mod offline_tracker;
 pub mod error;
 mod block_import;
 pub mod evaluation;
-
 
 // block size limit.
 const MAX_TRANSACTIONS_SIZE: usize = 4 * 1024 * 1024;
