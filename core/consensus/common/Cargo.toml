@@ -11,5 +11,5 @@ futures = "0.1"
 sr-version = { path = "../../sr-version" }
 sr-primitives = { path = "../../sr-primitives" }
 tokio = "0.1.7"
-parity-codec = "2.0"
+parity-codec = "2.1"
 parity-codec-derive = "2.0"
