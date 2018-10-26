@@ -96,39 +96,32 @@ fn slot_author<B: Block, C: Authorities<B>>(slot_num: u64, client: &C, header: &
 	-> Result<Option<(AuthorityId, Vec<AuthorityId>)>, C::Error>
 {
 	let hash = header.hash();
-	match client.authorities(&BlockId::Hash(hash)) {
-		Ok(authorities) => {
-			if authorities.is_empty() { return Ok(None) }
+	let authorities = client.authorities(&BlockId::Hash(hash))?;
 
-			let idx = slot_num % (authorities.len() as u64);
-			assert!(idx <= usize::max_value() as u64,
-				"It is impossible to have a vector with length beyond the address space; qed");
+	if authorities.is_empty() { return Ok(None) }
 
-			let current_author = *authorities.get(idx as usize)
-				.expect("authorities not empty; index constrained to list length;\
-					 this is a valid index; qed");
+	let idx = slot_num % (authorities.len() as u64);
+	assert!(idx <= usize::max_value() as u64,
+		"It is impossible to have a vector with length beyond the address space; qed");
 
-			Ok(Some((current_author, authorities)))
-		}
-		Err(e) => Err(e)
-	}
+	let current_author = *authorities.get(idx as usize)
+		.expect("authorities not empty; index constrained to list length;\
+				this is a valid index; qed");
+
+	Ok(Some((current_author, authorities)))
 }
 
-fn duration_now() -> Result<Duration, ()> {
+fn duration_now() -> Option<Duration> {
 	use std::time::SystemTime;
 
 	let now = SystemTime::now();
-	match now.duration_since(SystemTime::UNIX_EPOCH) {
-		Ok(dur) => Ok(dur),
-		Err(_) => {
-			warn!("Current time {:?} is before unix epoch. Something is wrong.", now);
-			return Err(())
-		}
-	}
+	now.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| {
+			warn!("Current time {:?} is before unix epoch. Something is wrong: {:?}", now, e);
+	}).ok()
 }
 
 /// Get the slot for now.
-fn slot_now(slot_duration: u64) -> Result<u64, ()> {
+fn slot_now(slot_duration: u64) -> Option<u64> {
 	duration_now().map(|s| s.as_secs() / slot_duration)
 }
 
@@ -203,7 +196,7 @@ pub fn start_aura<B, C, E, SO, Error>(
 			let remaining_full_secs = slot_duration - (now.as_secs() % slot_duration) - 1;
 			let remaining_nanos = 1_000_000_000 - now.subsec_nanos();
 			Instant::now() + Duration::new(remaining_full_secs, remaining_nanos)
-		}).unwrap_or_else(|()| Instant::now());
+		}).unwrap_or_else(|| Instant::now());
 
 		Interval::new(next_slot_start, Duration::from_secs(slot_duration))
 			.filter(move |_| !sync_oracle.is_major_syncing()) // only propose when we are not syncing.
@@ -213,8 +206,8 @@ pub fn start_aura<B, C, E, SO, Error>(
 				use futures::future;
 
 				let slot_num = match slot_now(slot_duration) {
-					Ok(n) => n,
-					Err(()) => return Either::B(future::err(())),
+					Some(n) => n,
+					_ => return Either::B(future::err(())),
 				};
 
 				if last_authored_slot >= slot_num { return Either::B(future::ok(())) }
@@ -550,7 +543,6 @@ mod tests {
 
 			runtime.spawn(aura);
 		}
-
 
 		// wait for all finalized on each.
 		let wait_for = ::futures::future::join_all(import_notifications)
