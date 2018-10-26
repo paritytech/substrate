@@ -34,7 +34,6 @@
 
 #![cfg(feature="rhd")]
 // FIXME: doesn't compile - https://github.com/paritytech/substrate/issues/1020
-// Remove or document the remaining TODO's in this file
 
 #![recursion_limit="128"]
 
@@ -401,7 +400,6 @@ impl<B, P, I, InStream, OutSink> Future for BftFuture<B, P, I, InStream, OutSink
 			Ok(Async::NotReady) => false,
 		};
 
-		// TODO: handle and log this error in a way which isn't noisy on exit.
 		let committed = match self.inner.poll().map_err(|_| ()) {
 			Ok(Async::Ready(x)) => x,
 			Ok(Async::NotReady) =>
@@ -794,7 +792,7 @@ fn check_justification_signed_message<H>(
 	message: &[u8],
 	just: UncheckedJustification<H>)
 -> Result<RhdJustification<H>, UncheckedJustification<H>> {
-	// TODO: return additional error information.
+	// additional error information could be useful here.
 	just.0.check(authorities.len() - max_faulty_of(authorities.len()), |_, _, sig| {
 		let auth_id = sig.signer.clone().into();
 		if !authorities.contains(&auth_id) { return None }
@@ -1089,7 +1087,6 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 
 		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
 
-		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = ::std::cmp::max(self.minimum_timestamp, current_timestamp());
 
 		let elapsed_since_start = self.start.elapsed();
@@ -1169,7 +1166,6 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 			&self.parent_hash,
 			self.parent_number,
 		) {
-			// TODO: these errors are easily re-checked in runtime.
 			debug!(target: "rhd", "Invalid proposal: {:?}", e);
 			return Box::new(future::ok(false));
 		};
@@ -1199,7 +1195,7 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		let vote_delays = {
 
 			// the duration until the given timestamp is current
-			let proposed_timestamp = ::std::cmp::max(self.minimum_timestamp, proposed_timestamp.unwrap_or(0)); 
+			let proposed_timestamp = ::std::cmp::max(self.minimum_timestamp, proposed_timestamp.unwrap_or(0));
 			let timestamp_delay = if proposed_timestamp > current_timestamp {
 				let delay_s = proposed_timestamp - current_timestamp;
 				debug!(target: "rhd", "Delaying evaluation of proposal for {} seconds", delay_s);
@@ -1217,7 +1213,7 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		};
 
 		// evaluate whether the block is actually valid.
-		// TODO: is it better to delay this until the delays are finished?
+		// it may be better to delay this until the delays are finished
 		let evaluated = match self.client.execute_block(&self.parent_id, &unchecked_proposal.clone()).map_err(Error::from) {
 			Ok(()) => Ok(true),
 			Err(err) => match err.kind() {

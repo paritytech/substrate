@@ -186,7 +186,6 @@ impl<C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<C
 
 		const MAX_VOTE_OFFLINE_SECONDS: Duration = Duration::from_secs(60);
 
-		// TODO: handle case when current timestamp behind that in state.
 		let timestamp = ::std::cmp::max(self.minimum_timestamp, current_timestamp());
 
 		let elapsed_since_start = self.start.elapsed();

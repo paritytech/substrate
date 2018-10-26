@@ -914,7 +914,7 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 			post_runtime_digests,
 			body,
 			finalized,
-			_aux, // TODO: write this to DB also
+			_aux,
 		) = import_block.into_inner();
 		let parent_hash = pre_header.parent_hash().clone();
 
