@@ -14,11 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Integration of the GRANDPA finality gadget into substrate.
 //!
 //! This is a long-running future that produces finality notifications.
-// end::description[]
 
 extern crate finality_grandpa as grandpa;
 extern crate futures;

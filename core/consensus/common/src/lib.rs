@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Consensus Common.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Tracks offline validators.
-// end::description[]
 
 #![allow(dead_code)]
 

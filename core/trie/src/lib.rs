@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Parity.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Utility functions to interact with Substrate's Base-16 Modified Merkle Patricia tree ("trie").
-// end::description[]
 
 // TODO: no_std
 

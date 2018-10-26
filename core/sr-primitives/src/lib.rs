@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! System manager: Handles all of the top-level stuff; executing block/transaction, setting code
 //! and depositing logs.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

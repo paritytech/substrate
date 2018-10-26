@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! State database maintenance. Handles canonicalization and pruning in the database. The input to
 //! this module is a `ChangeSet` which is basically a list of key-value pairs (trie nodes) that
 //! were added or deleted during block execution.
@@ -29,8 +28,6 @@
 //! # Pruning.
 //! See `RefWindow` for pruning algorithm details. `StateDb` prunes on each canonicalization until pruning
 //! constraints are satisfied.
-//!
-// end::description[]
 
 #[macro_use] extern crate log;
 #[macro_use] extern crate parity_codec_derive;
