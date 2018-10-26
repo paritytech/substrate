@@ -47,11 +47,11 @@ extern crate parity_codec_derive;
 use futures::prelude::*;
 use futures::stream::Fuse;
 use futures::sync::mpsc;
-use client::{Client, ImportNotifications, backend::Backend, CallExecutor};
+use client::{Client, error::Error as ClientError, ImportNotifications, backend::Backend, CallExecutor};
 use codec::{Encode, Decode};
 use consensus_common::BlockImport;
 use runtime_primitives::traits::{
-	As, NumberFor, Block as BlockT, Header as HeaderT, DigestItemFor,
+	NumberFor, Block as BlockT, Header as HeaderT, DigestItemFor,
 };
 use runtime_primitives::{generic::BlockId, Justification};
 use substrate_primitives::{ed25519, AuthorityId, Blake2Hasher};
@@ -108,7 +108,7 @@ pub enum Error {
 	/// A blockchain error.
 	Blockchain(String),
 	/// Could not complete a round on disk.
-	CouldNotCompleteRound(::client::error::Error),
+	CouldNotCompleteRound(ClientError),
 	/// A timer failed to fire.
 	Timer(::tokio::timer::Error),
 }
@@ -421,6 +421,7 @@ pub struct Environment<B, E, Block: BlockT, N: Network> {
 	config: Config,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	network: N,
+	set_id: u64,
 }
 
 impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N> where
@@ -459,13 +460,20 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash, NumberFor<Block>> for E
 	}
 
 	fn best_chain_containing(&self, block: Block::Hash) -> Option<(Block::Hash, NumberFor<Block>)> {
-		match self.inner.best_containing(block, None) {
+		// we refuse to vote beyond the current limit number where transitions are scheduled to
+		// occur.
+		// once blocks are finalized that make that transition irrelevant or activate it,
+		// we will proceed onwards. most of the time there will be no pending transition.
+		let limit = self.authority_set.current_limit();
+		match self.inner.best_containing(block, limit) {
 			Ok(Some(hash)) => {
 				let header = self.inner.header(&BlockId::Hash(hash)).ok()?
 					.expect("Header known to exist after `best_containing` call; qed");
 
 				Some((hash, header.number().clone()))
 			}
+			// Ok(None) can be returned when `block` is after `limit`. That might cause issues.
+			// might be better to return the header itself in this (rare) case.
 			Ok(None) => None,
 			Err(e) => {
 				debug!(target: "afg", "Encountered error finding best chain containing {:?}: {:?}", block, e);
@@ -486,12 +494,40 @@ pub struct ScheduledChange<N> {
 
 /// A GRANDPA-compatible DigestItem. This can describe when GRANDPA set changes
 /// are scheduled.
-// TODO: with specialization, do a blanket implementation so this trait
+//
+// With specialization, could do a blanket implementation so this trait
 // doesn't have to be implemented by users.
 pub trait CompatibleDigestItem<N> {
 	/// If this digest item notes a GRANDPA set change, return information about
 	/// the scheduled change.
 	fn scheduled_change(&self) -> Option<ScheduledChange<N>> { None }
+}
+
+/// Signals either an early exit of a voter or an error.
+#[derive(Debug)]
+pub enum ExitOrError {
+	/// An error occurred.
+	Error(Error),
+	/// Early exit of the voter: the new set ID and the new authorities along with respective weights.
+	AuthoritiesChanged(u64, Vec<(AuthorityId, u64)>),
+}
+
+impl From<Error> for ExitOrError {
+	fn from(e: Error) -> Self {
+		ExitOrError::Error(e)
+	}
+}
+
+impl From<ClientError> for ExitOrError {
+	fn from(e: ClientError) -> Self {
+		ExitOrError::Error(Error::from(e))
+	}
+}
+
+impl From<grandpa::Error> for ExitOrError {
+	fn from(e: grandpa::Error) -> Self {
+		ExitOrError::Error(Error::from(e))
+	}
 }
 
 impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N> where
@@ -514,7 +550,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 		SinkItem = ::grandpa::Message<Block::Hash, NumberFor<Block>>,
 		SinkError = Self::Error,
 	>>;
-	type Error = Error;
+	type Error = ExitOrError;
 
 	#[allow(unreachable_code)]
 	fn round_data(
@@ -528,24 +564,21 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 		let prevote_timer = Delay::new(now + self.config.gossip_duration * 2);
 		let precommit_timer = Delay::new(now + self.config.gossip_duration * 4);
 
-		// TODO [now]: Get from shared authority set.
-		let set_id = unimplemented!();
-
 		// TODO: dispatch this with `mpsc::spawn`.
 		let incoming = checked_message_stream::<Block, _>(
 			round,
-			set_id,
+			self.set_id,
 			self.network.messages_for(round),
 			self.config.genesis_voters.clone(),
 		);
 
 		let (out_rx, outgoing) = outgoing_messages::<Block, _>(
 			round,
-			set_id,
+			self.set_id,
 			self.config.local_key.clone(),
 			self.config.genesis_voters.clone(),
 			self.network.clone(),
-		);
+		).sink_map_err(Into::into);
 
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
@@ -556,7 +589,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 		);
 
 		// join incoming network messages with locally originating ones.
-		let incoming = Box::new(incoming.select(out_rx));
+		let incoming = Box::new(incoming.select(out_rx).map_err(Into::into));
 
 		// schedule network message cleanup when sink drops.
 		let outgoing = Box::new(ClearOnDrop {
@@ -580,21 +613,44 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 			.insert_aux(&[(LAST_COMPLETED_KEY, &encoded_state[..])], &[])
 		{
 			warn!(target: "afg", "Shutting down voter due to error bookkeeping last completed round in DB: {:?}", e);
-			Err(Error::CouldNotCompleteRound(e))
+			Err(Error::CouldNotCompleteRound(e).into())
 		} else {
 			Ok(())
 		}
 	}
 
 	fn finalize_block(&self, hash: Block::Hash, number: NumberFor<Block>) -> Result<(), Self::Error> {
-		// TODO: don't unconditionally notify.
+		// ideally some handle to a synchronization oracle would be used
+		// to avoid unconditionally notifying.
 		if let Err(e) = self.inner.finalize_block(BlockId::Hash(hash), true) {
 			warn!(target: "afg", "Error applying finality to block {:?}: {:?}", (hash, number), e);
+
+			// we return without error because not being able to finalize (temporarily) is
+			// non-fatal.
+			return Ok(());
 		}
 
-		// we return without error in all cases because not being able to finalize is
-		// non-fatal.
-		Ok(())
+		self.authority_set.with_mut(|authority_set| {
+			let client = &self.inner;
+			let prior_id = authority_set.set_id();
+			let has_changed = authority_set.apply_changes(number, |canon_number| {
+				client.block_hash_from_id(&BlockId::number(canon_number))
+					.map(|h| h.expect("given number always less than newly-finalized number; \
+						thus there is a block with that number finalized already; qed"))
+			})?;
+
+			if has_changed {
+				// TODO [now]: write to disk. if it fails, exit the node.
+			}
+
+			let (new_id, set_ref) = authority_set.current();
+			if new_id != prior_id {
+				// the authority set has changed.
+				return Err(ExitOrError::AuthoritiesChanged(new_id, set_ref.to_vec()));
+			}
+
+			Ok(())
+		})
 	}
 
 	fn prevote_equivocation(
@@ -692,7 +748,7 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 			))?
 	};
 
-	// TODO: attempt to load from disk.
+	// TODO [now]: attempt to load from disk.
 	let authority_set = SharedAuthoritySet::genesis(
 		voters.iter().map(|(&id, &weight)| (id, weight)).collect(),
 	);
@@ -707,6 +763,7 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 		config,
 		voters,
 		network,
+		set_id: authority_set.set_id(),
 		authority_set,
 	});
 
