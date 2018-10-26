@@ -60,14 +60,14 @@ decl_module! {
 			Ok(())
 		}
 
-		fn set_key(origin: T::Origin, new: T::AccountId) -> Result {
+		fn set_key(origin, new: T::AccountId) -> Result {
 			// This is a public call, so we ensure that the origin is some signed account.
 			let _sender = ensure_signed(origin)?;
 			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
 
 			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
 			<Key<T>>::put(new);
-			
+
 			Ok(())
 		}
 	}

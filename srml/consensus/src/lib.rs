@@ -181,7 +181,7 @@ decl_module! {
 			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
 			Ok(())
 		}
-		
+
 		/// Set the new code.
 		pub fn set_code(new: Vec<u8>) -> Result {
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
