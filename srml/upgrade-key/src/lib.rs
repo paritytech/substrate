@@ -48,11 +48,28 @@ pub trait Trait: consensus::Trait + system::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		/// Upgrade the runtime to the given Wasm binary. Must come from the Key.
-		fn upgrade(origin, new: Vec<u8>) -> Result;
+		fn deposit_event() = default;
+		fn upgrade(origin, new: Vec<u8>) -> Result {
+			// This is a public call, so we ensure that the origin is some signed account.
+			let _sender = ensure_signed(origin)?;
+			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
 
-		/// Change the Key.
-		fn set_key(origin, new: T::AccountId) -> Result;
+			<consensus::Module<T>>::set_code(new)?;
+			Self::deposit_event(RawEvent::Upgraded);
+
+			Ok(())
+		}
+
+		fn set_key(origin: T::Origin, new: T::AccountId) -> Result {
+			// This is a public call, so we ensure that the origin is some signed account.
+			let _sender = ensure_signed(origin)?;
+			ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
+
+			Self::deposit_event(RawEvent::KeyChanged(Self::key()));
+			<Key<T>>::put(new);
+			
+			Ok(())
+		}
 	}
 }
 
@@ -69,34 +86,5 @@ decl_event!(
 decl_storage! {
 	trait Store for Module<T: Trait> as UpgradeKey {
 		Key get(key) config(): T::AccountId;
-	}
-}
-
-impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
-	fn upgrade(origin: T::Origin, new: Vec<u8>) -> Result {
-		// This is a public call, so we ensure that the origin is some signed account.
-		let _sender = ensure_signed(origin)?;
-		ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
-
-		<consensus::Module<T>>::set_code(new)?;
-		Self::deposit_event(RawEvent::Upgraded);
-
-		Ok(())
-	}
-
-	fn set_key(origin: T::Origin, new: T::AccountId) -> Result {
-		// This is a public call, so we ensure that the origin is some signed account.
-		let _sender = ensure_signed(origin)?;
-		ensure!(_sender == Self::key(), "only the current upgrade key can use the upgrade_key module");
-
-		Self::deposit_event(RawEvent::KeyChanged(Self::key()));
-		<Key<T>>::put(new);
-		
-		Ok(())
 	}
 }

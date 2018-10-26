@@ -1,35 +1,33 @@
 
 == Substrate Packages
 
+=== Substrate Core
+
 :leveloffset: +3
-
-include::../../core/bft/README.adoc[]
-
-include::../../core/cli/README.adoc[]
 
 include::../../core/client/README.adoc[]
 
-include::../../codec/README.adoc[]
+include::../../core/test-client/README.adoc[]
 
-include::../../environmental/README.adoc[]
+include::../../core/client/db/README.adoc[]
+
+include::../../core/state-db/README.adoc[]
+
+include::../../core/consensus/common/README.adoc[]
+
+include::../../core/consensus/rhd/README.adoc[]
 
 include::../../core/executor/README.adoc[]
+
+include::../../core/finality-grandpa/README.adoc[]
 
 include::../../core/transaction-pool/README.adoc[]
 
 include::../../core/keyring/README.adoc[]
 
-include::../../core/keystore/README.adoc[]
-
-include::../../core/misbehavior-check/README.adoc[]
-
 include::../../core/network/README.adoc[]
 
 include::../../core/network-libp2p/README.adoc[]
-
-include::../../core/primitives/README.adoc[]
-
-include::../../pwasm-alloc/README.adoc[]
 
 include::../../core/rpc/README.adoc[]
 
@@ -37,26 +35,32 @@ include::../../core/rpc-servers/README.adoc[]
 
 include::../../srml/README.adoc[]
 
+include::../../core/sr-api/README.adoc[]
+
 include::../../core/sr-io/README.adoc[]
+
+include::../../core/sr-primitives/README.adoc[]
 
 include::../../core/sr-sandbox/README.adoc[]
 
 include::../../core/sr-std/README.adoc[]
 
-include::../../core/runtime-support/README.adoc[]
-
-include::../../core/serializer/README.adoc[]
-
-include::../../core/service/README.adoc[]
-
-include::../../core/state-db/README.adoc[]
-
 include::../../core/state-machine/README.adoc[]
+
+include::../../core/test-runtime/README.adoc[]
 
 include::../../core/telemetry/README.adoc[]
 
-include::../../core/test-client/README.adoc[]
+include::../../core/cli/README.adoc[]
 
-include::../../core/test-srml/README.adoc[]
+include::../../core/service/README.adoc[]
+
+include::../../core/trie/README.adoc[]
+
+include::../../core/keystore/README.adoc[]
+
+include::../../core/primitives/README.adoc[]
+
+include::../../core/serializer/README.adoc[]
 
 :leveloffset: -3

@@ -14,8 +14,14 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate Consensus Common.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Consensus Basics and common features
+// tag::description[]
+//! Consensus basics and common features
+// end::description[]
+
 #![recursion_limit="128"]
+#![allow(dead_code)]
+
+#![cfg(feature="rhd")]
 
 extern crate substrate_primitives as primitives;
 extern crate futures;
