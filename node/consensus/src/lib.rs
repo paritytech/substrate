@@ -227,6 +227,7 @@ impl<N, C, A> bft::Environment<<C as AuthoringApi>::Block> for ProposerFactory<N
 			client: self.client.clone(),
 			start: now,
 			local_key: sign_with,
+			next_index: None,
 			parent_hash,
 			parent_id: id,
 			parent_number: *parent_header.number(),
@@ -246,6 +247,7 @@ pub struct Proposer<C: AuthoringApi, A: txpool::ChainApi> {
 	client: Arc<C>,
 	start: Instant,
 	local_key: Arc<ed25519::Pair>,
+	next_index: Option<u64>,
 	parent_hash: <<C as AuthoringApi>::Block as BlockT>::Hash,
 	parent_id: BlockId<<C as AuthoringApi>::Block>,
 	parent_number: <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Number,
@@ -450,24 +452,25 @@ impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
 
 		let mut next_index = {
-			let local_id = self.local_key.public().0;
-			// let cur_index = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending| pending
-			// 	.filter(|tx| tx.verified.sender == local_id)
-			// 	.last()
-			// 	.map(|tx| Ok(tx.verified.index()))
-			// 	.unwrap_or_else(|| self.client.account_nonce(&self.parent_id, local_id))
-			// 	.map_err(Error::from)
-			// );
-			// TODO [ToDr] Use pool data
-			let cur_index: Result<u64> = self.client.account_nonce(&self.parent_id, &local_id).map_err(Error::from);
+			let cur_index: Result<u64> = self.client
+				.account_nonce(&self.parent_id, &self.local_key.public().0)
+				.map_err(Error::from);
 
-			match cur_index {
+			let cur_index = match cur_index {
 				Ok(cur_index) => cur_index + 1,
 				Err(e) => {
 					warn!(target: "consensus", "Error computing next transaction index: {:?}", e);
 					return;
 				}
-			}
+			};
+
+			let index = match self.next_index {
+				// make sure there were no other transactions in the meantime
+				Some(idx) if idx > cur_index => idx,
+				_ => cur_index,
+			};
+
+			index
 		};
 
 		for (target, misbehavior) in misbehavior {
@@ -487,6 +490,7 @@ impl<C, A> bft::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 			let payload = (next_index, Call::Consensus(ConsensusCall::report_misbehavior(report)), Era::immortal(), self.client.genesis_hash());
 			let signature = self.local_key.sign(&payload.encode()).into();
 			next_index += 1;
+			self.next_index = Some(next_index);
 
 			let local_id = self.local_key.public().0.into();
 			let extrinsic = UncheckedExtrinsic {
