@@ -151,22 +151,104 @@ where
 decl_module! {
 	/// Contracts module.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		fn deposit_event() = default;
 		// TODO: Change AccountId to staking::Address
+		/// Make a call to a specified account, optionally transferring some balance.
 		fn call(
 			origin,
 			dest: T::AccountId,
 			value: <T::Balance as HasCompact>::Type,
 			gas_limit: <T::Gas as HasCompact>::Type,
 			data: Vec<u8>
-		) -> Result;
+		) -> Result {
+			let origin = ensure_signed(origin)?;
+			let value = value.into();
+			let gas_limit = gas_limit.into();
 
+			// Pay for the gas upfront.
+			//
+			// NOTE: it is very important to avoid any state changes before
+			// paying for the gas.
+			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
+				events: Vec::new(),
+			};
+
+			let mut output_data = Vec::new();
+			let result = ctx.call(origin.clone(), dest, value, &mut gas_meter, &data, &mut output_data);
+
+			if let Ok(_) = result {
+				// Commit all changes that made it thus far into the persistant storage.
+				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+
+				// Then deposit all events produced.
+				ctx.events.into_iter().for_each(Self::deposit_event);
+			}
+
+			// Refund cost of the unused gas.
+			//
+			// NOTE: this should go after the commit to the storage, since the storage changes
+			// can alter the balance of the caller.
+			gas::refund_unused_gas::<T>(&origin, gas_meter);
+
+			result.map(|_| ())
+		}
+
+		/// Create a new contract, optionally transfering some balance to the created account.
+		///
+		/// Creation is executed as follows:
+		///
+		/// - the destination address is computed based on the sender and hash of the code.
+		/// - account is created at the computed address.
+		/// - the `ctor_code` is executed in the context of the newly created account. Buffer returned
+		///   after the execution is saved as the `code` of the account. That code will be invoked
+		///   upon any message received by this account.
 		fn create(
 			origin,
-			value: <T::Balance as HasCompact>::Type,
+			endowment: <T::Balance as HasCompact>::Type,
 			gas_limit: <T::Gas as HasCompact>::Type,
-			init_code: Vec<u8>,
+			ctor_code: Vec<u8>,
 			data: Vec<u8>
-		) -> Result;
+		) -> Result {
+			let origin = ensure_signed(origin)?;
+			let endowment = endowment.into();
+			let gas_limit = gas_limit.into();
+
+			// Pay for the gas upfront.
+			//
+			// NOTE: it is very important to avoid any state changes before
+			// paying for the gas.
+			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
+
+			let mut ctx = ExecutionContext {
+				self_account: origin.clone(),
+				depth: 0,
+				overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
+				events: Vec::new(),
+			};
+			let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
+
+			if let Ok(_) = result {
+				// Commit all changes that made it thus far into the persistant storage.
+				account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
+
+				// Then deposit all events produced.
+				ctx.events.into_iter().for_each(Self::deposit_event);
+			}
+
+			// Refund cost of the unused gas.
+			//
+			// NOTE: this should go after the commit to the storage, since the storage changes
+			// can alter the balance of the caller.
+			gas::refund_unused_gas::<T>(&origin, gas_meter);
+
+			result.map(|_| ())
+		}
+
 		fn on_finalise() {
 			<GasSpent<T>>::kill();
 		}
@@ -218,109 +300,6 @@ impl<T: Trait> double_map::StorageDoubleMap for StorageOf<T> {
 	type Key1 = T::AccountId;
 	type Key2 = Vec<u8>;
 	type Value = Vec<u8>;
-}
-
-impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
-	/// Make a call to a specified account, optionally transferring some balance.
-	fn call(
-		origin: <T as system::Trait>::Origin,
-		dest: T::AccountId,
-		value: <T::Balance as HasCompact>::Type,
-		gas_limit: <T::Gas as HasCompact>::Type,
-		data: Vec<u8>,
-	) -> Result {
-		let origin = ensure_signed(origin)?;
-		let value = value.into();
-		let gas_limit = gas_limit.into();
-
-		// Pay for the gas upfront.
-		//
-		// NOTE: it is very important to avoid any state changes before
-		// paying for the gas.
-		let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
-
-		let mut ctx = ExecutionContext {
-			self_account: origin.clone(),
-			depth: 0,
-			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
-			events: Vec::new(),
-		};
-
-		let mut output_data = Vec::new();
-		let result = ctx.call(origin.clone(), dest, value, &mut gas_meter, &data, &mut output_data);
-
-		if let Ok(_) = result {
-			// Commit all changes that made it thus far into the persistant storage.
-			account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
-
-			// Then deposit all events produced.
-			ctx.events.into_iter().for_each(Self::deposit_event);
-		}
-
-		// Refund cost of the unused gas.
-		//
-		// NOTE: this should go after the commit to the storage, since the storage changes
-		// can alter the balance of the caller.
-		gas::refund_unused_gas::<T>(&origin, gas_meter);
-
-		result.map(|_| ())
-	}
-
-	/// Create a new contract, optionally transfering some balance to the created account.
-	///
-	/// Creation is executed as follows:
-	///
-	/// - the destination address is computed based on the sender and hash of the code.
-	/// - account is created at the computed address.
-	/// - the `ctor_code` is executed in the context of the newly created account. Buffer returned
-	///   after the execution is saved as the `code` of the account. That code will be invoked
-	///   upon any message received by this account.
-	fn create(
-		origin: <T as system::Trait>::Origin,
-		endowment: <T::Balance as HasCompact>::Type,
-		gas_limit: <T::Gas as HasCompact>::Type,
-		ctor_code: Vec<u8>,
-		data: Vec<u8>,
-	) -> Result {
-		let origin = ensure_signed(origin)?;
-		let endowment = endowment.into();
-		let gas_limit = gas_limit.into();
-
-		// Pay for the gas upfront.
-		//
-		// NOTE: it is very important to avoid any state changes before
-		// paying for the gas.
-		let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
-
-		let mut ctx = ExecutionContext {
-			self_account: origin.clone(),
-			depth: 0,
-			overlay: OverlayAccountDb::<T>::new(&account_db::DirectAccountDb),
-			events: Vec::new(),
-		};
-		let result = ctx.create(origin.clone(), endowment, &mut gas_meter, &ctor_code, &data);
-
-		if let Ok(_) = result {
-			// Commit all changes that made it thus far into the persistant storage.
-			account_db::DirectAccountDb.commit(ctx.overlay.into_change_set());
-
-			// Then deposit all events produced.
-			ctx.events.into_iter().for_each(Self::deposit_event);
-		}
-
-		// Refund cost of the unused gas.
-		//
-		// NOTE: this should go after the commit to the storage, since the storage changes
-		// can alter the balance of the caller.
-		gas::refund_unused_gas::<T>(&origin, gas_meter);
-
-		result.map(|_| ())
-	}
 }
 
 impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
