@@ -125,8 +125,64 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: <T::Balance as HasCompact>::Type) -> Result;
-		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: <T::Balance as HasCompact>::Type, reserved: <T::Balance as HasCompact>::Type) -> Result;
+		fn deposit_event() = default;
+
+		/// Transfer some liquid free balance to another staker.
+		pub fn transfer(
+			origin,
+			dest: RawAddress<T::AccountId, T::AccountIndex>,
+			value: <T::Balance as HasCompact>::Type
+		) -> Result {
+			let transactor = ensure_signed(origin)?;
+
+			let dest = Self::lookup(dest)?;
+			let value = value.into();
+			let from_balance = Self::free_balance(&transactor);
+			let to_balance = Self::free_balance(&dest);
+			let would_create = to_balance.is_zero();
+			let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
+			let liability = match value.checked_add(&fee) {
+				Some(l) => l,
+				None => return Err("got overflow after adding a fee to value"),
+			};
+
+			let new_from_balance = match from_balance.checked_sub(&liability) {
+				Some(b) => b,
+				None => return Err("balance too low to send value"),
+			};
+			if would_create && value < Self::existential_deposit() {
+				return Err("value too low to create account");
+			}
+			T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
+
+			// NOTE: total stake being stored in the same type means that this could never overflow
+			// but better to be safe than sorry.
+			let new_to_balance = match to_balance.checked_add(&value) {
+				Some(b) => b,
+				None => return Err("destination balance too high to receive value"),
+			};
+
+			if transactor != dest {
+				Self::set_free_balance(&transactor, new_from_balance);
+				Self::decrease_total_stake_by(fee);
+				Self::set_free_balance_creating(&dest, new_to_balance);
+				Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
+			}
+
+			Ok(())
+		}
+
+		/// Set the balances of a given account.
+		fn set_balance(
+			who: RawAddress<T::AccountId, T::AccountIndex>,
+			free: <T::Balance as HasCompact>::Type,
+			reserved: <T::Balance as HasCompact>::Type
+		) -> Result {
+			let who = Self::lookup(who)?;
+			Self::set_free_balance(&who, free.into());
+			Self::set_reserved_balance(&who, reserved.into());
+			Ok(())
+		}
 	}
 }
 
@@ -232,12 +288,6 @@ pub enum UpdateBalanceOutcome {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// PUBLIC IMMUTABLES
 
 	/// The combined balance of `who`.
@@ -285,58 +335,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	// PUBLIC DISPATCH
-
-	/// Transfer some liquid free balance to another staker.
-	pub fn transfer(origin: T::Origin, dest: Address<T>, value: <T::Balance as HasCompact>::Type) -> Result {
-		let transactor = ensure_signed(origin)?;
-
-		let dest = Self::lookup(dest)?;
-		let value = value.into();
-		let from_balance = Self::free_balance(&transactor);
-		let to_balance = Self::free_balance(&dest);
-		let would_create = to_balance.is_zero();
-		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
-		let liability = match value.checked_add(&fee) {
-			Some(l) => l,
-			None => return Err("got overflow after adding a fee to value"),
-		};
-
-		let new_from_balance = match from_balance.checked_sub(&liability) {
-			Some(b) => b,
-			None => return Err("balance too low to send value"),
-		};
-		if would_create && value < Self::existential_deposit() {
-			return Err("value too low to create account");
-		}
-		T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
-
-		// NOTE: total stake being stored in the same type means that this could never overflow
-		// but better to be safe than sorry.
-		let new_to_balance = match to_balance.checked_add(&value) {
-			Some(b) => b,
-			None => return Err("destination balance too high to receive value"),
-		};
-
-		if transactor != dest {
-			Self::set_free_balance(&transactor, new_from_balance);
-			Self::decrease_total_stake_by(fee);
-			Self::set_free_balance_creating(&dest, new_to_balance);
-			Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
-		}
-
-		Ok(())
-	}
-
-	/// Set the balances of a given account.
-	fn set_balance(who: Address<T>, free: <T::Balance as HasCompact>::Type, reserved: <T::Balance as HasCompact>::Type) -> Result {
-		let who = Self::lookup(who)?;
-		Self::set_free_balance(&who, free.into());
-		Self::set_reserved_balance(&who, reserved.into());
-		Ok(())
-	}
-
-	// PUBLIC MUTABLES (DANGEROUS)
+	//PUBLIC MUTABLES (DANGEROUS)
 
 	/// Set the free balance of an account to some new value.
 	///
