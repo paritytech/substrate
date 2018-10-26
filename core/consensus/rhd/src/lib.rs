@@ -31,6 +31,8 @@
 //! set for this block height.
 
 #![cfg(feature="rhd")]
+// FIXME: doesn't compile - https://github.com/paritytech/substrate/issues/1020
+// Remove or document the remaining TODO's in this file
 
 #![recursion_limit="128"]
 
@@ -78,9 +80,9 @@ use runtime_primitives::traits::{Block, Header};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, As, BlockNumberToHash};
 use runtime_primitives::Justification;
 use primitives::{AuthorityId, ed25519, Blake2Hasher, ed25519::LocalizedSignature};
-// use srml_system::Trait as SystemT;
+use srml_system::Trait as SystemT;
 
-// use node_runtime::Runtime;
+use node_runtime::Runtime;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 
 use futures::prelude::*;
@@ -1072,8 +1074,8 @@ impl<C: AuthoringApi, A: txpool::ChainApi> Proposer<C, A> {
 impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 	C: AuthoringApi + BlockNumberToHash,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
-	// <<C as AuthoringApi>::Block as BlockT>::Hash:
-		// Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
+	<<C as AuthoringApi>::Block as BlockT>::Hash:
+		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
 	error::Error: From<<C as AuthoringApi>::Error>
 {
 	type Create = Result<<C as AuthoringApi>::Block, Error>;
@@ -1241,8 +1243,8 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 	C: AuthoringApi + BlockNumberToHash,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	Self: BaseProposer<<C as AuthoringApi>::Block, Error=Error>,
-	// <<C as AuthoringApi>::Block as BlockT>::Hash:
-		// Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
+	<<C as AuthoringApi>::Block as BlockT>::Hash:
+		Into<<Runtime as SystemT>::Hash> + PartialEq<primitives::H256> + Into<primitives::H256>,
 	error::Error: From<<C as AuthoringApi>::Error>
 {
 
@@ -1255,64 +1257,59 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 	}
 
 	fn import_misbehavior(&self, _misbehavior: Vec<(AuthorityId, Misbehavior<<<C as AuthoringApi>::Block as BlockT>::Hash>)>) {
-		// FIXME: do actually something with this.
+		use rhododendron::Misbehavior as GenericMisbehavior;
+		use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
+		use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
+
+		let mut next_index = {
+			let local_id = self.local_key.public().0;
+			let cur_index = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending| pending
+				.filter(|tx| tx.verified.sender == local_id)
+				.last()
+				.map(|tx| Ok(tx.verified.index()))
+				.unwrap_or_else(|| self.client.account_nonce(&self.parent_id, local_id))
+				.map_err(Error::from)
+			);
+
+			match cur_index {
+				Ok(cur_index) => cur_index + 1,
+				Err(e) => {
+					warn!(target: "consensus", "Error computing next transaction index: {:?}", e);
+					return;
+				}
+			}
+		};
+
+		for (target, misbehavior) in misbehavior {
+			let report = MisbehaviorReport {
+				parent_hash: self.parent_hash.into(),
+				parent_number: self.parent_number.as_(),
+				target,
+				misbehavior: match misbehavior {
+					GenericMisbehavior::ProposeOutOfTurn(_, _, _) => continue,
+					GenericMisbehavior::DoublePropose(_, _, _) => continue,
+					GenericMisbehavior::DoublePrepare(round, (h1, s1), (h2, s2))
+						=> MisbehaviorKind::BftDoublePrepare(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
+					GenericMisbehavior::DoubleCommit(round, (h1, s1), (h2, s2))
+						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
+				}
+			};
+			let payload = (next_index, Call::Consensus(ConsensusCall::report_misbehavior(report)), Era::immortal(), self.client.genesis_hash());
+			let signature = self.local_key.sign(&payload.encode()).into();
+			next_index += 1;
+
+			let local_id = self.local_key.public().0.into();
+			let extrinsic = UncheckedExtrinsic {
+				signature: Some((node_runtime::RawAddress::Id(local_id), signature, payload.0, Era::immortal())),
+				function: payload.1,
+			};
+			let uxt: <<C as AuthoringApi>::Block as BlockT>::Extrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
+			let hash = BlockId::<<C as AuthoringApi>::Block>::hash(self.parent_hash);
+			if let Err(e) = self.transaction_pool.submit_one(&hash, uxt) {
+				warn!("Error importing misbehavior report: {:?}", e);
+			}
+		}
 	}
-
-		// use rhododendron::Misbehavior as GenericMisbehavior;
-		// use runtime_primitives::bft::{MisbehaviorKind, MisbehaviorReport};
-		// use node_runtime::{Call, UncheckedExtrinsic, ConsensusCall};
-
-	// 	let mut next_index = {
-	// 		let local_id = self.local_key.public().0;
-	// 		// let cur_index = self.transaction_pool.cull_and_get_pending(&BlockId::hash(self.parent_hash), |pending| pending
-	// 		// 	.filter(|tx| tx.verified.sender == local_id)
-	// 		// 	.last()
-	// 		// 	.map(|tx| Ok(tx.verified.index()))
-	// 		// 	.unwrap_or_else(|| self.client.account_nonce(&self.parent_id, local_id))
-	// 		// 	.map_err(Error::from)
-	// 		// );
-	// 		// TODO [ToDr] Use pool data
-	// 		let cur_index: Result<u64> = self.client.account_nonce(&self.parent_id, &local_id).map_err(Error::from);
-
-	// 		match cur_index {
-	// 			Ok(cur_index) => cur_index + 1,
-	// 			Err(e) => {
-	// 				warn!(target: "consensus", "Error computing next transaction index: {:?}", e);
-	// 				return;
-	// 			}
-	// 		}
-	// 	};
-
-	// 	for (target, misbehavior) in misbehavior {
-	// 		let report = MisbehaviorReport {
-	// 			parent_hash: self.parent_hash.into(),
-	// 			parent_number: self.parent_number.as_(),
-	// 			target,
-	// 			misbehavior: match misbehavior {
-	// 				GenericMisbehavior::ProposeOutOfTurn(_, _, _) => continue,
-	// 				GenericMisbehavior::DoublePropose(_, _, _) => continue,
-	// 				GenericMisbehavior::DoublePrepare(round, (h1, s1), (h2, s2))
-	// 					=> MisbehaviorKind::BftDoublePrepare(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
-	// 				GenericMisbehavior::DoubleCommit(round, (h1, s1), (h2, s2))
-	// 					=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
-	// 			}
-	// 		};
-	// 		let payload = (next_index, Call::Consensus(ConsensusCall::report_misbehavior(report)), Era::immortal(), self.client.genesis_hash());
-	// 		let signature = self.local_key.sign(&payload.encode()).into();
-	// 		next_index += 1;
-
-	// 		let local_id = self.local_key.public().0.into();
-	// 		let extrinsic = UncheckedExtrinsic {
-	// 			signature: Some((node_runtime::RawAddress::Id(local_id), signature, payload.0, Era::immortal())),
-	// 			function: payload.1,
-	// 		};
-	// 		let uxt: <<C as AuthoringApi>::Block as BlockT>::Extrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
-	// 		let hash = BlockId::<<C as AuthoringApi>::Block>::hash(self.parent_hash);
-	// 		if let Err(e) = self.transaction_pool.submit_one(&hash, uxt) {
-	// 			warn!("Error importing misbehavior report: {:?}", e);
-	// 		}
-	// 	}
-	// }
 
 	fn on_round_end(&self, round_number: u32, was_proposed: bool) {
 		let primary_validator = self.validators[

@@ -1,4 +1,4 @@
-// Copyright 2017 Parity Technologies (UK) Ltd.
+// Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
 // Substrate is free software: you can redistribute it and/or modify
@@ -55,10 +55,3 @@ impl From<CommonErrorKind> for Error {
 		CommonError::from(e).into()
 	}
 }
-
-// impl From<::bft::InputStreamConcluded> for Error {
-// 	fn from(err: ::bft::InputStreamConcluded) -> Self {
-// 		::bft::Error::from(err).into()
-// 	}
-// }
-
