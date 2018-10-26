@@ -907,16 +907,16 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 	) -> Result<ImportResult, Self::Error> {
 		use runtime_primitives::traits::Digest;
 
-		let (
+		let ImportBlock {
 			origin,
-			pre_header,
-			justification,
+			header,
+			external_justification,
 			post_runtime_digests,
 			body,
 			finalized,
-			_aux,
-		) = import_block.into_inner();
-		let parent_hash = pre_header.parent_hash().clone();
+			..
+		} = import_block;
+		let parent_hash = header.parent_hash().clone();
 
 		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
 			blockchain::BlockStatus::InChain => {},
@@ -924,13 +924,13 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 		}
 
 		let import_headers = if post_runtime_digests.is_empty() {
-			PrePostHeader::Same(pre_header)
+			PrePostHeader::Same(header)
 		} else {
-			let mut post_header = pre_header.clone();
+			let mut post_header = header.clone();
 			for item in post_runtime_digests {
 				post_header.digest_mut().push(item);
 			}
-			PrePostHeader::Different(pre_header, post_header)
+			PrePostHeader::Different(header, post_header)
 		};
 
 		let hash = import_headers.post().hash();
@@ -942,7 +942,7 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 			origin,
 			hash,
 			import_headers,
-			justification,
+			external_justification,
 			body,
 			new_authorities,
 			finalized,

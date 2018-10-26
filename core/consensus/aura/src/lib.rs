@@ -176,8 +176,6 @@ pub fn start_aura<B, C, E, SO, Error>(
 	DigestItemFor<B>: CompatibleDigestItem,
 	Error: ::std::error::Error + Send + 'static + From<::consensus_common::Error>,
 {
-
-	// wait until the next full slot has started before authoring anything
 	let make_authorship = move || {
 		let config = config.clone();
 		let client = client.clone();
@@ -362,7 +360,8 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 		_justification: Vec<u8>,
 		body: Option<Vec<B::Extrinsic>>
 	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
-		let slot_now = slot_now(self.config.slot_duration).unwrap_or(0);
+		let slot_now = slot_now(self.config.slot_duration)
+			.ok_or("System time is before UnixTime?".to_owned())?;
 		let hash = header.hash();
 		let parent_hash = *header.parent_hash();
 		let authorities = self.client.authorities(&BlockId::Hash(parent_hash))

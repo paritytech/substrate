@@ -18,8 +18,11 @@
 //! Consensus basics and common features
 // end::description[]
 
-#![recursion_limit="128"]
+// This provides "unused" building blocks to other crates
 #![allow(dead_code)]
+
+// our error-chain could potentially blow up otherwise
+#![recursion_limit="128"]
 
 extern crate substrate_primitives as primitives;
 extern crate futures;

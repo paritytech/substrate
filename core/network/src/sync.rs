@@ -19,7 +19,7 @@ use std::sync::Arc;
 use protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
 use client::{BlockStatus, ClientInfo};
-use consensus::{BlockOrigin};
+use consensus::BlockOrigin;
 use client::error::Error as ClientError;
 use blocks::{self, BlockCollection};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};

@@ -35,8 +35,6 @@
 #![cfg(feature="rhd")]
 // FIXME: doesn't compile - https://github.com/paritytech/substrate/issues/1020
 
-#![recursion_limit="128"]
-
 extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate substrate_client as client;
@@ -1136,14 +1134,14 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 			})?;
 
 		info!("Proposing block [number: {}; hash: {}; parent_hash: {}; extrinsics: [{}]]",
-			  block.header().number(),
-			  <<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
-			  block.header().parent_hash(),
-			  block.extrinsics().iter()
-			  .map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
-			  .collect::<Vec<_>>()
-			  .join(", ")
-			 );
+			block.header().number(),
+			<<C as AuthoringApi>::Block as BlockT>::Hash::from(block.header().hash()),
+			block.header().parent_hash(),
+			block.extrinsics().iter()
+			.map(|xt| format!("{}", BlakeTwo256::hash_of(xt)))
+			.collect::<Vec<_>>()
+			.join(", ")
+		);
 
 		let substrate_block = Decode::decode(&mut block.encode().as_slice())
 			.expect("blocks are defined to serialize to substrate blocks correctly; qed");
@@ -1214,7 +1212,8 @@ impl<C, A> BaseProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 
 		// evaluate whether the block is actually valid.
 		// it may be better to delay this until the delays are finished
-		let evaluated = match self.client.execute_block(&self.parent_id, &unchecked_proposal.clone()).map_err(Error::from) {
+		let evaluated = match self.client.execute_block(&self.parent_id, &unchecked_proposal.clone())
+				.map_err(Error::from) {
 			Ok(()) => Ok(true),
 			Err(err) => match err.kind() {
 				error::ErrorKind::Client(client::error::ErrorKind::Execution(_)) => Ok(false),
@@ -1292,7 +1291,12 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 						=> MisbehaviorKind::BftDoubleCommit(round as u32, (h1.into(), s1.signature), (h2.into(), s2.signature)),
 				}
 			};
-			let payload = (next_index, Call::Consensus(ConsensusCall::report_misbehavior(report)), Era::immortal(), self.client.genesis_hash());
+			let payload = (
+				next_index,
+				Call::Consensus(ConsensusCall::report_misbehavior(report)),
+				Era::immortal(),
+				self.client.genesis_hash()
+			);
 			let signature = self.local_key.sign(&payload.encode()).into();
 			next_index += 1;
 
@@ -1301,7 +1305,8 @@ impl<C, A> LocalProposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
 				signature: Some((node_runtime::RawAddress::Id(local_id), signature, payload.0, Era::immortal())),
 				function: payload.1,
 			};
-			let uxt: <<C as AuthoringApi>::Block as BlockT>::Extrinsic = Decode::decode(&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
+			let uxt: <<C as AuthoringApi>::Block as BlockT>::Extrinsic = Decode::decode(
+				&mut extrinsic.encode().as_slice()).expect("Encoded extrinsic is valid");
 			let hash = BlockId::<<C as AuthoringApi>::Block>::hash(self.parent_hash);
 			if let Err(e) = self.transaction_pool.submit_one(&hash, uxt) {
 				warn!("Error importing misbehavior report: {:?}", e);

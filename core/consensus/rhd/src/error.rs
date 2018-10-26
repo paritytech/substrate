@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Error types in the Rhodendron Consensus service.
+//! Error types in the rhododendron Consensus service.
 use consensus::error::{Error as CommonError, ErrorKind as CommonErrorKind};
 use primitives::AuthorityId;
 use client;
