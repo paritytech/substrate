@@ -219,8 +219,6 @@ Or you can join the BBQ Birch Testnet with:
 [source, shell]
 cargo run
 
-include::doc/packages/packages.adoc[]
-
 include::CONTRIBUTING.adoc[leveloffset=+1]
 
 include::CODE_OF_CONDUCT.adoc[leveloffset=+1]
