@@ -207,7 +207,7 @@ pub fn start_aura<B, C, E, SO, Error>(
 
 				let slot_num = match slot_now(slot_duration) {
 					Some(n) => n,
-					_ => return Either::B(future::err(())),
+					None => return Either::B(future::err(())),
 				};
 
 				if last_authored_slot >= slot_num { return Either::B(future::ok(())) }
@@ -391,7 +391,7 @@ impl<B: Block, C> Verifier<B> for AuraVerifier<C> where
 				};
 
 				// FIXME: extract authorities - https://github.com/paritytech/substrate/issues/1019
-				Ok((import_block, None)) 
+				Ok((import_block, None))
 			}
 			CheckedHeader::Deferred(a, b) => {
 				debug!(target: "aura", "Checking {:?} failed; {:?}, {:?}.", hash, a, b);
