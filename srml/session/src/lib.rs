@@ -67,10 +67,28 @@ pub trait Trait: timestamp::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn set_key(origin, key: T::SessionKey) -> Result;
+		fn deposit_event() = default;
 
-		fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result;
-		fn force_new_session(apply_rewards: bool) -> Result;
+		/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
+		/// session.
+		fn set_key(origin, key: T::SessionKey) -> Result {
+			let who = ensure_signed(origin)?;
+			// set new value for next session
+			<NextKeyFor<T>>::insert(who, key);
+			Ok(())
+		}
+
+		/// Set a new session length. Won't kick in until the next session change (at current length).
+		fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+			<NextSessionLength<T>>::put(new.into());
+			Ok(())
+		}
+
+		/// Forces a new session.
+		fn force_new_session(apply_rewards: bool) -> Result {
+			Self::apply_force_new_session(apply_rewards)
+		}
+
 		fn on_finalise(n: T::BlockNumber) {
 			Self::check_rotate_session(n);
 		}
@@ -111,12 +129,6 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	/// The number of validators currently.
 	pub fn validator_count() -> u32 {
 		<Validators<T>>::get().len() as u32	// TODO: can probably optimised
@@ -127,28 +139,7 @@ impl<T: Trait> Module<T> {
 		<LastLengthChange<T>>::get().unwrap_or_else(T::BlockNumber::zero)
 	}
 
-	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
-	/// session.
-	fn set_key(origin: T::Origin, key: T::SessionKey) -> Result {
-		let who = ensure_signed(origin)?;
-		// set new value for next session
-		<NextKeyFor<T>>::insert(who, key);
-		Ok(())
-	}
-
-	/// Set a new session length. Won't kick in until the next session change (at current length).
-	fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result {
-		<NextSessionLength<T>>::put(new.into());
-		Ok(())
-	}
-
-	/// Forces a new session.
-	pub fn force_new_session(apply_rewards: bool) -> Result {
-		Self::apply_force_new_session(apply_rewards)
-	}
-
 	// INTERNAL API (available to other runtime modules)
-
 	/// Forces a new session, no origin.
 	pub fn apply_force_new_session(apply_rewards: bool) -> Result {
 		<ForcingNewSession<T>>::put(apply_rewards);

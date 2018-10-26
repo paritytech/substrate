@@ -160,13 +160,7 @@ mod tests {
 
 		decl_module! {
 			pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-				fn aux_0(origin) -> Result;
-			}
-		}
-
-		impl<T: Trait> Module<T> {
-			fn aux_0(_: T::Origin) -> Result {
-				unreachable!()
+				fn aux_0(_origin) -> Result { unreachable!() }
 			}
 		}
 	}

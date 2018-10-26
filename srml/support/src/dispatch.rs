@@ -75,7 +75,8 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = system
+			for enum $call_type where origin: $origin_type, system = system
+			{}
 			{}
 			[]
 			$($t)*
@@ -84,14 +85,15 @@ macro_rules! decl_module {
 	(
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident {
 			$($t:tt)*
 		}
 	) => {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type, system = $system
+			{}
 			{}
 			[]
 			$($t)*
@@ -101,8 +103,51 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{}
 		{ $( $on_finalise:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		$vis:vis fn deposit_event() = default;
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $vis fn deposit_event() = default; }
+			{ $( $on_finalise )* }
+			[ $($t)* ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{}
+		{ $( $on_finalise:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		$vis:vis fn deposit_event($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $vis fn deposit_event($( $param_name: $param ),* ) { $( $impl )* } }
+			{ $( $on_finalise )* }
+			[ $($t)* ]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+	    { $( $deposit_event:tt )* }
+		{}
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		fn on_finalise($($param_name:ident : $param:ty),* ) { $( $impl:tt )* }
@@ -111,7 +156,8 @@ macro_rules! decl_module {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
 			{ fn on_finalise( $( $param_name : $param ),* ) { $( $impl )* } }
 			[ $($t)* ]
 			$($rest)*
@@ -120,64 +166,72 @@ macro_rules! decl_module {
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		fn $fn_name:ident(origin $(, $param_name:ident : $param:ty)* ) -> $result:ty ;
+		$fn_vis:vis fn $fn_name:ident($origin:ident $(, $param_name:ident : $param:ty)* ) -> $result:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
 			{ $( $on_finalise )* }
-			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(origin $( , $param_name : $param )* ) -> $result; ]
+			[
+				$($t)*
+				$(#[doc = $doc_attr])*
+				$fn_vis fn $fn_name($origin $( , $param_name : $param )* ) -> $result { $( $impl )* }
+			]
 			$($rest)*
 		);
 	};
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
-		fn $fn_name:ident($( $param_name:ident : $param:ty),* ) -> $result:ty ;
+		$fn_vis:vis fn $fn_name:ident($( $param_name:ident : $param:ty),* ) -> $result:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		decl_module!(@normalize
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
 			{ $( $on_finalise )* }
-			[ $($t)* $(#[doc = $doc_attr])* fn $fn_name(root $( , $param_name : $param )* ) -> $result; ]
+			[
+				$($t)*
+				$(#[doc = $doc_attr])*
+				fn $fn_name(root $( , $param_name : $param )* ) -> $result { $( $impl )* }
+			]
 			$($rest)*
 		);
 	};
 	(@normalize
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
 		{ $( $on_finalise:tt )* }
 		[ $($t:tt)* ]
 	) => {
 		decl_module!(@imp
 			$(#[$attr])*
 			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type where system = $system {
+			for enum $call_type where origin: $origin_type, system = $system {
 				$($t)*
 			}
+			{ $( $deposit_event )* }
 			{ $( $on_finalise )* }
 		);
 	};
 
-	(@call
-		origin
-		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
-	) => {
-		<$mod_type<$trait_instance>>::$fn_name( $origin $(, $param_name )* )
-	};
 	(@call
 		root
 		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
@@ -185,6 +239,44 @@ macro_rules! decl_module {
 		{
 			$system::ensure_root($origin)?;
 			<$mod_type<$trait_instance>>::$fn_name( $( $param_name ),* )
+		}
+	};
+	(@call
+		$ingore:ident
+		$mod_type:ident $trait_instance:ident $fn_name:ident $origin:ident $system:ident [ $( $param_name:ident),* ]
+	) => {
+		<$mod_type<$trait_instance>>::$fn_name( $origin $(, $param_name )* )
+	};
+
+	// no `deposit_event` function wanted
+	(@impl_deposit_event
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$system:ident;
+	) => {};
+
+	(@impl_deposit_event
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$system:ident;
+		$vis:vis fn deposit_event() = default;
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$vis fn deposit_event(event: Event<$trait_instance>) {
+				<$system::Module<$trait_instance>>::deposit_event(
+					<$trait_instance as $trait_name>::Event::from(event).into()
+				);
+			}
+		}
+	};
+
+	(@impl_deposit_event
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$system:ident;
+		$vis:vis fn deposit_event($param:ident : $param_ty:ty) { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$vis fn deposit_event($param: $param_ty) {
+				$( $impl )*
+			}
 		}
 	};
 
@@ -218,15 +310,43 @@ macro_rules! decl_module {
 			for $module<$trait_instance> {}
 	};
 
+	(@impl_function
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$origin_ty:ty;
+		root;
+		$vis:vis fn $name:ident ( root $(, $param:ident : $param_ty:ty )* ) -> $result:ty { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$vis fn $name($( $param: $param_ty ),* ) -> $result {
+				$( $impl )*
+			}
+		}
+	};
+	(@impl_function
+		$module:ident<$trait_instance:ident: $trait_name:ident>;
+		$origin_ty:ty;
+		$ignore:ident;
+		$vis:vis fn $name:ident ( $origin:ident $(, $param:ident : $param_ty:ty )* ) -> $result:ty { $( $impl:tt )* }
+	) => {
+		impl<$trait_instance: $trait_name> $module<$trait_instance> {
+			$vis fn $name($origin: $origin_ty $(, $param: $param_ty )* ) -> $result {
+				$( $impl )*
+			}
+		}
+	};
+
 	(@imp
 		$(#[$attr:meta])*
 		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
-		for enum $call_type:ident where origin: $origin_type:ty where system = $system:ident {
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident {
 			$(
 				$(#[doc = $doc_attr:tt])*
-				fn $fn_name:ident($from:ident $( , $param_name:ident : $param:ty)*) -> $result:ty;
+				$fn_vis:vis fn $fn_name:ident(
+					$from:ident $( , $param_name:ident : $param:ty)*
+				) -> $result:ty { $( $impl:tt )* }
 			)*
 		}
+		{ $( $deposit_event:tt )* }
 		{ $( $on_finalise:tt )* }
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
@@ -249,6 +369,23 @@ macro_rules! decl_module {
 			$mod_type<$trait_instance: $trait_name>;
 			$( $on_finalise )*
 		}
+
+		decl_module! {
+			@impl_deposit_event
+			$mod_type<$trait_instance: $trait_name>;
+			$system;
+			$( $deposit_event )*
+		}
+
+		$(
+			decl_module! {
+				@impl_function
+				$mod_type<$trait_instance: $trait_name>;
+				$origin_type;
+				$from;
+				$fn_vis fn $fn_name ($from $(, $param_name : $param )* ) -> $result { $( $impl )* }
+			}
+		)*
 
 		#[cfg(feature = "std")]
 		$(#[$attr])*
@@ -357,7 +494,11 @@ macro_rules! decl_module {
 				match self {
 					$(
 						$call_type::$fn_name( $( $param_name ),* ) => {
-							decl_module!(@call $from $mod_type $trait_instance $fn_name _origin $system [ $( $param_name ),* ])
+							decl_module!(
+								@call
+								$from
+								$mod_type $trait_instance $fn_name _origin $system [ $( $param_name ),* ]
+							)
 						},
 					)*
 					_ => { panic!("__PhantomItem should never be used.") },
@@ -694,11 +835,11 @@ mod tests {
 	decl_module! {
 		pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 			/// Hi, this is a comment.
-			fn aux_0(origin) -> Result;
-			fn aux_1(origin, data: i32) -> Result;
-			fn aux_2(origin, data: i32, data2: String) -> Result;
-			fn aux_3() -> Result;
-			fn aux_4(data: i32) -> Result;
+			fn aux_0(_origin) -> Result { unreachable!() }
+			fn aux_1(_origin, _data: i32) -> Result { unreachable!() }
+			fn aux_2(_origin, _data: i32, _data2: String) -> Result { unreachable!() }
+			fn aux_3() -> Result { unreachable!() }
+			fn aux_4(_data: i32) -> Result { unreachable!() }
 		}
 	}
 
@@ -720,7 +861,7 @@ mod tests {
 					name: DecodeDifferent::Encode("aux_1"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("data"),
+							name: DecodeDifferent::Encode("_data"),
 							ty: DecodeDifferent::Encode("i32"),
 						}
 					]),
@@ -731,11 +872,11 @@ mod tests {
 					name: DecodeDifferent::Encode("aux_2"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("data"),
+							name: DecodeDifferent::Encode("_data"),
 							ty: DecodeDifferent::Encode("i32"),
 						},
 						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("data2"),
+							name: DecodeDifferent::Encode("_data2"),
 							ty: DecodeDifferent::Encode("String"),
 						}
 					]),
@@ -752,7 +893,7 @@ mod tests {
 					name: DecodeDifferent::Encode("aux_4"),
 					arguments: DecodeDifferent::Encode(&[
 						FunctionArgumentMetadata {
-							name: DecodeDifferent::Encode("data"),
+							name: DecodeDifferent::Encode("_data"),
 							ty: DecodeDifferent::Encode("i32"),
 						}
 					]),
@@ -761,28 +902,6 @@ mod tests {
 			]),
 		},
 	};
-
-	impl<T: Trait> Module<T> {
-		fn aux_0(_: T::Origin) -> Result {
-			unreachable!()
-		}
-
-		fn aux_1(_: T::Origin, _: i32) -> Result {
-			unreachable!()
-		}
-
-		fn aux_2(_: T::Origin, _: i32, _: String) -> Result {
-			unreachable!()
-		}
-
-		fn aux_3() -> Result {
-			unreachable!()
-		}
-
-		fn aux_4(_: i32) -> Result {
-			unreachable!()
-		}
-	}
 
 	struct TraitImpl {}
 

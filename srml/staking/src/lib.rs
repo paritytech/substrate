@@ -105,17 +105,140 @@ pub trait Trait: balances::Trait + session::Trait {
 decl_module! {
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn stake(origin) -> Result;
-		fn unstake(origin, intentions_index: Compact<u32>) -> Result;
-		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) -> Result;
-		fn unnominate(origin, target_index: Compact<u32>) -> Result;
-		fn register_preferences(origin, intentions_index: Compact<u32>, prefs: ValidatorPrefs<T::Balance>) -> Result;
+		fn deposit_event() = default;
 
-		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) -> Result;
-		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) -> Result;
-		fn set_validator_count(new: Compact<u32>) -> Result;
-		fn force_new_era(apply_rewards: bool) -> Result;
-		fn set_offline_slash_grace(new: Compact<u32>) -> Result;
+		/// Declare the desire to stake for the transactor.
+		///
+		/// Effects will be felt at the beginning of the next era.
+		fn stake(origin) -> Result {
+			let who = ensure_signed(origin)?;
+			ensure!(Self::nominating(&who).is_none(), "Cannot stake if already nominating.");
+			let mut intentions = <Intentions<T>>::get();
+			// can't be in the list twice.
+			ensure!(intentions.iter().find(|&t| t == &who).is_none(), "Cannot stake if already staked.");
+
+			<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
+			intentions.push(who);
+			<Intentions<T>>::put(intentions);
+			Ok(())
+		}
+
+		/// Retract the desire to stake for the transactor.
+		///
+		/// Effects will be felt at the beginning of the next era.
+		fn unstake(origin, intentions_index: Compact<u32>) -> Result {
+			let who = ensure_signed(origin)?;
+			let intentions_index: u32 = intentions_index.into();
+			// unstake fails in degenerate case of having too few existing staked parties
+			if Self::intentions().len() <= Self::minimum_validator_count() as usize {
+				return Err("cannot unstake when there are too few staked participants")
+			}
+			Self::apply_unstake(&who, intentions_index as usize)
+		}
+
+		fn nominate(origin, target: Address<T::AccountId, T::AccountIndex>) -> Result {
+			let who = ensure_signed(origin)?;
+			let target = <balances::Module<T>>::lookup(target)?;
+
+			ensure!(Self::nominating(&who).is_none(), "Cannot nominate if already nominating.");
+			ensure!(Self::intentions().iter().find(|&t| t == &who).is_none(), "Cannot nominate if already staked.");
+
+			// update nominators_for
+			let mut t = Self::nominators_for(&target);
+			t.push(who.clone());
+			<NominatorsFor<T>>::insert(&target, t);
+
+			// update nominating
+			<Nominating<T>>::insert(&who, &target);
+
+			// Update bondage
+			<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
+
+			Ok(())
+		}
+
+		/// Will panic if called when source isn't currently nominating target.
+		/// Updates Nominating, NominatorsFor and NominationBalance.
+		fn unnominate(origin, target_index: Compact<u32>) -> Result {
+			let source = ensure_signed(origin)?;
+			let target_index: u32 = target_index.into();
+			let target_index = target_index as usize;
+
+			let target = <Nominating<T>>::get(&source).ok_or("Account must be nominating")?;
+
+			let mut t = Self::nominators_for(&target);
+			if t.get(target_index) != Some(&source) {
+				return Err("Invalid target index")
+			}
+
+			// Ok - all valid.
+
+			// update nominators_for
+			t.swap_remove(target_index);
+			<NominatorsFor<T>>::insert(&target, t);
+
+			// update nominating
+			<Nominating<T>>::remove(&source);
+
+			// update bondage
+			<Bondage<T>>::insert(
+				source,
+				<system::Module<T>>::block_number() + Self::bonding_duration()
+			);
+			Ok(())
+		}
+
+		/// Set the given account's preference for slashing behaviour should they be a validator.
+		///
+		/// An error (no-op) if `Self::intentions()[intentions_index] != origin`.
+		fn register_preferences(
+			origin,
+			intentions_index: Compact<u32>,
+			prefs: ValidatorPrefs<T::Balance>
+		) -> Result {
+			let who = ensure_signed(origin)?;
+			let intentions_index: u32 = intentions_index.into();
+
+			if Self::intentions().get(intentions_index as usize) != Some(&who) {
+				return Err("Invalid index")
+			}
+
+			<ValidatorPreferences<T>>::insert(who, prefs);
+
+			Ok(())
+		}
+
+		/// Set the number of sessions in an era.
+		fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+			<NextSessionsPerEra<T>>::put(new.into());
+			Ok(())
+		}
+
+		/// The length of the bonding duration in eras.
+		fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+			<BondingDuration<T>>::put(new.into());
+			Ok(())
+		}
+
+		/// The length of a staking era in sessions.
+		fn set_validator_count(new: Compact<u32>) -> Result {
+			let new: u32 = new.into();
+			<ValidatorCount<T>>::put(new);
+			Ok(())
+		}
+
+		/// Force there to be a new era. This also forces a new session immediately after.
+		/// `apply_rewards` should be true for validators to get the session reward.
+		fn force_new_era(apply_rewards: bool) -> Result {
+			Self::apply_force_new_era(apply_rewards)
+		}
+
+		/// Set the offline slash grace period.
+		fn set_offline_slash_grace(new: Compact<u32>) -> Result {
+			let new: u32 = new.into();
+			<OfflineSlashGrace<T>>::put(new);
+			Ok(())
+		}
 	}
 }
 
@@ -189,10 +312,10 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
+	// Just force_new_era without origin check.
+	fn apply_force_new_era(apply_rewards: bool) -> Result {
+		<ForcingNewEra<T>>::put(());
+		<session::Module<T>>::apply_force_new_session(apply_rewards)
 	}
 
 	// PUBLIC IMMUTABLES
@@ -223,147 +346,6 @@ impl<T: Trait> Module<T> {
 			i if i <= <system::Module<T>>::block_number() => LockStatus::Liquid,
 			i => LockStatus::LockedUntil(i),
 		}
-	}
-
-	// PUBLIC DISPATCH
-
-	/// Declare the desire to stake for the transactor.
-	///
-	/// Effects will be felt at the beginning of the next era.
-	fn stake(origin: T::Origin) -> Result {
-		let who = ensure_signed(origin)?;
-		ensure!(Self::nominating(&who).is_none(), "Cannot stake if already nominating.");
-		let mut intentions = <Intentions<T>>::get();
-		// can't be in the list twice.
-		ensure!(intentions.iter().find(|&t| t == &who).is_none(), "Cannot stake if already staked.");
-
-		<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
-		intentions.push(who);
-		<Intentions<T>>::put(intentions);
-		Ok(())
-	}
-
-	/// Retract the desire to stake for the transactor.
-	///
-	/// Effects will be felt at the beginning of the next era.
-	fn unstake(origin: T::Origin, intentions_index: Compact<u32>) -> Result {
-		let who = ensure_signed(origin)?;
-		let intentions_index: u32 = intentions_index.into();
-		// unstake fails in degenerate case of having too few existing staked parties
-		if Self::intentions().len() <= Self::minimum_validator_count() as usize {
-			return Err("cannot unstake when there are too few staked participants")
-		}
-		Self::apply_unstake(&who, intentions_index as usize)
-	}
-
-	fn nominate(origin: T::Origin, target: Address<T::AccountId, T::AccountIndex>) -> Result {
-		let who = ensure_signed(origin)?;
-		let target = <balances::Module<T>>::lookup(target)?;
-
-		ensure!(Self::nominating(&who).is_none(), "Cannot nominate if already nominating.");
-		ensure!(Self::intentions().iter().find(|&t| t == &who).is_none(), "Cannot nominate if already staked.");
-
-		// update nominators_for
-		let mut t = Self::nominators_for(&target);
-		t.push(who.clone());
-		<NominatorsFor<T>>::insert(&target, t);
-
-		// update nominating
-		<Nominating<T>>::insert(&who, &target);
-
-		// Update bondage
-		<Bondage<T>>::insert(&who, T::BlockNumber::max_value());
-
-		Ok(())
-	}
-
-	/// Will panic if called when source isn't currently nominating target.
-	/// Updates Nominating, NominatorsFor and NominationBalance.
-	fn unnominate(origin: T::Origin, target_index: Compact<u32>) -> Result {
-		let source = ensure_signed(origin)?;
-		let target_index: u32 = target_index.into();
-		let target_index = target_index as usize;
-
-		let target = <Nominating<T>>::get(&source).ok_or("Account must be nominating")?;
-
-		let mut t = Self::nominators_for(&target);
-		if t.get(target_index) != Some(&source) {
-			return Err("Invalid target index")
-		}
-
-		// Ok - all valid.
-
-		// update nominators_for
-		t.swap_remove(target_index);
-		<NominatorsFor<T>>::insert(&target, t);
-
-		// update nominating
-		<Nominating<T>>::remove(&source);
-
-		// update bondage
-		<Bondage<T>>::insert(source, <system::Module<T>>::block_number() + Self::bonding_duration());
-		Ok(())
-	}
-
-	/// Set the given account's preference for slashing behaviour should they be a validator.
-	///
-	/// An error (no-op) if `Self::intentions()[intentions_index] != origin`.
-	fn register_preferences(
-		origin: T::Origin,
-		intentions_index: Compact<u32>,
-		prefs: ValidatorPrefs<T::Balance>
-	) -> Result {
-		let who = ensure_signed(origin)?;
-		let intentions_index: u32 = intentions_index.into();
-
-		if Self::intentions().get(intentions_index as usize) != Some(&who) {
-			return Err("Invalid index")
-		}
-
-		<ValidatorPreferences<T>>::insert(who, prefs);
-
-		Ok(())
-	}
-
-	// PRIV DISPATCH
-
-	/// Set the number of sessions in an era.
-	fn set_sessions_per_era(new: <T::BlockNumber as HasCompact>::Type) -> Result {
-		<NextSessionsPerEra<T>>::put(new.into());
-		Ok(())
-	}
-
-	/// The length of the bonding duration in eras.
-	fn set_bonding_duration(new: <T::BlockNumber as HasCompact>::Type) -> Result {
-		<BondingDuration<T>>::put(new.into());
-		Ok(())
-	}
-
-	/// The length of a staking era in sessions.
-	fn set_validator_count(new: Compact<u32>) -> Result {
-		let new: u32 = new.into();
-		<ValidatorCount<T>>::put(new);
-		Ok(())
-	}
-
-	/// Force there to be a new era. This also forces a new session immediately after.
-	/// `apply_rewards` should be true for validators to get the session reward.
-	fn force_new_era(apply_rewards: bool) -> Result {
-		Self::apply_force_new_era(apply_rewards)
-	}
-
-	// Just force_new_era without origin check.
-	fn apply_force_new_era(apply_rewards: bool) -> Result {
-		<ForcingNewEra<T>>::put(());
-		<session::Module<T>>::apply_force_new_session(apply_rewards)
-	}
-
-
-	/// Set the offline slash grace period.
-	fn set_offline_slash_grace(new: Compact<u32>) -> Result {
-		let new: u32 = new.into();
-		<OfflineSlashGrace<T>>::put(new);
-		Ok(())
 	}
 
 	// PUBLIC MUTABLES (DANGEROUS)
