@@ -20,7 +20,7 @@
 //! transfering a balance between accounts (when not reserved),
 //! slashing an account balance, account removal, rewards,
 //! lookup of an index to reclaim an account (when not balance not reserved),
-//! increasing total stake
+//! increasing total stake.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

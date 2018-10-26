@@ -23,7 +23,7 @@ pub use rstd::result;
 #[cfg(feature = "std")]
 use serde;
 pub use codec::{Codec, Decode, Encode, Input, Output};
-pub use substrate_metadata::{
+pub use srml_metadata::{
 	ModuleMetadata, FunctionMetadata, DecodeDifferent,
 	CallMetadata, FunctionArgumentMetadata, OuterDispatchMetadata, OuterDispatchCall
 };

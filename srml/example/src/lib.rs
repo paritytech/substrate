@@ -251,8 +251,13 @@ impl<T: Trait> Module<T> {
 	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
 		let _sender = ensure_signed(origin)?;
 
+		let prev = <Foo<T>>::get();
 		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
-		<Foo<T>>::mutate(|foo| *foo = *foo + increase_by);
+		let result = <Foo<T>>::mutate(|foo| {
+			*foo = *foo + increase_by;
+			*foo
+		});
+		assert!(prev + increase_by == result);
 
 		Ok(())
 	}

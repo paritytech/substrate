@@ -23,7 +23,6 @@
 //! having discarded heavy state that will allow a chain reorganization.
 //!
 //! Finality implies canonicality but not vice-versa.
-//!
 
 extern crate substrate_client as client;
 extern crate kvdb_rocksdb;
