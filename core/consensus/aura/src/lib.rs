@@ -92,13 +92,8 @@ pub struct Config {
 }
 
 /// Get slot author for given block along with authorities.
-fn slot_author<B: Block, C: Authorities<B>>(slot_num: u64, client: &C, header: &B::Header)
-	-> Result<Option<(AuthorityId, Vec<AuthorityId>)>, C::Error>
-{
-	let hash = header.hash();
-	let authorities = client.authorities(&BlockId::Hash(hash))?;
-
-	if authorities.is_empty() { return Ok(None) }
+fn slot_author(slot_num: u64, authorities: &[AuthorityId]) -> Option<AuthorityId> {
+	if authorities.is_empty() { return None }
 
 	let idx = slot_num % (authorities.len() as u64);
 	assert!(idx <= usize::max_value() as u64,
@@ -108,7 +103,7 @@ fn slot_author<B: Block, C: Authorities<B>>(slot_num: u64, client: &C, header: &
 		.expect("authorities not empty; index constrained to list length;\
 				this is a valid index; qed");
 
-	Ok(Some((current_author, authorities)))
+	Some(current_author)
 }
 
 fn duration_now() -> Option<Duration> {
@@ -221,9 +216,17 @@ pub fn start_aura<B, C, E, SO, Error>(
 					}
 				};
 
-				let proposal_work = match slot_author(slot_num, &*client, &chain_head) {
-					Ok(None) => return Either::B(future::ok(())),
-					Ok(Some((author, authorities))) => if author.0 == public_key.0 {
+				let authorities = match client.authorities(&BlockId::Hash(chain_head.hash())){
+					Ok(authorities) => authorities,
+					Err(e) => {
+						warn!("Unable to fetch authorities at block {:?}: {:?}", chain_head.hash(), e);
+						return Either::B(future::ok(()));
+					}
+				};
+
+				let proposal_work = match slot_author(slot_num, &authorities) {
+					None => return Either::B(future::ok(())),
+					Some(author) => if author.0 == public_key.0 {
 						// we are the slot author. make a block and sign it.
 						let proposer = match env.init(&chain_head, &authorities, key.clone()) {
 							Ok(p) => p,
@@ -235,10 +238,6 @@ pub fn start_aura<B, C, E, SO, Error>(
 
 						proposer.propose().into_future()
 					} else {
-						return Either::B(future::ok(()));
-					}
-					Err(e) => {
-						warn!("Unable to fetch authorities at block {:?}: {:?}", chain_head.hash(), e);
 						return Either::B(future::ok(()));
 					}
 				};
@@ -328,12 +327,11 @@ fn check_header<B: Block>(slot_now: u64, mut header: B::Header, hash: B::Hash, a
 	} else {
 		// check the signature is valid under the expected authority and
 		// chain state.
-		if authorities.is_empty() { return Err(format!("No authorities at {:?}", hash)) }
 
-		let idx = slot_num % (authorities.len() as u64);
-
-		let expected_author = *authorities.get(idx as usize)
-			.expect("authorities not empty; index constrained to length; index is valid; qed");
+		let expected_author = match slot_author(slot_num, &authorities) {
+			None => return Err("Slot Author not found".to_string()),
+			Some(author) => author
+		};
 
 		let pre_hash = header.hash();
 		let to_sign = (slot_num, pre_hash).encode();
