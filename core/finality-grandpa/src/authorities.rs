@@ -85,6 +85,15 @@ impl<H, N> From<AuthoritySet<H, N>> for SharedAuthoritySet<H, N> {
 	}
 }
 
+/// Status of the set after changes were applied.
+pub(crate) struct Status<H, N> {
+	/// Whether internal changes were made.
+	pub(crate) changed: bool,
+	/// `Some` when underlying authority set has changed, containign the
+	/// block where that set changed.
+	pub(crate) new_set_block: Option<(H, N)>,
+}
+
 /// A set of authorities.
 #[derive(Debug, Clone, Encode, Decode)]
 pub(crate) struct AuthoritySet<H, N> {
@@ -129,12 +138,16 @@ impl<H: Eq, N> AuthoritySet<H, N>
 	/// Apply or prune any pending transitions. Provide a closure that can be used to check for the
 	/// finalized block with given number.
 	///
-	/// Returns true when the set's representation has changed.
+	/// When the set has changed, the return value will be `Ok(Some((H, N)))` which is the cnaonical
+	/// block where the set last changed.
 	pub(crate) fn apply_changes<F, E>(&mut self, just_finalized: N, mut canonical: F)
-		-> Result<bool, E>
+		-> Result<Status<H, N>, E>
 		where F: FnMut(N) -> Result<H, E>
 	{
-		let mut changed = false;
+		let mut status = Status {
+			changed: false,
+			new_set_block: None,
+		};
 		loop {
 			let remove_up_to = match self.pending_changes.first() {
 				None => break,
@@ -152,6 +165,11 @@ impl<H: Eq, N> AuthoritySet<H, N>
 						self.current_authorities = change.next_authorities.clone();
 						self.set_id += 1;
 
+						status.new_set_block = Some((
+							canonical(effective_number.clone())?,
+							effective_number.clone(),
+						));
+
 						// discard any signalled changes
 						// that happened before or equal to the effective number of the change.
 						self.pending_changes.iter()
@@ -165,10 +183,10 @@ impl<H: Eq, N> AuthoritySet<H, N>
 
 			let remove_up_to = ::std::cmp::min(remove_up_to, self.pending_changes.len());
 			self.pending_changes.drain(..remove_up_to);
-			changed = true; // always changed because we strip at least the first change.
+			status.changed = true; // always changed because we strip at least the first change.
 		}
 
-		Ok(changed)
+		Ok(status)
 	}
 }
 
@@ -264,16 +282,18 @@ mod tests {
 		authorities.add_pending_change(change_a.clone());
 		authorities.add_pending_change(change_b.clone());
 
-		authorities.apply_changes::<_, ()>(10, |_| panic!()).unwrap();
+		authorities.apply_changes(10, |_| Err(())).unwrap();
 		assert!(authorities.current_authorities.is_empty());
 
-		authorities.apply_changes::<_, ()>(
-			15,
-			|n| if n == 5 { Ok("hash_a") } else { panic!() }
-		).unwrap();
+		authorities.apply_changes(15, |n| match n {
+			5 => Ok("hash_a"),
+			15 => Ok("hash_15_canon"),
+			_ => Err(()),
+		}).unwrap();
 
 		assert_eq!(authorities.current_authorities, set_a);
 		assert_eq!(authorities.set_id, 1);
+		assert!(authorities.pending_changes.is_empty());
 	}
 
 	#[test]
@@ -318,10 +338,12 @@ mod tests {
 			5 => Ok("hash_a"),
 			15 => Ok("hash_b"),
 			16 => Ok("hash_c"),
+			26 => Ok("hash_26"),
 			_ => Err(()),
 		}).unwrap();
 
 		assert_eq!(authorities.current_authorities, set_c);
 		assert_eq!(authorities.set_id, 2); // has been bumped only twice
+		assert!(authorities.pending_changes.is_empty());
 	}
 }
