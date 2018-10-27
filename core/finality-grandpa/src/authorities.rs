@@ -53,6 +53,11 @@ impl<H, N> SharedAuthoritySet<H, N> {
 	{
 		f(&*self.inner.read())
 	}
+
+	/// Execute a closure with the inner set mutably.
+	pub(crate) fn with_mut<F, U>(&self, f: F) -> U where F: FnOnce(&mut AuthoritySet<H, N>) -> U {
+		f(&mut *self.inner.write())
+	}
 }
 
 impl<H: Eq, N> SharedAuthoritySet<H, N>
@@ -60,17 +65,7 @@ impl<H: Eq, N> SharedAuthoritySet<H, N>
 {
 	/// Note an upcoming pending transition.
 	pub(crate) fn add_pending_change(&self, pending: PendingChange<H, N>) {
-		// ordered first by effective number and then by signal-block number.
-		let mut inner = self.inner.write();
-		let key = (pending.effective_number(), pending.canon_height.clone());
-		let idx = inner.pending_changes
-			.binary_search_by_key(&key, |change| (
-				change.effective_number(),
-				change.canon_height.clone(),
-			))
-			.unwrap_or_else(|i| i);
-
-		inner.pending_changes.insert(idx, pending);
+		self.inner.write().add_pending_change(pending)
 	}
 
 	/// Get the earliest limit-block number, if any.
@@ -81,11 +76,6 @@ impl<H: Eq, N> SharedAuthoritySet<H, N>
 	/// Get the current set ID. This is incremented every time the set changes.
 	pub(crate) fn set_id(&self) -> u64 {
 		self.inner.read().set_id
-	}
-
-	/// Execute a closure with the inner set mutably.
-	pub(crate) fn with_mut<F, U>(&self, f: F) -> U where F: FnOnce(&mut AuthoritySet<H, N>) -> U {
-		f(&mut *self.inner.write())
 	}
 }
 
@@ -118,6 +108,19 @@ impl<H, N> AuthoritySet<H, N> {
 impl<H: Eq, N> AuthoritySet<H, N>
 	where N: Add<Output=N> + Ord + Clone + Debug,
 {
+	/// Note an upcoming pending transition.
+	pub(crate) fn add_pending_change(&mut self, pending: PendingChange<H, N>) {
+		// ordered first by effective number and then by signal-block number.
+		let key = (pending.effective_number(), pending.canon_height.clone());
+		let idx = self.pending_changes
+			.binary_search_by_key(&key, |change| (
+				change.effective_number(),
+				change.canon_height.clone(),
+			))
+			.unwrap_or_else(|i| i);
+
+		self.pending_changes.insert(idx, pending);
+	}
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
 		self.pending_changes.get(0).map(|change| change.effective_number().clone())
@@ -173,7 +176,7 @@ impl<H: Eq, N> AuthoritySet<H, N>
 ///
 /// This will be applied when the announcing block is at some depth within
 /// the finalized chain.
-#[derive(Debug, Clone, Encode, Decode)]
+#[derive(Debug, Clone, Encode, Decode, PartialEq)]
 pub(crate) struct PendingChange<H, N> {
 	/// The new authorities and weights to apply.
 	pub(crate) next_authorities: Vec<(AuthorityId, u64)>,
@@ -190,5 +193,135 @@ impl<H, N: Add<Output=N> + Clone> PendingChange<H, N> {
 	/// Returns the effective number this change will be applied at.
 	fn effective_number(&self) -> N {
 		self.canon_height.clone() + self.finalization_depth.clone()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn changes_sorted_in_correct_order() {
+		let mut authorities = AuthoritySet {
+			current_authorities: Vec::new(),
+			set_id: 0,
+			pending_changes: Vec::new(),
+		};
+
+		let change_a = PendingChange {
+			next_authorities: Vec::new(),
+			finalization_depth: 10,
+			canon_height: 5,
+			canon_hash: "hash_a",
+		};
+
+		let change_b = PendingChange {
+			next_authorities: Vec::new(),
+			finalization_depth: 0,
+			canon_height: 16,
+			canon_hash: "hash_b",
+		};
+
+		let change_c = PendingChange {
+			next_authorities: Vec::new(),
+			finalization_depth: 5,
+			canon_height: 10,
+			canon_hash: "hash_c",
+		};
+
+		authorities.add_pending_change(change_a.clone());
+		authorities.add_pending_change(change_b.clone());
+		authorities.add_pending_change(change_c.clone());
+
+		assert_eq!(authorities.pending_changes, vec![change_a, change_c, change_b]);
+	}
+
+	#[test]
+	fn apply_change() {
+		let mut authorities = AuthoritySet {
+			current_authorities: Vec::new(),
+			set_id: 0,
+			pending_changes: Vec::new(),
+		};
+
+		let set_a = vec![([1; 32].into(), 5)];
+		let set_b = vec![([2; 32].into(), 5)];
+
+		let change_a = PendingChange {
+			next_authorities: set_a.clone(),
+			finalization_depth: 10,
+			canon_height: 5,
+			canon_hash: "hash_a",
+		};
+
+		let change_b = PendingChange {
+			next_authorities: set_b.clone(),
+			finalization_depth: 10,
+			canon_height: 5,
+			canon_hash: "hash_b",
+		};
+
+		authorities.add_pending_change(change_a.clone());
+		authorities.add_pending_change(change_b.clone());
+
+		authorities.apply_changes::<_, ()>(10, |_| panic!()).unwrap();
+		assert!(authorities.current_authorities.is_empty());
+
+		authorities.apply_changes::<_, ()>(
+			15,
+			|n| if n == 5 { Ok("hash_a") } else { panic!() }
+		).unwrap();
+
+		assert_eq!(authorities.current_authorities, set_a);
+		assert_eq!(authorities.set_id, 1);
+	}
+
+	#[test]
+	fn apply_many_changes_at_once() {
+		let mut authorities = AuthoritySet {
+			current_authorities: Vec::new(),
+			set_id: 0,
+			pending_changes: Vec::new(),
+		};
+
+		let set_a = vec![([1; 32].into(), 5)];
+		let set_b = vec![([2; 32].into(), 5)];
+		let set_c = vec![([3; 32].into(), 5)];
+
+		let change_a = PendingChange {
+			next_authorities: set_a.clone(),
+			finalization_depth: 10,
+			canon_height: 5,
+			canon_hash: "hash_a",
+		};
+
+		// will be ignored because it was signalled when change_a still pending.
+		let change_b = PendingChange {
+			next_authorities: set_b.clone(),
+			finalization_depth: 10,
+			canon_height: 15,
+			canon_hash: "hash_b",
+		};
+
+		let change_c = PendingChange {
+			next_authorities: set_c.clone(),
+			finalization_depth: 10,
+			canon_height: 16,
+			canon_hash: "hash_c",
+		};
+
+		authorities.add_pending_change(change_a.clone());
+		authorities.add_pending_change(change_b.clone());
+		authorities.add_pending_change(change_c.clone());
+
+		authorities.apply_changes(26, |n| match n {
+			5 => Ok("hash_a"),
+			15 => Ok("hash_b"),
+			16 => Ok("hash_c"),
+			_ => Err(()),
+		}).unwrap();
+
+		assert_eq!(authorities.current_authorities, set_c);
+		assert_eq!(authorities.set_id, 2); // has been bumped only twice
 	}
 }
