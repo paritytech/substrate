@@ -18,7 +18,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use protocol::Context;
 use network_libp2p::{Severity, NodeIndex};
-use client::{BlockStatus, BlockOrigin, ClientInfo};
+use client::{BlockStatus, ClientInfo};
+use consensus::BlockOrigin;
 use client::error::Error as ClientError;
 use blocks::{self, BlockCollection};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor};
@@ -75,6 +76,17 @@ pub struct Status<B: BlockT> {
 	pub state: SyncState,
 	/// Target sync block number.
 	pub best_seen_block: Option<NumberFor<B>>,
+}
+
+impl<B: BlockT> Status<B> {
+	/// Whether the synchronization status is doing major downloading work or
+	/// is near the head of the chain.
+	pub fn is_major_syncing(&self) -> bool {
+		match self.state {
+			SyncState::Idle => false,
+			SyncState::Downloading => true,
+		}
+	}
 }
 
 impl<B: BlockT> ChainSync<B> {

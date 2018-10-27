@@ -1,5 +1,5 @@
 [package]
-name = "substrate-consensus-rhd"
+name = "substrate-consensus-aura"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Rhododendron Round-Based consensus-algorithm for substrate"
@@ -7,28 +7,29 @@ description = "Rhododendron Round-Based consensus-algorithm for substrate"
 [dependencies]
 futures = "0.1.17"
 parity-codec = { version = "2.1" }
-parity-codec-derive = { version = "2.0" }
-substrate-primitives = { path = "../../primitives" }
 substrate-consensus-common = { path = "../common" }
 substrate-client = { path = "../../client" }
-substrate-transaction-pool = { path = "../../transaction-pool" }
+substrate-primitives = { path = "../../primitives" }
+substrate-network = { path = "../../network" }
 srml-support = { path = "../../../srml/support" }
-srml-system = { path = "../../../srml/system" }
-srml-consensus = { path = "../../../srml/consensus" }
 sr-primitives = { path = "../../sr-primitives" }
 sr-version = { path = "../../sr-version" }
 sr-io = { path = "../../sr-io" }
+srml-consensus = { path = "../../../srml/consensus" }
 tokio = "0.1.7"
 parking_lot = "0.4"
 error-chain = "0.12"
-log = "0.4"
-rhododendron = { version = "0.4.0", features = ["codec"] }
-exit-future = "0.1"
-
+log = "0.3"
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
+substrate-service = { path = "../../service" }
+substrate-test-client = { path = "../../test-client" }
+env_logger = { version = "0.4" }
+
+[target.'cfg(test)'.dependencies]
+substrate-network = { path = "../../network", features = ["test-helpers"] }
 
 [features]
 default = ["std"]
@@ -38,3 +39,4 @@ std = [
 	"sr-primitives/std",
 	"sr-version/std",
 ]
+

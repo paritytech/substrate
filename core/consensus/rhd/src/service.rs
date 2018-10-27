@@ -22,12 +22,9 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::sync::Arc;
 
-use rhd::{self, BftService};
 use client::{BlockchainEvents, ChainHead, BlockBody};
-use ed25519;
 use futures::prelude::*;
 use transaction_pool::txpool::{Pool as TransactionPool, ChainApi as PoolChainApi};
-use primitives;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, BlockNumberToHash};
 
 use tokio::executor::current_thread::TaskExecutor as LocalThreadHandle;
@@ -35,8 +32,11 @@ use tokio::runtime::TaskExecutor as ThreadPoolHandle;
 use tokio::runtime::current_thread::Runtime as LocalRuntime;
 use tokio::timer::Interval;
 
+use parking_lot::RwLock;
+use consensus::offline_tracker::OfflineTracker;
+
 use super::{Network, ProposerFactory, AuthoringApi};
-use error;
+use {consensus, primitives, ed25519, error, BftService, LocalProposer};
 
 const TIMER_DELAY_MS: u64 = 5000;
 const TIMER_INTERVAL_MS: u64 = 500;
@@ -47,11 +47,12 @@ fn start_bft<F, C, Block>(
 	header: <Block as BlockT>::Header,
 	bft_service: Arc<BftService<Block, F, C>>,
 ) where
-	F: rhd::Environment<Block> + 'static,
-	C: rhd::BlockImport<Block> + rhd::Authorities<Block> + 'static,
+	F: consensus::Environment<Block> + 'static,
+	C: consensus::BlockImport<Block> + consensus::Authorities<Block> + 'static,
 	F::Error: ::std::fmt::Debug,
-	<F::Proposer as rhd::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
-	<F as rhd::Environment<Block>>::Error: ::std::fmt::Display,
+	<F::Proposer as consensus::Proposer<Block>>::Error: ::std::fmt::Display + Into<error::Error>,
+	<F as consensus::Environment<Block>>::Proposer : LocalProposer<Block>,
+	<F as consensus::Environment<Block>>::Error: ::std::fmt::Display,
 	Block: BlockT,
 {
 	let mut handle = LocalThreadHandle::current();
@@ -88,14 +89,12 @@ impl Service {
 			C: BlockchainEvents<<A as AuthoringApi>::Block>
 				+ ChainHead<<A as AuthoringApi>::Block>
 				+ BlockBody<<A as AuthoringApi>::Block>,
-			C: bft::BlockImport<<A as AuthoringApi>::Block>
-				+ bft::Authorities<<A as AuthoringApi>::Block> + Send + Sync + 'static,
+			C: consensus::BlockImport<<A as AuthoringApi>::Block>
+				+ consensus::Authorities<<A as AuthoringApi>::Block> + Send + Sync + 'static,
 			primitives::H256: From<<<A as AuthoringApi>::Block as BlockT>::Hash>,
 			<<A as AuthoringApi>::Block as BlockT>::Hash: PartialEq<primitives::H256> + PartialEq,
 			N: Network<Block = <A as AuthoringApi>::Block> + Send + 'static,
 	{
-		use parking_lot::RwLock;
-		use super::OfflineTracker;
 
 		let (signal, exit) = ::exit_future::signal();
 		let thread = thread::spawn(move || {

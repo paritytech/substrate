@@ -47,6 +47,8 @@ extern crate hex_literal;
 #[cfg(test)]
 extern crate substrate_test_client as test_client;
 #[cfg(test)]
+extern crate substrate_consensus_common as consensus;
+#[cfg(test)]
 extern crate rustc_hex;
 
 mod errors;

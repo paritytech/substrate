@@ -16,9 +16,9 @@
 
 use super::*;
 use jsonrpc_macros::pubsub;
-use client::BlockOrigin;
 use test_client::{self, TestClient};
 use test_client::runtime::{Block, Header};
+use consensus::BlockOrigin;
 
 #[test]
 fn should_return_header() {

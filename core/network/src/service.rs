@@ -178,6 +178,12 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 	}
 }
 
+impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
+	fn is_major_syncing(&self) -> bool {
+		self.handler.sync().read().status().is_major_syncing()
+	}
+}
+
 impl<B: BlockT + 'static, S: Specialization<B>, H:ExHashT> Drop for Service<B, S, H> {
 	fn drop(&mut self) {
 		self.handler.stop();
