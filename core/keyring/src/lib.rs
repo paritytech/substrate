@@ -15,7 +15,7 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // tag::description[]
-//! Support code for the runtime.
+//! Support code for the runtime. A set of test accounts.
 // end::description[]
 
 #[macro_use] extern crate hex_literal;

@@ -221,11 +221,112 @@ cargo run
 
 include::doc/packages/packages.adoc[]
 
-include::CONTRIBUTING.adoc[leveloffset=+1]
+== Documentation
 
-include::CODE_OF_CONDUCT.adoc[leveloffset=+1]
+=== Viewing documentation for Substrate packages
+
+You can generate documentation for a Substrate Rust package and have it automatically open in your web browser using https://doc.rust-lang.org/rustdoc/what-is-rustdoc.html#using-rustdoc-with-cargo[rustdoc with Cargo],
+(of the The Rustdoc Book), by running the the following command:
+
+```
+cargo doc --package <spec> --open
+```
+
+Replacing `<spec>` with one of the following (i.e. `cargo doc --package node-cli --open`):
+
+* Substrate Core
+[source, shell]
+substrate, substrate-bft, substrate-cli, substrate-client, substrate-client-db,
+substrate-executor, substrate-finality-grandpa, substrate-keyring, substrate-keystore,
+substrate-metadata, substrate-misbehavior-check, substrate-network,
+substrate-network-libp2p, substrate-primitives, substrate-rpc, substrate-rpc-servers,
+substrate-serializer, substrate-service, substrate-service-test, substrate-state-db,
+substrate-state-machine, substrate-telemetry, substrate-test-client,
+substrate-test-runtime, substrate-transaction-graph, substrate-transaction-pool,
+substrate-trie
+* Substrate Runtime
+[source, shell]
+sr-api, sr-io, sr-primitives, sr-sandbox, sr-std, sr-version
+* Substrate Runtime Module Library (SRML)
+[source, shell]
+srml-balances, srml-consensus, srml-contract, srml-council, srml-democracy, srml-example,
+srml-executive, srml-session, srml-staking, srml-support, srml-system, srml-timestamp,
+srml-treasury
+* Node
+[source, shell]
+node-cli, node-consensus, node-executor, node-network, node-primitives, node-runtime, node-service
+* Subkey
+[source, shell]
+subkey
+
+
+=== Contributing to documentation for Substrate packages
+
+https://doc.rust-lang.org/1.9.0/book/documentation.html[Document source code] for Substrate packages by annotating the source code with documentation comments.
+
+Example (generic):
+```markdown
+/// Summary
+///
+/// Description
+///
+/// # Panics
+///
+/// # Errors
+///
+/// # Safety
+///
+/// # Examples
+///
+/// Summary of Example 1
+///
+/// ```rust
+/// // insert example 1 code here
+/// ```
+/// 
+```
+
+* Important notes:
+** Documentation comments must use annotations with a triple slash `///`
+** Modules are documented using `//!` 
+```
+//! Summary (of module)
+//!
+//! Description (of module)
+```
+* Special section header is indicated with a hash `#`. 
+** `Panics` section requires an explanation if the function triggers a panic
+** `Errors` section is for describing conditions under which a function of method returns `Err(E)` if it returns a `Result<T, E>`
+** `Safety` section requires an explanation if the function is `unsafe`
+** `Examples` section includes examples of using the function or method
+* Code block annotations for examples are included between triple graves, as shown above.
+Instead of including the programming language to use for syntax highlighting as the annotation
+after the triple graves, alternative annotations include the `ignore`, `text`, `should_panic`, or `no_run`.
+* Summary sentence is a short high level sinngle sentence of its functionality
+* Description paragraph is for details additional to the summary sentence
+* Missing documentation annotations may be used to identify where to generate warnings with `#![warn(missing_docs)]`
+or errors `#![deny(missing_docs)]`
+* Hide documentation for items with `#[doc(hidden)]`
+
+=== Contributing to documentation (tests, extended examples, macros) for Substrate packages
+
+The code block annotations in the `# Example` section may be used as https://doc.rust-lang.org/1.9.0/book/documentation.html#documentation-as-tests[documentation as tests and for extended examples].
+
+* Important notes:
+** Rustdoc will automatically add a `main()` wrapper around the code block to test it
+** https://doc.rust-lang.org/1.9.0/book/documentation.html#documenting-macros[Documentating macros].
+** Documentation as tests examples are included when running `cargo test`
+
+== Contributing
+
+=== Contributing Guidelines
+
+include::CONTRIBUTING.adoc[]
+
+=== Contributor Code of Conduct
+
+include::CODE_OF_CONDUCT.adoc[]
 
 == License
-----
-include::LICENSE[]
-----
+
+https://github.com/paritytech/substrate/blob/master/LICENSE[LICENSE]

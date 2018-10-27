@@ -1,5 +1,4 @@
-
-= transaction-pool
+= Runtime Primitives
 
 .Summary
 [source, toml]

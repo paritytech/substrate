@@ -27,6 +27,7 @@ extern crate substrate_service as service;
 extern crate substrate_network as network;
 extern crate substrate_primitives as primitives;
 extern crate substrate_client as client;
+extern crate substrate_consensus_common as consensus;
 extern crate sr_primitives;
 use std::iter;
 use std::sync::Arc;
@@ -47,9 +48,9 @@ use service::{
 	FactoryExtrinsic,
 };
 use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
-use client::ImportBlock;
 use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
+use consensus::{ImportBlock, BlockImport};
 
 struct TestNet<F: ServiceFactory> {
 	runtime: Runtime,

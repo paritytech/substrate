@@ -59,7 +59,7 @@ use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_primitives::RuntimeString;
 use runtime_primitives::traits::{
-	As, OnFinalise, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
+	As, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
 };
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, vec::Vec};
@@ -74,7 +74,36 @@ pub trait Trait: consensus::Trait + system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn set(origin, now: <T::Moment as HasCompact>::Type) -> Result;
+		/// Set the current time.
+		///
+		/// Extrinsic with this call should be placed at the specific position in the each block
+		/// (specified by the Trait::TIMESTAMP_SET_POSITION) typically at the start of the each block.
+		/// This call should be invoked exactly once per block. It will panic at the finalization phase,
+		/// if this call hasn't been invoked by that time.
+		///
+		/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
+		fn set(origin, now: <T::Moment as HasCompact>::Type) -> Result {
+			ensure_inherent(origin)?;
+			let now = now.into();
+
+			assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
+			assert!(
+				<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
+				"Timestamp extrinsic must be at position {} in the block",
+				T::TIMESTAMP_SET_POSITION
+			);
+			assert!(
+				Self::now().is_zero() || now >= Self::now() + Self::block_period(),
+				"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
+			);
+			<Self as Store>::Now::put(now);
+			<Self as Store>::DidUpdate::put(true);
+			Ok(())
+		}
+
+		fn on_finalise() {
+			assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
+		}
 	}
 }
 
@@ -98,33 +127,6 @@ impl<T: Trait> Module<T> {
 	/// it will return the timestamp of the previous block.
 	pub fn get() -> T::Moment {
 		Self::now()
-	}
-
-	/// Set the current time.
-	///
-	/// Extrinsic with this call should be placed at the specific position in the each block
-	/// (specified by the Trait::TIMESTAMP_SET_POSITION) typically at the start of the each block.
-	/// This call should be invoked exactly once per block. It will panic at the finalization phase,
-	/// if this call hasn't been invoked by that time.
-	///
-	/// The timestamp should be greater than the previous one by the amount specified by `block_period`.
-	fn set(origin: T::Origin, now: <T::Moment as HasCompact>::Type) -> Result {
-		ensure_inherent(origin)?;
-		let now = now.into();
-
-		assert!(!<Self as Store>::DidUpdate::exists(), "Timestamp must be updated only once in the block");
-		assert!(
-			<system::Module<T>>::extrinsic_index() == Some(T::TIMESTAMP_SET_POSITION),
-			"Timestamp extrinsic must be at position {} in the block",
-			T::TIMESTAMP_SET_POSITION
-		);
-		assert!(
-			Self::now().is_zero() || now >= Self::now() + Self::block_period(),
-			"Timestamp must increment by at least <BlockPeriod> between sequential blocks"
-		);
-		<Self as Store>::Now::put(now);
-		<Self as Store>::DidUpdate::put(true);
-		Ok(())
 	}
 
 	/// Set the timestamp to something in particular. Only used for tests.
@@ -168,12 +170,6 @@ impl<T: Trait> ProvideInherent for Module<T> {
 		} else {
 			Ok(())
 		}
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
-		assert!(<Self as Store>::DidUpdate::take(), "Timestamp must be updated once in the block");
 	}
 }
 

@@ -22,5 +22,6 @@ tokio = "0.1.7"
 [dev-dependencies]
 assert_matches = "1.1"
 substrate-test-client = { path = "../test-client" }
+substrate-consensus-common = { path = "../consensus/common" }
 rustc-hex = "2.0"
 hex-literal = "0.1"

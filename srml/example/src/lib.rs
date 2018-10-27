@@ -57,7 +57,6 @@ extern crate srml_system as system;
 // might find it useful).
 extern crate srml_balances as balances;
 
-use sr_primitives::traits::OnFinalise;
 use support::{StorageValue, dispatch::Result};
 use system::ensure_signed;
 
@@ -104,13 +103,97 @@ pub trait Trait: balances::Trait {
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Deposit one of this module's events by using the default implementation.
+		/// It is also possible to provide a custom implementation.
+		fn deposit_event() = default;
 		/// This is your public interface. Be extremely careful.
 		/// This is just a simple example of how to interact with the module from the external
 		/// world.
-		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result;
+		// This just increases the value of `Dummy` by `increase_by`.
+		//
+		// Since this is a dispatched function there are two extremely important things to
+		// remember:
+		//
+		// - MUST NOT PANIC: Under no circumstances (save, perhaps, storage getting into an
+		// irreparably damaged state) must this function panic.
+		// - NO SIDE-EFFECTS ON ERROR: This function must either complete totally (and return
+		// `Ok(())` or it must have no side-effects on storage and return `Err('Some reason')`.
+		//
+		// The first is relatively easy to audit for - just ensure all panickers are removed from
+		// logic that executes in production (which you do anyway, right?!). To ensure the second
+		// is followed, you should do all tests for validity at the top of your function. This
+		// is stuff like checking the sender (`origin`) or that state is such that the operation
+		// makes sense.
+		//
+		// Once you've determined that it's all good, then enact the operation and change storage.
+		// If you can't be certain that the operation will succeed without substantial computation
+		// then you have a classic blockchain attack scenario. The normal way of managing this is
+		// to attach a bond to the operation. As the first major alteration of storage, reserve
+		// some value from the sender's account (`Balances` module has a `reserve` function for
+		// exactly this scenario). This amount should be enough to cover any costs of the
+		// substantial execution in case it turns out that you can't proceed with the operation.
+		//
+		// If it eventually transpires that the operation is fine and, therefore, that the
+		// expense of the checks should be borne by the network, then you can refund the reserved
+		// deposit. If, however, the operation turns out to be invalid and the computation is
+		// wasted, then you can burn it or repatriate elsewhere.
+		//
+		// Security bonds ensure that attackers can't game it by ensuring that anyone interacting
+		// with the system either progresses it or pays for the trouble of faffing around with
+		// no progress.
+		//
+		// If you don't respect these rules, it is likely that your chain will be attackable.
+		fn accumulate_dummy(origin, increase_by: T::Balance) -> Result {
+			// This is a public call, so we ensure that the origin is some signed account.
+			let _sender = ensure_signed(origin)?;
+
+			// Read the value of dummy from storage.
+			// let dummy = Self::dummy();
+			// Will also work using the `::get` on the storage item type itself:
+			// let dummy = <Dummy<T>>::get();
+
+			// Calculate the new value.
+			// let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
+
+			// Put the new value into storage.
+			// <Dummy<T>>::put(new_dummy);
+			// Will also work with a reference:
+			// <Dummy<T>>::put(&new_dummy);
+
+			// Here's the new one of read and then modify the value.
+			<Dummy<T>>::mutate(|dummy| {
+				let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
+				*dummy = Some(new_dummy);
+			});
+
+			// Let's deposit an event to let the outside world know this happened.
+			Self::deposit_event(RawEvent::Dummy(increase_by));
+
+			// All good.
+			Ok(())
+		}
 
 		/// A privileged call; in this case it resets our dummy value to something new.
-		fn set_dummy(new_dummy: T::Balance) -> Result;
+		// Implementation of a privileged call. This doesn't have an `origin` parameter because
+		// it's not (directly) from an extrinsic, but rather the system as a whole has decided
+		// to execute it. Different runtimes have different reasons for allow privileged
+		// calls to be executed - we don't need to care why. Because it's privileged, we can
+		// assume it's a one-off operation and substantial processing/storage/memory can be used
+		// without worrying about gameability or attack scenarios.
+		fn set_dummy(new_value: T::Balance) -> Result {
+			// Put the new value into storage.
+			<Dummy<T>>::put(new_value);
+
+			// All good.
+			Ok(())
+		}
+
+		// The signature could also look like: `fn on_finalise()`
+		fn on_finalise(_n: T::BlockNumber) {
+			// Anything that needs to be done at the end of the block.
+			// We just kill our dummy storage item.
+			<Dummy<T>>::kill();
+		}
 	}
 }
 
@@ -162,116 +245,24 @@ decl_storage! {
 
 // The main implementation block for the module. Functions here fall into three broad
 // categories:
-// - Implementations of dispatch functions. The dispatch code generated by the module macro
-// expects each of its functions to be implemented.
 // - Public interface. These are functions that are `pub` and generally fall into inspector
 // functions that do not write to storage and operation functions that do.
 // - Private functions. These are your usual private utilities unavailable to other modules.
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	// TODO: move into `decl_module` macro.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
-	// Implement Calls and add public immutables and private mutables.
-
-	// Implement dispatched function `accumulate_dummy`. This just increases the value
-	// of `Dummy` by `increase_by`.
-	//
-	// Since this is a dispatched function there are two extremely important things to
-	// remember:
-	//
-	// - MUST NOT PANIC: Under no circumstances (save, perhaps, storage getting into an
-	// irreparably damaged state) must this function panic.
-	// - NO SIDE-EFFECTS ON ERROR: This function must either complete totally (and return
-	// `Ok(())` or it must have no side-effects on storage and return `Err('Some reason')`.
-	//
-	// The first is relatively easy to audit for - just ensure all panickers are removed from
-	// logic that executes in production (which you do anyway, right?!). To ensure the second
-	// is followed, you should do all tests for validity at the top of your function. This
-	// is stuff like checking the sender (`origin`) or that state is such that the operation
-	// makes sense.
-	//
-	// Once you've determined that it's all good, then enact the operation and change storage.
-	// If you can't be certain that the operation will succeed without substantial computation
-	// then you have a classic blockchain attack scenario. The normal way of managing this is
-	// to attach a bond to the operation. As the first major alteration of storage, reserve
-	// some value from the sender's account (`Balances` module has a `reserve` function for
-	// exactly this scenario). This amount should be enough to cover any costs of the
-	// substantial execution in case it turns out that you can't proceed with the operation.
-	//
-	// If it eventually transpires that the operation is fine and, therefore, that the
-	// expense of the checks should be borne by the network, then you can refund the reserved
-	// deposit. If, however, the operation turns out to be invalid and the computation is
-	// wasted, then you can burn it or repatriate elsewhere.
-	//
-	// Security bonds ensure that attackers can't game it by ensuring that anyone interacting
-	// with the system either progresses it or pays for the trouble of faffing around with
-	// no progress.
-	//
-	// If you don't respect these rules, it is likely that your chain will be attackable.
-	fn accumulate_dummy(origin: T::Origin, increase_by: T::Balance) -> Result {
-		// This is a public call, so we ensure that the origin is some signed account.
-		let _sender = ensure_signed(origin)?;
-
-		// Read the value of dummy from storage.
-		// let dummy = Self::dummy();
-		// Will also work using the `::get` on the storage item type itself:
-		// let dummy = <Dummy<T>>::get();
-
-		// Calculate the new value.
-		// let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
-
-		// Put the new value into storage.
-		// <Dummy<T>>::put(new_dummy);
-		// Will also work with a reference:
-		// <Dummy<T>>::put(&new_dummy);
-
-		// Here's the new one of read and then modify the value.
-		<Dummy<T>>::mutate(|dummy| {
-			let new_dummy = dummy.map_or(increase_by, |dummy| dummy + increase_by);
-			*dummy = Some(new_dummy);
-		});
-
-		// Let's deposit an event to let the outside world know this happened.
-		Self::deposit_event(RawEvent::Dummy(increase_by));
-
-		// All good.
-		Ok(())
-	}
-
+	// Add public immutables and private mutables.
 	#[allow(dead_code)]
 	fn accumulate_foo(origin: T::Origin, increase_by: T::Balance) -> Result {
 		let _sender = ensure_signed(origin)?;
 
+		let prev = <Foo<T>>::get();
 		// Because Foo has 'default', the type of 'foo' in closure is the raw type instead of an Option<> type.
-		<Foo<T>>::mutate(|foo| *foo = *foo + increase_by);
+		let result = <Foo<T>>::mutate(|foo| {
+			*foo = *foo + increase_by;
+			*foo
+		});
+		assert!(prev + increase_by == result);
 
 		Ok(())
-	}
-
-	// Implementation of a privileged call. This doesn't have an `origin` parameter because
-	// it's not (directly) from an extrinsic, but rather the system as a whole has decided
-	// to execute it. Different runtimes have different reasons for allow privileged
-	// calls to be executed - we don't need to care why. Because it's privileged, we can
-	// assume it's a one-off operation and substantial processing/storage/memory can be used
-	// without worrying about gameability or attack scenarios.
-	fn set_dummy(new_value: T::Balance) -> Result {
-		// Put the new value into storage.
-		<Dummy<T>>::put(new_value);
-
-		// All good.
-		Ok(())
-	}
-}
-
-// This trait expresses what should happen when the block is finalised.
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_: T::BlockNumber) {
-		// Anything that needs to be done at the end of the block.
-		// We just kill our dummy storage item.
-		<Dummy<T>>::kill();
 	}
 }
 
@@ -283,7 +274,9 @@ mod tests {
 	use substrate_primitives::{H256, Blake2Hasher};
 	// The testing primitives are very useful for avoiding having to work with signatures
 	// or public keys. `u64` is used as the `AccountId` and no `Signature`s are requried.
-	use sr_primitives::{BuildStorage, traits::{BlakeTwo256}, testing::{Digest, DigestItem, Header}};
+	use sr_primitives::{
+		BuildStorage, traits::{BlakeTwo256, OnFinalise}, testing::{Digest, DigestItem, Header}
+	};
 
 	impl_outer_origin! {
 		pub enum Origin for Test {}

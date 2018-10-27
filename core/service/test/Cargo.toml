@@ -12,6 +12,7 @@ env_logger = "0.4"
 fdlimit = "0.1"
 substrate-service = { path = "../../../core/service" }
 substrate-network = { path = "../../../core/network" }
+substrate-consensus-common = { path = "../../../core/consensus/common" }
 substrate-primitives = { path = "../../../core/primitives" }
 substrate-client = { path = "../../../core/client" }
 sr-primitives = { path = "../../../core/sr-primitives" }
