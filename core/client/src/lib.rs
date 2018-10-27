@@ -26,6 +26,7 @@ extern crate parity_codec as codec;
 extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
+extern crate substrate_consensus_common as consensus;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_test_client as test_client;
 #[macro_use] extern crate substrate_telemetry;
@@ -63,8 +64,8 @@ pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
 pub use client::{
 	new_with_backend,
 	new_in_mem,
-	BlockBody, BlockStatus, BlockOrigin, ImportNotifications, FinalityNotifications, BlockchainEvents,
-	Client, ClientInfo, ChainHead, ImportResult, ImportBlock,
+	BlockBody, BlockStatus, ImportNotifications, FinalityNotifications, BlockchainEvents,
+	Client, ClientInfo, ChainHead,
 };
 pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;

@@ -208,7 +208,7 @@ macro_rules! decl_module {
 			[
 				$($t)*
 				$(#[doc = $doc_attr])*
-				fn $fn_name(root $( , $param_name : $param )* ) -> $result { $( $impl )* }
+				$fn_vis fn $fn_name(root $( , $param_name : $param )* ) -> $result { $( $impl )* }
 			]
 			$($rest)*
 		);

@@ -53,6 +53,7 @@ pub mod meta_keys {
 }
 
 /// Database metadata.
+#[derive(Debug)]
 pub struct Meta<N, H> {
 	/// Hash of the best known block.
 	pub best_hash: H,

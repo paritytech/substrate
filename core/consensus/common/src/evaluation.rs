@@ -18,11 +18,10 @@
 
 use super::MAX_TRANSACTIONS_SIZE;
 
-use codec::{Decode, Encode};
-use node_runtime::{Block as GenericBlock};
-use node_primitives::{Hash, BlockNumber};
+use codec::Encode;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
 
+type BlockNumber = u64;
 
 error_chain! {
 	errors {
@@ -30,13 +29,13 @@ error_chain! {
 			description("Proposal provided not a block."),
 			display("Proposal provided not a block."),
 		}
-		WrongParentHash(expected: Hash, got: Hash) {
+		WrongParentHash(expected: String, got: String) {
 			description("Proposal had wrong parent hash."),
 			display("Proposal had wrong parent hash. Expected {:?}, got {:?}", expected, got),
 		}
 		WrongNumber(expected: BlockNumber, got: BlockNumber) {
 			description("Proposal had wrong number."),
-			display("Proposal had wrong number. Expected {:?}, got {:?}", expected, got),
+			display("Proposal had wrong number. Expected {}, got {}", expected, got),
 		}
 		ProposalTooLarge(size: usize) {
 			description("Proposal exceeded the maximum size."),
@@ -50,20 +49,17 @@ error_chain! {
 
 /// Attempt to evaluate a substrate block as a node block, returning error
 /// upon any initial validity checks failing.
-pub fn evaluate_initial<Block: BlockT, Hash>(
+pub fn evaluate_initial<Block: BlockT>(
 	proposal: &Block,
-	parent_hash: &Hash,
+	parent_hash: &<Block as BlockT>::Hash,
 	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
-) -> Result<()>
-where
-	Hash: PartialEq<<<GenericBlock as BlockT>::Header as HeaderT>::Hash>,
-	Hash: Into<self::Hash> + Clone,
-{
+) -> Result<()> {
+
 	let encoded = Encode::encode(proposal);
-	let proposal = GenericBlock::decode(&mut &encoded[..])
+	let proposal = Block::decode(&mut &encoded[..])
 		.ok_or_else(|| ErrorKind::BadProposalFormat)?;
 
-	let transactions_size = proposal.extrinsics.iter().fold(0, |a, tx| {
+	let transactions_size = proposal.extrinsics().iter().fold(0, |a, tx| {
 		a + Encode::encode(tx).len()
 	});
 
@@ -72,11 +68,14 @@ where
 	}
 
 	if *parent_hash != *proposal.header().parent_hash() {
-		bail!(ErrorKind::WrongParentHash((*parent_hash).clone().into(), proposal.header.parent_hash));
+		bail!(ErrorKind::WrongParentHash(
+			format!("{:?}", *parent_hash),
+			format!("{:?}", proposal.header().parent_hash())
+		));
 	}
 
-	if parent_number.as_() + 1 != *proposal.header().number() {
-		bail!(ErrorKind::WrongNumber(parent_number.as_() + 1, proposal.header.number));
+	if parent_number.as_() + 1 != proposal.header().number().as_() {
+		bail!(ErrorKind::WrongNumber(parent_number.as_() + 1, proposal.header().number().as_()));
 	}
 
 	Ok(())

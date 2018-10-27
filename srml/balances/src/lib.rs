@@ -423,6 +423,23 @@ impl<T: Trait> Module<T> {
 		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
 	}
 
+	/// Substrates `value` from the free balance of `who`. If the whole amount cannot be
+	/// deducted, an error is returned.
+	///
+	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
+	/// you mean to actually burn value out of existence, then use `slash` instead.
+	pub fn decrease_free_balance(
+		who: &T::AccountId,
+		value: T::Balance
+	) -> result::Result<UpdateBalanceOutcome, &'static str> {
+		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
+		let b = Self::free_balance(who);
+		if b < value {
+			return Err("account has too few funds")
+		}
+		Ok(Self::set_free_balance(who, b - value))
+	}
+
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
 	/// free balance. This function cannot fail.
 	///

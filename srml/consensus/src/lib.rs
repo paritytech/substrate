@@ -29,6 +29,7 @@ extern crate srml_support as runtime_support;
 #[macro_use]
 extern crate serde_derive;
 
+extern crate parity_codec;
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -42,6 +43,7 @@ extern crate sr_io as runtime_io;
 
 use rstd::prelude::*;
 use rstd::result;
+use parity_codec::Encode;
 use runtime_support::{storage, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
@@ -174,8 +176,14 @@ decl_module! {
 			Ok(())
 		}
 
+		/// Set the number of pages in the WebAssembly environment's heap.
+		fn set_heap_pages(pages: u64) -> Result {
+			storage::unhashed::put_raw(well_known_keys::HEAP_PAGES, &pages.encode());
+			Ok(())
+		}
+
 		/// Set the new code.
-		fn set_code(new: Vec<u8>) -> Result {
+		pub fn set_code(new: Vec<u8>) -> Result {
 			storage::unhashed::put_raw(well_known_keys::CODE, &new);
 			Ok(())
 		}

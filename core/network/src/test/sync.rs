@@ -16,6 +16,7 @@
 
 use client::backend::Backend;
 use client::blockchain::HeaderBackend as BlockchainHeaderBackend;
+use consensus::BlockOrigin;
 use sync::SyncState;
 use Roles;
 use super::*;
@@ -68,6 +69,7 @@ fn sync_no_common_longer_chain_fails() {
 fn sync_after_fork_works() {
 	::env_logger::init().ok();
 	let mut net = TestNet::new(3);
+	net.sync_step();
 	net.peer(0).push_blocks(30, false);
 	net.peer(1).push_blocks(30, false);
 	net.peer(2).push_blocks(30, false);
@@ -85,6 +87,20 @@ fn sync_after_fork_works() {
 	assert!(net.peer(0).client.backend().blockchain().canon_equals_to(&peer1_chain));
 	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer1_chain));
 	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer1_chain));
+}
+
+#[test]
+fn own_blocks_are_announced() {
+	::env_logger::init().ok();
+	let mut net = TestNet::new(3);
+	net.sync(); // connect'em
+	net.peer(0).generate_blocks(1, BlockOrigin::Own, |_| ());
+	net.sync();
+	assert_eq!(net.peer(0).client.backend().blockchain().info().unwrap().best_number, 1);
+	assert_eq!(net.peer(1).client.backend().blockchain().info().unwrap().best_number, 1);
+	let peer0_chain = net.peer(0).client.backend().blockchain().clone();
+	assert!(net.peer(1).client.backend().blockchain().canon_equals_to(&peer0_chain));
+	assert!(net.peer(2).client.backend().blockchain().canon_equals_to(&peer0_chain));
 }
 
 #[test]

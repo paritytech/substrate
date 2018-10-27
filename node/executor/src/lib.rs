@@ -254,6 +254,7 @@ mod tests {
 			timestamp: Some(Default::default()),
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
+			upgrade_key: Some(Default::default()),
 		}.build_storage().unwrap())
 	}
 
@@ -291,9 +292,9 @@ mod tests {
 			1,
 			GENESIS_HASH.into(),
 			if support_changes_trie {
-				hex!("ffa85ed1832eae3e25e684d4f993ff0b5e8b6ac4d7ba0f40a5fb0114fda22f3d").into()
+				hex!("978a3ff733a86638da39d36a349c693b5cf562bcc8db30fec6c2b6c40f925a9b").into()
 			} else {
-				hex!("98971908b8923d07944cdf7ee658c203d17042ef447169adbdfec8160cfabcad").into()
+				hex!("7bbad534e3de3db3c8cda015c4e8ed8ba10dde7e3fca21f4fd4fbc686e6c1410").into()
 			},
 			if support_changes_trie {
 				Some(hex!("1f8f44dcae8982350c14dee720d34b147e73279f5a2ce1f9781195a991970978").into())
@@ -317,7 +318,7 @@ mod tests {
 		construct_block(
 			2,
 			block1(false).1,
-			hex!("788a2e8b23e4b30e1bce347ca6415fd0080e989d40741c86995b9ad539bb76b3").into(),
+			hex!("7be30152ee2ee909047cffad5f0a28bf8c2b0a97c124b500aeac112f6917738e").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -340,7 +341,7 @@ mod tests {
 		construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("acc03af5b3972deaf9dde4dfd99c5614a5360454313681b6fc299d1644ae8a59").into(),
+			hex!("325a73726dc640af41becb42938e7152e218f130219c0695aae35b6a156f93f3").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
@@ -622,7 +623,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("21fb6fb965f012ae3c6e521b71b5b57d6df17c738c52f202ec2809ca235eb082").into(),
+			hex!("d68586d5098535e04ff7a12d71a9c9dc719960f318862e636e78a8e98cf4b8d4").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
