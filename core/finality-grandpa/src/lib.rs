@@ -24,7 +24,6 @@ extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_consensus_common as consensus_common;
 extern crate substrate_primitives;
-extern crate substrate_network as network;
 extern crate tokio;
 extern crate parking_lot;
 extern crate parity_codec as codec;
@@ -34,9 +33,6 @@ extern crate log;
 
 #[cfg(test)]
 extern crate substrate_network as network;
-
-#[cfg(test)]
-extern crate parking_lot;
 
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
@@ -871,10 +867,10 @@ mod tests {
 					.take_while(|n| Ok(n.header.number() < &20))
 					.for_each(move |_| Ok(()))
 			);
-			let voter = run_grandpa(
+			let (voter, _) = run_grandpa(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
-					voters: voters.clone(),
+					genesis_voters: voters.clone(),
 					local_key: Some(Arc::new(key.clone().into())),
 				},
 				client,
@@ -930,10 +926,10 @@ mod tests {
 					.take_while(|n| Ok(n.header.number() < &20))
 					.for_each(move |_| Ok(()))
 			);
-			let voter = run_grandpa(
+			let (voter, _) = run_grandpa(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
-					voters: voters.keys().cloned().collect(),
+					genesis_voters: voters.keys().cloned().collect(),
 					local_key,
 				},
 				client,
