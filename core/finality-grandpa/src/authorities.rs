@@ -20,6 +20,7 @@ use parking_lot::RwLock;
 use substrate_primitives::AuthorityId;
 
 use std::cmp::Ord;
+use std::fmt::Debug;
 use std::ops::Add;
 use std::sync::Arc;
 
@@ -54,14 +55,19 @@ impl<H, N> SharedAuthoritySet<H, N> {
 	}
 }
 
-impl<H: Eq, N: Add<Output=N> + Ord + Clone> SharedAuthoritySet<H, N> {
+impl<H: Eq, N> SharedAuthoritySet<H, N>
+	where N: Add<Output=N> + Ord + Clone + Debug
+{
 	/// Note an upcoming pending transition.
 	pub(crate) fn add_pending_change(&self, pending: PendingChange<H, N>) {
 		// ordered first by effective number and then by signal-block number.
 		let mut inner = self.inner.write();
-		let key = (pending.effective_number(), pending.canon_height);
+		let key = (pending.effective_number(), pending.canon_height.clone());
 		let idx = inner.pending_changes
-			.binary_search_by_key(&key, |change| (change.effective_number(), change.canon_height))
+			.binary_search_by_key(&key, |change| (
+				change.effective_number(),
+				change.canon_height.clone(),
+			))
 			.unwrap_or_else(|i| i);
 
 		inner.pending_changes.insert(idx, pending);
@@ -98,11 +104,6 @@ pub(crate) struct AuthoritySet<H, N> {
 }
 
 impl<H, N> AuthoritySet<H, N> {
-	/// Get the earliest limit-block number, if any.
-	pub(crate) fn current_limit(&self) -> Option<N> {
-		self.pending_changes.get(0).map(|change| change.effective_number().clone())
-	}
-
 	/// Get the set identifier.
 	pub(crate) fn set_id(&self) -> u64 {
 		self.set_id
@@ -114,12 +115,20 @@ impl<H, N> AuthoritySet<H, N> {
 	}
 }
 
-impl<H: Eq, N: Ord + Debug> AuthoritySet<H, N> {
+impl<H: Eq, N> AuthoritySet<H, N>
+	where N: Add<Output=N> + Ord + Clone + Debug,
+{
+	/// Get the earliest limit-block number, if any.
+	pub(crate) fn current_limit(&self) -> Option<N> {
+		self.pending_changes.get(0).map(|change| change.effective_number().clone())
+	}
+
 	/// Apply or prune any pending transitions. Provide a closure that can be used to check for the
 	/// finalized block with given number.
 	///
 	/// Returns true when the set's representation has changed.
-	pub(crate) fn apply_changes<F, E>(&mut self, just_finalized: N, canonical: F) -> Result<bool, E>
+	pub(crate) fn apply_changes<F, E>(&mut self, just_finalized: N, mut canonical: F)
+		-> Result<bool, E>
 		where F: FnMut(N) -> Result<H, E>
 	{
 		let mut changed = false;
@@ -132,7 +141,7 @@ impl<H: Eq, N: Ord + Debug> AuthoritySet<H, N> {
 
 					// check if the block that signalled the change is canonical in
 					// our chain.
-					if canonical(change.canon_height)? == change.canon_hash {
+					if canonical(change.canon_height.clone())? == change.canon_hash {
 						// apply this change: make the set canonical
 						info!(target: "finality", "Applying authority set change scheduled at block #{:?}",
 							change.canon_height);

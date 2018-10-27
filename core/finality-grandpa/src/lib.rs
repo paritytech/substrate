@@ -108,7 +108,7 @@ pub enum Error {
 	/// A blockchain error.
 	Blockchain(String),
 	/// Could not complete a round on disk.
-	CouldNotCompleteRound(ClientError),
+	Client(ClientError),
 	/// A timer failed to fire.
 	Timer(::tokio::timer::Error),
 }
@@ -520,7 +520,7 @@ impl From<Error> for ExitOrError {
 
 impl From<ClientError> for ExitOrError {
 	fn from(e: ClientError) -> Self {
-		ExitOrError::Error(Error::from(e))
+		ExitOrError::Error(Error::Client(e))
 	}
 }
 
@@ -578,7 +578,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 			self.config.local_key.clone(),
 			self.config.genesis_voters.clone(),
 			self.network.clone(),
-		).sink_map_err(Into::into);
+		);
 
 		// schedule incoming messages from the network to be held until
 		// corresponding blocks are imported.
@@ -595,12 +595,12 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 		let outgoing = Box::new(ClearOnDrop {
 			round,
 			network: self.network.clone(),
-			inner: outgoing,
+			inner: outgoing.sink_map_err(Into::into),
 		});
 
 		voter::RoundData {
-			prevote_timer: Box::new(prevote_timer.map_err(Error::Timer)),
-			precommit_timer: Box::new(precommit_timer.map_err(Error::Timer)),
+			prevote_timer: Box::new(prevote_timer.map_err(|e| Error::Timer(e).into())),
+			precommit_timer: Box::new(precommit_timer.map_err(|e| Error::Timer(e).into())),
 			voters: self.voters.clone(),
 			incoming,
 			outgoing,
@@ -613,7 +613,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 			.insert_aux(&[(LAST_COMPLETED_KEY, &encoded_state[..])], &[])
 		{
 			warn!(target: "afg", "Shutting down voter due to error bookkeeping last completed round in DB: {:?}", e);
-			Err(Error::CouldNotCompleteRound(e).into())
+			Err(Error::Client(e).into())
 		} else {
 			Ok(())
 		}
