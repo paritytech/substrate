@@ -41,7 +41,7 @@ extern crate srml_system as system;
 use rstd::prelude::*;
 use rstd::result;
 use codec::{HasCompact, Compact};
-use primitives::traits::{Zero, OnFinalise, As, MaybeSerializeDebug};
+use primitives::traits::{Zero, As, MaybeSerializeDebug};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
@@ -62,12 +62,79 @@ pub trait Trait: balances::Trait + Sized {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn propose(origin, proposal: Box<T::Proposal>, value: <T::Balance as HasCompact>::Type) -> Result;
-		fn second(origin, proposal: Compact<PropIndex>) -> Result;
-		fn vote(origin, ref_index: Compact<ReferendumIndex>, approve_proposal: bool) -> Result;
+		fn deposit_event() = default;
 
-		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result;
-		fn cancel_referendum(ref_index: Compact<ReferendumIndex>) -> Result;
+		/// Propose a sensitive action to be taken.
+		fn propose(
+			origin,
+			proposal: Box<T::Proposal>,
+			value: <T::Balance as HasCompact>::Type
+		) -> Result {
+			let who = ensure_signed(origin)?;
+			let value = value.into();
+
+			ensure!(value >= Self::minimum_deposit(), "value too low");
+			<balances::Module<T>>::reserve(&who, value)
+				.map_err(|_| "proposer's balance too low")?;
+
+			let index = Self::public_prop_count();
+			<PublicPropCount<T>>::put(index + 1);
+			<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
+
+			let mut props = Self::public_props();
+			props.push((index, (*proposal).clone(), who));
+			<PublicProps<T>>::put(props);
+			Ok(())
+		}
+
+		/// Propose a sensitive action to be taken.
+		fn second(origin, proposal: Compact<PropIndex>) -> Result {
+			let who = ensure_signed(origin)?;
+			let proposal: PropIndex = proposal.into();
+			let mut deposit = Self::deposit_of(proposal)
+				.ok_or("can only second an existing proposal")?;
+			<balances::Module<T>>::reserve(&who, deposit.0)
+				.map_err(|_| "seconder's balance too low")?;
+			deposit.1.push(who);
+			<DepositOf<T>>::insert(proposal, deposit);
+			Ok(())
+		}
+
+		/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
+		/// false would be a vote to keep the status quo.
+		fn vote(origin, ref_index: Compact<ReferendumIndex>, approve_proposal: bool) -> Result {
+			let who = ensure_signed(origin)?;
+			let ref_index = ref_index.into();
+			ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
+			ensure!(!<balances::Module<T>>::total_balance(&who).is_zero(),
+					"transactor must have balance to signal approval.");
+			if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
+				<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
+			}
+			<VoteOf<T>>::insert(&(ref_index, who), approve_proposal);
+			Ok(())
+		}
+
+		/// Start a referendum.
+		fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
+			Self::inject_referendum(
+				<system::Module<T>>::block_number() + Self::voting_period(),
+				*proposal,
+				vote_threshold
+			).map(|_| ())
+		}
+
+		/// Remove a referendum.
+		fn cancel_referendum(ref_index: Compact<ReferendumIndex>) -> Result {
+			Self::clear_referendum(ref_index.into());
+			Ok(())
+		}
+
+		fn on_finalise(n: T::BlockNumber) {
+			if let Err(e) = Self::end_block(n) {
+				runtime_io::print(e);
+			}
+		}
 	}
 }
 
@@ -116,12 +183,6 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// exposed immutables.
 
 	/// Get the amount locked in support of `proposal`; `None` if proposal isn't a valid proposal
@@ -162,71 +223,7 @@ impl<T: Trait> Module<T> {
 			.fold((Zero::zero(), Zero::zero()), |(a, b), (c, d)| (a + c, b + d))
 	}
 
-	// dispatching.
-
-	/// Propose a sensitive action to be taken.
-	fn propose(origin: T::Origin, proposal: Box<T::Proposal>, value: <T::Balance as HasCompact>::Type) -> Result {
-		let who = ensure_signed(origin)?;
-		let value = value.into();
-
-		ensure!(value >= Self::minimum_deposit(), "value too low");
-		<balances::Module<T>>::reserve(&who, value)
-			.map_err(|_| "proposer's balance too low")?;
-
-		let index = Self::public_prop_count();
-		<PublicPropCount<T>>::put(index + 1);
-		<DepositOf<T>>::insert(index, (value, vec![who.clone()]));
-
-		let mut props = Self::public_props();
-		props.push((index, (*proposal).clone(), who));
-		<PublicProps<T>>::put(props);
-		Ok(())
-	}
-
-	/// Propose a sensitive action to be taken.
-	fn second(origin: T::Origin, proposal: Compact<PropIndex>) -> Result {
-		let who = ensure_signed(origin)?;
-		let proposal: PropIndex = proposal.into();
-		let mut deposit = Self::deposit_of(proposal)
-			.ok_or("can only second an existing proposal")?;
-		<balances::Module<T>>::reserve(&who, deposit.0)
-			.map_err(|_| "seconder's balance too low")?;
-		deposit.1.push(who);
-		<DepositOf<T>>::insert(proposal, deposit);
-		Ok(())
-	}
-
-	/// Vote in a referendum. If `approve_proposal` is true, the vote is to enact the proposal;
-	/// false would be a vote to keep the status quo.
-	fn vote(origin: T::Origin, ref_index: Compact<ReferendumIndex>, approve_proposal: bool) -> Result {
-		let who = ensure_signed(origin)?;
-		let ref_index = ref_index.into();
-		ensure!(Self::is_active_referendum(ref_index), "vote given for invalid referendum.");
-		ensure!(!<balances::Module<T>>::total_balance(&who).is_zero(),
-			"transactor must have balance to signal approval.");
-		if !<VoteOf<T>>::exists(&(ref_index, who.clone())) {
-			<VotersFor<T>>::mutate(ref_index, |voters| voters.push(who.clone()));
-		}
-		<VoteOf<T>>::insert(&(ref_index, who), approve_proposal);
-		Ok(())
-	}
-
-	/// Start a referendum.
-	fn start_referendum(proposal: Box<T::Proposal>, vote_threshold: VoteThreshold) -> Result {
-		Self::inject_referendum(
-			<system::Module<T>>::block_number() + Self::voting_period(),
-			*proposal,
-			vote_threshold
-		).map(|_| ())
-	}
-
-	/// Remove a referendum.
-	fn cancel_referendum(ref_index: Compact<ReferendumIndex>) -> Result {
-		Self::clear_referendum(ref_index.into());
-		Ok(())
-	}
-
-	// exposed mutables.
+	// Exposed mutables.
 
 	/// Start a referendum. Can be called directly by the council.
 	pub fn internal_start_referendum(proposal: T::Proposal, vote_threshold: VoteThreshold) -> result::Result<ReferendumIndex, &'static str> {
@@ -305,14 +302,6 @@ impl<T: Trait> Module<T> {
 			<NextTally<T>>::put(index + 1);
 		}
 		Ok(())
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(n: T::BlockNumber) {
-		if let Err(e) = Self::end_block(n) {
-			runtime_io::print(e);
-		}
 	}
 }
 

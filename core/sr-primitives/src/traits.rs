@@ -197,11 +197,13 @@ impl<T: Default + Eq + PartialEq> Clear for T {
 pub trait SimpleBitOps:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitXor<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 {}
 impl<T:
 	Sized + Clear +
 	rstd::ops::BitOr<Self, Output = Self> +
+	rstd::ops::BitXor<Self, Output = Self> +
 	rstd::ops::BitAnd<Self, Output = Self>
 > SimpleBitOps for T {}
 
@@ -429,6 +431,8 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 	fn set_parent_hash(&mut self, Self::Hash);
 
 	fn digest(&self) -> &Self::Digest;
+	/// Get a mutable reference to the digest.
+	fn digest_mut(&mut self) -> &mut Self::Digest;
 	fn set_digest(&mut self, Self::Digest);
 
 	fn hash(&self) -> Self::Hash {
@@ -520,6 +524,8 @@ pub trait Digest: Member + Default {
 	fn logs(&self) -> &[Self::Item];
 	/// Push new digest item.
 	fn push(&mut self, item: Self::Item);
+	/// Pop a digest item.
+	fn pop(&mut self) -> Option<Self::Item>;
 
 	/// Get reference to the first digest item that matches the passed predicate.
 	fn log<T, F: Fn(&Self::Item) -> Option<&T>>(&self, predicate: F) -> Option<&T> {

@@ -24,7 +24,7 @@
 //! - execute_block(bytes)
 //! - init_block(PrevBlock?) -> InProgressBlock
 //! - add_transaction(InProgressBlock) -> InProgressBlock
-//! I leave it as is for now as it might be removed before this is ever done.
+//! It is left as is for now as it might be removed before this is ever done.
 // end::description[]
 
 #![warn(missing_docs)]

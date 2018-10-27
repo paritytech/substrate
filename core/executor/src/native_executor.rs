@@ -196,13 +196,9 @@ impl<D: NativeExecutionDispatch> CodeExecutor<Blake2Hasher> for NativeExecutor<D
 
 #[macro_export]
 macro_rules! native_executor_instance {
-	(pub $name:ident, $dispatcher:path, $version:path, $code:expr) => {
-		pub struct $name;
-		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
-	};
-	($name:ident, $dispatcher:path, $version:path, $code:expr) => {
+	( $pub:vis $name:ident, $dispatcher:path, $version:path, $code:expr) => {
 		/// A unit struct which implements `NativeExecutionDispatch` feeding in the hard-coded runtime.
-		struct $name;
+		$pub struct $name;
 		native_executor_instance!(IMPL $name, $dispatcher, $version, $code);
 	};
 	(IMPL $name:ident, $dispatcher:path, $version:path, $code:expr) => {

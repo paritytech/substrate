@@ -17,6 +17,7 @@ linked-hash-map = "0.5"
 rustc-hex = "1.0"
 rand = "0.5"
 substrate-primitives = { path = "../../core/primitives" }
+substrate-consensus-common = { path = "../../core/consensus/common" }
 substrate-client = { path = "../../core/client" }
 sr-primitives = { path = "../../core/sr-primitives" }
 parity-codec = "2.1"

@@ -20,7 +20,7 @@ use rstd::prelude::*;
 use rstd::result;
 use codec::Compact;
 use substrate_primitives::u32_trait::Value as U32;
-use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug, OnFinalise};
+use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug};
 use srml_support::dispatch::{Result, Dispatchable, Parameter};
 use srml_support::{StorageValue, StorageMap};
 use super::{Trait as CouncilTrait, Module as Council};
@@ -68,8 +68,96 @@ decl_event!(
 decl_module! {
 	#[cfg_attr(feature = "std", serde(bound(deserialize = "<T as Trait>::Proposal: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
-		fn propose(origin, threshold: Compact<u32>, proposal: Box<<T as Trait>::Proposal>) -> Result;
-		fn vote(origin, proposal: T::Hash, index: Compact<ProposalIndex>, approve: bool) -> Result;
+		fn deposit_event() = default;
+		fn propose(origin, threshold: Compact<u32>, proposal: Box<<T as Trait>::Proposal>) -> Result {
+			let who = ensure_signed(origin)?;
+			let threshold = threshold.into();
+
+			ensure!(Self::is_councillor(&who), "proposer not on council");
+
+			let proposal_hash = T::Hashing::hash_of(&proposal);
+
+			ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
+
+			if threshold < 2 {
+				let ok = proposal.dispatch(Origin::Members(1).into()).is_ok();
+				Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
+			} else {
+				let index = Self::proposal_count();
+				<ProposalCount<T>>::mutate(|i| *i += 1);
+				<Proposals<T>>::mutate(|proposals| proposals.push(proposal_hash));
+				<ProposalOf<T>>::insert(proposal_hash, *proposal);
+				<Voting<T>>::insert(proposal_hash, (index, threshold, vec![who.clone()], vec![]));
+
+				Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
+			}
+			Ok(())
+		}
+
+		fn vote(origin, proposal: T::Hash, index: Compact<ProposalIndex>, approve: bool) -> Result {
+			let who = ensure_signed(origin)?;
+			let index = index.into();
+
+			ensure!(Self::is_councillor(&who), "voter not on council");
+
+			let mut voting = Self::voting(&proposal).ok_or("proposal must exist")?;
+			ensure!(voting.0 == index, "mismatched index");
+
+			let position_yes = voting.2.iter().position(|a| a == &who);
+			let position_no = voting.3.iter().position(|a| a == &who);
+
+			if approve {
+				if position_yes.is_none() {
+					voting.2.push(who.clone());
+				} else {
+					return Err("duplicate vote ignored")
+				}
+				if let Some(pos) = position_no {
+					voting.3.swap_remove(pos);
+				}
+			} else {
+				if position_no.is_none() {
+					voting.3.push(who.clone());
+				} else {
+					return Err("duplicate vote ignored")
+				}
+				if let Some(pos) = position_yes {
+					voting.2.swap_remove(pos);
+				}
+			}
+
+			let yes_votes = voting.2.len() as u32;
+			let no_votes = voting.3.len() as u32;
+			Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
+
+			let threshold = voting.1;
+			let potential_votes = <Council<T>>::active_council().len() as u32;
+			let approved = yes_votes >= threshold;
+			let disapproved = potential_votes.saturating_sub(no_votes) < threshold;
+			if approved || disapproved {
+				if approved {
+					Self::deposit_event(RawEvent::Approved(proposal));
+
+					// execute motion, assuming it exists.
+					if let Some(p) = <ProposalOf<T>>::take(&proposal) {
+						let ok = p.dispatch(Origin::Members(threshold).into()).is_ok();
+						Self::deposit_event(RawEvent::Executed(proposal, ok));
+					}
+				} else {
+					// disapproved
+					Self::deposit_event(RawEvent::Disapproved(proposal));
+				}
+
+				// remove vote
+				<Voting<T>>::remove(&proposal);
+				<Proposals<T>>::mutate(|proposals| proposals.retain(|h| h != &proposal));
+			} else {
+				// update voting
+				<Voting<T>>::insert(&proposal, voting);
+			}
+
+			Ok(())
+		}
 	}
 }
 
@@ -91,111 +179,9 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	pub fn is_councillor(who: &T::AccountId) -> bool {
 		<Council<T>>::active_council().iter()
 			.any(|&(ref a, _)| a == who)
-	}
-
-	// Dispatch
-	fn propose(origin: <T as system::Trait>::Origin, threshold: Compact<u32>, proposal: Box<<T as Trait>::Proposal>) -> Result {
-		let who = ensure_signed(origin)?;
-		let threshold = threshold.into();
-
-		ensure!(Self::is_councillor(&who), "proposer not on council");
-
-		let proposal_hash = T::Hashing::hash_of(&proposal);
-
-		ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
-
-		if threshold < 2 {
-			let ok = proposal.dispatch(Origin::Members(1).into()).is_ok();
-			Self::deposit_event(RawEvent::Executed(proposal_hash, ok));
-		} else {
-			let index = Self::proposal_count();
-			<ProposalCount<T>>::mutate(|i| *i += 1);
-			<Proposals<T>>::mutate(|proposals| proposals.push(proposal_hash));
-			<ProposalOf<T>>::insert(proposal_hash, *proposal);
-			<Voting<T>>::insert(proposal_hash, (index, threshold, vec![who.clone()], vec![]));
-
-			Self::deposit_event(RawEvent::Proposed(who, index, proposal_hash, threshold));
-		}
-		Ok(())
-	}
-
-	fn vote(origin: <T as system::Trait>::Origin, proposal: T::Hash, index: Compact<ProposalIndex>, approve: bool) -> Result {
-		let who = ensure_signed(origin)?;
-		let index = index.into();
-
-		ensure!(Self::is_councillor(&who), "voter not on council");
-
-		let mut voting = Self::voting(&proposal).ok_or("proposal must exist")?;
-		ensure!(voting.0 == index, "mismatched index");
-
-		let position_yes = voting.2.iter().position(|a| a == &who);
-		let position_no = voting.3.iter().position(|a| a == &who);
-
-		if approve {
-			if position_yes.is_none() {
-				voting.2.push(who.clone());
-			} else {
-				return Err("duplicate vote ignored")
-			}
-			if let Some(pos) = position_no {
-				voting.3.swap_remove(pos);
-			}
-		} else {
-			if position_no.is_none() {
-				voting.3.push(who.clone());
-			} else {
-				return Err("duplicate vote ignored")
-			}
-			if let Some(pos) = position_yes {
-				voting.2.swap_remove(pos);
-			}
-		}
-
-		let yes_votes = voting.2.len() as u32;
-		let no_votes = voting.3.len() as u32;
-		Self::deposit_event(RawEvent::Voted(who, proposal, approve, yes_votes, no_votes));
-
-		let threshold = voting.1;
-		let potential_votes = <Council<T>>::active_council().len() as u32;
-		let approved = yes_votes >= threshold;
-		let disapproved = potential_votes.saturating_sub(no_votes) < threshold;
-		if approved || disapproved {
-			if approved {
-				Self::deposit_event(RawEvent::Approved(proposal));
-
-				// execute motion, assuming it exists.
-				if let Some(p) = <ProposalOf<T>>::take(&proposal) {
-					let ok = p.dispatch(Origin::Members(threshold).into()).is_ok();
-					Self::deposit_event(RawEvent::Executed(proposal, ok));
-				}
-			} else {
-				// disapproved
-				Self::deposit_event(RawEvent::Disapproved(proposal));
-			}
-
-			// remove vote
-			<Voting<T>>::remove(&proposal);
-			<Proposals<T>>::mutate(|proposals| proposals.retain(|h| h != &proposal));
-		} else {
-			// update voting
-			<Voting<T>>::insert(&proposal, voting);
-		}
-
-		Ok(())
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 

@@ -44,7 +44,7 @@ use rstd::{cmp, result};
 use codec::{Encode, Decode, Codec, Input, Output, HasCompact};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, One, SimpleArithmetic, OnFinalise, MakePayment,
+use primitives::traits::{Zero, One, SimpleArithmetic, MakePayment,
 	As, Lookup, Member, CheckedAdd, CheckedSub, CurrentHeight, BlockNumberToHash};
 use address::Address as RawAddress;
 use system::ensure_signed;
@@ -125,8 +125,64 @@ pub trait Trait: system::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn transfer(origin, dest: RawAddress<T::AccountId, T::AccountIndex>, value: <T::Balance as HasCompact>::Type) -> Result;
-		fn set_balance(who: RawAddress<T::AccountId, T::AccountIndex>, free: <T::Balance as HasCompact>::Type, reserved: <T::Balance as HasCompact>::Type) -> Result;
+		fn deposit_event() = default;
+
+		/// Transfer some liquid free balance to another staker.
+		pub fn transfer(
+			origin,
+			dest: RawAddress<T::AccountId, T::AccountIndex>,
+			value: <T::Balance as HasCompact>::Type
+		) -> Result {
+			let transactor = ensure_signed(origin)?;
+
+			let dest = Self::lookup(dest)?;
+			let value = value.into();
+			let from_balance = Self::free_balance(&transactor);
+			let to_balance = Self::free_balance(&dest);
+			let would_create = to_balance.is_zero();
+			let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
+			let liability = match value.checked_add(&fee) {
+				Some(l) => l,
+				None => return Err("got overflow after adding a fee to value"),
+			};
+
+			let new_from_balance = match from_balance.checked_sub(&liability) {
+				Some(b) => b,
+				None => return Err("balance too low to send value"),
+			};
+			if would_create && value < Self::existential_deposit() {
+				return Err("value too low to create account");
+			}
+			T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
+
+			// NOTE: total stake being stored in the same type means that this could never overflow
+			// but better to be safe than sorry.
+			let new_to_balance = match to_balance.checked_add(&value) {
+				Some(b) => b,
+				None => return Err("destination balance too high to receive value"),
+			};
+
+			if transactor != dest {
+				Self::set_free_balance(&transactor, new_from_balance);
+				Self::decrease_total_stake_by(fee);
+				Self::set_free_balance_creating(&dest, new_to_balance);
+				Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
+			}
+
+			Ok(())
+		}
+
+		/// Set the balances of a given account.
+		fn set_balance(
+			who: RawAddress<T::AccountId, T::AccountIndex>,
+			free: <T::Balance as HasCompact>::Type,
+			reserved: <T::Balance as HasCompact>::Type
+		) -> Result {
+			let who = Self::lookup(who)?;
+			Self::set_free_balance(&who, free.into());
+			Self::set_reserved_balance(&who, reserved.into());
+			Ok(())
+		}
 	}
 }
 
@@ -232,12 +288,6 @@ pub enum UpdateBalanceOutcome {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	// PUBLIC IMMUTABLES
 
 	/// The combined balance of `who`.
@@ -285,58 +335,7 @@ impl<T: Trait> Module<T> {
 		}
 	}
 
-	// PUBLIC DISPATCH
-
-	/// Transfer some liquid free balance to another staker.
-	pub fn transfer(origin: T::Origin, dest: Address<T>, value: <T::Balance as HasCompact>::Type) -> Result {
-		let transactor = ensure_signed(origin)?;
-
-		let dest = Self::lookup(dest)?;
-		let value = value.into();
-		let from_balance = Self::free_balance(&transactor);
-		let to_balance = Self::free_balance(&dest);
-		let would_create = to_balance.is_zero();
-		let fee = if would_create { Self::creation_fee() } else { Self::transfer_fee() };
-		let liability = match value.checked_add(&fee) {
-			Some(l) => l,
-			None => return Err("got overflow after adding a fee to value"),
-		};
-
-		let new_from_balance = match from_balance.checked_sub(&liability) {
-			Some(b) => b,
-			None => return Err("balance too low to send value"),
-		};
-		if would_create && value < Self::existential_deposit() {
-			return Err("value too low to create account");
-		}
-		T::EnsureAccountLiquid::ensure_account_liquid(&transactor)?;
-
-		// NOTE: total stake being stored in the same type means that this could never overflow
-		// but better to be safe than sorry.
-		let new_to_balance = match to_balance.checked_add(&value) {
-			Some(b) => b,
-			None => return Err("destination balance too high to receive value"),
-		};
-
-		if transactor != dest {
-			Self::set_free_balance(&transactor, new_from_balance);
-			Self::decrease_total_stake_by(fee);
-			Self::set_free_balance_creating(&dest, new_to_balance);
-			Self::deposit_event(RawEvent::Transfer(transactor, dest, value, fee));
-		}
-
-		Ok(())
-	}
-
-	/// Set the balances of a given account.
-	fn set_balance(who: Address<T>, free: <T::Balance as HasCompact>::Type, reserved: <T::Balance as HasCompact>::Type) -> Result {
-		let who = Self::lookup(who)?;
-		Self::set_free_balance(&who, free.into());
-		Self::set_reserved_balance(&who, reserved.into());
-		Ok(())
-	}
-
-	// PUBLIC MUTABLES (DANGEROUS)
+	//PUBLIC MUTABLES (DANGEROUS)
 
 	/// Set the free balance of an account to some new value.
 	///
@@ -422,6 +421,23 @@ impl<T: Trait> Module<T> {
 	/// you mean to actually mint value into existence, then use `reward` instead.
 	pub fn increase_free_balance_creating(who: &T::AccountId, value: T::Balance) -> UpdateBalanceOutcome {
 		Self::set_free_balance_creating(who, Self::free_balance(who) + value)
+	}
+
+	/// Substrates `value` from the free balance of `who`. If the whole amount cannot be
+	/// deducted, an error is returned.
+	///
+	/// NOTE: This assumes that the total stake remains unchanged after this operation. If
+	/// you mean to actually burn value out of existence, then use `slash` instead.
+	pub fn decrease_free_balance(
+		who: &T::AccountId,
+		value: T::Balance
+	) -> result::Result<UpdateBalanceOutcome, &'static str> {
+		T::EnsureAccountLiquid::ensure_account_liquid(who)?;
+		let b = Self::free_balance(who);
+		if b < value {
+			return Err("account has too few funds")
+		}
+		Ok(Self::set_free_balance(who, b - value))
 	}
 
 	/// Deducts up to `value` from the combined balance of `who`, preferring to deduct from the
@@ -649,11 +665,6 @@ impl<T: Trait> Module<T> {
 			address::Address::Id(i) => Ok(i),
 			address::Address::Index(i) => <Module<T>>::lookup_index(i).ok_or("invalid account index"),
 		}
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(_n: T::BlockNumber) {
 	}
 }
 

@@ -17,8 +17,9 @@
 //! Substrate chain configurations.
 
 use primitives::{AuthorityId, ed25519};
+use node_primitives::AccountId;
 use node_runtime::{GenesisConfig, ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
-	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
+	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig, UpgradeKeyConfig,
 	ContractConfig, Permill, Perbill};
 use substrate_service;
 
@@ -45,7 +46,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 	const CENTS: u128 = 1_000 * MILLICENTS;	// assume this is worth about a cent.
 	const DOLLARS: u128 = 100 * CENTS;
 
-	const SECS_PER_BLOCK: u64 = 5;
+	const SECS_PER_BLOCK: u64 = 4;
 	const MINUTES: u64 = 60 / SECS_PER_BLOCK;
 	const HOURS: u64 = MINUTES * 60;
 	const DAYS: u64 = HOURS * 24;
@@ -121,6 +122,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			max_depth: 1024,
 			block_gas_limit: 10_000_000,
 		}),
+		upgrade_key: Some(UpgradeKeyConfig {
+			key: endowed_accounts[0].clone(),
+		}),
 	}
 }
 
@@ -139,7 +143,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 	)
 }
 
-fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
+fn testnet_genesis(initial_authorities: Vec<AuthorityId>, upgrade_key: AccountId) -> GenesisConfig {
 	let endowed_accounts = vec![
 		ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
 		ed25519::Pair::from_seed(b"Bob                             ").public().0.into(),
@@ -220,13 +224,18 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>) -> GenesisConfig {
 			max_depth: 1024,
 			block_gas_limit: 10_000_000,
 		}),
+		upgrade_key: Some(UpgradeKeyConfig {
+			key: upgrade_key,
+		}),
 	}
 }
 
 fn development_config_genesis() -> GenesisConfig {
 	testnet_genesis(vec![
 		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-	])
+	],
+		ed25519::Pair::from_seed(b"Alice                           ").public().0.into()
+	)
 }
 
 /// Development config (single validator Alice)
@@ -238,7 +247,9 @@ fn local_testnet_genesis() -> GenesisConfig {
 	testnet_genesis(vec![
 		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
 		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
-	])
+	],
+		ed25519::Pair::from_seed(b"Alice                           ").public().0.into()
+	)
 }
 
 /// Local testnet config (multivalidator Alice + Bob)

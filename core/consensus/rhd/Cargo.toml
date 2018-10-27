@@ -6,30 +6,33 @@ description = "Rhododendron Round-Based consensus-algorithm for substrate"
 
 [dependencies]
 futures = "0.1.17"
-parity-codec = { version = "1.1" }
+parity-codec = { version = "2.1" }
 parity-codec-derive = { version = "2.0" }
 substrate-primitives = { path = "../../primitives" }
+substrate-consensus-common = { path = "../common" }
+substrate-client = { path = "../../client" }
+substrate-transaction-pool = { path = "../../transaction-pool" }
 srml-support = { path = "../../../srml/support" }
+srml-system = { path = "../../../srml/system" }
+srml-consensus = { path = "../../../srml/consensus" }
 sr-primitives = { path = "../../sr-primitives" }
 sr-version = { path = "../../sr-version" }
 sr-io = { path = "../../sr-io" }
-srml-consensus = { path = "../../../srml/consensus" }
 tokio = "0.1.7"
 parking_lot = "0.4"
 error-chain = "0.12"
-log = "0.3"
-rhododendron = { git = "https://github.com/paritytech/rhododendron.git", features = ["codec"] }
-serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+rhododendron = { version = "0.4.0", features = ["codec"] }
+exit-future = "0.1"
+
 
 [dev-dependencies]
 substrate-keyring = { path = "../../keyring" }
 substrate-executor = { path = "../../executor" }
 
-
 [features]
 default = ["std"]
 std = [
-	"serde/std",
 	"substrate-primitives/std",
 	"srml-support/std",
 	"sr-primitives/std",

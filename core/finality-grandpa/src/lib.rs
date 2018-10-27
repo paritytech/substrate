@@ -14,9 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+// tag::description[]
 //! Integration of the GRANDPA finality gadget into substrate.
 //!
 //! This is a long-running future that produces finality notifications.
+// end::description[]
 
 extern crate finality_grandpa as grandpa;
 extern crate futures;
@@ -45,11 +47,11 @@ use futures::stream::Fuse;
 use futures::sync::mpsc;
 use client::{Client, error::Error as ClientError, ImportNotifications, backend::Backend, CallExecutor};
 use codec::{Encode, Decode};
-use consensus_common::BlockImport;
+use consensus_common::{BlockImport, ImportBlock, ImportResult};
 use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestItemFor,
 };
-use runtime_primitives::{generic::BlockId, Justification};
+use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, AuthorityId, Blake2Hasher};
 use tokio::timer::Interval;
 
@@ -702,21 +704,24 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT> {
 
 impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block> where
 	B: Backend<Block, Blake2Hasher> + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone,
 	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
 {
-	fn import_block(&self, block: Block, _justification: Justification, _authorities: &[AuthorityId]) -> bool {
+	type Error = ClientError;
+
+	fn import_block(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
+		-> Result<ImportResult, Self::Error>
+	{
 		use runtime_primitives::traits::Digest;
 		use authorities::PendingChange;
 
-		let maybe_event = block.header().digest().logs().iter()
+		let maybe_event = block.header.digest().logs().iter()
 			.filter_map(|log| log.scheduled_change())
 			.next()
-			.map(|change| (block.header().hash(), *block.header().number(), change));
+			.map(|change| (block.header.hash(), *block.header.number(), change));
 
-		// TODO [now]: use import-block trait for client when implemented
-		let result = self.inner.import_block(unimplemented!(), unimplemented!()).is_ok();
-		if let (true, Some((hash, number, change))) = (result, maybe_event) {
+		let result = self.inner.import_block(block, new_authorities);
+		if let (true, Some((hash, number, change))) = (result.is_ok(), maybe_event) {
 			self.authority_set.add_pending_change(PendingChange {
 				next_authorities: change.next_authorities,
 				finalization_depth: number + change.delay,
@@ -726,6 +731,7 @@ impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block>
 
 			// TODO [now]: write to DB, and what to do on failure?
 		}
+
 		result
 	}
 }
