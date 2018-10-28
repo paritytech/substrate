@@ -48,7 +48,7 @@ use client::{Client, error::Error as ClientError, ImportNotifications, backend::
 use codec::{Encode, Decode};
 use consensus_common::{BlockImport, ImportBlock, ImportResult};
 use runtime_primitives::traits::{
-	NumberFor, Block as BlockT, Header as HeaderT, DigestItemFor,
+	NumberFor, Block as BlockT, Header as HeaderT, DigestFor,
 };
 use runtime_primitives::generic::BlockId;
 use substrate_primitives::{ed25519, AuthorityId, Blake2Hasher};
@@ -434,7 +434,6 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash, NumberFor<Block>> for E
 	N: Network + 'static,
 	N::In: 'static,
 	NumberFor<Block>: BlockNumberOps,
-	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
 {
 	fn ancestry(&self, base: Block::Hash, block: Block::Hash) -> Result<Vec<Block::Hash>, GrandpaError> {
 		let tree_route_res = ::client::blockchain::tree_route(
@@ -529,7 +528,6 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 	N: Network + 'static,
 	N::In: 'static,
 	NumberFor<Block>: BlockNumberOps,
-	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
 {
 	type Timer = Box<Future<Item = (), Error = Self::Error>>;
 	type Id = AuthorityId;
@@ -686,7 +684,7 @@ pub struct GrandpaBlockImport<B, E, Block: BlockT> {
 impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone,
-	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
+	DigestFor<Block>: Encode,
 {
 	type Error = ClientError;
 
@@ -696,13 +694,20 @@ impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block>
 		use runtime_primitives::traits::Digest;
 		use authorities::PendingChange;
 
-		let maybe_event = block.header.digest().logs().iter()
-			.filter_map(|log| log.scheduled_change())
-			.next()
-			.map(|change| (block.header.hash(), *block.header.number(), change));
+		let maybe_change: Option<ScheduledChange<NumberFor<Block>>> = self.inner.call_api_at(
+			&BlockId::hash(block.header.parent_hash().clone()),
+			::fg_primitives::PENDING_CHANGE_CALL,
+			block.header.digest()
+		)?;
+
+		let maybe_change = maybe_change.map(|change| (
+			block.header.hash(),
+			block.header.number().clone(),
+			change
+		));
 
 		let result = self.inner.import_block(block, new_authorities);
-		if let (true, Some((hash, number, change))) = (result.is_ok(), maybe_event) {
+		if let (true, Some((hash, number, change))) = (result.is_ok(), maybe_change) {
 			self.authority_set.add_pending_change(PendingChange {
 				next_authorities: change.next_authorities,
 				finalization_depth: number + change.delay,
@@ -734,7 +739,7 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 	N: Network + 'static,
 	N::In: 'static,
 	NumberFor<Block>: BlockNumberOps,
-	DigestItemFor<Block>: CompatibleDigestItem<NumberFor<Block>>,
+	DigestFor<Block>: Encode,
 {
 	use futures::future::{self, Loop as FutureLoop};
 
@@ -825,8 +830,6 @@ mod tests {
 	use tokio::runtime::current_thread;
 	use keyring::Keyring;
 	use client::BlockchainEvents;
-
-	impl CompatibleDigestItem<NumberFor<Block>> for DigestItemFor<Block> { }
 
 	#[derive(Clone)]
 	struct TestGrandpaNetwork {
