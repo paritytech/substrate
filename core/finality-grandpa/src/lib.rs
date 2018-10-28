@@ -155,7 +155,7 @@ impl<B, E, Block: BlockT> BlockStatus<Block> for Arc<Client<B, E, Block>> where
 }
 
 /// Buffering imported messages until blocks with given hashes are imported.
-pub struct UntilImported<Block: BlockT, Status, I> {
+struct UntilImported<Block: BlockT, Status, I> {
 	import_notifications: Fuse<ImportNotifications<Block>>,
 	status_check: Status,
 	inner: Fuse<I>,
@@ -417,7 +417,7 @@ fn outgoing_messages<Block: BlockT, N: Network>(
 }
 
 /// The environment we run GRANDPA in.
-pub struct Environment<B, E, Block: BlockT, N: Network> {
+struct Environment<B, E, Block: BlockT, N: Network> {
 	inner: Arc<Client<B, E, Block>>,
 	voters: Arc<HashMap<AuthorityId, u64>>,
 	config: Config,
@@ -507,7 +507,7 @@ pub trait CompatibleDigestItem<N> {
 
 /// A new authority set along with the canonical block it changed at.
 #[derive(Debug)]
-pub struct NewAuthoritySet<H, N> {
+struct NewAuthoritySet<H, N> {
 	canon_number: N,
 	canon_hash: H,
 	set_id: u64,
@@ -516,7 +516,7 @@ pub struct NewAuthoritySet<H, N> {
 
 /// Signals either an early exit of a voter or an error.
 #[derive(Debug)]
-pub enum ExitOrError<H, N> {
+enum ExitOrError<H, N> {
 	/// An error occurred.
 	Error(Error),
 	/// Early exit of the voter: the new set ID and the new authorities along with respective weights.
