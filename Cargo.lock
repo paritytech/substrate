@@ -3020,6 +3020,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "substrate-fg-primitives"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "sr-api 0.1.0",
+ "sr-primitives 0.1.0",
+ "substrate-primitives 0.1.0",
+]
+
+[[package]]
 name = "substrate-finality-grandpa"
 version = "0.1.0"
 dependencies = [
@@ -3032,6 +3043,7 @@ dependencies = [
  "sr-primitives 0.1.0",
  "substrate-client 0.1.0",
  "substrate-consensus-common 0.1.0",
+ "substrate-fg-primitives 0.1.0",
  "substrate-keyring 0.1.0",
  "substrate-network 0.1.0",
  "substrate-primitives 0.1.0",

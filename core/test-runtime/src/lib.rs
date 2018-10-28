@@ -38,7 +38,6 @@ extern crate sr_io as runtime_io;
 #[macro_use]
 extern crate sr_version as runtime_version;
 
-
 #[cfg(test)]
 #[macro_use]
 extern crate hex_literal;
