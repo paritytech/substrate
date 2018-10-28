@@ -1,0 +1,21 @@
+[package]
+name = "substrate-fg-primitives"
+version = "0.1.0"
+authors = ["Parity Technologies <admin@parity.io>"]
+
+[dependencies]
+substrate-primitives = { path = "../../primitives", default-features = false }
+parity-codec = { version = "2.1", default-features = false }
+parity-codec-derive = { version = "2.1", default-features = false }
+sr-api = { path = "../../sr-api", default-features = false }
+sr-primitives = { path = "../../sr-primitives", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+	"substrate-primitives/std",
+	"parity-codec/std",
+	"parity-codec-derive/std",
+	"sr-api/std",
+	"sr-primitives/std",
+]

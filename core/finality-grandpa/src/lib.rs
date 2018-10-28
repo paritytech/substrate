@@ -14,11 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Integration of the GRANDPA finality gadget into substrate.
 //!
 //! This is a long-running future that produces finality notifications.
-// end::description[]
 
 extern crate finality_grandpa as grandpa;
 extern crate futures;
@@ -29,6 +27,7 @@ extern crate substrate_primitives;
 extern crate tokio;
 extern crate parking_lot;
 extern crate parity_codec as codec;
+extern crate substrate_fg_primitives as fg_primitives;
 
 #[macro_use]
 extern crate log;
@@ -63,6 +62,8 @@ use std::sync::Arc;
 use std::time::{Instant, Duration};
 
 use authorities::SharedAuthoritySet;
+
+pub use fg_primitives::ScheduledChange;
 
 mod authorities;
 
@@ -483,26 +484,6 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash, NumberFor<Block>> for E
 			}
 		}
 	}
-}
-
-/// A scheduled change of authority set.
-#[derive(Debug, PartialEq)]
-pub struct ScheduledChange<N> {
-	/// The new authorities after the change, along with their respective weights.
-	pub next_authorities: Vec<(AuthorityId, u64)>,
-	/// The number of blocks to delay.
-	pub delay: N,
-}
-
-/// A GRANDPA-compatible DigestItem. This can describe when GRANDPA set changes
-/// are scheduled.
-//
-// With specialization, could do a blanket implementation so this trait
-// doesn't have to be implemented by users.
-pub trait CompatibleDigestItem<N> {
-	/// If this digest item notes a GRANDPA set change, return information about
-	/// the scheduled change.
-	fn scheduled_change(&self) -> Option<ScheduledChange<N>> { None }
 }
 
 /// A new authority set along with the canonical block it changed at.
