@@ -14,7 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Version module for runtime; Provide a function that returns runtime version.
+// tag::description[]
+//! Version module for the Substrate runtime; Provides a function that returns the runtime version.
+// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

@@ -29,6 +29,7 @@ srml-staking = { path = "../../srml/staking" }
 srml-system = { path = "../../srml/system" }
 srml-timestamp = { path = "../../srml/timestamp" }
 srml-treasury = { path = "../../srml/treasury" }
+srml-upgrade-key = { path = "../../srml/upgrade-key" }
 sr-version = { path = "../../core/sr-version" }
 node-primitives = { path = "../primitives" }
 
@@ -53,6 +54,7 @@ std = [
 	"srml-system/std",
 	"srml-timestamp/std",
 	"srml-treasury/std",
+	"srml-upgrade-key/std",
 	"sr-version/std",
 	"node-primitives/std",
 	"serde_derive",

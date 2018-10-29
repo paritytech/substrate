@@ -20,11 +20,12 @@ use std::{self, io::{Read, Write}};
 use futures::Future;
 use serde_json;
 
-use client::BlockOrigin;
 use runtime_primitives::generic::{SignedBlock, BlockId};
 use runtime_primitives::traits::{As, Block, Header};
 use network::import_queue::{ImportQueue, BlockData};
 use network::message;
+
+use consensus_common::BlockOrigin;
 use components::{self, Components, ServiceFactory, FactoryFullConfiguration, FactoryBlockNumber, RuntimeGenesis};
 use new_client;
 use codec::{Decode, Encode};

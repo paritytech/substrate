@@ -21,7 +21,7 @@ use std::{
 	sync::Arc,
 };
 
-use client::{self, Client, CallExecutor, BlockchainEvents};
+use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata};
 use jsonrpc_macros::Trailing;
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;

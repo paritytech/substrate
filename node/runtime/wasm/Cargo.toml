@@ -28,6 +28,7 @@ srml-staking = { path = "../../../srml/staking", default-features = false }
 srml-system = { path = "../../../srml/system", default-features = false }
 srml-timestamp = { path = "../../../srml/timestamp", default-features = false }
 srml-treasury = { path = "../../../srml/treasury", default-features = false }
+srml-upgrade-key = { path = "../../../srml/upgrade-key", default-features = false }
 sr-version = { path = "../../../core/sr-version", default-features = false }
 node-primitives = { path = "../../primitives", default-features = false }
 
@@ -53,6 +54,7 @@ std = [
 	"srml-system/std",
 	"srml-timestamp/std",
 	"srml-treasury/std",
+	"srml-upgrade-key/std",
 	"sr-version/std",
 	"node-primitives/std",
 ]

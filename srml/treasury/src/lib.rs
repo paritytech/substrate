@@ -73,23 +73,80 @@ type ProposalIndex = u32;
 decl_module! {
 	// Simple declaration of the `Module` type. Lets the macro know what its working on.
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		// Put forward a suggestion for spending. A deposit proportional to the value
-		// is reserved and slashed if the proposal is rejected. It is returned once the
-		// proposal is awarded.
-		fn propose_spend(origin, value: <T::Balance as HasCompact>::Type, beneficiary: Address<T::AccountId, T::AccountIndex>) -> Result;
+		fn deposit_event() = default;
+		/// Put forward a suggestion for spending. A deposit proportional to the value
+		/// is reserved and slashed if the proposal is rejected. It is returned once the
+		/// proposal is awarded.
+		fn propose_spend(
+			origin,
+			value: <T::Balance as HasCompact>::Type,
+			beneficiary: Address<T::AccountId, T::AccountIndex>
+		) -> Result {
+			let proposer = ensure_signed(origin)?;
+			let beneficiary = <balances::Module<T>>::lookup(beneficiary)?;
+			let value = value.into();
 
-		// Set the balance of funds available to spend.
-		fn set_pot(new_pot: <T::Balance as HasCompact>::Type) -> Result;
+			let bond = Self::calculate_bond(value);
+			<balances::Module<T>>::reserve(&proposer, bond)
+				.map_err(|_| "Proposer's balance too low")?;
 
-		// (Re-)configure this module.
-		fn configure(proposal_bond: Permill, proposal_bond_minimum: <T::Balance as HasCompact>::Type, spend_period: <T::BlockNumber as HasCompact>::Type, burn: Permill) -> Result;
+			let c = Self::proposal_count();
+			<ProposalCount<T>>::put(c + 1);
+			<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
 
-		// Reject a proposed spend. The original deposit will be slashed.
-		fn reject_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result;
+			Self::deposit_event(RawEvent::Proposed(c));
 
-		// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
-		// and the original deposit will be returned.
-		fn approve_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result;
+			Ok(())
+		}
+
+		/// Set the balance of funds available to spend.
+		fn set_pot(new_pot: <T::Balance as HasCompact>::Type) -> Result {
+			// Put the new value into storage.
+			<Pot<T>>::put(new_pot.into());
+
+			// All good.
+			Ok(())
+		}
+
+		/// (Re-)configure this module.
+		fn configure(
+			proposal_bond: Permill,
+			proposal_bond_minimum: <T::Balance as HasCompact>::Type,
+			spend_period: <T::BlockNumber as HasCompact>::Type,
+			burn: Permill
+		) -> Result {
+			<ProposalBond<T>>::put(proposal_bond);
+			<ProposalBondMinimum<T>>::put(proposal_bond_minimum.into());
+			<SpendPeriod<T>>::put(spend_period.into());
+			<Burn<T>>::put(burn);
+			Ok(())
+		}
+
+		/// Reject a proposed spend. The original deposit will be slashed.
+		fn reject_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result {
+			T::RejectOrigin::ensure_origin(origin)?;
+			let proposal_id: ProposalIndex = proposal_id.into();
+
+			let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
+
+			let value = proposal.bond;
+			let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
+
+			Ok(())
+		}
+
+		/// Approve a proposal. At a later time, the proposal will be allocated to the beneficiary
+		/// and the original deposit will be returned.
+		fn approve_proposal(origin, proposal_id: Compact<ProposalIndex>) -> Result {
+			T::ApproveOrigin::ensure_origin(origin)?;
+			let proposal_id = proposal_id.into();
+
+			ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
+
+			<Approvals<T>>::mutate(|v| v.push(proposal_id));
+
+			Ok(())
+		}
 
 		fn on_finalise(n: T::BlockNumber) {
 			// Check to see if we should spend some funds!
@@ -160,74 +217,7 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
-	// Implement Calls and add public immutables and private mutables.
-
-	fn propose_spend(origin: T::Origin, value: <T::Balance as HasCompact>::Type, beneficiary: Address<T::AccountId, T::AccountIndex>) -> Result {
-		let proposer = ensure_signed(origin)?;
-		let beneficiary = <balances::Module<T>>::lookup(beneficiary)?;
-		let value = value.into();
-
-		let bond = Self::calculate_bond(value);
-		<balances::Module<T>>::reserve(&proposer, bond)
-			.map_err(|_| "Proposer's balance too low")?;
-
-		let c = Self::proposal_count();
-		<ProposalCount<T>>::put(c + 1);
-		<Proposals<T>>::insert(c, Proposal { proposer, value, beneficiary, bond });
-
-		Self::deposit_event(RawEvent::Proposed(c));
-
-		Ok(())
-	}
-
-	fn reject_proposal(origin: T::Origin, proposal_id: Compact<ProposalIndex>) -> Result {
-		T::RejectOrigin::ensure_origin(origin)?;
-		let proposal_id: ProposalIndex = proposal_id.into();
-
-		let proposal = <Proposals<T>>::take(proposal_id).ok_or("No proposal at that index")?;
-
-		let value = proposal.bond;
-		let _ = <balances::Module<T>>::slash_reserved(&proposal.proposer, value);
-
-		Ok(())
-	}
-
-	fn approve_proposal(origin: T::Origin, proposal_id: Compact<ProposalIndex>) -> Result {
-		T::ApproveOrigin::ensure_origin(origin)?;
-		let proposal_id = proposal_id.into();
-
-		ensure!(<Proposals<T>>::exists(proposal_id), "No proposal at that index");
-
-		<Approvals<T>>::mutate(|v| v.push(proposal_id));
-
-		Ok(())
-	}
-
-	fn set_pot(new_pot: <T::Balance as HasCompact>::Type) -> Result {
-		// Put the new value into storage.
-		<Pot<T>>::put(new_pot.into());
-
-		// All good.
-		Ok(())
-	}
-
-	fn configure(
-		proposal_bond: Permill,
-		proposal_bond_minimum: <T::Balance as HasCompact>::Type,
-		spend_period: <T::BlockNumber as HasCompact>::Type,
-		burn: Permill
-	) -> Result {
-		<ProposalBond<T>>::put(proposal_bond);
-		<ProposalBondMinimum<T>>::put(proposal_bond_minimum.into());
-		<SpendPeriod<T>>::put(spend_period.into());
-		<Burn<T>>::put(burn);
-		Ok(())
-	}
+	// Add public immutables and private mutables.
 
 	/// The needed bond for a proposal whose spend is `value`.
 	fn calculate_bond(value: T::Balance) -> T::Balance {

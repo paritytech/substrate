@@ -150,7 +150,7 @@ where
 		let heap_pages = state.storage(well_known_keys::HEAP_PAGES)
 			.map_err(|e| error::ErrorKind::Execution(Box::new(e)))?
 			.and_then(|v| u64::decode(&mut &v[..]))
-			.unwrap_or(8) as usize;
+			.unwrap_or(1024) as usize;
 
 		let mut ext = Ext::new(&mut overlay, &state, self.backend.changes_trie_storage());
 		self.executor.runtime_version(&mut ext, heap_pages, &code)

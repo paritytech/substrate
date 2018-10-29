@@ -28,6 +28,7 @@ extern crate substrate_primitives as primitives;
 extern crate substrate_client as client;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_network_libp2p as network_libp2p;
+extern crate substrate_consensus_common as consensus;
 extern crate parity_codec as codec;
 extern crate futures;
 extern crate rustc_hex;

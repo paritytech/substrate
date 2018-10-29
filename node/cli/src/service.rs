@@ -22,38 +22,19 @@ use std::sync::Arc;
 use transaction_pool::{self, txpool::{Pool as TransactionPool}};
 use node_primitives::Block;
 use node_runtime::GenesisConfig;
-use node_network::Protocol as NodeProtocol;
 use substrate_service::{
 	FactoryFullConfiguration, LightComponents, FullComponents, FullBackend,
-	LightBackend, FullExecutor, LightExecutor
+	FullClient, LightClient, LightBackend, FullExecutor, LightExecutor,
+	Roles, TaskExecutor,
 };
-use network::import_queue::{BasicQueue, BlockOrigin, ImportBlock, Verifier};
-use runtime_primitives::{traits::Block as BlockT};
-use primitives::AuthorityId;
 use node_executor;
+use consensus::{import_queue, start_aura, Config as AuraConfig, AuraImportQueue};
 
-// TODO: Remove me, when we have a functional consensus.
-/// A verifier that doesn't actually do any checks
-pub struct NoneVerifier;
-/// This Verifiyer accepts all data as valid
-impl<B: BlockT> Verifier<B> for NoneVerifier {
-	fn verify(
-		&self,
-		origin: BlockOrigin,
-		header: B::Header,
-		justification: Vec<u8>,
-		body: Option<Vec<B::Extrinsic>>
-	) -> Result<(ImportBlock<B>, Option<Vec<AuthorityId>>), String> {
-		Ok((ImportBlock {
-			origin,
-			header,
-			body,
-			finalized: true,
-			external_justification: justification,
-			internal_justification: vec![],
-			auxiliary: Vec::new(),
-		}, None))
-	}
+const AURA_SLOT_DURATION: u64 = 6;
+
+construct_simple_protocol! {
+	/// Demo protocol attachment for substrate.
+	pub struct NodeProtocol where Block = Block { }
 }
 
 construct_simple_service!(Service);
@@ -70,14 +51,47 @@ construct_service_factory! {
 		Genesis = GenesisConfig,
 		Configuration = (),
 		FullService = Service<FullComponents<Self>>
-			{ |config, executor| Service::<FullComponents<Factory>>::new(config, executor) },
+			{ |config: FactoryFullConfiguration<Self>, executor: TaskExecutor| {
+				let is_auth = config.roles == Roles::AUTHORITY;
+				Service::<FullComponents<Factory>>::new(config, executor.clone()).map(move |service|{
+					if is_auth {
+						if let Ok(Some(Ok(key))) = service.keystore().contents()
+							.map(|keys| keys.get(0).map(|k| service.keystore().load(k, "")))
+						{
+							info!("Using authority key {}", key.public());
+							let task = start_aura(
+								AuraConfig {
+									local_key:  Some(Arc::new(key)),
+									slot_duration: AURA_SLOT_DURATION,
+								},
+								service.client(),
+								service.proposer(),
+								service.network(),
+							);
+
+							executor.spawn(task);
+						}
+					}
+
+					service
+				})
+			}
+		},
 		LightService = Service<LightComponents<Self>>
 			{ |config, executor| Service::<LightComponents<Factory>>::new(config, executor) },
-		ImportQueue = BasicQueue<Block, NoneVerifier>
-			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) }
-			{ |_, _| Ok(BasicQueue::new(Arc::new(NoneVerifier {}))) },
+		FullImportQueue = AuraImportQueue<Self::Block, FullClient<Self>>
+			{ |config, client| Ok(import_queue(AuraConfig {
+						local_key: None,
+						slot_duration: 5
+					}, client)) },
+		LightImportQueue = AuraImportQueue<Self::Block, LightClient<Self>>
+			{ |config, client| Ok(import_queue(AuraConfig {
+						local_key: None,
+						slot_duration: 5
+					}, client)) },
 	}
 }
+
 
 #[cfg(test)]
 mod tests {

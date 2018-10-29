@@ -28,6 +28,7 @@ extern crate sr_primitives as runtime_primitives;
 pub extern crate substrate_client as client;
 pub extern crate substrate_keyring as keyring;
 pub extern crate substrate_test_runtime as runtime;
+pub extern crate substrate_consensus_common as consensus;
 
 pub mod client_ext;
 pub mod trait_tests;
