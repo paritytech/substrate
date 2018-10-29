@@ -712,7 +712,6 @@ impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block>
 	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
-		use runtime_primitives::traits::Digest;
 		use authorities::PendingChange;
 
 		let maybe_change: Option<ScheduledChange<NumberFor<Block>>> = self.inner.call_api_at(
@@ -779,10 +778,29 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 	let chain_info = client.info()?;
 	let genesis_hash = chain_info.chain.genesis_hash;
 
-	// TODO [now]: attempt to load from disk.
-	let authority_set = SharedAuthoritySet::genesis(
-		voters.iter().map(|(&id, &weight)| (id, weight)).collect(),
-	);
+	let authority_set = match client.backend().get_aux(AUTHORITY_SET_KEY)? {
+		None => {
+			info!(target: "afg", "Loading GRANDPA authorities \
+				from genesis on what appears to be first startup.");
+
+			// no authority set on disk: fetch authorities from genesis state.
+			// if genesis state is not available, we may be a light client, but these
+			// are unsupported for following GRANDPA directly.
+			let genesis_authorities: Vec<(AuthorityId, u64)> = client
+				.call_api_at(&BlockId::Number(NumberFor::<Block>::zero()), fg_primitives::AUTHORITIES_CALL, &())?;
+
+			let authority_set = SharedAuthoritySet::genesis(genesis_authorities);
+			let encoded = authority_set.inner().read().encode();
+			client.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded[..])], &[])?;
+
+			authority_set
+		}
+		Some(raw) => ::authorities::AuthoritySet::decode(&mut &raw[..])
+			.ok_or_else(|| ::client::error::ErrorKind::Backend(
+				format!("GRANDPA authority set kept in invalid format")
+			))?
+			.into(),
+	};
 
 	let block_import = GrandpaBlockImport {
 		inner: client.clone(),

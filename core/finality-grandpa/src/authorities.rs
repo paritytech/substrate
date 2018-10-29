@@ -56,11 +56,6 @@ impl<H, N> SharedAuthoritySet<H, N> {
 impl<H: Eq, N> SharedAuthoritySet<H, N>
 	where N: Add<Output=N> + Ord + Clone + Debug
 {
-	/// Note an upcoming pending transition.
-	pub(crate) fn add_pending_change(&self, pending: PendingChange<H, N>) {
-		self.inner.write().add_pending_change(pending)
-	}
-
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
 		self.inner.read().current_limit()
@@ -96,11 +91,6 @@ pub(crate) struct AuthoritySet<H, N> {
 }
 
 impl<H, N> AuthoritySet<H, N> {
-	/// Get the set identifier.
-	pub(crate) fn set_id(&self) -> u64 {
-		self.set_id
-	}
-
 	/// Get the current set id and a reference to the current authority set.
 	pub(crate) fn current(&self) -> (u64, &[(AuthorityId, u64)]) {
 		(self.set_id, &self.current_authorities[..])

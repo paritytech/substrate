@@ -44,7 +44,7 @@ pub struct ScheduledChange<N> {
 /// WASM function call to check for pending changes.
 pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
-pub const AUTHORITIES_CALL: &str = "grandpa_pending_change";
+pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
 
 decl_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
@@ -66,8 +66,8 @@ decl_apis! {
 		/// passed completely.
 		fn grandpa_pending_change(digest: DigestFor<B>) -> Option<ScheduledChange<NumberFor<B>>>;
 
-		/// Get the current GRANDPA authorities. This should not change except
+		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
-		fn grandpa_authorities() -> Vec<AuthorityId>;
+		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
 	}
 }
