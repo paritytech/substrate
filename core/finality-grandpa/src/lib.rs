@@ -38,6 +38,9 @@ extern crate substrate_network as network;
 #[cfg(test)]
 extern crate substrate_keyring as keyring;
 
+#[cfg(test)]
+extern crate substrate_test_client as test_client;
+
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -620,6 +623,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 			return Ok(());
 		}
 
+		// lock must be held through writing to DB to avoid race
 		let mut authority_set = self.authority_set.inner().write();
 		let client = &self.inner;
 		let status = authority_set.apply_changes(number, |canon_number| {
@@ -752,31 +756,22 @@ impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block>
 	}
 }
 
-/// Run a GRANDPA voter as a task. This returns two pieces of data: a task to run,
-/// and a `BlockImport` implementation.
-pub fn run_grandpa<B, E, Block: BlockT, N>(
-	config: Config,
+/// Half of a link between a block-import worker and a the background voter.
+// This should remain non-clone.
+pub struct LinkHalf<B, E, Block: BlockT> {
 	client: Arc<Client<B, E, Block>>,
-	voters: HashMap<AuthorityId, u64>,
-	network: N,
-) -> ::client::error::Result<(
-	impl Future<Item=(),Error=()>,
-	GrandpaBlockImport<B, E, Block>,
-)> where
-	Block::Hash: Ord,
+	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+}
+
+/// Make block importer and link half necessary to tie the background voter
+/// to it.
+pub fn block_import<B, E, Block: BlockT>(client: Arc<Client<B, E, Block>>)
+	-> Result<(GrandpaBlockImport<B, E, Block>, LinkHalf<B, E, Block>), ClientError>
+	where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
-	N: Network + 'static,
-	N::In: 'static,
-	NumberFor<Block>: BlockNumberOps,
-	DigestFor<Block>: Encode,
 {
-	use futures::future::{self, Loop as FutureLoop};
-
 	use runtime_primitives::traits::Zero;
-
-	let chain_info = client.info()?;
-	let genesis_hash = chain_info.chain.genesis_hash;
 
 	let authority_set = match client.backend().get_aux(AUTHORITY_SET_KEY)? {
 		None => {
@@ -802,10 +797,33 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 			.into(),
 	};
 
-	let block_import = GrandpaBlockImport {
-		inner: client.clone(),
-		authority_set: authority_set.clone(),
-	};
+	Ok((
+		GrandpaBlockImport { inner: client.clone(), authority_set: authority_set.clone() },
+		LinkHalf { client, authority_set },
+	))
+}
+
+/// Run a GRANDPA voter as a task. Provide configuration and a link to a
+/// block import worker that has already been instantiated with `block_import`.
+pub fn run_grandpa<B, E, Block: BlockT, N>(
+	config: Config,
+	link: LinkHalf<B, E, Block>,
+	network: N,
+) -> ::client::error::Result<impl Future<Item=(),Error=()>> where
+	Block::Hash: Ord,
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	N: Network + 'static,
+	N::In: 'static,
+	NumberFor<Block>: BlockNumberOps,
+	DigestFor<Block>: Encode,
+{
+	use futures::future::{self, Loop as FutureLoop};
+	use runtime_primitives::traits::Zero;
+
+	let LinkHalf { client, authority_set } = link;
+	let chain_info = client.info()?;
+	let genesis_hash = chain_info.chain.genesis_hash;
 
 	let (last_round_number, last_state) = match client.backend().get_aux(LAST_COMPLETED_KEY)? {
 		None => (0, RoundState::genesis((genesis_hash, <NumberFor<Block>>::zero()))),
@@ -814,6 +832,10 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 				format!("Last GRANDPA round state kept in invalid format")
 			))?
 	};
+
+	let voters = authority_set.inner().read().current().1.iter()
+		.cloned()
+		.collect();
 
 	let initial_environment = Arc::new(Environment {
 		inner: client.clone(),
@@ -824,7 +846,7 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 		authority_set: authority_set.clone(),
 	});
 
-	let voters = future::loop_fn((initial_environment, last_round_number, last_state), move |params| {
+	let work = future::loop_fn((initial_environment, last_round_number, last_state), move |params| {
 		let (env, last_round_number, last_state) = params;
 		let chain_info = match client.info() {
 			Ok(i) => i,
@@ -866,29 +888,84 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 		}))
 	});
 
-	let work = voters.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e));
-
-	Ok((work, block_import))
+	Ok(work.map_err(|e| warn!("GRANDPA Voter failed: {:?}", e)))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use network::test::*;
+	use network::test::{Block, Hash, TestNetFactory, Peer, PeersClient};
+	use network::import_queue::{PassThroughVerifier};
+	use network::ProtocolConfig;
 	use parking_lot::Mutex;
 	use tokio::runtime::current_thread;
 	use keyring::Keyring;
 	use client::BlockchainEvents;
+	use test_client;
+
+	type PeerData = Mutex<Option<LinkHalf<test_client::Backend, test_client::Executor, Block>>>;
+	type GrandpaPeer = Peer<PassThroughVerifier, PeerData>;
+
+	struct GrandpaTestNet {
+		peers: Vec<Arc<GrandpaPeer>>,
+		started: bool
+	}
+
+	impl TestNetFactory for GrandpaTestNet {
+		type Verifier = PassThroughVerifier;
+		type PeerData = PeerData;
+
+		/// Create new test network with peers and given config.
+		fn from_config(_config: &ProtocolConfig) -> Self {
+			GrandpaTestNet {
+				peers: Vec::new(),
+				started: false
+			}
+		}
+
+		fn make_verifier(&self, _client: Arc<PeersClient>, _cfg: &ProtocolConfig)
+			-> Arc<Self::Verifier>
+		{
+			Arc::new(PassThroughVerifier(false)) // use non-instant finality.
+		}
+
+		fn make_block_import(&self, client: Arc<PeersClient>)
+			-> (Arc<BlockImport<Block,Error=ClientError> + Send + Sync>, PeerData)
+		{
+			let (import, link) = block_import(client).expect("Could not create block import for fresh peer.");
+			(Arc::new(import), Mutex::new(Some(link)))
+		}
+
+		fn peer(&self, i: usize) -> &GrandpaPeer {
+			&self.peers[i]
+		}
+
+		fn peers(&self) -> &Vec<Arc<GrandpaPeer>> {
+			&self.peers
+		}
+
+		fn mut_peers<F: Fn(&mut Vec<Arc<GrandpaPeer>>)>(&mut self, closure: F) {
+			closure(&mut self.peers);
+		}
+
+		fn started(&self) -> bool {
+			self.started
+		}
+
+		fn set_started(&mut self, new: bool) {
+			self.started = new;
+		}
+	}
 
 	#[derive(Clone)]
-	struct TestGrandpaNetwork {
-		inner: Arc<Mutex<TestNet>>,
+	struct MessageRouting {
+		inner: Arc<Mutex<GrandpaTestNet>>,
 		peer_id: usize,
 	}
 
-	impl TestGrandpaNetwork {
-		fn new(inner: Arc<Mutex<TestNet>>, peer_id: usize,) -> Self {
-			TestGrandpaNetwork {
+	impl MessageRouting {
+		fn new(inner: Arc<Mutex<GrandpaTestNet>>, peer_id: usize,) -> Self {
+			MessageRouting {
 				inner,
 				peer_id,
 			}
@@ -904,7 +981,7 @@ mod tests {
 		hash
 	}
 
-	impl Network for TestGrandpaNetwork {
+	impl Network for MessageRouting {
 		type In = Box<Stream<Item=Vec<u8>,Error=()>>;
 
 		fn messages_for(&self, round: u64) -> Self::In {
@@ -936,7 +1013,7 @@ mod tests {
 
 	#[test]
 	fn finalize_20_unanimous_3_peers() {
-		let mut net = TestNet::new(3);
+		let mut net = GrandpaTestNet::new(3);
 		net.peer(0).push_blocks(20, false);
 		net.sync();
 
@@ -955,20 +1032,27 @@ mod tests {
 
 		let mut runtime = current_thread::Runtime::new().unwrap();
 		for (peer_id, key) in peers {
-			let client = net.lock().peer(*peer_id).client().clone();
+			let (client, link) = {
+				let mut net = net.lock();
+				// temporary needed for some reason
+				let link = net.peers[*peer_id].data.lock().take().expect("link initialized at startup; qed");
+				(
+					net.peers[*peer_id].client().clone(),
+					link,
+				)
+			};
 			finality_notifications.push(
 				client.finality_notification_stream()
 					.take_while(|n| Ok(n.header.number() < &20))
 					.for_each(move |_| Ok(()))
 			);
-			let (voter, _) = run_grandpa(
+			let voter = run_grandpa(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					local_key: Some(Arc::new(key.clone().into())),
 				},
-				client,
-				voters.iter().map(|&id| (id, 1)).collect(),
-				TestGrandpaNetwork::new(net.clone(), *peer_id),
+				link,
+				MessageRouting::new(net.clone(), *peer_id),
 			).expect("all in order with client and network");
 
 			runtime.spawn(voter);
@@ -989,7 +1073,7 @@ mod tests {
 
 	#[test]
 	fn observer_can_finalize() {
-		let mut net = TestNet::new(4);
+		let mut net = GrandpaTestNet::new(4);
 		net.peer(0).push_blocks(20, false);
 		net.sync();
 
@@ -1013,20 +1097,26 @@ mod tests {
 			.chain(::std::iter::once((3, None)));
 
 		for (peer_id, local_key) in all_peers {
-			let client = net.lock().peer(peer_id).client().clone();
+			let (client, link) = {
+				let mut net = net.lock();
+				let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
+				(
+					net.peers[peer_id].client().clone(),
+					link,
+				)
+			};
 			finality_notifications.push(
 				client.finality_notification_stream()
 					.take_while(|n| Ok(n.header.number() < &20))
 					.for_each(move |_| Ok(()))
 			);
-			let (voter, _) = run_grandpa(
+			let voter = run_grandpa(
 				Config {
 					gossip_duration: TEST_GOSSIP_DURATION,
 					local_key,
 				},
-				client,
-				voters.clone(),
-				TestGrandpaNetwork::new(net.clone(), peer_id),
+				link,
+				MessageRouting::new(net.clone(), peer_id),
 			).expect("all in order with client and network");
 
 			runtime.spawn(voter);
