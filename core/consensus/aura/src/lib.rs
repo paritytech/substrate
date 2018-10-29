@@ -464,6 +464,7 @@ mod tests {
 
 	impl TestNetFactory for AuraTestNet {
 		type Verifier = AuraVerifier<PeersClient>;
+		type PeerData = ();
 
 		/// Create new test network with peers and given config.
 		fn from_config(_config: &ProtocolConfig) -> Self {
@@ -480,15 +481,15 @@ mod tests {
 			Arc::new(AuraVerifier { client, config })
 		}
 
-		fn peer(&self, i: usize) -> &Peer<Self::Verifier> {
+		fn peer(&self, i: usize) -> &Peer<Self::Verifier, ()> {
 			&self.peers[i]
 		}
 
-		fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier>>> {
+		fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, ()>>> {
 			&self.peers
 		}
 
-		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier>>>)>(&mut self, closure: F ) {
+		fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, ()>>>)>(&mut self, closure: F) {
 			closure(&mut self.peers);
 		}
 
