@@ -620,36 +620,57 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 			return Ok(());
 		}
 
-		self.authority_set.with_mut(|authority_set| {
-			let client = &self.inner;
-			let status = authority_set.apply_changes(number, |canon_number| {
-				client.block_hash_from_id(&BlockId::number(canon_number))
-					.map(|h| h.expect("given number always less than newly-finalized number; \
-						thus there is a block with that number finalized already; qed"))
-			})?;
+		let mut authority_set = self.authority_set.inner().write();
+		let client = &self.inner;
+		let status = authority_set.apply_changes(number, |canon_number| {
+			client.block_hash_from_id(&BlockId::number(canon_number))
+				.map(|h| h.expect("given number always less than newly-finalized number; \
+					thus there is a block with that number finalized already; qed"))
+		})?;
 
-			if status.changed {
-				// TODO [now]: write to disk. if it fails, exit the node.
-				// write `authorities.encode()`
+		if status.changed {
+			// write new authority set state to disk.
+			let encoded_set = authority_set.encode();
 
-				if let Some((ref canon_hash, ref canon_number)) = status.new_set_block {
-					// write `LastFinalized` entry with `RoundState::genesis(canon)`.
-				}
+			let write_result = if let Some((ref canon_hash, ref canon_number)) = status.new_set_block {
+				// we also overwrite the "last completed round" entry with a blank slate
+				// because from the perspective of the finality gadget, the chain has
+				// reset.
+				let round_state = RoundState::genesis((*canon_hash, *canon_number));
+				let last_completed: LastCompleted<_, _> = (0, round_state);
+				let encoded = last_completed.encode();
+
+				client.backend().insert_aux(
+					&[
+						(AUTHORITY_SET_KEY, &encoded_set[..]),
+						(LAST_COMPLETED_KEY, &encoded[..]),
+					],
+					&[]
+				)
+			} else {
+				client.backend().insert_aux(&[(AUTHORITY_SET_KEY, &encoded_set[..])], &[])
+			};
+
+			if let Err(e) = write_result {
+				warn!(target: "finality", "Failed to write updated authority set to disk. Bailing.");
+				warn!(target: "finality", "Node is in a potentially inconsistent state.");
+
+				return Err(e.into());
 			}
+		}
 
-			if let Some((canon_hash, canon_number)) = status.new_set_block {
-				// the authority set has changed.
-				let (new_id, set_ref) = authority_set.current();
-				return Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
-					canon_hash,
-					canon_number,
-					set_id: new_id,
-					authorities: set_ref.to_vec(),
-				}));
-			}
-
+		if let Some((canon_hash, canon_number)) = status.new_set_block {
+			// the authority set has changed.
+			let (new_id, set_ref) = authority_set.current();
+			Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
+				canon_hash,
+				canon_number,
+				set_id: new_id,
+				authorities: set_ref.to_vec(),
+			}))
+		} else {
 			Ok(())
-		})
+		}
 	}
 
 	fn prevote_equivocation(
@@ -688,7 +709,7 @@ impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block>
 {
 	type Error = ClientError;
 
-	fn import_block(&self, block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
+	fn import_block(&self, mut block: ImportBlock<Block>, new_authorities: Option<Vec<AuthorityId>>)
 		-> Result<ImportResult, Self::Error>
 	{
 		use runtime_primitives::traits::Digest;
@@ -700,22 +721,32 @@ impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block>
 			block.header.digest()
 		)?;
 
-		let maybe_change = maybe_change.map(|change| (
-			block.header.hash(),
-			block.header.number().clone(),
-			change
-		));
+		// when we update the authorities, we need to hold the lock
+		// until the block is written to prevent a race if we need to restore
+		// the old authority set on error.
+		let just_in_case = maybe_change.map(|change| {
+			let hash = block.header.hash();
+			let number = block.header.number().clone();
 
-		let result = self.inner.import_block(block, new_authorities);
-		if let (true, Some((hash, number, change))) = (result.is_ok(), maybe_change) {
-			self.authority_set.add_pending_change(PendingChange {
+			let mut authorities = self.authority_set.inner().write();
+			let old_set = authorities.clone();
+			authorities.add_pending_change(PendingChange {
 				next_authorities: change.next_authorities,
 				finalization_depth: number + change.delay,
 				canon_height: number,
 				canon_hash: hash,
 			});
 
-			// TODO [now]: write to DB, and what to do on failure?
+			block.auxiliary.push((AUTHORITY_SET_KEY.to_vec(), Some(authorities.encode())));
+			(old_set, authorities)
+		});
+
+		let result = self.inner.import_block(block, new_authorities);
+		if let Err(ref e) = result {
+			if let Some((old_set, mut authorities)) = just_in_case {
+				debug!(target: "afg", "Restoring old set after block import error: {:?}", e);
+				*authorities = old_set;
+			}
 		}
 
 		result

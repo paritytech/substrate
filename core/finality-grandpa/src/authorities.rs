@@ -47,16 +47,9 @@ impl<H, N> SharedAuthoritySet<H, N> {
 		}
 	}
 
-	/// Execute some work using the inner authority set.
-	pub(crate) fn with<F, U>(&self, f: F) -> U
-		where F: FnOnce(&AuthoritySet<H, N>) -> U
-	{
-		f(&*self.inner.read())
-	}
-
-	/// Execute a closure with the inner set mutably.
-	pub(crate) fn with_mut<F, U>(&self, f: F) -> U where F: FnOnce(&mut AuthoritySet<H, N>) -> U {
-		f(&mut *self.inner.write())
+	/// Acquire a reference to the inner read-write lock.
+	pub(crate) fn inner(&self) -> &RwLock<AuthoritySet<H, N>> {
+		&*self.inner
 	}
 }
 
