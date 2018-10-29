@@ -324,7 +324,7 @@ pub trait TestNetFactory: Sized {
 	/// Get reference to peer.
 	fn peer(&self, i: usize) -> &Peer<Self::Verifier, Self::PeerData>;
 	fn peers(&self) -> &Vec<Arc<Peer<Self::Verifier, Self::PeerData>>>;
-	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, Self::PeerData>>>)>(&mut self, closure: F );
+	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier, Self::PeerData>>>)>(&mut self, closure: F);
 
 	fn started(&self) -> bool;
 	fn set_started(&mut self, now: bool);

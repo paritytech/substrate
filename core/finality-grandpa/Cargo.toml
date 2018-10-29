@@ -24,3 +24,4 @@ features = ["derive-codec"]
 [dev-dependencies]
 substrate-network = { path = "../network", features = ["test-helpers"] }
 substrate-keyring = { path = "../keyring" }
+substrate-test-client = { path = "../test-client"}
