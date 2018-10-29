@@ -26,7 +26,7 @@ use client::{self, error, Client as SubstrateClient, CallExecutor};
 use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, id::BLOCK_BUILDER};
 use codec::{Decode, Encode};
 use consensus_common::{self, InherentData, evaluation, offline_tracker::OfflineTracker};
-use primitives::{AuthorityId, ed25519, Blake2Hasher};
+use primitives::{H256, AuthorityId, ed25519, Blake2Hasher};
 use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
@@ -70,7 +70,7 @@ pub trait AuthoringApi:
 impl<'a, B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<'a, B, E, Block, Blake2Hasher> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT
+	Block: BlockT<Hash=H256>,
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
@@ -80,7 +80,7 @@ impl<'a, B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilde
 impl<'a, B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Block = Block;
 	type Error = client::error::Error;

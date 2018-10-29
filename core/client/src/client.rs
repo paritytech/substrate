@@ -894,7 +894,7 @@ impl<B, E, Block> Client<B, E, Block> where
 impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 
@@ -960,7 +960,7 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 impl<B, E, Block> consensus::Authorities<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
