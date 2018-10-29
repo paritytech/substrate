@@ -34,14 +34,16 @@ use primitives::AuthorityId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, NumberFor, Zero};
 
 pub use blocks::BlockData;
-use chain::Client;
+use client::error::Error as ClientError;
 use error::{ErrorKind, Error};
 use protocol::Context;
 use service::ExecuteInContext;
 use sync::ChainSync;
 
-pub use consensus::{ImportBlock, ImportResult, BlockOrigin};
+pub use consensus::{ImportBlock, BlockImport, ImportResult, BlockOrigin};
 
+/// Shared block import struct used by the queue.
+pub type SharedBlockImport<B> = Arc<dyn BlockImport<B,Error=ClientError> + Send + Sync>;
 
 #[cfg(any(test, feature = "test-helpers"))]
 use std::cell::RefCell;
@@ -98,6 +100,7 @@ pub struct BasicQueue<B: BlockT, V: 'static + Verifier<B>> {
 	handle: Mutex<Option<::std::thread::JoinHandle<()>>>,
 	data: Arc<AsyncImportQueueData<B>>,
 	verifier: Arc<V>,
+	block_import: SharedBlockImport<B>,
 }
 
 /// Locks order: queue, queue_blocks, best_importing_number
@@ -111,11 +114,12 @@ struct AsyncImportQueueData<B: BlockT> {
 
 impl<B: BlockT, V: Verifier<B>> BasicQueue<B, V> {
 	/// Instantiate a new basic queue, with given verifier.
-	pub fn new(verifier: Arc<V>) -> Self {
+	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>) -> Self {
 		Self {
 			handle: Mutex::new(None),
 			data: Arc::new(AsyncImportQueueData::new()),
 			verifier,
+			block_import,
 		}
 	}
 }
@@ -141,8 +145,9 @@ impl<B: BlockT, V: 'static + Verifier<B>> ImportQueue<B> for BasicQueue<B, V> {
 
 		let qdata = self.data.clone();
 		let verifier = self.verifier.clone();
+		let block_import = self.block_import.clone();
 		*self.handle.lock() = Some(::std::thread::Builder::new().name("ImportQueue".into()).spawn(move || {
-			import_thread(link, qdata, verifier)
+			import_thread(block_import, link, qdata, verifier)
 		}).map_err(|err| Error::from(ErrorKind::Io(err)))?);
 		Ok(())
 	}
@@ -205,6 +210,7 @@ impl<B: BlockT, V: 'static + Verifier<B>> Drop for BasicQueue<B, V> {
 
 /// Blocks import thread.
 fn import_thread<B: BlockT, L: Link<B>, V: Verifier<B>>(
+	block_import: SharedBlockImport<B>,
 	link: L,
 	qdata: Arc<AsyncImportQueueData<B>>,
 	verifier: Arc<V>
@@ -229,6 +235,7 @@ fn import_thread<B: BlockT, L: Link<B>, V: Verifier<B>>(
 
 		let blocks_hashes: Vec<B::Hash> = new_blocks.1.iter().map(|b| b.block.hash.clone()).collect();
 		if !import_many_blocks(
+			&*block_import,
 			&link,
 			Some(&*qdata),
 			new_blocks,
@@ -249,8 +256,6 @@ fn import_thread<B: BlockT, L: Link<B>, V: Verifier<B>>(
 /// Hooks that the verification queue can use to influence the synchronization
 /// algorithm.
 pub trait Link<B: BlockT>: Send {
-	/// Get chain reference.
-	fn chain(&self) -> &Client<B>;
 	/// Block imported.
 	fn block_imported(&self, _hash: &B::Hash, _number: NumberFor<B>) { }
 	/// Maintain sync.
@@ -265,8 +270,6 @@ pub trait Link<B: BlockT>: Send {
 
 /// A link implementation that connects to the network.
 pub struct NetworkLink<B: BlockT, E: ExecuteInContext<B>> {
-	/// The client handle.
-	pub(crate) client: Arc<Client<B>>,
 	/// The chain-sync handle
 	pub(crate) sync: Weak<RwLock<ChainSync<B>>>,
 	/// Network context.
@@ -286,10 +289,6 @@ impl<B: BlockT, E: ExecuteInContext<B>> NetworkLink<B, E> {
 }
 
 impl<B: BlockT, E: ExecuteInContext<B>> Link<B> for NetworkLink<B, E> {
-	fn chain(&self) -> &Client<B> {
-		&*self.client
-	}
-
 	fn block_imported(&self, hash: &B::Hash, number: NumberFor<B>) {
 		self.with_sync(|sync, _| sync.block_imported(&hash, number))
 	}
@@ -342,6 +341,7 @@ enum BlockImportError {
 
 /// Import a bunch of blocks.
 fn import_many_blocks<'a, B: BlockT, L: Link<B>, V: Verifier<B>>(
+	import_handle: &BlockImport<B, Error=ClientError>,
 	link: &L,
 	qdata: Option<&AsyncImportQueueData<B>>,
 	blocks: (BlockOrigin, Vec<BlockData<B>>),
@@ -365,7 +365,7 @@ fn import_many_blocks<'a, B: BlockT, L: Link<B>, V: Verifier<B>>(
 	// Blocks in the response/drain should be in ascending order.
 	for block in blocks {
 		let import_result = import_single_block(
-			link.chain(),
+			import_handle,
 			blocks_origin.clone(),
 			block,
 			verifier.clone(),
@@ -389,7 +389,7 @@ fn import_many_blocks<'a, B: BlockT, L: Link<B>, V: Verifier<B>>(
 
 /// Single block import function.
 fn import_single_block<B: BlockT, V: Verifier<B>>(
-	chain: &Client<B>,
+	import_handle: &BlockImport<B,Error=ClientError>,
 	block_origin: BlockOrigin,
 	block: BlockData<B>,
 	verifier: Arc<V>
@@ -431,7 +431,7 @@ fn import_single_block<B: BlockT, V: Verifier<B>>(
 			BlockImportError::VerificationFailed(peer, msg)
 		})?;
 
-	match chain.import(import_block, new_authorities) {
+	match import_handle.import_block(import_block, new_authorities) {
 		Ok(ImportResult::AlreadyInChain) => {
 			trace!(target: "sync", "Block already in chain {}: {:?}", number, hash);
 			Ok(BlockImportResult::ImportedKnown(hash, number))
@@ -558,15 +558,25 @@ impl<B: BlockT> Verifier<B> for PassThroughVerifier {
 	}
 }
 
-#[cfg(any(test, feature = "test-helpers"))]
 /// Blocks import queue that is importing blocks in the same thread.
 /// The boolean value indicates whether blocks should be imported without instant finality.
-pub struct SyncImportQueue<B: BlockT, V: Verifier<B>>(Arc<V>, ImportCB<B>);
+#[cfg(any(test, feature = "test-helpers"))]
+pub struct SyncImportQueue<B: BlockT, V: Verifier<B>> {
+	verifier: Arc<V>,
+	link: ImportCB<B>,
+	block_import: SharedBlockImport<B>,
+}
+
 #[cfg(any(test, feature = "test-helpers"))]
 impl<B: BlockT, V: Verifier<B>> SyncImportQueue<B, V> {
-	/// Create a new SyncImportQueue wrapping the given Verifier
-	pub fn new(verifier: Arc<V>) -> Self {
-		SyncImportQueue(verifier, ImportCB::new())
+	/// Create a new SyncImportQueue wrapping the given Verifier and block import
+	/// handle.
+	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>) -> Self {
+		SyncImportQueue {
+			verifier,
+			link: ImportCB::new(),
+			block_import,
+		}
 	}
 }
 
@@ -577,10 +587,12 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 		&self,
 		link: L,
 	) -> Result<(), Error> {
-		let v = self.0.clone();
-		self.1.set(Box::new(move |origin, new_blocks| {
+		let v = self.verifier.clone();
+		let import_handle = self.block_import.clone();
+		self.link.set(Box::new(move |origin, new_blocks| {
 			let verifier = v.clone();
 			import_many_blocks(
+				&*import_handle,
 				&link,
 				None,
 				(origin, new_blocks),
@@ -605,7 +617,7 @@ impl<B: 'static + BlockT, V: 'static + Verifier<B>> ImportQueue<B> for SyncImpor
 	}
 
 	fn import_blocks(&self, origin: BlockOrigin, blocks: Vec<BlockData<B>>) {
-		self.1.call(origin, blocks);
+		self.link.call(origin, blocks);
 	}
 }
 
@@ -644,7 +656,6 @@ pub mod tests {
 	}
 
 	impl Link<Block> for TestLink {
-		fn chain(&self) -> &Client<Block> { &*self.chain }
 		fn block_imported(&self, _hash: &Hash, _number: NumberFor<Block>) {
 			self.imported.set(self.imported.get() + 1);
 		}
@@ -762,7 +773,9 @@ pub mod tests {
 		let qdata = AsyncImportQueueData::new();
 		let verifier = Arc::new(PassThroughVerifier(true));
 		qdata.is_stopping.store(true, Ordering::SeqCst);
+		let client = test_client::new();
 		assert!(!import_many_blocks(
+			&client,
 			&mut TestLink::new(),
 			Some(&qdata),
 			(BlockOrigin::File, vec![block.clone(), block]),

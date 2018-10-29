@@ -24,6 +24,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use client;
+use client::error::Error as ClientError;
 use client::block_builder::BlockBuilder;
 use runtime_primitives::generic::BlockId;
 use io::SyncIo;
@@ -38,7 +39,7 @@ use import_queue::{SyncImportQueue, PassThroughVerifier, Verifier};
 use consensus::BlockOrigin;
 use specialization::Specialization;
 use consensus_gossip::ConsensusGossip;
-use import_queue::ImportQueue;
+use import_queue::{BlockImport, ImportQueue};
 use service::ExecuteInContext;
 use test_client;
 
@@ -163,7 +164,6 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 		let info = self.client.info().expect("In-mem client does not fail");
 		let header = self.client.header(&BlockId::Hash(info.chain.best_hash)).unwrap().unwrap();
 		let network_link = ::import_queue::NetworkLink {
-			client: self.sync.context_data().chain.clone(),
 			sync: Arc::downgrade(self.sync.sync()),
 			context: Arc::downgrade(&self.executor),
 		};
@@ -235,16 +235,31 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
 	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>)
 	{
-		for _ in 0 .. count {
+		use blocks::BlockData;
+
+		for _  in 0..count {
 			let mut builder = self.client.new_block().unwrap();
 			edit_block(&mut builder);
 			let block = builder.bake().unwrap();
 			let hash = block.header.hash();
 			trace!("Generating {}, (#{}, parent={})", hash, block.header.number, block.header.parent_hash);
 			let header = block.header.clone();
-			self.client.justify_and_import(origin, block).unwrap();
-			self.sync.on_block_imported(&mut TestIo::new(&self.queue, None), hash, &header);
+
+			// NOTE: if we use a non-synchronous queue in the test-net in the future,
+			// this may not work.
+		 	self.import_queue.import_blocks(origin, vec![BlockData {
+				origin: None,
+				block: ::message::BlockData::<Block> {
+					hash,
+					header: Some(header),
+					body: Some(block.extrinsics),
+					receipt: None,
+					message_queue: None,
+					justification: None,
+				},
+			}]);
 		}
+
 	}
 
 	/// Push blocks to the peer (simplified: with or without a TX)
@@ -308,7 +323,12 @@ pub trait TestNetFactory: Sized {
 	fn mut_peers<F: Fn(&mut Vec<Arc<Peer<Self::Verifier>>>)>(&mut self, closure: F );
 
 	fn started(&self) -> bool;
-	fn set_started(&mut self, now: bool); 
+	fn set_started(&mut self, now: bool);
+
+	/// Get custom block import handle for fresh client.
+	fn make_block_import(&self, client: Arc<PeersClient>) -> Arc<BlockImport<Block,Error=ClientError> + Send + Sync> {
+		client
+	}
 
 	fn default_config() -> ProtocolConfig {
 		ProtocolConfig::default()
@@ -330,7 +350,9 @@ pub trait TestNetFactory: Sized {
 		let client = Arc::new(test_client::new());
 		let tx_pool = Arc::new(EmptyTransactionPool);
 		let verifier = self.make_verifier(client.clone(), config);
-		let import_queue = Arc::new(SyncImportQueue::new(verifier));
+		let block_import = self.make_block_import(client.clone());
+
+		let import_queue = Arc::new(SyncImportQueue::new(verifier, block_import));
 		let specialization = DummySpecialization {
 			gossip: ConsensusGossip::new(),
 		};
@@ -471,7 +493,7 @@ impl TestNetFactory for TestNet {
 			started: false
 		}
 	}
-	
+
 	fn make_verifier(&self, _client: Arc<PeersClient>, _config: &ProtocolConfig)
 		-> Arc<Self::Verifier>
 	{
