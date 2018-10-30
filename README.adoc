@@ -118,18 +118,18 @@ Inherent extrinsic knowledge is again somewhat generic, and the actual construct
 
 Substate Node is Substrate's pre-baked blockchain client. You can run a development node locally or configure a new chain and launch your own global testnet.
 
-=== On Mac
+=== On Mac and Ubuntu
 
 To get going as fast as possible, there is a simple script that installs all required dependencies and installs Substrate into your path. Just open a terminal and run:
 
 [source, shell]
 ----
-curl https://raw.githubusercontent.com/paritytech/substrate/master/scripts/getgoing.sh -sSf | sh
+curl getsubstrate.io -sSf | bash
 ----
 
 You can start a local Substrate development chain with running `substrate --dev`.
 
-To create your own global testnet, you'll need to make a new Substrate Node chain specification file ("chainspec").
+To create your own global network/cryptocurrency, you'll need to make a new Substrate Node chain specification file ("chainspec").
 
 First let's get a template chainspec that you can edit. We'll use the "staging" chain, a sort of default chain that the node comes pre-configured with:
 
@@ -147,20 +147,28 @@ Now, edit `~/chainspec.json` in your editor. There are a lot of individual field
       },
 ----
 
+Now with this new chainspec file, you can build a "raw" chain definition for your new chain:
+
 [source, shell]
 ----
 substrate build-spec --chain ~/chainspec.json --raw > ~/mychain.json
 ----
+
+This can be fed into Substrate:
 
 [source, shell]
 ----
 substrate --chain ~/mychain.json
 ----
 
+It won't do much until you start producing blocks though, so to do that you'll need to use the `--validator` option together with passing the seed for the account(s) that is configured to be the initial authorities:
+
 [source, shell]
 ----
 substrate --chain ~/mychain.json --validator --key ...
 ----
+
+You can distribute `mychain.json` so that everyone can synchronise and (depending on your authorities list) validate on your chain.
 
 
 == Building

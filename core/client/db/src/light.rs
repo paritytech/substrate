@@ -196,7 +196,8 @@ impl<Block: BlockT> LightStorage<Block> {
 			).into())
 		}
 
-		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, hash.as_ref());
+		let lookup_key = ::utils::number_to_lookup_key(header.number().clone());
+		transaction.put(columns::META, meta_keys::FINALIZED_BLOCK, &lookup_key);
 
 		// build new CHT if required
 		if let Some(new_cht_number) = cht::is_build_required(cht::SIZE, *header.number()) {
@@ -243,6 +244,14 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 		let hash = header.hash();
 		let number = *header.number();
 		let parent_hash = *header.parent_hash();
+
+		// blocks in longest chain are keyed by number
+		let lookup_key = if leaf_state.is_best() {
+			::utils::number_to_lookup_key(number).to_vec()
+		} else {
+		// other blocks are keyed by number + hash
+			::utils::number_and_hash_to_lookup_key(number, hash)
+		};
 
 		if leaf_state.is_best() {
 			// handle reorg.
@@ -298,16 +307,8 @@ impl<Block> LightBlockchainStorage<Block> for LightStorage<Block>
 				}
 			}
 
-			transaction.put(columns::META, meta_keys::BEST_BLOCK, hash.as_ref());
+			transaction.put(columns::META, meta_keys::BEST_BLOCK, &lookup_key);
 		}
-
-		// blocks in longest chain are keyed by number
-		let lookup_key = if leaf_state.is_best() {
-			::utils::number_to_lookup_key(number).to_vec()
-		} else {
-		// other blocks are keyed by number + hash
-			::utils::number_and_hash_to_lookup_key(number, hash)
-		};
 
 		transaction.put(columns::HEADER, &lookup_key, &header.encode());
 		transaction.put(columns::HASH_LOOKUP, hash.as_ref(), &lookup_key);

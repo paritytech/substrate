@@ -776,41 +776,41 @@ macro_rules! construct_simple_protocol {
 
 			fn on_connect(
 				&mut self,
-				ctx: &mut $crate::Context<$block>,
-				who: $crate::NodeIndex,
-				status: $crate::StatusMessage<$block>
+				_ctx: &mut $crate::Context<$block>,
+				_who: $crate::NodeIndex,
+				_status: $crate::StatusMessage<$block>
 			) {
-				$( self.$sub_protocol_name.on_connect(ctx, who, status); )*
+				$( self.$sub_protocol_name.on_connect(_ctx, _who, _status); )*
 			}
 
-			fn on_disconnect(&mut self, ctx: &mut $crate::Context<$block>, who: $crate::NodeIndex) {
-				$( self.$sub_protocol_name.on_disconnect(ctx, who); )*
+			fn on_disconnect(&mut self, _ctx: &mut $crate::Context<$block>, _who: $crate::NodeIndex) {
+				$( self.$sub_protocol_name.on_disconnect(_ctx, _who); )*
 			}
 
 			fn on_message(
 				&mut self,
-				ctx: &mut $crate::Context<$block>,
-				who: $crate::NodeIndex,
-				message: &mut Option<$crate::message::Message<$block>>
+				_ctx: &mut $crate::Context<$block>,
+				_who: $crate::NodeIndex,
+				_message: &mut Option<$crate::message::Message<$block>>
 			) {
-				$( self.$sub_protocol_name.on_message(ctx, who, message); )*
+				$( self.$sub_protocol_name.on_message(_ctx, _who, _message); )*
 			}
 
 			fn on_abort(&mut self) {
 				$( self.$sub_protocol_name.on_abort(); )*
 			}
 
-			fn maintain_peers(&mut self, ctx: &mut $crate::Context<$block>) {
-				$( self.$sub_protocol_name.maintain_peers(ctx); )*
+			fn maintain_peers(&mut self, _ctx: &mut $crate::Context<$block>) {
+				$( self.$sub_protocol_name.maintain_peers(_ctx); )*
 			}
 
 			fn on_block_imported(
 				&mut self,
-				ctx: &mut $crate::Context<$block>,
-				hash: <$block as $crate::BlockT>::Hash,
-				header: &<$block as $crate::BlockT>::Header
+				_ctx: &mut $crate::Context<$block>,
+				_hash: <$block as $crate::BlockT>::Hash,
+				_header: &<$block as $crate::BlockT>::Header
 			) {
-				$( self.$sub_protocol_name.on_block_imported(ctx, hash, header); )*
+				$( self.$sub_protocol_name.on_block_imported(_ctx, _hash, _header); )*
 			}
 		}
 	}

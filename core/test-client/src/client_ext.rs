@@ -16,15 +16,17 @@
 
 //! Client extension for tests.
 
-use client::{self, ImportBlock, Client};
+use client::{self, Client};
+use consensus::{ImportBlock, BlockImport, BlockOrigin};
 use runtime_primitives::generic::BlockId;
 use primitives::Blake2Hasher;
 use runtime;
 
 /// Extension trait for a test client.
-pub trait TestClient {
+pub trait TestClient: Sized {
 	/// Justify and import block to the chain. No finality.
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()>;
+	fn justify_and_import(&self, origin: BlockOrigin, block: runtime::Block)
+		-> client::error::Result<()>;
 
 	/// Finalize a block.
 	fn finalize_block(&self, id: BlockId<runtime::Block>) -> client::error::Result<()>;
@@ -36,21 +38,23 @@ pub trait TestClient {
 impl<B, E> TestClient for Client<B, E, runtime::Block>
 	where
 		B: client::backend::Backend<runtime::Block, Blake2Hasher>,
-		E: client::CallExecutor<runtime::Block, Blake2Hasher>
+		E: client::CallExecutor<runtime::Block, Blake2Hasher>,
+		Self: BlockImport<runtime::Block, Error=client::error::Error>
 {
-	fn justify_and_import(&self, origin: client::BlockOrigin, block: runtime::Block) -> client::error::Result<()> {
+	fn justify_and_import(&self, origin: BlockOrigin, block: runtime::Block)
+		-> client::error::Result<()>
+	{
 		let import = ImportBlock {
 			origin,
 			header: block.header,
 			external_justification: vec![],
-			internal_justification: vec![],
+			post_runtime_digests: vec![],
 			body: Some(block.extrinsics),
 			finalized: false,
 			auxiliary: Vec::new(),
 		};
-		self.import_block(import, None)?;
 
-		Ok(())
+		self.import_block(import, None).map(|_| ())
 	}
 
 	fn finalize_block(&self, id: BlockId<runtime::Block>) -> client::error::Result<()> {

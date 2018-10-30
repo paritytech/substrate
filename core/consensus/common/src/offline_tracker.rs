@@ -16,7 +16,7 @@
 
 //! Tracks offline validators.
 
-use node_primitives::AccountId;
+use primitives::AuthorityId;
 
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
@@ -56,7 +56,7 @@ impl Observed {
 
 /// Tracks offline validators and can issue a report for those offline.
 pub struct OfflineTracker {
-	observed: HashMap<AccountId, Observed>,
+	observed: HashMap<AuthorityId, Observed>,
 }
 
 impl OfflineTracker {
@@ -66,7 +66,7 @@ impl OfflineTracker {
 	}
 
 	/// Note new consensus is starting with the given set of validators.
-	pub fn note_new_block(&mut self, validators: &[AccountId]) {
+	pub fn note_new_block(&mut self, validators: &[AuthorityId]) {
 		use std::collections::HashSet;
 
 		let set: HashSet<_> = validators.iter().cloned().collect();
@@ -74,14 +74,14 @@ impl OfflineTracker {
 	}
 
 	/// Note that a round has ended.
-	pub fn note_round_end(&mut self, validator: AccountId, was_online: bool) {
+	pub fn note_round_end(&mut self, validator: AuthorityId, was_online: bool) {
 		self.observed.entry(validator)
 			.or_insert_with(Observed::new)
 			.note_round_end(was_online);
 	}
 
 	/// Generate a vector of indices for offline account IDs.
-	pub fn reports(&self, validators: &[AccountId]) -> Vec<u32> {
+	pub fn reports(&self, validators: &[AuthorityId]) -> Vec<u32> {
 		validators.iter()
 			.enumerate()
 			.filter_map(|(i, v)| if self.is_online(v) {
@@ -93,7 +93,7 @@ impl OfflineTracker {
 	}
 
 	/// Whether reports on a validator set are consistent with our view of things.
-	pub fn check_consistency(&self, validators: &[AccountId], reports: &[u32]) -> bool {
+	pub fn check_consistency(&self, validators: &[AuthorityId], reports: &[u32]) -> bool {
 		reports.iter().cloned().all(|r| {
 			let v = match validators.get(r as usize) {
 				Some(v) => v,
@@ -106,7 +106,7 @@ impl OfflineTracker {
 		})
 	}
 
-	fn is_online(&self, v: &AccountId) -> bool {
+	fn is_online(&self, v: &AuthorityId) -> bool {
 		self.observed.get(v).map(Observed::is_active).unwrap_or(true)
 	}
 }

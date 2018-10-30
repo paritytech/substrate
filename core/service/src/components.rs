@@ -25,7 +25,7 @@ use chain_spec::ChainSpec;
 use client_db;
 use client::{self, Client};
 use {error, Service};
-use network::{self, OnDemand};
+use network::{self, OnDemand, import_queue::ImportQueue};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
@@ -136,8 +136,10 @@ pub trait ServiceFactory: 'static + Sized {
 	type FullService: Deref<Target = Service<FullComponents<Self>>> + Send + Sync + 'static;
 	/// Extended light service type.
 	type LightService: Deref<Target = Service<LightComponents<Self>>> + Send + Sync + 'static;
-	/// ImportQueue
-	type ImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
+	/// ImportQueue for full client
+	type FullImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
+	/// ImportQueue for light clients
+	type LightImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
 
 	//TODO: replace these with a constructor trait. that TransactionPool implements.
 	/// Extrinsic pool constructor for the full client.
@@ -162,7 +164,7 @@ pub trait ServiceFactory: 'static + Sized {
 	fn build_full_import_queue(
 		config: &FactoryFullConfiguration<Self>,
 		_client: Arc<FullClient<Self>>
-	) -> Result<Self::ImportQueue, error::Error> {
+	) -> Result<Self::FullImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
 				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
@@ -177,7 +179,7 @@ pub trait ServiceFactory: 'static + Sized {
 	fn build_light_import_queue(
 		config: &FactoryFullConfiguration<Self>,
 		_client: Arc<LightClient<Self>>
-	) -> Result<Self::ImportQueue, error::Error> {
+	) -> Result<Self::LightImportQueue, error::Error> {
 		if let Some(name) = config.chain_spec.consensus_engine() {
 			match name {
 				_ => Err(format!("Chain Specification defines unknown consensus engine '{}'", name).into())
@@ -196,12 +198,15 @@ pub trait Components: 'static {
 	/// Client backend.
 	type Backend: 'static + client::backend::Backend<FactoryBlock<Self::Factory>, Blake2Hasher>;
 	/// Client executor.
-	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync;
+	type Executor: 'static + client::CallExecutor<FactoryBlock<Self::Factory>, Blake2Hasher> + Send + Sync + Clone;
 	/// Extrinsic pool type.
 	type TransactionPoolApi: 'static + txpool::ChainApi<
 		Hash = <<Self::Factory as ServiceFactory>::Block as BlockT>::Hash,
 		Block = FactoryBlock<Self::Factory>
 	>;
+
+	/// Our Import Queue
+	type ImportQueue: ImportQueue<FactoryBlock<Self::Factory>> + 'static;
 
 	/// Create client.
 	fn build_client(
@@ -221,7 +226,7 @@ pub trait Components: 'static {
 	fn build_import_queue(
 		config: &FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
-	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error>;
+	) -> Result<Self::ImportQueue, error::Error>;
 }
 
 /// A struct that implement `Components` for the full client.
@@ -234,6 +239,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	type Executor = FullExecutor<Factory>;
 	type Backend = FullBackend<Factory>;
 	type TransactionPoolApi = <Factory as ServiceFactory>::FullTransactionPoolApi;
+	type ImportQueue = Factory::FullImportQueue;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -267,7 +273,7 @@ impl<Factory: ServiceFactory> Components for FullComponents<Factory> {
 	fn build_import_queue(
 		config: &FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
-	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error> {
+	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_full_import_queue(config, client)
 	}
 }
@@ -282,6 +288,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	type Executor = LightExecutor<Factory>;
 	type Backend = LightBackend<Factory>;
 	type TransactionPoolApi = <Factory as ServiceFactory>::LightTransactionPoolApi;
+	type ImportQueue = <Factory as ServiceFactory>::LightImportQueue;
 
 	fn build_client(
 		config: &FactoryFullConfiguration<Factory>,
@@ -316,7 +323,7 @@ impl<Factory: ServiceFactory> Components for LightComponents<Factory> {
 	fn build_import_queue(
 		config: &FactoryFullConfiguration<Self::Factory>,
 		client: Arc<ComponentClient<Self>>
-	) -> Result<<Self::Factory as ServiceFactory>::ImportQueue, error::Error> {
+	) -> Result<Self::ImportQueue, error::Error> {
 		Factory::build_light_import_queue(config, client)
 	}
 }
