@@ -258,7 +258,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 					body: Some(block.extrinsics),
 					receipt: None,
 					message_queue: None,
-					justification: None,
+					justification: Some(Vec::new()),
 				},
 			}]);
 		}

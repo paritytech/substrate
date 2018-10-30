@@ -268,6 +268,11 @@ pub trait Link<B: BlockT>: Send {
 	fn restart(&self) { }
 }
 
+/// A link implementation that does nothing.
+pub struct NoopLink;
+
+impl<B: BlockT> Link<B> for NoopLink { }
+
 /// A link implementation that connects to the network.
 pub struct NetworkLink<B: BlockT, E: ExecuteInContext<B>> {
 	/// The chain-sync handle
@@ -340,9 +345,9 @@ enum BlockImportError {
 }
 
 /// Import a bunch of blocks.
-fn import_many_blocks<'a, B: BlockT, L: Link<B>, V: Verifier<B>>(
+fn import_many_blocks<'a, B: BlockT, V: Verifier<B>>(
 	import_handle: &BlockImport<B, Error=ClientError>,
-	link: &L,
+	link: &Link<B>,
 	qdata: Option<&AsyncImportQueueData<B>>,
 	blocks: (BlockOrigin, Vec<BlockData<B>>),
 	verifier: Arc<V>
@@ -460,7 +465,7 @@ fn import_single_block<B: BlockT, V: Verifier<B>>(
 }
 
 /// Process single block import result.
-fn process_import_result<'a, B: BlockT>(
+fn process_import_result<B: BlockT>(
 	link: &Link<B>,
 	result: Result<BlockImportResult<B::Hash, <<B as BlockT>::Header as HeaderT>::Number>, BlockImportError>
 ) -> usize
@@ -568,15 +573,30 @@ pub struct SyncImportQueue<B: BlockT, V: Verifier<B>> {
 }
 
 #[cfg(any(test, feature = "test-helpers"))]
-impl<B: BlockT, V: Verifier<B>> SyncImportQueue<B, V> {
+impl<B: 'static + BlockT, V: 'static + Verifier<B>> SyncImportQueue<B, V> {
 	/// Create a new SyncImportQueue wrapping the given Verifier and block import
 	/// handle.
 	pub fn new(verifier: Arc<V>, block_import: SharedBlockImport<B>) -> Self {
-		SyncImportQueue {
+		let queue = SyncImportQueue {
 			verifier,
 			link: ImportCB::new(),
 			block_import,
-		}
+		};
+
+		let v = queue.verifier.clone();
+		let import_handle = queue.block_import.clone();
+		queue.link.set(Box::new(move |origin, new_blocks| {
+			let verifier = v.clone();
+			import_many_blocks(
+				&*import_handle,
+				&NoopLink,
+				None,
+				(origin, new_blocks),
+				verifier,
+			)
+		}));
+
+		queue
 	}
 }
 

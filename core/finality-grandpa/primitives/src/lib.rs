@@ -33,7 +33,7 @@ use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor};
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]
-#[derive(Encode, Decode)]
+#[derive(Clone, Encode, Decode)]
 pub struct ScheduledChange<N> {
 	/// The new authorities after the change, along with their respective weights.
 	pub next_authorities: Vec<(AuthorityId, u64)>,

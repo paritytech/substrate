@@ -699,20 +699,58 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 	}
 }
 
+/// Client side of the GRANDPA APIs declared in fg-primitives.
+pub trait ApiClient<Block: BlockT> {
+	/// Get the genesis authorities for GRANDPA.
+	fn genesis_authorities(&self) -> Result<Vec<(AuthorityId, u64)>, ClientError>;
+
+	/// Check a header's digest for a scheduled change.
+	fn scheduled_change(&self, header: &Block::Header)
+		-> Result<Option<ScheduledChange<NumberFor<Block>>>, ClientError>;
+}
+
+impl<B, E, Block: BlockT> ApiClient<Block> for Arc<Client<B, E, Block>> where
+	B: Backend<Block, Blake2Hasher> + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone,
+	DigestFor<Block>: Encode,
+{
+	fn genesis_authorities(&self) -> Result<Vec<(AuthorityId, u64)>, ClientError> {
+		use runtime_primitives::traits::Zero;
+
+		self.call_api_at(
+			&BlockId::Number(NumberFor::<Block>::zero()),
+			fg_primitives::AUTHORITIES_CALL,
+			&()
+		)
+	}
+
+	fn scheduled_change(&self, header: &Block::Header)
+		-> Result<Option<ScheduledChange<NumberFor<Block>>>, ClientError>
+	{
+		self.call_api_at(
+			&BlockId::hash(header.parent_hash().clone()),
+			::fg_primitives::PENDING_CHANGE_CALL,
+			header.digest(),
+		)
+	}
+}
+
 /// A block-import handler for GRANDPA.
 ///
 /// This scans each imported block for signals of changing authority set.
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<B, E, Block: BlockT> {
+pub struct GrandpaBlockImport<B, E, Block: BlockT, Api> {
 	inner: Arc<Client<B, E, Block>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
+	api_client: Api,
 }
 
-impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block> where
+impl<B, E, Block: BlockT, Api> BlockImport<Block> for GrandpaBlockImport<B, E, Block, Api> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone,
 	DigestFor<Block>: Encode,
+	Api: ApiClient<Block>,
 {
 	type Error = ClientError;
 
@@ -721,11 +759,7 @@ impl<B, E, Block: BlockT> BlockImport<Block> for GrandpaBlockImport<B, E, Block>
 	{
 		use authorities::PendingChange;
 
-		let maybe_change: Option<ScheduledChange<NumberFor<Block>>> = self.inner.call_api_at(
-			&BlockId::hash(block.header.parent_hash().clone()),
-			::fg_primitives::PENDING_CHANGE_CALL,
-			block.header.digest()
-		)?;
+		let maybe_change = self.api_client.scheduled_change(&block.header)?;
 
 		// when we update the authorities, we need to hold the lock
 		// until the block is written to prevent a race if we need to restore
@@ -768,14 +802,13 @@ pub struct LinkHalf<B, E, Block: BlockT> {
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT>(client: Arc<Client<B, E, Block>>)
-	-> Result<(GrandpaBlockImport<B, E, Block>, LinkHalf<B, E, Block>), ClientError>
+pub fn block_import<B, E, Block: BlockT, Api>(client: Arc<Client<B, E, Block>>, api_client: Api)
+	-> Result<(GrandpaBlockImport<B, E, Block, Api>, LinkHalf<B, E, Block>), ClientError>
 	where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
+	Api: ApiClient<Block>,
 {
-	use runtime_primitives::traits::Zero;
-
 	let authority_set = match client.backend().get_aux(AUTHORITY_SET_KEY)? {
 		None => {
 			info!(target: "afg", "Loading GRANDPA authorities \
@@ -784,8 +817,7 @@ pub fn block_import<B, E, Block: BlockT>(client: Arc<Client<B, E, Block>>)
 			// no authority set on disk: fetch authorities from genesis state.
 			// if genesis state is not available, we may be a light client, but these
 			// are unsupported for following GRANDPA directly.
-			let genesis_authorities: Vec<(AuthorityId, u64)> = client
-				.call_api_at(&BlockId::Number(NumberFor::<Block>::zero()), fg_primitives::AUTHORITIES_CALL, &())?;
+			let genesis_authorities: Vec<(AuthorityId, u64)> = api_client.genesis_authorities()?;
 
 			let authority_set = SharedAuthoritySet::genesis(genesis_authorities);
 			let encoded = authority_set.inner().read().encode();
@@ -801,7 +833,7 @@ pub fn block_import<B, E, Block: BlockT>(client: Arc<Client<B, E, Block>>)
 	};
 
 	Ok((
-		GrandpaBlockImport { inner: client.clone(), authority_set: authority_set.clone() },
+		GrandpaBlockImport { inner: client.clone(), authority_set: authority_set.clone(), api_client },
 		LinkHalf { client, authority_set },
 	))
 }
