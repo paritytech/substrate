@@ -16,7 +16,7 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use super::{BalanceOf, Config, CreateReceipt, Error, Ext};
+use super::{BalanceOf, Schedule, CreateReceipt, Error, Ext};
 use rstd::prelude::*;
 use codec::{Decode, Encode};
 use gas::{GasMeter, GasMeterResult};
@@ -41,7 +41,7 @@ pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	input_data: &'data [u8],
 	output_data: &'data mut Vec<u8>,
 	scratch_buf: Vec<u8>,
-	config: &'a Config<E::T>,
+	schedule: &'a Schedule<E::T>,
 	memory: sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
@@ -51,7 +51,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 		ext: &'a mut E,
 		input_data: &'data [u8],
 		output_data: &'data mut Vec<u8>,
-		config: &'a Config<E::T>,
+		schedule: &'a Schedule<E::T>,
 		memory: sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
 	) -> Self {
@@ -60,7 +60,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 			input_data,
 			output_data,
 			scratch_buf: Vec::new(),
-			config,
+			schedule,
 			memory,
 			gas_meter,
 			special_trap: None,
@@ -340,7 +340,7 @@ define_env!(init_env, <E: Ext>,
 	// successful result to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
 		let data_len_in_gas = <<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(data_len as u64);
-		let price = (ctx.config.return_data_per_byte_cost)
+		let price = (ctx.schedule.return_data_per_byte_cost)
 			.checked_mul(&data_len_in_gas)
 			.ok_or(sandbox::HostError)?;
 

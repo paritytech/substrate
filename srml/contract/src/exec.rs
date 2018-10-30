@@ -92,7 +92,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 						ctx: &mut nested,
 						_caller: caller,
 					},
-					&::vm::Config::default(),
+					&vm::Schedule::default(),
 					gas_meter,
 				).map_err(|_| "vm execute returned error while call")?;
 			}
@@ -160,7 +160,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 					ctx: &mut nested,
 					_caller: caller,
 				},
-				&::vm::Config::default(),
+				&vm::Schedule::default(),
 				gas_meter,
 			).map_err(|_| "vm execute returned error while create")?;
 
