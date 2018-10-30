@@ -430,7 +430,7 @@ macro_rules! decl_apis {
 /// The ApiIds for the various standard runtime APIs.
 pub mod id {
 	use super::ApiId;
-	
+
 	/// ApiId for the BlockBuilder trait.
 	pub const BLOCK_BUILDER: ApiId = *b"blkbuild";
 
@@ -443,10 +443,12 @@ pub mod id {
 
 decl_apis! {
 	/// The `Core` api trait that is mandantory for each runtime.
-	pub trait Core<Block: BlockT, AuthorityId> {
+	pub trait Core<Block: BlockT, AuthorityId> ExtraClientSide <OverlayedChanges> {
 		fn version() -> RuntimeVersion;
 		fn authorities() -> Vec<AuthorityId>;
 		fn execute_block(block: Block);
+		/// Initialise a block with the given header.
+		fn initialise_block(header: <Block as BlockT>::Header) ExtraClientSide(changes: &mut Self::OverlayedChanges);
 	}
 
 	/// The `Metadata` api trait that returns metadata for the runtime.
@@ -461,8 +463,6 @@ decl_apis! {
 
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
 	pub trait BlockBuilder<Block: BlockT> ExtraClientSide <OverlayedChanges> {
-		/// Initialise a block with the given header.
-		fn initialise_block(header: <Block as BlockT>::Header) ExtraClientSide(changes: &mut Self::OverlayedChanges);
 		/// Apply the given extrinsics.
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) ExtraClientSide(changes: &mut Self::OverlayedChanges) -> ApplyResult;
 		/// Finish the current block.
