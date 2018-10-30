@@ -18,7 +18,7 @@ substrate-fg-primitives = { path = "primitives" }
 
 [dependencies.finality-grandpa]
 #version = "0.3.0"
-git = "https://github.com/paritytech/finality-grandpa"
+path = "../../../finality-afg"
 features = ["derive-codec"]
 
 [dev-dependencies]
