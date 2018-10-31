@@ -14,14 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{MaxDepth, ContractAddressFor, Module, Trait, Event, RawEvent, Schedule, Config};
+use super::{ContractAddressFor, Trait, Event, RawEvent, Config};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use vm;
 
 use rstd::prelude::*;
 use runtime_primitives::traits::{Zero, CheckedAdd, CheckedSub};
-use runtime_support::StorageValue;
 use balances::{self, EnsureAccountLiquid};
 
 // TODO: Add logs
@@ -52,12 +51,11 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		data: &[u8],
 		output_data: &mut Vec<u8>,
 	) -> Result<CallReceipt, &'static str> {
-		if self.depth == <MaxDepth<T>>::get() as usize {
+		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot make a call");
 		}
 
-		let call_base_fee = <Module<T>>::call_base_fee();
-		if gas_meter.charge(call_base_fee).is_out_of_gas() {
+		if gas_meter.charge(self.config.call_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base call fee");
 		}
 
@@ -94,7 +92,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 						ctx: &mut nested,
 						_caller: caller,
 					},
-					&Schedule::default(),
+					&self.config.schedule,
 					gas_meter,
 				).map_err(|_| "vm execute returned error while call")?;
 			}
@@ -116,12 +114,11 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 		init_code: &[u8],
 		data: &[u8],
 	) -> Result<CreateReceipt<T>, &'static str> {
-		if self.depth == <MaxDepth<T>>::get() as usize {
+		if self.depth == self.config.max_depth as usize {
 			return Err("reached maximum depth, cannot create");
 		}
 
-		let create_base_fee = <Module<T>>::create_base_fee();
-		if gas_meter.charge(create_base_fee).is_out_of_gas() {
+		if gas_meter.charge(self.config.create_base_fee).is_out_of_gas() {
 			return Err("not enough gas to pay base create fee");
 		}
 
@@ -163,7 +160,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 					ctx: &mut nested,
 					_caller: caller,
 				},
-				&Schedule::default(),
+				&self.config.schedule,
 				gas_meter,
 			).map_err(|_| "vm execute returned error while create")?;
 
@@ -216,14 +213,15 @@ fn transfer<'a, T: Trait>(
 	// `contract_create` will be `false` but `would_create` will be `true`.
 	let would_create = to_balance.is_zero();
 
-	let fee: T::Balance = if contract_create {
-		<Module<T>>::contract_fee()
-	} else {
-		if would_create {
-			<balances::Module<T>>::creation_fee()
-		} else {
-			<balances::Module<T>>::transfer_fee()
-		}
+	let fee: T::Balance = match (contract_create, would_create) {
+		// If this function is called from `CREATE` routine, then we always
+		// charge contract account creation fee.
+		(true, _) => ctx.config.contract_account_create_fee,
+
+		// Otherwise the fee depends on whether we create a new account or transfer
+		// to an existing one.
+		(false, true) => ctx.config.account_create_fee,
+		(false, false) => ctx.config.transfer_fee,
 	};
 
 	if gas_meter.charge_by_balance(fee).is_out_of_gas() {

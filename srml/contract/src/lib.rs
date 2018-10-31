@@ -102,7 +102,7 @@ use double_map::StorageDoubleMap;
 
 use rstd::prelude::*;
 use rstd::marker::PhantomData;
-use codec::{Encode, Input, Codec, HasCompact};
+use codec::{Codec, HasCompact};
 use runtime_primitives::traits::{Hash, As, SimpleArithmetic};
 use runtime_support::dispatch::Result;
 use runtime_support::{Parameter, StorageMap, StorageValue};
@@ -172,7 +172,7 @@ decl_module! {
 			// paying for the gas.
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
-			let cfg = fetch_config();
+			let cfg = Config::preload();
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,
@@ -227,7 +227,7 @@ decl_module! {
 			// paying for the gas.
 			let mut gas_meter = gas::buy_gas::<T>(&origin, gas_limit)?;
 
-			let cfg = fetch_config();
+			let cfg = Config::preload();
 			let mut ctx = ExecutionContext {
 				self_account: origin.clone(),
 				depth: 0,
@@ -290,12 +290,10 @@ decl_storage! {
 		MaxDepth get(max_depth) config(): u32 = 100;
 		/// The maximum amount of gas that could be expended per block.
 		BlockGasLimit get(block_gas_limit) config(): T::Gas = T::Gas::sa(1_000_000);
-
-		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
-
 		/// Gas spent so far in this block.
 		GasSpent get(gas_spent): T::Gas;
-
+		/// Current cost schedule for contracts.
+		CurrentSchedule get(current_schedule) config(): Schedule<T::Gas> = Schedule::default();
 		/// The code associated with an account.
 		pub CodeOf: map T::AccountId => Vec<u8>;	// TODO Vec<u8> values should be optimised to not do a length prefix.
 	}
@@ -322,41 +320,46 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 	}
 }
 
-fn fetch_config<T: Trait>() -> Config<T> {
-	Config {
-		schedule: <Module<T>>::current_schedule(),
-		max_depth: <Module<T>>::max_depth(),
-		gas_price: <Module<T>>::gas_price(),
-		contract_account_create_fee: <Module<T>>::contract_fee(),
-		account_create_fee: <balances::Module<T>>::creation_fee(),
-		transfer_fee: <balances::Module<T>>::transfer_fee(),
-		call_base_fee: <Module<T>>::call_base_fee(),
-		create_base_fee: <Module<T>>::create_base_fee(),
+/// In-memory cache of configuration values.
+///
+/// We assume that these values can't be changed in the
+/// course of transaction execution.
+pub struct Config<T: Trait> {
+	pub schedule: Schedule<T::Gas>,
+	pub max_depth: u32,
+	pub contract_account_create_fee: T::Balance,
+	pub account_create_fee: T::Balance,
+	pub transfer_fee: T::Balance,
+	pub call_base_fee: T::Gas,
+	pub create_base_fee: T::Gas,
+}
+
+impl<T: Trait> Config<T> {
+	fn preload() -> Config<T> {
+		Config {
+			schedule: <Module<T>>::current_schedule(),
+			max_depth: <Module<T>>::max_depth(),
+			contract_account_create_fee: <Module<T>>::contract_fee(),
+			account_create_fee: <balances::Module<T>>::creation_fee(),
+			transfer_fee: <balances::Module<T>>::transfer_fee(),
+			call_base_fee: <Module<T>>::call_base_fee(),
+			create_base_fee: <Module<T>>::create_base_fee(),
+		}
 	}
 }
 
-pub struct Config<T: Trait> {
-	schedule: Schedule<T::Gas>,
-	max_depth: u32,
-	gas_price: T::Balance,
-	contract_account_create_fee: T::Balance,
-	account_create_fee: T::Balance,
-	transfer_fee: T::Balance,
-	call_base_fee: T::Gas,
-	create_base_fee: T::Gas,
-}
-
+/// Definition of the cost schedule and other parameterizations for wasm vm.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Clone, Encode, Decode)]
 pub struct Schedule<Gas> {
 	/// Gas cost of a growing memory by single page.
-	grow_mem_cost: Gas,
+	pub grow_mem_cost: Gas,
 
 	/// Gas cost of a regular operation.
-	regular_op_cost: Gas,
+	pub regular_op_cost: Gas,
 
 	/// Gas cost per one byte returned.
-	return_data_per_byte_cost: Gas,
+	pub return_data_per_byte_cost: Gas,
 
 	/// Gas cost per one byte read from the sandbox memory.
 	sandbox_data_read_cost: Gas,
@@ -368,11 +371,11 @@ pub struct Schedule<Gas> {
 	///
 	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
 	/// how the stack frame cost is calculated.
-	max_stack_height: u32,
+	pub max_stack_height: u32,
 
 	//// What is the maximal memory pages amount is allowed to have for
 	/// a contract.
-	max_memory_pages: u32,
+	pub max_memory_pages: u32,
 }
 
 impl<Gas: As<u64>> Default for Schedule<Gas> {
