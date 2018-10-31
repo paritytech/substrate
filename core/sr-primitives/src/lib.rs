@@ -108,9 +108,9 @@ pub struct Permill(u32);
 
 // TODO: impl Mul<Permill> for N where N: As<usize>
 impl Permill {
-	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
+	pub fn times<N: num_traits::FromPrimitive + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
 		// TODO: handle overflows
-		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1000000)
+		b * <N as num_traits::FromPrimitive>::from_u32(self.0).unwrap() / <N as num_traits::FromPrimitive>::from_u32(1000000).unwrap()
 	}
 
 	pub fn from_millionths(x: u32) -> Permill { Permill(x) }
