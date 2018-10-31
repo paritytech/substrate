@@ -169,7 +169,7 @@ define_env!(init_env, <E: Ext>,
 	//
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
-		let amount = <<<E as Ext>::T as Trait>::Gas as As<u32>>::sa(amount);
+		let amount = <<E::T as Trait>::Gas as As<u32>>::sa(amount);
 		charge_gas(&mut ctx.gas_meter, amount)?;
 
 		Ok(())
@@ -257,7 +257,7 @@ define_env!(init_env, <E: Ext>,
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
-			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
+			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
 		};
 		let ext = &mut ctx.ext;
 		let scratch_buf = &mut ctx.scratch_buf;
@@ -316,7 +316,7 @@ define_env!(init_env, <E: Ext>,
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
-			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
+			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
 		};
 		let ext = &mut ctx.ext;
 		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
@@ -339,7 +339,7 @@ define_env!(init_env, <E: Ext>,
 	// Save a data buffer as a result of the execution, terminate the execution and return a
 	// successful result to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
-		let data_len_in_gas = <<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(data_len as u64);
+		let data_len_in_gas = <<E::T as Trait>::Gas as As<u64>>::sa(data_len as u64);
 		let price = (ctx.schedule.return_data_per_byte_cost)
 			.checked_mul(&data_len_in_gas)
 			.ok_or(sandbox::HostError)?;

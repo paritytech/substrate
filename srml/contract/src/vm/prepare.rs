@@ -173,7 +173,7 @@ pub(super) struct PreparedContract {
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
 pub(super) fn prepare_contract<E: Ext>(
 	original_code: &[u8],
-	schedule: &Schedule<<<E as Ext>::T as Trait>::Gas>,
+	schedule: &Schedule<<E::T as Trait>::Gas>,
 	env: &HostFunctionSet<E>,
 ) -> Result<PreparedContract, Error> {
 	let mut contract_module = ContractModule::new(original_code, schedule)?;

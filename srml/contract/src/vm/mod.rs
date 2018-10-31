@@ -117,7 +117,7 @@ pub fn execute<'a, E: Ext>(
 	input_data: &[u8],
 	output_data: &mut Vec<u8>,
 	ext: &'a mut E,
-	schedule: &Schedule<<<E as Ext>::T as Trait>::Gas>,
+	schedule: &Schedule<<E::T as Trait>::Gas>,
 	gas_meter: &mut GasMeter<E::T>,
 ) -> Result<(), Error> {
 	let env = runtime::init_env();
