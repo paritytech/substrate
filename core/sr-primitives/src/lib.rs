@@ -144,9 +144,9 @@ pub struct Perbill(u32);
 // TODO: impl Mul<Perbill> for N where N: As<usize>
 impl Perbill {
 	/// Attenuate `b` by self.
-	pub fn times<N: traits::As<u64> + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
+	pub fn times<N: num_traits::FromPrimitive + ::rstd::ops::Mul<N, Output=N> + ::rstd::ops::Div<N, Output=N>>(self, b: N) -> N {
 		// TODO: handle overflows
-		b * <N as traits::As<u64>>::sa(self.0 as u64) / <N as traits::As<u64>>::sa(1_000_000_000)
+		b * <N as num_traits::FromPrimitive>::from_u32(self.0).unwrap() / <N as num_traits::FromPrimitive>::from_u32(1_000_000_000).unwrap()
 	}
 
 	/// Nothing.
