@@ -236,14 +236,13 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 
 	/// Add blocks to the peer -- edit the block before adding
 	pub fn generate_blocks<F>(&self, count: usize, origin: BlockOrigin, mut edit_block: F)
-	where F: FnMut(&mut BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>)
+		where F: FnMut(BlockBuilder<test_client::Backend, test_client::Executor, Block, Blake2Hasher>) -> Block
 	{
 		use blocks::BlockData;
 
 		for _  in 0..count {
-			let mut builder = self.client.new_block().unwrap();
-			edit_block(&mut builder);
-			let block = builder.bake().unwrap();
+			let builder = self.client.new_block().unwrap();
+			let block = edit_block(builder);
 			let hash = block.header.hash();
 			trace!("Generating {}, (#{}, parent={})", hash, block.header.number, block.header.parent_hash);
 			let header = block.header.clone();
@@ -269,7 +268,7 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 	pub fn push_blocks(&self, count: usize, with_tx: bool) {
 		let mut nonce = 0;
 		if with_tx {
-			self.generate_blocks(count, BlockOrigin::File, |builder| {
+			self.generate_blocks(count, BlockOrigin::File, |mut builder| {
 				let transfer = Transfer {
 					from: Keyring::Alice.to_raw_public().into(),
 					to: Keyring::Alice.to_raw_public().into(),
@@ -279,9 +278,10 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 				let signature = Keyring::from_raw_public(transfer.from.0).unwrap().sign(&transfer.encode()).into();
 				builder.push(Extrinsic { transfer, signature }).unwrap();
 				nonce = nonce + 1;
+				builder.bake().unwrap()
 			});
 		} else {
-			self.generate_blocks(count, BlockOrigin::File, |_| ());
+			self.generate_blocks(count, BlockOrigin::File, |builder| builder.bake().unwrap());
 		}
 	}
 
