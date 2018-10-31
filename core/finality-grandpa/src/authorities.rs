@@ -39,11 +39,7 @@ impl<H, N> SharedAuthoritySet<H, N> {
 	/// The genesis authority set.
 	pub(crate) fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
 		SharedAuthoritySet {
-			inner: Arc::new(RwLock::new(AuthoritySet {
-				current_authorities: initial,
-				set_id: 0,
-				pending_changes: Vec::new(),
-			}))
+			inner: Arc::new(RwLock::new(AuthoritySet::genesis(initial)))
 		}
 	}
 
@@ -91,6 +87,15 @@ pub(crate) struct AuthoritySet<H, N> {
 }
 
 impl<H, N> AuthoritySet<H, N> {
+	/// Get a genesis set with given authorities.
+	pub(crate) fn genesis(initial: Vec<(AuthorityId, u64)>) -> Self {
+		AuthoritySet {
+			current_authorities: initial,
+			set_id: 0,
+			pending_changes: Vec::new(),
+		}
+	}
+
 	/// Get the current set id and a reference to the current authority set.
 	pub(crate) fn current(&self) -> (u64, &[(AuthorityId, u64)]) {
 		(self.set_id, &self.current_authorities[..])
@@ -113,6 +118,12 @@ impl<H: Eq, N> AuthoritySet<H, N>
 
 		self.pending_changes.insert(idx, pending);
 	}
+
+	/// Inspect pending changes.
+	pub(crate) fn pending_changes(&self) -> &[PendingChange<H, N>] {
+		&self.pending_changes
+	}
+
 	/// Get the earliest limit-block number, if any.
 	pub(crate) fn current_limit(&self) -> Option<N> {
 		self.pending_changes.get(0).map(|change| change.effective_number().clone())
