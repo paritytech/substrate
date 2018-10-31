@@ -18,25 +18,25 @@
 //! wasm module before execution.
 
 use super::env_def::HostFunctionSet;
-use super::{Schedule, Error, Ext};
+use super::{Error, Ext};
 use rstd::prelude::*;
 use parity_wasm::elements::{self, External, MemoryType, Type};
 use pwasm_utils;
 use pwasm_utils::rules;
 use runtime_primitives::traits::As;
 use sandbox;
-use Trait;
+use {Trait, Schedule};
 
-struct ContractModule<'a, T: Trait + 'a> {
+struct ContractModule<'a, Gas: 'a> {
 	// An `Option` is used here for loaning (`take()`-ing) the module.
 	// Invariant: Can't be `None` (i.e. on enter and on exit from the function
 	// the value *must* be `Some`).
 	module: Option<elements::Module>,
-	schedule: &'a Schedule<T>,
+	schedule: &'a Schedule<Gas>,
 }
 
-impl<'a, T: Trait> ContractModule<'a, T> {
-	fn new(original_code: &[u8], schedule: &'a Schedule<T>) -> Result<ContractModule<'a, T>, Error> {
+impl<'a, Gas: 'a + As<u32> + Clone> ContractModule<'a, Gas> {
+	fn new(original_code: &[u8], schedule: &'a Schedule<Gas>) -> Result<ContractModule<'a, Gas>, Error> {
 		let module =
 			elements::deserialize_buffer(original_code).map_err(|_| Error::Deserialization)?;
 		Ok(ContractModule {
@@ -65,8 +65,8 @@ impl<'a, T: Trait> ContractModule<'a, T> {
 	}
 
 	fn inject_gas_metering(&mut self) -> Result<(), Error> {
-		let gas_rules = rules::Set::new(self.schedule.regular_op_cost.as_(), Default::default())
-			.with_grow_cost(self.schedule.grow_mem_cost.as_())
+		let gas_rules = rules::Set::new(self.schedule.regular_op_cost.clone().as_(), Default::default())
+			.with_grow_cost(self.schedule.grow_mem_cost.clone().as_())
 			.with_forbidden_floats();
 
 		let module = self
@@ -173,7 +173,7 @@ pub(super) struct PreparedContract {
 /// The preprocessing includes injecting code for gas metering and metering the height of stack.
 pub(super) fn prepare_contract<E: Ext>(
 	original_code: &[u8],
-	schedule: &Schedule<E::T>,
+	schedule: &Schedule<<<E as Ext>::T as Trait>::Gas>,
 	env: &HostFunctionSet<E>,
 ) -> Result<PreparedContract, Error> {
 	let mut contract_module = ContractModule::new(original_code, schedule)?;
@@ -218,7 +218,6 @@ pub(super) fn prepare_contract<E: Ext>(
 mod tests {
 	use super::*;
 	use std::fmt;
-	use tests::Test;
 	use vm::tests::MockExt;
 	use wabt;
 
@@ -230,7 +229,7 @@ mod tests {
 
 	fn parse_and_prepare_wat(wat: &str) -> Result<PreparedContract, Error> {
 		let wasm = wabt::Wat2Wasm::new().validate(false).convert(wat).unwrap();
-		let schedule = Schedule::<Test>::default();
+		let schedule = Schedule::<u64>::default();
 		let env = ::vm::runtime::init_env();
 		prepare_contract::<MockExt>(wasm.as_ref(), &schedule, &env)
 	}
@@ -244,7 +243,7 @@ mod tests {
 	#[test]
 	fn memory() {
 		// This test assumes that maximum page number is configured to a certain number.
-		assert_eq!(Schedule::<Test>::default().max_memory_pages, 16);
+		assert_eq!(Schedule::<u64>::default().max_memory_pages, 16);
 
 		let r = parse_and_prepare_wat(r#"(module (import "env" "memory" (memory 1 1)))"#);
 		assert_matches!(r, Ok(_));

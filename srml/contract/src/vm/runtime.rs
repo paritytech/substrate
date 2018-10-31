@@ -41,7 +41,7 @@ pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	input_data: &'data [u8],
 	output_data: &'data mut Vec<u8>,
 	scratch_buf: Vec<u8>,
-	schedule: &'a Schedule<E::T>,
+	schedule: &'a Schedule<<E::T as Trait>::Gas>,
 	memory: sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
@@ -51,7 +51,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 		ext: &'a mut E,
 		input_data: &'data [u8],
 		output_data: &'data mut Vec<u8>,
-		schedule: &'a Schedule<E::T>,
+		schedule: &'a Schedule<<E::T as Trait>::Gas>,
 		memory: sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
 	) -> Self {
@@ -117,7 +117,7 @@ fn read_sandbox_memory<E: Ext>(
 	ptr: u32,
 	len: u32,
 ) -> Result<Vec<u8>, sandbox::HostError> {
-	let price = (ctx.config.sandbox_data_read_cost)
+	let price = (ctx.schedule.sandbox_data_read_cost)
 		.checked_mul(&<GasOf<E> as As<u32>>::sa(len))
 		.ok_or(sandbox::HostError)?;
 	charge_gas(ctx.gas_meter, price)?;
@@ -382,7 +382,7 @@ define_env!(init_env, <E: Ext>,
 
 		// Finally, perform the write.
 		write_sandbox_memory(
-			ctx.config.sandbox_data_write_cost,
+			ctx.schedule.sandbox_data_write_cost,
 			ctx.gas_meter,
 			&ctx.memory,
 			dest_ptr,
@@ -414,7 +414,7 @@ define_env!(init_env, <E: Ext>,
 
 		// Finally, perform the write.
 		write_sandbox_memory(
-			ctx.config.sandbox_data_write_cost,
+			ctx.schedule.sandbox_data_write_cost,
 			ctx.gas_meter,
 			&ctx.memory,
 			dest_ptr,

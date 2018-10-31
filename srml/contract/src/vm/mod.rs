@@ -20,8 +20,7 @@
 use exec::CreateReceipt;
 use gas::GasMeter;
 use rstd::prelude::*;
-use runtime_primitives::traits::As;
-use Trait;
+use {Trait, Schedule};
 use {balances, sandbox, system};
 
 type BalanceOf<T> = <T as balances::Trait>::Balance;
@@ -118,7 +117,7 @@ pub fn execute<'a, E: Ext>(
 	input_data: &[u8],
 	output_data: &mut Vec<u8>,
 	ext: &'a mut E,
-	schedule: &Schedule<E::T>,
+	schedule: &Schedule<<<E as Ext>::T as Trait>::Gas>,
 	gas_meter: &mut GasMeter<E::T>,
 ) -> Result<(), Error> {
 	let env = runtime::init_env();
@@ -149,49 +148,6 @@ pub fn execute<'a, E: Ext>(
 		// Other instantiation errors.
 		// Return without executing anything.
 		Err(_) => return Err(Error::Instantiate),
-	}
-}
-
-// TODO: Extract it to the root of the crate
-#[derive(Clone)]
-pub struct Schedule<T: Trait> {
-	/// Gas cost of a growing memory by single page.
-	grow_mem_cost: T::Gas,
-
-	/// Gas cost of a regular operation.
-	regular_op_cost: T::Gas,
-
-	/// Gas cost per one byte returned.
-	return_data_per_byte_cost: T::Gas,
-
-	/// Gas cost per one byte read from the sandbox memory.
-	sandbox_data_read_cost: T::Gas,
-
-	/// Gas cost per one byte written to the sandbox memory.
-	sandbox_data_write_cost: T::Gas,
-
-	/// How tall the stack is allowed to grow?
-	///
-	/// See https://wiki.parity.io/WebAssembly-StackHeight to find out
-	/// how the stack frame cost is calculated.
-	max_stack_height: u32,
-
-	//// What is the maximal memory pages amount is allowed to have for
-	/// a contract.
-	max_memory_pages: u32,
-}
-
-impl<T: Trait> Default for Schedule<T> {
-	fn default() -> Schedule<T> {
-		Schedule {
-			grow_mem_cost: T::Gas::sa(1),
-			regular_op_cost: T::Gas::sa(1),
-			return_data_per_byte_cost: T::Gas::sa(1),
-			sandbox_data_read_cost: T::Gas::sa(1),
-			sandbox_data_write_cost: T::Gas::sa(1),
-			max_stack_height: 64 * 1024,
-			max_memory_pages: 16,
-		}
 	}
 }
 
@@ -318,7 +274,7 @@ mod tests {
 			&[],
 			&mut Vec::new(),
 			&mut mock_ext,
-			&Schedule::default(),
+			&Schedule::<u64>::default(),
 			&mut GasMeter::with_limit(50_000, 1),
 		).unwrap();
 

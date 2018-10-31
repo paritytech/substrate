@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate. If not, see <http://www.gnu.org/licenses/>.
 
-use super::{MaxDepth, ContractAddressFor, Module, Trait, Event, RawEvent};
+use super::{MaxDepth, ContractAddressFor, Module, Trait, Event, RawEvent, Schedule, Config};
 use account_db::{AccountDb, OverlayAccountDb};
 use gas::GasMeter;
 use vm;
@@ -38,6 +38,7 @@ pub struct ExecutionContext<'a, T: Trait + 'a> {
 	pub overlay: OverlayAccountDb<'a, T>,
 	pub depth: usize,
 	pub events: Vec<Event<T>>,
+	pub config: &'a Config<T>,
 }
 
 impl<'a, T: Trait> ExecutionContext<'a, T> {
@@ -70,6 +71,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				self_account: dest.clone(),
 				depth: self.depth + 1,
 				events: Vec::new(),
+				config: self.config,
 			};
 
 			if value > T::Balance::zero() {
@@ -92,7 +94,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 						ctx: &mut nested,
 						_caller: caller,
 					},
-					&vm::Schedule::default(),
+					&Schedule::default(),
 					gas_meter,
 				).map_err(|_| "vm execute returned error while call")?;
 			}
@@ -138,6 +140,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 				self_account: dest.clone(),
 				depth: self.depth + 1,
 				events: Vec::new(),
+				config: self.config,
 			};
 
 			if endowment > T::Balance::zero() {
@@ -160,7 +163,7 @@ impl<'a, T: Trait> ExecutionContext<'a, T> {
 					ctx: &mut nested,
 					_caller: caller,
 				},
-				&vm::Schedule::default(),
+				&Schedule::default(),
 				gas_meter,
 			).map_err(|_| "vm execute returned error while create")?;
 
