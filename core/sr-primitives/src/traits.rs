@@ -25,7 +25,7 @@ use substrate_primitives;
 use substrate_primitives::Blake2Hasher;
 use codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
-pub use num_traits::{Zero, One, Bounded};
+pub use num_traits::{Zero, One, Bounded, FromPrimitive, ToPrimitive};
 pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
 use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
 	RemAssign, Shl, Shr};
@@ -122,7 +122,7 @@ impl<T> RefInto<T> for T {
 }
 
 pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot + As<u64> +
+	Zero + One + IntegerSquareRoot + FromPrimitive + ToPrimitive +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
@@ -137,7 +137,7 @@ pub trait SimpleArithmetic:
 	HasCompact
 {}
 impl<T:
-	Zero + One + IntegerSquareRoot + As<u64> +
+	Zero + One + IntegerSquareRoot + FromPrimitive + ToPrimitive +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
