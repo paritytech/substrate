@@ -1,2 +1,4 @@
 doc
 target
+Dockerfile
+.dockerignore

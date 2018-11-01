@@ -5,15 +5,15 @@ LABEL description="This is the build stage for Substrate. Here we create the bin
 ARG PROFILE=release
 WORKDIR /substrate
 
-COPY . /substrate
-
 RUN apt-get update && \
 	apt-get upgrade -y && \
 	apt-get install -y cmake pkg-config libssl-dev git
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-	export PATH=$PATH:$HOME/.cargo/bin && \
-	cargo build --$PROFILE
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+COPY . /substrate
+
+RUN export PATH=$PATH:$HOME/.cargo/bin && cargo build --$PROFILE
 
 # ===== SECOND STAGE ======
 
