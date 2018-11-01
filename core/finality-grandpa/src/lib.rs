@@ -41,6 +41,9 @@ extern crate substrate_keyring as keyring;
 #[cfg(test)]
 extern crate substrate_test_client as test_client;
 
+#[cfg(test)]
+extern crate env_logger;
+
 #[macro_use]
 extern crate parity_codec_derive;
 
@@ -100,6 +103,14 @@ pub struct Config {
 	pub gossip_duration: Duration,
 	/// The local signing key.
 	pub local_key: Option<Arc<ed25519::Pair>>,
+	/// Some local identifier of the voter.
+	pub name: Option<String>,
+}
+
+impl Config {
+	fn name(&self) -> &str {
+		self.name.as_ref().map(|s| s.as_str()).unwrap_or("<unknown>")
+	}
 }
 
 /// Errors that can occur while voting in GRANDPA.
@@ -133,13 +144,13 @@ pub trait Network: Clone {
 
 	/// Get a stream of messages for a specific round. This stream should
 	/// never logically conclude.
-	fn messages_for(&self, round: u64) -> Self::In;
+	fn messages_for(&self, round: u64, set_id: u64) -> Self::In;
 
 	/// Send a message at a specific round out.
-	fn send_message(&self, round: u64, message: Vec<u8>);
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>);
 
 	/// Clean up messages for a round.
-	fn drop_messages(&self, round: u64);
+	fn drop_messages(&self, round: u64, set_id: u64);
 }
 
 /// Something which can determine if a block is known.
@@ -297,6 +308,7 @@ impl<Block: BlockT, Status: BlockStatus<Block>, I> Stream for UntilImported<Bloc
 // clears the network messages for inner round on drop.
 struct ClearOnDrop<I, N: Network> {
 	round: u64,
+	set_id: u64,
 	inner: I,
 	network: N,
 }
@@ -320,7 +332,7 @@ impl<I: Sink, N: Network> Sink for ClearOnDrop<I, N> {
 
 impl<I, N: Network> Drop for ClearOnDrop<I, N> {
 	fn drop(&mut self) {
-		self.network.drop_messages(self.round);
+		self.network.drop_messages(self.round, self.set_id);
 	}
 }
 
@@ -406,7 +418,7 @@ fn outgoing_messages<Block: BlockT, N: Network>(
 				};
 
 				// forward to network.
-				network.send_message(round, signed.encode());
+				network.send_message(round, set_id, signed.encode());
 				Some(signed)
 			} else {
 				None
@@ -473,6 +485,8 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash, NumberFor<Block>> for E
 		// once blocks are finalized that make that transition irrelevant or activate it,
 		// we will proceed onwards. most of the time there will be no pending transition.
 		let limit = self.authority_set.current_limit();
+		trace!(target: "afg", "Finding best chain containing block {:?} with number limit {:?}", block, limit);
+
 		match self.inner.best_containing(block, limit) {
 			Ok(Some(hash)) => {
 				let header = self.inner.header(&BlockId::Hash(hash)).ok()?
@@ -564,7 +578,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 		let incoming = checked_message_stream::<Block, _>(
 			round,
 			self.set_id,
-			self.network.messages_for(round),
+			self.network.messages_for(round, self.set_id),
 			self.voters.clone(),
 		);
 
@@ -585,11 +599,12 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 		);
 
 		// join incoming network messages with locally originating ones.
-		let incoming = Box::new(incoming.select(out_rx).map_err(Into::into));
+		let incoming = Box::new(out_rx.select(incoming).map_err(Into::into));
 
 		// schedule network message cleanup when sink drops.
 		let outgoing = Box::new(ClearOnDrop {
 			round,
+			set_id: self.set_id,
 			network: self.network.clone(),
 			inner: outgoing.sink_map_err(Into::into),
 		});
@@ -604,6 +619,15 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 	}
 
 	fn completed(&self, round: u64, state: RoundState<Block::Hash, NumberFor<Block>>) -> Result<(), Self::Error> {
+		debug!(
+			target: "afg", "Voter {} completed round {} in set {}. Estimate = {:?}, Finalized in round = {:?}",
+			self.config.name(),
+			round,
+			self.set_id,
+			state.estimate.as_ref().map(|e| e.1),
+			state.finalized.as_ref().map(|e| e.1),
+		);
+
 		let encoded_state = (round, state).encode();
 		if let Err(e) = self.inner.backend()
 			.insert_aux(&[(LAST_COMPLETED_KEY, &encoded_state[..])], &[])
@@ -669,6 +693,12 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 		if let Some((canon_hash, canon_number)) = status.new_set_block {
 			// the authority set has changed.
 			let (new_id, set_ref) = authority_set.current();
+
+			if set_ref.len() > 16 {
+				info!("Applying GRANDPA set change to new set with {} authorities", set_ref.len());
+			} else {
+				info!("Applying GRANDPA set change to new set {:?}", set_ref);
+			}
 			Err(ExitOrError::AuthoritiesChanged(NewAuthoritySet {
 				canon_hash,
 				canon_number,
@@ -772,7 +802,7 @@ impl<B, E, Block: BlockT, Api> BlockImport<Block> for GrandpaBlockImport<B, E, B
 			let old_set = authorities.clone();
 			authorities.add_pending_change(PendingChange {
 				next_authorities: change.next_authorities,
-				finalization_depth: number + change.delay,
+				finalization_depth: change.delay,
 				canon_height: number,
 				canon_hash: hash,
 			});
@@ -883,6 +913,8 @@ pub fn run_grandpa<B, E, Block: BlockT, N>(
 
 	let work = future::loop_fn((initial_environment, last_round_number, last_state), move |params| {
 		let (env, last_round_number, last_state) = params;
+		debug!(target: "afg", "{}: Starting new voter with set ID {}", config.name(), env.set_id);
+
 		let chain_info = match client.info() {
 			Ok(i) => i,
 			Err(e) => return future::Either::B(future::err(Error::Client(e))),

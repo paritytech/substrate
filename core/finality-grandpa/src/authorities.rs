@@ -120,6 +120,7 @@ impl<H: Eq, N> AuthoritySet<H, N>
 	}
 
 	/// Inspect pending changes.
+	#[cfg(test)]
 	pub(crate) fn pending_changes(&self) -> &[PendingChange<H, N>] {
 		&self.pending_changes
 	}
