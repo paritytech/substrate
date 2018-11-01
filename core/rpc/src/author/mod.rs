@@ -33,7 +33,7 @@ use transaction_pool::{
 };
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
-use primitives::{Bytes, Blake2Hasher};
+use primitives::{Bytes, Blake2Hasher, H256};
 use rpc::futures::{Sink, Stream, Future};
 use runtime_primitives::{generic, traits};
 use subscriptions::Subscriptions;
@@ -107,6 +107,7 @@ impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<ExtrinsicF
 	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
+	P::Block: traits::Block<Hash=H256>,
 	P::Error: 'static,
 {
 	type Metadata = ::metadata::Metadata;

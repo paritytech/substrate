@@ -70,6 +70,12 @@ error_chain! {
 			display("On-chain runtime does not specify version"),
 		}
 
+		/// Genesis config is invalid.
+		GenesisInvalid {
+			description("Genesis config error"),
+			display("Genesis config provided is invalid"),
+		}
+
 		/// Bad justification for header.
 		BadJustification(h: String) {
 			description("bad justification for header"),

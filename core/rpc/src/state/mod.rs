@@ -25,6 +25,7 @@ use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata
 use jsonrpc_macros::Trailing;
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
+use primitives::H256;
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
 use primitives::{Blake2Hasher, Bytes};
@@ -104,7 +105,7 @@ impl<B, E, Block: BlockT> State<B, E, Block> {
 }
 
 impl<B, E, Block> State<B, E, Block> where
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 	B: client::backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 {
@@ -114,7 +115,7 @@ impl<B, E, Block> State<B, E, Block> where
 }
 
 impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
-	Block: BlockT + 'static,
+	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 {

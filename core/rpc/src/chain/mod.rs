@@ -23,6 +23,7 @@ use jsonrpc_macros::{pubsub, Trailing};
 use jsonrpc_pubsub::SubscriptionId;
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
+use primitives::H256;
 use runtime_primitives::generic::{BlockId, SignedBlock};
 use runtime_primitives::traits::{Block as BlockT, Header, NumberFor};
 use runtime_version::RuntimeVersion;
@@ -100,7 +101,7 @@ impl<B, E, Block: BlockT> Chain<B, E, Block> {
 }
 
 impl<B, E, Block> Chain<B, E, Block> where
-	Block: BlockT + 'static,
+	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 {
@@ -113,7 +114,7 @@ impl<B, E, Block> Chain<B, E, Block> where
 }
 
 impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic> for Chain<B, E, Block> where
-	Block: BlockT + 'static,
+	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
 {

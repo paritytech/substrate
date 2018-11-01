@@ -130,7 +130,7 @@ decl_storage! {
 		#[serde(with = "substrate_primitives::bytes")]
 		config(code): Vec<u8>;
 
-		build(|storage: &mut primitives::StorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
 			use codec::{Encode, KeyedVec};
 
 			let auth_count = config.authorities.len() as u32;
