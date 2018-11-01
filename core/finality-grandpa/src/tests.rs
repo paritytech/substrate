@@ -27,6 +27,7 @@ use client::BlockchainEvents;
 use test_client::{self, runtime::BlockNumber};
 use codec::Decode;
 use consensus_common::BlockOrigin;
+use std::collections::HashSet;
 
 use authorities::AuthoritySet;
 
@@ -66,6 +67,13 @@ impl TestNetFactory for GrandpaTestNet {
 			peers: Vec::new(),
 			test_config: Default::default(),
 			started: false
+		}
+	}
+
+	fn default_config() -> ProtocolConfig {
+		// the authority role ensures gossip hits all nodes here.
+		ProtocolConfig {
+			roles: ::network::Roles::AUTHORITY,
 		}
 	}
 
@@ -118,11 +126,15 @@ impl MessageRouting {
 	}
 }
 
-fn round_to_topic(round: u64) -> Hash {
+fn make_topic(round: u64, set_id: u64) -> Hash {
 	let mut hash = Hash::default();
 	round.using_encoded(|s| {
 		let raw = hash.as_mut();
 		raw[..8].copy_from_slice(s);
+	});
+	set_id.using_encoded(|s| {
+		let raw = hash.as_mut();
+		raw[8..16].copy_from_slice(s);
 	});
 	hash
 }
@@ -130,9 +142,9 @@ fn round_to_topic(round: u64) -> Hash {
 impl Network for MessageRouting {
 	type In = Box<Stream<Item=Vec<u8>,Error=()>>;
 
-	fn messages_for(&self, round: u64) -> Self::In {
+	fn messages_for(&self, round: u64, set_id: u64) -> Self::In {
 		let messages = self.inner.lock().peer(self.peer_id)
-			.with_spec(|spec, _| spec.gossip.messages_for(round_to_topic(round)));
+			.with_spec(|spec, _| spec.gossip.messages_for(make_topic(round, set_id)));
 
 		let messages = messages.map_err(
 			move |_| panic!("Messages for round {} dropped too early", round)
@@ -141,14 +153,14 @@ impl Network for MessageRouting {
 		Box::new(messages)
 	}
 
-	fn send_message(&self, round: u64, message: Vec<u8>) {
+	fn send_message(&self, round: u64, set_id: u64, message: Vec<u8>) {
 		let mut inner = self.inner.lock();
-		inner.peer(self.peer_id).gossip_message(round_to_topic(round), message);
-		inner.route();
+		inner.peer(self.peer_id).gossip_message(make_topic(round, set_id), message);
+		inner.route_until_complete();
 	}
 
-	fn drop_messages(&self, round: u64) {
-		let topic = round_to_topic(round);
+	fn drop_messages(&self, round: u64, set_id: u64) {
+		let topic = make_topic(round, set_id);
 		self.inner.lock().peer(self.peer_id)
 			.with_spec(|spec, _| spec.gossip.collect_garbage(|t| t == &topic));
 	}
@@ -179,12 +191,7 @@ impl ApiClient<Block> for TestApi {
 	{
 		// we take only scheduled changes at given block number where there are no
 		// extrinsics.
-		let change = self.scheduled_changes.lock().get(&header.hash()).map(|c| c.clone());
-		if change.is_some() {
-			println!("Found transition for {:?}", header.hash());
-		}
-
-		Ok(change)
+		Ok(self.scheduled_changes.lock().get(&header.hash()).map(|c| c.clone()))
 	}
 }
 
@@ -236,6 +243,7 @@ fn finalize_3_voters_no_observers() {
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key: Some(Arc::new(key.clone().into())),
+				name: Some(format!("peer#{}", peer_id)),
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
@@ -293,6 +301,7 @@ fn finalize_3_voters_1_observer() {
 			Config {
 				gossip_duration: TEST_GOSSIP_DURATION,
 				local_key,
+				name: Some(format!("peer#{}", peer_id)),
 			},
 			link,
 			MessageRouting::new(net.clone(), peer_id),
@@ -344,14 +353,13 @@ fn transition_3_voters_twice_1_observer() {
 		transitions.lock().insert(hash, change);
 	};
 
-	let mut net = GrandpaTestNet::new(api, 8);
+	let mut net = GrandpaTestNet::new(api, 9);
 
 	// first 20 blocks: transition at 15, applied at 20.
 	{
 		net.peer(0).push_blocks(14, false);
 		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
 			let block = builder.bake().unwrap();
-			println!("Adding transition for {:?}", block.header.hash());
 			add_transition(block.header.hash(), ScheduledChange {
 				next_authorities: make_ids(peers_b),
 				delay: 4,
@@ -367,7 +375,6 @@ fn transition_3_voters_twice_1_observer() {
 	{
 		net.peer(0).generate_blocks(1, BlockOrigin::File, |builder| {
 			let block = builder.bake().unwrap();
-			println!("Adding transition for {:?}", block.header.hash());
 			add_transition(block.header.hash(), ScheduledChange {
 				next_authorities: make_ids(peers_c),
 				delay: 0,
@@ -391,50 +398,63 @@ fn transition_3_voters_twice_1_observer() {
 		assert_eq!(set.pending_changes().len(), 2);
 	}
 
-	// let net = Arc::new(Mutex::new(net));
-	// let mut finality_notifications = Vec::new();
+	let net = Arc::new(Mutex::new(net));
+	let mut finality_notifications = Vec::new();
 
-	// let mut runtime = current_thread::Runtime::new().unwrap();
-	// let all_peers = peers.iter()
-	// 	.cloned()
-	// 	.map(|key| Some(Arc::new(key.into())))
-	// 	.chain(::std::iter::once(None));
+	let mut runtime = current_thread::Runtime::new().unwrap();
+	let all_peers = peers_a.iter()
+		.chain(peers_b)
+		.chain(peers_c)
+		.chain(observer)
+		.cloned()
+		.collect::<HashSet<_>>() // deduplicate
+		.into_iter()
+		.map(|key| Some(Arc::new(key.into())))
+		.enumerate();
 
-	// for (peer_id, local_key) in all_peers.enumerate() {
-	// 	let (client, link) = {
-	// 		let mut net = net.lock();
-	// 		let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
-	// 		(
-	// 			net.peers[peer_id].client().clone(),
-	// 			link,
-	// 		)
-	// 	};
-	// 	finality_notifications.push(
-	// 		client.finality_notification_stream()
-	// 			.take_while(|n| Ok(n.header.number() < &20))
-	// 			.for_each(move |_| Ok(()))
-	// 	);
-	// 	let voter = run_grandpa(
-	// 		Config {
-	// 			gossip_duration: TEST_GOSSIP_DURATION,
-	// 			local_key,
-	// 		},
-	// 		link,
-	// 		MessageRouting::new(net.clone(), peer_id),
-	// 	).expect("all in order with client and network");
+	for (peer_id, local_key) in all_peers {
+		let (client, link) = {
+			let mut net = net.lock();
+			let link = net.peers[peer_id].data.lock().take().expect("link initialized at startup; qed");
+			(
+				net.peers[peer_id].client().clone(),
+				link,
+			)
+		};
+		finality_notifications.push(
+			client.finality_notification_stream()
+				.take_while(|n| Ok(n.header.number() < &30))
+				.for_each(move |_| Ok(()))
+				.map(move |()| {
+					let set_raw = client.backend().get_aux(::AUTHORITY_SET_KEY).unwrap().unwrap();
+					let set = AuthoritySet::<Hash, BlockNumber>::decode(&mut &set_raw[..]).unwrap();
 
-	// 	runtime.spawn(voter);
-	// }
+					assert_eq!(set.current(), (2, make_ids(peers_c).as_slice()));
+					assert!(set.pending_changes().is_empty());
+				})
+		);
+		let voter = run_grandpa(
+			Config {
+				gossip_duration: TEST_GOSSIP_DURATION,
+				local_key,
+				name: Some(format!("peer#{}", peer_id)),
+			},
+			link,
+			MessageRouting::new(net.clone(), peer_id),
+		).expect("all in order with client and network");
 
-	// // wait for all finalized on each.
-	// let wait_for = ::futures::future::join_all(finality_notifications)
-	// 	.map(|_| ())
-	// 	.map_err(|_| ());
+		runtime.spawn(voter);
+	}
 
-	// let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
-	// 	.for_each(move |_| { net.lock().route_until_complete(); Ok(()) })
-	// 	.map(|_| ())
-	// 	.map_err(|_| ());
+	// wait for all finalized on each.
+	let wait_for = ::futures::future::join_all(finality_notifications)
+		.map(|_| ())
+		.map_err(|_| ());
 
-	// runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
+	let drive_to_completion = ::tokio::timer::Interval::new_interval(TEST_ROUTING_INTERVAL)
+		.for_each(move |_| { net.lock().route_until_complete(); Ok(()) })
+		.map(|_| ())
+		.map_err(|_| ());
+
+	runtime.block_on(wait_for.select(drive_to_completion).map_err(|_| ())).unwrap();
 }

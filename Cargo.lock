@@ -3033,6 +3033,7 @@ dependencies = [
 name = "substrate-finality-grandpa"
 version = "0.1.0"
 dependencies = [
+ "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "finality-grandpa 0.3.0",
  "futures 0.1.25 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
