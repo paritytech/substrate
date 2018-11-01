@@ -93,6 +93,7 @@ fn calculate_score(desired: String, case_sensitive:bool, key: &str) -> f32 {
 
 /// Print a set of keys to stdout
 pub fn print_keys(keys: Vec<KeyPair>) {
+
 	for key in keys {
 		println!(r#"Found match with a score of {:4.2}%
 	 - Address  : {}
@@ -158,6 +159,9 @@ fn get_cpus_specs() -> (usize, usize) {
 	(cpus, cpus * 2)
 }
 
+
+/// This function create the threads and monitors whether we
+/// have generated enough keys or not
 pub fn generate_keys(
 	desired: String,
 	case_sensitive: bool,
@@ -173,7 +177,6 @@ pub fn generate_keys(
 	println!("Found {} CPUs, using {} threads.", nb_cpus, nb_threads);
 	println!("Searching for keys matching '{}' with a minimum score of {}.", desired, minscore);
 
-    // let pattern = std::sync::Arc::new(desired);
     for j in 0..nb_threads {
         let sender = s.clone();
     	let pattern = desired.clone();
@@ -184,8 +187,9 @@ pub fn generate_keys(
 
     while result.len() < count {
         match r.recv() {
-            Ok(r) => {
-            	result.push(r);
+            Ok(key) => {
+            	println!("{:>6.2}%\t{}\t{}", key.score, key.pair.public().to_ss58check(), HexDisplay::from(&key.pair.public().0));
+            	result.push(key);
             	pb.inc();
             },
             Err(_) => break,
