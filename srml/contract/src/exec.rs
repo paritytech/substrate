@@ -234,7 +234,7 @@ fn transfer<'a, T: Trait>(
 		Some(b) => b,
 		None => return Err("balance too low to send value"),
 	};
-	if would_create && value < <balances::Module<T>>::existential_deposit() {
+	if would_create && value < ctx.config.existential_deposit {
 		return Err("value too low to create account");
 	}
 	<T as balances::Trait>::EnsureAccountLiquid::ensure_account_liquid(transactor)?;

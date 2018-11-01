@@ -326,6 +326,7 @@ impl<T: Trait> balances::OnFreeBalanceZero<T::AccountId> for Module<T> {
 /// course of transaction execution.
 pub struct Config<T: Trait> {
 	pub schedule: Schedule<T::Gas>,
+	pub existential_deposit: T::Balance,
 	pub max_depth: u32,
 	pub contract_account_create_fee: T::Balance,
 	pub account_create_fee: T::Balance,
@@ -338,6 +339,7 @@ impl<T: Trait> Config<T> {
 	fn preload() -> Config<T> {
 		Config {
 			schedule: <Module<T>>::current_schedule(),
+			existential_deposit: <balances::Module<T>>::existential_deposit(),
 			max_depth: <Module<T>>::max_depth(),
 			contract_account_create_fee: <Module<T>>::contract_fee(),
 			account_create_fee: <balances::Module<T>>::creation_fee(),
