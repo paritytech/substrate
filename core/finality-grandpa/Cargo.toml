@@ -17,8 +17,7 @@ tokio = "0.1.7"
 substrate-fg-primitives = { path = "primitives" }
 
 [dependencies.finality-grandpa]
-#version = "0.3.0"
-path = "../../../finality-afg"
+version = "0.3.0"
 features = ["derive-codec"]
 
 [dev-dependencies]
