@@ -20,7 +20,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
 use primitives::storage::{StorageKey, StorageData};
-use runtime_primitives::{BuildStorage, StorageMap};
+use runtime_primitives::{BuildStorage, StorageMap, ChildrenStorageMap};
 use serde_json as json;
 use components::RuntimeGenesis;
 
@@ -63,10 +63,10 @@ impl<G: RuntimeGenesis> GenesisSource<G> {
 }
 
 impl<'a, G: RuntimeGenesis> BuildStorage for &'a ChainSpec<G> {
-	fn build_storage(self) -> Result<StorageMap, String> {
+	fn build_storage(self) -> Result<(StorageMap, ChildrenStorageMap), String> {
 		match self.genesis.resolve()? {
 			Genesis::Runtime(gc) => gc.build_storage(),
-			Genesis::Raw(map) => Ok(map.into_iter().map(|(k, v)| (k.0, v.0)).collect()),
+			Genesis::Raw(map) => Ok((map.into_iter().map(|(k, v)| (k.0, v.0)).collect(), Default::default())),
 		}
 	}
 }
@@ -185,7 +185,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		};
 		let genesis = match (raw, self.genesis.resolve()?) {
 			(true, Genesis::Runtime(g)) => {
-				let storage = g.build_storage()?.into_iter()
+				let storage = g.build_storage()?.0.into_iter()
 					.map(|(k, v)| (StorageKey(k), StorageData(v)))
 					.collect();
 

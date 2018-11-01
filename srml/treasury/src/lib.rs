@@ -325,7 +325,7 @@ mod tests {
 	type Treasury = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(0, 100), (1, 99), (2, 1)],
 			transaction_base_fee: 0,
@@ -334,13 +334,13 @@ mod tests {
 			creation_fee: 0,
 			existential_deposit: 0,
 			reclaim_rebate: 0,
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			proposal_bond: Permill::from_percent(5),
 			proposal_bond_minimum: 1,
 			spend_period: 2,
 			burn: Permill::from_percent(50),
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		t.into()
 	}
 

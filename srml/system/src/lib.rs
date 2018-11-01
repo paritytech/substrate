@@ -206,7 +206,7 @@ decl_storage! {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
 		config(_phantom): ::std::marker::PhantomData<T>;
 
-		build(|storage: &mut primitives::StorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
 			use codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
@@ -467,7 +467,7 @@ mod tests {
 	type System = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::<Test>::default().build_storage().unwrap().into()
+		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
 	}
 
 	#[test]
