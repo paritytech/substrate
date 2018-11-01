@@ -99,9 +99,9 @@ These functions only modify the local `Map`.
 
 A lookup in the local cache consists of at least one `Map` lookup, for locating the specific account. For `get_storage` there is a second lookup: because account's storage is implemented as a nested map, another lookup is required for fetching a storage value by a key.
 
-While these functions only modify the local `Map`, if changes made by them are committed to the bottommost `AccountDb`, each changed entry in the `Map` will require a DB write. It should be ensured that pricing accounts for this fact.
+While these functions only modify the local `Map`, if changes made by them are committed to the bottommost `AccountDb`, each changed entry in the `Map` will require a DB write. Moreover, if the balance of the account is changed to be below `existential_deposit` then that account along with all its storage will be removed, which requires time proportional to the number of storage entries that account has. It should be ensured that pricing accounts for these facts.
 
-**complexity**: Each lookup has a logarithmical computing time to the number of inserted entries. No additional memory is required.
+**complexity**: Each lookup has a logarithmical computing time to the number of already inserted entries. No additional memory is required.
 
 ## commit
 
@@ -115,13 +115,15 @@ Note that in case of storage modification we need to construct a key in the unde
 - then perform `blake2_256` hashing of the storage key.
 - concatenation of these hashes will constitute the key in the underlying storage.
 
-**complexity**:
+There is also a special case to think of: if the balance of some account goes below `existential_deposit`, then all storage entries of that account will be erased, which requires time proprotional to the number of storage entries that account has.
+
+**complexity**: `N` inserts into a `Map` or eventually into the storage (if committed). Every deleted account will induce removal of all its storage which is proportional to the number of storage entries that account has.
 
 ## revert
 
 Consists of dropping (in the Rust sense) of the `AccountDb`.
 
-**complexity**: TODO: What about the recursive dropping of all values?
+**complexity**: Computing complexity is proportional to a number of changed entries in a overlay. No additional memory is required.
 
 # Executive
 
@@ -139,9 +141,11 @@ This function performs the following steps:
 
 In the course of the execution this function can perform up to 4 DB reads: 2x `get_balance`, fee and `existential_deposit`. The last two can be pre-loaded pushing the cost of loading to a higher level and making it a one time. It can also induce up to 2 DB writes via `set_balance` if flushed to the storage.
 
+Moreover, if the source balance goes below `existential_deposit` then the account will be deleted along with all its storage which requires time proportional to the number of storage entries of that account.
+
 Assuming marshaled size of a balance value is of the constant size we can neglect its effect on the performance.
 
-**complexity**: up to 4 DB reads and up to 2 DB writes. For the current `AccountDb` implementation computing complexity also depends on the depth of the `AccountDb` cascade. Memorywise it can be assumed to be constant.
+**complexity**: up to 4 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has. For the current `AccountDb` implementation computing complexity also depends on the depth of the `AccountDb` cascade. Memorywise it can be assumed to be constant.
 
 ## Call
 
@@ -159,11 +163,11 @@ The execution of this function will involve 2 DB reads for querying `MaxDepth` a
 
 Loading code most probably will trigger a DB read, since the code is immutable and therefore will not get into the cache (unless a suicide removes it).
 
-Also, `transfer` can make up to 4 DB reads and up to 2 DB writes (if flushed to the storage).
+Also, `transfer` can make up to 4 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
 Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the code. Thus, the pricing of storage modification should account for that.
 
-**complexity**: Up to 7 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage).
+**complexity**: Up to 7 DB reads. DB read of the code is of dynamic size. There can also be up to 2 DB writes (if flushed to the storage). Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
 ## Create
 
@@ -184,13 +188,13 @@ This function takes the code of the constructor and input data. Creation of a co
 
 The execution of this function involves 2 DB reads for querying `create_base_fee` and `MaxDepth` constants. These values can be pre-loaded pushing the cost of loading to a higher level and making it a one time.
 
-Also, `transfer` can make up to 4 DB reads and up to 2 DB writes (if flushed to the storage).
+Also, `transfer` can make up to 4 DB reads and up to 2 DB writes (if flushed to the storage) in the standard case. If removal of the source account takes place then it will additionally perform a DB write per one storage entry that the account has.
 
 Storing the code in the overlay may induce another DB write (if flushed to the storage) with the size proportional to the size of the constructor code.
 
 Finally, all changes are `commit`-ted into the underlying overlay. The complexity of this depends on the number of changes performed by the constructor code. Thus, the pricing of storage modification should account for that.
 
-**complexity**: Up to 6 DB reads and induces up to 3 DB writes (if flushed to the storage), one of which is dependent on the size of the code.
+**complexity**: Up to 6 DB reads and induces up to 3 DB writes (if flushed to the storage), one of which is dependent on the size of the code. Additionally, if the source account removal takes place a DB write will be performed per one storage entry that the account has.
 
 # Externalities
 
