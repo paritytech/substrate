@@ -53,3 +53,9 @@ returns:
 	 - Address  : 5DHsZCnuPqzHnXFW1subSTgnLD3zcFbJ3Q2bFcZ1Bmj5xFMw
 	 - Hex seed : 0x364712b4a74784c605d01547f4cec951049e280d5a47aad2c7e9f06b2f7ad321
 	 - Seed     : 1c328aea576a252c80a91a2b1c08312c095320b04f2f6d264eeb50b9d544fd4d
+
+== Running forever until your favorite key shows up
+
+	 while true; do cargo run -- vanity AAA -c -m 80; done
+
+Then stop with CTRL+C
