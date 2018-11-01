@@ -215,8 +215,8 @@ mod tests {
 
 	#[test]
 	fn timestamp_works() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> { period: 0 }.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
@@ -228,8 +228,8 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must be updated only once in the block")]
 	fn double_timestamp_should_fail() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);
@@ -241,8 +241,8 @@ mod tests {
 	#[test]
 	#[should_panic(expected = "Timestamp must increment by at least <BlockPeriod> between sequential blocks")]
 	fn block_period_is_enforced() {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
-		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
+		t.extend(GenesisConfig::<Test> { period: 5 }.build_storage().unwrap().0);
 
 		with_externalities(&mut TestExternalities::new(t), || {
 			Timestamp::set_timestamp(42);

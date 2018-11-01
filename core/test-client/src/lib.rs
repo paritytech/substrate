@@ -43,6 +43,7 @@ pub use executor::NativeExecutor;
 use std::sync::Arc;
 use primitives::Blake2Hasher;
 use runtime_primitives::StorageMap;
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT};
 use runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 use keyring::Keyring;
 
@@ -98,7 +99,8 @@ fn genesis_config(support_changes_trie: bool) -> GenesisConfig {
 
 fn genesis_storage(support_changes_trie: bool) -> StorageMap {
 	let mut storage = genesis_config(support_changes_trie).genesis_map();
-	let block: runtime::Block = client::genesis::construct_genesis_block(&storage);
+	let state_root = <<<runtime::Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(storage.clone().into_iter());
+	let block: runtime::Block = client::genesis::construct_genesis_block(state_root);
 	storage.extend(additional_storage_with_genesis(&block));
 	storage
 }

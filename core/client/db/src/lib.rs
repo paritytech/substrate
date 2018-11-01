@@ -69,7 +69,7 @@ use trie::MemoryDB;
 use parking_lot::RwLock;
 use primitives::{H256, AuthorityId, Blake2Hasher, ChangesTrieConfiguration};
 use primitives::storage::well_known_keys;
-use runtime_primitives::{generic::BlockId, Justification};
+use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
@@ -104,10 +104,10 @@ pub fn new_client<E, S, Block>(
 	block_execution_strategy: ExecutionStrategy,
 	api_execution_strategy: ExecutionStrategy,
 ) -> Result<client::Client<Backend<Block>, client::LocalCallExecutor<Backend<Block>, E>, Block>, client::error::Error>
-	where
-		Block: BlockT,
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-		S: BuildStorage,
+where
+	Block: BlockT<Hash=H256>,
+	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	S: BuildStorage,
 {
 	let backend = Arc::new(Backend::new(settings, CANONICALIZATION_DELAY)?);
 	let executor = client::LocalCallExecutor::new(backend.clone(), executor);
@@ -281,7 +281,7 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 
 impl<Block> client::backend::BlockImportOperation<Block, Blake2Hasher>
 for BlockImportOperation<Block, Blake2Hasher>
-where Block: BlockT,
+where Block: BlockT<Hash=H256>,
 {
 	type State = DbState;
 
@@ -315,11 +315,33 @@ where Block: BlockT,
 		Ok(())
 	}
 
-	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> Result<(), client::error::Error> {
+	fn reset_storage(&mut self, mut top: StorageMap, children: ChildrenStorageMap) -> Result<H256, client::error::Error> {
 		// TODO: wipe out existing trie.
-		let (_, update) = self.old_state.storage_root(iter.into_iter().map(|(k, v)| (k, Some(v))));
-		self.updates = update;
-		Ok(())
+
+		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+			return Err(client::error::ErrorKind::GenesisInvalid.into());
+		}
+
+		let mut transaction: MemoryDB<Blake2Hasher> = Default::default();
+
+		for (child_key, child_map) in children {
+			if !well_known_keys::is_child_storage_key(&child_key) {
+				return Err(client::error::ErrorKind::GenesisInvalid.into());
+			}
+
+			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
+			transaction.consolidate(update);
+
+			if !is_default {
+				top.insert(child_key, root);
+			}
+		}
+
+		let (root, update) = self.old_state.storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
+		transaction.consolidate(update);
+
+		self.updates = transaction;
+		Ok(root)
 	}
 
 	fn update_changes_trie(&mut self, update: MemoryDB<Blake2Hasher>) -> Result<(), client::error::Error> {
@@ -522,7 +544,9 @@ impl<Block: BlockT> Backend<Block> {
 		transaction: &mut DBTransaction,
 		f_header: &Block::Header,
 		f_hash: Block::Hash,
-	) -> Result<(), client::error::Error> {
+	) -> Result<(), client::error::Error> where
+		Block: BlockT<Hash=H256>,
+	{
 		let meta = self.blockchain.meta.read();
 		let f_num = f_header.number().clone();
 
@@ -568,7 +592,7 @@ fn apply_state_commit(transaction: &mut DBTransaction, commit: state_db::CommitS
 	}
 }
 
-impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT {
+impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> where Block: BlockT<Hash=H256> {
 	type BlockImportOperation = BlockImportOperation<Block, Blake2Hasher>;
 	type Blockchain = BlockchainDb<Block>;
 	type State = DbState;
@@ -860,7 +884,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 }
 
 impl<Block> client::backend::LocalBackend<Block, Blake2Hasher> for Backend<Block>
-where Block: BlockT {}
+where Block: BlockT<Hash=H256> {}
 
 #[cfg(test)]
 mod tests {
@@ -1002,7 +1026,7 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.reset_storage(storage.iter().cloned()).unwrap();
+			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
 			op.set_block_data(
 				header.clone(),
 				Some(vec![]),
@@ -1081,7 +1105,7 @@ mod tests {
 			).0.into();
 			let hash = header.hash();
 
-			op.reset_storage(storage.iter().cloned()).unwrap();
+			op.reset_storage(storage.iter().cloned().collect(), Default::default()).unwrap();
 
 			key = op.updates.insert(b"hello");
 			op.set_block_data(

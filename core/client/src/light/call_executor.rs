@@ -66,9 +66,8 @@ where
 	Block: BlockT,
 	B: ChainBackend<Block>,
 	F: Fetcher<Block>,
-	H: Hasher,
-	H::Out: Ord,
-
+	H: Hasher<Out=Block::Hash>,
+	Block::Hash: Ord,
 {
 	type Error = ClientError;
 
@@ -134,7 +133,7 @@ pub fn check_execution_proof<Header, E, H>(
 		E: CodeExecutor<H>,
 		H: Hasher,
 		H::Out: Ord + HeapSizeOf,
-	
+
 {
 	let local_state_root = request.header.state_root();
 	let mut root: H::Out = Default::default();

@@ -47,7 +47,7 @@ use client::{Client, ImportNotifications, backend::Backend, CallExecutor};
 use codec::{Encode, Decode};
 use runtime_primitives::traits::{As, NumberFor, Block as BlockT, Header as HeaderT};
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{ed25519, AuthorityId, Blake2Hasher};
+use substrate_primitives::{ed25519, H256, AuthorityId, Blake2Hasher};
 use tokio::timer::Interval;
 
 use grandpa::Error as GrandpaError;
@@ -123,7 +123,7 @@ pub trait BlockStatus<Block: BlockT> {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<u32>, Error>;
 }
 
-impl<B, E, Block: BlockT> BlockStatus<Block> for Arc<Client<B, E, Block>> where
+impl<B, E, Block: BlockT<Hash=H256>> BlockStatus<Block> for Arc<Client<B, E, Block>> where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	NumberFor<Block>: As<u32>,
@@ -385,7 +385,7 @@ pub struct Environment<B, E, Block: BlockT, N: Network> {
 	network: N,
 }
 
-impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, Block, N> where
+impl<Block: BlockT<Hash=H256>, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, Block, N> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
@@ -436,7 +436,7 @@ impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, B
 	}
 }
 
-impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, E, Block, N> where
+impl<B, E, Block: BlockT<Hash=H256>, N> voter::Environment<Block::Hash> for Environment<B, E, Block, N> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
@@ -545,7 +545,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash> for Environment<B, 
 }
 
 /// Run a GRANDPA voter as a task. The returned future should be executed in a tokio runtime.
-pub fn run_grandpa<B, E, Block: BlockT, N>(
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N>(
 	config: Config,
 	client: Arc<Client<B, E, Block>>,
 	voters: HashMap<AuthorityId, usize>,
