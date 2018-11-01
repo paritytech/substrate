@@ -55,14 +55,27 @@ const CHANNEL_SIZE: usize = 262144;
 
 /// Initialise telemetry.
 pub fn init_telemetry(config: TelemetryConfig) -> slog_scope::GlobalLoggerGuard {
+	let writer = TelemetryWriter::new();
+	let out_sync = writer.out.clone();
 	let log = slog::Logger::root(
 		slog_async::Async::new(
-			slog_json::Json::default(TelemetryWriter::new(config)).fuse()
+			slog_json::Json::default(writer).fuse()
 		).chan_size(CHANNEL_SIZE)
 		.overflow_strategy(slog_async::OverflowStrategy::DropAndReport)
 		.build().fuse(), o!()
 	);
-	slog_scope::set_global_logger(log)
+	let logger_guard = slog_scope::set_global_logger(log);
+
+	thread::spawn(move || {
+		loop {
+			trace!(target: "telemetry", "Connecting to Telemetry...");
+			let _ = ws::connect(config.url.as_str(), |out| Connection::new(out, &*out_sync, &config));
+
+			thread::sleep(time::Duration::from_millis(5000));
+		}
+	});
+
+	return logger_guard;
 }
 
 /// Exactly equivalent to `slog_scope::info`, provided as a convenience.
@@ -117,19 +130,8 @@ struct TelemetryWriter {
 }
 
 impl TelemetryWriter {
-	fn new(config: TelemetryConfig) -> Self {
-		let out_sync = Arc::new(Mutex::new(None));
-		let out = out_sync.clone();
-
-		thread::spawn(move || {
-			loop {
-				trace!(target: "telemetry", "Connecting to Telemetry...");
-
-				let _ = ws::connect(config.url.as_str(), |out| Connection::new(out, &*out_sync, &config));
-
-				thread::sleep(time::Duration::from_millis(5000));
-			}
-		});
+	fn new() -> Self {
+		let out = Arc::new(Mutex::new(None));
 
 		TelemetryWriter {
 			buffer: Vec::new(),

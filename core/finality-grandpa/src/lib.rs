@@ -57,7 +57,7 @@ use runtime_primitives::traits::{
 	NumberFor, Block as BlockT, Header as HeaderT, DigestFor,
 };
 use runtime_primitives::generic::BlockId;
-use substrate_primitives::{ed25519, AuthorityId, Blake2Hasher};
+use substrate_primitives::{ed25519, H256, AuthorityId, Blake2Hasher};
 use tokio::timer::Interval;
 
 use grandpa::Error as GrandpaError;
@@ -161,7 +161,7 @@ pub trait BlockStatus<Block: BlockT> {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<NumberFor<Block>>, Error>;
 }
 
-impl<B, E, Block: BlockT> BlockStatus<Block> for Arc<Client<B, E, Block>> where
+impl<B, E, Block: BlockT<Hash=H256>> BlockStatus<Block> for Arc<Client<B, E, Block>> where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	NumberFor<Block>: BlockNumberOps,
@@ -445,7 +445,7 @@ struct Environment<B, E, Block: BlockT, N: Network> {
 	set_id: u64,
 }
 
-impl<Block: BlockT, B, E, N> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N> where
+impl<Block: BlockT<Hash=H256>, B, E, N> grandpa::Chain<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
@@ -541,7 +541,7 @@ impl<H, N> From<grandpa::Error> for ExitOrError<H, N> {
 	}
 }
 
-impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N> where
+impl<B, E, Block: BlockT<Hash=H256>, N> voter::Environment<Block::Hash, NumberFor<Block>> for Environment<B, E, Block, N> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
@@ -730,7 +730,7 @@ impl<B, E, Block: BlockT, N> voter::Environment<Block::Hash, NumberFor<Block>> f
 }
 
 /// Client side of the GRANDPA APIs declared in fg-primitives.
-pub trait ApiClient<Block: BlockT> {
+pub trait ApiClient<Block: BlockT<Hash=H256>> {
 	/// Get the genesis authorities for GRANDPA.
 	fn genesis_authorities(&self) -> Result<Vec<(AuthorityId, u64)>, ClientError>;
 
@@ -739,7 +739,7 @@ pub trait ApiClient<Block: BlockT> {
 		-> Result<Option<ScheduledChange<NumberFor<Block>>>, ClientError>;
 }
 
-impl<B, E, Block: BlockT> ApiClient<Block> for Arc<Client<B, E, Block>> where
+impl<B, E, Block: BlockT<Hash=H256>> ApiClient<Block> for Arc<Client<B, E, Block>> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone,
 	DigestFor<Block>: Encode,
@@ -770,13 +770,13 @@ impl<B, E, Block: BlockT> ApiClient<Block> for Arc<Client<B, E, Block>> where
 /// This scans each imported block for signals of changing authority set.
 /// When using GRANDPA, the block import worker should be using this block import
 /// object.
-pub struct GrandpaBlockImport<B, E, Block: BlockT, Api> {
+pub struct GrandpaBlockImport<B, E, Block: BlockT<Hash=H256>, Api> {
 	inner: Arc<Client<B, E, Block>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 	api_client: Api,
 }
 
-impl<B, E, Block: BlockT, Api> BlockImport<Block> for GrandpaBlockImport<B, E, Block, Api> where
+impl<B, E, Block: BlockT<Hash=H256>, Api> BlockImport<Block> for GrandpaBlockImport<B, E, Block, Api> where
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Clone,
 	DigestFor<Block>: Encode,
@@ -825,14 +825,14 @@ impl<B, E, Block: BlockT, Api> BlockImport<Block> for GrandpaBlockImport<B, E, B
 
 /// Half of a link between a block-import worker and a the background voter.
 // This should remain non-clone.
-pub struct LinkHalf<B, E, Block: BlockT> {
+pub struct LinkHalf<B, E, Block: BlockT<Hash=H256>> {
 	client: Arc<Client<B, E, Block>>,
 	authority_set: SharedAuthoritySet<Block::Hash, NumberFor<Block>>,
 }
 
 /// Make block importer and link half necessary to tie the background voter
 /// to it.
-pub fn block_import<B, E, Block: BlockT, Api>(client: Arc<Client<B, E, Block>>, api_client: Api)
+pub fn block_import<B, E, Block: BlockT<Hash=H256>, Api>(client: Arc<Client<B, E, Block>>, api_client: Api)
 	-> Result<(GrandpaBlockImport<B, E, Block, Api>, LinkHalf<B, E, Block>), ClientError>
 	where
 	B: Backend<Block, Blake2Hasher> + 'static,
@@ -870,7 +870,7 @@ pub fn block_import<B, E, Block: BlockT, Api>(client: Arc<Client<B, E, Block>>, 
 
 /// Run a GRANDPA voter as a task. Provide configuration and a link to a
 /// block import worker that has already been instantiated with `block_import`.
-pub fn run_grandpa<B, E, Block: BlockT, N>(
+pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N>(
 	config: Config,
 	link: LinkHalf<B, E, Block>,
 	network: N,

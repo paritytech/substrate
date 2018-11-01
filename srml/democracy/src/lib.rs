@@ -353,7 +353,7 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Test>{
 			balances: vec![(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)],
 			transaction_base_fee: 0,
@@ -362,12 +362,12 @@ mod tests {
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			launch_period: 1,
 			voting_period: 1,
 			minimum_deposit: 1,
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
 
