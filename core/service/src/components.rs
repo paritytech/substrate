@@ -30,7 +30,7 @@ use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
 use config::Configuration;
-use primitives::{Blake2Hasher};
+use primitives::{H256, Blake2Hasher};
 
 // Type aliases.
 // These exist mainly to avoid typing `<F as Factory>::Foo` all over the code.
@@ -119,7 +119,7 @@ impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 /// A collection of types and methods to build a service on top of the substrate service.
 pub trait ServiceFactory: 'static + Sized {
 	/// Block type.
-	type Block: BlockT;
+	type Block: BlockT<Hash=H256>;
 	/// Network protocol extensions.
 	type NetworkProtocol: network::specialization::Specialization<Self::Block>;
 	/// Chain runtime.

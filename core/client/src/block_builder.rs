@@ -25,7 +25,7 @@ use runtime_primitives::generic::BlockId;
 use runtime_api::BlockBuilder as BlockBuilderAPI;
 use {backend, error, Client, CallExecutor};
 use runtime_primitives::ApplyOutcome;
-use primitives::{Blake2Hasher};
+use primitives::{Blake2Hasher, H256};
 use hash_db::Hasher;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
@@ -34,7 +34,7 @@ where
 	B: backend::Backend<Block, H> + 'a,
 	E: CallExecutor<Block, H> + Clone + 'a,
 	Block: BlockT,
-	H: Hasher,
+	H: Hasher<Out=Block::Hash>,
 	H::Out: Ord,
 
 {
@@ -50,7 +50,7 @@ impl<'a, B, E, Block> BlockBuilder<'a, B, E, Block, Blake2Hasher>
 where
 	B: backend::Backend<Block, Blake2Hasher> + 'a,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + 'a,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &'a Client<B, E, Block>) -> error::Result<Self> {

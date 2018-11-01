@@ -322,7 +322,7 @@ mod tests {
 
 	#[test]
 	fn balance_transfer_dispatch_works() {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
 		t.extend(balances::GenesisConfig::<Runtime> {
 			balances: vec![(1, 111)],
 			transaction_base_fee: 10,
@@ -331,7 +331,7 @@ mod tests {
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		let xt = primitives::testing::TestXt(Some(1), 0, Call::transfer(2.into(), 69.into()));
 		let mut t = runtime_io::TestExternalities::<Blake2Hasher>::new(t);
 		with_externalities(&mut t, || {
@@ -344,8 +344,8 @@ mod tests {
 	}
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap();
-		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap());
+		let mut t = system::GenesisConfig::<Runtime>::default().build_storage().unwrap().0;
+		t.extend(balances::GenesisConfig::<Runtime>::default().build_storage().unwrap().0);
 		t.into()
 	}
 
