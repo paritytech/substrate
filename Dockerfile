@@ -2,18 +2,17 @@ FROM phusion/baseimage:0.10.1 as builder
 LABEL maintainer "chevdor@gmail.com"
 LABEL description="This is the build stage for Polkadot. Here we create the binary."
 
-ARG PROFILE=release
-WORKDIR /polkadot
-
-COPY . /polkadot
-
 RUN apt-get update && \
 	apt-get upgrade -y && \
 	apt-get install -y cmake pkg-config libssl-dev git
 
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y && \
-	export PATH=$PATH:$HOME/.cargo/bin && \
-	cargo build --$PROFILE
+ARG PROFILE=release
+WORKDIR /polkadot
+COPY . /polkadot
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+
+RUN export PATH=$PATH:$HOME/.cargo/bin && cargo build --$PROFILE
 
 # ===== SECOND STAGE ======
 
