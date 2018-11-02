@@ -106,7 +106,7 @@ impl<AccountId> EnsureAccountLiquid<AccountId> for () {
 
 pub trait Trait: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
 	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
