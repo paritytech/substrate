@@ -20,8 +20,6 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit="256"]
 
-extern crate sr_io as runtime_io;
-
 #[macro_use]
 extern crate sr_api as runtime_api;
 
