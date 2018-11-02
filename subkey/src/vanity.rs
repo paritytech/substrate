@@ -167,10 +167,14 @@ pub fn generate_keys(key_specs: KeySpecs, count: usize, threads: u8) -> Vec<KeyP
     while result.len() < count {
         match r.recv() {
             Ok(key) => {
-            	println!("{:>6.2}%\t{}\t0x{}", key.score, key.pair.public().to_ss58check(),
-            		HexDisplay::from(&key.pair.public().0));
+            	// Do not show intermediary results and progress for a single key
+            	if count > 1 {
+            		println!("{:>6.2}%\t{}\t0x{}",
+            			key.score, key.pair.public().to_ss58check(),
+            			HexDisplay::from(&key.pair.public().0));
+            		pb.inc();
+            	}
             	result.push(key);
-            	pb.inc();
             },
             Err(_) => break,
         };
