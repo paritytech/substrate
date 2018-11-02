@@ -177,7 +177,7 @@ pub fn generate_keys(
     while result.len() < count {
         match r.recv() {
             Ok(key) => {
-            	println!("{:>6.2}%\t{}\t{}", key.score, key.pair.public().to_ss58check(), HexDisplay::from(&key.pair.public().0));
+            	println!("{:>6.2}%\t{}\t0x{}", key.score, key.pair.public().to_ss58check(), HexDisplay::from(&key.pair.public().0));
             	result.push(key);
             	pb.inc();
             },
