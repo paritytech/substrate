@@ -12,4 +12,4 @@ slog = "^2"
 slog-json = "^2"
 slog-async = "^2"
 slog-scope = "^4"
-ws = { version = "^0.7", features = ["ssl"] }
+ws = { version = "0.7.9", features = ["ssl"] }
