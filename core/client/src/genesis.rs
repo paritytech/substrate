@@ -17,15 +17,13 @@
 //! Tool for creating the genesis block.
 
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash as HashT, Zero};
-use runtime_primitives::StorageMap;
 
 /// Create a genesis block, given the initial storage.
 pub fn construct_genesis_block<
 	Block: BlockT
 > (
-	storage: &StorageMap
+	state_root: Block::Hash
 ) -> Block {
-	let state_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(storage.clone().into_iter());
 	let extrinsics_root = <<<Block as BlockT>::Header as HeaderT>::Hashing as HashT>::trie_root(::std::iter::empty::<(&[u8], &[u8])>());
 	Block::new(
 		<<Block as BlockT>::Header as HeaderT>::new(
@@ -50,6 +48,7 @@ mod tests {
 	use test_client;
 	use test_client::runtime::genesismap::{GenesisConfig, additional_storage_with_genesis};
 	use test_client::runtime::{Hash, Transfer, Block, BlockNumber, Header, Digest, Extrinsic};
+	use runtime_primitives::traits::BlakeTwo256;
 	use primitives::{Blake2Hasher, ed25519::{Public, Pair}};
 
 	native_executor_instance!(Executor, test_client::runtime::api::dispatch, test_client::runtime::native_version, include_bytes!("../../test-runtime/wasm/target/wasm32-unknown-unknown/release/substrate_test_runtime.compact.wasm"));
@@ -144,7 +143,8 @@ mod tests {
 		let mut storage = GenesisConfig::new_simple(
 			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
 		).genesis_map();
-		let block = construct_genesis_block::<Block>(&storage);
+		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
+		let block = construct_genesis_block::<Block>(state_root);
 		let genesis_hash = block.header.hash();
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 
@@ -168,7 +168,8 @@ mod tests {
 		let mut storage = GenesisConfig::new_simple(
 			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 1000
 		).genesis_map();
-		let block = construct_genesis_block::<Block>(&storage);
+		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
+		let block = construct_genesis_block::<Block>(state_root);
 		let genesis_hash = block.header.hash();
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 
@@ -193,7 +194,8 @@ mod tests {
 		let mut storage = GenesisConfig::new_simple(
 			vec![Keyring::One.to_raw_public().into(), Keyring::Two.to_raw_public().into()], 68
 		).genesis_map();
-		let block = construct_genesis_block::<Block>(&storage);
+		let state_root = BlakeTwo256::trie_root(storage.clone().into_iter());
+		let block = construct_genesis_block::<Block>(state_root);
 		let genesis_hash = block.header.hash();
 		storage.extend(additional_storage_with_genesis(&block).into_iter());
 

@@ -26,6 +26,7 @@ use runtime_primitives::{
 	generic::{BlockId, SignedBlock, Block as RuntimeBlock},
 	transaction_validity::{TransactionValidity, TransactionTag},
 };
+use consensus::{ImportBlock, ImportResult, BlockOrigin};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
 use runtime_primitives::{ApplyResult, BuildStorage};
 use runtime_api as api;
@@ -44,7 +45,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {cht, error, in_mem, block_builder, genesis};
+use {cht, error, in_mem, block_builder, genesis, consensus};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;
@@ -106,21 +107,6 @@ pub struct ClientInfo<Block: BlockT> {
 	pub best_queued_hash: Option<Block::Hash>,
 }
 
-/// Block import result.
-#[derive(Debug)]
-pub enum ImportResult {
-	/// Added to the import queue.
-	Queued,
-	/// Already in the import queue.
-	AlreadyQueued,
-	/// Already in the blockchain.
-	AlreadyInChain,
-	/// Block or parent is known to be bad.
-	KnownBad,
-	/// Block parent is not in the chain.
-	UnknownParent,
-}
-
 /// Block status.
 #[derive(Debug, PartialEq, Eq)]
 pub enum BlockStatus {
@@ -133,70 +119,6 @@ pub enum BlockStatus {
 	/// Not in the queue or the blockchain.
 	Unknown,
 }
-
-/// Block data origin.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub enum BlockOrigin {
-	/// Genesis block built into the client.
-	Genesis,
-	/// Block is part of the initial sync with the network.
-	NetworkInitialSync,
-	/// Block was broadcasted on the network.
-	NetworkBroadcast,
-	/// Block that was received from the network and validated in the consensus process.
-	ConsensusBroadcast,
-	/// Block that was collated by this node.
-	Own,
-	/// Block was imported from a file.
-	File,
-}
-
-/// Data required to import a Block
-pub struct ImportBlock<Block: BlockT> {
-	/// Origin of the Block
-	pub origin: BlockOrigin,
-	/// Header
-	pub header: Block::Header,
-	/// Justification provided for this block from the outside
-	pub external_justification: Justification,
-	/// Internal Justification for the block
-	pub internal_justification: Vec<u8>, // Block::Digest::DigestItem?
-	/// Block's body
-	pub body: Option<Vec<Block::Extrinsic>>,
-	/// Is this block finalized already?
-	/// `true` implies instant finality.
-	pub finalized: bool,
-	/// Auxiliary consensus data produced by the block.
-	/// Contains a list of key-value pairs. If values are `None`, the keys
-	/// will be deleted.
-	pub auxiliary: Vec<(Vec<u8>, Option<Vec<u8>>)>,
-}
-
-impl<Block: BlockT> ImportBlock<Block> {
-	/// Deconstruct the justified header into parts.
-	pub fn into_inner(self)
-		-> (
-			BlockOrigin,
-			<Block as BlockT>::Header,
-			Justification,
-			Justification,
-			Option<Vec<<Block as BlockT>::Extrinsic>>,
-			bool,
-			Vec<(Vec<u8>, Option<Vec<u8>>)>,
-		) {
-		(
-			self.origin,
-			self.header,
-			self.external_justification,
-			self.internal_justification,
-			self.body,
-			self.finalized,
-			self.auxiliary,
-		)
-	}
-}
-
-
 
 /// Summary of an imported block
 #[derive(Clone, Debug)]
@@ -222,16 +144,50 @@ pub struct FinalityNotification<Block: BlockT> {
 	pub header: Block::Header,
 }
 
+// used in importing a block, where additional changes are made after the runtime
+// executed.
+enum PrePostHeader<H> {
+	// they are the same: no post-runtime digest items.
+	Same(H),
+	// different headers (pre, post).
+	Different(H, H),
+}
+
+impl<H> PrePostHeader<H> {
+	// get a reference to the "pre-header" -- the header as it should be just after the runtime.
+	fn pre(&self) -> &H {
+		match *self {
+			PrePostHeader::Same(ref h) => h,
+			PrePostHeader::Different(ref h, _) => h,
+		}
+	}
+
+	// get a reference to the "post-header" -- the header as it should be after all changes are applied.
+	fn post(&self) -> &H {
+		match *self {
+			PrePostHeader::Same(ref h) => h,
+			PrePostHeader::Different(_, ref h) => h,
+		}
+	}
+
+	// convert to the "post-header" -- the header as it should be after all changes are applied.
+	fn into_post(self) -> H {
+		match self {
+			PrePostHeader::Same(h) => h,
+			PrePostHeader::Different(_, h) => h,
+		}
+	}
+}
+
 /// Create an instance of in-memory client.
 pub fn new_in_mem<E, Block, S>(
 	executor: E,
 	genesis_storage: S,
 ) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>, Block>>
-	where
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-		S: BuildStorage,
-		Block: BlockT,
-		H256: From<Block::Hash>,
+where
+	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	S: BuildStorage,
+	Block: BlockT<Hash=H256>,
 {
 	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
 }
@@ -243,12 +199,11 @@ pub fn new_with_backend<B, E, Block, S>(
 	executor: E,
 	build_genesis_storage: S,
 ) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block>>
-	where
-		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-		S: BuildStorage,
-		Block: BlockT,
-		H256: From<Block::Hash>,
-		B: backend::LocalBackend<Block, Blake2Hasher>
+where
+	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
+	S: BuildStorage,
+	Block: BlockT<Hash=H256>,
+	B: backend::LocalBackend<Block, Blake2Hasher>
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
@@ -257,7 +212,7 @@ pub fn new_with_backend<B, E, Block, S>(
 impl<B, E, Block> Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new<S: BuildStorage>(
@@ -268,11 +223,12 @@ impl<B, E, Block> Client<B, E, Block> where
 		api_execution_strategy: ExecutionStrategy,
 	) -> error::Result<Self> {
 		if backend.blockchain().header(BlockId::Number(Zero::zero()))?.is_none() {
-			let genesis_storage = build_genesis_storage.build_storage()?;
-			let genesis_block = genesis::construct_genesis_block::<Block>(&genesis_storage);
-			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
+			let (genesis_storage, children_genesis_storage) = build_genesis_storage.build_storage()?;
 			let mut op = backend.begin_operation(BlockId::Hash(Default::default()))?;
-			op.reset_storage(genesis_storage.into_iter())?;
+			let state_root = op.reset_storage(genesis_storage, children_genesis_storage)?;
+
+			let genesis_block = genesis::construct_genesis_block::<Block>(state_root.into());
+			info!("Initialising Genesis block/state (state: {}, header-hash: {})", genesis_block.header().state_root(), genesis_block.header().hash());
 			op.set_block_data(
 				genesis_block.deconstruct().0,
 				Some(vec![]),
@@ -344,11 +300,6 @@ impl<B, E, Block> Client<B, E, Block> where
 	/// Get call executor reference.
 	pub fn executor(&self) -> &E {
 		&self.executor
-	}
-
-	/// Returns the runtime metadata.
-	pub fn metadata(&self, id: &BlockId<Block>) -> error::Result<Vec<u8>> {
-		self.executor.call(id, "metadata",&[]).map(|v| v.return_data)
 	}
 
 	/// Reads storage value at a given block + key, returning read proof.
@@ -518,52 +469,6 @@ impl<B, E, Block> Client<B, E, Block> where
 		)
 	}
 
-	/// Import a checked and validated block
-	pub fn import_block(
-		&self,
-		import_block: ImportBlock<Block>,
-		new_authorities: Option<Vec<AuthorityId>>,
-	) -> error::Result<ImportResult> {
-
-		let (
-			origin,
-			header,
-			_,
-			justification,
-			body,
-			finalized,
-			_aux, // TODO: write this to DB also
-		) = import_block.into_inner();
-		let parent_hash = header.parent_hash().clone();
-
-		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
-			blockchain::BlockStatus::InChain => {},
-			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
-		}
-		let hash = header.hash();
-		let _import_lock = self.import_lock.lock();
-		let height: u64 = header.number().as_();
-		*self.importing_block.write() = Some(hash);
-
-		let result = self.execute_and_import_block(
-			origin,
-			hash,
-			header,
-			justification,
-			body,
-			new_authorities,
-			finalized,
-		);
-
-		*self.importing_block.write() = None;
-		telemetry!("block.import";
-			"height" => height,
-			"best" => ?hash,
-			"origin" => ?origin
-		);
-		result
-	}
-
 	// TODO [ToDr] Optimize and re-use tags from the pool.
 	fn transaction_tags(&self, at: Block::Hash, body: &Option<Vec<Block::Extrinsic>>) -> error::Result<Vec<TransactionTag>> {
 		let id = BlockId::Hash(at);
@@ -592,13 +497,13 @@ impl<B, E, Block> Client<B, E, Block> where
 		&self,
 		origin: BlockOrigin,
 		hash: Block::Hash,
-		header: Block::Header,
+		import_headers: PrePostHeader<Block::Header>,
 		justification: Justification,
 		body: Option<Vec<Block::Extrinsic>>,
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
 	) -> error::Result<ImportResult> {
-		let parent_hash = header.parent_hash().clone();
+		let parent_hash = import_headers.post().parent_hash().clone();
 		match self.backend.blockchain().status(BlockId::Hash(hash))? {
 			blockchain::BlockStatus::InChain => return Ok(ImportResult::AlreadyInChain),
 			blockchain::BlockStatus::Unknown => {},
@@ -632,12 +537,13 @@ impl<B, E, Block> Client<B, E, Block> where
 					transaction_state,
 					&mut overlay,
 					"execute_block",
-					&<Block as BlockT>::new(header.clone(), body.clone().unwrap_or_default()).encode(),
+					&<Block as BlockT>::new(import_headers.pre().clone(), body.clone().unwrap_or_default()).encode(),
 					match (origin, self.block_execution_strategy) {
 						(BlockOrigin::NetworkInitialSync, _) | (_, ExecutionStrategy::NativeWhenPossible) =>
 							ExecutionManager::NativeWhenPossible,
 						(_, ExecutionStrategy::AlwaysWasm) => ExecutionManager::AlwaysWasm,
 						_ => ExecutionManager::Both(|wasm_result, native_result| {
+							let header = import_headers.post();
 							warn!("Consensus error between wasm and native block execution at block {}", hash);
 							warn!("   Header {:?}", header);
 							warn!("   Native result {:?}", native_result);
@@ -659,7 +565,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		};
 
 		// TODO: non longest-chain rule.
-		let is_new_best = finalized || header.number() > &last_best_number;
+		let is_new_best = finalized || import_headers.post().number() > &last_best_number;
 		let leaf_state = if finalized {
 			::backend::NewBlockState::Final
 		} else if is_new_best {
@@ -668,10 +574,10 @@ impl<B, E, Block> Client<B, E, Block> where
 			::backend::NewBlockState::Normal
 		};
 
-		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, header.number(), is_new_best, origin);
+		trace!("Imported {}, (#{}), best={}, origin={:?}", hash, import_headers.post().number(), is_new_best, origin);
 
 		transaction.set_block_data(
-			header.clone(),
+			import_headers.post().clone(),
 			body,
 			Some(justification),
 			leaf_state,
@@ -698,7 +604,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			if finalized {
 				let notification = FinalityNotification::<Block> {
 					hash,
-					header: header.clone(),
+					header: import_headers.post().clone(),
 				};
 
 				self.finality_notification_sinks.lock()
@@ -708,7 +614,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			let notification = BlockImportNotification::<Block> {
 				hash,
 				origin,
-				header,
+				header: import_headers.into_post(),
 				is_new_best,
 				tags,
 			};
@@ -984,10 +890,88 @@ impl<B, E, Block> Client<B, E, Block> where
 	}
 }
 
+
+impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	Block: BlockT<Hash=H256>,
+{
+	type Error = Error;
+
+	/// Import a checked and validated block
+	fn import_block(
+		&self,
+		import_block: ImportBlock<Block>,
+		new_authorities: Option<Vec<AuthorityId>>,
+	) -> Result<ImportResult, Self::Error> {
+		use runtime_primitives::traits::Digest;
+
+		let ImportBlock {
+			origin,
+			header,
+			external_justification,
+			post_runtime_digests,
+			body,
+			finalized,
+			..
+		} = import_block;
+		let parent_hash = header.parent_hash().clone();
+
+		match self.backend.blockchain().status(BlockId::Hash(parent_hash))? {
+			blockchain::BlockStatus::InChain => {},
+			blockchain::BlockStatus::Unknown => return Ok(ImportResult::UnknownParent),
+		}
+
+		let import_headers = if post_runtime_digests.is_empty() {
+			PrePostHeader::Same(header)
+		} else {
+			let mut post_header = header.clone();
+			for item in post_runtime_digests {
+				post_header.digest_mut().push(item);
+			}
+			PrePostHeader::Different(header, post_header)
+		};
+
+		let hash = import_headers.post().hash();
+		let _import_lock = self.import_lock.lock();
+		let height: u64 = import_headers.post().number().as_();
+		*self.importing_block.write() = Some(hash);
+
+		let result = self.execute_and_import_block(
+			origin,
+			hash,
+			import_headers,
+			external_justification,
+			body,
+			new_authorities,
+			finalized,
+		);
+
+		*self.importing_block.write() = None;
+		telemetry!("block.import";
+			"height" => height,
+			"best" => ?hash,
+			"origin" => ?origin
+		);
+		result.map_err(|e| e.into())
+	}
+}
+
+impl<B, E, Block> consensus::Authorities<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Clone,
+	Block: BlockT<Hash=H256>,
+{
+	type Error = Error;
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+		self.authorities_at(at).map_err(|e| e.into())
+	}
+}
+
 impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
 	fn current_height(&self) -> Self::BlockNumber {
@@ -998,7 +982,7 @@ impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
 impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
 	type Hash = Block::Hash;
@@ -1011,7 +995,7 @@ impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
 impl<B, E, Block> BlockchainEvents<Block> for Client<B, E, Block>
 where
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	/// Get block import event stream.
 	fn import_notification_stream(&self) -> ImportNotifications<Block> {
@@ -1036,18 +1020,17 @@ impl<B, E, Block> ChainHead<Block> for Client<B, E, Block>
 where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
 	}
 }
 
-impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
-	where
-		B: backend::Backend<Block, Blake2Hasher>,
-		E: CallExecutor<Block, Blake2Hasher>,
-		Block: BlockT,
+impl<B, E, Block> BlockBody<Block> for Client<B, E, Block> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher>,
+	Block: BlockT<Hash=H256>,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
@@ -1057,7 +1040,7 @@ impl<B, E, Block> BlockBody<Block> for Client<B, E, Block>
 impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 
@@ -1074,22 +1057,22 @@ impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> api::Metadata<Block> for Client<B, E, Block> where
+impl<B, E, Block> api::Metadata<Block, Vec<u8>> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 
 	fn metadata(&self, at: &BlockId<Block>) -> Result<Vec<u8>, Self::Error> {
-		self.call_api_at(at, "metadata", &())
+		self.executor.call(at, "metadata",&[]).map(|v| v.return_data)
 	}
 }
 
 impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 	type OverlayedChanges = OverlayedChanges;
@@ -1140,30 +1123,10 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> api::OldTxQueue<Block> for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
-{
-	type Error = Error;
-
-	fn account_nonce<AccountId: Encode + Decode, Index: Encode + Decode>(
-		&self, at: &BlockId<Block>, account: &AccountId
-	) -> Result<Index, Self::Error> {
-		self.call_api_at(at, "account_nonce", &(account))
-	}
-
-	fn lookup_address<Address: Encode + Decode, AccountId: Encode + Decode>(
-		&self, at: &BlockId<Block>, address: &Address
-	) -> Result<Option<AccountId>, Self::Error> {
-		self.call_api_at(at, "lookup_address", &(address))
-	}
-}
-
 impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 {
 	type Error = Error;
 
@@ -1171,30 +1134,6 @@ impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> whe
 		&self, at: &BlockId<Block>, tx: &<Block as BlockT>::Extrinsic
 	) -> Result<TransactionValidity, Self::Error> {
 		self.call_api_at(at, "validate_transaction", &(tx))
-	}
-}
-
-impl<B, E, Block> api::Miscellaneous<Block> for Client<B, E, Block> where
-	B: backend::Backend<Block, Blake2Hasher>,
-	E: CallExecutor<Block, Blake2Hasher>,
-	Block: BlockT,
-{
-	type Error = Error;
-
-	fn validator_count(&self, at: &BlockId<Block>) -> Result<u32, Self::Error> {
-		self.call_api_at(at, "validator_count", &())
-	}
-
-	fn validators<AccountId: Encode + Decode>(
-		&self, at: &BlockId<Block>
-	) -> Result<Vec<AccountId>, Self::Error> {
-		self.call_api_at(at, "validators", &())
-	}
-
-	fn timestamp<Moment: Encode + Decode>(
-		&self, at: &BlockId<Block>
-	) -> Result<Moment, Self::Error> {
-		self.call_api_at(at, "timestamp", &())
 	}
 }
 
@@ -1207,7 +1146,7 @@ pub(crate) mod tests {
 	use runtime_primitives::traits::{Digest as DigestT, DigestItem as DigestItemT};
 	use runtime_primitives::generic::DigestItem;
 	use test_client::{self, TestClient};
-	use test_client::client::BlockOrigin;
+	use consensus::BlockOrigin;
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer};

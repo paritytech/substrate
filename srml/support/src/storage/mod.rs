@@ -169,7 +169,7 @@ pub trait StorageValue<T: Codec> {
 	fn put<Arg: Borrow<T>>(val: Arg);
 
 	/// Mutate the value
-	fn mutate<F: FnOnce(&mut Self::Query)>(f: F);
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R;
 
 	/// Clear the storage value.
 	fn kill();
@@ -193,7 +193,7 @@ impl<T: Codec, U> StorageValue<T> for U where U: generator::StorageValue<T> {
 	fn put<Arg: Borrow<T>>(val: Arg) {
 		U::put(val.borrow(), &RuntimeStorage)
 	}
-	fn mutate<F: FnOnce(&mut Self::Query)>(f: F) {
+	fn mutate<R, F: FnOnce(&mut Self::Query) -> R>(f: F) -> R {
 		U::mutate(f, &RuntimeStorage)
 	}
 	fn kill() {
@@ -296,7 +296,7 @@ pub trait StorageMap<K: Codec, V: Codec> {
 	fn remove<KeyArg: Borrow<K>>(key: KeyArg);
 
 	/// Mutate the value under a key.
-	fn mutate<KeyArg: Borrow<K>, F: FnOnce(&mut Self::Query)>(key: KeyArg, f: F);
+	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R;
 
 	/// Take the value under a key.
 	fn take<KeyArg: Borrow<K>>(key: KeyArg) -> Self::Query;
@@ -329,7 +329,7 @@ impl<K: Codec, V: Codec, U> StorageMap<K, V> for U where U: generator::StorageMa
 		U::remove(key.borrow(), &RuntimeStorage)
 	}
 
-	fn mutate<KeyArg: Borrow<K>, F: FnOnce(&mut Self::Query)>(key: KeyArg, f: F) {
+	fn mutate<KeyArg: Borrow<K>, R, F: FnOnce(&mut Self::Query) -> R>(key: KeyArg, f: F) -> R {
 		U::mutate(key.borrow(), f, &RuntimeStorage)
 	}
 

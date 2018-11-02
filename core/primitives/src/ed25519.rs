@@ -31,7 +31,7 @@ pub type Signature = H512;
 pub const PKCS_LEN: usize = 85;
 
 /// A localized signature also contains sender information.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Encode, Decode)]
 pub struct LocalizedSignature {
 	/// The signer of the signature.
 	pub signer: Public,
@@ -40,6 +40,7 @@ pub struct LocalizedSignature {
 }
 
 /// Verify a message without type checking the parameters' types for the right size.
+/// Returns true if the signature is good.
 pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], public: P) -> bool {
 	let public_key = untrusted::Input::from(public.as_ref());
 	let msg = untrusted::Input::from(message);
@@ -52,7 +53,7 @@ pub fn verify<P: AsRef<[u8]>>(sig: &[u8], message: &[u8], public: P) -> bool {
 }
 
 /// A public key.
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Encode, Decode)]
 pub struct Public(pub [u8; 32]);
 
 /// A key pair.
@@ -246,7 +247,7 @@ impl Pair {
 	}
 }
 
-/// Verify a signature on a message.
+/// Verify a signature on a message. Returns true if the signature is good.
 pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: P) -> bool {
 	let public_key = untrusted::Input::from(&pubkey.as_ref().0[..]);
 	let msg = untrusted::Input::from(message);

@@ -24,7 +24,8 @@
 #[cfg(feature = "std")]
 extern crate serde;
 
-extern crate sr_std as rstd;
+#[doc(hidden)]
+pub extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[doc(hidden)]
 pub extern crate sr_primitives as runtime_primitives;
@@ -65,6 +66,7 @@ pub mod inherent;
 pub use self::storage::{StorageVec, StorageList, StorageValue, StorageMap};
 pub use self::hashable::Hashable;
 pub use self::dispatch::{Parameter, Dispatchable, Callable, IsSubType};
+pub use self::metadata::RuntimeMetadata;
 pub use runtime_io::print;
 
 #[macro_export]
