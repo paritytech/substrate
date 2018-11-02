@@ -17,8 +17,8 @@ args:
     multiple: true
     required: true
 - upgrade_key_seed:
-      short: u
-      value_name: UPGRADE_KEY_SEED
-      help: Upgrade key seed
-      takes_value: true
-      required: true
+    short: u
+    value_name: UPGRADE_KEY_SEED
+    help: Upgrade key seed
+    takes_value: true
+    required: true

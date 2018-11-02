@@ -19,8 +19,8 @@
 use primitives::{AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
-				   SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
-				   UpgradeKeyConfig, ContractConfig, Permill, Perbill};
+	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig,
+	UpgradeKeyConfig, ContractConfig, Permill, Perbill};
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 
@@ -154,9 +154,10 @@ pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
 }
 
 /// Helper function to create GenesisConfig for testing
-pub fn testnet_genesis(initial_authorities: Vec<AuthorityId>,
-					   upgrade_key: AccountId,
-					   endowed_accounts: Option<Vec<AuthorityId>>,
+pub fn testnet_genesis(
+	initial_authorities: Vec<AuthorityId>,
+	upgrade_key: AccountId,
+	endowed_accounts: Option<Vec<AuthorityId>>,
 ) -> GenesisConfig {
 	let endowed_accounts = endowed_accounts.unwrap_or_else(|| {
 		vec![
