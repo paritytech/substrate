@@ -404,11 +404,11 @@ pub type AuraImportQueue<B, C> = BasicQueue<B, AuraVerifier<C>>;
 /// Start an import queue for the Aura consensus algorithm.
 pub fn import_queue<B, C>(config: Config, client: Arc<C>) -> AuraImportQueue<B, C> where
 	B: Block,
-	C: Authorities<B> + BlockImport<B> + Send + Sync,
+	C: Authorities<B> + BlockImport<B,Error=client::error::Error> + Send + Sync,
 	DigestItemFor<B>: CompatibleDigestItem,
 {
-	let verifier = Arc::new(AuraVerifier { config, client });
-	BasicQueue::new(verifier)
+	let verifier = Arc::new(AuraVerifier { config, client: client.clone() });
+	BasicQueue::new(verifier, client)
 }
 
 
@@ -458,7 +458,7 @@ mod tests {
 	const TEST_ROUTING_INTERVAL: Duration = Duration::from_millis(50);
 
 	pub struct AuraTestNet {
-		peers: Vec<Arc<Peer<AuraVerifier<PeersClient>>>>,
+		peers: Vec<Arc<Peer<AuraVerifier<PeersClient>, ()>>>,
 		started: bool
 	}
 

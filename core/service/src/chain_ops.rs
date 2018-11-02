@@ -88,16 +88,12 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut input: R) -> error::Result<()>
 	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, R: Read,
 {
-	use network::ClientHandle;
-
-	struct DummyLink<T>(::std::sync::Arc<T>);
-	impl<B: Block, T: ClientHandle<B>> Link<B> for DummyLink<T> {
-		fn chain(&self) -> &ClientHandle<B> { &*self.0 }
-	}
+	struct DummyLink;
+	impl<B: Block> Link<B> for DummyLink { }
 
 	let client = new_client::<F>(&config)?;
 	let queue = components::FullComponents::<F>::build_import_queue(&config, client.clone())?;
-	queue.start(DummyLink(client.clone()))?;
+	queue.start(DummyLink)?;
 
 	let (exit_send, exit_recv) = std::sync::mpsc::channel();
 	::std::thread::spawn(move || {
