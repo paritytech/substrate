@@ -34,11 +34,6 @@ subcommands:
             long: case-sensitive
             help: Whether the patten case is important or not
             takes_value: false
-        - paranoiac:
-            short: p
-            long: paranoiac
-            help: Sacrifice speed for better randomness (~7% slower)
-            takes_value: false
         - format:
             short: f
             long: format

@@ -97,11 +97,6 @@ pub fn generate_key(key_specs: &KeySpecs) -> Result<KeyPair, String> {
 
 	loop {
 		let p = Pair::from_seed(&seed);
-
-		if key_specs.paranoiac {
-			OsRng::new().unwrap().fill_bytes(&mut seed[..]);
-		}
-
 		let ss58 = p.public().to_ss58check();
 		let score = calculate_score(&key_specs, &ss58);
 		if score >= key_specs.minscore {
@@ -196,7 +191,6 @@ mod tests {
 		let specs = KeySpecs {
 			desired_pattern: String::from("j"),
 			case_sensitive: true,
-			paranoiac: false,
 			minscore: 75.0,
 		};
 
@@ -208,7 +202,6 @@ mod tests {
 		let specs = KeySpecs {
 			desired_pattern: String::from("j"),
 			case_sensitive: true,
-			paranoiac: false,
 			minscore: 75.0,
 		};
 
@@ -221,7 +214,6 @@ mod tests {
 		let specs = KeySpecs {
 			desired_pattern: String::from("Substrate"),
 			case_sensitive: true,
-			paranoiac: false,
 			minscore: 75.0,
 		};
 		let score = calculate_score(&specs, "5SubstratewHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
@@ -233,7 +225,6 @@ mod tests {
 		let specs = KeySpecs {
 			desired_pattern: String::from("Substrate"),
 			case_sensitive: true,
-			paranoiac: false,
 			minscore: 75.0,
 		};
 
@@ -246,7 +237,6 @@ mod tests {
 		let specs = KeySpecs {
 			desired_pattern: String::from("Substrate"),
 			case_sensitive: true,
-			paranoiac: false,
 			minscore: 75.0,
 		};
 
@@ -255,26 +245,10 @@ mod tests {
 
 	#[cfg(feature = "bench")]
 	#[bench]
-	fn bench_paranoiac(b: &mut Bencher) {
+	fn bench(b: &mut Bencher) {
 		let specs = KeySpecs {
 			desired_pattern: String::from("oo7"),
 			case_sensitive: false,
-			paranoiac: true,
-			minscore: 75.0,
-		};
-
-		b.iter(|| {
-			generate_key(&specs)
-		});
-	}
-
-	#[cfg(feature = "bench")]
-	#[bench]
-	fn bench_not_paranoiac(b: &mut Bencher) {
-		let specs = KeySpecs {
-			desired_pattern: String::from("oo7"),
-			case_sensitive: false,
-			paranoiac: false,
 			minscore: 75.0,
 		};
 

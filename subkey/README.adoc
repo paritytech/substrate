@@ -23,7 +23,6 @@ A key generation utility with vanity address support.
 	FLAGS:
 	    -c, --case-sensitive    Whether the patten case is important or not
 	    -h, --help              Prints help information
-	    -p, --paranoiac         Sacrifice speed for better randomness
 	    -V, --version           Prints version information
 
 	OPTIONS:

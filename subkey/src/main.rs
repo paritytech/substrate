@@ -55,7 +55,6 @@ fn main() {
 			let key_specs = KeySpecs {
 				 desired_pattern: matches.value_of("pattern").map(str::to_string).unwrap_or_default(),
 				 case_sensitive: matches.is_present("case_sensitive"),
-				 paranoiac: matches.is_present("paranoiac"),
 				 minscore: ::std::cmp::min(
 				 	matches.value_of("minscore").map(str::to_string).unwrap_or_default().parse::<u8>().unwrap(), 100) as f32,
 			};

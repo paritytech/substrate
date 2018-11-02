@@ -4,7 +4,6 @@ use std::fmt;
 pub struct KeySpecs {
 	pub desired_pattern: String,
 	pub case_sensitive: bool,
-	pub paranoiac: bool,
 	pub minscore: f32,
 }
 
@@ -13,10 +12,9 @@ impl fmt::Display for KeySpecs {
         write!(f, r#"Key specifications:
  - Pattern:        {}
  - Case sensitive: {}
- - Paranoiac:      {}
  - Min. Score:     {}"#,
         	self.desired_pattern,
         	self.case_sensitive,
-        	self.paranoiac, self.minscore)
+        	self.minscore)
     }
 }
