@@ -145,10 +145,11 @@ pub fn staging_testnet_config() -> ChainSpec {
 
 /// Helper function to generate AuthorityID from seed
 pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
+	let mut padded_seed: [u8; 32] = Default::default();
+	let padded = format!("{:width$}", seed, width = padded_seed.len());
+	padded_seed[0..32].copy_from_slice(padded.as_str().as_bytes());
 	// NOTE from ed25519 impl:
 	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
-	let mut padded_seed: [u8; 32] = Default::default();
-	padded_seed[0..seed.len()].copy_from_slice(seed.as_bytes());
 	ed25519::Pair::from_seed(&padded_seed).public().0.into()
 }
 
@@ -294,7 +295,14 @@ mod tests {
 	}
 
 	#[test]
-	fn test_connectivity() {
+	fn test_get_authority_from_seed_padding() {
+		let space_padded: AuthorityId = ed25519::Pair::from_seed(b"Alice                           ").public().0.into();
+		let authority_id = get_authority_id_from_seed("Alice");
+		assert_eq!(space_padded, authority_id);
+	}
+
+	#[test]
+	fn test_connectiviy() {
 		service_test::connectivity::<Factory>(integration_test_config());
 	}
 }
