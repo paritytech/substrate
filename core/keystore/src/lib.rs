@@ -153,7 +153,7 @@ impl Store {
 
 	/// Create a new key from seed. Do not place it into the store.
 	/// Only the first 32 bytes of the sead are used. This is meant to be used for testing only.
-	// TODO: Remove this
+	// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
 	pub fn generate_from_seed(&mut self, seed: &str) -> Result<Pair> {
 		let mut s: [u8; 32] = [' ' as u8; 32];
 

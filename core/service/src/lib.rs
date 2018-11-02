@@ -142,7 +142,7 @@ impl<Components> Service<Components>
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
 
 		// This is meant to be for testing only
-		// TODO: remove this
+		// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
