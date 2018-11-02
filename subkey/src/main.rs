@@ -26,7 +26,6 @@
 extern crate test;
 extern crate substrate_primitives;
 extern crate rand;
-extern crate ansi_term;
 extern crate num_cpus;
 extern crate ctrlc;
 
@@ -34,9 +33,13 @@ extern crate ctrlc;
 extern crate clap;
 extern crate pbr;
 
+use vanity::OutputFormat;
+use keyspecs::KeySpecs;
 use substrate_primitives::{ed25519::Pair, hexdisplay::HexDisplay};
 
 mod vanity;
+mod keypair;
+mod keyspecs;
 
 fn main() {
 	let yaml = load_yaml!("cli.yml");
@@ -44,26 +47,25 @@ fn main() {
 
 	match matches.subcommand() {
 		("vanity", Some(matches)) => {
-				let desired_pattern:String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
-				let number: u32 = matches.value_of("number").map(str::to_string).unwrap_or_default().parse::<u32>().unwrap();
-				let minscore: u8 = matches.value_of("minscore").map(str::to_string).unwrap_or_default().parse::<u8>().unwrap();
-				let case_sensitive: bool = matches.is_present("case_sensitive");
-				let paranoiac: bool = matches.is_present("paranoiac");
+			let number: u32 = matches.value_of("number").map(str::to_string).unwrap_or_default().parse::<u32>().unwrap();
+			let threads: u8 = matches.value_of("threads").map(str::to_string).unwrap_or_default().parse::<u8>().unwrap();
+			let format: OutputFormat = match matches.value_of("format").unwrap_or_default() {
+				"csv" => OutputFormat::Csv,
+				_ => OutputFormat::Stdout,
+			};
+			let key_specs = KeySpecs {
+				 desired_pattern: matches.value_of("pattern").map(str::to_string).unwrap_or_default(),
+				 case_sensitive: matches.is_present("case_sensitive"),
+				 paranoiac: matches.is_present("paranoiac"),
+				 minscore: match matches.value_of("minscore").map(str::to_string).unwrap_or_default().parse::<u8>().unwrap() {
+					 m @ 0...100 => m as f32,
+					_ => 100_f32,
+				},
+			};
 
-				let minscore = match minscore {
-					0...100  => minscore,
-					m if m >= 100 => 100,
-					_ => 75,
-				};
-
-				let keys = vanity::generate_keys(
-						desired_pattern,
-						case_sensitive,
-						paranoiac,
-						minscore as f32,
-						number as usize);
-				vanity::print_keys(keys);
-			}
+			let keys = vanity::generate_keys(key_specs, number as usize, threads);
+			vanity::print_keys(keys, format);
+		}
 
 		("restore", Some(matches)) => {
 			let mut raw_seed = matches.value_of("seed")
@@ -89,7 +91,6 @@ fn main() {
 			);
 		},
 		_ => print_usage(&matches),
-
 	}
 }
 

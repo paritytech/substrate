@@ -39,3 +39,16 @@ subcommands:
             long: paranoiac
             help: Sacrifice speed for better randomness (~7% slower)
             takes_value: false
+        - format:
+            short: f
+            long: format
+            help: Format of the generated output (stdout|csv)
+            takes_value: true
+            default_value: stdout
+        - threads:
+            short: t
+            long: threads
+            help: Force the number of threads to be used (0= number of cpus x 2)
+            takes_value: true
+            default_value: "0"
+

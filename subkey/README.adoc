@@ -18,15 +18,16 @@ A key generation utility with vanity address support.
 == vanity addresses
 
 	USAGE:
-	    subkey vanity [FLAGS] [OPTIONS] [pattern]
+    subkey vanity [FLAGS] [OPTIONS] [pattern]
 
 	FLAGS:
 	    -c, --case-sensitive    Whether the patten case is important or not
 	    -h, --help              Prints help information
-	    -p, --paranoiac         Sacrifice speed for better randomness
+	    -p, --paranoiac         Sacrifice speed for better randomness (\~7% slower)
 	    -V, --version           Prints version information
 
 	OPTIONS:
+	    -f, --format <format>        Format of the generated output (stdout|csv) [default: stdout]
 	    -m, --minscore <minscore>    Minimum score for the results (between 0 and 100) [default: 75]
 	    -n, --number <number>        Number of keys to generate [default: 1]
 
@@ -41,18 +42,18 @@ The following command generates 3 vanity addresses containing `sub`, with a mini
 
 returns:
 
-	Found match with a score of 86.24%
-	 - Address  : 5D7d6gfCYrbXAa6fRKspJJzSpKiZsubT9UVrPsVUqsuYVQGb
-	 - Hex seed : 0x2e75f39eabd3a94eab235d0a1e29a34b6550cce9bc38a858e83e581bfe9872cd
-	 - Seed     : b2a7b571d580180dff551352558c8b55a68f3448388218f0eb5a48dc38a0aaf8
-	Found match with a score of 88.89%
-	 - Address  : 5CaBqxamFdJYFAEipjnJ7ibsubwZhCiuhKRFEHJoHZKWfSgC
-	 - Hex seed : 0x167c54fa2c5f4228653a12b5d2f075e28b1b0abfc2d13e373e39b0ab90400737
-	 - Seed     : 4db70e51cf384fa5f65c56fb28210acb8f36edcb4b48072260c4357f1625bf6c
 	Found match with a score of 92.06%
 	 - Address  : 5DHsZCnuPqzHnXFW1subSTgnLD3zcFbJ3Q2bFcZ1Bmj5xFMw
 	 - Hex seed : 0x364712b4a74784c605d01547f4cec951049e280d5a47aad2c7e9f06b2f7ad321
 	 - Seed     : 1c328aea576a252c80a91a2b1c08312c095320b04f2f6d264eeb50b9d544fd4d
+	Found match with a score of 88.89%
+	 - Address  : 5CaBqxamFdJYFAEipjnJ7ibsubwZhCiuhKRFEHJoHZKWfSgC
+	 - Hex seed : 0x167c54fa2c5f4228653a12b5d2f075e28b1b0abfc2d13e373e39b0ab90400737
+	 - Seed     : 4db70e51cf384fa5f65c56fb28210acb8f36edcb4b48072260c4357f1625bf6c
+	Found match with a score of 86.24%
+	 - Address  : 5D7d6gfCYrbXAa6fRKspJJzSpKiZsubT9UVrPsVUqsuYVQGb
+	 - Hex seed : 0x2e75f39eabd3a94eab235d0a1e29a34b6550cce9bc38a858e83e581bfe9872cd
+	 - Seed     : b2a7b571d580180dff551352558c8b55a68f3448388218f0eb5a48dc38a0aaf8
 
 == Running forever until your favorite key shows up
 
