@@ -18,9 +18,10 @@
 
 use primitives::{AuthorityId, ed25519};
 use node_primitives::AccountId;
-use node_runtime::{GenesisConfig, ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
+use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig, UpgradeKeyConfig,
 	ContractConfig, Permill, Perbill};
+pub use node_runtime::GenesisConfig;
 use substrate_service;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -28,6 +29,7 @@ const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 /// Specialised `ChainSpec`.
 pub type ChainSpec = substrate_service::ChainSpec<GenesisConfig>;
 
+/// BBQ birch testnet generator
 pub fn bbq_birch_config() -> Result<ChainSpec, String> {
 	ChainSpec::from_embedded(include_bytes!("../res/bbq-birch.json"))
 }
@@ -143,15 +145,30 @@ pub fn staging_testnet_config() -> ChainSpec {
 	)
 }
 
-fn testnet_genesis(initial_authorities: Vec<AuthorityId>, upgrade_key: AccountId) -> GenesisConfig {
-	let endowed_accounts = vec![
-		ed25519::Pair::from_seed(b"Alice                           ").public().0.into(),
-		ed25519::Pair::from_seed(b"Bob                             ").public().0.into(),
-		ed25519::Pair::from_seed(b"Charlie                         ").public().0.into(),
-		ed25519::Pair::from_seed(b"Dave                            ").public().0.into(),
-		ed25519::Pair::from_seed(b"Eve                             ").public().0.into(),
-		ed25519::Pair::from_seed(b"Ferdie                          ").public().0.into(),
-	];
+/// Helper function to generate AuthorityID from seed
+pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
+	// NOTE from ed25519 impl:
+	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
+	let mut padded_seed: [u8; 32] = Default::default();
+	padded_seed[0..seed.len()].copy_from_slice(seed.as_bytes());
+	ed25519::Pair::from_seed(&padded_seed).public().0.into()
+}
+
+/// Helper function to create GenesisConfig for testing
+pub fn testnet_genesis(initial_authorities: Vec<AuthorityId>,
+                   upgrade_key: AccountId,
+                   endowed_accounts: Option<Vec<AuthorityId>>
+                   ) -> GenesisConfig {
+    let endowed_accounts = endowed_accounts.unwrap_or_else(|| {
+        vec![
+			get_authority_id_from_seed("Alice"),
+			get_authority_id_from_seed("Bob"),
+			get_authority_id_from_seed("Charlie"),
+			get_authority_id_from_seed("Dave"),
+			get_authority_id_from_seed("Eve"),
+			get_authority_id_from_seed("Ferdie"),
+        ]
+    });
 	GenesisConfig {
 		consensus: Some(ConsensusConfig {
 			code: include_bytes!("../../runtime/wasm/target/wasm32-unknown-unknown/release/node_runtime.compact.wasm").to_vec(),
@@ -165,7 +182,7 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, upgrade_key: AccountId
 			transfer_fee: 0,
 			creation_fee: 0,
 			reclaim_rebate: 0,
-			balances: endowed_accounts.iter().map(|&k|(k, (1 << 60))).collect(),
+			balances: endowed_accounts.iter().map(|&k|(k.into(), (1 << 60))).collect(),
 		}),
 		session: Some(SessionConfig {
 			validators: initial_authorities.iter().cloned().map(Into::into).collect(),
@@ -232,9 +249,10 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, upgrade_key: AccountId
 
 fn development_config_genesis() -> GenesisConfig {
 	testnet_genesis(vec![
-		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
+		get_authority_id_from_seed("Alice"),
 	],
-		ed25519::Pair::from_seed(b"Alice                           ").public().0.into()
+		get_authority_id_from_seed("Alice").into(),
+        None
 	)
 }
 
@@ -245,10 +263,11 @@ pub fn development_config() -> ChainSpec {
 
 fn local_testnet_genesis() -> GenesisConfig {
 	testnet_genesis(vec![
-		ed25519::Pair::from_seed(b"Alice                           ").public().into(),
-		ed25519::Pair::from_seed(b"Bob                             ").public().into(),
+		get_authority_id_from_seed("Alice"),
+		get_authority_id_from_seed("Bob"),
 	],
-		ed25519::Pair::from_seed(b"Alice                           ").public().0.into()
+		get_authority_id_from_seed("Alice").into(),
+        None
 	)
 }
 

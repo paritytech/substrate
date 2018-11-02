@@ -140,10 +140,12 @@ impl<Components> Service<Components>
 		let executor = NativeExecutor::new();
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+
+		// This is meant to be for testing only
+		// TODO: remove this
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
-
 		// Keep the public key for telemetry
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
