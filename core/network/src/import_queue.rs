@@ -652,7 +652,6 @@ pub mod tests {
 	use super::*;
 
 	struct TestLink {
-		chain: Arc<Client<Block>>,
 		imported: Cell<usize>,
 		maintains: Cell<usize>,
 		disconnects: Cell<usize>,
@@ -662,7 +661,6 @@ pub mod tests {
 	impl TestLink {
 		fn new() -> TestLink {
 			TestLink {
-				chain: Arc::new(test_client::new()),
 				imported: Cell::new(0),
 				maintains: Cell::new(0),
 				disconnects: Cell::new(0),
@@ -806,7 +804,7 @@ pub mod tests {
 	#[test]
 	fn async_import_queue_drops() {
 		let verifier = Arc::new(PassThroughVerifier(true));
-		let queue = BasicQueue::new(verifier);
+		let queue = BasicQueue::new(verifier, Arc::new(test_client::new()));
 		queue.start(TestLink::new()).unwrap();
 		drop(queue);
 	}
