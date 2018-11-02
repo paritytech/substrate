@@ -56,10 +56,8 @@ fn main() {
 				 desired_pattern: matches.value_of("pattern").map(str::to_string).unwrap_or_default(),
 				 case_sensitive: matches.is_present("case_sensitive"),
 				 paranoiac: matches.is_present("paranoiac"),
-				 minscore: match matches.value_of("minscore").map(str::to_string).unwrap_or_default().parse::<u8>().unwrap() {
-					 m @ 0...100 => m as f32,
-					_ => 100_f32,
-				},
+				 minscore: ::std::cmp::min(
+				 	matches.value_of("minscore").map(str::to_string).unwrap_or_default().parse::<u8>().unwrap(), 100) as f32,
 			};
 
 			let keys = vanity::generate_keys(key_specs, number as usize, threads);
