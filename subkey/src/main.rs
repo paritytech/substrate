@@ -27,7 +27,6 @@ extern crate test;
 extern crate substrate_primitives;
 extern crate rand;
 extern crate num_cpus;
-extern crate ctrlc;
 
 #[macro_use]
 extern crate clap;

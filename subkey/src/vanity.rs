@@ -216,39 +216,39 @@ mod tests {
 			minscore: 75.0,
 		};
 
-		let score = calculate_score(&specs, "5jolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
+		let score = calculate_score(&specs, "5jubstratewHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
 		assert!(score >= 100.0);
 	}
 
 	#[test]
 	fn test_score_100() {
 		let specs = KeySpecs {
-			desired_pattern: String::from("j"),
+			desired_pattern: String::from("Substrate"),
 			case_sensitive: true,
 			paranoiac: false,
 			minscore: 75.0,
 		};
-		let score = calculate_score(&specs, "5PolkadotwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
+		let score = calculate_score(&specs, "5SubstratewHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim");
 		assert!(score >= 100.0);
 	}
 
 	#[test]
 	fn test_score_50() {
 		let specs = KeySpecs {
-			desired_pattern: String::from("Polkadot"),
+			desired_pattern: String::from("Substrate"),
 			case_sensitive: true,
 			paranoiac: false,
 			minscore: 75.0,
 		};
 
 		// ~50% for the position + ~50% for the size
-		assert!(calculate_score(&specs, "5PolkXXXXwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim") >= 50.0);
+		assert!(calculate_score(&specs, "5SubstXXXwHY5k9GpdTgpqs9xjuNvtv8EcwCFpEeyEf3KHim") >= 50.0);
 	}
 
 	#[test]
 	fn test_score_0() {
 		let specs = KeySpecs {
-			desired_pattern: String::from("Polkadot"),
+			desired_pattern: String::from("Substrate"),
 			case_sensitive: true,
 			paranoiac: false,
 			minscore: 75.0,
@@ -260,16 +260,30 @@ mod tests {
 	#[cfg(feature = "bench")]
 	#[bench]
 	fn bench_paranoiac(b: &mut Bencher) {
+		let specs = KeySpecs {
+			desired_pattern: String::from("oo7"),
+			case_sensitive: false,
+			paranoiac: true,
+			minscore: 75.0,
+		};
+
 		b.iter(|| {
-			generate_key("abc", false, true, 75.0)
+			generate_key(&specs)
 		});
 	}
 
 	#[cfg(feature = "bench")]
 	#[bench]
 	fn bench_not_paranoiac(b: &mut Bencher) {
+		let specs = KeySpecs {
+			desired_pattern: String::from("oo7"),
+			case_sensitive: false,
+			paranoiac: false,
+			minscore: 75.0,
+		};
+
 		b.iter(|| {
-			generate_key("abc", false, false, 75.0)
+			generate_key(&specs)
 		});
 	}
 }

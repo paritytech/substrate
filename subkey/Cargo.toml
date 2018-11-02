@@ -9,7 +9,6 @@ rand = "0.4"
 clap = { version = "~2.32", features = ["yaml"] }
 num_cpus = "1.8.0"
 pbr = "1.0.1"
-ctrlc = "3.1.1"
 
 [features]
 bench = []
