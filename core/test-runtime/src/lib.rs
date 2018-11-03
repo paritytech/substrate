@@ -259,10 +259,7 @@ impl client::runtime_api::TaggedTransactionQueue<Block> for ClientWithApi {
 impl client::runtime_api::Metadata<Block, Vec<u8>> for ClientWithApi {
 	type Error = client::error::Error;
 
-	fn metadata(
-		&self,
-		at: &BlockId<Block>,
-	) -> Result<Vec<u8>, Self::Error> {
+	fn metadata(&self, at: &BlockId<Block>) -> Result<Vec<u8>, Self::Error> {
 		unsafe { (*self.call).call_api_at(at, "metadata", ().encode()).map(decode) }
 	}
 }

@@ -973,7 +973,7 @@ impl<B, E, Block, RA> CallIntoRuntime for Client<B, E, Block, RA> where
 			&state,
 			changes,
 			function,
-			&args.encode(),
+			&args,
 			execution_manager()
 		).map(|res| res.0)
 	}
