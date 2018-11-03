@@ -21,6 +21,7 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::{Decode, Encode, Input};
+use num_traits::AsPrimitive;
 use traits::{self, Member, SimpleArithmetic, MaybeDisplay, CurrentHeight, BlockNumberToHash, Lookup,
 	Checkable, Extrinsic};
 use super::{CheckedExtrinsic, Era};
@@ -72,7 +73,8 @@ where
 	Call: Encode + Member,
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	AccountId: Member + MaybeDisplay,
-	BlockNumber: SimpleArithmetic,
+	BlockNumber: SimpleArithmetic + AsPrimitive<u64>,
+	u64: AsPrimitive<BlockNumber>,
 	Hash: Encode,
 	Context: Lookup<Source=Address, Target=AccountId>
 		+ CurrentHeight<BlockNumber=BlockNumber>
@@ -83,9 +85,10 @@ where
 	fn check(self, context: &Context) -> Result<Self::Checked, &'static str> {
 		Ok(match self.signature {
 			Some((signed, signature, index, era)) => {
-				let h = context.block_number_to_hash(BlockNumber::sa(era.birth(context.current_height().as_())))
+				let birth = era.birth(context.current_height().as_());
+				let hash = context.block_number_to_hash(birth.as_())
 					.ok_or("transaction birth block ancient")?;
-				let payload = (index, self.function, era, h);
+				let payload = (index, self.function, era, hash);
 				let signed = context.lookup(signed)?;
 				if !::verify_encoded_lazy(&signature, &payload, &signed) {
 					return Err("bad signature in extrinsic")
