@@ -39,7 +39,7 @@ use runtime_api::{
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
-use codec::{Encode, Decode};
+use codec::Decode;
 use state_machine::{
 	Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, ChangesTrieAnchorBlockId,
@@ -1142,7 +1142,8 @@ pub(crate) mod tests {
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer, ClientWithApi};
-	use runtime_api::CallIntoRuntime;
+	use test_client::client::runtime_api::CallIntoRuntime;
+	use codec::{Decode, Encode};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;
@@ -1217,13 +1218,17 @@ pub(crate) mod tests {
 		(remote_client, local_roots, test_cases)
 	}
 
+	//FIXME: Remove me!
+	fn decode<R: Decode>(data: Vec<u8>) -> R {
+		R::decode(&mut &data[..]).unwrap()
+	}
+
 	#[test]
 	fn client_initialises_from_genesis_ok() {
 		let client = test_client::new();
 
-		//TODO: FIXME
-		// assert_eq!(client.call_api("balance_of", Keyring::Alice.to_raw_public().encode()).unwrap(), 1000);
-		// assert_eq!(client.call_api("balance_of", Keyring::Ferdie.to_raw_public().encode()).unwrap(), 0);
+		assert_eq!(decode::<u64>(client.call_api("balance_of", Keyring::Alice.to_raw_public().encode()).unwrap()), 1000);
+		assert_eq!(decode::<u64>(client.call_api("balance_of", Keyring::Ferdie.to_raw_public().encode()).unwrap()), 0);
 	}
 
 	#[test]
@@ -1266,9 +1271,8 @@ pub(crate) mod tests {
 
 		assert_eq!(client.info().unwrap().chain.best_number, 1);
 		assert!(client.state_at(&BlockId::Number(1)).unwrap() != client.state_at(&BlockId::Number(0)).unwrap());
-		//TODO: FIXME
-		// assert_eq!(client.call_api("balance_of", Keyring::Alice.to_raw_public().encode()).unwrap(), 958);
-		// assert_eq!(client.call_api("balance_of", Keyring::Ferdie.to_raw_public().encode()).unwrap(), 42);
+		assert_eq!(decode::<u64>(client.call_api("balance_of", Keyring::Alice.to_raw_public().encode()).unwrap()), 958);
+		assert_eq!(decode::<u64>(client.call_api("balance_of", Keyring::Ferdie.to_raw_public().encode()).unwrap()), 42);
 	}
 
 	#[test]
