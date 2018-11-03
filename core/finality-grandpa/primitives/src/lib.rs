@@ -46,6 +46,14 @@ pub const PENDING_CHANGE_CALL: &str = "grandpa_pending_change";
 /// WASM function call to get current GRANDPA authorities.
 pub const AUTHORITIES_CALL: &str = "grandpa_authorities";
 
+/// The ApiIds for GRANDPA API.
+pub mod id {
+	use sr_api::ApiId;
+
+	/// ApiId for the GrandpaApi trait.
+	pub const GRANDPA_API: ApiId = *b"fgrandpa";
+}
+
 decl_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	///
@@ -55,7 +63,7 @@ decl_apis! {
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
-	pub trait Api<B: BlockT> {
+	pub trait GrandpaApi<B: BlockT> {
 		/// Check a digest for pending changes.
 		/// Return `None` if there are no pending changes.
 		///
