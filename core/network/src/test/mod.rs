@@ -194,6 +194,11 @@ impl<V: 'static + Verifier<Block>, D> Peer<V, D> {
 		io.to_disconnect.clone()
 	}
 
+	fn with_io<'a, F, U>(&'a self, f: F) -> U where F: FnOnce(&mut TestIo<'a>) -> U {
+		let mut io = TestIo::new(&self.queue, None);
+		f(&mut io)
+	}
+
 	/// Produce the next pending message to send to another peer.
 	fn pending_message(&self) -> Option<TestPacket> {
 		self.flush();
