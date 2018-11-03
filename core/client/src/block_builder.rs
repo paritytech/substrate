@@ -17,54 +17,45 @@
 //! Utility struct to build a block.
 
 use std::vec::Vec;
-use std::marker::PhantomData;
 use codec::Encode;
-use state_machine;
-use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
+use blockchain::HeaderBackend;
+use state_machine::{self, OverlayedChanges};
+use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
-use runtime_api::BlockBuilder as BlockBuilderAPI;
-use {backend, error, Client, CallExecutor};
+use runtime_api::{BlockBuilder as BlockBuilderAPI, Core};
+use error;
 use runtime_primitives::ApplyOutcome;
-use primitives::{Blake2Hasher, H256};
-use hash_db::Hasher;
+use primitives::AuthorityId;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, B, E, Block, H>
-where
-	B: backend::Backend<Block, H> + 'a,
-	E: CallExecutor<Block, H> + Clone + 'a,
-	Block: BlockT,
-	H: Hasher<Out=Block::Hash>,
-	H::Out: Ord,
-
-{
+pub struct BlockBuilder<'a, Block, A> where Block: BlockT {
 	header: <Block as BlockT>::Header,
 	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
-	client: &'a Client<B, E, Block>,
+	api: &'a A,
 	block_id: BlockId<Block>,
 	changes: state_machine::OverlayedChanges,
-	_marker: PhantomData<H>,
 }
 
-impl<'a, B, E, Block> BlockBuilder<'a, B, E, Block, Blake2Hasher>
+impl<'a, Block, A> BlockBuilder<'a, Block, A>
 where
-	B: backend::Backend<Block, Blake2Hasher> + 'a,
-	E: CallExecutor<Block, Blake2Hasher> + Clone + 'a,
 	Block: BlockT<Hash=H256>,
+	A: ProvideRuntimeApi + HeaderBackend<Block> + 'a,
+	A::Api: BlockBuilderAPI<Block, Error=error::Error, OverlayedChanges=OverlayedChanges> +
+			Core<Block, AuthorityId, OverlayedChanges=OverlayedChanges, Error=error::Error>
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
-	pub fn new(client: &'a Client<B, E, Block>) -> error::Result<Self> {
-		client.info().and_then(|i| Self::at_block(&BlockId::Hash(i.chain.best_hash), client))
+	pub fn new(api: &'a A) -> error::Result<Self> {
+		api.info().and_then(|i| Self::at_block(&BlockId::Hash(i.best_hash), api))
 	}
 
 	/// Create a new instance of builder from the given client using a particular block's ID to
 	/// build upon.
-	pub fn at_block(block_id: &BlockId<Block>, client: &'a Client<B, E, Block>) -> error::Result<Self> {
-		let number = client.block_number_from_id(block_id)?
+	pub fn at_block(block_id: &BlockId<Block>, api: &'a A) -> error::Result<Self> {
+		let number = api.block_number_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?
 			+ One::one();
 
-		let parent_hash = client.block_hash_from_id(block_id)?
+		let parent_hash = api.block_hash_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?;
 
 		let mut changes = Default::default();
@@ -76,16 +67,15 @@ where
 			Default::default()
 		);
 
-		client.initialise_block(block_id, &mut changes, &header)?;
+		api.runtime_api().initialise_block(block_id, &mut changes, &header)?;
 		changes.commit_prospective();
 
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
-			client,
+			api,
 			block_id: *block_id,
 			changes,
-			_marker: Default::default(),
 		})
 	}
 
@@ -93,7 +83,7 @@ where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		match self.client.apply_extrinsic(&self.block_id, &mut self.changes, &xt) {
+		match self.api.runtime_api().apply_extrinsic(&self.block_id, &mut self.changes, &xt) {
 			Ok(result) => {
 				match result {
 					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
@@ -116,7 +106,7 @@ where
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header = self.client.finalise_block(&self.block_id, &mut self.changes)?;
+		self.header = self.api.runtime_api().finalise_block(&self.block_id, &mut self.changes)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),

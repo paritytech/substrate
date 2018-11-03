@@ -22,6 +22,9 @@ extern crate sr_std as rstd;
 extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
 
+#[cfg(feature = "std")]
+extern crate substrate_client as client;
+
 #[macro_use]
 extern crate srml_support as runtime_support;
 #[macro_use]
@@ -48,8 +51,9 @@ use rstd::prelude::*;
 use codec::{Encode, Decode};
 
 use runtime_api::runtime::*;
-use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT};
+use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT, Api};
 use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
+use runtime_primitives::generic::BlockId;
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
 use primitives::AuthorityId;
@@ -162,6 +166,107 @@ mod test_api {
 
 use test_api::runtime::TestAPI;
 
+#[cfg(feature = "std")]
+pub struct ClientWithApi {
+	call: *const client::runtime_api::CallIntoRuntime<Block=Block>,
+}
+
+#[cfg(feature = "std")]
+unsafe impl Send for ClientWithApi {}
+#[cfg(feature = "std")]
+unsafe impl Sync for ClientWithApi {}
+
+#[cfg(feature = "std")]
+fn decode<R: Decode>(data: Vec<u8>) -> R {
+	R::decode(&mut &data[..]).unwrap()
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::ConstructRuntimeApi for ClientWithApi {
+	type Block = Block;
+
+	fn construct_runtime_api<'a, T: client::runtime_api::CallIntoRuntime<Block=Block>>(call: &'a T) -> Api<'a, Self> {
+		ClientWithApi { call: unsafe { ::std::mem::transmute(call as &client::runtime_api::CallIntoRuntime<Block=Block>) } }.into()
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::Core<Block, AuthorityId> for ClientWithApi {
+	type Error = client::error::Error;
+	type OverlayedChanges = client::runtime_api::OverlayedChanges;
+
+	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "version", Vec::new()).map(decode) }
+	}
+
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "authorities", Vec::new()).map(decode) }
+	}
+
+	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "execute_block", block.encode()).map(decode) }
+	}
+
+	fn initialise_block(&self, at: &BlockId<Block>, overlay: &mut client::runtime_api::OverlayedChanges, header: &<Block as BlockT>::Header) -> Result<(), Self::Error> {
+		unsafe { (*self.call).call_at_state(at, "initialise_block", header.encode(), overlay).map(decode) }
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::BlockBuilder<Block> for ClientWithApi {
+	type Error = client::error::Error;
+	type OverlayedChanges = client::runtime_api::OverlayedChanges;
+
+	fn apply_extrinsic(&self, at: &BlockId<Block>, overlay: &mut client::runtime_api::OverlayedChanges, extrinsic: &<Block as BlockT>::Extrinsic) -> Result<ApplyResult, Self::Error> {
+		unsafe { (*self.call).call_at_state(at, "apply_extrinsic", extrinsic.encode(), overlay).map(decode) }
+	}
+
+	fn finalise_block(&self, at: &BlockId<Block>, overlay: &mut client::runtime_api::OverlayedChanges) -> Result<<Block as BlockT>::Header, Self::Error> {
+		unsafe { (*self.call).call_at_state(at, "finalise_block", Vec::new(), overlay).map(decode) }
+	}
+
+	fn inherent_extrinsics<Inherent: Decode + Encode, Unchecked: Decode + Encode>(
+		&self, at: &BlockId<Block>, inherent: &Inherent
+	) -> Result<Vec<Unchecked>, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "inherent_extrinsics", inherent.encode()).map(decode) }
+	}
+
+	fn check_inherents<Inherent: Decode + Encode, Error: Decode + Encode>(&self, at: &BlockId<Block>, block: &Block, inherent: &Inherent) -> Result<Result<(), Error>, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "check_inherents", (block, inherent).encode()).map(decode) }
+	}
+
+	fn random_seed(&self, at: &BlockId<Block>) -> Result<<Block as BlockT>::Hash, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "random_seed", Vec::new()).map(decode) }
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::TaggedTransactionQueue<Block> for ClientWithApi {
+	type Error = client::error::Error;
+
+	fn validate_transaction<TransactionValidity: Encode + Decode>(
+		&self,
+		at: &BlockId<Block>,
+		utx: &<Block as BlockT>::Extrinsic
+	) -> Result<TransactionValidity, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "validate_transaction", utx.encode()).map(decode) }
+	}
+}
+
+//TODO: We can not use `Vec<u8>` here. We need to introduce a new OpaqueType,
+// that just decodes by returning the input bytes.
+#[cfg(feature = "std")]
+impl client::runtime_api::Metadata<Block, Vec<u8>> for ClientWithApi {
+	type Error = client::error::Error;
+
+	fn metadata(
+		&self,
+		at: &BlockId<Block>,
+	) -> Result<Vec<u8>, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "metadata", ().encode()).map(decode) }
+	}
+}
+
 struct Runtime;
 
 impl_apis! {
@@ -177,6 +282,10 @@ impl_apis! {
 		fn execute_block(block: Block) {
 			system::execute_block(block)
 		}
+
+		fn initialise_block(header: <Block as BlockT>::Header) {
+			system::initialise_block(header)
+		}
 	}
 
 	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
@@ -186,10 +295,6 @@ impl_apis! {
 	}
 
 	impl BlockBuilder<Block, u32, u32, u32, u32> for Runtime {
-		fn initialise_block(header: <Block as BlockT>::Header) {
-			system::initialise_block(header)
-		}
-
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			system::execute_transaction(extrinsic)
 		}

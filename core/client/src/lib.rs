@@ -56,6 +56,7 @@ mod leaves;
 mod call_executor;
 mod client;
 mod notifications;
+pub mod runtime_api;
 
 pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};
@@ -68,8 +69,3 @@ pub use client::{
 pub use notifications::{StorageEventStream, StorageChangeSet};
 pub use state_machine::ExecutionStrategy;
 pub use leaves::LeafSet;
-
-/// Traits for interfacing with the runtime from the client.
-pub mod runtime_api {
-	pub use sr_api::*;
-}

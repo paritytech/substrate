@@ -20,8 +20,10 @@ use codec;
 use client;
 use keyring;
 use runtime;
-
-use primitives::{Blake2Hasher};
+use runtime_primitives::traits::ProvideRuntimeApi;
+use client::runtime_api::{Core, BlockBuilder};
+use primitives::AuthorityId;
+use state_machine::OverlayedChanges;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
@@ -29,10 +31,10 @@ pub trait BlockBuilderExt {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error>;
 }
 
-impl<'a, B, E> BlockBuilderExt for client::block_builder::BlockBuilder<'a, B, E, runtime::Block, Blake2Hasher>
-    where
-        B: client::backend::Backend<runtime::Block, Blake2Hasher>,
-        E: client::CallExecutor<runtime::Block, Blake2Hasher> + Clone,
+impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A> where
+	A: ProvideRuntimeApi + client::blockchain::HeaderBackend<runtime::Block>,
+	A::Api: Core<runtime::Block, AuthorityId, Error=client::error::Error, OverlayedChanges=OverlayedChanges> +
+	BlockBuilder<runtime::Block, Error=client::error::Error, OverlayedChanges=OverlayedChanges>
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(sign_tx(transfer))

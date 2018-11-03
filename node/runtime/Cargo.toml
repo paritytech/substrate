@@ -15,6 +15,7 @@ sr-api = { path = "../../core/sr-api", default-features = false }
 sr-std = { path = "../../core/sr-std" }
 srml-support = { path = "../../srml/support" }
 substrate-primitives = { path = "../../core/primitives" }
+substrate-client = { path = "../../core/client", optional = true }
 substrate-keyring = { path = "../../core/keyring" }
 srml-balances = { path = "../../srml/balances" }
 srml-consensus = { path = "../../srml/consensus" }
@@ -57,5 +58,6 @@ std = [
 	"node-primitives/std",
 	"serde_derive",
 	"serde/std",
-	"safe-mix/std"
+	"safe-mix/std",
+	"substrate-client"
 ]

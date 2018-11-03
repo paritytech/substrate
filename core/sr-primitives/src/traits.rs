@@ -27,8 +27,10 @@ use codec::{Codec, Encode, HasCompact};
 pub use integer_sqrt::IntegerSquareRoot;
 pub use num_traits::{Zero, One, Bounded};
 pub use num_traits::ops::checked::{CheckedAdd, CheckedSub, CheckedMul, CheckedDiv};
-use rstd::ops::{Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
-	RemAssign, Shl, Shr};
+use rstd::ops::{
+	Add, Sub, Mul, Div, Rem, AddAssign, SubAssign, MulAssign, DivAssign,
+	RemAssign, Shl, Shr
+};
 
 /// A lazy value.
 pub trait Lazy<T: ?Sized> {
@@ -596,4 +598,37 @@ pub trait ProvideInherent {
 	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
 		block: &Block, data: Self::Inherent, extract_function: &F
 	) -> Result<(), Self::Error>;
+}
+
+/// Something that acts like an `Extrinsic`.
+pub trait Extrinsic {
+	/// Is this `Extrinsic` signed?
+	/// If no information are available about signed/unsigned, `None` should be returned.
+	fn is_signed(&self) -> Option<bool> { None }
+}
+
+/// Auxiliary wrapper that holds an API instance and binds it to the given lifetime.
+pub struct Api<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+
+impl<'a, T> From<T> for Api<'a, T> {
+	fn from(api: T) -> Self {
+		Api(api, Default::default())
+	}
+}
+
+impl<'a, T> rstd::ops::Deref for Api<'a, T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+
+/// Something that provides a runtime API.
+pub trait ProvideRuntimeApi {
+	/// The concrete type that provides the API.
+	type Api;
+
+	/// Returns the runtime API.
+	fn runtime_api<'a>(&'a self) -> Api<'a, Self::Api>;
 }

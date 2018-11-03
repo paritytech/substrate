@@ -21,18 +21,18 @@ use std::{
 	sync::Arc,
 };
 
-use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::Metadata};
+use client::{self, Client, CallExecutor, BlockchainEvents, runtime_api::{Metadata, Core, ConstructRuntimeApi}};
 use jsonrpc_macros::Trailing;
 use jsonrpc_macros::pubsub;
 use jsonrpc_pubsub::SubscriptionId;
 use primitives::H256;
 use primitives::hexdisplay::HexDisplay;
 use primitives::storage::{StorageKey, StorageData, StorageChangeSet};
-use primitives::{Blake2Hasher, Bytes};
+use primitives::{Blake2Hasher, Bytes, AuthorityId};
 use rpc::Result as RpcResult;
 use rpc::futures::{stream, Future, Sink, Stream};
 use runtime_primitives::generic::BlockId;
-use runtime_primitives::traits::{Block as BlockT, Header};
+use runtime_primitives::traits::{Block as BlockT, Header, ProvideRuntimeApi};
 
 use subscriptions::Subscriptions;
 
@@ -87,16 +87,16 @@ build_rpc_trait! {
 }
 
 /// State API with subscriptions support.
-pub struct State<B, E, Block: BlockT> {
+pub struct State<B, E, Block: BlockT, RA> {
 	/// Substrate client.
-	client: Arc<Client<B, E, Block>>,
+	client: Arc<Client<B, E, Block, RA>>,
 	/// Current subscriptions.
 	subscriptions: Subscriptions,
 }
 
-impl<B, E, Block: BlockT> State<B, E, Block> {
+impl<B, E, Block: BlockT, RA> State<B, E, Block, RA> {
 	/// Create new State API RPC handler.
-	pub fn new(client: Arc<Client<B, E, Block>>, subscriptions: Subscriptions) -> Self {
+	pub fn new(client: Arc<Client<B, E, Block, RA>>, subscriptions: Subscriptions) -> Self {
 		Self {
 			client,
 			subscriptions,
@@ -104,7 +104,7 @@ impl<B, E, Block: BlockT> State<B, E, Block> {
 	}
 }
 
-impl<B, E, Block> State<B, E, Block> where
+impl<B, E, Block, RA> State<B, E, Block, RA> where
 	Block: BlockT<Hash=H256>,
 	B: client::backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
@@ -114,10 +114,13 @@ impl<B, E, Block> State<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
+impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
+	RA: Send + Sync + 'static + Metadata<Block, Vec<u8>, Error=client::error::Error> +
+		ConstructRuntimeApi<Block=Block> +
+		Core<Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges>
 {
 	type Metadata = ::metadata::Metadata;
 
@@ -151,7 +154,7 @@ impl<B, E, Block> StateApi<Block::Hash> for State<B, E, Block> where
 
 	fn metadata(&self, block: Trailing<Block::Hash>) -> Result<Bytes> {
 		let block = self.unwrap_or_best(block)?;
-		self.client.metadata(&BlockId::Hash(block)).map(Bytes).map_err(Into::into)
+		self.client.runtime_api().metadata(&BlockId::Hash(block)).map(Bytes).map_err(Into::into)
 	}
 
 	fn query_storage(&self, keys: Vec<StorageKey>, from: Block::Hash, to: Trailing<Block::Hash>) -> Result<Vec<StorageChangeSet<Block::Hash>>> {

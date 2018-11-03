@@ -35,8 +35,13 @@ extern crate serde_derive;
 
 extern crate substrate_primitives;
 
+#[cfg(feature = "std")]
+extern crate substrate_client as client;
+
 #[macro_use]
 extern crate parity_codec_derive;
+
+extern crate parity_codec as codec;
 
 extern crate sr_std as rstd;
 extern crate srml_balances as balances;
@@ -55,17 +60,19 @@ extern crate srml_upgrade_key as upgrade_key;
 extern crate sr_version as version;
 extern crate node_primitives;
 
+use codec::{Encode, Decode};
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
-	SessionKey, Signature
+	SessionKey, Signature, Block as GBlock,
 };
 use runtime_api::{runtime::*, id::*};
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT};
+use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, Api};
+use substrate_primitives::AuthorityId;
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
@@ -236,6 +243,107 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
 
+//TODO: Auto impl
+#[cfg(feature = "std")]
+pub struct ClientWithApi {
+	call: *const client::runtime_api::CallIntoRuntime<Block=GBlock>,
+}
+
+#[cfg(feature = "std")]
+unsafe impl Send for ClientWithApi {}
+#[cfg(feature = "std")]
+unsafe impl Sync for ClientWithApi {}
+
+#[cfg(feature = "std")]
+fn decode<R: Decode>(data: Vec<u8>) -> R {
+	R::decode(&mut &data[..]).unwrap()
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::ConstructRuntimeApi for ClientWithApi {
+	type Block = GBlock;
+
+	fn construct_runtime_api<'a, T: client::runtime_api::CallIntoRuntime<Block=GBlock>>(call: &'a T) -> Api<'a, Self> {
+		ClientWithApi { call: unsafe { ::std::mem::transmute(call as &client::runtime_api::CallIntoRuntime<Block=GBlock>) } }.into()
+	}
+}
+
+type GBlockId = generic::BlockId<GBlock>;
+
+#[cfg(feature = "std")]
+impl client::runtime_api::Core<GBlock, AuthorityId> for ClientWithApi {
+	type Error = client::error::Error;
+	type OverlayedChanges = client::runtime_api::OverlayedChanges;
+
+	fn version(&self, at: &GBlockId) -> Result<RuntimeVersion, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "version", Vec::new()).map(decode) }
+	}
+
+	fn authorities(&self, at: &GBlockId) -> Result<Vec<AuthorityId>, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "authorities", Vec::new()).map(decode) }
+	}
+
+	fn execute_block(&self, at: &GBlockId, block: &GBlock) -> Result<(), Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "execute_block", block.encode()).map(decode) }
+	}
+
+	fn initialise_block(&self, at: &GBlockId, overlay: &mut client::runtime_api::OverlayedChanges, header: &<GBlock as BlockT>::Header) -> Result<(), Self::Error> {
+		unsafe { (*self.call).call_at_state(at, "initialise_block", header.encode(), overlay).map(decode) }
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::BlockBuilder<GBlock> for ClientWithApi {
+	type Error = client::error::Error;
+	type OverlayedChanges = client::runtime_api::OverlayedChanges;
+
+	fn apply_extrinsic(&self, at: &GBlockId, overlay: &mut client::runtime_api::OverlayedChanges, extrinsic: &<GBlock as BlockT>::Extrinsic) -> Result<ApplyResult, Self::Error> {
+		unsafe { (*self.call).call_at_state(at, "apply_extrinsic", extrinsic.encode(), overlay).map(decode) }
+	}
+
+	fn finalise_block(&self, at: &GBlockId, overlay: &mut client::runtime_api::OverlayedChanges) -> Result<<GBlock as BlockT>::Header, Self::Error> {
+		unsafe { (*self.call).call_at_state(at, "finalise_block", Vec::new(), overlay).map(decode) }
+	}
+
+	fn inherent_extrinsics<Inherent: Decode + Encode, Unchecked: Decode + Encode>(
+		&self, at: &GBlockId, inherent: &Inherent
+	) -> Result<Vec<Unchecked>, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "inherent_extrinsics", inherent.encode()).map(decode) }
+	}
+
+	fn check_inherents<Inherent: Decode + Encode, Error: Decode + Encode>(&self, at: &GBlockId, block: &GBlock, inherent: &Inherent) -> Result<Result<(), Error>, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "check_inherents", (block, inherent).encode()).map(decode) }
+	}
+
+	fn random_seed(&self, at: &GBlockId) -> Result<<GBlock as BlockT>::Hash, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "random_seed", Vec::new()).map(decode) }
+	}
+}
+
+#[cfg(feature = "std")]
+impl client::runtime_api::TaggedTransactionQueue<GBlock> for ClientWithApi {
+	type Error = client::error::Error;
+
+	fn validate_transaction<TransactionValidity: Encode + Decode>(
+		&self,
+		at: &GBlockId,
+		utx: &<GBlock as BlockT>::Extrinsic
+	) -> Result<TransactionValidity, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "validate_transaction", utx.encode()).map(decode) }
+	}
+}
+
+//TODO: We can not use `Vec<u8>` here. We need to introduce a new OpaqueType,
+// that just decodes by returning the input bytes.
+#[cfg(feature = "std")]
+impl client::runtime_api::Metadata<GBlock, Vec<u8>> for ClientWithApi {
+	type Error = client::error::Error;
+
+	fn metadata(&self, at: &GBlockId,) -> Result<Vec<u8>, Self::Error> {
+		unsafe { (*self.call).call_api_at(at, "metadata", ().encode()).map(decode) }
+	}
+}
+
 impl_apis! {
 	impl Core<Block, SessionKey> for Runtime {
 		fn version() -> RuntimeVersion {
@@ -249,6 +357,10 @@ impl_apis! {
 		fn execute_block(block: Block) {
 			Executive::execute_block(block)
 		}
+
+		fn initialise_block(header: <Block as BlockT>::Header) {
+			Executive::initialise_block(&header)
+		}
 	}
 
 	impl Metadata<RuntimeMetadata> for Runtime {
@@ -258,10 +370,6 @@ impl_apis! {
 	}
 
 	impl BlockBuilder<Block, InherentData, UncheckedExtrinsic, InherentData, InherentError> for Runtime {
-		fn initialise_block(header: <Block as BlockT>::Header) {
-			Executive::initialise_block(&header)
-		}
-
 		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult {
 			Executive::apply_extrinsic(extrinsic)
 		}

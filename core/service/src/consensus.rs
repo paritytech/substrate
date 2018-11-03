@@ -23,11 +23,11 @@ use std::time::{self, Duration, Instant};
 use std;
 
 use client::{self, error, Client as SubstrateClient, CallExecutor};
-use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, id::BLOCK_BUILDER};
+use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, id::BLOCK_BUILDER, ConstructRuntimeApi};
 use codec::{Decode, Encode};
 use consensus_common::{self, InherentData, evaluation, offline_tracker::OfflineTracker};
 use primitives::{H256, AuthorityId, ed25519, Blake2Hasher};
-use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT};
+use runtime_primitives::traits::{Block as BlockT, Hash as HashT, Header as HeaderT, ProvideRuntimeApi};
 use runtime_primitives::generic::BlockId;
 use transaction_pool::txpool::{self, Pool as TransactionPool};
 
@@ -47,12 +47,7 @@ pub trait BlockBuilder<Block: BlockT> {
 }
 
 /// Local client abstraction for the consensus.
-pub trait AuthoringApi:
-	Send
-	+ Sync
-	+ BlockBuilderAPI<<Self as AuthoringApi>::Block, Error=<Self as AuthoringApi>::Error>
-	+ Core<<Self as AuthoringApi>::Block, AuthorityId, Error=<Self as AuthoringApi>::Error>
-{
+pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where <Self as ProvideRuntimeApi>::Api: Core<Self::Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> {
 	/// The block used for this API type.
 	type Block: BlockT;
 	/// The error used by this API type.
@@ -67,20 +62,22 @@ pub trait AuthoringApi:
 	) -> Result<Self::Block, error::Error>;
 }
 
-impl<'a, B, E, Block> BlockBuilder<Block> for client::block_builder::BlockBuilder<'a, B, E, Block, Blake2Hasher> where
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
+impl<'a, B, E, Block, RA> BlockBuilder<Block> for client::block_builder::BlockBuilder<'a, Block, SubstrateClient<B, E, Block, RA>> where
+	B: client::backend::Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
+	RA: Send + Sync + BlockBuilderAPI<Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Core<Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + ConstructRuntimeApi<Block=Block>
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
 	}
 }
 
-impl<'a, B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
+impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
+	RA: Send + Sync + BlockBuilderAPI<Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Core<Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + ConstructRuntimeApi<Block=Block>
 {
 	type Block = Block;
 	type Error = client::error::Error;
@@ -95,7 +92,7 @@ impl<'a, B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
 
 		let mut block_builder = self.new_block_at(at)?;
 		if runtime_version.has_api(BLOCK_BUILDER, 1) {
-			self.inherent_extrinsics(at, &inherent_data)?
+			self.runtime_api().inherent_extrinsics(at, &inherent_data)?
 				.into_iter().try_for_each(|i| block_builder.push(i))?;
 		}
 
@@ -106,10 +103,7 @@ impl<'a, B, E, Block> AuthoringApi for SubstrateClient<B, E, Block> where
 }
 
 /// Proposer factory.
-pub struct ProposerFactory<C, A> where
-	C: AuthoringApi,
-	A: txpool::ChainApi,
-{
+pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 	/// The client instance.
 	pub client: Arc<C>,
 	/// The transaction pool.
@@ -122,10 +116,11 @@ pub struct ProposerFactory<C, A> where
 
 impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
 	C: AuthoringApi,
+	<C as ProvideRuntimeApi>::Api:BlockBuilderAPI<<C as AuthoringApi>::Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Core<<C as AuthoringApi>::Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + ConstructRuntimeApi<Block=<C as AuthoringApi>::Block>,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
-	type Proposer = Proposer<C, A>;
+	type Proposer = Proposer<<C as AuthoringApi>::Block, C, A>;
 	type Error = error::Error;
 
 	fn init(
@@ -138,7 +133,7 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 
 		let id = BlockId::hash(parent_hash);
 
-		let authorities: Vec<AuthorityId> = self.client.authorities(&id)?;
+		let authorities: Vec<AuthorityId> = self.client.runtime_api().authorities(&id)?;
 		self.offline.write().note_new_block(&authorities[..]);
 
 		info!("Starting consensus session on top of parent {:?}", parent_hash);
@@ -161,21 +156,23 @@ impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for Propose
 }
 
 /// The proposer logic.
-pub struct Proposer<C: AuthoringApi, A: txpool::ChainApi> {
+pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 	client: Arc<C>,
 	start: Instant,
-	parent_hash: <<C as AuthoringApi>::Block as BlockT>::Hash,
-	parent_id: BlockId<<C as AuthoringApi>::Block>,
-	parent_number: <<<C as AuthoringApi>::Block as BlockT>::Header as HeaderT>::Number,
+	parent_hash: <Block as BlockT>::Hash,
+	parent_id: BlockId<Block>,
+	parent_number: <<Block as BlockT>::Header as HeaderT>::Number,
 	transaction_pool: Arc<TransactionPool<A>>,
 	offline: SharedOfflineTracker,
 	authorities: Vec<AuthorityId>,
 	minimum_timestamp: u64,
 }
 
-impl<C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<C, A> where
-	C: AuthoringApi,
-	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
+impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
+	Block: BlockT,
+	C: AuthoringApi<Block=Block>,
+	<C as ProvideRuntimeApi>::Api:BlockBuilderAPI<Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Core<Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + ConstructRuntimeApi<Block=Block>,
+	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
 	type Create = Result<<C as AuthoringApi>::Block, error::Error>;

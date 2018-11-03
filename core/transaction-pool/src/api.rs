@@ -18,8 +18,9 @@
 
 use std::{
 	sync::Arc,
+	marker::PhantomData,
 };
-use client::{self, runtime_api::TaggedTransactionQueue};
+use client::{self, runtime_api::TaggedTransactionQueue, blockchain::HeaderBackend};
 use parity_codec::Encode;
 use txpool;
 use substrate_primitives::{
@@ -36,30 +37,34 @@ use sr_primitives::{
 use error;
 
 /// The transaction pool logic
-pub struct ChainApi<B, E, Block: traits::Block> {
-	client: Arc<client::Client<B, E, Block>>,
+pub struct ChainApi<T, Block> {
+	client: Arc<T>,
+	_marker: PhantomData<Block>,
 }
 
-impl<B, E, Block: traits::Block> ChainApi<B, E, Block> {
+impl<T, Block> ChainApi<T, Block> where
+	Block: traits::Block,
+	T: traits::ProvideRuntimeApi + HeaderBackend<Block> {
 	/// Create new transaction pool logic.
-	pub fn new(client: Arc<client::Client<B, E, Block>>) -> Self {
+	pub fn new(client: Arc<T>) -> Self {
 		ChainApi {
 			client,
+			_marker: Default::default()
 		}
 	}
 }
 
-impl<B, E, Block> txpool::ChainApi for ChainApi<B, E, Block> where
+impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 	Block: traits::Block<Hash=H256>,
-	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
-	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	T: traits::ProvideRuntimeApi + HeaderBackend<Block>,
+	T::Api: TaggedTransactionQueue<Block, Error=client::error::Error>
 {
 	type Block = Block;
 	type Hash = H256;
 	type Error = error::Error;
 
 	fn validate_transaction(&self, at: &BlockId<Self::Block>, uxt: &txpool::ExtrinsicFor<Self>) -> error::Result<TransactionValidity> {
-		Ok(self.client.validate_transaction(at, uxt)?)
+		Ok(self.client.runtime_api().validate_transaction(at, uxt)?)
 	}
 
 	// TODO [toDr] Use proper lbock number type
