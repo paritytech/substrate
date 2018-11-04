@@ -64,10 +64,10 @@ impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(match input.read_byte()? {
-			x @ 0x00...0xef => Address::Index(As::sa(x)),
-			0xfc => Address::Index(As::sa(need_more_than(0xef, u16::decode(input)?)?)),
-			0xfd => Address::Index(As::sa(need_more_than(0xffff, u32::decode(input)?)?)),
-			0xfe => Address::Index(need_more_than(As::sa(0xffffffffu32), Decode::decode(input)?)?),
+			x @ 0x00...0xef => Address::Index(x.as_()),
+			0xfc => Address::Index(need_more_than(0xef, u16::decode(input)?)?.as_()),
+			0xfd => Address::Index(need_more_than(0xffff, u32::decode(input)?)?.as_()),
+			0xfe => Address::Index(need_more_than((0xffffffffu32 as u64).as_(), Decode::decode(input)?)?),
 			0xff => Address::Id(Decode::decode(input)?),
 			_ => return None,
 		})
