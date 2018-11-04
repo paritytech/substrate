@@ -18,7 +18,7 @@
 
 #[cfg(feature = "std")]
 use std::fmt;
-use super::{Member, Decode, Encode, As, Input, Output};
+use super::{Member, Decode, Encode, AsPrimitive, Input, Output};
 
 /// A vetted and verified extrinsic from the external world.
 #[derive(PartialEq, Eq, Clone)]
