@@ -19,7 +19,7 @@
 use super::MAX_TRANSACTIONS_SIZE;
 
 use codec::Encode;
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, AsPrimitive};
 
 type BlockNumber = u64;
 
