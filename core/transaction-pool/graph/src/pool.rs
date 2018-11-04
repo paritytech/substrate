@@ -31,7 +31,7 @@ use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
 use sr_primitives::{
 	generic::BlockId,
-	traits::{self, As},
+	traits::{self, AsPrimitive},
 	transaction_validity::{TransactionValidity, TransactionTag as Tag},
 };
 
