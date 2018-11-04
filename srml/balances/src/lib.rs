@@ -561,8 +561,7 @@ impl<T: Trait> Module<T> {
 			let quantized_account_count: T::AccountIndex = (next_set_index * enum_set_size / quantization + One::one()) * quantization;
 			// then modify the starting balance to be modulo this to allow it to potentially
 			// identify an account index for reuse.
-			let maybe_try_index = balance % <T::Balance as As<T::AccountIndex>>::sa(quantized_account_count * reclaim_index_modulus);
-			let maybe_try_index = As::<T::AccountIndex>::as_(maybe_try_index);
+			let maybe_try_index = balance % (quantized_account_count * reclaim_index_modulus.as_()).as_();
 
 			// this identifier must end with magic byte 0x69 to trigger this check (a minor
 			// optimisation to ensure we don't check most unintended account creations).
