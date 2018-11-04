@@ -644,8 +644,9 @@ macro_rules! __generate_genesis_config {
 		#[cfg(feature = "std")]
 		impl<$traitinstance: $traittype> $crate::runtime_primitives::BuildStorage for GenesisConfig<$traitinstance>
 		{
-			fn build_storage(self) -> ::std::result::Result<$crate::runtime_primitives::StorageMap, String> {
+			fn build_storage(self) -> ::std::result::Result<($crate::runtime_primitives::StorageMap, $crate::runtime_primitives::ChildrenStorageMap), String> {
 				let mut r: $crate::runtime_primitives::StorageMap = Default::default();
+				let mut c: $crate::runtime_primitives::ChildrenStorageMap = Default::default();
 
 				// normal getters
 				$({
@@ -664,9 +665,9 @@ macro_rules! __generate_genesis_config {
 				})*
 
 				// extra call
-				$call(&mut r, &self);
+				$call(&mut r, &mut c, &self);
 
-				Ok(r)
+				Ok((r, c))
 			}
 		}
 	};
@@ -718,7 +719,7 @@ macro_rules! decl_storage {
 			__impl_store_fns!($traitinstance $($t)*);
 			__impl_store_metadata!($cratename; $($t)*);
 		}
-		__decl_genesis_config_items!([$traittype $traitinstance] [] [] [] [] [|_, _|{}] $($t)*);
+		__decl_genesis_config_items!([$traittype $traitinstance] [] [] [] [] [|_, _, _|{}] $($t)*);
 	};
 }
 
@@ -1961,7 +1962,7 @@ mod tests {
 		}
 		add_extra_genesis {
 			config(_marker) : ::std::marker::PhantomData<T>;
-			build(|_, _| {});
+			build(|_, _, _| {});
 		}
 	}
 
@@ -2168,7 +2169,7 @@ mod test2 {
 		add_extra_genesis {
 			config(_marker) : ::std::marker::PhantomData<T>;
 			config(extra_field) : u32 = 32;
-			build(|_, _| {});
+			build(|_, _, _| {});
 		}
 	}
 

@@ -255,7 +255,7 @@ mod tests {
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
 			upgrade_key: Some(Default::default()),
-		}.build_storage().unwrap())
+		}.build_storage().unwrap().0)
 	}
 
 	fn construct_block(

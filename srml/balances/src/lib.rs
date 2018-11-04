@@ -112,7 +112,7 @@ impl<AccountId> EnsureAccountLiquid<AccountId> for () {
 
 pub trait Trait: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
 	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
@@ -266,7 +266,7 @@ decl_storage! {
 	}
 	add_extra_genesis {
 		config(balances): Vec<(T::AccountId, T::Balance)>;
-		build(|storage: &mut primitives::StorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
 			let ids: Vec<_> = config.balances.iter().map(|x| x.0.clone()).collect();
 			for i in 0..(ids.len() + ENUM_SET_SIZE - 1) / ENUM_SET_SIZE {
 				storage.insert(GenesisConfig::<T>::hash(&<EnumSet<T>>::key_for(T::AccountIndex::sa(i))).to_vec(),

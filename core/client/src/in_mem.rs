@@ -22,13 +22,13 @@ use parking_lot::RwLock;
 use error;
 use backend::{self, NewBlockState};
 use light;
-use primitives::AuthorityId;
+use primitives::{AuthorityId, storage::well_known_keys};
 use runtime_primitives::generic::BlockId;
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero,
 	NumberFor, As, Digest, DigestItem};
-use runtime_primitives::Justification;
+use runtime_primitives::{Justification, StorageMap, ChildrenStorageMap};
 use blockchain::{self, BlockStatus, HeaderBackend};
-use state_machine::backend::{Backend as StateBackend, InMemory};
+use state_machine::backend::{Backend as StateBackend, InMemory, Consolidate};
 use state_machine::InMemoryChangesTrieStorage;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
@@ -361,9 +361,9 @@ pub struct BlockImportOperation<Block: BlockT, H: Hasher> {
 impl<Block, H> backend::BlockImportOperation<Block, H> for BlockImportOperation<Block, H>
 where
 	Block: BlockT,
-	H: Hasher,
+	H: Hasher<Out=Block::Hash>,
 
-	H::Out: HeapSizeOf,
+	H::Out: HeapSizeOf + Ord,
 {
 	type State = InMemory<H>;
 
@@ -400,9 +400,31 @@ where
 		Ok(())
 	}
 
-	fn reset_storage<I: Iterator<Item=(Vec<u8>, Vec<u8>)>>(&mut self, iter: I) -> error::Result<()> {
-		self.new_state = Some(InMemory::from(iter.collect::<HashMap<_, _>>()));
-		Ok(())
+	fn reset_storage(&mut self, mut top: StorageMap, children: ChildrenStorageMap) -> error::Result<H::Out> {
+		if top.iter().any(|(k, _)| well_known_keys::is_child_storage_key(k)) {
+			return Err(error::ErrorKind::GenesisInvalid.into());
+		}
+
+		let mut transaction: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)> = Default::default();
+
+		for (child_key, child_map) in children {
+			if !well_known_keys::is_child_storage_key(&child_key) {
+				return Err(error::ErrorKind::GenesisInvalid.into());
+			}
+
+			let (root, is_default, update) = self.old_state.child_storage_root(&child_key, child_map.into_iter().map(|(k, v)| (k, Some(v))));
+			transaction.consolidate(update);
+
+			if !is_default {
+				top.insert(child_key, root);
+			}
+		}
+
+		let (root, update) = self.old_state.storage_root(top.into_iter().map(|(k, v)| (k, Some(v))));
+		transaction.consolidate(update);
+
+		self.new_state = Some(InMemory::from(transaction));
+		Ok(root)
 	}
 }
 
@@ -410,9 +432,8 @@ where
 pub struct Backend<Block, H>
 where
 	Block: BlockT,
-	H: Hasher,
-
-	H::Out: HeapSizeOf + From<Block::Hash>,
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
 {
 	states: RwLock<HashMap<Block::Hash, InMemory<H>>>,
 	changes_trie_storage: InMemoryChangesTrieStorage<H>,
@@ -423,9 +444,8 @@ where
 impl<Block, H> Backend<Block, H>
 where
 	Block: BlockT,
-	H: Hasher,
-
-	H::Out: HeapSizeOf + From<Block::Hash>,
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
 {
 	/// Create a new instance of in-mem backend.
 	pub fn new() -> Backend<Block, H> {
@@ -441,8 +461,8 @@ where
 impl<Block, H> backend::Backend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
-	H: Hasher,
-	H::Out: HeapSizeOf + From<Block::Hash>,
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
 {
 	type BlockImportOperation = BlockImportOperation<Block, H>;
 	type Blockchain = Blockchain<Block>;
@@ -533,8 +553,8 @@ where
 impl<Block, H> backend::LocalBackend<Block, H> for Backend<Block, H>
 where
 	Block: BlockT,
-	H: Hasher,
-	H::Out: HeapSizeOf + From<Block::Hash>,
+	H: Hasher<Out=Block::Hash>,
+	H::Out: HeapSizeOf + Ord,
 {}
 
 impl<Block: BlockT> Cache<Block> {

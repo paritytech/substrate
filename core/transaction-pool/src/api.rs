@@ -50,7 +50,7 @@ impl<B, E, Block: traits::Block> ChainApi<B, E, Block> {
 }
 
 impl<B, E, Block> txpool::ChainApi for ChainApi<B, E, Block> where
-	Block: traits::Block,
+	Block: traits::Block<Hash=H256>,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 {
@@ -75,4 +75,3 @@ impl<B, E, Block> txpool::ChainApi for ChainApi<B, E, Block> where
 		Blake2Hasher::hash(&ex.encode())
 	}
 }
-
