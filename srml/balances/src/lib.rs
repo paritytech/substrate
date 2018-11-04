@@ -45,7 +45,7 @@ use codec::{Encode, Decode, Codec, Input, Output, HasCompact};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
 use primitives::traits::{Zero, One, SimpleArithmetic, MakePayment,
-	As, Lookup, Member, CheckedAdd, CheckedSub, CurrentHeight, BlockNumberToHash};
+	AsPrimitive, Lookup, Member, CheckedAdd, CheckedSub, CurrentHeight, BlockNumberToHash};
 use address::Address as RawAddress;
 use system::ensure_signed;
 
