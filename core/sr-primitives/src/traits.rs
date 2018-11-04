@@ -122,7 +122,7 @@ impl<T> RefInto<T> for T {
 }
 
 pub trait SimpleArithmetic:
-	Zero + One + IntegerSquareRoot +
+	Zero + One + IntegerSquareRoot + AsPrimitive<u64> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
@@ -137,7 +137,7 @@ pub trait SimpleArithmetic:
 	HasCompact
 {}
 impl<T:
-	Zero + One + IntegerSquareRoot +
+	Zero + One + IntegerSquareRoot + AsPrimitive<u64> +
 	Add<Self, Output = Self> + AddAssign<Self> +
 	Sub<Self, Output = Self> + SubAssign<Self> +
 	Mul<Self, Output = Self> + MulAssign<Self> +
