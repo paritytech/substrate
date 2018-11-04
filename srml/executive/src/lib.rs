@@ -250,7 +250,7 @@ impl<
 			if index < &expected_index {
 				return TransactionValidity::Invalid
 			}
-			if *index > expected_index + As::sa(256) {
+			if *index > expected_index + 256.as_() {
 				return TransactionValidity::Unknown
 			}
 
