@@ -25,6 +25,8 @@ use sandbox;
 use system;
 use Trait;
 
+type GasOf<E> = <<E as Ext>::T as Trait>::Gas;
+
 /// Enumerates all possible *special* trap conditions.
 ///
 /// In this runtime traps used not only for signaling about errors but also
@@ -89,6 +91,70 @@ pub(crate) fn to_execution_result<E: Ext>(
 	}
 }
 
+/// Charge the specified amount of gas.
+///
+/// Returns `Err` if there is not enough gas.
+fn charge_gas<T: Trait>(
+	gas_meter: &mut GasMeter<T>,
+	amount: T::Gas,
+) -> Result<(), sandbox::HostError> {
+	match gas_meter.charge(amount) {
+		GasMeterResult::Proceed => Ok(()),
+		GasMeterResult::OutOfGas => Err(sandbox::HostError),
+	}
+}
+
+/// Read designated chunk from the sandbox memory, consuming an appropriate amount of
+/// gas.
+///
+/// Returns `Err` if one of the following conditions occurs:
+///
+/// - calculating the gas cost resulted in overflow.
+/// - out of gas
+/// - requested buffer is not within the bounds of the sandbox memory.
+fn read_sandbox_memory<E: Ext>(
+	ctx: &mut Runtime<E>,
+	ptr: u32,
+	len: u32,
+) -> Result<Vec<u8>, sandbox::HostError> {
+	let price = (ctx.config.sandbox_data_read_cost)
+		.checked_mul(&<GasOf<E> as As<u32>>::sa(len))
+		.ok_or(sandbox::HostError)?;
+	charge_gas(ctx.gas_meter, price)?;
+
+	let mut buf = Vec::new();
+	buf.resize(len as usize, 0);
+
+	ctx.memory().get(ptr, &mut buf)?;
+
+	Ok(buf)
+}
+
+/// Write the given buffer to the designated location in the sandbox memory, consuming
+/// an appropriate amount of gas.
+///
+/// Returns `Err` if one of the following conditions occurs:
+///
+/// - calculating the gas cost resulted in overflow.
+/// - out of gas
+/// - designated area is not within the bounds of the sandbox memory.
+fn write_sandbox_memory<T: Trait>(
+	per_byte_cost: T::Gas,
+	gas_meter: &mut GasMeter<T>,
+	memory: &sandbox::Memory,
+	ptr: u32,
+	buf: &[u8],
+) -> Result<(), sandbox::HostError> {
+	let price = per_byte_cost
+		.checked_mul(&<T::Gas as As<u32>>::sa(buf.len() as u32))
+		.ok_or(sandbox::HostError)?;
+	charge_gas(gas_meter, price)?;
+
+	memory.set(ptr, buf)?;
+
+	Ok(())
+}
+
 // ***********************************************************
 // * AFTER MAKING A CHANGE MAKE SURE TO UPDATE COMPLEXITY.MD *
 // ***********************************************************
@@ -104,16 +170,14 @@ define_env!(init_env, <E: Ext>,
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
 		let amount = <<<E as Ext>::T as Trait>::Gas as As<u32>>::sa(amount);
+		charge_gas(&mut ctx.gas_meter, amount)?;
 
-		match ctx.gas_meter.charge(amount) {
-			GasMeterResult::Proceed => Ok(()),
-			GasMeterResult::OutOfGas => Err(sandbox::HostError),
-		}
+		Ok(())
 	},
 
-	// Change the value at the given location in storage or remove it.
+	// Change the value at the given key in the storage or remove the entry.
 	//
-	// - location_ptr: pointer into the linear
+	// - key_ptr: pointer into the linear
 	//   memory where the location of the requested value is placed.
 	// - value_non_null: if set to 0, then the entry
 	//   at the given location will be removed.
@@ -121,17 +185,13 @@ define_env!(init_env, <E: Ext>,
 	//   where the value to set is placed. If `value_non_null` is set to 0, then this parameter is ignored.
 	// - value_len: the length of the value. If `value_non_null` is set to 0, then this parameter is ignored.
 	ext_set_storage(ctx, key_ptr: u32, value_non_null: u32, value_ptr: u32, value_len: u32) => {
-		let mut key = [0; 32];
-		ctx.memory().get(key_ptr, &mut key)?;
-
-		let value = if value_non_null != 0 {
-			let mut value_buf = Vec::new();
-			value_buf.resize(value_len as usize, 0);
-			ctx.memory().get(value_ptr, &mut value_buf)?;
-			Some(value_buf)
-		} else {
-			None
-		};
+		let key = read_sandbox_memory(ctx, key_ptr, 32)?;
+		let value =
+			if value_non_null != 0 {
+				Some(read_sandbox_memory(ctx, value_ptr, value_len)?)
+			} else {
+				None
+			};
 		ctx.ext.set_storage(&key, value);
 
 		Ok(())
@@ -144,9 +204,7 @@ define_env!(init_env, <E: Ext>,
 	// - key_ptr: pointer into the linear memory where the key
 	//   of the requested value is placed.
 	ext_get_storage(ctx, key_ptr: u32) -> u32 => {
-		let mut key = [0; 32];
-		ctx.memory().get(key_ptr, &mut key)?;
-
+		let key = read_sandbox_memory(ctx, key_ptr, 32)?;
 		if let Some(value) = ctx.ext.get_storage(&key) {
 			ctx.scratch_buf = value;
 			Ok(0)
@@ -181,22 +239,17 @@ define_env!(init_env, <E: Ext>,
 		input_data_ptr: u32,
 		input_data_len: u32
 	) -> u32 => {
-		let mut callee = Vec::new();
-		callee.resize(callee_len as usize, 0);
-		ctx.memory().get(callee_ptr, &mut callee)?;
-		let callee =
-			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee[..])
-				.ok_or_else(|| sandbox::HostError)?;
-
-		let mut value_buf = Vec::new();
-		value_buf.resize(value_len as usize, 0);
-		ctx.memory().get(value_ptr, &mut value_buf)?;
-		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-			.ok_or_else(|| sandbox::HostError)?;
-
-		let mut input_data = Vec::new();
-		input_data.resize(input_data_len as usize, 0u8);
-		ctx.memory().get(input_data_ptr, &mut input_data)?;
+		let callee = {
+			let callee_buf = read_sandbox_memory(ctx, callee_ptr, callee_len)?;
+			<<E as Ext>::T as system::Trait>::AccountId::decode(&mut &callee_buf[..])
+				.ok_or_else(|| sandbox::HostError)?
+		};
+		let value = {
+			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
+			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
+				.ok_or_else(|| sandbox::HostError)?
+		};
+		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		// Clear the scratch buffer in any case.
 		ctx.scratch_buf.clear();
@@ -249,19 +302,13 @@ define_env!(init_env, <E: Ext>,
 		input_data_ptr: u32,
 		input_data_len: u32
 	) -> u32 => {
-		let mut value_buf = Vec::new();
-		value_buf.resize(value_len as usize, 0);
-		ctx.memory().get(value_ptr, &mut value_buf)?;
-		let value = BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
-			.ok_or_else(|| sandbox::HostError)?;
-
-		let mut init_code = Vec::new();
-		init_code.resize(init_code_len as usize, 0u8);
-		ctx.memory().get(init_code_ptr, &mut init_code)?;
-
-		let mut input_data = Vec::new();
-		input_data.resize(input_data_len as usize, 0u8);
-		ctx.memory().get(input_data_ptr, &mut input_data)?;
+		let init_code = read_sandbox_memory(ctx, init_code_ptr, init_code_len)?;
+		let value = {
+			let value_buf = read_sandbox_memory(ctx, value_ptr, value_len)?;
+			BalanceOf::<<E as Ext>::T>::decode(&mut &value_buf[..])
+				.ok_or_else(|| sandbox::HostError)?
+		};
+		let input_data = read_sandbox_memory(ctx, input_data_ptr, input_data_len)?;
 
 		// Clear the scratch buffer in any case.
 		ctx.scratch_buf.clear();
@@ -289,12 +336,13 @@ define_env!(init_env, <E: Ext>,
 		}
 	},
 
-	// Save a data buffer as a result of the execution.
+	// Save a data buffer as a result of the execution, terminate the execution and return a
+	// successful result to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
 		let data_len_in_gas = <<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(data_len as u64);
 		let price = (ctx.config.return_data_per_byte_cost)
 			.checked_mul(&data_len_in_gas)
-			.ok_or_else(|| sandbox::HostError)?;
+			.ok_or(sandbox::HostError)?;
 
 		match ctx.gas_meter.charge(price) {
 			GasMeterResult::Proceed => (),
@@ -332,7 +380,14 @@ define_env!(init_env, <E: Ext>,
 			return Err(sandbox::HostError);
 		}
 
-		ctx.memory().set(dest_ptr, src)?;
+		// Finally, perform the write.
+		write_sandbox_memory(
+			ctx.config.sandbox_data_write_cost,
+			ctx.gas_meter,
+			&ctx.memory,
+			dest_ptr,
+			src,
+		)?;
 
 		Ok(())
 	},
@@ -357,7 +412,14 @@ define_env!(init_env, <E: Ext>,
 			return Err(sandbox::HostError);
 		}
 
-		ctx.memory().set(dest_ptr, src)?;
+		// Finally, perform the write.
+		write_sandbox_memory(
+			ctx.config.sandbox_data_write_cost,
+			ctx.gas_meter,
+			&ctx.memory,
+			dest_ptr,
+			src,
+		)?;
 
 		Ok(())
 	},
