@@ -41,7 +41,7 @@ extern crate srml_system as system;
 use rstd::prelude::*;
 use rstd::result;
 use codec::{HasCompact, Compact};
-use primitives::traits::{Zero, As, MaybeSerializeDebug};
+use primitives::traits::{Zero, As};
 use srml_support::{StorageValue, StorageMap, Parameter, Dispatchable, IsSubType};
 use srml_support::dispatch::Result;
 use system::ensure_signed;
@@ -55,7 +55,7 @@ pub type PropIndex = u32;
 pub type ReferendumIndex = u32;
 
 pub trait Trait: balances::Trait + Sized {
-	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>> + MaybeSerializeDebug;
+	type Proposal: Parameter + Dispatchable<Origin=Self::Origin> + IsSubType<Module<Self>>;
 
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
 }

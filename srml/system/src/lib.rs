@@ -41,7 +41,8 @@ extern crate safe_mix;
 
 use rstd::prelude::*;
 use primitives::traits::{self, CheckEqual, SimpleArithmetic, SimpleBitOps, Zero, One, Bounded, Lookup,
-	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash};
+	Hash, Member, MaybeDisplay, EnsureOrigin, Digest as DigestT, As, CurrentHeight, BlockNumberToHash,
+	MaybeSerializeDebugButNotDeserialize, MaybeSerializeDebug};
 use substrate_primitives::storage::well_known_keys;
 use runtime_support::{storage, StorageValue, StorageMap, Parameter};
 use safe_mix::TripletMix;
@@ -68,12 +69,12 @@ pub fn extrinsics_data_root<H: Hash>(xts: Vec<Vec<u8>>) -> H::Output {
 
 pub trait Trait: Eq + Clone {
 	type Origin: Into<Option<RawOrigin<Self::AccountId>>> + From<RawOrigin<Self::AccountId>>;
-	type Index: Parameter + Member + Default + MaybeDisplay + SimpleArithmetic + Copy;
-	type BlockNumber: Parameter + Member + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
-	type Hash: Parameter + Member + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
+	type Index: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + MaybeDisplay + SimpleArithmetic + Copy;
+	type BlockNumber: Parameter + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleArithmetic + Default + Bounded + Copy + rstd::hash::Hash;
+	type Hash: Parameter + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Default + Copy + CheckEqual + rstd::hash::Hash + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
-	type Digest: Parameter + Member + Default + traits::Digest<Hash = Self::Hash>;
-	type AccountId: Parameter + Member + MaybeDisplay + Ord + Default;
+	type Digest: Parameter + Member + MaybeSerializeDebugButNotDeserialize + Default + traits::Digest<Hash = Self::Hash>;
+	type AccountId: Parameter + Member + MaybeSerializeDebug + MaybeDisplay + Ord + Default;
 	type Header: Parameter + traits::Header<
 		Number = Self::BlockNumber,
 		Hash = Self::Hash,

@@ -30,7 +30,6 @@ const TRANSACTION_VERSION: u8 = 1;
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
 	/// The signature, address, number of extrinsics have come before from
 	/// the same signer and an era describing the longevity of this transaction,

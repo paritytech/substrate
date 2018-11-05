@@ -21,7 +21,7 @@ use serde::{Deserialize, Deserializer};
 
 use codec::{Decode, Encode, Codec, Input, Output, HasCompact};
 use traits::{self, Member, SimpleArithmetic, SimpleBitOps, MaybeDisplay,
-	Hash as HashT, DigestItem as DigestItemT};
+	Hash as HashT, DigestItem as DigestItemT, MaybeSerializeDebugButNotDeserialize};
 use generic::Digest;
 
 /// Abstraction over a block header for a substrate chain.
@@ -114,10 +114,10 @@ impl<Number, Hash, DigestItem> Encode for Header<Number, Hash, DigestItem> where
 }
 
 impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestItem> where
-	Number: Member + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec,
+	Number: Member + MaybeSerializeDebugButNotDeserialize + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec,
 	Hash: HashT,
 	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
-	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeDisplay + SimpleBitOps + Codec,
+	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
  {
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;

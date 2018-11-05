@@ -32,7 +32,7 @@ extern crate sr_primitives;
 extern crate log;
 
 use std::io;
-use sr_primitives::traits::{Block as BlockT, NumberFor};
+use sr_primitives::{traits::{Block as BlockT, NumberFor}, generic::SignedBlock};
 
 type Metadata = apis::metadata::Metadata;
 type RpcHandler = pubsub::PubSubHandler<Metadata>;
@@ -50,7 +50,7 @@ pub fn rpc_handler<Block: BlockT, ExHash, PendingExtrinsics, S, C, A, Y>(
 	ExHash: Send + Sync + 'static + sr_primitives::Serialize + sr_primitives::DeserializeOwned,
 	PendingExtrinsics: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + 'static,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic, Metadata=Metadata>,
+	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block::Header, Block::Extrinsic>, Metadata=Metadata>,
 	A: apis::author::AuthorApi<ExHash, Block::Hash, Block::Extrinsic, PendingExtrinsics, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
 {

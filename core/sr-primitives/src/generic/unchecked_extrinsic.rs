@@ -25,7 +25,6 @@ use traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup};
 use super::CheckedExtrinsic;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct SignatureContent<Address, Index, Signature>
 where
 	Address: Codec,
@@ -40,7 +39,6 @@ where
 /// A extrinsic right from the external world. This is unchecked and so
 /// can contain a signature.
 #[derive(PartialEq, Eq, Clone)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 pub struct UncheckedExtrinsic<Address, Index, Call, Signature>
 where
 	Address: Codec,

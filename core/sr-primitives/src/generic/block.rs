@@ -21,7 +21,7 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::Codec;
-use traits::{self, Member, Block as BlockT, Header as HeaderT};
+use traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerializeDebugButNotDeserialize};
 use ::Justification;
 
 /// Something to identify a block.
@@ -59,14 +59,27 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 
 /// Abstraction over a substrate block.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Header, Extrinsic> {
+pub struct Block<Header, Extrinsic: Codec> {
 	/// The block header.
 	pub header: Header,
 	/// The accompanying extrinsics.
+	#[cfg_attr(feature = "std", serde(serialize_with = "extrinsics_serde::serialize"))]
 	pub extrinsics: Vec<Extrinsic>,
+}
+
+mod extrinsics_serde {
+	use codec::Encode;
+	use serde::ser::SerializeSeq;
+	pub fn serialize<S, Extrinsic: Encode>(t: &Vec<Extrinsic>, s: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		let mut seq = s.serialize_seq(Some(t.len()))?;
+		for e in t {
+			e.using_encoded(|bytes| seq.serialize_element(bytes))?;
+		}
+		seq.end()
+	}
 }
 
 impl<Header, Extrinsic> traits::Block for Block<Header, Extrinsic>
@@ -94,10 +107,10 @@ where
 
 /// Abstraction over a substrate block and justification.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+#[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct SignedBlock<H, E> {
+pub struct SignedBlock<H, E: Codec> {
 	/// Full block.
 	pub block: Block<H, E>,
 	/// Block justification.

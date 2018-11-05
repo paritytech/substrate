@@ -75,7 +75,7 @@ pub enum LockStatus<BlockNumber: Parameter> {
 
 /// Preference of what happens on a slash event.
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
-#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[cfg_attr(feature = "std", derive(Debug))]
 pub struct ValidatorPrefs<Balance: HasCompact + Copy> { // TODO: @bkchr shouldn't need this Copy but derive(Encode) breaks otherwise
 	/// Validator should ensure this many more slashes than is necessary before being unstaked.
 	#[codec(compact)]
@@ -103,7 +103,6 @@ pub trait Trait: balances::Trait + session::Trait {
 }
 
 decl_module! {
-	#[cfg_attr(feature = "std", serde(bound(deserialize = "T::Balance: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
 		fn deposit_event() = default;
 

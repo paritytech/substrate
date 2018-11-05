@@ -20,8 +20,6 @@ pub use rstd::prelude::{Vec, Clone, Eq, PartialEq};
 #[cfg(feature = "std")]
 pub use std::fmt;
 pub use rstd::result;
-#[cfg(feature = "std")]
-use serde;
 pub use codec::{Codec, Decode, Encode, Input, Output};
 pub use substrate_metadata::{
 	ModuleMetadata, FunctionMetadata, DecodeDifferent,
@@ -36,11 +34,6 @@ pub trait Dispatchable {
 	fn dispatch(self, origin: Self::Origin) -> Result;
 }
 
-#[cfg(feature = "std")]
-pub trait Callable {
-	type Call: Dispatchable + Codec + ::serde::Serialize + Clone + PartialEq + Eq;
-}
-#[cfg(not(feature = "std"))]
 pub trait Callable {
 	type Call: Dispatchable + Codec + Clone + PartialEq + Eq;
 }
@@ -50,10 +43,10 @@ pub trait Callable {
 pub type CallableCallFor<A> = <A as Callable>::Call;
 
 #[cfg(feature = "std")]
-pub trait Parameter: Codec + serde::Serialize + Clone + Eq + fmt::Debug {}
+pub trait Parameter: Codec + Clone + Eq + fmt::Debug {}
 
 #[cfg(feature = "std")]
-impl<T> Parameter for T where T: Codec + serde::Serialize + Clone + Eq + fmt::Debug {}
+impl<T> Parameter for T where T: Codec + Clone + Eq + fmt::Debug {}
 
 #[cfg(not(feature = "std"))]
 pub trait Parameter: Codec + Clone + Eq {}
@@ -172,6 +165,31 @@ macro_rules! decl_module {
 		[ $($t:tt)* ]
 		$(#[doc = $doc_attr:tt])*
 		$fn_vis:vis fn $fn_name:ident($origin:ident $(, $param_name:ident : $param:ty)* ) -> $result:ty { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		decl_module!(@normalize
+			$(#[$attr])*
+			pub struct $mod_type<$trait_instance: $trait_name>
+			for enum $call_type where origin: $origin_type, system = $system
+			{ $( $deposit_event )* }
+			{ $( $on_finalise )* }
+			[
+				$($t)*
+				$(#[doc = $doc_attr])*
+				$fn_vis fn $fn_name($origin $( , $param_name : $param )* ) -> $result { $( $impl )* }
+			]
+			$($rest)*
+		);
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_finalise:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		$fn_vis:vis fn $fn_name:ident($origin:ident : T::Origin $(, $param_name:ident : $param:ty)* ) -> $result:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
 		decl_module!(@normalize
@@ -351,7 +369,7 @@ macro_rules! decl_module {
 	) => {
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		// TODO: switching based on std feature is because of an issue in
 		// serde-derive for when we attempt to derive `Deserialize` on these types,
 		// in a situation where we've imported `srml_support` as another name.
@@ -360,7 +378,7 @@ macro_rules! decl_module {
 
 		// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 		#[derive(Clone, Copy, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		#[cfg(not(feature = "std"))]
 		pub struct $mod_type<$trait_instance: $trait_name>(::core::marker::PhantomData<$trait_instance>);
 
@@ -389,7 +407,6 @@ macro_rules! decl_module {
 
 		#[cfg(feature = "std")]
 		$(#[$attr])*
-		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::std::marker::PhantomData<$trait_instance>),
 			__OtherPhantomItem(::std::marker::PhantomData<$trait_instance>),
@@ -401,7 +418,6 @@ macro_rules! decl_module {
 
 		#[cfg(not(feature = "std"))]
 		$(#[$attr])*
-		#[cfg_attr(feature = "std", derive(Serialize, Deserialize))]
 		pub enum $call_type<$trait_instance: $trait_name> {
 			__PhantomItem(::core::marker::PhantomData<$trait_instance>),
 			__OtherPhantomItem(::core::marker::PhantomData<$trait_instance>),
@@ -610,7 +626,7 @@ macro_rules! impl_outer_dispatch {
 	) => {
 		$(#[$attr])*
 		#[derive(Clone, PartialEq, Eq)]
-		#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+		#[cfg_attr(feature = "std", derive(Debug))]
 		pub enum $call_type {
 			$(
 				$camelcase ( $crate::dispatch::CallableCallFor<$camelcase> )
