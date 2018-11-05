@@ -32,8 +32,8 @@
 //!
 // end::description[]
 
-#[macro_use] extern crate log;
-#[macro_use] extern crate parity_codec_derive;
+#[macro_use]extern crate log;
+#[macro_use]extern crate parity_codec_derive;
 extern crate parking_lot;
 extern crate parity_codec as codec;
 #[cfg(test)]
@@ -41,7 +41,7 @@ extern crate substrate_primitives as primitives;
 
 mod noncanonical;
 mod pruning;
-#[cfg(test)] mod test;
+#[cfg(test)]mod test;
 
 use std::fmt;
 use parking_lot::RwLock;
@@ -363,14 +363,59 @@ mod tests {
 		let mut db = make_db(&[91, 921, 922, 93, 94]);
 		let state_db = StateDb::new(settings, &db).unwrap();
 
-		db.commit(&state_db.insert_block::<io::Error>(&H256::from(1), 1, &H256::from(0), make_changeset(&[1], &[91])).unwrap());
-		db.commit(&state_db.insert_block::<io::Error>(&H256::from(21), 2, &H256::from(1), make_changeset(&[21], &[921, 1])).unwrap());
-		db.commit(&state_db.insert_block::<io::Error>(&H256::from(22), 2, &H256::from(1), make_changeset(&[22], &[922])).unwrap());
-		db.commit(&state_db.insert_block::<io::Error>(&H256::from(3), 3, &H256::from(21), make_changeset(&[3], &[93])).unwrap());
-		db.commit(&state_db.canonicalize_block(&H256::from(1)));
-		db.commit(&state_db.insert_block::<io::Error>(&H256::from(4), 4, &H256::from(3), make_changeset(&[4], &[94])).unwrap());
-		db.commit(&state_db.canonicalize_block(&H256::from(21)));
-		db.commit(&state_db.canonicalize_block(&H256::from(3)));
+		db.commit(
+			&state_db
+				.insert_block::<io::Error>(
+					&H256::from_low_u64_be(1),
+					1,
+					&H256::from_low_u64_be(0),
+					make_changeset(&[1], &[91]),
+				)
+				.unwrap(),
+		);
+		db.commit(
+			&state_db
+				.insert_block::<io::Error>(
+					&H256::from_low_u64_be(21),
+					2,
+					&H256::from_low_u64_be(1),
+					make_changeset(&[21], &[921, 1]),
+				)
+				.unwrap(),
+		);
+		db.commit(
+			&state_db
+				.insert_block::<io::Error>(
+					&H256::from_low_u64_be(22),
+					2,
+					&H256::from_low_u64_be(1),
+					make_changeset(&[22], &[922]),
+				)
+				.unwrap(),
+		);
+		db.commit(
+			&state_db
+				.insert_block::<io::Error>(
+					&H256::from_low_u64_be(3),
+					3,
+					&H256::from_low_u64_be(21),
+					make_changeset(&[3], &[93]),
+				)
+				.unwrap(),
+		);
+		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(1)));
+		db.commit(
+			&state_db
+				.insert_block::<io::Error>(
+					&H256::from_low_u64_be(4),
+					4,
+					&H256::from_low_u64_be(3),
+					make_changeset(&[4], &[94]),
+				)
+				.unwrap(),
+		);
+		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(21)));
+		db.commit(&state_db.canonicalize_block(&H256::from_low_u64_be(3)));
 
 		(db, state_db)
 	}

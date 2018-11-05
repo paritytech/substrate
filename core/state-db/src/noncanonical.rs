@@ -275,7 +275,7 @@ mod tests {
 	use test::{make_db, make_changeset};
 
 	fn contains(overlay: &NonCanonicalOverlay<H256, H256>, key: u64) -> bool {
-		overlay.get(&H256::from(key)) == Some(H256::from(key).to_vec())
+		overlay.get(&H256::from_low_u64_be(key)) == Some(H256::from_low_u64_be(key).as_bytes().to_vec())
 	}
 
 	#[test]
