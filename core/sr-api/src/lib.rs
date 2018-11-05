@@ -25,15 +25,17 @@ extern crate sr_primitives as primitives;
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
 extern crate sr_version as runtime_version;
+use rstd::vec::Vec;
 
 #[doc(hidden)]
 pub use primitives::{traits::Block as BlockT, generic::BlockId, transaction_validity::TransactionValidity, ApplyResult};
-use runtime_version::{ApiId, RuntimeVersion};
-use rstd::vec::Vec;
 #[doc(hidden)]
 pub use rstd::slice;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
+
+// these are part of the public API, so need to be re-exported
+pub use runtime_version::{ApiId, RuntimeVersion};
 
 /// Declare the given API traits.
 ///
@@ -432,7 +434,7 @@ macro_rules! decl_apis {
 /// The ApiIds for the various standard runtime APIs.
 pub mod id {
 	use super::ApiId;
-	
+
 	/// ApiId for the BlockBuilder trait.
 	pub const BLOCK_BUILDER: ApiId = *b"blkbuild";
 
