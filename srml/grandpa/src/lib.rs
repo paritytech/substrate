@@ -61,7 +61,7 @@ use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::RuntimeString;
 use primitives::traits::{
-	MaybeSerializeDebug, Member, Block as BlockT
+	MaybeSerializeDebug, Member, Block as BlockT, CurrentHeight, Digest,
 };
 use substrate_primitives::storage::well_known_keys;
 use substrate_primitives::AuthorityId;
@@ -70,70 +70,94 @@ use system::ensure_signed;
 mod mock;
 mod tests;
 
-struct AuthorityStorageVec;
-impl StorageVec for AuthorityStorageVec {
-	type Item = (AuthorityId, u64);
+struct AuthorityStorageVec<S: codec::Codec + Default>(rstd::marker::PhantomData<S>);
+impl<S: codec::Codec + Default> StorageVec for AuthorityStorageVec<S> {
+	type Item = (S, u64);
 	const PREFIX: &'static [u8] = ::fg_primitives::well_known_keys::AUTHORITY_PREFIX;
 }
 
 /// The log type of this crate, projected from module trait type.
 pub type Log<T> = RawLog<
 	<T as system::Trait>::BlockNumber,
+	<T as Trait>::SessionKey,
 >;
 
 /// Logs which can be scanned by GRANDPA for authorities change events.
 pub trait GrandpaChangeSignal<N> {
 	/// Try to cast the log entry as a contained signal.
-	fn as_signal(&self) -> Option<&ScheduledChange<N>>;
+	fn as_signal(&self) -> Option<ScheduledChange<N>>;
 }
 
 /// A logs in this module.
 #[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
 #[derive(Encode, Decode, PartialEq, Eq, Clone)]
-pub enum RawLog<N> {
-	/// Authorities set change has been signalled. Contains the new set of authorities.
-	AuthoritiesChangeSignal(ScheduledChange<N>),
+pub enum RawLog<N, SessionKey> {
+	/// Authorities set change has been signalled. Contains the new set of authorities
+	/// and the delay in blocks before applying.
+	AuthoritiesChangeSignal(N, Vec<(SessionKey, u64)>),
 	/// Authorities set change has happened. New authorities are contained,
 	/// with associated weights.
-	AuthoritiesChange(Vec<(AuthorityId, u64)>),
+	AuthoritiesChange(Vec<(SessionKey, u64)>),
 }
 
-impl<N> RawLog<N> {
+impl<N: Clone, SessionKey> RawLog<N, SessionKey> {
 	/// Try to cast the log entry as a contained signal.
-	pub fn as_signal(&self) -> Option<&ScheduledChange<N>> {
+	pub fn as_signal(&self) -> Option<(N, &[(SessionKey, u64)])> {
 		match *self {
-			RawLog::AuthoritiesChangeSignal(ref signal) => Some(signal),
+			RawLog::AuthoritiesChangeSignal(ref n, ref signal) => Some((n.clone(), signal)),
 			RawLog::AuthoritiesChange(_) => None,
 		}
 	}
 
 	/// Try to cast the log entry as a post-change notification.
-	pub fn as_authorities_change(&self) -> Option<&[(AuthorityId, u64)]> {
+	pub fn as_authorities_change(&self) -> Option<&[(SessionKey, u64)]> {
 		match *self {
-			RawLog::AuthoritiesChangeSignal(_) => None,
+			RawLog::AuthoritiesChangeSignal(_, _) => None,
 			RawLog::AuthoritiesChange(ref v) => Some(&v[..]),
 		}
 	}
 }
 
-impl<N> GrandpaChangeSignal<N> for RawLog<N> {
-	fn as_signal(&self) -> Option<&ScheduledChange<N>> {
-		RawLog::as_signal(self)
+impl<N, SessionKey> GrandpaChangeSignal<N> for RawLog<N, SessionKey>
+	where N: Clone, SessionKey: Clone + Into<AuthorityId>,
+{
+	fn as_signal(&self) -> Option<ScheduledChange<N>> {
+		RawLog::as_signal(self).map(|(delay, next_authorities)| ScheduledChange {
+			delay,
+			next_authorities: next_authorities.iter()
+				.cloned()
+				.map(|(k, w)| (k.into(), w))
+				.collect(),
+		})
 	}
 }
 
 pub trait Trait: system::Trait {
 	/// Type for all log entries of this module.
 	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
+
+	/// The session key type used by authorities.
+	type SessionKey: Parameter + Default + MaybeSerializeDebug + Into<AuthorityId>;
+}
+
+/// A stored pending change.
+#[derive(Encode, Decode)]
+pub struct StoredPendingChange<N, SessionKey> {
+	/// The block number this was scheduled at.
+	pub scheduled_at: N,
+	/// The delay in blocks until it will be applied.
+	pub delay: N,
+	/// The next authority set.
+	pub next_authorities: Vec<(SessionKey, u64)>,
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as GrandpaFinality {
 		// Pending change: (signalled at, scheduled change).
-		PendingChange get(pending_change): Option<(T::BlockNumber, ScheduledChange<T::BlockNumber>)>;
+		PendingChange get(pending_change): Option<StoredPendingChange<T::BlockNumber, T::SessionKey>>;
 	}
 	add_extra_genesis {
-		config(authorities): Vec<(AuthorityId, u64)>;
+		config(authorities): Vec<(T::SessionKey, u64)>;
 
 		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
 			use codec::{Encode, KeyedVec};
@@ -163,15 +187,20 @@ decl_module! {
 		}
 
 		fn on_finalise(block_number: T::BlockNumber) {
-			if let Some((signaled_at, pending_change)) = <PendingChange<T>>::get() {
-				if block_number == signaled_at {
-					Self::deposit_log(RawLog::AuthoritiesChangeSignal(pending_change.clone()));
+			if let Some(pending_change) = <PendingChange<T>>::get() {
+				if block_number == pending_change.scheduled_at {
+					Self::deposit_log(RawLog::AuthoritiesChangeSignal(
+						pending_change.delay,
+						pending_change.next_authorities.clone(),
+					));
 				}
 
-				if block_number == signaled_at + pending_change.delay {
-					Self::deposit_log(RawLog::AuthoritiesChange(pending_change.next_authorities.clone()));
-					AuthorityStorageVec::set_items(pending_change.next_authorities);
-					<PendingChange<T>>::remove();
+				if block_number == pending_change.scheduled_at + pending_change.delay {
+					Self::deposit_log(
+						RawLog::AuthoritiesChange(pending_change.next_authorities.clone())
+					);
+					<AuthorityStorageVec<T::SessionKey>>::set_items(pending_change.next_authorities);
+					<PendingChange<T>>::kill();
 				}
 			}
 		}
@@ -180,8 +209,8 @@ decl_module! {
 
 impl<T: Trait> Module<T> {
 	/// Get the current set of authorities, along with their respective weights.
-	pub fn grandpa_authorities() -> Vec<(AuthorityId, u64)> {
-		AuthorityStorageVec::items()
+	pub fn grandpa_authorities() -> Vec<(T::SessionKey, u64)> {
+		<AuthorityStorageVec<T::SessionKey>>::items()
 	}
 
 	/// Signal a change in the authorities.
@@ -193,18 +222,17 @@ impl<T: Trait> Module<T> {
 	/// No change should be signalled while any change is pending. Returns
 	/// an error if a change is already pending.
 	pub fn signal_change(
-		authorities: &[(AuthorityId, u64)],
+		next_authorities: Vec<(T::SessionKey, u64)>,
 		in_blocks: T::BlockNumber,
 	) -> Result {
 		if Self::pending_change().is_none() {
-			let scheduled_at = <T as system::Trait>::block_number();
-			let change = ScheduledChange {
-				next_authorities: authorities.iter()
-					.map(|(key, weight)| (key.clone().into(), weight))
-					.collect::<Vec<(AuthorityId, _)>>(),
+			let scheduled_at = system::ChainContext::<T>::default().current_height();
+			<PendingChange<T>>::put(StoredPendingChange {
 				delay: in_blocks,
-			};
-			<PendingChange<T>>::put(Some(scheduled_at, change));
+				scheduled_at,
+				next_authorities,
+			});
+
 			Ok(())
 		} else {
 			Err("Attempt to signal GRANDPA change with one already pending.")
@@ -221,7 +249,9 @@ impl<T: Trait> Module<T>
 	where system::DigestItemOf<T>: GrandpaChangeSignal<T::BlockNumber>,
 {
 	/// See if the digest contains any scheduled change.
-	pub fn contains_pending_change(digest: &Self::Digest) -> Option<ScheduledChange<NumberFor<B>>> {
-		digest.items().iter().filter_map(|log| log.as_signal()).cloned().next()
+	pub fn contains_pending_change(digest: &<T as system::Trait>::Digest)
+		-> Option<ScheduledChange<T::BlockNumber>>
+	{
+		digest.logs().iter().filter_map(|log| log.as_signal()).next()
 	}
 }
