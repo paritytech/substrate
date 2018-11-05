@@ -28,7 +28,7 @@ use heapsize::HeapSizeOf;
 use trie;
 
 use primitives::H256;
-use runtime_primitives::traits::{As, Header as HeaderT, SimpleArithmetic, One};
+use runtime_primitives::traits::{AsPrimitive, Header as HeaderT, SimpleArithmetic, One};
 use state_machine::backend::InMemory as InMemoryState;
 use state_machine::{prove_read, read_proof_check};
 
@@ -42,6 +42,7 @@ pub const SIZE: u64 = 2048;
 pub fn is_build_required<N>(cht_size: u64, block_num: N) -> Option<N>
 	where
 		N: Clone + SimpleArithmetic,
+		u64: AsPrimitive<N>
 {
 	let block_cht_num = block_to_cht_number(cht_size, block_num.clone())?;
 	let two = N::one() + N::one();
@@ -69,6 +70,7 @@ pub fn compute_root<Header, Hasher, I>(
 		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord,
 		I: IntoIterator<Item=Option<Header::Hash>>,
+		u64: AsPrimitive<Header::Number>
 {
 	build_pairs::<Header, I>(cht_size, cht_num, hashes)
 		.map(|pairs| trie::trie_root::<Hasher, _, _, _>(pairs))
@@ -86,6 +88,7 @@ pub fn build_proof<Header, Hasher, I>(
 		Hasher: hash_db::Hasher,
 		Hasher::Out: Ord + HeapSizeOf,
 		I: IntoIterator<Item=Option<Header::Hash>>,
+		u64: AsPrimitive<Header::Number>
 {
 	let transaction = build_pairs::<Header, I>(cht_size, cht_num, hashes)?
 		.into_iter()
@@ -135,6 +138,7 @@ fn build_pairs<Header, I>(
 	where
 		Header: HeaderT,
 		I: IntoIterator<Item=Option<Header::Hash>>,
+		u64: AsPrimitive<Header::Number>
 {
 	let start_num = start_number(cht_size, cht_num);
 	let mut pairs = Vec::new();
@@ -160,27 +164,33 @@ fn build_pairs<Header, I>(
 /// More generally: CHT N includes block (1 + N*SIZE)...((N+1)*SIZE).
 /// This is because the genesis hash is assumed to be known
 /// and including it would be redundant.
-pub fn start_number<N: SimpleArithmetic>(cht_size: u64, cht_num: N) -> N {
-	(cht_num * As::sa(cht_size)) + N::one()
+pub fn start_number<N: SimpleArithmetic>(cht_size: u64, cht_num: N) -> N
+	where u64: AsPrimitive<N>
+{
+	(cht_num * cht_size.as_()) + N::one()
 }
 
 /// Get the ending block of a given CHT.
-pub fn end_number<N: SimpleArithmetic>(cht_size: u64, cht_num: N) -> N {
-	(cht_num + N::one()) * As::sa(cht_size)
+pub fn end_number<N: SimpleArithmetic>(cht_size: u64, cht_num: N) -> N
+	where u64: AsPrimitive<N>
+{
+	(cht_num + N::one()) * cht_size.as_()
 }
 
 /// Convert a block number to a CHT number.
 /// Returns `None` for `block_num` == 0, `Some` otherwise.
-pub fn block_to_cht_number<N: SimpleArithmetic>(cht_size: u64, block_num: N) -> Option<N> {
+pub fn block_to_cht_number<N: SimpleArithmetic>(cht_size: u64, block_num: N) -> Option<N>
+	where u64: AsPrimitive<N>
+{
 	if block_num == N::zero() {
 		None
 	} else {
-		Some((block_num - N::one()) / As::sa(cht_size))
+		Some((block_num - N::one()) / cht_size.as_())
 	}
 }
 
 /// Convert header number into CHT key.
-pub fn encode_cht_key<N: As<u64>>(number: N) -> Vec<u8> {
+pub fn encode_cht_key<N: AsPrimitive<u64>>(number: N) -> Vec<u8> {
 	let number: u64 = number.as_();
 	vec![
 		(number >> 56) as u8,
