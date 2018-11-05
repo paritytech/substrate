@@ -623,7 +623,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("d68586d5098535e04ff7a12d71a9c9dc719960f318862e636e78a8e98cf4b8d4").into(),
+			hex!("cf0fee74c87ecff646804984bbdf85832a788b3ca2a2aa33e20da61fa7182b37").into(),
 			None,
 			vec![
 				CheckedExtrinsic {
