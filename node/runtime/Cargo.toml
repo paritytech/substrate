@@ -13,7 +13,6 @@ parity-codec = "2.1"
 parity-codec-derive = "2.1"
 sr-api = { path = "../../core/sr-api", default-features = false }
 sr-std = { path = "../../core/sr-std" }
-sr-io = { path = "../../core/sr-io" }
 srml-support = { path = "../../srml/support" }
 substrate-primitives = { path = "../../core/primitives" }
 substrate-keyring = { path = "../../core/keyring" }
@@ -40,7 +39,6 @@ std = [
 	"substrate-primitives/std",
 	"sr-api/std",
 	"sr-std/std",
-	"sr-io/std",
 	"srml-support/std",
 	"srml-balances/std",
 	"srml-consensus/std",
