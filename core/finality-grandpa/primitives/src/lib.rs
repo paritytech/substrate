@@ -54,6 +54,14 @@ pub mod id {
 	pub const GRANDPA_API: ApiId = *b"fgrandpa";
 }
 
+/// Well-known storage keys for GRANDPA.
+pub mod well_known_keys {
+	/// The key for the authorities and weights vector in storage.
+	pub const AUTHORITY_PREFIX: &[u8] = b":grandpa:auth:";
+	/// The key for the authorities count.
+	pub const AUTHORITY_COUNT: &[u8] = b":grandpa:auth:len";
+}
+
 decl_apis! {
 	/// APIs for integrating the GRANDPA finality gadget into runtimes.
 	///
@@ -72,6 +80,10 @@ decl_apis! {
 		///
 		/// No change should be scheduled if one is already and the delay has not
 		/// passed completely.
+		///
+		/// This should be a pure function: i.e. as long as the runtime can interpret
+		/// the digest type it should return the same result regardless of the current
+		/// state.
 		fn grandpa_pending_change(digest: DigestFor<B>) -> Option<ScheduledChange<NumberFor<B>>>;
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
