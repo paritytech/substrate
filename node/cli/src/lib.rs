@@ -37,6 +37,7 @@ extern crate node_primitives;
 #[macro_use]
 extern crate substrate_service;
 extern crate node_executor;
+extern crate substrate_keystore;
 
 #[macro_use]
 extern crate log;

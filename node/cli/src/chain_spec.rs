@@ -24,6 +24,8 @@ use node_runtime::{ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, Dem
 pub use node_runtime::GenesisConfig;
 use substrate_service;
 
+use substrate_keystore::pad_seed;
+
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
 /// Specialised `ChainSpec`.
@@ -145,9 +147,7 @@ pub fn staging_testnet_config() -> ChainSpec {
 
 /// Helper function to generate AuthorityID from seed
 pub fn get_authority_id_from_seed(seed: &str) -> AuthorityId {
-	let mut padded_seed: [u8; 32] = Default::default();
-	let padded = format!("{:width$}", seed, width = padded_seed.len());
-	padded_seed[0..32].copy_from_slice(padded.as_str().as_bytes());
+	let padded_seed = pad_seed(seed);
 	// NOTE from ed25519 impl:
 	// prefer pkcs#8 unless security doesn't matter -- this is used primarily for tests.
 	ed25519::Pair::from_seed(&padded_seed).public().0.into()
@@ -293,13 +293,6 @@ mod tests {
 	/// Local testnet config (multivalidator Alice + Bob)
 	pub fn integration_test_config() -> ChainSpec {
 		ChainSpec::from_genesis("Integration Test", "test", local_testnet_genesis_instant, vec![], None, None, None)
-	}
-
-	#[test]
-	fn test_get_authority_from_seed_padding() {
-		let space_padded: AuthorityId = ed25519::Pair::from_seed(b"Alice                           ").public().0.into();
-		let authority_id = get_authority_id_from_seed("Alice");
-		assert_eq!(space_padded, authority_id);
 	}
 
 	#[test]
