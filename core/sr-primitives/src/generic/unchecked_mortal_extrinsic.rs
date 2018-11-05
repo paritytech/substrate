@@ -73,7 +73,7 @@ where
 	Call: Encode + Member,
 	Signature: Member + traits::Verify<Signer=AccountId>,
 	AccountId: Member + MaybeDisplay,
-	BlockNumber: SimpleArithmetic + AsPrimitive<u64>,
+	BlockNumber: SimpleArithmetic,
 	u64: AsPrimitive<BlockNumber>,
 	Hash: Encode,
 	Context: Lookup<Source=Address, Target=AccountId>
