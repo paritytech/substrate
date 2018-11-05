@@ -60,14 +60,14 @@ fn need_more_than<T: PartialOrd>(a: T, b: T) -> Option<T> {
 
 impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 	AccountId: Member + Decode,
-	AccountIndex: Member + Decode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+	AccountIndex: Member + Decode + PartialOrd<AccountIndex> + Ord + AsPrimitive<u32> + AsPrimitive<u16> + AsPrimitive<u8> + Copy,
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(match input.read_byte()? {
 			x @ 0x00...0xef => Address::Index(x.as_()),
 			0xfc => Address::Index(need_more_than(0xef, u16::decode(input)?)?.as_()),
 			0xfd => Address::Index(need_more_than(0xffff, u32::decode(input)?)?.as_()),
-			0xfe => Address::Index(need_more_than((0xffffffffu32 as u64).as_(), Decode::decode(input)?)?),
+			0xfe => Address::Index(need_more_than(0xffffffffu32.as_(), Decode::decode(input)?)?),
 			0xff => Address::Id(Decode::decode(input)?),
 			_ => return None,
 		})
@@ -76,7 +76,7 @@ impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 
 impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 	AccountId: Member + Encode,
-	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + As<u32> + As<u16> + As<u8> + Copy,
+	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + AsPrimitive<u32> + AsPrimitive<u16> + AsPrimitive<u8> + Copy,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
@@ -84,19 +84,19 @@ impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 				dest.push_byte(255);
 				dest.push(i);
 			}
-			Address::Index(i) if i > As::sa(0xffffffffu32) => {
+			Address::Index(i) if i > 0xffffffffu32.as_() => {
 				dest.push_byte(254);
 				dest.push(&i);
 			}
-			Address::Index(i) if i > As::sa(0xffffu32) => {
+			Address::Index(i) if i > 0xffffu32.as_() => {
 				dest.push_byte(253);
-				dest.push(&As::<u32>::as_(i));
+				dest.push(i.as_());
 			}
-			Address::Index(i) if i >= As::sa(0xf0u32) => {
+			Address::Index(i) if i >= 0xf0u32.as_() => {
 				dest.push_byte(252);
-				dest.push(&As::<u16>::as_(i));
+				dest.push(i.as_());
 			}
-			Address::Index(i) => dest.push_byte(As::<u8>::as_(i)),
+			Address::Index(i) => dest.push_byte(i.as_())
 		}
 	}
 }
