@@ -45,6 +45,7 @@ extern crate parity_codec_derive;
 extern crate sr_primitives as primitives;
 extern crate parity_codec as codec;
 extern crate srml_system as system;
+extern crate srml_session as session;
 extern crate substrate_primitives;
 
 #[cfg(test)]
@@ -60,7 +61,7 @@ use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{
-	MaybeSerializeDebug, CurrentHeight, Digest,
+	MaybeSerializeDebug, CurrentHeight, Digest, Convert,
 };
 use substrate_primitives::AuthorityId;
 use system::ensure_signed;
@@ -251,5 +252,40 @@ impl<T: Trait> Module<T>
 		-> Option<ScheduledChange<T::BlockNumber>>
 	{
 		digest.logs().iter().filter_map(|log| log.as_signal()).next()
+	}
+}
+
+/// Helper for authorities being synchronized with the general session authorities.
+///
+/// This is not the only way to manage an authority set for GRANDPA, but it is
+/// a convenient one. When this is used, no other mechanism for altering authority
+/// sets should be.
+pub struct SyncedAuthorities<T>(::rstd::marker::PhantomData<T>);
+
+impl<T> Default for SyncedAuthorities<T> {
+	fn default() -> Self {
+		SyncedAuthorities(::rstd::marker::PhantomData)
+	}
+}
+
+impl<X, T> session::OnSessionChange<X> for SyncedAuthorities<T> where
+	T: Trait,
+	T: session::Trait,
+	<T as session::Trait>::ConvertAccountIdToSessionKey: Convert<
+		<T as system::Trait>::AccountId,
+		<T as Trait>::SessionKey,
+	>,
+{
+	fn on_session_change(_: X, _: bool) {
+		use primitives::traits::Zero;
+
+		let next_authorities = <session::Module<T>>::validators()
+			.into_iter()
+			.map(T::ConvertAccountIdToSessionKey::convert)
+			.map(|key| (key, 1)) // evenly-weighted.
+			.collect::<Vec<(<T as Trait>::SessionKey, u64)>>();
+
+		// instant changes
+		let _ = <Module<T>>::schedule_change(next_authorities, Zero::zero());
 	}
 }
