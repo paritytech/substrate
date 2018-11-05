@@ -60,7 +60,10 @@ fn need_more_than<T: PartialOrd>(a: T, b: T) -> Option<T> {
 
 impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 	AccountId: Member + Decode,
-	AccountIndex: Member + Decode + PartialOrd<AccountIndex> + Ord + AsPrimitive<u32> + AsPrimitive<u16> + AsPrimitive<u8> + Copy,
+	AccountIndex: Member + Decode + PartialOrd<AccountIndex> + Ord + Copy,
+	u8: AsPrimitive<AccountIndex>,
+	u16: AsPrimitive<AccountIndex>,
+	u32: AsPrimitive<AccountIndex>
 {
 	fn decode<I: Input>(input: &mut I) -> Option<Self> {
 		Some(match input.read_byte()? {
