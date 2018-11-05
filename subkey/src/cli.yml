@@ -23,3 +23,27 @@ subcommands:
             help: Number of keys to generate
             takes_value: true
             default_value: "1"
+        - minscore:
+            short: m
+            long: minscore
+            help: Minimum score for the results (between 0 and 100)
+            takes_value: true
+            default_value: "75"
+        - case_sensitive:
+            short: c
+            long: case-sensitive
+            help: Whether the patten case is important or not
+            takes_value: false
+        - format:
+            short: f
+            long: format
+            help: Format of the generated output (stdout|csv)
+            takes_value: true
+            default_value: stdout
+        - threads:
+            short: t
+            long: threads
+            help: Force the number of threads to be used (0= number of cpus x 2)
+            takes_value: true
+            default_value: "0"
+

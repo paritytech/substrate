@@ -1,3 +1,9 @@
+//! # subkey
+//!
+//! `subkey` is is a cli utility that allows operations on keys such as
+//! restoration of keys from their seed, generation of vanity addresses, etc...
+//! You can find the documentation [here](https://github.com/paritytech/substrate/blob/master/subkey/README.adoc).
+
 // Copyright 2018 Parity Technologies (UK) Ltd.
 // This file is part of Substrate.
 
@@ -16,16 +22,23 @@
 
 #![cfg_attr(feature = "bench", feature(test))]
 #[cfg(feature = "bench")]
+
 extern crate test;
 extern crate substrate_primitives;
 extern crate rand;
+extern crate num_cpus;
 
 #[macro_use]
 extern crate clap;
+extern crate pbr;
 
+use vanity::OutputFormat;
+use keyspecs::KeySpecs;
 use substrate_primitives::{ed25519::Pair, hexdisplay::HexDisplay};
 
 mod vanity;
+mod keypair;
+mod keyspecs;
 
 fn main() {
 	let yaml = load_yaml!("cli.yml");
@@ -33,14 +46,23 @@ fn main() {
 
 	match matches.subcommand() {
 		("vanity", Some(matches)) => {
-			let desired: String = matches.value_of("pattern").map(str::to_string).unwrap_or_default();
-			let key = vanity::generate_key(&desired).expect("Key generation failed");
-			println!("Seed {} (hex: 0x{}) - {} ({}%)",
-				key.pair.public().to_ss58check(),
-				HexDisplay::from(&key.pair.public().0),
-				HexDisplay::from(&key.seed),
-				key.score);
+			let number: u32 = matches.value_of("number").map(str::to_string).unwrap_or_default().parse::<u32>().unwrap();
+			let threads: u8 = matches.value_of("threads").map(str::to_string).unwrap_or_default().parse::<u8>().unwrap();
+			let format: OutputFormat = match matches.value_of("format").unwrap_or_default() {
+				"csv" => OutputFormat::Csv,
+				_ => OutputFormat::Stdout,
+			};
+			let key_specs = KeySpecs {
+				 desired_pattern: matches.value_of("pattern").map(str::to_string).unwrap_or_default(),
+				 case_sensitive: matches.is_present("case_sensitive"),
+				 minscore: ::std::cmp::min(
+				 	matches.value_of("minscore").map(str::to_string).unwrap_or_default().parse::<u8>().unwrap(), 100) as f32,
+			};
+
+			let keys = vanity::generate_keys(key_specs, number as usize, threads);
+			vanity::print_keys(keys, format);
 		}
+
 		("restore", Some(matches)) => {
 			let mut raw_seed = matches.value_of("seed")
 				.map(str::as_bytes)
