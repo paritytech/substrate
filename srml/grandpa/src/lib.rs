@@ -17,6 +17,8 @@
 //! GRANDPA Consensus module for runtime.
 //!
 //! This manages the GRANDPA authority set ready for the native code.
+//! These authorities are only for GRANDPA finality, not for consensus overall.
+//!
 //! In the future, it will also handle misbehavior reports, and on-chain
 //! finality notifications.
 //!
@@ -52,18 +54,14 @@ extern crate sr_io as runtime_io;
 pub extern crate substrate_fg_primitives as fg_primitives;
 
 use rstd::prelude::*;
-use rstd::result;
-use parity_codec::Encode;
-use fg_primitives::{ScheduledChange, GrandpaApi};
-use runtime_support::{storage, Parameter};
+use fg_primitives::ScheduledChange;
+use runtime_support::Parameter;
 use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
-use primitives::RuntimeString;
 use primitives::traits::{
-	MaybeSerializeDebug, Member, Block as BlockT, CurrentHeight, Digest,
+	MaybeSerializeDebug, CurrentHeight, Digest,
 };
-use substrate_primitives::storage::well_known_keys;
 use substrate_primitives::AuthorityId;
 use system::ensure_signed;
 
@@ -137,7 +135,7 @@ pub trait Trait: system::Trait {
 	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
 
 	/// The session key type used by authorities.
-	type SessionKey: Parameter + Default + MaybeSerializeDebug + Into<AuthorityId>;
+	type SessionKey: Parameter + Default + MaybeSerializeDebug;
 }
 
 /// A stored pending change.
@@ -213,7 +211,7 @@ impl<T: Trait> Module<T> {
 		<AuthorityStorageVec<T::SessionKey>>::items()
 	}
 
-	/// Signal a change in the authorities.
+	/// Schedule a change in the authorities.
 	///
 	/// The change will be applied at the end of execution of the block
 	/// `in_blocks` after the current block. This value may be 0, in which
@@ -221,7 +219,7 @@ impl<T: Trait> Module<T> {
 	///
 	/// No change should be signalled while any change is pending. Returns
 	/// an error if a change is already pending.
-	pub fn signal_change(
+	pub fn schedule_change(
 		next_authorities: Vec<(T::SessionKey, u64)>,
 		in_blocks: T::BlockNumber,
 	) -> Result {

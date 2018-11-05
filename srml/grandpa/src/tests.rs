@@ -18,48 +18,76 @@
 
 #![cfg(test)]
 
-use primitives::{generic, testing, traits::OnFinalise};
+use primitives::{testing, traits::OnFinalise};
+use primitives::traits::Header;
 use runtime_io::with_externalities;
-use substrate_primitives::H256;
-use mock::{Consensus, System, new_test_ext};
+use mock::{Grandpa, System, new_test_ext};
+use {RawLog};
 
 #[test]
 fn authorities_change_logged() {
-	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
+	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Consensus::set_authorities(&[4, 5, 6]);
-		Consensus::on_finalise(1);
+		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 0).unwrap();
+		Grandpa::on_finalise(1);
 		let header = System::finalise();
 		assert_eq!(header.digest, testing::Digest {
 			logs: vec![
-				generic::DigestItem::AuthoritiesChange::<H256, u64>(vec![4, 5, 6]),
+				RawLog::AuthoritiesChangeSignal(0, vec![(4, 1), (5, 1), (6, 1)]).into(),
+				RawLog::AuthoritiesChange(vec![(4, 1), (5, 1), (6, 1)]).into(),
 			],
 		});
 	});
 }
 
 #[test]
-fn authorities_change_is_not_logged_when_not_changed() {
-	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
+fn authorities_change_logged_after_delay() {
+	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Consensus::on_finalise(1);
+		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1).unwrap();
+		Grandpa::on_finalise(1);
 		let header = System::finalise();
 		assert_eq!(header.digest, testing::Digest {
-			logs: vec![],
+			logs: vec![
+				RawLog::AuthoritiesChangeSignal(1, vec![(4, 1), (5, 1), (6, 1)]).into(),
+			],
+		});
+
+		System::initialise(&2, &header.hash(), &Default::default());
+		Grandpa::on_finalise(2);
+
+		let header = System::finalise();
+		assert_eq!(header.digest, testing::Digest {
+			logs: vec![
+				RawLog::AuthoritiesChange(vec![(4, 1), (5, 1), (6, 1)]).into(),
+			],
 		});
 	});
 }
 
 #[test]
-fn authorities_change_is_not_logged_when_changed_back_to_original() {
-	with_externalities(&mut new_test_ext(vec![1, 2, 3]), || {
+fn cannot_schedule_change_when_one_pending() {
+	with_externalities(&mut new_test_ext(vec![(1, 1), (2, 1), (3, 1)]), || {
 		System::initialise(&1, &Default::default(), &Default::default());
-		Consensus::set_authorities(&[4, 5, 6]);
-		Consensus::set_authorities(&[1, 2, 3]);
-		Consensus::on_finalise(1);
+		Grandpa::schedule_change(vec![(4, 1), (5, 1), (6, 1)], 1).unwrap();
+		assert!(Grandpa::pending_change().is_some());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1).is_err());
+
+		Grandpa::on_finalise(1);
 		let header = System::finalise();
-		assert_eq!(header.digest, testing::Digest {
-			logs: vec![],
-		});
+
+		System::initialise(&2, &header.hash(), &Default::default());
+		assert!(Grandpa::pending_change().is_some());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1).is_err());
+
+		Grandpa::on_finalise(2);
+		let header = System::finalise();
+
+		System::initialise(&3, &header.hash(), &Default::default());
+		assert!(Grandpa::pending_change().is_none());
+		assert!(Grandpa::schedule_change(vec![(5, 1)], 1).is_ok());
+
+		Grandpa::on_finalise(3);
+		let _header = System::finalise();
 	});
 }

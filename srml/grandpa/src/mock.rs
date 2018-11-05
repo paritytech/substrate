@@ -19,22 +19,28 @@
 #![cfg(test)]
 
 use primitives::{BuildStorage, testing::{Digest, DigestItem, Header}};
+use primitives::generic::DigestItem as GenDigestItem;
 use runtime_io;
 use substrate_primitives::{H256, Blake2Hasher};
-use {GenesisConfig, Trait, Module, system};
+use parity_codec::Encode;
+use {system, GenesisConfig, Trait, Module, RawLog};
 
 impl_outer_origin!{
 	pub enum Origin for Test {}
+}
+
+impl From<RawLog<u64, u64>> for DigestItem {
+	fn from(log: RawLog<u64, u64>) -> DigestItem {
+		GenDigestItem::Other(log.encode())
+	}
 }
 
 // Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
 #[derive(Clone, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Test;
 impl Trait for Test {
-	const NOTE_OFFLINE_POSITION: u32 = 1;
 	type Log = DigestItem;
 	type SessionKey = u64;
-	type OnOfflineValidator = ();
 }
 impl system::Trait for Test {
 	type Origin = Origin;
@@ -49,14 +55,13 @@ impl system::Trait for Test {
 	type Log = DigestItem;
 }
 
-pub fn new_test_ext(authorities: Vec<u64>) -> runtime_io::TestExternalities<Blake2Hasher> {
+pub fn new_test_ext(authorities: Vec<(u64, u64)>) -> runtime_io::TestExternalities<Blake2Hasher> {
 	let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
-	t.extend(GenesisConfig::<Test>{
-		code: vec![],
+	t.extend(GenesisConfig::<Test> {
 		authorities,
 	}.build_storage().unwrap().0);
 	t.into()
 }
 
 pub type System = system::Module<Test>;
-pub type Consensus = Module<Test>;
+pub type Grandpa = Module<Test>;
