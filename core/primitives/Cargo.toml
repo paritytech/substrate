@@ -4,7 +4,7 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-crunchy = "0.1"
+crunchy = { version = "0.2", default-features = false }
 sr-std = { path = "../sr-std", default-features = false }
 parity-codec = { version = "2.1", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
@@ -32,6 +32,7 @@ heapsize = "0.4"
 [features]
 default = ["std"]
 std = [
+	"crunchy/std",
 	"wasmi",
 	"uint/std",
 	"fixed-hash/std",
