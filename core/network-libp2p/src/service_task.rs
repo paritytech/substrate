@@ -21,7 +21,7 @@ use futures::{prelude::*, task, Stream};
 use futures::sync::{oneshot, mpsc};
 use libp2p::{Multiaddr, PeerId};
 use libp2p::core::{Endpoint, PublicKey};
-use libp2p::core::nodes::swarm::ConnectedPoint;
+use libp2p::core::nodes::ConnectedPoint;
 use libp2p::kad::{KadSystem, KadSystemConfig, KadConnecController, KadPeer};
 use libp2p::kad::{KadConnectionType, KadQueryEvent};
 use parking_lot::Mutex;
