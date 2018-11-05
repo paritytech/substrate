@@ -76,7 +76,8 @@ impl<AccountId, AccountIndex> Decode for Address<AccountId, AccountIndex> where
 
 impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 	AccountId: Member + Encode,
-	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + AsPrimitive<u32> + AsPrimitive<u16> + AsPrimitive<u8> + Copy,
+	AccountIndex: Member + Encode + PartialOrd<AccountIndex> + Ord + Copy + AsPrimitive<u32> + AsPrimitive<u16> + AsPrimitive<u8>,
+	u32: AsPrimitive<AccountIndex>,
 {
 	fn encode_to<T: Output>(&self, dest: &mut T) {
 		match *self {
@@ -88,14 +89,17 @@ impl<AccountId, AccountIndex> Encode for Address<AccountId, AccountIndex> where
 				dest.push_byte(254);
 				dest.push(&i);
 			}
+			// small enough to be encoded as 4 bytes
 			Address::Index(i) if i > 0xffffu32.as_() => {
 				dest.push_byte(253);
-				dest.push(i.as_());
+				dest.push(&AsPrimitive::<u32>::as_(i));
 			}
+			// small enough to be encoded as 2 bytes
 			Address::Index(i) if i >= 0xf0u32.as_() => {
 				dest.push_byte(252);
-				dest.push(i.as_());
+				dest.push(&AsPrimitive::<u16>::as_(i));
 			}
+			// small enough to be encoded as 1 byte
 			Address::Index(i) => dest.push_byte(i.as_())
 		}
 	}
