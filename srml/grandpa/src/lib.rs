@@ -248,7 +248,7 @@ impl<T: Trait> Module<T>
 	where system::DigestItemOf<T>: GrandpaChangeSignal<T::BlockNumber>,
 {
 	/// See if the digest contains any scheduled change.
-	pub fn contains_pending_change(digest: &<T as system::Trait>::Digest)
+	pub fn scrape_digest_change(digest: &<T as system::Trait>::Digest)
 		-> Option<ScheduledChange<T::BlockNumber>>
 	{
 		digest.logs().iter().filter_map(|log| log.as_signal()).next()

@@ -71,7 +71,7 @@ decl_apis! {
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
-	pub trait GrandpaApi<B: BlockT> {
+	pub trait GrandpaApi<SessionKey, B: BlockT> {
 		/// Check a digest for pending changes.
 		/// Return `None` if there are no pending changes.
 		///
@@ -88,6 +88,6 @@ decl_apis! {
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.
-		fn grandpa_authorities() -> Vec<(AuthorityId, u64)>;
+		fn grandpa_authorities() -> Vec<(SessionKey, u64)>;
 	}
 }

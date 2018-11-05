@@ -47,6 +47,7 @@ extern crate srml_contract as contract;
 extern crate srml_council as council;
 extern crate srml_democracy as democracy;
 extern crate srml_executive as executive;
+extern crate srml_grandpa as grandpa;
 extern crate srml_session as session;
 extern crate srml_staking as staking;
 extern crate srml_system as system;
@@ -63,11 +64,12 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	SessionKey, Signature
 };
+use grandpa::fg_primitives::{GrandpaApi, ScheduledChange, id::*};
 use runtime_api::{runtime::*, id::*};
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT};
+use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, DigestFor};
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
@@ -97,7 +99,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
 	apis: apis_vec!([
 		(BLOCK_BUILDER, 1),
 		(TAGGED_TRANSACTION_QUEUE, 1),
-		(METADATA, 1)
+		(METADATA, 1),
+		(GRANDPA_API, 1),
 	]),
 };
 
@@ -197,6 +200,11 @@ impl upgrade_key::Trait for Runtime {
 	type Event = Event;
 }
 
+impl grandpa::Trait for Runtime {
+	type SessionKey = SessionKey;
+	type Log = Log;
+}
+
 construct_runtime!(
 	pub enum Runtime with Log(InternalLog: DigestItem<Hash, SessionKey>) where
 		Block = Block,
@@ -213,11 +221,22 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
+		Grandpa: grandpa::{Module, Storage, Config<T>, Log(from_grandpa_log)},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
 		UpgradeKey: upgrade_key,
 	}
 );
+
+impl Log {
+	fn from_grandpa_log(&self)
+	fn as_grandpa_log(&self) -> Option<Grandpa::RawLog> {
+		match self.0 {
+			InternalLog::Grandpa(raw) => Some(raw),
+			_ => None,
+		}
+	}
+}
 
 /// The address format for describing accounts.
 pub use balances::address::Address as RawAddress;
@@ -288,6 +307,16 @@ impl_apis! {
 	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
+		}
+	}
+
+	impl GrandpaApi<SessionKey, Block> for Runtime {
+		fn grandpa_pending_change(digest: DigestFor<Block>) -> Option<ScheduledChange<Block::Number>> {
+			Grandpa::scrape_digest_change(&digest)
+		}
+
+		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
+			Grandpa::grandpa_authorities()
 		}
 	}
 }
