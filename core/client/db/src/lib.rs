@@ -67,7 +67,7 @@ use hash_db::Hasher;
 use kvdb::{KeyValueDB, DBTransaction};
 use trie::MemoryDB;
 use parking_lot::RwLock;
-use primitives::{H256, AuthorityId, Blake2Hasher, ChangesTrieConfiguration};
+use primitives::{H256, AuthorityId, Blake2Hasher, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::well_known_keys;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem};
@@ -423,7 +423,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 			&*self,
 			min_blocks_to_keep,
 			&state_machine::ChangesTrieAnchorBlockId {
-				hash: utils::convert_hash(&block_hash),
+				hash: convert_hash(&block_hash),
 				number: block_num.as_(),
 			},
 			|node| tx.delete(columns::CHANGES_TRIE, node.as_ref()));
@@ -443,7 +443,7 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 			// if block is not finalized yet, we should find the required block hash by traversing
 			// back from the anchor to the block with given number
 			let mut current_num = anchor.number;
-			let mut current_hash: Block::Hash = ::utils::convert_hash(&anchor.hash);
+			let mut current_hash: Block::Hash = convert_hash(&anchor.hash);
 			while current_num != block {
 				let current_header: Block::Header = ::utils::require_header::<Block>(
 					&*self.db, columns::HASH_LOOKUP, columns::HEADER, BlockId::Hash(current_hash)

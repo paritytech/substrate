@@ -21,14 +21,13 @@ use futures::IntoFuture;
 
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
-use primitives::ChangesTrieConfiguration;
+use primitives::{ChangesTrieConfiguration, convert_hash};
 use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, ChangesTrieAnchorBlockId,
 	read_proof_check, key_changes_proof_check};
 
 use call_executor::CallResult;
 use cht;
-use client::convert_hash;
 use error::{Error as ClientError, ErrorKind as ClientErrorKind, Result as ClientResult};
 use light::call_executor::check_execution_proof;
 

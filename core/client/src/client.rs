@@ -30,7 +30,7 @@ use consensus::{ImportBlock, ImportResult, BlockOrigin};
 use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
 use runtime_primitives::{ApplyResult, BuildStorage};
 use runtime_api as api;
-use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration};
+use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use codec::{Encode, Decode};
@@ -1141,14 +1141,6 @@ impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> whe
 	) -> Result<TransactionValidity, Self::Error> {
 		self.call_api_at(at, "validate_transaction", &(tx))
 	}
-}
-
-/// Converts one hash type into another.
-pub(crate) fn convert_hash<H1: Default + AsMut<[u8]>, H2: AsRef<[u8]>>(src: &H2) -> H1 {
-	let mut dest = H1::default();
-	let len = ::std::cmp::min(dest.as_mut().len(), src.as_ref().len());
-	dest.as_mut().copy_from_slice(&src.as_ref()[..len]);
-	dest
 }
 
 #[cfg(test)]

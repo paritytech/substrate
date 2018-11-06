@@ -246,11 +246,3 @@ pub fn read_meta<Block>(db: &KeyValueDB, col_meta: Option<u32>, col_header: Opti
 		genesis_hash,
 	})
 }
-
-/// Converts one hash type into another.
-pub(crate) fn convert_hash<H1: Default + AsMut<[u8]>, H2: AsRef<[u8]>>(src: &H2) -> H1 {
-	let mut dest = H1::default();
-	let len = ::std::cmp::min(dest.as_mut().len(), src.as_ref().len());
-	dest.as_mut().copy_from_slice(&src.as_ref()[..len]);
-	dest
-}
