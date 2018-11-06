@@ -117,7 +117,7 @@ pub struct Service<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> {
 	handler: Arc<Protocol<B, S, H>>,
 	/// Protocol ID.
 	protocol_id: ProtocolId,
-	/// Sender for messages to the backgound service task, and handle for the background thread.
+	/// Sender for messages to the background service task, and handle for the background thread.
 	/// Dropping the sender should close the task and the thread.
 	/// This is an `Option` because we need to extract it in the destructor.
 	bg_thread: Option<(oneshot::Sender<()>, thread::JoinHandle<()>)>,
@@ -175,6 +175,12 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> Service<B, S, H> {
 		where F: FnOnce(&mut S, &mut Context<B>) -> U
 	{
 		self.handler.with_spec(&mut NetSyncIo::new(&self.network, self.protocol_id), f)
+	}
+}
+
+impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ::consensus::SyncOracle for Service<B, S, H> {
+	fn is_major_syncing(&self) -> bool {
+		self.handler.sync().read().status().is_major_syncing()
 	}
 }
 

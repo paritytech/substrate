@@ -128,7 +128,7 @@ where
 	fn child_storage_root_transaction(&mut self, storage_key: &[u8]) -> (Vec<u8>, B::Transaction) {
 		self.mark_dirty();
 
-		let (root, transaction) = {
+		let (root, is_default, transaction) = {
 			let delta = self.overlay.committed.children.get(storage_key)
 				.into_iter()
 				.flat_map(|map| map.1.iter().map(|(k, v)| (k.clone(), v.clone())))
@@ -139,7 +139,7 @@ where
 			self.backend.child_storage_root(storage_key, delta)
 		};
 
-		let root_val = if root == default_child_trie_root::<H>(storage_key) {
+		let root_val = if is_default {
 			None
 		} else {
 			Some(root.clone())

@@ -86,7 +86,16 @@ pub trait Trait: Eq + Clone {
 pub type DigestItemOf<T> = <<T as Trait>::Digest as traits::Digest>::Item;
 
 decl_module! {
-	pub struct Module<T: Trait> for enum Call where origin: T::Origin {}
+	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
+		/// Deposits an event onto this block's event record.
+		pub fn deposit_event(event: T::Event) {
+			let extrinsic_index = Self::extrinsic_index();
+			let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
+			let mut events = Self::events();
+			events.push(EventRecord { phase, event });
+			<Events<T>>::put(events);
+		}
+	}
 }
 
 /// A phase of a block's execution.
@@ -197,7 +206,7 @@ decl_storage! {
 		config(changes_trie_config): Option<ChangesTrieConfiguration>;
 		config(_phantom): ::std::marker::PhantomData<T>;
 
-		build(|storage: &mut primitives::StorageMap, config: &GenesisConfig<T>| {
+		build(|storage: &mut primitives::StorageMap, _: &mut primitives::ChildrenStorageMap, config: &GenesisConfig<T>| {
 			use codec::Encode;
 
 			storage.insert(well_known_keys::EXTRINSIC_INDEX.to_vec(), 0u32.encode());
@@ -299,15 +308,6 @@ impl<T: Trait> Module<T> {
 		let mut l = <Digest<T>>::get();
 		traits::Digest::push(&mut l, item);
 		<Digest<T>>::put(l);
-	}
-
-	/// Deposits an event onto this block's event record.
-	pub fn deposit_event(event: T::Event) {
-		let extrinsic_index = Self::extrinsic_index();
-		let phase = extrinsic_index.map_or(Phase::Finalization, |c| Phase::ApplyExtrinsic(c));
-		let mut events = Self::events();
-		events.push(EventRecord { phase, event });
-		<Events<T>>::put(events);
 	}
 
 	/// Calculate the current block's random seed.
@@ -467,7 +467,7 @@ mod tests {
 	type System = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		GenesisConfig::<Test>::default().build_storage().unwrap().into()
+		GenesisConfig::<Test>::default().build_storage().unwrap().0.into()
 	}
 
 	#[test]

@@ -15,25 +15,25 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 // tag::description[]
-//! This crate provides means of instantiation and execution of wasm modules.
+//! This crate provides means to instantiate and execute wasm modules.
 //!
-//! It works even when the user of this library is itself executes
-//! inside the wasm VM. In this case same VM is used for execution
+//! It works even when the user of this library executes from
+//! inside the wasm VM. In this case the same VM is used for execution
 //! of both the sandbox owner and the sandboxed module, without compromising security
-//! and without performance penalty of full wasm emulation inside wasm.
+//! and without the performance penalty of full wasm emulation inside wasm.
 //!
-//! This is achieved by using bindings to wasm VM which are published by the host API.
-//! This API is thin and consists of only handful functions. It contains functions for instantiating
-//! modules and executing them and for example doesn't contain functions for inspecting the module
-//! structure. The user of this library is supposed to read wasm module by it's own means.
+//! This is achieved by using bindings to the wasm VM, which are published by the host API.
+//! This API is thin and consists of only a handful functions. It contains functions for instantiating
+//! modules and executing them, but doesn't contain functions for inspecting the module
+//! structure. The user of this library is supposed to read the wasm module.
 //!
-//! When this crate is used in `std` environment all these functions are implemented by directly
-//! calling wasm VM.
+//! When this crate is used in the `std` environment all these functions are implemented by directly
+//! calling the wasm VM.
 //!
-//! Example of possible use-cases for this library are following:
+//! Example of possible use-cases for this library are the following:
 //!
-//! - implementing smart-contract runtimes which uses wasm for contract code
-//! - executing wasm substrate runtime inside of a wasm parachain
+//! - implementing smart-contract runtimes that use wasm for contract code
+//! - executing a wasm substrate runtime inside of a wasm parachain
 //! - etc
 // end::description[]
 

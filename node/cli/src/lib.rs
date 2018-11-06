@@ -30,9 +30,9 @@ extern crate hex_literal;
 #[cfg(test)]
 extern crate substrate_service_test as service_test;
 extern crate substrate_transaction_pool as transaction_pool;
+#[macro_use]
 extern crate substrate_network as network;
-extern crate node_network;
-extern crate sr_primitives as runtime_primitives;
+extern crate substrate_consensus_aura as consensus;
 extern crate node_primitives;
 #[macro_use]
 extern crate substrate_service;

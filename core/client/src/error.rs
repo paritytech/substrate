@@ -16,11 +16,17 @@
 
 //! Substrate client possible errors.
 
+#![allow(missing_docs)]
+
 use std;
 use state_machine;
 use runtime_primitives::ApplyError;
+use consensus;
 
 error_chain! {
+	links {
+		Consensus(consensus::Error, consensus::ErrorKind);
+	}
 	errors {
 		/// Backend error.
 		Backend(s: String) {
@@ -62,6 +68,12 @@ error_chain! {
 		VersionInvalid {
 			description("Runtime version error"),
 			display("On-chain runtime does not specify version"),
+		}
+
+		/// Genesis config is invalid.
+		GenesisInvalid {
+			description("Genesis config error"),
+			display("Genesis config provided is invalid"),
 		}
 
 		/// Bad justification for header.

@@ -4,5 +4,12 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 description = "Common utilities for substrate consensus"
 
-[dev-dependencies]
-substrate-primitives = { path= "../../primitives"}
+[dependencies]
+substrate-primitives = { path= "../../primitives" }
+error-chain = "0.12"
+futures = "0.1"
+sr-version = { path = "../../sr-version" }
+sr-primitives = { path = "../../sr-primitives" }
+tokio = "0.1.7"
+parity-codec = "2.1"
+parity-codec-derive = "2.0"

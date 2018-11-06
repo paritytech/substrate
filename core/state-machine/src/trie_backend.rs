@@ -121,17 +121,19 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 		(root, write_overlay)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
 	{
+		let default_root = default_child_trie_root::<H>(storage_key);
+
 		let mut write_overlay = MemoryDB::default();
 		let mut root = match self.storage(storage_key) {
 			Ok(value) => value.unwrap_or(default_child_trie_root::<H>(storage_key)),
 			Err(e) => {
 				warn!(target: "trie", "Failed to read child storage root: {}", e);
-				default_child_trie_root::<H>(storage_key)
+				default_root.clone()
 			},
 		};
 
@@ -147,7 +149,9 @@ impl<S: TrieBackendStorage<H>, H: Hasher> Backend<H> for TrieBackend<S, H> where
 			}
 		}
 
-		(root, write_overlay)
+		let is_default = root == default_root;
+
+		(root, is_default, write_overlay)
 	}
 
 	fn try_into_trie_backend(self) -> Option<TrieBackend<Self::TrieBackendStorage, H>> {

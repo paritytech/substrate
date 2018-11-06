@@ -19,7 +19,7 @@
 use rstd::prelude::*;
 use rstd::borrow::Borrow;
 use codec::HasCompact;
-use primitives::traits::{OnFinalise, Hash, As};
+use primitives::traits::{Hash, As};
 use runtime_io::print;
 use srml_support::dispatch::Result;
 use srml_support::{StorageValue, StorageMap, IsSubType};
@@ -33,12 +33,88 @@ pub trait Trait: CouncilTrait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn propose(origin, proposal: Box<T::Proposal>) -> Result;
-		fn vote(origin, proposal: T::Hash, approve: bool) -> Result;
-		fn veto(origin, proposal_hash: T::Hash) -> Result;
+		fn deposit_event() = default;
 
-		fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result;
-		fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result;
+		fn propose(origin, proposal: Box<T::Proposal>) -> Result {
+			let who = ensure_signed(origin)?;
+
+			let expiry = <system::Module<T>>::block_number() + Self::voting_period();
+			ensure!(Self::will_still_be_councillor_at(&who, expiry), "proposer would not be on council");
+
+			let proposal_hash = T::Hashing::hash_of(&proposal);
+
+			ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
+			ensure!(!Self::is_vetoed(&proposal_hash), "proposal is vetoed");
+
+			let mut proposals = Self::proposals();
+			proposals.push((expiry, proposal_hash));
+			proposals.sort_by_key(|&(expiry, _)| expiry);
+			Self::set_proposals(&proposals);
+
+			<ProposalOf<T>>::insert(proposal_hash, *proposal);
+			<ProposalVoters<T>>::insert(proposal_hash, vec![who.clone()]);
+			<CouncilVoteOf<T>>::insert((proposal_hash, who.clone()), true);
+
+			Ok(())
+		}
+
+		fn vote(origin, proposal: T::Hash, approve: bool) -> Result {
+			let who = ensure_signed(origin)?;
+
+			ensure!(Self::is_councillor(&who), "only councillors may vote on council proposals");
+
+			if Self::vote_of((proposal, who.clone())).is_none() {
+				<ProposalVoters<T>>::mutate(proposal, |voters| voters.push(who.clone()));
+			}
+			<CouncilVoteOf<T>>::insert((proposal, who), approve);
+			Ok(())
+		}
+
+		fn veto(origin, proposal_hash: T::Hash) -> Result {
+			let who = ensure_signed(origin)?;
+
+			ensure!(Self::is_councillor(&who), "only councillors may veto council proposals");
+			ensure!(<ProposalVoters<T>>::exists(&proposal_hash), "proposal must exist to be vetoed");
+
+			let mut existing_vetoers = Self::veto_of(&proposal_hash)
+				.map(|pair| pair.1)
+				.unwrap_or_else(Vec::new);
+			let insert_position = existing_vetoers.binary_search(&who)
+				.err().ok_or("a councillor may not veto a proposal twice")?;
+			existing_vetoers.insert(insert_position, who);
+			Self::set_veto_of(
+				&proposal_hash,
+				<system::Module<T>>::block_number() + Self::cooloff_period(),
+				existing_vetoers
+			);
+
+			Self::set_proposals(
+				&Self::proposals().into_iter().filter(|&(_, h)| h != proposal_hash
+			).collect::<Vec<_>>());
+			<ProposalVoters<T>>::remove(proposal_hash);
+			<ProposalOf<T>>::remove(proposal_hash);
+			for (c, _) in <Council<T>>::active_council() {
+				<CouncilVoteOf<T>>::remove((proposal_hash, c));
+			}
+			Ok(())
+		}
+
+		fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result {
+			<CooloffPeriod<T>>::put(blocks.into());
+			Ok(())
+		}
+
+		fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result {
+			<VotingPeriod<T>>::put(blocks.into());
+			Ok(())
+		}
+
+		fn on_finalise(n: T::BlockNumber) {
+			if let Err(e) = Self::end_block(n) {
+				print("Guru meditation");
+				print(e);
+			}
+		}
 	}
 }
 
@@ -67,12 +143,6 @@ decl_event!(
 );
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	pub fn is_vetoed<B: Borrow<T::Hash>>(proposal: B) -> bool {
 		Self::veto_of(proposal.borrow())
 			.map(|(expiry, _): (T::BlockNumber, Vec<T::AccountId>)| <system::Module<T>>::block_number() < expiry)
@@ -95,78 +165,7 @@ impl<T: Trait> Module<T> {
 		Self::generic_tally(proposal_hash, |w: &T::AccountId, p: &T::Hash| Self::vote_of((*p, w.clone())))
 	}
 
-	// Dispatch
-	fn propose(origin: T::Origin, proposal: Box<T::Proposal>) -> Result {
-		let who = ensure_signed(origin)?;
-
-		let expiry = <system::Module<T>>::block_number() + Self::voting_period();
-		ensure!(Self::will_still_be_councillor_at(&who, expiry), "proposer would not be on council");
-
-		let proposal_hash = T::Hashing::hash_of(&proposal);
-
-		ensure!(!<ProposalOf<T>>::exists(proposal_hash), "duplicate proposals not allowed");
-		ensure!(!Self::is_vetoed(&proposal_hash), "proposal is vetoed");
-
-		let mut proposals = Self::proposals();
-		proposals.push((expiry, proposal_hash));
-		proposals.sort_by_key(|&(expiry, _)| expiry);
-		Self::set_proposals(&proposals);
-
-		<ProposalOf<T>>::insert(proposal_hash, *proposal);
-		<ProposalVoters<T>>::insert(proposal_hash, vec![who.clone()]);
-		<CouncilVoteOf<T>>::insert((proposal_hash, who.clone()), true);
-
-		Ok(())
-	}
-
-	fn vote(origin: T::Origin, proposal: T::Hash, approve: bool) -> Result {
-		let who = ensure_signed(origin)?;
-
-		ensure!(Self::is_councillor(&who), "only councillors may vote on council proposals");
-
-		if Self::vote_of((proposal, who.clone())).is_none() {
-			<ProposalVoters<T>>::mutate(proposal, |voters| voters.push(who.clone()));
-		}
-		<CouncilVoteOf<T>>::insert((proposal, who), approve);
-		Ok(())
-	}
-
-	fn veto(origin: T::Origin, proposal_hash: T::Hash) -> Result {
-		let who = ensure_signed(origin)?;
-
-		ensure!(Self::is_councillor(&who), "only councillors may veto council proposals");
-		ensure!(<ProposalVoters<T>>::exists(&proposal_hash), "proposal must exist to be vetoed");
-
-		let mut existing_vetoers = Self::veto_of(&proposal_hash)
-			.map(|pair| pair.1)
-			.unwrap_or_else(Vec::new);
-		let insert_position = existing_vetoers.binary_search(&who)
-			.err().ok_or("a councillor may not veto a proposal twice")?;
-		existing_vetoers.insert(insert_position, who);
-		Self::set_veto_of(&proposal_hash, <system::Module<T>>::block_number() + Self::cooloff_period(), existing_vetoers);
-
-		Self::set_proposals(&Self::proposals().into_iter().filter(|&(_, h)| h != proposal_hash).collect::<Vec<_>>());
-		<ProposalVoters<T>>::remove(proposal_hash);
-		<ProposalOf<T>>::remove(proposal_hash);
-		for (c, _) in <Council<T>>::active_council() {
-			<CouncilVoteOf<T>>::remove((proposal_hash, c));
-		}
-		Ok(())
-	}
-
-	fn set_cooloff_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result {
-		<CooloffPeriod<T>>::put(blocks.into());
-		Ok(())
-	}
-
-	fn set_voting_period(blocks: <T::BlockNumber as HasCompact>::Type) -> Result {
-		<VotingPeriod<T>>::put(blocks.into());
-		Ok(())
-	}
-
-	// private
-
-
+	// Private
 	fn set_veto_of(proposal: &T::Hash, expiry: T::BlockNumber, vetoers: Vec<T::AccountId>) {
 		<VetoedProposal<T>>::insert(proposal, (expiry, vetoers));
 	}
@@ -224,15 +223,6 @@ impl<T: Trait> Module<T> {
 			}
 		}
 		Ok(())
-	}
-}
-
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(n: T::BlockNumber) {
-		if let Err(e) = Self::end_block(n) {
-			print("Guru meditation");
-			print(e);
-		}
 	}
 }
 

@@ -17,7 +17,7 @@
 use super::*;
 use self::error::{Error, ErrorKind};
 
-use client::BlockOrigin;
+use consensus::BlockOrigin;
 use jsonrpc_macros::pubsub;
 use rustc_hex::FromHex;
 use test_client::{self, runtime, keyring::Keyring, TestClient, BlockBuilderExt};

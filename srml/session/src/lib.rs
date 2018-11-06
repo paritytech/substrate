@@ -42,7 +42,7 @@ extern crate srml_system as system;
 extern crate srml_timestamp as timestamp;
 
 use rstd::prelude::*;
-use primitives::traits::{As, Zero, One, OnFinalise, Convert};
+use primitives::traits::{As, Zero, One, Convert};
 use codec::HasCompact;
 use runtime_support::{StorageValue, StorageMap};
 use runtime_support::dispatch::Result;
@@ -67,10 +67,31 @@ pub trait Trait: timestamp::Trait {
 
 decl_module! {
 	pub struct Module<T: Trait> for enum Call where origin: T::Origin {
-		fn set_key(origin, key: T::SessionKey) -> Result;
+		fn deposit_event() = default;
 
-		fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result;
-		fn force_new_session(apply_rewards: bool) -> Result;
+		/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
+		/// session.
+		fn set_key(origin, key: T::SessionKey) -> Result {
+			let who = ensure_signed(origin)?;
+			// set new value for next session
+			<NextKeyFor<T>>::insert(who, key);
+			Ok(())
+		}
+
+		/// Set a new session length. Won't kick in until the next session change (at current length).
+		fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result {
+			<NextSessionLength<T>>::put(new.into());
+			Ok(())
+		}
+
+		/// Forces a new session.
+		fn force_new_session(apply_rewards: bool) -> Result {
+			Self::apply_force_new_session(apply_rewards)
+		}
+
+		fn on_finalise(n: T::BlockNumber) {
+			Self::check_rotate_session(n);
+		}
 	}
 }
 
@@ -108,12 +129,6 @@ decl_storage! {
 }
 
 impl<T: Trait> Module<T> {
-
-	/// Deposit one of this module's events.
-	fn deposit_event(event: Event<T>) {
-		<system::Module<T>>::deposit_event(<T as Trait>::Event::from(event).into());
-	}
-
 	/// The number of validators currently.
 	pub fn validator_count() -> u32 {
 		<Validators<T>>::get().len() as u32	// TODO: can probably optimised
@@ -124,28 +139,7 @@ impl<T: Trait> Module<T> {
 		<LastLengthChange<T>>::get().unwrap_or_else(T::BlockNumber::zero)
 	}
 
-	/// Sets the session key of `_validator` to `_key`. This doesn't take effect until the next
-	/// session.
-	fn set_key(origin: T::Origin, key: T::SessionKey) -> Result {
-		let who = ensure_signed(origin)?;
-		// set new value for next session
-		<NextKeyFor<T>>::insert(who, key);
-		Ok(())
-	}
-
-	/// Set a new session length. Won't kick in until the next session change (at current length).
-	fn set_length(new: <T::BlockNumber as HasCompact>::Type) -> Result {
-		<NextSessionLength<T>>::put(new.into());
-		Ok(())
-	}
-
-	/// Forces a new session.
-	pub fn force_new_session(apply_rewards: bool) -> Result {
-		Self::apply_force_new_session(apply_rewards)
-	}
-
 	// INTERNAL API (available to other runtime modules)
-
 	/// Forces a new session, no origin.
 	pub fn apply_force_new_session(apply_rewards: bool) -> Result {
 		<ForcingNewSession<T>>::put(apply_rewards);
@@ -228,12 +222,6 @@ impl<T: Trait> Module<T> {
 	}
 }
 
-impl<T: Trait> OnFinalise<T::BlockNumber> for Module<T> {
-	fn on_finalise(n: T::BlockNumber) {
-		Self::check_rotate_session(n);
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -282,18 +270,18 @@ mod tests {
 	type Session = Module<Test>;
 
 	fn new_test_ext() -> runtime_io::TestExternalities<Blake2Hasher> {
-		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap();
+		let mut t = system::GenesisConfig::<Test>::default().build_storage().unwrap().0;
 		t.extend(consensus::GenesisConfig::<Test>{
 			code: vec![],
 			authorities: vec![1, 2, 3],
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		t.extend(timestamp::GenesisConfig::<Test>{
 			period: 5,
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		t.extend(GenesisConfig::<Test>{
 			session_length: 2,
 			validators: vec![1, 2, 3],
-		}.build_storage().unwrap());
+		}.build_storage().unwrap().0);
 		runtime_io::TestExternalities::new(t)
 	}
 

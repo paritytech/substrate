@@ -23,7 +23,7 @@ use std::marker::PhantomData;
 use hash_db::Hasher;
 use trie_backend::TrieBackend;
 use trie_backend_essence::TrieBackendStorage;
-use substrate_trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root};
+use substrate_trie::{TrieDBMut, TrieMut, MemoryDB, trie_root, child_trie_root, default_child_trie_root};
 use heapsize::HeapSizeOf;
 
 /// A state backend is used to read state data and can have changes committed
@@ -71,8 +71,9 @@ pub trait Backend<H: Hasher> {
 		H::Out: Ord;
 
 	/// Calculate the child storage root, with given delta over what is already stored in
-	/// the backend, and produce a "transaction" that can be used to commit.
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, Self::Transaction)
+	/// the backend, and produce a "transaction" that can be used to commit. The second argument
+	/// is true if child storage root equals default storage root.
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord;
@@ -190,6 +191,18 @@ impl<H> From<HashMap<Vec<u8>, Vec<u8>>> for InMemory<H> {
 	}
 }
 
+impl<H> From<Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>> for InMemory<H> {
+	fn from(inner: Vec<(Option<Vec<u8>>, Vec<u8>, Option<Vec<u8>>)>) -> Self {
+		let mut expanded: HashMap<Option<Vec<u8>>, HashMap<Vec<u8>, Vec<u8>>> = HashMap::new();
+		for (child_key, key, value) in inner {
+			if let Some(value) = value {
+				expanded.entry(child_key).or_default().insert(key, value);
+			}
+		}
+		expanded.into()
+	}
+}
+
 impl super::Error for Void {}
 
 impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
@@ -236,7 +249,7 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 		(root, full_transaction)
 	}
 
-	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, Self::Transaction)
+	fn child_storage_root<I>(&self, storage_key: &[u8], delta: I) -> (Vec<u8>, bool, Self::Transaction)
 	where
 		I: IntoIterator<Item=(Vec<u8>, Option<Vec<u8>>)>,
 		H::Out: Ord
@@ -256,7 +269,9 @@ impl<H: Hasher> Backend<H> for InMemory<H> where H::Out: HeapSizeOf {
 
 		let full_transaction = transaction.into_iter().map(|(k, v)| (Some(storage_key.clone()), k, v)).collect();
 
-		(root, full_transaction)
+		let is_default = root == default_child_trie_root::<H>(&storage_key);
+
+		(root, is_default, full_transaction)
 	}
 
 	fn pairs(&self) -> Vec<(Vec<u8>, Vec<u8>)> {
