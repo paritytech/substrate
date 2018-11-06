@@ -35,7 +35,7 @@ macro_rules! impl_rest {
 		impl<'de> Deserialize<'de> for $name {
 			fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: Deserializer<'de> {
 				bytes::deserialize_check_len(deserializer, bytes::ExpectedLen::Exact($len))
-					.map(|x| (&*x).into())
+					.map(|x| $name::from_slice(&x))
 			}
 		}
 
@@ -49,12 +49,29 @@ macro_rules! impl_rest {
 				<[u8; $len] as ::codec::Decode>::decode(input).map($name)
 			}
 		}
+
+		#[cfg(feature = "std")]
+		impl From<u64> for $name {
+			fn from(val: u64) -> Self {
+				Self::from_low_u64_be(val)
+			}
+		}
 	}
 }
 
-construct_hash!(H160, 20);
-construct_hash!(H256, 32);
-construct_hash!(H512, 64);
+construct_fixed_hash!{
+	/// Fixed-size uninterpreted hash type with 20 bytes (160 bits) size.
+	pub struct H160(20);
+}
+construct_fixed_hash!{
+	/// Fixed-size uninterpreted hash type with 32 bytes (256 bits) size.
+	pub struct H256(32);
+}
+construct_fixed_hash!{
+	/// Fixed-size uninterpreted hash type with 64 bytes (512 bits) size.
+	pub struct H512(64);
+}
+
 impl_rest!(H160, 20);
 impl_rest!(H256, 32);
 impl_rest!(H512, 64);
@@ -113,7 +130,7 @@ mod tests {
 	#[test]
 	fn test_heapsizeof() {
 		use heapsize::HeapSizeOf;
-		let h = H256::new();
+		let h = H256::zero();
 		assert_eq!(h.heap_size_of_children(), 0);
 	}
 }

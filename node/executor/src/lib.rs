@@ -268,7 +268,10 @@ mod tests {
 		use trie::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
+		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter()
+			.map(Encode::encode))
+			.to_fixed_bytes()
+			.into();
 
 		let mut digest = generic::Digest::<Log>::default();
 		if let Some(changes_root) = changes_root {

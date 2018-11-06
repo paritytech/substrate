@@ -358,7 +358,7 @@ mod tests {
 
 		/// Hash the extrinsic.
 		fn hash(&self, uxt: &ExtrinsicFor<Self>) -> Self::Hash {
-			(uxt.transfer.from.low_u64() << 5) + uxt.transfer.nonce
+			(uxt.transfer.from.to_low_u64_be() << 5) + uxt.transfer.nonce
 		}
 	}
 

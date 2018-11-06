@@ -67,7 +67,7 @@ mod tests {
 		use trie::ordered_trie_root;
 
 		let transactions = txs.into_iter().map(|tx| {
-			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.0)).unwrap())
+			let signature = Pair::from(Keyring::from_public(Public::from_raw(tx.from.to_fixed_bytes())).unwrap())
 				.sign(&tx.encode()).into();
 
 			Extrinsic { transfer: tx, signature }

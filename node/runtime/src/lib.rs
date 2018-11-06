@@ -145,7 +145,7 @@ impl timestamp::Trait for Runtime {
 pub struct SessionKeyConversion;
 impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 	fn convert(a: AccountId) -> SessionKey {
-		a.0.into()
+		a.to_fixed_bytes().into()
 	}
 }
 

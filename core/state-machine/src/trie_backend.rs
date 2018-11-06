@@ -212,7 +212,7 @@ pub mod tests {
 
 	#[test]
 	fn storage_root_is_non_default() {
-		assert!(test_trie().storage_root(::std::iter::empty()).0 != H256([0; 32]));
+		assert!(test_trie().storage_root(::std::iter::empty()).0 != H256::repeat_byte(0));
 	}
 
 	#[test]
