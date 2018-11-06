@@ -233,8 +233,8 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	if given != expected {
 		::runtime_io::print("Hash not equal");
-		::runtime_io::print(&given.0[..]);
-		::runtime_io::print(&expected.0[..]);
+		::runtime_io::print(given.as_bytes());
+		::runtime_io::print(expected.as_bytes());
 	}
 }
 

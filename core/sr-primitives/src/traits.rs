@@ -331,8 +331,8 @@ impl CheckEqual for substrate_primitives::H256 {
 	fn check_equal(&self, other: &Self) {
 		if self != other {
 			runtime_io::print("Hash not equal");
-			runtime_io::print(&self.0[..]);
-			runtime_io::print(&other.0[..]);
+			runtime_io::print(self.as_bytes());
+			runtime_io::print(other.as_bytes());
 		}
 	}
 }
