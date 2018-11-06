@@ -117,7 +117,7 @@ pub fn validate_transaction(utx: Extrinsic) -> TransactionValidity {
 	}
 
 	let hash = |from: &AccountId, nonce: u64| {
-		twox_128(&nonce.to_keyed_vec(&*from)).to_vec()
+		twox_128(&nonce.to_keyed_vec(from.as_bytes())).to_vec()
 	};
 	let requires = if tx.nonce != expected_nonce && tx.nonce > 0 {
 		let mut deps = Vec::new();
@@ -221,7 +221,11 @@ fn execute_transaction_backend(utx: &Extrinsic) -> ApplyResult {
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	use primitives::hexdisplay::HexDisplay;
 	if given != expected {
-		println!("Hash: given={}, expected={}", HexDisplay::from(&given.0), HexDisplay::from(&expected.0));
+		println!(
+			"Hash: given={}, expected={}",
+			HexDisplay::from(given.as_fixed_bytes()),
+			HexDisplay::from(expected.as_fixed_bytes())
+		);
 	}
 }
 
@@ -229,8 +233,8 @@ fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 fn info_expect_equal_hash(given: &Hash, expected: &Hash) {
 	if given != expected {
 		::runtime_io::print("Hash not equal");
-		::runtime_io::print(&given.0[..]);
-		::runtime_io::print(&expected.0[..]);
+		::runtime_io::print(given.as_bytes());
+		::runtime_io::print(expected.as_bytes());
 	}
 }
 
@@ -257,7 +261,7 @@ mod tests {
 	}
 
 	fn construct_signed_tx(tx: Transfer) -> Extrinsic {
-		let signature = Keyring::from_raw_public(tx.from.0).unwrap().sign(&tx.encode()).into();
+		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
 		Extrinsic { transfer: tx, signature }
 	}
 

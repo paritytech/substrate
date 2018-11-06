@@ -241,7 +241,7 @@ impl Pair {
 	pub fn derive_child_probably_bad(&self, chain_data: &[u8]) -> Pair {
 		let sig = self.sign(chain_data);
 		let mut seed = [0u8; 32];
-		seed.copy_from_slice(&sig.0[..32]);
+		seed.copy_from_slice(&sig[..32]);
 
 		Pair::from_seed(&seed)
 	}
@@ -251,7 +251,7 @@ impl Pair {
 pub fn verify_strong<P: AsRef<Public>>(sig: &Signature, message: &[u8], pubkey: P) -> bool {
 	let public_key = untrusted::Input::from(&pubkey.as_ref().0[..]);
 	let msg = untrusted::Input::from(message);
-	let sig = untrusted::Input::from(&sig.0[..]);
+	let sig = untrusted::Input::from(&sig.as_bytes());
 
 	match signature::verify(&signature::ED25519, public_key, msg, sig) {
 		Ok(_) => true,
@@ -316,7 +316,7 @@ mod test {
 		assert_eq!(public, Public::from_raw(hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee")));
 		let message = hex!("2f8c6129d816cf51c374bc7f08c3e63ed156cf78aefb4a6550d97b87997977ee00000000000000000200d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a4500000000000000");
 		let signature = pair.sign(&message[..]);
-		println!("Correct signature: {}", HexDisplay::from(&signature.0));
+		println!("Correct signature: {}", HexDisplay::from(&signature.as_bytes()));
 		assert!(verify_strong(&signature, &message[..], &public));
 	}
 
