@@ -39,17 +39,18 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate blockchain API
-	pub trait ChainApi<Hash, Header, Number, SignedBlock> {
+	pub trait ChainApi<Hash, Header, Number> {
 		type Metadata;
 
 		/// Get header of a relay chain block.
 		#[rpc(name = "chain_getHeader")]
 		fn header(&self, Trailing<Hash>) -> Result<Option<Header>>;
 
-		/// Get header and body of a relay chain block.
+// TODO: Uncomment once RPC is fixed so that we don't need Deserialize to be implemented for return params.
+/*		/// Get header and body of a relay chain block.
 		#[rpc(name = "chain_getBlock")]
-		fn block(&self, Trailing<Hash>) -> Result<Option<SignedBlock>>;
-
+		fn block(&self, Trailing<Hash>) -> Result<Option<SignedBlock<Header, Extrinsic>>>;
+*/
 		/// Get hash of the n-th block in the canon chain.
 		///
 		/// By default returns latest block hash.
@@ -113,7 +114,7 @@ impl<B, E, Block> Chain<B, E, Block> where
 	}
 }
 
-impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block::Header, Block::Extrinsic>> for Chain<B, E, Block> where
+impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>> for Chain<B, E, Block> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static,
@@ -125,13 +126,13 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedB
 		Ok(self.client.header(&BlockId::Hash(hash))?)
 	}
 
-	fn block(&self, hash: Trailing<Block::Hash>)
+/*	fn block(&self, hash: Trailing<Block::Hash>)
 		-> Result<Option<SignedBlock<Block::Header, Block::Extrinsic>>>
 	{
 		let hash = self.unwrap_or_best(hash)?;
 		Ok(self.client.block(&BlockId::Hash(hash))?)
 	}
-
+*/
 	fn block_hash(&self, number: Trailing<NumberFor<Block>>) -> Result<Option<Block::Hash>> {
 		Ok(match number.into() {
 			None => Some(self.client.info()?.chain.best_hash),

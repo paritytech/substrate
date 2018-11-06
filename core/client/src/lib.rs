@@ -32,6 +32,7 @@ extern crate substrate_consensus_common as consensus;
 #[macro_use] extern crate substrate_telemetry;
 #[macro_use] extern crate slog;	// needed until we can reexport `slog_info` from `substrate_telemetry`
 
+//extern crate serde;
 extern crate fnv;
 extern crate futures;
 extern crate parking_lot;

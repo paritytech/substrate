@@ -157,6 +157,14 @@ where
 	}
 }
 
+impl<Address: Encode, Index: Encode, Signature: Encode, Call: Encode> serde::Serialize
+	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
+	}
+}
+
 /// TODO: use derive when possible.
 #[cfg(feature = "std")]
 impl<Address, Index, Call, Signature> fmt::Debug for UncheckedMortalExtrinsic<Address, Index, Call, Signature> where

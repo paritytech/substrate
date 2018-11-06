@@ -34,7 +34,10 @@ use chain_spec::ChainSpec;
 
 /// Export a range of blocks to a binary stream.
 pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut output: W, from: FactoryBlockNumber<F>, to: Option<FactoryBlockNumber<F>>, json: bool) -> error::Result<()>
-	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, W: Write,
+	where
+	F: ServiceFactory,
+	E: Future<Item=(),Error=()> + Send + 'static,
+	W: Write,
 {
 	let client = new_client::<F>(&config)?;
 	let mut block = from;
@@ -65,9 +68,9 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 		}
 		match client.block(&BlockId::number(block))? {
 			Some(block) => {
-				if json {
+/*				if json {
 					serde_json::to_writer(&mut output, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
-				} else {
+				} else*/ {
 					output.write(&block.encode())?;
 				}
 			},

@@ -414,7 +414,7 @@ impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Mem
 /// `parent_hash`, as well as a `digest` and a block `number`.
 ///
 /// You can also create a `new` one from those fields.
-pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
 	type Number: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + SimpleArithmetic + Codec;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 	type Hashing: Hash<Output = Self::Hash>;
@@ -454,7 +454,7 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDe
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebugButNotDeserialize + 'static {
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeDebug + 'static {
 	type Extrinsic: Member + Codec + Extrinsic;
 	type Header: Header<Hash=Self::Hash>;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
@@ -526,8 +526,8 @@ pub trait Applyable: Sized + Send + Sync {
 
 /// Something that acts like a `Digest` - it can have `Log`s `push`ed onto it and these `Log`s are
 /// each `Codec`.
-pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
-	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
+pub trait Digest: Member + MaybeSerializeDebug + Default {
+	type Hash: Member + MaybeSerializeDebug;
 	type Item: DigestItem<Hash = Self::Hash>;
 
 	/// Get reference to all digest items.
@@ -549,9 +549,9 @@ pub trait Digest: Member + MaybeSerializeDebugButNotDeserialize + Default {
 /// for casting member to 'system' log items, known to substrate.
 ///
 /// If the runtime does not supports some 'system' items, use `()` as a stub.
-pub trait DigestItem: Codec + Member + MaybeSerializeDebugButNotDeserialize {
-	type Hash: Member + MaybeSerializeDebugButNotDeserialize;
-	type AuthorityId: Member + MaybeSerializeDebugButNotDeserialize;
+pub trait DigestItem: Codec + Member + MaybeSerializeDebug {
+	type Hash: Member + MaybeSerializeDebug;
+	type AuthorityId: Member + MaybeSerializeDebug;
 
 	/// Returns Some if the entry is the `AuthoritiesChange` entry.
 	fn as_authorities_change(&self) -> Option<&[Self::AuthorityId]>;

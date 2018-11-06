@@ -141,6 +141,14 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> 
 	}
 }
 
+impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> serde::Serialize
+	for UncheckedExtrinsic<Address, Index, Call, Signature>
+{
+	fn serialize<S>(&self, seq: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
+		self.using_encoded(|bytes| seq.serialize_bytes(bytes))
+	}
+}
+
 /// TODO: use derive when possible.
 #[cfg(feature = "std")]
 impl<Address, Index, Signature, Call> fmt::Debug
@@ -155,6 +163,8 @@ where
 		write!(f, "UncheckedExtrinsic({:?}, {:?})", self.signature.as_ref().map(|x| (&x.signed, &x.index)), self.function)
 	}
 }
+
+
 
 #[cfg(test)]
 mod test {

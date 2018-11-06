@@ -62,24 +62,11 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Header, Extrinsic: Codec> {
+pub struct Block<Header, Extrinsic> {
 	/// The block header.
 	pub header: Header,
 	/// The accompanying extrinsics.
-	#[cfg_attr(feature = "std", serde(serialize_with = "extrinsics_serde::serialize"))]
 	pub extrinsics: Vec<Extrinsic>,
-}
-
-mod extrinsics_serde {
-	use codec::Encode;
-	use serde::ser::SerializeSeq;
-	pub fn serialize<S, Extrinsic: Encode>(t: &Vec<Extrinsic>, s: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
-		let mut seq = s.serialize_seq(Some(t.len()))?;
-		for e in t {
-			e.using_encoded(|bytes| seq.serialize_element(bytes))?;
-		}
-		seq.end()
-	}
 }
 
 impl<Header, Extrinsic> traits::Block for Block<Header, Extrinsic>
