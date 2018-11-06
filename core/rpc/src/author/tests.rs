@@ -35,7 +35,7 @@ fn uxt(sender: Keyring, nonce: u64) -> Extrinsic {
 		from: sender.to_raw_public().into(),
 		to: Default::default(),
 	};
-	let signature = Keyring::from_raw_public(tx.from.0).unwrap().sign(&tx.encode()).into();
+	let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
 	Extrinsic { transfer: tx, signature }
 }
 
@@ -105,7 +105,7 @@ fn should_watch_extrinsic() {
 			from: Keyring::Alice.to_raw_public().into(),
 			to: Default::default(),
 		};
-		let signature = Keyring::from_raw_public(tx.from.0).unwrap().sign(&tx.encode()).into();
+		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
 		Extrinsic { transfer: tx, signature }
 	};
 	AuthorApi::submit_rich_extrinsic(&p, replacement).unwrap();
