@@ -26,6 +26,7 @@ use error;
 use listener::Listener;
 use rotator::PoolRotator;
 use watcher::Watcher;
+use serde::Serialize;
 
 use futures::sync::mpsc;
 use parking_lot::{Mutex, RwLock};
@@ -54,7 +55,7 @@ pub trait ChainApi: Send + Sync {
 	/// Block type.
 	type Block: traits::Block;
 	/// Hash type
-	type Hash: hash::Hash + Eq + traits::Member;
+	type Hash: hash::Hash + Eq + traits::Member + Serialize;
 	/// Error type.
 	type Error: From<error::Error> + error::IntoPoolError;
 
@@ -287,7 +288,7 @@ fn fire_events<H, H2, Ex>(
 	listener: &mut Listener<H, H2>,
 	imported: &base::Imported<H, Ex>,
 ) where
-	H: hash::Hash + Eq + traits::Member,
+	H: hash::Hash + Eq + traits::Member + Serialize,
 	H2: Clone,
 {
 	match *imported {
