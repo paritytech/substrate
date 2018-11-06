@@ -38,6 +38,7 @@ std = [
 	"fixed-hash/std",
 	"fixed-hash/heapsize",
 	"fixed-hash/byteorder",
+	"fixed-hash/rustc-hex",
 	"fixed-hash/libc",
 	"parity-codec/std",
 	"hash256-std-hasher/std",
