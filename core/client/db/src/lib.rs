@@ -440,20 +440,30 @@ impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbC
 			// if block is finalized, we could just read canonical hash
 			BlockId::Number(As::sa(block))
 		} else {
-			// if block is not finalized yet, we should find the required block hash by traversing
-			// back from the anchor to the block with given number
+			// the block is not finalized
 			let mut current_num = anchor.number;
 			let mut current_hash: Block::Hash = convert_hash(&anchor.hash);
-			while current_num != block {
-				let current_header: Block::Header = ::utils::require_header::<Block>(
-					&*self.db, columns::HASH_LOOKUP, columns::HEADER, BlockId::Hash(current_hash)
-				).map_err(|e| e.to_string())?;
+			let maybe_anchor_header: Block::Header = ::utils::require_header::<Block>(
+				&*self.db, columns::HASH_LOOKUP, columns::HEADER, BlockId::Number(As::sa(current_num))
+			).map_err(|e| e.to_string())?;
+			if maybe_anchor_header.hash() == current_hash {
+				// if anchor is canonicalized, then the block is also canonicalized
+				BlockId::Number(As::sa(block))
+			} else {
+				// else (block is not finalized + anchor is not canonicalized):
+				// => we should find the required block hash by traversing
+				// back from the anchor to the block with given number
+				while current_num != block {
+					let current_header: Block::Header = ::utils::require_header::<Block>(
+						&*self.db, columns::HASH_LOOKUP, columns::HEADER, BlockId::Hash(current_hash)
+					).map_err(|e| e.to_string())?;
 
-				current_hash = *current_header.parent_hash();
-				current_num = current_num - 1;
+					current_hash = *current_header.parent_hash();
+					current_num = current_num - 1;
+				}
+
+				BlockId::Hash(current_hash)
 			}
-
-			BlockId::Hash(current_hash)
 		};
 
 		Ok(::utils::require_header::<Block>(&*self.db, columns::HASH_LOOKUP, columns::HEADER, block_id)
@@ -1269,7 +1279,7 @@ mod tests {
 		let block2_2_0 = insert_header(&backend, 3, block2, changes2_2_0.clone(), Default::default());
 		let block2_2_1 = insert_header(&backend, 4, block2_2_0, changes2_2_1.clone(), Default::default());
 
-		// finalized block1
+		// finalize block1
 		backend.changes_tries_storage.meta.write().finalized_number = 1;
 
 		// branch1: when asking for finalized block hash
@@ -1281,25 +1291,25 @@ mod tests {
 		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 1), Ok(Some(changes1_root)));
 
-		// branch1: when asking for non-finalized block hash
+		// branch1: when asking for non-finalized block hash (search by traversal)
 		let (changes2_1_0_root, _) = prepare_changes(changes2_1_0);
 		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_1_0_root)));
 
-		// branch2: when asking for non-finalized block hash
+		// branch2: when asking for non-finalized block hash (search using canonicalized hint)
 		let (changes2_2_0_root, _) = prepare_changes(changes2_2_0);
 		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_2_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
 
-		// finalized first block of branch2
+		// finalize first block of branch2 (block2_2_0)
 		backend.changes_tries_storage.meta.write().finalized_number = 3;
+
+		// branch2: when asking for finalized block of this branch
+		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
 
 		// branch1: when asking for finalized block of other branch
 		// => result is incorrect (returned for the block of branch1), but this is expected,
 		// because the other fork is abandoned (forked before finalized header)
-		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
-
-		// branch2: when asking for finalized block of this branch
 		let anchor = state_machine::ChangesTrieAnchorBlockId { hash: block2_1_1, number: 4 };
 		assert_eq!(backend.changes_tries_storage.root(&anchor, 3), Ok(Some(changes2_2_0_root)));
 	}
