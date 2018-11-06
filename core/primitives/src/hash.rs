@@ -50,6 +50,7 @@ macro_rules! impl_rest {
 			}
 		}
 
+		#[cfg(feature = "fixed-hash/byteorder")]
 		impl From<u64> for $name {
 			fn from(val: u64) -> Self {
 				Self::from_low_u64_be(val)
