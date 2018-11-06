@@ -822,8 +822,8 @@ pub mod tests {
 			let result = response.wait().unwrap();
 			assert_eq!(
 				result.hash(),
-				"0x6443a0b46e0412e626363028115a9f2\
-				 cf963eeed526b8b33e5316f08b50d0dc3".parse().unwrap()
+				"6443a0b46e0412e626363028115a9f2c\
+				 f963eeed526b8b33e5316f08b50d0dc3".parse().unwrap()
 			);
 		});
 
