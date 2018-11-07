@@ -53,6 +53,7 @@ impl<B, E, Block> txpool::ChainApi for ChainApi<B, E, Block> where
 	Block: traits::Block<Hash=H256>,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
+	u64: traits::AsPrimitive<traits::NumberFor<Block>>
 {
 	type Block = Block;
 	type Hash = H256;
