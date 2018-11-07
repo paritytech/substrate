@@ -50,7 +50,7 @@ use rstd::prelude::*;
 use rstd::marker::PhantomData;
 use rstd::result;
 use primitives::traits::{self, Header, Zero, One, Checkable, Applyable, CheckEqual, OnFinalise,
-	MakePayment, Hash, AsPrimitive, Digest};
+	MakePayment, Hash, AsPrimitive, Digest, NumberFor};
 use runtime_support::Dispatchable;
 use codec::{Codec, Encode};
 use system::extrinsics_root;
@@ -89,7 +89,8 @@ impl<
 	Block::Extrinsic: Checkable<Context> + Codec,
 	<Block::Extrinsic as Checkable<Context>>::Checked: Applyable<Index=System::Index, AccountId=System::AccountId>,
 	<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call: Dispatchable,
-	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>
+	<<<Block::Extrinsic as Checkable<Context>>::Checked as Applyable>::Call as Dispatchable>::Origin: From<Option<System::AccountId>>,
+	u64: AsPrimitive<System::Index>,
 {
 	/// Start the execution of a particular block.
 	pub fn initialise_block(header: &System::Header) {
