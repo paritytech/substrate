@@ -20,7 +20,7 @@ use std::vec::Vec;
 use std::marker::PhantomData;
 use codec::Encode;
 use state_machine;
-use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor};
+use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor, AsPrimitive, NumberFor};
 use runtime_primitives::generic::BlockId;
 use runtime_api::BlockBuilder as BlockBuilderAPI;
 use {backend, error, Client, CallExecutor};
@@ -51,6 +51,7 @@ where
 	B: backend::Backend<Block, Blake2Hasher> + 'a,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + 'a,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(client: &'a Client<B, E, Block>) -> error::Result<Self> {
