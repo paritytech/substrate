@@ -217,7 +217,7 @@ fn should_notify_about_latest_block() {
 }
 
 #[test]
-fn should_notify_about_finalized_block() {
+fn should_notify_about_finalised_block() {
 	let mut core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
 	let (subscriber, id, transport) = pubsub::Subscriber::new_test("test");
@@ -228,7 +228,7 @@ fn should_notify_about_finalized_block() {
 			subscriptions: Subscriptions::new(remote),
 		};
 
-		api.subscribe_finalized_heads(Default::default(), subscriber);
+		api.subscribe_finalised_heads(Default::default(), subscriber);
 
 		// assert id assigned
 		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
