@@ -22,10 +22,12 @@ use std;
 use state_machine;
 use runtime_primitives::ApplyError;
 use consensus;
+use sr_api;
 
 error_chain! {
 	links {
 		Consensus(consensus::Error, consensus::ErrorKind);
+		Api(sr_api::error::Error, sr_api::error::ErrorKind);
 	}
 	errors {
 		/// Backend error.
@@ -104,12 +106,6 @@ error_chain! {
 		RemoteFetchFailed {
 			description("remote fetch failed"),
 			display("Remote data fetch has been failed"),
-		}
-
-		/// Error decoding call result.
-		CallResultDecode(method: &'static str) {
-			description("Error decoding call result")
-			display("Error decoding call result of {}", method)
 		}
 
 		/// Changes tries are not supported.

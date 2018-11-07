@@ -133,3 +133,20 @@ impl Deref for Bytes {
 	type Target = [u8];
 	fn deref(&self) -> &[u8] { &self.0[..] }
 }
+
+#[derive(Encode, Decode)]
+pub struct OpaqueMetadata(Vec<u8>);
+
+impl OpaqueMetadata {
+	pub fn new(metadata: Vec<u8>) -> Self {
+		OpaqueMetadata(metadata)
+	}
+}
+
+impl rstd::ops::Deref for OpaqueMetadata {
+	type Target = Vec<u8>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}

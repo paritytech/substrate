@@ -16,47 +16,126 @@
 
 /// Traits for interfacing with the runtime from the client.
 
+use client::Client;
 use error;
-#[doc(hidden)]
-pub use state_machine::OverlayedChanges;
+use backend;
+use call_executor::CallExecutor;
+use blockchain::HeaderBackend;
 pub use sr_api::*;
-use runtime_primitives::traits::{Block as BlockT, Api};
+pub use sr_api::core::{CallApiAt, Core, ConstructRuntimeApi};
+use sr_api;
+use runtime_primitives::traits::{Block as BlockT, self, Header as HeaderT, As, ProvideRuntimeApi};
+use primitives::Blake2Hasher;
+use state_machine::OverlayedChanges;
 
-/// Something that can be constructed to a runtime api.
-pub trait ConstructRuntimeApi: Sized {
-	type Block: BlockT;
-	/// Construct the runtime api.
-	fn construct_runtime_api<'a, T: CallIntoRuntime<Block=Self::Block>>(call: &'a T) -> Api<'a, Self>;
+use std::{ops::Deref, ptr::NonNull, mem};
+
+pub struct ApiWithOverlay<B, E, Block: BlockT, RA> {
+	overlay: OverlayedChanges,
+	client: NonNull<Client<B, E, Block, RA>>,
+	api: RA,
+	initialised_block: Option<BlockId<Block>>,
+	commit_on_success: bool,
 }
 
-/// Something that can call into the runtime.
-pub trait CallIntoRuntime {
-	type Block: BlockT;
+impl<B, E, Block, RA> ApiWithOverlay<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Block: BlockT,
+	RA: Core<Block>,
+{
+	pub(crate) fn new(client: &Client<B, E, Block, RA>) -> Self {
+		let api = unsafe { client.runtime_api().into_inner() };
+		let client = unsafe { NonNull::new_unchecked(mem::transmute(client)) };
+		ApiWithOverlay {
+			overlay: Default::default(),
+			client,
+			api,
+			initialised_block: None,
+			commit_on_success: true,
+		}
+	}
+}
 
-	/// Call the given API function with the given arguments and returns the result.
-	fn call_api(
-		&self,
-		function: &'static str,
-		args: Vec<u8>,
-	) -> error::Result<Vec<u8>>;
+impl<B, E, Block, RA> traits::ApiWithOverlay for ApiWithOverlay<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Block: BlockT,
+	RA: Core<Block>
+{
+	type Api = RA;
 
-	/// Call the given API function with the given arguments and returns the result at the given
-	/// block.
+	fn map_api_result<F: FnOnce(&Self::Api) -> Result<R, Error>, R, Error>(&mut self, map_call: F) -> Result<R, Error> {
+		self.commit_on_success = false;
+		let res = map_call(self);
+		self.commit_on_success = true;
+
+		if res.is_err() {
+			self.overlay.discard_prospective();
+		} else {
+			self.overlay.commit_prospective();
+		}
+
+		res
+	}
+}
+
+impl<B, E, Block, RA> Deref for ApiWithOverlay<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Block: BlockT,
+	RA: Core<Block>
+{
+	type Target = RA;
+
+	fn deref(&self) -> &Self::Target {
+		self.api.replace_call(self);
+		&self.api
+	}
+}
+
+impl<B, E, Block, RA> CallApiAt<Block> for ApiWithOverlay<B, E, Block, RA> where
+	B: backend::Backend<Block, Blake2Hasher>,
+	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
+	Block: BlockT,
+	RA: Core<Block>,
+{
 	fn call_api_at(
-		&self,
-		at: &BlockId<Self::Block>,
+		&mut self,
+		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>,
-	) -> error::Result<Vec<u8>>;
+	) -> sr_api::error::Result<Vec<u8>> {
+		//TODO: Find a better way to prevent double block initialization
+		if function != "initialise_block" && self.initialised_block.map(|id| id != *at).unwrap_or(true) {
+			let parent = at;
+			let header = <<Block as BlockT>::Header as HeaderT>::new(
+				unsafe { self.client.as_ref().block_number_from_id(parent)
+					.and_then(|v|
+						v.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)).into())
+					).map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))? }
+				+ As::sa(1),
+				Default::default(),
+				Default::default(),
+				unsafe { self.client.as_ref().block_hash_from_id(&parent)
+					.and_then(|v|
+						v.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)).into())
+					).map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))? },
+				Default::default()
+			);
+			self.api.initialise_block(at, &header)?;
+			self.initialised_block = Some(*at);
+		}
+		let res = unsafe { self.client.as_ref().call_at_state(at, function, args, &mut self.overlay) };
 
-	/// Call at the given state into the runtime.
-	/// This is an auxiliary method, that is probably used by the implementation of `call_api` and
-	/// `call_api_at`.
-	fn call_at_state(
-		&self,
-		at: &BlockId<Self::Block>,
-		function: &'static str,
-		args: Vec<u8>,
-		changes: &mut OverlayedChanges
-	) -> error::Result<Vec<u8>>;
+		if self.commit_on_success {
+			if res.is_err() {
+				self.overlay.discard_prospective();
+			} else {
+				self.overlay.commit_prospective();
+			}
+		}
+
+		res
+	}
 }

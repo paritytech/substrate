@@ -19,19 +19,34 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 extern crate sr_std as rstd;
-extern crate sr_primitives as primitives;
+extern crate sr_primitives as runtime_primitives;
+extern crate substrate_primitives as primitives;
 #[doc(hidden)]
 pub extern crate parity_codec as codec;
 extern crate sr_version as runtime_version;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate error_chain;
+#[cfg(feature = "std")]
+extern crate substrate_state_machine as state_machine;
+#[macro_use]
+extern crate parity_codec_derive;
 
 #[doc(hidden)]
-pub use primitives::{traits::Block as BlockT, generic::BlockId, transaction_validity::TransactionValidity, ApplyResult};
-use runtime_version::{ApiId, RuntimeVersion};
+pub use runtime_primitives::{
+	traits::Block as BlockT, generic::BlockId,
+	transaction_validity::TransactionValidity, ApplyResult
+};
+use runtime_version::ApiId;
+use primitives::OpaqueMetadata;
 use rstd::vec::Vec;
 #[doc(hidden)]
 pub use rstd::slice;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
+
+pub mod core;
+pub mod error;
 
 /// Declare the given API traits.
 ///
@@ -278,7 +293,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
-			{ $( $result_return_ty; )* Result<$return_ty_current, Self::Error>; };
+			{ $( $result_return_ty; )* $crate::error::Result<$return_ty_current>; };
 			$( $( $return_ty_rest )*; )*
 		);
 	};
@@ -311,7 +326,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
-			{ $( $result_return_ty; )* Result<(), Self::Error>; };
+			{ $( $result_return_ty; )* $crate::error::Result<()>; };
 			$( $( $return_ty_rest )*; )*
 		);
 	};
@@ -360,9 +375,7 @@ macro_rules! decl_apis {
 		{ $( $result_return_ty:ty; )* };
 	) => {
 		$( #[$attr] )*
-		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > {
-			/// The Error type returned by this API.
-			type Error;
+		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > : $crate::core::Core<Block> {
 			$( type $client_generic_param $( : $client_generic_bound )*; )*
 
 			$(
@@ -442,18 +455,9 @@ pub mod id {
 }
 
 decl_apis! {
-	/// The `Core` api trait that is mandantory for each runtime.
-	pub trait Core<Block: BlockT, AuthorityId> ExtraClientSide <OverlayedChanges> {
-		fn version() -> RuntimeVersion;
-		fn authorities() -> Vec<AuthorityId>;
-		fn execute_block(block: Block);
-		/// Initialise a block with the given header.
-		fn initialise_block(header: <Block as BlockT>::Header) ExtraClientSide(changes: &mut Self::OverlayedChanges);
-	}
-
 	/// The `Metadata` api trait that returns metadata for the runtime.
-	pub trait Metadata<Data> {
-		fn metadata() -> Data;
+	pub trait Metadata {
+		fn metadata() -> OpaqueMetadata;
 	}
 
 	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
@@ -462,11 +466,11 @@ decl_apis! {
 	}
 
 	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
-	pub trait BlockBuilder<Block: BlockT> ExtraClientSide <OverlayedChanges> {
+	pub trait BlockBuilder<Block: BlockT> {
 		/// Apply the given extrinsics.
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) ExtraClientSide(changes: &mut Self::OverlayedChanges) -> ApplyResult;
+		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
 		/// Finish the current block.
-		fn finalise_block() ExtraClientSide(changes: &mut Self::OverlayedChanges) -> <Block as BlockT>::Header;
+		fn finalise_block() -> <Block as BlockT>::Header;
 		/// Generate inherent extrinsics.
 		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
 		/// Check that the inherents are valid.

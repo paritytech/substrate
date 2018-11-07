@@ -33,17 +33,18 @@ use runtime_primitives::traits::{
 };
 use runtime_primitives::BuildStorage;
 use runtime_api::{
-	Core as CoreAPI, BlockBuilder as BlockBuilderAPI, CallIntoRuntime, ConstructRuntimeApi,
-	TaggedTransactionQueue
+	Core as CoreAPI, BlockBuilder as BlockBuilderAPI, CallApiAt, ConstructRuntimeApi,
+	TaggedTransactionQueue, self, ApiWithOverlay
 };
+use sr_api;
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use codec::Decode;
 use state_machine::{
-	Backend as StateBackend, CodeExecutor,
-	ExecutionStrategy, ExecutionManager, ChangesTrieAnchorBlockId,
-	prove_read, key_changes, key_changes_proof, OverlayedChanges
+	Backend as StateBackend, CodeExecutor, self,
+	ExecutionStrategy, ExecutionManager, prove_read,
+	key_changes, key_changes_proof, OverlayedChanges
 };
 
 use backend::{self, BlockImportOperation};
@@ -190,20 +191,11 @@ impl<H> PrePostHeader<H> {
 pub fn new_in_mem<E, Block, S, RA>(
 	executor: E,
 	genesis_storage: S,
-<<<<<<< HEAD
-) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>, Block>>
-where
-	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-	S: BuildStorage,
-	Block: BlockT<Hash=H256>,
-=======
 ) -> error::Result<Client<in_mem::Backend<Block, Blake2Hasher>, LocalCallExecutor<in_mem::Backend<Block, Blake2Hasher>, E>, Block, RA>>
 	where
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
-		Block: BlockT,
-		H256: From<Block::Hash>,
->>>>>>> Switch to first version of new runtime API implementation
+		Block: BlockT<Hash=H256>,
 {
 	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
 }
@@ -214,22 +206,12 @@ pub fn new_with_backend<B, E, Block, S, RA>(
 	backend: Arc<B>,
 	executor: E,
 	build_genesis_storage: S,
-<<<<<<< HEAD
-) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block>>
-where
-	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
-	S: BuildStorage,
-	Block: BlockT<Hash=H256>,
-	B: backend::LocalBackend<Block, Blake2Hasher>
-=======
 ) -> error::Result<Client<B, LocalCallExecutor<B, E>, Block, RA>>
 	where
 		E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 		S: BuildStorage,
-		Block: BlockT,
-		H256: From<Block::Hash>,
+		Block: BlockT<Hash=H256>,
 		B: backend::LocalBackend<Block, Blake2Hasher>
->>>>>>> Switch to first version of new runtime API implementation
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
@@ -350,6 +332,32 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		self.header_proof_with_cht_size(id, cht::SIZE)
 	}
 
+	pub(crate) fn call_at_state(
+		&self,
+		at: &BlockId<Block>,
+		function: &'static str,
+		args: Vec<u8>,
+		changes: &mut OverlayedChanges
+	) -> sr_api::error::Result<Vec<u8>> {
+		let state = self.state_at(at)
+						.map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))?;
+
+		let execution_manager = || match self.api_execution_strategy {
+			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
+			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
+			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
+				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
+				warn!("   Function {:?}", function);
+				warn!("   Native result {:?}", native_result);
+				warn!("   Wasm result {:?}", wasm_result);
+				wasm_result
+			}),
+		};
+
+		self.executor.call_at_state(&state, changes, function, &args, execution_manager())
+			.map(|res| res.0)
+			.map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)).into())
+	}
 
 	/// Get block hash by number.
 	pub fn block_hash(&self, block_number: <<Block as BlockT>::Header as HeaderT>::Number) -> error::Result<Option<Block::Hash>> {
@@ -439,8 +447,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
-		RA: Send + Sync + BlockBuilderAPI<Block, Error=error::Error, OverlayedChanges=OverlayedChanges> +
-		CoreAPI<Block, AuthorityId, OverlayedChanges=OverlayedChanges, Error=error::Error> + ConstructRuntimeApi<Block=Block>
+		RA: BlockBuilderAPI<Block>
 	{
 		block_builder::BlockBuilder::new(self)
 	}
@@ -450,8 +457,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self, parent: &BlockId<Block>
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
-		RA: Send + Sync + BlockBuilderAPI<Block, Error=error::Error, OverlayedChanges=OverlayedChanges> +
-		CoreAPI<Block, AuthorityId, OverlayedChanges=OverlayedChanges, Error=error::Error> + ConstructRuntimeApi<Block=Block>
+		RA: BlockBuilderAPI<Block>
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
@@ -462,10 +468,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		at: Block::Hash,
 		body: &Option<Vec<Block::Extrinsic>>
 	) -> error::Result<Vec<TransactionTag>> where
-		RA: CoreAPI<Block, AuthorityId, Error=error::Error, OverlayedChanges=OverlayedChanges> +
-			ConstructRuntimeApi<Block=Block> + TaggedTransactionQueue<Block, Error=error::Error> +
-			Send +
-			Sync,
+		RA: TaggedTransactionQueue<Block>,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
 		let id = BlockId::Hash(at);
@@ -500,10 +503,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
 	) -> error::Result<ImportResult> where
-		RA: CoreAPI<Block, AuthorityId, Error=error::Error, OverlayedChanges=OverlayedChanges> +
-			ConstructRuntimeApi<Block=Block> + TaggedTransactionQueue<Block, Error=error::Error> +
-			Send +
-			Sync,
+		RA: TaggedTransactionQueue<Block>,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
@@ -903,79 +903,51 @@ impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT,
-	RA: CoreAPI<Block, AuthorityId, Error=error::Error, OverlayedChanges=OverlayedChanges> +
-		ConstructRuntimeApi<Block=Block> + Send + Sync
+	RA: CoreAPI<Block>
 {
 	type Api = RA;
+	type ApiWithOverlay = runtime_api::ApiWithOverlay<B, E, Block, RA>;
 
 	fn runtime_api<'a>(&'a self) -> Api<'a, Self::Api> {
 		Self::Api::construct_runtime_api(self)
 	}
+
+	fn runtime_api_with_overlay<'a>(&'a self) -> Api<'a, Self::ApiWithOverlay> {
+		ApiWithOverlay::new(self).into()
+	}
 }
 
-impl<B, E, Block, RA> CallIntoRuntime for Client<B, E, Block, RA> where
+impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + CoreAPI<Block, AuthorityId, Error=error::Error, OverlayedChanges=OverlayedChanges> +
-		ConstructRuntimeApi<Block=Block>
+	RA: CoreAPI<Block>
 {
-	type Block = Block;
-
-	fn call_api(&self, function: &'static str, args: Vec<u8>) -> error::Result<Vec<u8>> {
-		self.call_api_at(&BlockId::Number(self.info()?.chain.best_number), function, args)
-	}
-
 	fn call_api_at(
-		&self,
+		&mut self,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>
-	) -> error::Result<Vec<u8>> {
+	) -> sr_api::error::Result<Vec<u8>> {
 		let parent = at;
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
-			self.block_number_from_id(parent)?
-				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))? + As::sa(1),
+			self.block_number_from_id(parent)
+				.and_then(|v|
+					v.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)).into())
+				).map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))?
+			+ As::sa(1),
 			Default::default(),
 			Default::default(),
-			self.block_hash_from_id(&parent)?
-				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
+			self.block_hash_from_id(&parent)
+				.and_then(|v|
+					v.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)).into())
+				).map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))?,
 			Default::default()
 		);
 		let mut overlay = Default::default();
 
-		self.runtime_api().initialise_block(at, &mut overlay, &header)?;
+		self.runtime_api().initialise_block(at, &header)?;
 		self.call_at_state(at, function, args, &mut overlay)
-	}
-
-	fn call_at_state(
-		&self,
-		at: &BlockId<Block>,
-		function: &'static str,
-		args: Vec<u8>,
-		changes: &mut OverlayedChanges
-	) -> error::Result<Vec<u8>> {
-		let state = self.state_at(at)?;
-
-		let execution_manager = || match self.api_execution_strategy {
-			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
-			ExecutionStrategy::AlwaysWasm => ExecutionManager::AlwaysWasm,
-			ExecutionStrategy::Both => ExecutionManager::Both(|wasm_result, native_result| {
-				warn!("Consensus error between wasm and native runtime execution at block {:?}", at);
-				warn!("   Function {:?}", function);
-				warn!("   Native result {:?}", native_result);
-				warn!("   Wasm result {:?}", wasm_result);
-				wasm_result
-			}),
-		};
-
-		self.executor.call_at_state(
-			&state,
-			changes,
-			function,
-			&args,
-			execution_manager()
-		).map(|res| res.0)
 	}
 }
 
@@ -984,8 +956,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + CoreAPI<Block, AuthorityId, Error=error::Error, OverlayedChanges=OverlayedChanges> +
-	ConstructRuntimeApi<Block=Block> + TaggedTransactionQueue<Block, Error=error::Error>
+	RA: TaggedTransactionQueue<Block>
 {
 	type Error = Error;
 

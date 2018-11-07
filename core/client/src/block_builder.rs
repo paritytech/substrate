@@ -19,29 +19,25 @@
 use std::vec::Vec;
 use codec::Encode;
 use blockchain::HeaderBackend;
-use state_machine::{self, OverlayedChanges};
-use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi};
+use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, Api, ApiWithOverlay};
 use runtime_primitives::generic::BlockId;
-use runtime_api::{BlockBuilder as BlockBuilderAPI, Core};
+use runtime_api::{Core, BlockBuilder as BlockBuilderAPI};
 use error;
 use runtime_primitives::ApplyOutcome;
-use primitives::AuthorityId;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
-pub struct BlockBuilder<'a, Block, A> where Block: BlockT {
+pub struct BlockBuilder<'a, Block, A: ProvideRuntimeApi> where Block: BlockT {
 	header: <Block as BlockT>::Header,
 	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
-	api: &'a A,
+	api: Api<'a, A::ApiWithOverlay>,
 	block_id: BlockId<Block>,
-	changes: state_machine::OverlayedChanges,
 }
 
 impl<'a, Block, A> BlockBuilder<'a, Block, A>
 where
 	Block: BlockT<Hash=H256>,
 	A: ProvideRuntimeApi + HeaderBackend<Block> + 'a,
-	A::Api: BlockBuilderAPI<Block, Error=error::Error, OverlayedChanges=OverlayedChanges> +
-			Core<Block, AuthorityId, OverlayedChanges=OverlayedChanges, Error=error::Error>
+	A::Api: BlockBuilderAPI<Block>
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(api: &'a A) -> error::Result<Self> {
@@ -58,7 +54,6 @@ where
 		let parent_hash = api.block_hash_from_id(block_id)?
 			.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{}", block_id)))?;
 
-		let mut changes = Default::default();
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			number,
 			Default::default(),
@@ -67,15 +62,14 @@ where
 			Default::default()
 		);
 
-		api.runtime_api().initialise_block(block_id, &mut changes, &header)?;
-		changes.commit_prospective();
+		let api = api.runtime_api_with_overlay();
+		api.initialise_block(block_id, &header)?;
 
 		Ok(BlockBuilder {
 			header,
 			extrinsics: Vec::new(),
 			api,
 			block_id: *block_id,
-			changes,
 		})
 	}
 
@@ -83,30 +77,31 @@ where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		match self.api.runtime_api().apply_extrinsic(&self.block_id, &mut self.changes, &xt) {
-			Ok(result) => {
-				match result {
+		fn impl_push<'a, T: ApiWithOverlay, Block: BlockT>(
+			api: &mut Api<'a, T>,
+			block_id: &BlockId<Block>,
+			xt: Block::Extrinsic,
+			extrinsics: &mut Vec<Block::Extrinsic>
+		) -> error::Result<()> where T::Api: BlockBuilderAPI<Block> {
+			api.map_api_result(|api| {
+				match api.apply_extrinsic(block_id, &xt)? {
 					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
-						self.extrinsics.push(xt);
-						self.changes.commit_prospective();
+						extrinsics.push(xt);
 						Ok(())
 					}
 					Err(e) => {
-						self.changes.discard_prospective();
 						Err(error::ErrorKind::ApplyExtrinsicFailed(e).into())
 					}
 				}
-			}
-			Err(e) => {
-				self.changes.discard_prospective();
-				Err(e)
-			}
+			})
 		}
+
+		impl_push(&mut self.api, &self.block_id, xt, &mut self.extrinsics)
 	}
 
 	/// Consume the builder to return a valid `Block` containing all pushed extrinsics.
 	pub fn bake(mut self) -> error::Result<Block> {
-		self.header = self.api.runtime_api().finalise_block(&self.block_id, &mut self.changes)?;
+		self.header = self.api.finalise_block(&self.block_id)?;
 
 		debug_assert_eq!(
 			self.header.extrinsics_root().clone(),
