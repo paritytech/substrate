@@ -59,7 +59,7 @@ use runtime_support::{StorageValue, Parameter};
 use runtime_support::dispatch::Result;
 use runtime_primitives::RuntimeString;
 use runtime_primitives::traits::{
-	As, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
+	AsPrimitive, SimpleArithmetic, Zero, ProvideInherent, Block as BlockT, Extrinsic
 };
 use system::ensure_inherent;
 use rstd::{result, ops::{Mul, Div}, vec::Vec};
@@ -110,9 +110,9 @@ decl_module! {
 decl_storage! {
 	trait Store for Module<T: Trait> as Timestamp {
 		/// Current time for the current block.
-		pub Now get(now) build(|_| T::Moment::sa(0)): T::Moment;
+		pub Now get(now) build(|_| T::Moment::zero()): T::Moment;
 		/// The minimum (and advised) period between blocks.
-		pub BlockPeriod get(block_period) config(period): T::Moment = T::Moment::sa(5);
+		pub BlockPeriod get(block_period) config(period): T::Moment = 5_u64.as_();
 
 		/// Did the timestamp get updated in this block?
 		DidUpdate: bool;
