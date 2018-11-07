@@ -27,7 +27,7 @@ use runtime_primitives::{
 	transaction_validity::{TransactionValidity, TransactionTag},
 };
 use consensus::{ImportBlock, ImportResult, BlockOrigin};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, As, NumberFor, CurrentHeight, BlockNumberToHash};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Zero, AsPrimitive, NumberFor, CurrentHeight, BlockNumberToHash};
 use runtime_primitives::{ApplyResult, BuildStorage};
 use runtime_api as api;
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration};
@@ -188,6 +188,7 @@ where
 	E: CodeExecutor<Blake2Hasher> + RuntimeInfo,
 	S: BuildStorage,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	new_with_backend(Arc::new(in_mem::Backend::new()), executor, genesis_storage)
 }
@@ -204,6 +205,7 @@ where
 	S: BuildStorage,
 	Block: BlockT<Hash=H256>,
 	B: backend::LocalBackend<Block, Blake2Hasher>
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	let call_executor = LocalCallExecutor::new(backend.clone(), executor);
 	Client::new(backend, call_executor, build_genesis_storage, ExecutionStrategy::NativeWhenPossible, ExecutionStrategy::NativeWhenPossible)
@@ -213,6 +215,7 @@ impl<B, E, Block> Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	/// Creates new Substrate Client with given blockchain and code executor.
 	pub fn new<S: BuildStorage>(
@@ -330,7 +333,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		let block_num = *header.number();
 		let cht_num = cht::block_to_cht_number(cht_size, block_num).ok_or_else(proof_error)?;
 		let cht_start = cht::start_number(cht_size, cht_num);
-		let headers = (cht_start.as_()..).map(|num| self.block_hash(As::sa(num)).unwrap_or_default());
+		let headers = (cht_start.as_()..).map(|num| self.block_hash(num.as_()).unwrap_or_default());
 		let proof = cht::build_proof::<Block::Header, Blake2Hasher, _>(cht_size, cht_num, block_num, headers)
 			.ok_or_else(proof_error)?;
 		Ok((header, proof))
@@ -359,7 +362,7 @@ impl<B, E, Block> Client<B, E, Block> where
 			self.backend.blockchain().info()?.best_number.as_(),
 			key)
 		.map_err(|err| error::ErrorKind::ChangesTrieAccessFailed(err).into())
-		.map(|r| r.into_iter().map(|(b, e)| (As::sa(b), e)).collect())
+		.map(|r| r.into_iter().map(|(b, e)| (b.as_(), e)).collect())
 	}
 
 	/// Get proof for computation of (block, extrinsic) pairs where key has been changed at given blocks range.
@@ -423,7 +426,7 @@ impl<B, E, Block> Client<B, E, Block> where
 		let parent = at;
 		let header = <<Block as BlockT>::Header as HeaderT>::new(
 			self.block_number_from_id(&parent)?
-				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))? + As::sa(1),
+				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))? + 1_u64.as_(),
 			Default::default(),
 			Default::default(),
 			self.block_hash_from_id(&parent)?
@@ -895,6 +898,7 @@ impl<B, E, Block> consensus::BlockImport<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	type Error = Error;
 
@@ -961,6 +965,7 @@ impl<B, E, Block> consensus::Authorities<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	type Error = Error;
 	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, Self::Error> {
@@ -972,6 +977,7 @@ impl<B, E, Block> CurrentHeight for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
 	fn current_height(&self) -> Self::BlockNumber {
@@ -983,6 +989,7 @@ impl<B, E, Block> BlockNumberToHash for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	type BlockNumber = <Block::Header as HeaderT>::Number;
 	type Hash = Block::Hash;
@@ -1021,6 +1028,7 @@ where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	fn best_block_header(&self) -> error::Result<<Block as BlockT>::Header> {
 		Client::best_block_header(self)
@@ -1031,6 +1039,7 @@ impl<B, E, Block> BlockBody<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	fn block_body(&self, id: &BlockId<Block>) -> error::Result<Option<Vec<<Block as BlockT>::Extrinsic>>> {
 		self.body(id)
@@ -1041,6 +1050,7 @@ impl<B, E, Block> api::Core<Block, AuthorityId> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	type Error = Error;
 
@@ -1073,6 +1083,7 @@ impl<B, E, Block> api::BlockBuilder<Block> for Client<B, E, Block> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	type Error = Error;
 	type OverlayedChanges = OverlayedChanges;
@@ -1127,6 +1138,7 @@ impl<B, E, Block> api::TaggedTransactionQueue<Block> for Client<B, E, Block> whe
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher>,
 	Block: BlockT<Hash=H256>,
+	u64: AsPrimitive<NumberFor<Block>>,
 {
 	type Error = Error;
 
