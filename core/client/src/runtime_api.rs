@@ -23,7 +23,6 @@ use call_executor::CallExecutor;
 use blockchain::HeaderBackend;
 pub use sr_api::*;
 pub use sr_api::core::{CallApiAt, Core, ConstructRuntimeApi};
-use sr_api;
 use runtime_primitives::traits::{Block as BlockT, self, Header as HeaderT, As, ProvideRuntimeApi};
 use primitives::Blake2Hasher;
 use state_machine::OverlayedChanges;
@@ -42,7 +41,7 @@ impl<B, E, Block, RA> ApiWithOverlay<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	Block: BlockT,
-	RA: Core<Block>,
+	RA: Core<Block, Error=error::Error>,
 {
 	pub(crate) fn new(client: &Client<B, E, Block, RA>) -> Self {
 		let api = unsafe { client.runtime_api().into_inner() };
@@ -61,7 +60,7 @@ impl<B, E, Block, RA> traits::ApiWithOverlay for ApiWithOverlay<B, E, Block, RA>
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	Block: BlockT,
-	RA: Core<Block>
+	RA: Core<Block, Error=error::Error>
 {
 	type Api = RA;
 
@@ -84,7 +83,7 @@ impl<B, E, Block, RA> Deref for ApiWithOverlay<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	Block: BlockT,
-	RA: Core<Block>
+	RA: Core<Block, Error=error::Error>
 {
 	type Target = RA;
 
@@ -98,29 +97,30 @@ impl<B, E, Block, RA> CallApiAt<Block> for ApiWithOverlay<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	Block: BlockT,
-	RA: Core<Block>,
+	RA: Core<Block, Error=error::Error>,
 {
+	type Error = error::Error;
+
 	fn call_api_at(
 		&mut self,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>,
-	) -> sr_api::error::Result<Vec<u8>> {
+	) -> error::Result<Vec<u8>> {
 		//TODO: Find a better way to prevent double block initialization
 		if function != "initialise_block" && self.initialised_block.map(|id| id != *at).unwrap_or(true) {
 			let parent = at;
 			let header = <<Block as BlockT>::Header as HeaderT>::new(
-				unsafe { self.client.as_ref().block_number_from_id(parent)
-					.and_then(|v|
-						v.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)).into())
-					).map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))? }
-				+ As::sa(1),
+				unsafe {
+					self.client.as_ref().block_number_from_id(parent)?
+						.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?
+				} + As::sa(1),
 				Default::default(),
 				Default::default(),
-				unsafe { self.client.as_ref().block_hash_from_id(&parent)
-					.and_then(|v|
-						v.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)).into())
-					).map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))? },
+				unsafe {
+					self.client.as_ref().block_hash_from_id(&parent)?
+						.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?
+				},
 				Default::default()
 			);
 			self.api.initialise_block(at, &header)?;

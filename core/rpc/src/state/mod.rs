@@ -118,9 +118,7 @@ impl<B, E, Block, RA> StateApi<Block::Hash> for State<B, E, Block, RA> where
 	Block: BlockT<Hash=H256> + 'static,
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + 'static + Clone,
-	RA: Send + Sync + 'static + Metadata<Block, Vec<u8>, Error=client::error::Error> +
-		ConstructRuntimeApi<Block=Block> +
-		Core<Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges>
+	RA: Metadata<Block, Error=client::error::Error>
 {
 	type Metadata = ::metadata::Metadata;
 

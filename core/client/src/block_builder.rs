@@ -37,7 +37,7 @@ impl<'a, Block, A> BlockBuilder<'a, Block, A>
 where
 	Block: BlockT<Hash=H256>,
 	A: ProvideRuntimeApi + HeaderBackend<Block> + 'a,
-	A::Api: BlockBuilderAPI<Block>
+	A::Api: BlockBuilderAPI<Block, Error=error::Error>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(api: &'a A) -> error::Result<Self> {
@@ -82,7 +82,7 @@ where
 			block_id: &BlockId<Block>,
 			xt: Block::Extrinsic,
 			extrinsics: &mut Vec<Block::Extrinsic>
-		) -> error::Result<()> where T::Api: BlockBuilderAPI<Block> {
+		) -> error::Result<()> where T::Api: BlockBuilderAPI<Block, Error=error::Error> {
 			api.map_api_result(|api| {
 				match api.apply_extrinsic(block_id, &xt)? {
 					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {

@@ -41,12 +41,12 @@ use runtime_version::ApiId;
 use primitives::OpaqueMetadata;
 use rstd::vec::Vec;
 #[doc(hidden)]
-pub use rstd::slice;
+pub use rstd::{result, slice};
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
 
 pub mod core;
-pub mod error;
+mod error;
 
 /// Declare the given API traits.
 ///
@@ -293,7 +293,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
-			{ $( $result_return_ty; )* $crate::error::Result<$return_ty_current>; };
+			{ $( $result_return_ty; )* $crate::result::Result<$return_ty_current, <Self as $name<Block>>::Error>; };
 			$( $( $return_ty_rest )*; )*
 		);
 	};
@@ -326,7 +326,7 @@ macro_rules! decl_apis {
 				)*
 			};
 			$( $generic_param_parsed $( : $generic_bound_parsed )* ),*;
-			{ $( $result_return_ty; )* $crate::error::Result<()>; };
+			{ $( $result_return_ty; )* $crate::result::Result<(), <Self as $name<Block>>::Error>; };
 			$( $( $return_ty_rest )*; )*
 		);
 	};
@@ -375,7 +375,9 @@ macro_rules! decl_apis {
 		{ $( $result_return_ty:ty; )* };
 	) => {
 		$( #[$attr] )*
-		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > : $crate::core::Core<Block> {
+		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > : $crate::core::Core<Block, Error = <Self as $name<Block>>::Error> {
+			type Error;
+
 			$( type $client_generic_param $( : $client_generic_bound )*; )*
 
 			$(

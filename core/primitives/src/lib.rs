@@ -129,6 +129,10 @@ impl From<Vec<u8>> for Bytes {
 	fn from(s: Vec<u8>) -> Self { Bytes(s) }
 }
 
+impl From<OpaqueMetadata> for Bytes {
+	fn from(s: OpaqueMetadata) -> Self { Bytes(s.0) }
+}
+
 impl Deref for Bytes {
 	type Target = [u8];
 	fn deref(&self) -> &[u8] { &self.0[..] }

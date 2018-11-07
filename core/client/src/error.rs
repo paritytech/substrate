@@ -22,12 +22,10 @@ use std;
 use state_machine;
 use runtime_primitives::ApplyError;
 use consensus;
-use sr_api;
 
 error_chain! {
 	links {
 		Consensus(consensus::Error, consensus::ErrorKind);
-		Api(sr_api::error::Error, sr_api::error::ErrorKind);
 	}
 	errors {
 		/// Backend error.

@@ -36,13 +36,12 @@ use runtime_api::{
 	Core as CoreAPI, BlockBuilder as BlockBuilderAPI, CallApiAt, ConstructRuntimeApi,
 	TaggedTransactionQueue, self, ApiWithOverlay
 };
-use sr_api;
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
 use codec::Decode;
 use state_machine::{
-	Backend as StateBackend, CodeExecutor, self,
+	Backend as StateBackend, CodeExecutor,
 	ExecutionStrategy, ExecutionManager, prove_read,
 	key_changes, key_changes_proof, OverlayedChanges
 };
@@ -338,9 +337,8 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		function: &'static str,
 		args: Vec<u8>,
 		changes: &mut OverlayedChanges
-	) -> sr_api::error::Result<Vec<u8>> {
-		let state = self.state_at(at)
-						.map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))?;
+	) -> error::Result<Vec<u8>> {
+		let state = self.state_at(at)?;
 
 		let execution_manager = || match self.api_execution_strategy {
 			ExecutionStrategy::NativeWhenPossible => ExecutionManager::NativeWhenPossible,
@@ -356,7 +354,6 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 
 		self.executor.call_at_state(&state, changes, function, &args, execution_manager())
 			.map(|res| res.0)
-			.map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)).into())
 	}
 
 	/// Get block hash by number.
@@ -447,7 +444,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block>
+		RA: BlockBuilderAPI<Block, Error=Error>
 	{
 		block_builder::BlockBuilder::new(self)
 	}
@@ -457,7 +454,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		&self, parent: &BlockId<Block>
 	) -> error::Result<block_builder::BlockBuilder<Block, Self>> where
 		E: Clone + Send + Sync,
-		RA: BlockBuilderAPI<Block>
+		RA: BlockBuilderAPI<Block, Error=Error>
 	{
 		block_builder::BlockBuilder::at_block(parent, &self)
 	}
@@ -468,7 +465,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		at: Block::Hash,
 		body: &Option<Vec<Block::Extrinsic>>
 	) -> error::Result<Vec<TransactionTag>> where
-		RA: TaggedTransactionQueue<Block>,
+		RA: TaggedTransactionQueue<Block, Error=Error>,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
 		let id = BlockId::Hash(at);
@@ -503,7 +500,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 		authorities: Option<Vec<AuthorityId>>,
 		finalized: bool,
 	) -> error::Result<ImportResult> where
-		RA: TaggedTransactionQueue<Block>,
+		RA: TaggedTransactionQueue<Block, Error=Error>,
 		E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone,
 	{
 		let parent_hash = import_headers.post().parent_hash().clone();
@@ -903,7 +900,7 @@ impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT,
-	RA: CoreAPI<Block>
+	RA: CoreAPI<Block, Error=Error>
 {
 	type Api = RA;
 	type ApiWithOverlay = runtime_api::ApiWithOverlay<B, E, Block, RA>;
@@ -921,27 +918,25 @@ impl<B, E, Block, RA> CallApiAt<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: CoreAPI<Block>
+	RA: CoreAPI<Block, Error=Error>
 {
+	type Error = Error;
+
 	fn call_api_at(
 		&mut self,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>
-	) -> sr_api::error::Result<Vec<u8>> {
+	) -> error::Result<Vec<u8>> {
 		let parent = at;
-		let header = <<Block as BlockT>::Header as HeaderT>::new(
-			self.block_number_from_id(parent)
-				.and_then(|v|
-					v.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)).into())
-				).map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))?
+		let header = <Block::Header as HeaderT>::new(
+			self.block_number_from_id(parent)?
+				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?
 			+ As::sa(1),
 			Default::default(),
 			Default::default(),
-			self.block_hash_from_id(&parent)
-				.and_then(|v|
-					v.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)).into())
-				).map_err(|e| sr_api::error::ErrorKind::GenericError(Box::new(e)))?,
+			self.block_hash_from_id(&parent)?
+				.ok_or_else(|| error::ErrorKind::UnknownBlock(format!("{:?}", parent)))?,
 			Default::default()
 		);
 		let mut overlay = Default::default();
@@ -956,7 +951,7 @@ impl<B, E, Block, RA> consensus::BlockImport<Block> for Client<B, E, Block, RA> 
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
 	Block: BlockT<Hash=H256>,
-	RA: TaggedTransactionQueue<Block>
+	RA: TaggedTransactionQueue<Block, Error=Error>
 {
 	type Error = Error;
 
