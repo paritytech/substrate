@@ -1168,7 +1168,7 @@ pub(crate) mod tests {
 			vec![(Keyring::Alice, Keyring::Dave)],
 		];
 
-		// prepare client ang import blocks
+		// prepare client and import blocks
 		let mut local_roots = Vec::new();
 		let remote_client = test_client::new_with_changes_trie();
 		let mut nonces: HashMap<_, u64> = Default::default();
