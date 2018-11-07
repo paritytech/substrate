@@ -25,6 +25,7 @@ extern crate substrate_primitives as primitives;
 extern crate sr_primitives as runtime_primitives;
 extern crate substrate_state_machine as state_machine;
 extern crate substrate_consensus_common as consensus;
+extern crate sr_version as runtime_version;
 #[cfg(test)] extern crate substrate_keyring as keyring;
 #[cfg(test)] extern crate substrate_test_client as test_client;
 #[macro_use] extern crate substrate_telemetry;
@@ -36,7 +37,6 @@ extern crate parking_lot;
 extern crate hash_db;
 extern crate heapsize;
 extern crate kvdb;
-extern crate sr_api;
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;

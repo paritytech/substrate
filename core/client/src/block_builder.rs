@@ -19,9 +19,11 @@
 use std::vec::Vec;
 use codec::Encode;
 use blockchain::HeaderBackend;
-use runtime_primitives::traits::{Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, Api, ApiWithOverlay};
+use runtime_primitives::traits::{
+	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef
+};
 use runtime_primitives::generic::BlockId;
-use runtime_api::{Core, BlockBuilder as BlockBuilderAPI};
+use runtime_api::{core::Core, BlockBuilder as BlockBuilderAPI};
 use error;
 use runtime_primitives::ApplyOutcome;
 
@@ -29,7 +31,7 @@ use runtime_primitives::ApplyOutcome;
 pub struct BlockBuilder<'a, Block, A: ProvideRuntimeApi> where Block: BlockT {
 	header: <Block as BlockT>::Header,
 	extrinsics: Vec<<Block as BlockT>::Extrinsic>,
-	api: Api<'a, A::ApiWithOverlay>,
+	api: ApiRef<'a, A::Api>,
 	block_id: BlockId<Block>,
 }
 
@@ -37,7 +39,7 @@ impl<'a, Block, A> BlockBuilder<'a, Block, A>
 where
 	Block: BlockT<Hash=H256>,
 	A: ProvideRuntimeApi + HeaderBackend<Block> + 'a,
-	A::Api: BlockBuilderAPI<Block, Error=error::Error>,
+	A::Api: BlockBuilderAPI<Block>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(api: &'a A) -> error::Result<Self> {
@@ -62,7 +64,7 @@ where
 			Default::default()
 		);
 
-		let api = api.runtime_api_with_overlay();
+		let api = api.runtime_api();
 		api.initialise_block(block_id, &header)?;
 
 		Ok(BlockBuilder {
@@ -77,12 +79,12 @@ where
 	/// can be validly executed (by executing it); if it is invalid, it'll be returned along with
 	/// the error. Otherwise, it will return a mutable reference to self (in order to chain).
 	pub fn push(&mut self, xt: <Block as BlockT>::Extrinsic) -> error::Result<()> {
-		fn impl_push<'a, T: ApiWithOverlay, Block: BlockT>(
-			api: &mut Api<'a, T>,
+		fn impl_push<'a, T, Block: BlockT>(
+			api: &mut ApiRef<'a, T>,
 			block_id: &BlockId<Block>,
 			xt: Block::Extrinsic,
 			extrinsics: &mut Vec<Block::Extrinsic>
-		) -> error::Result<()> where T::Api: BlockBuilderAPI<Block, Error=error::Error> {
+		) -> error::Result<()> where T: BlockBuilderAPI<Block> {
 			api.map_api_result(|api| {
 				match api.apply_extrinsic(block_id, &xt)? {
 					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
@@ -96,6 +98,7 @@ where
 			})
 		}
 
+		//FIXME: Please NLL, help me!
 		impl_push(&mut self.api, &self.block_id, xt, &mut self.extrinsics)
 	}
 

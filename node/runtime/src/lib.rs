@@ -21,9 +21,6 @@
 #![recursion_limit="256"]
 
 #[macro_use]
-extern crate sr_api as runtime_api;
-
-#[macro_use]
 extern crate srml_support;
 
 #[macro_use]
@@ -36,6 +33,7 @@ extern crate serde_derive;
 extern crate substrate_primitives;
 
 #[cfg(feature = "std")]
+#[macro_use]
 extern crate substrate_client as client;
 
 #[macro_use]
@@ -67,11 +65,11 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	SessionKey, Signature, Block as GBlock,
 };
-use runtime_api::{runtime::*, id::*};
+use client::runtime_api::{runtime::*, id::*, core::{ApiExt, runtime::*}};
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, Api};
+use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, ApiRef};
 use substrate_primitives::AuthorityId;
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -79,6 +77,7 @@ use council::{motions as council_motions, voting as council_voting};
 use council::seats as council_seats;
 #[cfg(any(feature = "std", test))]
 use version::NativeVersion;
+use substrate_primitives::OpaqueMetadata;
 
 #[cfg(any(feature = "std", test))]
 pub use runtime_primitives::BuildStorage;
@@ -246,7 +245,10 @@ pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext
 //TODO: Auto impl
 #[cfg(feature = "std")]
 pub struct ClientWithApi {
-	call: *const client::runtime_api::CallIntoRuntime<Block=GBlock>,
+	call: ::std::ptr::NonNull<client::runtime_api::core::CallApiAt<GBlock>>,
+	commit_on_success: ::std::cell::RefCell<bool>,
+	initialised_block: ::std::cell::RefCell<Option<GBlockId>>,
+	changes: ::std::cell::RefCell<client::runtime_api::OverlayedChanges>,
 }
 
 #[cfg(feature = "std")]
@@ -255,97 +257,140 @@ unsafe impl Send for ClientWithApi {}
 unsafe impl Sync for ClientWithApi {}
 
 #[cfg(feature = "std")]
-fn decode<R: Decode>(data: Vec<u8>) -> R {
-	R::decode(&mut &data[..]).unwrap()
+impl ApiExt for ClientWithApi {
+	fn map_api_result<F: FnOnce(&Self) -> Result<R, E>, R, E>(&self, map_call: F) -> Result<R, E> {
+		*self.commit_on_success.borrow_mut() = false;
+		let res = map_call(self);
+		*self.commit_on_success.borrow_mut() = true;
+
+		self.commit_on_ok(&res);
+
+		res
+	}
 }
 
 #[cfg(feature = "std")]
-impl client::runtime_api::ConstructRuntimeApi for ClientWithApi {
-	type Block = GBlock;
+impl client::runtime_api::core::ConstructRuntimeApi<GBlock> for ClientWithApi {
+	fn construct_runtime_api<'a, T: client::runtime_api::core::CallApiAt<GBlock>>(call: &'a T) -> ApiRef<'a, Self> {
+		ClientWithApi {
+			call: unsafe {
+				::std::ptr::NonNull::new_unchecked(
+					::std::mem::transmute(
+						call as &client::runtime_api::core::CallApiAt<GBlock>
+					)
+				)
+			},
+			commit_on_success: true.into(),
+			initialised_block: None.into(),
+			changes: Default::default(),
+		}.into()
+	}
+}
 
-	fn construct_runtime_api<'a, T: client::runtime_api::CallIntoRuntime<Block=GBlock>>(call: &'a T) -> Api<'a, Self> {
-		ClientWithApi { call: unsafe { ::std::mem::transmute(call as &client::runtime_api::CallIntoRuntime<Block=GBlock>) } }.into()
+#[cfg(feature = "std")]
+impl ClientWithApi {
+	fn call_api_at<A: Encode, R: Decode>(
+		&self,
+		at: &GBlockId,
+		function: &'static str,
+		args: &A
+	) -> client::error::Result<R> {
+		let res = unsafe {
+			self.call.as_ref().call_api_at(
+				at,
+				function,
+				args.encode(),
+				&mut *self.changes.borrow_mut(),
+				&mut *self.initialised_block.borrow_mut()
+			).and_then(|r|
+				R::decode(&mut &r[..])
+					.ok_or_else(||
+						client::error::ErrorKind::CallResultDecode(function).into()
+					)
+			)
+		};
+
+		self.commit_on_ok(&res);
+		res
+	}
+
+	fn commit_on_ok<R, E>(&self, res: &Result<R, E>) {
+		if *self.commit_on_success.borrow() {
+			if res.is_err() {
+				self.changes.borrow_mut().discard_prospective();
+			} else {
+				self.changes.borrow_mut().commit_prospective();
+			}
+		}
 	}
 }
 
 type GBlockId = generic::BlockId<GBlock>;
 
 #[cfg(feature = "std")]
-impl client::runtime_api::Core<GBlock, AuthorityId> for ClientWithApi {
-	type Error = client::error::Error;
-	type OverlayedChanges = client::runtime_api::OverlayedChanges;
-
-	fn version(&self, at: &GBlockId) -> Result<RuntimeVersion, Self::Error> {
-		unsafe { (*self.call).call_api_at(at, "version", Vec::new()).map(decode) }
+impl client::runtime_api::core::Core<GBlock> for ClientWithApi {
+	fn version(&self, at: &GBlockId) -> Result<RuntimeVersion, client::error::Error> {
+		self.call_api_at(at, "version", &())
 	}
 
-	fn authorities(&self, at: &GBlockId) -> Result<Vec<AuthorityId>, Self::Error> {
-		unsafe { (*self.call).call_api_at(at, "authorities", Vec::new()).map(decode) }
+	fn authorities(&self, at: &GBlockId) -> Result<Vec<AuthorityId>, client::error::Error> {
+		self.call_api_at(at, "authorities", &())
 	}
 
-	fn execute_block(&self, at: &GBlockId, block: &GBlock) -> Result<(), Self::Error> {
-		unsafe { (*self.call).call_api_at(at, "execute_block", block.encode()).map(decode) }
+	fn execute_block(&self, at: &GBlockId, block: &GBlock) -> Result<(), client::error::Error> {
+		self.call_api_at(at, "execute_block", block)
 	}
 
-	fn initialise_block(&self, at: &GBlockId, overlay: &mut client::runtime_api::OverlayedChanges, header: &<GBlock as BlockT>::Header) -> Result<(), Self::Error> {
-		unsafe { (*self.call).call_at_state(at, "initialise_block", header.encode(), overlay).map(decode) }
+	fn initialise_block(&self, at: &GBlockId, header: &<GBlock as BlockT>::Header) -> Result<(), client::error::Error> {
+		self.call_api_at(at, "initialise_block", header)
 	}
 }
 
 #[cfg(feature = "std")]
 impl client::runtime_api::BlockBuilder<GBlock> for ClientWithApi {
-	type Error = client::error::Error;
-	type OverlayedChanges = client::runtime_api::OverlayedChanges;
-
-	fn apply_extrinsic(&self, at: &GBlockId, overlay: &mut client::runtime_api::OverlayedChanges, extrinsic: &<GBlock as BlockT>::Extrinsic) -> Result<ApplyResult, Self::Error> {
-		unsafe { (*self.call).call_at_state(at, "apply_extrinsic", extrinsic.encode(), overlay).map(decode) }
+	fn apply_extrinsic(&self, at: &GBlockId, extrinsic: &<GBlock as BlockT>::Extrinsic) -> Result<ApplyResult, client::error::Error> {
+		self.call_api_at(at, "apply_extrinsic", extrinsic)
 	}
 
-	fn finalise_block(&self, at: &GBlockId, overlay: &mut client::runtime_api::OverlayedChanges) -> Result<<GBlock as BlockT>::Header, Self::Error> {
-		unsafe { (*self.call).call_at_state(at, "finalise_block", Vec::new(), overlay).map(decode) }
+	fn finalise_block(&self, at: &GBlockId) -> Result<<GBlock as BlockT>::Header, client::error::Error> {
+		self.call_api_at(at, "finalise_block", &())
 	}
 
 	fn inherent_extrinsics<Inherent: Decode + Encode, Unchecked: Decode + Encode>(
 		&self, at: &GBlockId, inherent: &Inherent
-	) -> Result<Vec<Unchecked>, Self::Error> {
-		unsafe { (*self.call).call_api_at(at, "inherent_extrinsics", inherent.encode()).map(decode) }
+	) -> Result<Vec<Unchecked>, client::error::Error> {
+		self.call_api_at(at, "inherent_extrinsics", inherent)
 	}
 
-	fn check_inherents<Inherent: Decode + Encode, Error: Decode + Encode>(&self, at: &GBlockId, block: &GBlock, inherent: &Inherent) -> Result<Result<(), Error>, Self::Error> {
-		unsafe { (*self.call).call_api_at(at, "check_inherents", (block, inherent).encode()).map(decode) }
+	fn check_inherents<Inherent: Decode + Encode, Error: Decode + Encode>(&self, at: &GBlockId, block: &GBlock, inherent: &Inherent) -> Result<Result<(), Error>, client::error::Error> {
+		self.call_api_at(at, "check_inherents", &(block, inherent))
 	}
 
-	fn random_seed(&self, at: &GBlockId) -> Result<<GBlock as BlockT>::Hash, Self::Error> {
-		unsafe { (*self.call).call_api_at(at, "random_seed", Vec::new()).map(decode) }
+	fn random_seed(&self, at: &GBlockId) -> Result<<GBlock as BlockT>::Hash, client::error::Error> {
+		self.call_api_at(at, "random_seed", &())
 	}
 }
 
 #[cfg(feature = "std")]
 impl client::runtime_api::TaggedTransactionQueue<GBlock> for ClientWithApi {
-	type Error = client::error::Error;
-
 	fn validate_transaction<TransactionValidity: Encode + Decode>(
 		&self,
 		at: &GBlockId,
 		utx: &<GBlock as BlockT>::Extrinsic
-	) -> Result<TransactionValidity, Self::Error> {
-		unsafe { (*self.call).call_api_at(at, "validate_transaction", utx.encode()).map(decode) }
+	) -> Result<TransactionValidity, client::error::Error> {
+		self.call_api_at(at, "validate_transaction", utx)
 	}
 }
 
-//TODO: We can not use `Vec<u8>` here. We need to introduce a new OpaqueType,
-// that just decodes by returning the input bytes.
 #[cfg(feature = "std")]
-impl client::runtime_api::Metadata<GBlock, Vec<u8>> for ClientWithApi {
-	type Error = client::error::Error;
-
-	fn metadata(&self, at: &GBlockId,) -> Result<Vec<u8>, Self::Error> {
-		unsafe { (*self.call).call_api_at(at, "metadata", ().encode()).map(decode) }
+impl client::runtime_api::Metadata<GBlock> for ClientWithApi {
+	fn metadata(&self, at: &GBlockId) -> Result<OpaqueMetadata, client::error::Error> {
+		self.call_api_at(at, "metadata", &())
 	}
 }
 
 impl_apis! {
-	impl Core<Block, SessionKey> for Runtime {
+	impl Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
 		}
@@ -363,9 +408,9 @@ impl_apis! {
 		}
 	}
 
-	impl Metadata<RuntimeMetadata> for Runtime {
-		fn metadata() -> RuntimeMetadata {
-			Runtime::metadata()
+	impl Metadata for Runtime {
+		fn metadata() -> OpaqueMetadata {
+			Runtime::metadata().into()
 		}
 	}
 

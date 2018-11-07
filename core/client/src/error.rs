@@ -106,6 +106,12 @@ error_chain! {
 			display("Remote data fetch has been failed"),
 		}
 
+		/// Error decoding call result.
+		CallResultDecode(method: &'static str) {
+			description("Error decoding call result")
+			display("Error decoding call result of {}", method)
+		}
+
 		/// Changes tries are not supported.
 		ChangesTriesNotSupported {
 			description("changes tries are not supported"),

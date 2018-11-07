@@ -21,9 +21,7 @@ use client;
 use keyring;
 use runtime;
 use runtime_primitives::traits::ProvideRuntimeApi;
-use client::runtime_api::{Core, BlockBuilder};
-use primitives::AuthorityId;
-use state_machine::OverlayedChanges;
+use client::runtime_api::BlockBuilder;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {
@@ -32,9 +30,8 @@ pub trait BlockBuilderExt {
 }
 
 impl<'a, A> BlockBuilderExt for client::block_builder::BlockBuilder<'a, runtime::Block, A> where
-	A: ProvideRuntimeApi + client::blockchain::HeaderBackend<runtime::Block>,
-	A::Api: Core<runtime::Block, AuthorityId, Error=client::error::Error, OverlayedChanges=OverlayedChanges> +
-	BlockBuilder<runtime::Block, Error=client::error::Error, OverlayedChanges=OverlayedChanges>
+	A: ProvideRuntimeApi + client::blockchain::HeaderBackend<runtime::Block> + 'a,
+	A::Api: BlockBuilder<runtime::Block>
 {
 	fn push_transfer(&mut self, transfer: runtime::Transfer) -> Result<(), client::error::Error> {
 		self.push(sign_tx(transfer))

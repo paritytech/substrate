@@ -608,21 +608,15 @@ pub trait Extrinsic {
 }
 
 /// Auxiliary wrapper that holds an API instance and binds it to the given lifetime.
-pub struct Api<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
+pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
 
-impl<'a, T> Api<'a, T> {
-	pub unsafe fn into_inner(self) -> T {
-		self.0
-	}
-}
-
-impl<'a, T> From<T> for Api<'a, T> {
+impl<'a, T> From<T> for ApiRef<'a, T> {
 	fn from(api: T) -> Self {
-		Api(api, Default::default())
+		ApiRef(api, Default::default())
 	}
 }
 
-impl<'a, T> rstd::ops::Deref for Api<'a, T> {
+impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
@@ -630,25 +624,11 @@ impl<'a, T> rstd::ops::Deref for Api<'a, T> {
 	}
 }
 
-impl<'a, T> rstd::ops::DerefMut for Api<'a, T> {
-	fn deref_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
-
-pub trait ApiWithOverlay: rstd::ops::Deref<Target=<Self as ApiWithOverlay>::Api> {
-	type Api;
-
-	fn map_api_result<F: FnOnce(&Self::Api) -> Result<R, E>, R, E>(&mut self, map_call: F) -> Result<R, E>;
-}
-
 /// Something that provides a runtime API.
 pub trait ProvideRuntimeApi {
 	/// The concrete type that provides the API.
 	type Api;
-	type ApiWithOverlay: self::ApiWithOverlay<Api=Self::Api>;
 
 	/// Returns the runtime API.
-	fn runtime_api_with_overlay<'a>(&'a self) -> Api<'a, Self::ApiWithOverlay>;
-	fn runtime_api<'a>(&'a self) -> Api<'a, Self::Api>;
+	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
 }

@@ -11,7 +11,6 @@ serde_derive = { version = "1.0", optional = true }
 safe-mix = { version = "1.0", default-features = false }
 parity-codec = "2.1"
 parity-codec-derive = "2.1"
-sr-api = { path = "../../core/sr-api", default-features = false }
 sr-std = { path = "../../core/sr-std" }
 srml-support = { path = "../../srml/support" }
 substrate-primitives = { path = "../../core/primitives" }
@@ -38,7 +37,6 @@ default = ["std"]
 std = [
 	"parity-codec/std",
 	"substrate-primitives/std",
-	"sr-api/std",
 	"sr-std/std",
 	"srml-support/std",
 	"srml-balances/std",
@@ -59,5 +57,5 @@ std = [
 	"serde_derive",
 	"serde/std",
 	"safe-mix/std",
-	"substrate-client"
+	"substrate-client",
 ]

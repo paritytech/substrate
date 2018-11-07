@@ -20,7 +20,7 @@ use std::{
 	sync::Arc,
 	marker::PhantomData,
 };
-use client::{self, runtime_api::TaggedTransactionQueue, blockchain::HeaderBackend};
+use client::{runtime_api::TaggedTransactionQueue, blockchain::HeaderBackend};
 use parity_codec::Encode;
 use txpool;
 use substrate_primitives::{
@@ -57,7 +57,7 @@ impl<T, Block> ChainApi<T, Block> where
 impl<T, Block> txpool::ChainApi for ChainApi<T, Block> where
 	Block: traits::Block<Hash=H256>,
 	T: traits::ProvideRuntimeApi + HeaderBackend<Block>,
-	T::Api: TaggedTransactionQueue<Block, Error=client::error::Error>
+	T::Api: TaggedTransactionQueue<Block>
 {
 	type Block = Block;
 	type Hash = H256;

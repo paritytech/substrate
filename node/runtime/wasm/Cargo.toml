@@ -12,7 +12,6 @@ safe-mix = { version = "1.0", default-features = false}
 parity-codec-derive = { version = "2.1" }
 parity-codec = { version = "2.1", default-features = false }
 substrate-primitives = { path = "../../../core/primitives", default-features = false }
-sr-api = { path = "../../../core/sr-api", default-features = false }
 sr-std = { path = "../../../core/sr-std", default-features = false }
 srml-support = { path = "../../../srml/support", default-features = false }
 srml-balances = { path = "../../../srml/balances", default-features = false }

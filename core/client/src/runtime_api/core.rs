@@ -15,48 +15,50 @@
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
 use runtime_version::RuntimeVersion;
-use rstd::vec::Vec;
-use runtime_primitives::{traits::{Block as BlockT, Api}, generic::BlockId};
+use runtime_primitives::{traits::{Block as BlockT, ApiRef}, generic::BlockId};
 use primitives::AuthorityId;
+use error::Result;
+use state_machine::OverlayedChanges;
+use std::result;
 
 /// Something that can be constructed to a runtime api.
 pub trait ConstructRuntimeApi<Block: BlockT>: Sized {
-	type Error;
-
 	/// Construct the runtime api.
-	fn construct_runtime_api<'a, T: CallApiAt<Block, Error=Self::Error>>(call: &'a T) -> Api<'a, Self>;
+	fn construct_runtime_api<'a, T: CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self>;
+}
 
-	fn replace_call<'a, T: CallApiAt<Block, Error=Self::Error>>(&self, new_call: &'a T);
+pub trait ApiExt {
+	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(&self, map_call: F) -> result::Result<R, E>;
 }
 
 /// Something that can call into the runtime.
 pub trait CallApiAt<Block: BlockT> {
-	type Error;
 	/// Call the given API function with the given arguments and returns the result at the given
 	/// block.
 	fn call_api_at(
-		&mut self,
+		&self,
 		at: &BlockId<Block>,
 		function: &'static str,
 		args: Vec<u8>,
-	) -> ::std::result::Result<Vec<u8>, Self::Error>;
+		changes: &mut OverlayedChanges,
+		initialised_block: &mut Option<BlockId<Block>>,
+	) -> Result<Vec<u8>>;
 }
 
 /// The `Core` api trait that is mandantory for each runtime.
-pub trait Core<Block: BlockT>: 'static + Send + Sync + ConstructRuntimeApi<Block, Error=<Self as Core<Block>>::Error> {
-	type Error;
+pub trait Core<Block: BlockT>: 'static + Send + Sync + ConstructRuntimeApi<Block> + ApiExt {
 	/// Returns the version of the runtime.
-	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, <Self as Core<Block>>::Error>;
+	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion>;
 	/// Returns the authorities.
-	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>, <Self as Core<Block>>::Error>;
+	fn authorities(&self, at: &BlockId<Block>) -> Result<Vec<AuthorityId>>;
 	/// Execute the given block.
-	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<(), <Self as Core<Block>>::Error>;
+	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<()>;
 	/// Initialise a block with the given header.
 	fn initialise_block(
         &self,
         at: &BlockId<Block>,
         header: &<Block as BlockT>::Header
-    ) -> Result<(), <Self as Core<Block>>::Error>;
+    ) -> Result<()>;
 }
 
 pub mod runtime {

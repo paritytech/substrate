@@ -21,14 +21,14 @@ use serde::{Serialize, de::DeserializeOwned};
 use tokio::runtime::TaskExecutor;
 use chain_spec::ChainSpec;
 use client_db;
-use client::{self, Client};
+use client::{self, Client, runtime_api::{TaggedTransactionQueue, Metadata}};
 use {error, Service, RpcConfig, maybe_start_server, TransactionPoolAdapter};
 use network::{self, OnDemand, import_queue::ImportQueue};
 use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
 use config::Configuration;
-use primitives::{H256, Blake2Hasher};
+use primitives::Blake2Hasher;
 use rpc;
 
 // Type aliases.
@@ -129,6 +129,7 @@ pub trait StartRPC<C: Components> {
 	) -> Result<(Option<rpc::HttpServer>, Option<rpc::WsServer>), error::Error>;
 }
 
+<<<<<<< HEAD
 impl<T: Components> StartRPC<Self> for T where
 	T::RuntimeApi:
 		client::runtime_api::Metadata<
@@ -145,6 +146,9 @@ impl<T: Components> StartRPC<Self> for T where
 		>,
 	for<'de> SignedBlock<ComponentBlock<T>>: ::serde::Deserialize<'de>,
 {
+=======
+impl<T: Components> StartRPC<Self> for T where T::RuntimeApi: Metadata<ComponentBlock<T>> {
+>>>>>>> Move `sr-api` into client and more refactoring
 	fn start_rpc(
 		client: Arc<Client<T::Backend, T::Executor, ComponentBlock<T>, T::RuntimeApi>>,
 		chain_name: String,
@@ -192,15 +196,7 @@ pub trait CreateNetworkParams<C: Components> {
 }
 
 impl<T: Components> CreateNetworkParams<Self> for T where
-	T::RuntimeApi:
-		client::runtime_api::ConstructRuntimeApi<Block=<T::Factory as ServiceFactory>::Block>
-		+ client::runtime_api::Core<
-			ComponentBlock<T>,
-			primitives::AuthorityId,
-			Error=client::error::Error,
-			OverlayedChanges=client::runtime_api::OverlayedChanges
-		>
-		+ client::runtime_api::TaggedTransactionQueue<ComponentBlock<T>, Error=client::error::Error>
+	T::RuntimeApi: TaggedTransactionQueue<ComponentBlock<T>>
 {
 	fn create_network_params<S>(
 		client: Arc<Client<T::Backend, T::Executor, ComponentBlock<T>, T::RuntimeApi>>,

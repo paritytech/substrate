@@ -23,7 +23,7 @@ use std::time::{self, Duration, Instant};
 use std;
 
 use client::{self, error, Client as SubstrateClient, CallExecutor};
-use client::runtime_api::{Core, BlockBuilder as BlockBuilderAPI, id::BLOCK_BUILDER, ConstructRuntimeApi};
+use client::runtime_api::{BlockBuilder as BlockBuilderAPI, id::BLOCK_BUILDER, core::Core};
 use codec::{Decode, Encode};
 use consensus_common::{self, InherentData, evaluation, offline_tracker::OfflineTracker};
 use primitives::{H256, AuthorityId, ed25519, Blake2Hasher};
@@ -47,7 +47,9 @@ pub trait BlockBuilder<Block: BlockT> {
 }
 
 /// Local client abstraction for the consensus.
-pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where <Self as ProvideRuntimeApi>::Api: Core<Self::Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> {
+pub trait AuthoringApi: Send + Sync + ProvideRuntimeApi where
+	<Self as ProvideRuntimeApi>::Api: Core<Self::Block>
+{
 	/// The block used for this API type.
 	type Block: BlockT;
 	/// The error used by this API type.
@@ -66,7 +68,7 @@ impl<'a, B, E, Block, RA> BlockBuilder<Block> for client::block_builder::BlockBu
 	B: client::backend::Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + BlockBuilderAPI<Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Core<Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + ConstructRuntimeApi<Block=Block>
+	RA: BlockBuilderAPI<Block>,
 {
 	fn push_extrinsic(&mut self, extrinsic: <Block as BlockT>::Extrinsic) -> Result<(), error::Error> {
 		client::block_builder::BlockBuilder::push(self, extrinsic).map_err(Into::into)
@@ -77,7 +79,7 @@ impl<B, E, Block, RA> AuthoringApi for SubstrateClient<B, E, Block, RA> where
 	B: client::backend::Backend<Block, Blake2Hasher> + Send + Sync + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync + Clone + 'static,
 	Block: BlockT<Hash=H256>,
-	RA: Send + Sync + BlockBuilderAPI<Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Core<Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + ConstructRuntimeApi<Block=Block>
+	RA: BlockBuilderAPI<Block>,
 {
 	type Block = Block;
 	type Error = client::error::Error;
@@ -116,7 +118,7 @@ pub struct ProposerFactory<C, A> where A: txpool::ChainApi {
 
 impl<C, A> consensus_common::Environment<<C as AuthoringApi>::Block> for ProposerFactory<C, A> where
 	C: AuthoringApi,
-	<C as ProvideRuntimeApi>::Api:BlockBuilderAPI<<C as AuthoringApi>::Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Core<<C as AuthoringApi>::Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + ConstructRuntimeApi<Block=<C as AuthoringApi>::Block>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderAPI<<C as AuthoringApi>::Block>,
 	A: txpool::ChainApi<Block=<C as AuthoringApi>::Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
@@ -171,7 +173,7 @@ pub struct Proposer<Block: BlockT, C, A: txpool::ChainApi> {
 impl<Block, C, A> consensus_common::Proposer<<C as AuthoringApi>::Block> for Proposer<Block, C, A> where
 	Block: BlockT,
 	C: AuthoringApi<Block=Block>,
-	<C as ProvideRuntimeApi>::Api:BlockBuilderAPI<Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + Core<Block, AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> + ConstructRuntimeApi<Block=Block>,
+	<C as ProvideRuntimeApi>::Api: BlockBuilderAPI<Block>,
 	A: txpool::ChainApi<Block=Block>,
 	client::error::Error: From<<C as AuthoringApi>::Error>
 {
