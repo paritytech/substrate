@@ -136,6 +136,7 @@ pub trait SimpleArithmetic:
 	PartialOrd<Self> + Ord +
 	HasCompact
 {}
+
 impl<T:
 	Zero + One + IntegerSquareRoot + AsPrimitive<u64> +
 	Add<Self, Output = Self> + AddAssign<Self> +
