@@ -1,5 +1,6 @@
 doc
 target
 .idea/
-Dockerfile
 .dockerignore
+.git/
+docker/

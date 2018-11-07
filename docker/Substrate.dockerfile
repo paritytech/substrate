@@ -1,18 +1,11 @@
-FROM frolvlad/alpine-glibc AS builder
+FROM substrate-deps as builder
 LABEL maintainer="chevdor@gmail.com"
 LABEL description="This is the build stage for Substrate. Here we create the binary."
 
-RUN apk add build-base \
-    cmake \
-    linux-headers \
-    openssl-dev && \
-    apk add --repository http://nl.alpinelinux.org/alpine/edge/community cargo
-
 ARG PROFILE=release
+
 WORKDIR /substrate
-
 COPY . /substrate
-
 RUN cargo build --$PROFILE
 
 # ===== SECOND STAGE ======
@@ -20,6 +13,7 @@ RUN cargo build --$PROFILE
 FROM alpine:3.8
 LABEL maintainer="chevdor@gmail.com"
 LABEL description="This is the 2nd stage: a very small image where we copy the Substrate binary."
+
 ARG PROFILE=release
 COPY --from=builder /substrate/target/$PROFILE/substrate /usr/local/bin
 
