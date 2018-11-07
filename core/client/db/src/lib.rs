@@ -70,7 +70,7 @@ use parking_lot::RwLock;
 use primitives::{H256, AuthorityId, Blake2Hasher, ChangesTrieConfiguration};
 use primitives::storage::well_known_keys;
 use runtime_primitives::{generic::BlockId, Justification, StorageMap, ChildrenStorageMap};
-use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, As, NumberFor, Zero, Digest, DigestItem};
+use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, AsPrimitive, NumberFor, Zero, Digest, DigestItem};
 use runtime_primitives::BuildStorage;
 use state_machine::backend::Backend as StateBackend;
 use executor::RuntimeInfo;
@@ -428,7 +428,7 @@ impl<Block: BlockT> DbChangesTrieStorage<Block> {
 
 impl<Block: BlockT> state_machine::ChangesTrieRootsStorage<Blake2Hasher> for DbChangesTrieStorage<Block> {
 	fn root(&self, block: u64) -> Result<Option<H256>, String> {
-		Ok(read_db::<Block>(&*self.db, columns::HASH_LOOKUP, columns::HEADER, BlockId::Number(As::sa(block)))
+		Ok(read_db::<Block>(&*self.db, columns::HASH_LOOKUP, columns::HEADER, BlockId::Number(block.as_())))
 			.map_err(|err| format!("{}", err))
 			.and_then(|header| match header {
 				Some(header) => Block::Header::decode(&mut &header[..])
@@ -523,7 +523,7 @@ impl<Block: BlockT> Backend<Block> {
 			let hash = if new_canonical == number_u64 {
 				hash
 			} else {
-				::client::blockchain::HeaderBackend::hash(&self.blockchain, As::sa(new_canonical))?
+				::client::blockchain::HeaderBackend::hash(&self.blockchain, new_canonical.as_()))?
 					.expect("existence of block with number `new_canonical` \
 						implies existence of blocks with all numbers before it; qed")
 			};
@@ -811,15 +811,15 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 		use client::blockchain::HeaderBackend;
 		let mut best = self.blockchain.info()?.best_number;
 		for c in 0 .. n.as_() {
-			if best == As::sa(0) {
-				return Ok(As::sa(c))
+			if best == 0_u64.as() {
+				return Ok(c.as_())
 			}
 			let mut transaction = DBTransaction::new();
 			match self.storage.state_db.revert_one() {
 				Some(commit) => {
 					apply_state_commit(&mut transaction, commit);
 					let _removed = best.clone();
-					best -= As::sa(1);
+					best -= 1_u64.as_();
 					let header = self.blockchain.header(BlockId::Number(best))?.ok_or_else(
 						|| client::error::ErrorKind::UnknownBlock(
 							format!("Error reverting to {}. Block header not found.", best)))?;
@@ -831,7 +831,7 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 					self.blockchain.update_meta(header.hash().clone(), best.clone(), true, false);
 					self.blockchain.leaves.write().revert(header.hash().clone(), header.number().clone(), header.parent_hash().clone());
 				}
-				None => return Ok(As::sa(c))
+				None => return Ok(c.as_())
 			}
 		}
 		Ok(n)
