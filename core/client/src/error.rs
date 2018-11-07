@@ -41,7 +41,7 @@ error_chain! {
 		}
 
 		/// Applying extrinsic error.
-		ApplyExtinsicFailed(e: ApplyError) {
+		ApplyExtrinsicFailed(e: ApplyError) {
 			description("Extrinsic error"),
 			display("Extrinsic error: {:?}", e),
 		}
