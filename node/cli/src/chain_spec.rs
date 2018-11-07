@@ -208,8 +208,8 @@ pub fn testnet_genesis(
 		}),
 		council_seats: Some(CouncilSeatsConfig {
 			active_council: endowed_accounts.iter()
-				.filter(|a| initial_authorities.iter().find(|&b| a.as_bytes() == b.0).is_none())
-				.map(|a| (a.clone(), 1000000)).collect(),
+			.filter(|a| initial_authorities.iter().find(|&b| a.0 == b.0).is_none())
+				.map(|a| (a.clone().into(), 1000000)).collect(),
 			candidacy_bond: 10,
 			voter_bond: 2,
 			present_slash_per_voter: 1,
