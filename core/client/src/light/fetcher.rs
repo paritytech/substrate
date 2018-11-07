@@ -22,7 +22,7 @@ use futures::IntoFuture;
 use hash_db::Hasher;
 use heapsize::HeapSizeOf;
 use primitives::ChangesTrieConfiguration;
-use runtime_primitives::traits::{As, Block as BlockT, Header as HeaderT, NumberFor};
+use runtime_primitives::traits::{AsPrimitive, Block as BlockT, Header as HeaderT, NumberFor};
 use state_machine::{CodeExecutor, ChangesTrieRootsStorage, read_proof_check,
 	key_changes_proof_check};
 
@@ -169,6 +169,7 @@ impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 		E: CodeExecutor<H>,
 		H: Hasher,
 		H::Out: Ord + HeapSizeOf,
+		u64: AsPrimitive<NumberFor<Block>>,
 {
 	fn check_header_proof(
 		&self,
@@ -232,7 +233,7 @@ impl<E, Block, H> FetchChecker<Block> for LightDataChecker<E, H>
 			request.last_block.0.as_(),
 			remote_max.as_(),
 			&request.key)
-		.map(|pairs| pairs.into_iter().map(|(b, x)| (As::sa(b), x)).collect())
+		.map(|pairs| pairs.into_iter().map(|(b, x)| (b.as_(), x)).collect())
 		.map_err(|err| ClientErrorKind::ChangesTrieAccessFailed(err).into())
 	}
 }
