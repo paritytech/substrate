@@ -185,6 +185,38 @@ fn should_notify_about_latest_block() {
 }
 
 #[test]
+fn should_notify_about_finalized_block() {
+	let mut core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+	let (subscriber, id, transport) = pubsub::Subscriber::new_test("test");
+
+	{
+		let api = Chain {
+			client: Arc::new(test_client::new()),
+			subscriptions: Subscriptions::new(remote),
+		};
+
+		api.subscribe_finalized_heads(Default::default(), subscriber);
+
+		// assert id assigned
+		assert_eq!(core.block_on(id), Ok(Ok(SubscriptionId::Number(1))));
+
+		let builder = api.client.new_block().unwrap();
+		api.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+		api.client.finalize_block(BlockId::number(1), true).unwrap();
+	}
+
+	// assert initial head sent.
+	let (notification, next) = core.block_on(transport.into_future()).unwrap();
+	assert!(notification.is_some());
+	// assert notification sent to transport
+	let (notification, next) = core.block_on(next.into_future()).unwrap();
+	assert!(notification.is_some());
+	// no more notifications on this channel
+	assert_eq!(core.block_on(next.into_future()).unwrap().0, None);
+}
+
+#[test]
 fn should_return_runtime_version() {
 	let core = ::tokio::runtime::Runtime::new().unwrap();
 	let remote = core.executor();
