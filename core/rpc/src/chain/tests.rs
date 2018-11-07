@@ -150,7 +150,39 @@ fn should_return_block_hash() {
 		client.block_hash(Some(1u64).into()),
 		Ok(Some(ref x)) if x == &block.hash()
 	);
+}
 
+
+#[test]
+fn should_return_finalised_hash() {
+	let core = ::tokio::runtime::Runtime::new().unwrap();
+	let remote = core.executor();
+
+	let client = Chain {
+		client: Arc::new(test_client::new()),
+		subscriptions: Subscriptions::new(remote),
+	};
+
+	assert_matches!(
+		client.finalised_head(),
+		Ok(ref x) if x == &client.client.genesis_hash()
+	);
+
+	// import new block
+	let builder = client.client.new_block().unwrap();
+	client.client.justify_and_import(BlockOrigin::Own, builder.bake().unwrap()).unwrap();
+	// no finalisation yet
+	assert_matches!(
+		client.finalised_head(),
+		Ok(ref x) if x == &client.client.genesis_hash()
+	);
+
+	// finalise
+	client.client.finalize_block(BlockId::number(1), true).unwrap();
+	assert_matches!(
+		client.finalised_head(),
+		Ok(ref x) if x == &client.client.block_hash(1).unwrap().unwrap()
+	);
 }
 
 #[test]

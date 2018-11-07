@@ -56,6 +56,10 @@ build_rpc_trait! {
 		#[rpc(name = "chain_getBlockHash", alias = ["chain_getHead", ])]
 		fn block_hash(&self, Trailing<Number>) -> Result<Option<Hash>>;
 
+		/// Get hash of the last finalised block in the canon chain.
+		#[rpc(name = "chain_getFinalisedHead")]
+		fn finalised_head(&self) -> Result<Hash>;
+
 		/// Get the runtime version.
 		#[rpc(name = "chain_getRuntimeVersion")]
 		fn runtime_version(&self, Trailing<Hash>) -> Result<RuntimeVersion>;
@@ -183,6 +187,10 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::
 			None => Some(self.client.info()?.chain.best_hash),
 			Some(number) => self.client.header(&BlockId::number(number))?.map(|h| h.hash()),
 		})
+	}
+
+	fn finalised_head(&self) -> Result<Block::Hash> {
+		Ok(self.client.info()?.chain.finalized_hash)
 	}
 
 	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
