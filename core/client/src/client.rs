@@ -1107,7 +1107,6 @@ pub(crate) mod tests {
 	use test_client::client::backend::Backend as TestBackend;
 	use test_client::BlockBuilderExt;
 	use test_client::runtime::{self, Block, Transfer, ClientWithApi, test_api::TestAPI};
-	use codec::{Decode, Encode};
 
 	/// Returns tuple, consisting of:
 	/// 1) test client pre-filled with blocks changing balances;

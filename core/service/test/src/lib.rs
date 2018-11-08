@@ -181,11 +181,7 @@ impl<F: ServiceFactory> TestNet<F> {
 
 pub fn connectivity<F: ServiceFactory>(spec: FactoryChainSpec<F>) where
 	<F as ServiceFactory>::RuntimeApi:
-		Send +
-		Sync +
-		client::runtime_api::Core<<F as service::ServiceFactory>::Block, primitives::AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> +
-		client::runtime_api::BlockBuilder<<F as service::ServiceFactory>::Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> +
-		client::runtime_api::ConstructRuntimeApi<Block=<F as service::ServiceFactory>::Block>
+		client::runtime_api::BlockBuilder<<F as service::ServiceFactory>::Block>
 {
 	const NUM_NODES: u32 = 10;
 	{
@@ -227,12 +223,8 @@ where
 	B: Fn(&F::FullService) -> ImportBlock<F::Block>,
 	E: Fn(&F::FullService) -> FactoryExtrinsic<F>,
 	<F as ServiceFactory>::RuntimeApi:
-		Send +
-		Sync +
-		client::runtime_api::Core<<F as service::ServiceFactory>::Block, primitives::AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> +
-		client::runtime_api::BlockBuilder<<F as service::ServiceFactory>::Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> +
-		client::runtime_api::TaggedTransactionQueue<<F as service::ServiceFactory>::Block, Error=client::error::Error> +
-		client::runtime_api::ConstructRuntimeApi<Block=<F as service::ServiceFactory>::Block>
+		client::runtime_api::BlockBuilder<<F as service::ServiceFactory>::Block> +
+		client::runtime_api::TaggedTransactionQueue<<F as service::ServiceFactory>::Block>
 {
 	const NUM_NODES: u32 = 10;
 	const NUM_BLOCKS: usize = 512;
@@ -270,12 +262,7 @@ pub fn consensus<F>(spec: FactoryChainSpec<F>, authorities: Vec<String>)
 where
 	F: ServiceFactory,
 	<F as ServiceFactory>::RuntimeApi:
-		Send +
-		Sync +
-		client::runtime_api::Core<<F as service::ServiceFactory>::Block, primitives::AuthorityId, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> +
-		client::runtime_api::BlockBuilder<<F as service::ServiceFactory>::Block, Error=client::error::Error, OverlayedChanges=client::runtime_api::OverlayedChanges> +
-		client::runtime_api::ConstructRuntimeApi<Block=<F as service::ServiceFactory>::Block>
-
+		client::runtime_api::BlockBuilder<<F as service::ServiceFactory>::Block>
 {
 	const NUM_NODES: u32 = 20;
 	const NUM_BLOCKS: u64 = 200;
