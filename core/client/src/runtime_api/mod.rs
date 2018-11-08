@@ -18,16 +18,20 @@
 //! Core api's are also declared here.
 
 #[doc(hidden)]
+#[cfg(feature = "std")]
 pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
 pub use runtime_primitives::{traits::Block as BlockT, generic::BlockId};
+#[cfg(feature = "std")]
 use runtime_primitives::traits::ApiRef;
 use runtime_version::ApiId;
 #[doc(hidden)]
-pub use std::slice;
+pub use rstd::slice;
+#[cfg(feature = "std")]
+use rstd::result;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
-use std::result;
+#[cfg(feature = "std")]
 use error;
 
 mod core;
@@ -36,12 +40,14 @@ mod macros;
 mod traits;
 
 /// Something that can be constructed to a runtime api.
+#[cfg(feature = "std")]
 pub trait ConstructRuntimeApi<Block: BlockT>: Sized {
 	/// Construct an instance of the runtime api.
 	fn construct_runtime_api<'a, T: CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self>;
 }
 
 /// An extension for the `RuntimeApi`.
+#[cfg(feature = "std")]
 pub trait ApiExt {
 	/// The given closure will be called with api instance. Inside the closure any api call is
 	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
@@ -55,6 +61,7 @@ pub trait ApiExt {
 }
 
 /// Something that can call the runtime api at a given block.
+#[cfg(feature = "std")]
 pub trait CallApiAt<Block: BlockT> {
 	/// Calls the given api function with the given encoded arguments at the given block
 	/// and returns the encoded result.
@@ -82,7 +89,7 @@ pub mod id {
 	pub const METADATA: ApiId = *b"metadata";
 }
 
-pub use self::core::Core;
+pub use self::core::*;
 pub use self::traits::*;
 
 /// The runtime apis that should be implemented for the `Runtime`.

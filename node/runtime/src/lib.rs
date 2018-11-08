@@ -32,7 +32,6 @@ extern crate serde_derive;
 
 extern crate substrate_primitives;
 
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate substrate_client as client;
 
@@ -58,18 +57,25 @@ extern crate srml_upgrade_key as upgrade_key;
 extern crate sr_version as version;
 extern crate node_primitives;
 
+#[cfg(feature = "std")]
 use codec::{Encode, Decode};
 use rstd::prelude::*;
 use substrate_primitives::u32_trait::{_2, _4};
 use node_primitives::{
-	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
-	SessionKey, Signature, Block as GBlock,
+	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index, SessionKey, Signature
 };
-use client::{block_builder::api::runtime::*, runtime_api::{runtime::*, id::*, ApiExt}};
+#[cfg(feature = "std")]
+use node_primitives::Block as GBlock;
+use client::{block_builder::api::runtime::*, runtime_api::{runtime::*, id::*}};
+#[cfg(feature = "std")]
+use client::runtime_api::ApiExt;
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, ApiRef};
+use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT};
+#[cfg(feature = "std")]
+use runtime_primitives::traits::ApiRef;
+#[cfg(feature = "std")]
 use substrate_primitives::AuthorityId;
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
@@ -325,6 +331,7 @@ impl ClientWithApi {
 	}
 }
 
+#[cfg(feature = "std")]
 type GBlockId = generic::BlockId<GBlock>;
 
 #[cfg(feature = "std")]

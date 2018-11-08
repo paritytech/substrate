@@ -14,8 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Utility struct to build a block.
-
+use super::api::BlockBuilder as BlockBuilderApi;
 use std::vec::Vec;
 use codec::Encode;
 use blockchain::HeaderBackend;
@@ -27,28 +26,6 @@ use runtime_primitives::generic::BlockId;
 use runtime_api::Core;
 use error;
 use runtime_primitives::ApplyOutcome;
-
-/// The runtime api for building blocks.
-pub mod api {
-	use runtime_primitives::{traits::Block as BlockT, ApplyResult};
-
-	decl_runtime_apis! {
-		/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
-		pub trait BlockBuilder<Block: BlockT> {
-			/// Apply the given extrinsics.
-			fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
-			/// Finish the current block.
-			fn finalise_block() -> <Block as BlockT>::Header;
-			/// Generate inherent extrinsics.
-			fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
-			/// Check that the inherents are valid.
-			fn check_inherents<InherentData, Error>(block: Block, data: InherentData) -> Result<(), Error>;
-			/// Generate a random seed.
-			fn random_seed() -> <Block as BlockT>::Hash;
-		}
-	}
-}
-use self::api::BlockBuilder as BlockBuilderApi;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block, A: ProvideRuntimeApi> where Block: BlockT {
@@ -107,7 +84,7 @@ where
 			block_id: &BlockId<Block>,
 			xt: Block::Extrinsic,
 			extrinsics: &mut Vec<Block::Extrinsic>
-		) -> error::Result<()> where T: api::BlockBuilder<Block> {
+		) -> error::Result<()> where T: BlockBuilderApi<Block> {
 			api.map_api_result(|api| {
 				match api.apply_extrinsic(block_id, &xt)? {
 					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {

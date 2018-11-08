@@ -4,27 +4,55 @@ version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 
 [dependencies]
-error-chain = "0.12"
-fnv = "1.0"
-log = "0.4"
-parking_lot = "0.4"
-hex-literal = "0.1"
-futures = "0.1.17"
-slog = "^2"
-heapsize = "0.4"
-substrate-consensus-common = { path = "../consensus/common" }
-parity-codec = "2.1"
-substrate-executor = { path = "../executor" }
-substrate-primitives = { path = "../primitives" }
-sr-primitives = { path = "../sr-primitives" }
-sr-version = { path = "../sr-version" }
-substrate-state-machine = { path = "../state-machine" }
-substrate-keyring = { path = "../keyring" }
-substrate-trie = { path = "../trie" }
-substrate-telemetry = { path = "../telemetry" }
-hash-db = { git = "https://github.com/paritytech/trie" }
-kvdb = "0.1"
+error-chain = { version = "0.12", optional = true }
+fnv = { version = "1.0", optional = true }
+log = { version = "0.4", optional = true }
+parking_lot = { version = "0.4", optional = true }
+hex-literal = { version = "0.1", optional = true }
+futures = { version = "0.1.17", optional = true }
+slog = { version = "^2", optional = true }
+heapsize = { version = "0.4", optional = true }
+substrate-consensus-common = { path = "../consensus/common", optional = true }
+substrate-executor = { path = "../executor", optional = true }
+substrate-state-machine = { path = "../state-machine", optional = true }
+substrate-keyring = { path = "../keyring", optional = true }
+substrate-trie = { path = "../trie", optional = true }
+substrate-telemetry = { path = "../telemetry", optional = true }
+hash-db = { git = "https://github.com/paritytech/trie", optional = true }
+kvdb = { version = "0.1", optional = true }
+
+parity-codec = { version = "2.1", default-features = false }
+substrate-primitives = { path = "../primitives", default-features = false }
+sr-primitives = { path = "../sr-primitives", default-features = false }
+sr-version = { path = "../sr-version", default-features = false }
+sr-std = { path = "../sr-std", default-features = false }
 
 [dev-dependencies]
 substrate-test-client = { path = "../test-client" }
 kvdb-memorydb = "0.1"
+
+[features]
+default = ["std"]
+std = [
+	"parity-codec/std",
+	"substrate-consensus-common",
+	"substrate-primitives/std",
+	"parking_lot",
+	"error-chain",
+	"fnv",
+	"log",
+	"hex-literal",
+	"futures",
+	"slog",
+	"heapsize",
+	"substrate-executor",
+	"sr-primitives/std",
+	"sr-version/std",
+	"sr-std/std",
+	"substrate-state-machine",
+	"substrate-keyring",
+	"substrate-trie",
+	"substrate-telemetry",
+	"hash-db",
+	"kvdb"
+]

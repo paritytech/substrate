@@ -9,6 +9,7 @@ hex-literal = { version = "0.1.0", optional = true }
 parity-codec = { version = "2.1", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 substrate-primitives = { path = "../../primitives", default-features = false }
+substrate-client = { path = "../../client", default-features = false }
 sr-std = { path = "../../sr-std", default-features = false }
 sr-io = { path = "../../sr-io", default-features = false }
 sr-version = { path = "../../sr-version", default-features = false }
@@ -21,12 +22,12 @@ std = [
 	"log",
 	"hex-literal",
 	"parity-codec/std",
-	"sr-api/std",
 	"sr-std/std",
 	"sr-io/std",
 	"srml-support/std",
 	"sr-version/std",
 	"substrate-primitives/std",
+	"substrate-client/std",
 	"sr-primitives/std"
 ]
 

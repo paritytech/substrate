@@ -22,7 +22,6 @@ extern crate sr_std as rstd;
 extern crate parity_codec as codec;
 extern crate sr_primitives as runtime_primitives;
 
-#[cfg(feature = "std")]
 #[macro_use]
 extern crate substrate_client as client;
 
@@ -49,13 +48,20 @@ pub mod system;
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 
-use client::{runtime_api::{ApiExt, runtime::*}, block_builder::api::runtime::*};
-use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT, ApiRef};
+use client::{runtime_api::runtime::*, block_builder::api::runtime::*};
+#[cfg(feature = "std")]
+use client::runtime_api::ApiExt;
+use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT};
+#[cfg(feature = "std")]
+use runtime_primitives::traits::ApiRef;
 use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
+#[cfg(feature = "std")]
 use runtime_primitives::generic::BlockId;
 use runtime_version::RuntimeVersion;
 pub use primitives::hash::H256;
-use primitives::{AuthorityId, OpaqueMetadata};
+use primitives::AuthorityId;
+#[cfg(feature = "std")]
+use primitives::OpaqueMetadata;
 #[cfg(any(feature = "std", test))]
 use runtime_version::NativeVersion;
 

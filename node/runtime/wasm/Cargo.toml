@@ -8,10 +8,11 @@ crate-type = ["cdylib"]
 
 [dependencies]
 integer-sqrt = { version = "0.1.2" }
-safe-mix = { version = "1.0", default-features = false}
+safe-mix = { version = "1.0", default-features = false }
 parity-codec-derive = { version = "2.1" }
 parity-codec = { version = "2.1", default-features = false }
 substrate-primitives = { path = "../../../core/primitives", default-features = false }
+substrate-client = { path = "../../../core/client", default-features = false }
 sr-std = { path = "../../../core/sr-std", default-features = false }
 srml-support = { path = "../../../srml/support", default-features = false }
 srml-balances = { path = "../../../srml/balances", default-features = false }
@@ -36,7 +37,7 @@ std = [
 	"safe-mix/std",
 	"parity-codec/std",
 	"substrate-primitives/std",
-	"sr-api/std",
+	"substrate-client/std",
 	"sr-std/std",
 	"srml-support/std",
 	"srml-balances/std",
