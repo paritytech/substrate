@@ -183,6 +183,7 @@ impl treasury::Trait for Runtime {
 	type ApproveOrigin = council_motions::EnsureMembers<_4>;
 	type RejectOrigin = council_motions::EnsureMembers<_2>;
 	type Event = Event;
+	type Log = Log;
 }
 
 impl contract::Trait for Runtime {
@@ -211,7 +212,7 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
-		Treasury: treasury,
+		Treasury: treasury::{default, Log()},
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
 		UpgradeKey: upgrade_key,
 	}
@@ -235,6 +236,15 @@ pub type UncheckedExtrinsic = generic::UncheckedMortalExtrinsic<Address, Index, 
 pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
+
+#[cfg(feature = "std")]
+fn my_test(val: u128) {
+	println!("TestDigestItem: {}", val);
+}
+
+#[cfg(not(feature = "std"))]
+fn my_test(_: u128) {
+}
 
 impl_apis! {
 	impl Core<Block, SessionKey> for Runtime {
@@ -267,7 +277,18 @@ impl_apis! {
 		}
 
 		fn finalise_block() -> <Block as BlockT>::Header {
-			Executive::finalise_block()
+			let header = Executive::finalise_block();
+
+			// accessing internal digest item
+			let test_digest = header.digest.logs.iter().filter_map(|l| match l {
+				Log(InternalLog::treasury(treasury::RawLog::TestDigestItem(test_value))) => Some(*test_value),
+				_ => None,
+			}).next();
+			if let Some(test_value) = test_digest {
+				my_test(test_value);
+			}
+
+			header
 		}
 
 		fn inherent_extrinsics(data: InherentData) -> Vec<UncheckedExtrinsic> {

@@ -64,9 +64,31 @@ pub trait Trait: balances::Trait {
 
 	/// The overarching event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
+
+	/// The overarching log type.
+	type Log: From<Log<Self>> + Into<system::DigestItemOf<Self>>;
 }
 
 type ProposalIndex = u32;
+
+pub type Log<T> = RawLog<
+	<T as balances::Trait>::Balance
+>;
+
+#[cfg_attr(feature = "std", derive(Serialize, Deserialize, Debug))]
+#[derive(Encode, Decode, PartialEq, Eq, Clone)]
+pub enum RawLog<Balance> {
+	TestDigestItem(Balance),
+}
+
+// Implementation for tests outside of this crate.
+#[cfg(any(feature = "std", test))]
+impl<N> From<RawLog<N>> for runtime_primitives::testing::DigestItem where N: Into<u64> {
+	fn from(_: RawLog<N>) -> runtime_primitives::testing::DigestItem {
+		unimplemented!()
+	}
+}
+
 
 // The module declaration. This states the entry points that we handle. The
 // macro takes care of the marshalling of arguments and dispatch.
@@ -264,8 +286,13 @@ impl<T: Trait> Module<T> {
 		}
 
 		Self::deposit_event(RawEvent::Rollover(budget_remaining));
+		Self::deposit_log(RawLog::TestDigestItem(budget_remaining));
 
 		<Pot<T>>::put(budget_remaining);
+	}
+
+	fn deposit_log(log: Log<T>) {
+		<system::Module<T>>::deposit_log(<T as Trait>::Log::from(log).into());
 	}
 }
 
@@ -320,6 +347,7 @@ mod tests {
 		type ApproveOrigin = system::EnsureRoot<u64>;
 		type RejectOrigin = system::EnsureRoot<u64>;
 		type Event = ();
+		type Log = DigestItem;
 	}
 	type Balances = balances::Module<Test>;
 	type Treasury = Module<Test>;
