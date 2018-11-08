@@ -106,10 +106,10 @@ impl<AccountId> EnsureAccountLiquid<AccountId> for () {
 
 pub trait Trait: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + AsPrimitive<Self::AccountIndex> + AsPrimitive<usize> + AsPrimitive<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + AsPrimitive<u8> + AsPrimitive<u16> + AsPrimitive<u32> + AsPrimitive<u64> + AsPrimitive<usize> + Copy;
 	/// A function which is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///
@@ -218,7 +218,7 @@ decl_storage! {
 
 		/// The next free enumeration set.
 		pub NextEnumSet get(next_enum_set) build(|config: &GenesisConfig<T>| {
-			T::AccountIndex::sa(config.balances.len() / ENUM_SET_SIZE)
+			(config.balances.len() / ENUM_SET_SIZE).as_()
 		}): T::AccountIndex;
 		/// The enumeration sets.
 		pub EnumSet get(enum_set): map T::AccountIndex => Vec<T::AccountId>;
@@ -287,7 +287,11 @@ pub enum UpdateBalanceOutcome {
 	AccountKilled,
 }
 
-impl<T: Trait> Module<T> {
+impl<T: Trait> Module<T> where
+	usize: AsPrimitive<T::AccountIndex>,
+	T::Balance: AsPrimitive<T::AccountIndex>,
+	T::AccountIndex: AsPrimitive<T::Balance>
+{
 	// PUBLIC IMMUTABLES
 
 	/// The combined balance of `who`.
@@ -315,7 +319,7 @@ impl<T: Trait> Module<T> {
 	pub fn lookup_index(index: T::AccountIndex) -> Option<T::AccountId> {
 		let enum_set_size = Self::enum_set_size();
 		let set = Self::enum_set(index / enum_set_size);
-		let i: usize = (index % enum_set_size).as_();
+		let i: usize = <T::AccountIndex as AsPrimitive<usize>>::as_(index % enum_set_size);
 		set.get(i).map(|x| x.clone())
 	}
 
@@ -323,7 +327,7 @@ impl<T: Trait> Module<T> {
 	pub fn can_reclaim(try_index: T::AccountIndex) -> bool {
 		let enum_set_size = Self::enum_set_size();
 		let try_set = Self::enum_set(try_index / enum_set_size);
-		let i = (try_index % enum_set_size).as_();
+		let i: usize = <T::AccountIndex as AsPrimitive<usize>>::as_(try_index % enum_set_size);
 		i < try_set.len() && Self::total_balance(&try_set[i]).is_zero()
 	}
 
@@ -543,16 +547,16 @@ impl<T: Trait> Module<T> {
 	}
 
 	fn enum_set_size() -> T::AccountIndex {
-		T::AccountIndex::sa(ENUM_SET_SIZE)
+		ENUM_SET_SIZE.as_()
 	}
 
 	/// Register a new account (with existential balance).
 	fn new_account(who: &T::AccountId, balance: T::Balance) -> NewAccountOutcome {
 		let enum_set_size = Self::enum_set_size();
 		let next_set_index = Self::next_enum_set();
-		let reclaim_index_magic = T::AccountIndex::sa(RECLAIM_INDEX_MAGIC);
-		let reclaim_index_modulus = T::AccountIndex::sa(256usize);
-		let quantization = T::AccountIndex::sa(256usize);
+		let reclaim_index_magic: T::AccountIndex = RECLAIM_INDEX_MAGIC.as_();
+		let reclaim_index_modulus: T::AccountIndex = 256_usize.as_();
+		let quantization: T::AccountIndex = 256_usize.as_();
 
 		// A little easter-egg for reclaiming dead indexes..
 		let ret = {
@@ -561,7 +565,8 @@ impl<T: Trait> Module<T> {
 			let quantized_account_count: T::AccountIndex = (next_set_index * enum_set_size / quantization + One::one()) * quantization;
 			// then modify the starting balance to be modulo this to allow it to potentially
 			// identify an account index for reuse.
-			let maybe_try_index = balance % (quantized_account_count * reclaim_index_modulus.as_()).as_();
+			let maybe_try_index: T::Balance = balance % (quantized_account_count * reclaim_index_modulus).as_();
+			let maybe_try_index: T::AccountIndex = maybe_try_index.as_();
 
 			// this identifier must end with magic byte 0x69 to trigger this check (a minor
 			// optimisation to ensure we don't check most unintended account creations).
@@ -572,7 +577,7 @@ impl<T: Trait> Module<T> {
 				// then check to see if this balance identifies a dead account index.
 				let set_index = try_index / enum_set_size;
 				let mut try_set = Self::enum_set(set_index);
-				let item_index = (try_index % enum_set_size).as_();
+				let item_index: usize = <T::AccountIndex as AsPrimitive<usize>>::as_(try_index % enum_set_size);
 				if item_index < try_set.len() {
 					if Self::total_balance(&try_set[item_index]).is_zero() {
 						// yup - this index refers to a dead account. can be reused.
@@ -601,7 +606,7 @@ impl<T: Trait> Module<T> {
 			set_index += One::one();
 		};
 
-		let index = T::AccountIndex::sa(set_index.as_() * ENUM_SET_SIZE + set.len());
+		let index: T::AccountIndex = (<T::AccountIndex as AsPrimitive<usize>>::as_(set_index) * ENUM_SET_SIZE + set.len()).as_();
 
 		// update set.
 		set.push(who.clone());
@@ -674,7 +679,10 @@ impl<T> Default for ChainContext<T> {
 	}
 }
 
-impl<T: Trait> Lookup for ChainContext<T> {
+impl<T: Trait> Lookup for ChainContext<T> where
+	usize: AsPrimitive<T::AccountIndex>,
+	T::AccountIndex: AsPrimitive<T::Balance>
+{
 	type Source = address::Address<T::AccountId, T::AccountIndex>;
 	type Target = T::AccountId;
 	fn lookup(&self, a: Self::Source) -> result::Result<Self::Target, &'static str> {
@@ -697,10 +705,14 @@ impl<T: Trait> BlockNumberToHash for ChainContext<T> {
 	}
 }
 
-impl<T: Trait> MakePayment<T::AccountId> for Module<T> {
+impl<T: Trait> MakePayment<T::AccountId> for Module<T> where
+	usize: AsPrimitive<T::AccountIndex>,
+	usize: AsPrimitive<T::Balance>,
+	T::AccountIndex: AsPrimitive<T::Balance>
+{
 	fn make_payment(transactor: &T::AccountId, encoded_len: usize) -> Result {
 		let b = Self::free_balance(transactor);
-		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * <T::Balance as As<u64>>::sa(encoded_len as u64);
+		let transaction_fee = Self::transaction_base_fee() + Self::transaction_byte_fee() * encoded_len.as_();
 		if b < transaction_fee + Self::existential_deposit() {
 			return Err("not enough funds for transaction fee");
 		}
