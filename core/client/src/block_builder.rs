@@ -22,6 +22,7 @@ use blockchain::HeaderBackend;
 use runtime_primitives::traits::{
 	Header as HeaderT, Hash, Block as BlockT, One, HashFor, ProvideRuntimeApi, ApiRef
 };
+use primitives::H256;
 use runtime_primitives::generic::BlockId;
 use runtime_api::{core::Core, BlockBuilder as BlockBuilderAPI};
 use error;

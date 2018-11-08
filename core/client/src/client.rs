@@ -873,7 +873,7 @@ impl<B, E, Block, RA> Client<B, E, Block, RA> where
 impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 	RA: Send + Sync
 {
 	fn header(&self, id: BlockId<Block>) -> error::Result<Option<Block::Header>> {
@@ -900,7 +900,7 @@ impl<B, E, Block, RA> ChainHeaderBackend<Block> for Client<B, E, Block, RA> wher
 impl<B, E, Block, RA> ProvideRuntimeApi for Client<B, E, Block, RA> where
 	B: backend::Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Clone + Send + Sync,
-	Block: BlockT,
+	Block: BlockT<Hash=H256>,
 	RA: CoreAPI<Block>
 {
 	type Api = RA;

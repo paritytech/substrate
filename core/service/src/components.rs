@@ -28,7 +28,7 @@ use substrate_executor::{NativeExecutor, NativeExecutionDispatch};
 use transaction_pool::txpool::{self, Options as TransactionPoolOptions, Pool as TransactionPool};
 use runtime_primitives::{traits::Block as BlockT, traits::Header as HeaderT, BuildStorage};
 use config::Configuration;
-use primitives::Blake2Hasher;
+use primitives::{Blake2Hasher, H256};
 use rpc;
 
 // Type aliases.

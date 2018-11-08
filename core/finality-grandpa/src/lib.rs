@@ -121,7 +121,7 @@ pub trait BlockStatus<Block: BlockT> {
 	fn block_number(&self, hash: Block::Hash) -> Result<Option<u32>, Error>;
 }
 
-impl<B, E, Block: BlockT<Hash=H256>> BlockStatus<Block> for Arc<Client<B, E, Block, RA>> where
+impl<B, E, Block: BlockT<Hash=H256>, RA> BlockStatus<Block> for Arc<Client<B, E, Block, RA>> where
 	B: Backend<Block, Blake2Hasher>,
 	E: CallExecutor<Block, Blake2Hasher> + Send + Sync,
 	RA: Send + Sync,
@@ -384,11 +384,7 @@ pub struct Environment<B, E, Block: BlockT, N: Network, RA> {
 	network: N,
 }
 
-<<<<<<< HEAD
-impl<Block: BlockT<Hash=H256>, B, E, N> grandpa::Chain<Block::Hash> for Environment<B, E, Block, N> where
-=======
-impl<Block: BlockT, B, E, N, RA> grandpa::Chain<Block::Hash> for Environment<B, E, Block, N, RA> where
->>>>>>> Switch to first version of new runtime API implementation
+impl<Block: BlockT<Hash=H256>, B, E, N, RA> grandpa::Chain<Block::Hash> for Environment<B, E, Block, N, RA> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static,
@@ -439,11 +435,7 @@ impl<Block: BlockT, B, E, N, RA> grandpa::Chain<Block::Hash> for Environment<B, 
 	}
 }
 
-<<<<<<< HEAD
-impl<B, E, Block: BlockT<Hash=H256>, N> voter::Environment<Block::Hash> for Environment<B, E, Block, N> where
-=======
-impl<B, E, Block: BlockT, N, RA> voter::Environment<Block::Hash> for Environment<B, E, Block, N, RA> where
->>>>>>> Switch to first version of new runtime API implementation
+impl<B, E, Block: BlockT<Hash=H256>, N, RA> voter::Environment<Block::Hash> for Environment<B, E, Block, N, RA> where
 	Block: 'static,
 	B: Backend<Block, Blake2Hasher> + 'static,
 	E: CallExecutor<Block, Blake2Hasher> + 'static + Send + Sync,
@@ -553,11 +545,7 @@ impl<B, E, Block: BlockT, N, RA> voter::Environment<Block::Hash> for Environment
 }
 
 /// Run a GRANDPA voter as a task. The returned future should be executed in a tokio runtime.
-<<<<<<< HEAD
-pub fn run_grandpa<B, E, Block: BlockT<Hash=H256>, N>(
-=======
-pub fn run_grandpa<B, E: Send + Sync, Block: BlockT, N, RA: Send + Sync + 'static>(
->>>>>>> Switch to first version of new runtime API implementation
+pub fn run_grandpa<B, E: Send + Sync, Block: BlockT<Hash=H256>, N, RA: Send + Sync + 'static>(
 	config: Config,
 	client: Arc<Client<B, E, Block, RA>>,
 	voters: HashMap<AuthorityId, usize>,
