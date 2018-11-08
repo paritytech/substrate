@@ -36,3 +36,5 @@ EXPOSE 30333 9933 9944
 VOLUME ["/data"]
 
 CMD ["/usr/local/bin/substrate"]
+
+
