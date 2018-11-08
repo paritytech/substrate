@@ -442,41 +442,6 @@ impl<C: Components> network::TransactionPool<ComponentExHash<C>, ComponentBlock<
 	}
 }
 
-/// Creates a simple `Service` implementation.
-/// This `Service` just holds an instance to a `service::Service` and implements `Deref`.
-/// It also provides a `new` function that takes a `config` and a `TaskExecutor`.
-#[macro_export]
-macro_rules! construct_simple_service {
-	(
-		$name: ident
-	) => {
-		pub struct $name<C: $crate::Components> {
-			inner: $crate::Arc<$crate::Service<C>>,
-		}
-
-		impl<C: $crate::Components> $name<C> {
-			fn new(
-				config: $crate::FactoryFullConfiguration<C::Factory>,
-				executor: $crate::TaskExecutor
-			) -> $crate::Result<Self, $crate::Error> {
-				Ok(
-					Self {
-						inner: $crate::Arc::new($crate::Service::new(config, executor)?)
-					}
-				)
-			}
-		}
-
-		impl<C: $crate::Components> $crate::Deref for $name<C> {
-			type Target = $crate::Service<C>;
-
-			fn deref(&self) -> &Self::Target {
-				&self.inner
-			}
-		}
-	}
-}
-
 /// Constructs a service factory with the given name that implements the `ServiceFactory` trait.
 /// The required parameters are required to be given in the exact order. Some parameters are followed
 /// by `{}` blocks. These blocks are required and used to initialize the given parameter.

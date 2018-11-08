@@ -116,6 +116,7 @@ pub type PoolApi<C> = <C as Components>::TransactionPoolApi;
 pub trait RuntimeGenesis: Serialize + DeserializeOwned + BuildStorage {}
 impl<T: Serialize + DeserializeOwned + BuildStorage> RuntimeGenesis for T {}
 
+/// Something that can start the RPC service.
 pub trait StartRPC<C: Components> {
 	fn start_rpc(
 		client: Arc<Client<C::Backend, C::Executor, ComponentBlock<C>, C::RuntimeApi>>,
@@ -184,6 +185,7 @@ impl<T: Components> StartRPC<Self> for T where T::RuntimeApi: Metadata<Component
 	}
 }
 
+/// Something that can create an instance of `network::Params`.
 pub trait CreateNetworkParams<C: Components> {
 	fn create_network_params<S>(
 		client: Arc<Client<C::Backend, C::Executor, ComponentBlock<C>, C::RuntimeApi>>,
@@ -217,13 +219,24 @@ impl<T: Components> CreateNetworkParams<Self> for T where
 	}
 }
 
-pub trait Test<C: Components>: Deref<Target = Service<C>> + Send + Sync + 'static + StartRPC<C> + CreateNetworkParams<C> {}
-impl<C: Components, T: Deref<Target = Service<C>> + Send + Sync + 'static + StartRPC<C> + CreateNetworkParams<C>> Test<C> for T {}
+/// The super trait that combines all required traits a `Service` needs to implement.
+pub trait ServiceTrait<C: Components>:
+	Deref<Target = Service<C>>
+	+ Send
+	+ Sync
+	+ 'static
+	+ StartRPC<C>
+	+ CreateNetworkParams<C>
+{}
+impl<C: Components, T> ServiceTrait<C> for T where
+	T: Deref<Target = Service<C>> + Send + Sync + 'static + StartRPC<C> + CreateNetworkParams<C>
+{}
 
 /// A collection of types and methods to build a service on top of the substrate service.
 pub trait ServiceFactory: 'static + Sized {
 	/// Block type.
 	type Block: BlockT<Hash=H256>;
+	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
 	/// Network protocol extensions.
 	type NetworkProtocol: network::specialization::Specialization<Self::Block>;
@@ -238,9 +251,9 @@ pub trait ServiceFactory: 'static + Sized {
 	/// Other configuration for service members.
 	type Configuration: Default;
 	/// Extended full service type.
-	type FullService: Test<FullComponents<Self>>;
+	type FullService: ServiceTrait<FullComponents<Self>>;
 	/// Extended light service type.
-	type LightService: Test<LightComponents<Self>>;
+	type LightService: ServiceTrait<LightComponents<Self>>;
 	/// ImportQueue for full client
 	type FullImportQueue: network::import_queue::ImportQueue<Self::Block> + 'static;
 	/// ImportQueue for light clients
@@ -309,8 +322,11 @@ pub trait Components: Sized + 'static {
 		Hash = <<Self::Factory as ServiceFactory>::Block as BlockT>::Hash,
 		Block = FactoryBlock<Self::Factory>
 	>;
+	/// The type that implements the runtime API.
 	type RuntimeApi: Send + Sync;
+	/// A type that can start the RPC.
 	type RPC: StartRPC<Self>;
+	/// A type that can create the network params.
 	type CreateNetworkParams: CreateNetworkParams<Self>;
 
 	/// Our Import Queue
