@@ -607,7 +607,7 @@ pub trait Extrinsic {
 	fn is_signed(&self) -> Option<bool> { None }
 }
 
-/// Auxiliary wrapper that holds an API instance and binds it to the given lifetime.
+/// Auxiliary wrapper that holds an api instance and binds it to the given lifetime.
 pub struct ApiRef<'a, T>(T, rstd::marker::PhantomData<&'a ()>);
 
 impl<'a, T> From<T> for ApiRef<'a, T> {
@@ -624,11 +624,15 @@ impl<'a, T> rstd::ops::Deref for ApiRef<'a, T> {
 	}
 }
 
-/// Something that provides a runtime API.
+/// Something that provides a runtime api.
 pub trait ProvideRuntimeApi {
-	/// The concrete type that provides the API.
+	/// The concrete type that provides the api.
 	type Api;
 
-	/// Returns the runtime API.
+	/// Returns the runtime api.
+	/// The returned instance will keep track of modifications to the storage. Any successful
+	/// call to an api function, will `commit` its changes to an internal buffer. Otherwise,
+	/// the modifications will be `discarded`. The modifications will not be applied to the
+	/// storage, even on a `commit`.
 	fn runtime_api<'a>(&'a self) -> ApiRef<'a, Self::Api>;
 }

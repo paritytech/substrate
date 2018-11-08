@@ -49,8 +49,7 @@ pub mod system;
 use rstd::prelude::*;
 use codec::{Encode, Decode};
 
-use client::runtime_api::runtime::*;
-use client::runtime_api::core::{ApiExt, runtime::*};
+use client::{runtime_api::{ApiExt, runtime::*}, block_builder::api::runtime::*};
 use runtime_primitives::traits::{BlindCheckable, BlakeTwo256, Block as BlockT, Extrinsic as ExtrinsicT, ApiRef};
 use runtime_primitives::{ApplyResult, Ed25519Signature, transaction_validity::TransactionValidity};
 use runtime_primitives::generic::BlockId;
@@ -157,7 +156,7 @@ pub fn changes_trie_config() -> primitives::ChangesTrieConfiguration {
 }
 
 pub mod test_api {
-	decl_apis! {
+	decl_runtime_apis! {
 		pub trait TestAPI {
 			fn balance_of<AccountId>(id: AccountId) -> u64;
 		}
@@ -168,7 +167,7 @@ use test_api::runtime::TestAPI;
 
 #[cfg(feature = "std")]
 pub struct ClientWithApi {
-	call: ::std::ptr::NonNull<client::runtime_api::core::CallApiAt<Block>>,
+	call: ::std::ptr::NonNull<client::runtime_api::CallApiAt<Block>>,
 	commit_on_success: ::std::cell::RefCell<bool>,
 	initialised_block: ::std::cell::RefCell<Option<BlockId<Block>>>,
 	changes: ::std::cell::RefCell<client::runtime_api::OverlayedChanges>,
@@ -193,13 +192,13 @@ impl ApiExt for ClientWithApi {
 }
 
 #[cfg(feature = "std")]
-impl client::runtime_api::core::ConstructRuntimeApi<Block> for ClientWithApi {
-	fn construct_runtime_api<'a, T: client::runtime_api::core::CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self> {
+impl client::runtime_api::ConstructRuntimeApi<Block> for ClientWithApi {
+	fn construct_runtime_api<'a, T: client::runtime_api::CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self> {
 		ClientWithApi {
 			call: unsafe {
 				::std::ptr::NonNull::new_unchecked(
 					::std::mem::transmute(
-						call as &client::runtime_api::core::CallApiAt<Block>
+						call as &client::runtime_api::CallApiAt<Block>
 					)
 				)
 			},
@@ -249,7 +248,7 @@ impl ClientWithApi {
 }
 
 #[cfg(feature = "std")]
-impl client::runtime_api::core::Core<Block> for ClientWithApi {
+impl client::runtime_api::Core<Block> for ClientWithApi {
 	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion, client::error::Error> {
 		self.call_api_at(at, "version", &())
 	}
@@ -268,7 +267,7 @@ impl client::runtime_api::core::Core<Block> for ClientWithApi {
 }
 
 #[cfg(feature = "std")]
-impl client::runtime_api::BlockBuilder<Block> for ClientWithApi {
+impl client::block_builder::api::BlockBuilder<Block> for ClientWithApi {
 	fn apply_extrinsic(&self, at: &BlockId<Block>, extrinsic: &<Block as BlockT>::Extrinsic) -> Result<ApplyResult, client::error::Error> {
 		self.call_api_at(at, "apply_extrinsic", extrinsic)
 	}
@@ -294,7 +293,7 @@ impl client::runtime_api::BlockBuilder<Block> for ClientWithApi {
 
 #[cfg(feature = "std")]
 impl client::runtime_api::TaggedTransactionQueue<Block> for ClientWithApi {
-	fn validate_transaction<TransactionValidity: Encode + Decode>(
+	fn validate_transaction(
 		&self,
 		at: &BlockId<Block>,
 		utx: &<Block as BlockT>::Extrinsic
@@ -319,7 +318,7 @@ impl test_api::TestAPI<Block> for ClientWithApi {
 
 struct Runtime;
 
-impl_apis! {
+impl_runtime_apis! {
 	impl Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			version()
@@ -338,7 +337,7 @@ impl_apis! {
 		}
 	}
 
-	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
+	impl TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(utx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			system::validate_transaction(utx)
 		}

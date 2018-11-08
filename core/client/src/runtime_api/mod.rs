@@ -14,25 +14,59 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! API's for interfacing with the runtime via native/wasm.
+//! All the functionality required for declaring and implementing runtime api's.
+//! Core api's are also declared here.
 
 #[doc(hidden)]
 pub use state_machine::OverlayedChanges;
 #[doc(hidden)]
-pub use runtime_primitives::{
-	traits::{Block as BlockT, Header as HeaderT, ProvideRuntimeApi}, generic::BlockId,
-	transaction_validity::TransactionValidity, ApplyResult
-};
+pub use runtime_primitives::{traits::Block as BlockT, generic::BlockId};
+use runtime_primitives::traits::ApiRef;
 use runtime_version::ApiId;
-use primitives::OpaqueMetadata;
 #[doc(hidden)]
 pub use std::slice;
 #[doc(hidden)]
 pub use codec::{Encode, Decode};
+use std::result;
+use error;
 
-pub mod core;
+mod core;
 #[macro_use]
 mod macros;
+mod traits;
+
+/// Something that can be constructed to a runtime api.
+pub trait ConstructRuntimeApi<Block: BlockT>: Sized {
+	/// Construct an instance of the runtime api.
+	fn construct_runtime_api<'a, T: CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self>;
+}
+
+/// An extension for the `RuntimeApi`.
+pub trait ApiExt {
+	/// The given closure will be called with api instance. Inside the closure any api call is
+	/// allowed. After doing the api call, the closure is allowed to map the `Result` to a
+	/// different `Result` type. This can be important, as the internal data structure that keeps
+	/// track of modifications to the storage, discards changes when the `Result` is an `Err`.
+	/// On `Ok`, the structure commits the changes to an internal buffer.
+	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(
+		&self,
+		map_call: F
+	) -> result::Result<R, E>;
+}
+
+/// Something that can call the runtime api at a given block.
+pub trait CallApiAt<Block: BlockT> {
+	/// Calls the given api function with the given encoded arguments at the given block
+	/// and returns the encoded result.
+	fn call_api_at(
+		&self,
+		at: &BlockId<Block>,
+		function: &'static str,
+		args: Vec<u8>,
+		changes: &mut OverlayedChanges,
+		initialised_block: &mut Option<BlockId<Block>>,
+	) -> error::Result<Vec<u8>>;
+}
 
 /// The ApiIds for the various standard runtime APIs.
 pub mod id {
@@ -48,28 +82,11 @@ pub mod id {
 	pub const METADATA: ApiId = *b"metadata";
 }
 
-decl_apis! {
-	/// The `Metadata` api trait that returns metadata for the runtime.
-	pub trait Metadata {
-		fn metadata() -> OpaqueMetadata;
-	}
+pub use self::core::Core;
+pub use self::traits::*;
 
-	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
-	pub trait TaggedTransactionQueue<Block: BlockT> {
-		fn validate_transaction<TransactionValidity>(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;
-	}
-
-	/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
-	pub trait BlockBuilder<Block: BlockT> {
-		/// Apply the given extrinsics.
-		fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
-		/// Finish the current block.
-		fn finalise_block() -> <Block as BlockT>::Header;
-		/// Generate inherent extrinsics.
-		fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
-		/// Check that the inherents are valid.
-		fn check_inherents<InherentData, Error>(block: Block, data: InherentData) -> Result<(), Error>;
-		/// Generate a random seed.
-		fn random_seed() -> <Block as BlockT>::Hash;
-	}
+/// The runtime apis that should be implemented for the `Runtime`.
+pub mod runtime {
+	pub use super::core::runtime::Core;
+	pub use super::traits::runtime::*;
 }

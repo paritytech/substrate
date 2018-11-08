@@ -21,7 +21,7 @@ use client;
 use keyring;
 use runtime;
 use runtime_primitives::traits::ProvideRuntimeApi;
-use client::runtime_api::BlockBuilder;
+use client::block_builder::api::BlockBuilder;
 
 /// Extension trait for test block builder.
 pub trait BlockBuilderExt {

@@ -21,7 +21,7 @@
 /// # Example:
 ///
 /// ```nocompile
-/// decl_apis!{
+/// decl_runtime_apis!{
 ///     pub trait Test<Event> ExtraClientSide<ClientArg> {
 ///         fn test<AccountId>(event: Event) -> AccountId;
 ///
@@ -49,11 +49,11 @@
 /// }
 /// ```
 ///
-/// The declarations generated in the `runtime` module will be used by `impl_apis!` for implementing
+/// The declarations generated in the `runtime` module will be used by `impl_runtime_apis!` for implementing
 /// the traits for a runtime. The other declarations should be used for implementing the interface
 /// in the client.
 #[macro_export]
-macro_rules! decl_apis {
+macro_rules! decl_runtime_apis {
 	(
 		$(
 			$( #[$attr:meta] )*
@@ -72,7 +72,7 @@ macro_rules! decl_apis {
 		)*
 	) => {
 		$(
-			decl_apis!(
+			decl_runtime_apis!(
 				@ADD_BLOCK_GENERIC
 				$( #[$attr] )*
 				pub trait $name $(< $( $generic_param $( : $generic_bound )* ),* >)* {
@@ -90,7 +90,7 @@ macro_rules! decl_apis {
 				$( $( $generic_param $( : $generic_bound )* ),* )*
 			);
 		)*
-		decl_apis! {
+		decl_runtime_apis! {
 			@GENERATE_RUNTIME_TRAITS
 			$(
 				$( #[$attr] )*
@@ -119,7 +119,7 @@ macro_rules! decl_apis {
 		Block: BlockT
 		$(, $generic_param_rest:ident $( : $generic_bound_rest:ident )* )*
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@ADD_BLOCK_GENERIC
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -152,7 +152,7 @@ macro_rules! decl_apis {
 		$generic_param:ident $( : $generic_bound:ident )*
 		$(, $generic_param_rest:ident $( : $generic_bound_rest:ident )* )*
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@ADD_BLOCK_GENERIC
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -183,7 +183,7 @@ macro_rules! decl_apis {
 		Found;
 	 	$( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -214,7 +214,7 @@ macro_rules! decl_apis {
 		;
 		$( $generic_param_parsed:ident $( : $generic_bound_parsed:ident )* ),*;
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -248,7 +248,7 @@ macro_rules! decl_apis {
 		$return_ty_current:ty;
 		$( $( $return_ty_rest:ty )*; )*
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -281,7 +281,7 @@ macro_rules! decl_apis {
 		;
 		$( $( $return_ty_rest:ty )*; )*
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_RETURN_TYPES
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -312,7 +312,7 @@ macro_rules! decl_apis {
         $( $generic_param_parsed:ident $( : $generic_bound_parsed:path )* ),*;
 		{ $( $result_return_ty:ty; )* };
 	) => {
-		decl_apis!(
+		decl_runtime_apis!(
 			@GENERATE_CLIENT_TRAITS
 			$( #[$attr] )*
 			pub trait $name $(< $( $generic_param_orig $( : $generic_bound_orig )* ),* >)* {
@@ -343,7 +343,7 @@ macro_rules! decl_apis {
 		{ $( $result_return_ty:ty; )* };
 	) => {
 		$( #[$attr] )*
-		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > : $crate::runtime_api::core::Core<Block> {
+		pub trait $name < $( $generic_param_parsed $( : $generic_bound_parsed )* ),* > : $crate::runtime_api::Core<Block> {
 			$( type $client_generic_param $( : $client_generic_bound )*; )*
 
 			$(
@@ -367,7 +367,7 @@ macro_rules! decl_apis {
 			};
 		)*
 	) => {
-		decl_apis! {
+		decl_runtime_apis! {
 			@GENERATE_RUNTIME_TRAITS_WITH_JOINED_GENERICS
 			$(
 				$( #[$attr] )*
@@ -409,7 +409,7 @@ macro_rules! decl_apis {
 }
 
 /// Implement the given API's for the given runtime.
-/// All desired API's need to be implemented in one `impl_apis!` call.
+/// All desired API's need to be implemented in one `impl_runtime_apis!` call.
 /// Besides generating the implementation for the runtime, there will be also generated an
 /// auxiliary module named `api` that contains function for inferring with the API in native/wasm.
 /// It is important to use the traits from the `runtime` module with this macro.
@@ -418,18 +418,17 @@ macro_rules! decl_apis {
 ///
 /// ```nocompile
 /// #[macro_use]
-/// extern crate sr_api as runtime_api;
+/// extern crate substrate_client as client;
 ///
-/// use runtime_api::runtime::{Core, TaggedTransactionQueue};
+/// use client::runtime_api::runtime::{Core, TaggedTransactionQueue};
 ///
-/// impl_apis! {
-///     impl Core<Block, AccountId> for Runtime {
-///         fn version() -> RuntimeVersion { 1 }
-///         fn authorities() -> Vec<AuthorityId> { vec![1] }
+/// impl_runtime_apis! {
+///     impl Core<Block> for Runtime {
+///         fn version() -> RuntimeVersion { unimplemented!() }
+///         fn authorities() -> Vec<AuthorityId> { unimplemented!() }
 ///         fn execute_block(block: Block) {
 ///             //comment
-///             let block = call_arbitrary_code(block);
-///             execute(block);
+///             unimplemented!()
 ///         }
 ///     }
 ///
@@ -443,7 +442,7 @@ macro_rules! decl_apis {
 /// fn main() {}
 /// ```
 #[macro_export]
-macro_rules! impl_apis {
+macro_rules! impl_runtime_apis {
 	(
 		impl $trait_name:ident $( < $( $generic:ident ),* > )* for $runtime:ident {
 			$(
@@ -461,7 +460,7 @@ macro_rules! impl_apis {
 				}
 			)*
 		}
-		impl_apis! {
+		impl_runtime_apis! {
 			$runtime;
 			$( $fn_name ( $( $arg_name: $arg_ty ),* ); )*;
 			$( $rest )*
@@ -486,7 +485,7 @@ macro_rules! impl_apis {
 				}
 			)*
 		}
-		impl_apis! {
+		impl_runtime_apis! {
 			$runtime;
 			$( $fn_name_parsed ( $( $arg_name_parsed: $arg_ty_parsed ),* ); )*
 			$( $fn_name ( $( $arg_name: $arg_ty ),* ); )*;
@@ -505,7 +504,7 @@ macro_rules! impl_apis {
 				match method {
 					$(
 						stringify!($fn_name) => {
-							Some({impl_apis! {
+							Some({impl_runtime_apis! {
 								@GENERATE_IMPL_CALL
 								$runtime;
 								$fn_name;
@@ -530,7 +529,7 @@ macro_rules! impl_apis {
 						}
 					};
 
-					let output = { impl_apis! {
+					let output = { impl_runtime_apis! {
 						@GENERATE_IMPL_CALL
 						$runtime;
 						$fn_name;

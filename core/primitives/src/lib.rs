@@ -138,10 +138,12 @@ impl Deref for Bytes {
 	fn deref(&self) -> &[u8] { &self.0[..] }
 }
 
+/// Stores the encoded `RuntimeMetadata` for the native side as opaque type.
 #[derive(Encode, Decode)]
 pub struct OpaqueMetadata(Vec<u8>);
 
 impl OpaqueMetadata {
+	/// Creates a new instance with the given metadata blob.
 	pub fn new(metadata: Vec<u8>) -> Self {
 		OpaqueMetadata(metadata)
 	}

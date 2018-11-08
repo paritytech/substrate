@@ -32,10 +32,7 @@ use runtime_primitives::traits::{
 	ApiRef, ProvideRuntimeApi
 };
 use runtime_primitives::BuildStorage;
-use runtime_api::{
-	core::Core as CoreAPI, BlockBuilder as BlockBuilderAPI, core::CallApiAt,
-	TaggedTransactionQueue, core::ConstructRuntimeApi,
-};
+use runtime_api::{Core as CoreAPI, CallApiAt, TaggedTransactionQueue, ConstructRuntimeApi};
 use primitives::{Blake2Hasher, H256, ChangesTrieConfiguration, convert_hash};
 use primitives::storage::{StorageKey, StorageData};
 use primitives::storage::well_known_keys;
@@ -52,7 +49,7 @@ use blockchain::{self, Info as ChainInfo, Backend as ChainBackend, HeaderBackend
 use call_executor::{CallExecutor, LocalCallExecutor};
 use executor::{RuntimeVersion, RuntimeInfo};
 use notifications::{StorageNotifications, StorageEventStream};
-use {cht, error, in_mem, block_builder, genesis, consensus};
+use {cht, error, in_mem, block_builder::{self, api::BlockBuilder as BlockBuilderAPI}, genesis, consensus};
 
 /// Type that implements `futures::Stream` of block import events.
 pub type ImportNotifications<Block> = mpsc::UnboundedReceiver<BlockImportNotification<Block>>;

@@ -14,38 +14,15 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
+use super::{ConstructRuntimeApi, ApiExt};
 use runtime_version::RuntimeVersion;
-use runtime_primitives::{traits::{Block as BlockT, ApiRef}, generic::BlockId};
+use runtime_primitives::{traits::Block as BlockT, generic::BlockId};
 use primitives::AuthorityId;
 use error::Result;
-use state_machine::OverlayedChanges;
-use std::result;
-
-/// Something that can be constructed to a runtime api.
-pub trait ConstructRuntimeApi<Block: BlockT>: Sized {
-	/// Construct the runtime api.
-	fn construct_runtime_api<'a, T: CallApiAt<Block>>(call: &'a T) -> ApiRef<'a, Self>;
-}
-
-pub trait ApiExt {
-	fn map_api_result<F: FnOnce(&Self) -> result::Result<R, E>, R, E>(&self, map_call: F) -> result::Result<R, E>;
-}
-
-/// Something that can call into the runtime.
-pub trait CallApiAt<Block: BlockT> {
-	/// Call the given API function with the given arguments and returns the result at the given
-	/// block.
-	fn call_api_at(
-		&self,
-		at: &BlockId<Block>,
-		function: &'static str,
-		args: Vec<u8>,
-		changes: &mut OverlayedChanges,
-		initialised_block: &mut Option<BlockId<Block>>,
-	) -> Result<Vec<u8>>;
-}
 
 /// The `Core` api trait that is mandantory for each runtime.
+/// This is the side that should be implemented for the `RuntimeApi` that is used by the `Client`.
+/// Any modifications at one of these two traits, needs to be done on the other one as well.
 pub trait Core<Block: BlockT>: 'static + Send + Sync + ConstructRuntimeApi<Block> + ApiExt {
 	/// Returns the version of the runtime.
 	fn version(&self, at: &BlockId<Block>) -> Result<RuntimeVersion>;
@@ -65,6 +42,7 @@ pub mod runtime {
 	use super::*;
 
     /// The `Core` api trait that is mandantory for each runtime.
+	/// This is the side that should be implemented for the `Runtime`.
     pub trait Core<Block: BlockT> {
     	/// Returns the version of the runtime.
     	fn version() -> RuntimeVersion;

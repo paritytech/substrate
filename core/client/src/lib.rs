@@ -44,6 +44,8 @@ extern crate kvdb;
 #[cfg(test)] #[macro_use] extern crate hex_literal;
 #[cfg(test)] extern crate kvdb_memorydb;
 
+#[macro_use]
+pub mod runtime_api;
 pub mod error;
 pub mod blockchain;
 pub mod backend;
@@ -56,7 +58,6 @@ mod leaves;
 mod call_executor;
 mod client;
 mod notifications;
-pub mod runtime_api;
 
 pub use blockchain::Info as ChainInfo;
 pub use call_executor::{CallResult, CallExecutor, LocalCallExecutor};

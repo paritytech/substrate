@@ -65,7 +65,7 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	SessionKey, Signature, Block as GBlock,
 };
-use client::runtime_api::{runtime::*, id::*, core::{ApiExt, runtime::*}};
+use client::{block_builder::api::runtime::*, runtime_api::{runtime::*, id::*, ApiExt}};
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
@@ -245,7 +245,7 @@ pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext
 //TODO: Auto impl
 #[cfg(feature = "std")]
 pub struct ClientWithApi {
-	call: ::std::ptr::NonNull<client::runtime_api::core::CallApiAt<GBlock>>,
+	call: ::std::ptr::NonNull<client::runtime_api::CallApiAt<GBlock>>,
 	commit_on_success: ::std::cell::RefCell<bool>,
 	initialised_block: ::std::cell::RefCell<Option<GBlockId>>,
 	changes: ::std::cell::RefCell<client::runtime_api::OverlayedChanges>,
@@ -270,13 +270,13 @@ impl ApiExt for ClientWithApi {
 }
 
 #[cfg(feature = "std")]
-impl client::runtime_api::core::ConstructRuntimeApi<GBlock> for ClientWithApi {
-	fn construct_runtime_api<'a, T: client::runtime_api::core::CallApiAt<GBlock>>(call: &'a T) -> ApiRef<'a, Self> {
+impl client::runtime_api::ConstructRuntimeApi<GBlock> for ClientWithApi {
+	fn construct_runtime_api<'a, T: client::runtime_api::CallApiAt<GBlock>>(call: &'a T) -> ApiRef<'a, Self> {
 		ClientWithApi {
 			call: unsafe {
 				::std::ptr::NonNull::new_unchecked(
 					::std::mem::transmute(
-						call as &client::runtime_api::core::CallApiAt<GBlock>
+						call as &client::runtime_api::CallApiAt<GBlock>
 					)
 				)
 			},
@@ -328,7 +328,7 @@ impl ClientWithApi {
 type GBlockId = generic::BlockId<GBlock>;
 
 #[cfg(feature = "std")]
-impl client::runtime_api::core::Core<GBlock> for ClientWithApi {
+impl client::runtime_api::Core<GBlock> for ClientWithApi {
 	fn version(&self, at: &GBlockId) -> Result<RuntimeVersion, client::error::Error> {
 		self.call_api_at(at, "version", &())
 	}
@@ -347,7 +347,7 @@ impl client::runtime_api::core::Core<GBlock> for ClientWithApi {
 }
 
 #[cfg(feature = "std")]
-impl client::runtime_api::BlockBuilder<GBlock> for ClientWithApi {
+impl client::block_builder::api::BlockBuilder<GBlock> for ClientWithApi {
 	fn apply_extrinsic(&self, at: &GBlockId, extrinsic: &<GBlock as BlockT>::Extrinsic) -> Result<ApplyResult, client::error::Error> {
 		self.call_api_at(at, "apply_extrinsic", extrinsic)
 	}
@@ -373,7 +373,7 @@ impl client::runtime_api::BlockBuilder<GBlock> for ClientWithApi {
 
 #[cfg(feature = "std")]
 impl client::runtime_api::TaggedTransactionQueue<GBlock> for ClientWithApi {
-	fn validate_transaction<TransactionValidity: Encode + Decode>(
+	fn validate_transaction(
 		&self,
 		at: &GBlockId,
 		utx: &<GBlock as BlockT>::Extrinsic
@@ -389,7 +389,7 @@ impl client::runtime_api::Metadata<GBlock> for ClientWithApi {
 	}
 }
 
-impl_apis! {
+impl_runtime_apis! {
 	impl Core<Block> for Runtime {
 		fn version() -> RuntimeVersion {
 			VERSION
@@ -436,7 +436,7 @@ impl_apis! {
 		}
 	}
 
-	impl TaggedTransactionQueue<Block, TransactionValidity> for Runtime {
+	impl TaggedTransactionQueue<Block> for Runtime {
 		fn validate_transaction(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity {
 			Executive::validate_transaction(tx)
 		}

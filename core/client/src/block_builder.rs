@@ -24,9 +24,31 @@ use runtime_primitives::traits::{
 };
 use primitives::H256;
 use runtime_primitives::generic::BlockId;
-use runtime_api::{core::Core, BlockBuilder as BlockBuilderAPI};
+use runtime_api::Core;
 use error;
 use runtime_primitives::ApplyOutcome;
+
+/// The runtime api for building blocks.
+pub mod api {
+	use runtime_primitives::{traits::Block as BlockT, ApplyResult};
+
+	decl_runtime_apis! {
+		/// The `BlockBuilder` api trait that provides required functions for building a block for a runtime.
+		pub trait BlockBuilder<Block: BlockT> {
+			/// Apply the given extrinsics.
+			fn apply_extrinsic(extrinsic: <Block as BlockT>::Extrinsic) -> ApplyResult;
+			/// Finish the current block.
+			fn finalise_block() -> <Block as BlockT>::Header;
+			/// Generate inherent extrinsics.
+			fn inherent_extrinsics<InherentExtrinsic, UncheckedExtrinsic>(inherent: InherentExtrinsic) -> Vec<UncheckedExtrinsic>;
+			/// Check that the inherents are valid.
+			fn check_inherents<InherentData, Error>(block: Block, data: InherentData) -> Result<(), Error>;
+			/// Generate a random seed.
+			fn random_seed() -> <Block as BlockT>::Hash;
+		}
+	}
+}
+use self::api::BlockBuilder as BlockBuilderApi;
 
 /// Utility for building new (valid) blocks from a stream of extrinsics.
 pub struct BlockBuilder<'a, Block, A: ProvideRuntimeApi> where Block: BlockT {
@@ -40,7 +62,7 @@ impl<'a, Block, A> BlockBuilder<'a, Block, A>
 where
 	Block: BlockT<Hash=H256>,
 	A: ProvideRuntimeApi + HeaderBackend<Block> + 'a,
-	A::Api: BlockBuilderAPI<Block>,
+	A::Api: BlockBuilderApi<Block>,
 {
 	/// Create a new instance of builder from the given client, building on the latest block.
 	pub fn new(api: &'a A) -> error::Result<Self> {
@@ -85,7 +107,7 @@ where
 			block_id: &BlockId<Block>,
 			xt: Block::Extrinsic,
 			extrinsics: &mut Vec<Block::Extrinsic>
-		) -> error::Result<()> where T: BlockBuilderAPI<Block> {
+		) -> error::Result<()> where T: api::BlockBuilder<Block> {
 			api.map_api_result(|api| {
 				match api.apply_extrinsic(block_id, &xt)? {
 					Ok(ApplyOutcome::Success) | Ok(ApplyOutcome::Fail) => {
