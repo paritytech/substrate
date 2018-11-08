@@ -268,7 +268,10 @@ mod tests {
 		use trie::ordered_trie_root;
 
 		let extrinsics = extrinsics.into_iter().map(sign).collect::<Vec<_>>();
-		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter().map(Encode::encode)).0.into();
+		let extrinsics_root = ordered_trie_root::<Blake2Hasher, _, _>(extrinsics.iter()
+			.map(Encode::encode))
+			.to_fixed_bytes()
+			.into();
 
 		let mut digest = generic::Digest::<Log>::default();
 		if let Some(changes_root) = changes_root {
@@ -623,7 +626,7 @@ mod tests {
 		let b = construct_block(
 			1,
 			GENESIS_HASH.into(),
-			hex!("d68586d5098535e04ff7a12d71a9c9dc719960f318862e636e78a8e98cf4b8d4").into(),
+			hex!("cf0fee74c87ecff646804984bbdf85832a788b3ca2a2aa33e20da61fa7182b37").into(),
 			None,
 			vec![
 				CheckedExtrinsic {

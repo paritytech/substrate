@@ -56,6 +56,10 @@ build_rpc_trait! {
 		#[rpc(name = "chain_getBlockHash", alias = ["chain_getHead", ])]
 		fn block_hash(&self, Trailing<Number>) -> Result<Option<Hash>>;
 
+		/// Get hash of the last finalised block in the canon chain.
+		#[rpc(name = "chain_getFinalisedHead")]
+		fn finalised_head(&self) -> Result<Hash>;
+
 		/// Get the runtime version.
 		#[rpc(name = "chain_getRuntimeVersion")]
 		fn runtime_version(&self, Trailing<Hash>) -> Result<RuntimeVersion>;
@@ -68,6 +72,16 @@ build_rpc_trait! {
 			/// Unsubscribe from new head subscription.
 			#[rpc(name = "chain_unsubscribeNewHead", alias = ["unsubscribe_newHead", ])]
 			fn unsubscribe_new_head(&self, SubscriptionId) -> RpcResult<bool>;
+		}
+
+		#[pubsub(name = "chain_finalisedHead")] {
+			/// New head subscription
+			#[rpc(name = "chain_subscribeFinalisedHeads")]
+			fn subscribe_finalised_heads(&self, Self::Metadata, pubsub::Subscriber<Header>);
+
+			/// Unsubscribe from new head subscription.
+			#[rpc(name = "chain_unsubscribeFinalisedHeads")]
+			fn unsubscribe_finalised_heads(&self, SubscriptionId) -> RpcResult<bool>;
 		}
 
 		#[pubsub(name = "chain_runtimeVersion")] {
@@ -111,6 +125,42 @@ impl<B, E, Block> Chain<B, E, Block> where
 			Some(hash) => hash,
 		})
 	}
+
+	fn subscribe_headers<F, G, S, ERR>(
+		&self,
+		subscriber: pubsub::Subscriber<Block::Header>,
+		best_block_hash: G,
+		stream: F,
+	) where
+		F: FnOnce() -> S,
+		G: FnOnce() -> Result<Option<Block::Hash>>,
+		ERR: ::std::fmt::Debug,
+		S: Stream<Item=Block::Header, Error=ERR> + Send + 'static,
+	{
+		self.subscriptions.add(subscriber, |sink| {
+			// send current head right at the start.
+			let header = best_block_hash()
+				.and_then(|hash| self.header(hash.into()))
+				.and_then(|header| {
+					header.ok_or_else(|| self::error::ErrorKind::Unimplemented.into())
+				})
+				.map_err(Into::into);
+
+			// send further subscriptions
+			let stream = stream()
+				.map(|res| Ok(res))
+				.map_err(|e| warn!("Block notification stream error: {:?}", e));
+
+			sink
+				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
+				.send_all(
+					stream::iter_result(vec![Ok(header)])
+						.chain(stream)
+				)
+				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
+				.map(|_| ())
+		});
+	}
 }
 
 impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::Extrinsic> for Chain<B, E, Block> where
@@ -139,42 +189,41 @@ impl<B, E, Block> ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Block::
 		})
 	}
 
+	fn finalised_head(&self) -> Result<Block::Hash> {
+		Ok(self.client.info()?.chain.finalized_hash)
+	}
+
 	fn runtime_version(&self, at: Trailing<Block::Hash>) -> Result<RuntimeVersion> {
 		let at = self.unwrap_or_best(at)?;
 		Ok(self.client.runtime_version_at(&BlockId::Hash(at))?)
 	}
 
 	fn subscribe_new_head(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
-		self.subscriptions.add(subscriber, |sink| {
-			// send current head right at the start.
-			let header = self.block_hash(None.into())
-				.and_then(|hash| self.header(hash.into()))
-				.and_then(|header| {
-					header.ok_or_else(|| self::error::ErrorKind::Unimplemented.into())
-				})
-				.map_err(Into::into);
-
-			// send further subscriptions
-			let stream = self.client.import_notification_stream()
+		self.subscribe_headers(
+			subscriber,
+			|| self.block_hash(None.into()),
+			|| self.client.import_notification_stream()
 				.filter(|notification| notification.is_new_best)
-				.map(|notification| Ok(notification.header))
-				.map_err(|e| warn!("Block notification stream error: {:?}", e));
-
-			sink
-				.sink_map_err(|e| warn!("Error sending notifications: {:?}", e))
-				.send_all(
-					stream::iter_result(vec![Ok(header)])
-						.chain(stream)
-				)
-				// we ignore the resulting Stream (if the first stream is over we are unsubscribed)
-				.map(|_| ())
-		});
+				.map(|notification| notification.header),
+		)
 	}
 
 	fn unsubscribe_new_head(&self, id: SubscriptionId) -> RpcResult<bool> {
 		Ok(self.subscriptions.cancel(id))
 	}
 
+	fn subscribe_finalised_heads(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<Block::Header>) {
+		self.subscribe_headers(
+			subscriber,
+			|| Ok(Some(self.client.info()?.chain.finalized_hash)),
+			|| self.client.finality_notification_stream()
+				.map(|notification| notification.header),
+		)
+	}
+
+	fn unsubscribe_finalised_heads(&self, id: SubscriptionId) -> RpcResult<bool> {
+		Ok(self.subscriptions.cancel(id))
+	}
 
 	fn subscribe_runtime_version(&self, _meta: Self::Metadata, subscriber: pubsub::Subscriber<RuntimeVersion>) {
 		let stream = match self.client.storage_changes_notification_stream(Some(&[storage::StorageKey(storage::well_known_keys::CODE.to_vec())])) {
