@@ -59,11 +59,11 @@ pub struct SubstrateNodeHandler<TSubstream> {
 	need_report_kad_open: bool,
 
 	/// Substream open for sending pings, if any.
-	ping_out_substream: Option<ping::PingDialer<TSubstream, Instant>>,
+	ping_out_substream: Option<ping::protocol::PingDialer<TSubstream, Instant>>,
 	/// Active pinging attempt with the moment it expires.
 	active_ping_out: Option<Delay>,
 	/// Substreams open for receiving pings.
-	ping_in_substreams: Vec<ping::PingListener<TSubstream>>,
+	ping_in_substreams: Vec<ping::protocol::PingListener<TSubstream>>,
 	/// Future that fires when we need to ping the node again.
 	///
 	/// Every time we receive a pong, we reset the timer to the next time.
@@ -245,7 +245,7 @@ macro_rules! listener_upgrade {
 		upgrade::or(upgrade::or(upgrade::or(
 			upgrade::map((*$self.registered_custom).clone(), move |c| FinalUpgrade::Custom(c)),
 			upgrade::map(KadConnecConfig::new(), move |(c, s)| FinalUpgrade::Kad(c, s))),
-			upgrade::map(ping::Ping::default(), move |p| FinalUpgrade::from(p))),
+			upgrade::map(ping::protocol::Ping::default(), move |p| FinalUpgrade::from(p))),
 			upgrade::map(identify::IdentifyProtocolConfig, move |i| FinalUpgrade::from(i)))
 			// TODO: meh for cloning a Vec here
 	)
@@ -343,7 +343,7 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Ping => {
-				let wanted = upgrade::map(ping::Ping::default(), move |p| FinalUpgrade::from(p));
+				let wanted = upgrade::map(ping::protocol::Ping::default(), move |p| FinalUpgrade::from(p));
 				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
@@ -837,16 +837,16 @@ enum FinalUpgrade<TSubstream> {
 	Kad(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>),
 	IdentifyListener(identify::IdentifySender<TSubstream>),
 	IdentifyDialer(identify::IdentifyInfo, Multiaddr),
-	PingDialer(ping::PingDialer<TSubstream, Instant>),
-	PingListener(ping::PingListener<TSubstream>),
+	PingDialer(ping::protocol::PingDialer<TSubstream, Instant>),
+	PingListener(ping::protocol::PingListener<TSubstream>),
 	Custom(RegisteredProtocolSubstream<TSubstream>),
 }
 
-impl<TSubstream> From<ping::PingOutput<TSubstream, Instant>> for FinalUpgrade<TSubstream> {
-	fn from(out: ping::PingOutput<TSubstream, Instant>) -> Self {
+impl<TSubstream> From<ping::protocol::PingOutput<TSubstream, Instant>> for FinalUpgrade<TSubstream> {
+	fn from(out: ping::protocol::PingOutput<TSubstream, Instant>) -> Self {
 		match out {
-			ping::PingOutput::Ponger(ponger) => FinalUpgrade::PingListener(ponger),
-			ping::PingOutput::Pinger(pinger) => FinalUpgrade::PingDialer(pinger),
+			ping::protocol::PingOutput::Ponger(ponger) => FinalUpgrade::PingListener(ponger),
+			ping::protocol::PingOutput::Pinger(pinger) => FinalUpgrade::PingDialer(pinger),
 		}
 	}
 }
