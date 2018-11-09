@@ -134,6 +134,6 @@ fn should_return_pending_extrinsics() {
 //	AuthorApi::submit_rich_extrinsic(&p, ex.clone()).unwrap();
  	assert_matches!(
 		p.pending_extrinsics(),
-		Ok(ref expected) if expected == vec![ex]
+		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
 	);
 }
