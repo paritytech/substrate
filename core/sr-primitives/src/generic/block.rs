@@ -118,8 +118,10 @@ pub struct SignedBlock<Block> {
 
 // TODO: Remove Deserialize for SignedBlock once RPC no longer needs it
 #[cfg(feature = "std")]
-impl<'a, Header: 'a, Extrinsic: 'a + Codec + MaybeSerialize> Deserialize<'a> for SignedBlock<Block<Header, Extrinsic>> where
-	SignedBlock<Block<Header, Extrinsic>>: Decode,
+impl<'a, Block: BlockT,> Deserialize<'a> for SignedBlock<Block> where
+	Block::Header: 'a,
+	Block::Extrinsic: 'a + Codec + MaybeSerialize,
+	SignedBlock<Block>: Decode,
 {
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
 		let r = <Vec<u8>>::deserialize(de)?;

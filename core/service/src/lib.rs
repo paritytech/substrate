@@ -124,7 +124,7 @@ impl<Components> Service<Components>
 	where
 		Components: components::Components,
 		<Components as components::Components>::Executor: std::clone::Clone,
-		for<'de> SignedBlock<<<Components as components::Components>::Factory as components::ServiceFactory>::Block>: ::serde::Deserialize<'de>
+		for<'de> SignedBlock<ComponentBlock<Components>>: ::serde::Deserialize<'de>,
 {
 	/// Creates a new service.
 	pub fn new(
