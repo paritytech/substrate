@@ -17,7 +17,7 @@
 //! Utility struct to build a block.
 
 #[cfg(feature = "std")]
- mod block_builder;
+mod block_builder;
 #[cfg(feature = "std")]
 pub use self::block_builder::*;
 pub mod api;

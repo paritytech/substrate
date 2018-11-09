@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Macros for declaring and implementing the runtime API's.
+//! Macros for declaring and implementing the runtime APIs.
 
 /// Declare the given API traits.
 ///
