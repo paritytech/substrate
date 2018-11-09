@@ -248,7 +248,6 @@ pub type CheckedExtrinsic = generic::CheckedExtrinsic<AccountId, Index, Call>;
 /// Executive: handles dispatch to the various modules.
 pub type Executive = executive::Executive<Runtime, Block, balances::ChainContext<Runtime>, Balances, AllModules>;
 
-//TODO: Auto impl
 #[cfg(feature = "std")]
 pub struct ClientWithApi {
 	call: ::std::ptr::NonNull<client::runtime_api::CallApiAt<GBlock>>,
