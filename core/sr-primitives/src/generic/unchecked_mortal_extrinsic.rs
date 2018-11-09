@@ -57,7 +57,7 @@ impl<Address, Index, Call, Signature> UncheckedMortalExtrinsic<Address, Index, C
 	}
 }
 
-impl<Address, Index, Call, Signature> Extrinsic for UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
+impl<Address: Encode, Index: Encode, Call: Encode, Signature: Encode> Extrinsic for UncheckedMortalExtrinsic<Address, Index, Call, Signature> {
 	fn is_signed(&self) -> Option<bool> {
 		Some(self.signature.is_some())
 	}

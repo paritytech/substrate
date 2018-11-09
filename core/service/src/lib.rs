@@ -69,7 +69,7 @@ use parking_lot::{Mutex, RwLock};
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::generic::{BlockId, SignedBlock};
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -124,6 +124,7 @@ impl<Components> Service<Components>
 	where
 		Components: components::Components,
 		<Components as components::Components>::Executor: std::clone::Clone,
+		for<'de> SignedBlock<<<Components as components::Components>::Factory as components::ServiceFactory>::Block>: ::serde::Deserialize<'de>
 {
 	/// Creates a new service.
 	pub fn new(

@@ -18,7 +18,6 @@
 
 use std::{self, io::{Read, Write}};
 use futures::Future;
-use serde_json;
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
 use runtime_primitives::traits::{As, Block, Header};
@@ -107,14 +106,14 @@ pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut 
 		if exit_recv.try_recv().is_ok() {
 			break;
 		}
-		if let Some(signed) = SignedBlock::<<F::Block as Block>::Header, <F::Block as Block>::Extrinsic>::decode(&mut input) {
-			let header = signed.block.header;
+		if let Some(signed) = SignedBlock::<F::Block>::decode(&mut input) {
+			let (header, extrinsics) = signed.block.deconstruct();
 			let hash = header.hash();
 			let block  = message::BlockData::<F::Block> {
 				hash: hash,
 				justification: Some(signed.justification),
 				header: Some(header),
-				body: Some(signed.block.extrinsics),
+				body: Some(extrinsics),
 				receipt: None,
 				message_queue: None
 			};

@@ -101,7 +101,7 @@ impl traits::Header for Header {
 #[derive(PartialEq, Eq, Clone, Serialize, Deserialize, Debug, Encode, Decode)]
 pub struct ExtrinsicWrapper<Xt>(Xt);
 
-impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> {
+impl<Xt> traits::Extrinsic for ExtrinsicWrapper<Xt> where Xt: Serialize {
 	fn is_signed(&self) -> Option<bool> {
 		None
 	}

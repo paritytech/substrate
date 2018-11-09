@@ -48,9 +48,9 @@ pub fn rpc_handler<Block: BlockT, ExHash, S, C, A, Y>(
 ) -> RpcHandler where
 	Block: BlockT + 'static,
 	ExHash: Send + Sync + 'static + sr_primitives::Serialize + sr_primitives::DeserializeOwned,
-//	<Block as sr_primitives::traits::Block>::Extrinsic: serde::Serialize,
+	SignedBlock<Block>: serde::Serialize + sr_primitives::DeserializeOwned,
 	S: apis::state::StateApi<Block::Hash, Metadata=Metadata>,
-	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, Metadata=Metadata>,
+	C: apis::chain::ChainApi<Block::Hash, Block::Header, NumberFor<Block>, SignedBlock<Block>, Metadata=Metadata>,
 	A: apis::author::AuthorApi<ExHash, Block::Hash, Metadata=Metadata>,
 	Y: apis::system::SystemApi,
 {

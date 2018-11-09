@@ -366,6 +366,16 @@ pub trait MaybeSerializeDebugButNotDeserialize {}
 impl<T> MaybeSerializeDebugButNotDeserialize for T {}
 
 #[cfg(feature = "std")]
+pub trait MaybeSerialize: Serialize {}
+#[cfg(feature = "std")]
+impl<T: Serialize> MaybeSerialize for T {}
+
+#[cfg(not(feature = "std"))]
+pub trait MaybeSerialize {}
+#[cfg(not(feature = "std"))]
+impl<T> MaybeSerialize for T {}
+
+#[cfg(feature = "std")]
 pub trait MaybeSerializeDebug: Serialize + DeserializeOwned + Debug {}
 #[cfg(feature = "std")]
 impl<T: Serialize + DeserializeOwned + Debug> MaybeSerializeDebug for T {}
@@ -404,7 +414,6 @@ impl<T: ::codec::Decode> MaybeDecode for T {}
 pub trait MaybeDecode {}
 #[cfg(not(feature = "std"))]
 impl<T> MaybeDecode for T {}
-
 
 pub trait Member: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static {}
 impl<T: Send + Sync + Sized + MaybeDebug + Eq + PartialEq + Clone + 'static> Member for T {}
@@ -454,8 +463,8 @@ pub trait Header: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'stat
 /// `Extrinsic` piece of information as well as a `Header`.
 ///
 /// You can get an iterator over each of the `extrinsics` and retrieve the `header`.
-pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeDebug + 'static {
-	type Extrinsic: Member + Codec + Extrinsic;
+pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeSerializeDebug + 'static {
+	type Extrinsic: Member + Codec + Extrinsic + MaybeSerialize;
 	type Header: Header<Hash=Self::Hash>;
 	type Hash: Member + MaybeSerializeDebug + ::rstd::hash::Hash + Copy + MaybeDisplay + Default + SimpleBitOps + Codec + AsRef<[u8]> + AsMut<[u8]>;
 
@@ -466,6 +475,13 @@ pub trait Block: Clone + Send + Sync + Codec + Eq + MaybeDebug + 'static {
 	fn hash(&self) -> Self::Hash {
 		<<Self::Header as Header>::Hashing as Hash>::hash_of(self.header())
 	}
+}
+
+/// Something that acts like an `Extrinsic`.
+pub trait Extrinsic {
+	/// Is this `Extrinsic` signed?
+	/// If no information are available about signed/unsigned, `None` should be returned.
+	fn is_signed(&self) -> Option<bool> { None }
 }
 
 /// Extract the hashing type for a block.
@@ -580,11 +596,4 @@ pub trait ProvideInherent {
 	fn check_inherent<Block: self::Block, F: Fn(&Block::Extrinsic) -> Option<&Self::Call>>(
 		block: &Block, data: Self::Inherent, extract_function: &F
 	) -> Result<(), Self::Error>;
-}
-
-/// Something that acts like an `Extrinsic`.
-pub trait Extrinsic {
-	/// Is this `Extrinsic` signed?
-	/// If no information are available about signed/unsigned, `None` should be returned.
-	fn is_signed(&self) -> Option<bool> { None }
 }

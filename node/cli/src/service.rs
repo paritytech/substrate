@@ -37,7 +37,32 @@ construct_simple_protocol! {
 	pub struct NodeProtocol where Block = Block { }
 }
 
-construct_simple_service!(Service);
+pub struct Service<C: ::substrate_service::Components> {
+	inner: ::substrate_service::Arc<::substrate_service::Service<C>>,
+}
+
+impl<C: ::substrate_service::Components> Service<C> {
+	fn new(
+		config: FactoryFullConfiguration<C::Factory>,
+		executor: ::substrate_service::TaskExecutor
+	) -> ::substrate_service::Result<Self, ::substrate_service::Error> {
+		Ok(
+			Self {
+				inner: ::substrate_service::Arc::new(::substrate_service::Service::new(config, executor)?)
+			}
+		)
+	}
+}
+
+impl<C: ::substrate_service::Components> ::substrate_service::Deref for Service<C> {
+	type Target = ::substrate_service::Service<C>;
+
+	fn deref(&self) -> &Self::Target {
+		&self.inner
+	}
+}
+
+//construct_simple_service!(Service);
 
 construct_service_factory! {
 	struct Factory {

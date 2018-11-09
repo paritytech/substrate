@@ -25,7 +25,6 @@ use transaction_pool::{
 		ChainApi as PoolChainApi,
 		BlockHash,
 		ExHash,
-		ExtrinsicFor,
 		IntoPoolError,
 		Pool,
 		watcher::Status,

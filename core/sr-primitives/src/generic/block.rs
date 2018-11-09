@@ -19,9 +19,10 @@
 #[cfg(feature = "std")]
 use std::fmt;
 
+use serde::{Deserialize, Deserializer};
 use rstd::prelude::*;
-use codec::Codec;
-use traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerializeDebugButNotDeserialize};
+use codec::{Codec, Decode};
+use traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
 use ::Justification;
 
 /// Something to identify a block.
@@ -62,14 +63,25 @@ impl<Block: BlockT> fmt::Display for BlockId<Block> {
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct Block<Header, Extrinsic> {
+pub struct Block<Header, Extrinsic: MaybeSerialize> {
 	/// The block header.
 	pub header: Header,
 	/// The accompanying extrinsics.
 	pub extrinsics: Vec<Extrinsic>,
 }
 
-impl<Header, Extrinsic> traits::Block for Block<Header, Extrinsic>
+// TODO: Remove Deserialize for Block once RPC no longer needs it
+#[cfg(feature = "std")]
+impl<'a, Header: 'a, Extrinsic: 'a + MaybeSerialize> Deserialize<'a> for Block<Header, Extrinsic> where
+	Block<Header, Extrinsic>: Decode,
+{
+	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
+		let r = <Vec<u8>>::deserialize(de)?;
+		Decode::decode(&mut &r[..]).ok_or(::serde::de::Error::custom("Invalid value passed into decode"))
+	}
+}
+
+impl<Header, Extrinsic: MaybeSerialize> traits::Block for Block<Header, Extrinsic>
 where
 	Header: HeaderT,
 	Extrinsic: Member + Codec + traits::Extrinsic,
@@ -97,9 +109,20 @@ where
 #[cfg_attr(feature = "std", derive(Debug, Serialize))]
 #[cfg_attr(feature = "std", serde(rename_all = "camelCase"))]
 #[cfg_attr(feature = "std", serde(deny_unknown_fields))]
-pub struct SignedBlock<H, E: Codec> {
+pub struct SignedBlock<Block> {
 	/// Full block.
-	pub block: Block<H, E>,
+	pub block: Block,
 	/// Block justification.
 	pub justification: Justification,
+}
+
+// TODO: Remove Deserialize for SignedBlock once RPC no longer needs it
+#[cfg(feature = "std")]
+impl<'a, Header: 'a, Extrinsic: 'a + Codec + MaybeSerialize> Deserialize<'a> for SignedBlock<Block<Header, Extrinsic>> where
+	SignedBlock<Block<Header, Extrinsic>>: Decode,
+{
+	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
+		let r = <Vec<u8>>::deserialize(de)?;
+		Decode::decode(&mut &r[..]).ok_or(::serde::de::Error::custom("Invalid value passed into decode"))
+	}
 }

@@ -42,42 +42,14 @@ pub struct Header<Number, Hash: HashT, DigestItem> {
 	pub digest: Digest<DigestItem>,
 }
 
-// Hack to work around the fact that deriving deserialize doesn't work nicely with
-// the `hashing` trait used as a parameter.
-// dummy struct that uses the hash type directly.
-// https://github.com/serde-rs/serde/issues/1296
-#[cfg(feature = "std")]
-#[serde(rename_all = "camelCase")]
-#[derive(Deserialize)]
-struct DeserializeHeader<N, H, D> {
-	parent_hash: H,
-	number: N,
-	state_root: H,
-	extrinsics_root: H,
-	digest: Digest<D>,
-}
-
-#[cfg(feature = "std")]
-impl<N, D, Hash: HashT> From<DeserializeHeader<N, Hash::Output, D>> for Header<N, Hash, D> {
-	fn from(other: DeserializeHeader<N, Hash::Output, D>) -> Self {
-		Header {
-			parent_hash: other.parent_hash,
-			number: other.number,
-			state_root: other.state_root,
-			extrinsics_root: other.extrinsics_root,
-			digest: other.digest,
-		}
-	}
-}
-
+// TODO: Remove Deserialize for Header once RPC no longer needs it
 #[cfg(feature = "std")]
 impl<'a, Number: 'a, Hash: 'a + HashT, DigestItem: 'a> Deserialize<'a> for Header<Number, Hash, DigestItem> where
-	Number: Deserialize<'a>,
-	Hash::Output: Deserialize<'a>,
-	DigestItem: Deserialize<'a>,
+	Header<Number, Hash, DigestItem>: Decode,
 {
 	fn deserialize<D: Deserializer<'a>>(de: D) -> Result<Self, D::Error> {
-		DeserializeHeader::<Number, Hash::Output, DigestItem>::deserialize(de).map(Into::into)
+		let r = <Vec<u8>>::deserialize(de)?;
+		Decode::decode(&mut &r[..]).ok_or(::serde::de::Error::custom("Invalid value passed into decode"))
 	}
 }
 
@@ -118,7 +90,7 @@ impl<Number, Hash, DigestItem> traits::Header for Header<Number, Hash, DigestIte
 	Hash: HashT,
 	DigestItem: DigestItemT<Hash = Hash::Output> + Codec,
 	Hash::Output: Default + ::rstd::hash::Hash + Copy + Member + MaybeSerializeDebugButNotDeserialize + MaybeDisplay + SimpleBitOps + Codec,
- {
+{
 	type Number = Number;
 	type Hash = <Hash as HashT>::Output;
 	type Hashing = Hash;
