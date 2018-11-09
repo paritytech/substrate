@@ -3,3 +3,6 @@ target
 .idea/
 Dockerfile
 .dockerignore
+**/target
+!**/wasm/target
+.git/
