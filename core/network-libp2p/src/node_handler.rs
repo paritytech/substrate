@@ -21,8 +21,6 @@ use libp2p::core::{ConnectionUpgrade, Endpoint, PeerId, PublicKey, upgrade};
 use libp2p::core::nodes::handled_node::{NodeHandler, NodeHandlerEndpoint, NodeHandlerEvent};
 use libp2p::kad::{KadConnecConfig, KadFindNodeRespond, KadIncomingRequest, KadConnecController};
 use libp2p::{identify, ping};
-// use libp2p::{identify};
-// use libp2p::ping::protocol;
 use parking_lot::Mutex;
 use std::io::{Error as IoError, ErrorKind as IoErrorKind};
 use std::sync::Arc;
