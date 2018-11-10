@@ -141,6 +141,7 @@ impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> 
 	}
 }
 
+#[cfg(feature = "std")]
 impl<Address: Codec, Index: HasCompact + Codec, Signature: Codec, Call: Encode> serde::Serialize
 	for UncheckedExtrinsic<Address, Index, Call, Signature>
 {

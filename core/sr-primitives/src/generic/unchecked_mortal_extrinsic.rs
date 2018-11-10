@@ -157,6 +157,7 @@ where
 	}
 }
 
+#[cfg(feature = "std")]
 impl<Address: Encode, Index: Encode, Signature: Encode, Call: Encode> serde::Serialize
 	for UncheckedMortalExtrinsic<Address, Index, Call, Signature>
 {

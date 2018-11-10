@@ -19,9 +19,12 @@
 #[cfg(feature = "std")]
 use std::fmt;
 
+#[cfg(feature = "std")]
 use serde::{Deserialize, Deserializer};
+#[cfg(feature = "std")]
+use codec::Decode;
 use rstd::prelude::*;
-use codec::{Codec, Decode};
+use codec::Codec;
 use traits::{self, Member, Block as BlockT, Header as HeaderT, MaybeSerialize};
 use ::Justification;
 
