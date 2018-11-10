@@ -322,8 +322,8 @@ impl CheckEqual for substrate_primitives::H256 {
 	#[cfg(feature = "std")]
 	fn check_equal(&self, other: &Self) {
 		use substrate_primitives::hexdisplay::HexDisplay;
-		if &self.0 != &other.0 {
-			println!("Hash: given={}, expected={}", HexDisplay::from(&self.0), HexDisplay::from(&other.0));
+		if self != other {
+			println!("Hash: given={}, expected={}", HexDisplay::from(self.as_fixed_bytes()), HexDisplay::from(other.as_fixed_bytes()));
 		}
 	}
 
@@ -331,8 +331,8 @@ impl CheckEqual for substrate_primitives::H256 {
 	fn check_equal(&self, other: &Self) {
 		if self != other {
 			runtime_io::print("Hash not equal");
-			runtime_io::print(&self.0[..]);
-			runtime_io::print(&other.0[..]);
+			runtime_io::print(self.as_bytes());
+			runtime_io::print(other.as_bytes());
 		}
 	}
 }

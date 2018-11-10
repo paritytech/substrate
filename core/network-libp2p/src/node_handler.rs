@@ -19,7 +19,6 @@ use custom_proto::{RegisteredProtocols, RegisteredProtocolSubstream};
 use futures::{prelude::*, task};
 use libp2p::core::{ConnectionUpgrade, Endpoint, PeerId, PublicKey, upgrade};
 use libp2p::core::nodes::handled_node::{NodeHandler, NodeHandlerEndpoint, NodeHandlerEvent};
-use libp2p::core::nodes::swarm::ConnectedPoint;
 use libp2p::kad::{KadConnecConfig, KadFindNodeRespond, KadIncomingRequest, KadConnecController};
 use libp2p::{identify, ping};
 use parking_lot::Mutex;
@@ -54,20 +53,17 @@ pub struct SubstrateNodeHandler<TSubstream> {
 	/// Substreams open for "custom" protocols (eg. dot).
 	custom_protocols_substreams: Vec<RegisteredProtocolSubstream<TSubstream>>,
 
-	/// Address of the node.
-	address: Multiaddr,
-
 	/// Substream open for Kademlia, if any.
 	kademlia_substream: Option<(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>)>,
 	/// If true, we need to send back a `KadOpen` event on the stream (if Kademlia is open).
 	need_report_kad_open: bool,
 
 	/// Substream open for sending pings, if any.
-	ping_out_substream: Option<ping::PingDialer<TSubstream, Instant>>,
+	ping_out_substream: Option<ping::protocol::PingDialer<TSubstream, Instant>>,
 	/// Active pinging attempt with the moment it expires.
 	active_ping_out: Option<Delay>,
 	/// Substreams open for receiving pings.
-	ping_in_substreams: Vec<ping::PingListener<TSubstream>>,
+	ping_in_substreams: Vec<ping::protocol::PingListener<TSubstream>>,
 	/// Future that fires when we need to ping the node again.
 	///
 	/// Every time we receive a pong, we reset the timer to the next time.
@@ -249,7 +245,7 @@ macro_rules! listener_upgrade {
 		upgrade::or(upgrade::or(upgrade::or(
 			upgrade::map((*$self.registered_custom).clone(), move |c| FinalUpgrade::Custom(c)),
 			upgrade::map(KadConnecConfig::new(), move |(c, s)| FinalUpgrade::Kad(c, s))),
-			upgrade::map(ping::Ping::default(), move |p| FinalUpgrade::from(p))),
+			upgrade::map(ping::protocol::Ping::default(), move |p| FinalUpgrade::from(p))),
 			upgrade::map(identify::IdentifyProtocolConfig, move |i| FinalUpgrade::from(i)))
 			// TODO: meh for cloning a Vec here
 	)
@@ -260,20 +256,14 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
 	/// Creates a new node handler.
 	#[inline]
-	pub fn new(registered_custom: Arc<RegisteredProtocols>, endpoint: ConnectedPoint) -> Self {
+	pub fn new(registered_custom: Arc<RegisteredProtocols>) -> Self {
 		let registered_custom_len = registered_custom.len();
 		let queued_dial_upgrades = registered_custom.0
 			.iter()
 			.map(|proto| UpgradePurpose::Custom(proto.id()))
 			.collect();
 
-		let address = match endpoint {
-			ConnectedPoint::Dialer { address } => address.clone(),
-			ConnectedPoint::Listener { send_back_addr, .. } => send_back_addr.clone(),
-		};
-
 		SubstrateNodeHandler {
-			address,
 			custom_protocols_substreams: Vec::with_capacity(registered_custom_len),
 			kademlia_substream: None,
 			need_report_kad_open: false,
@@ -294,18 +284,19 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 	}
 }
 
-impl<TSubstream> NodeHandler<TSubstream> for SubstrateNodeHandler<TSubstream>
+impl<TSubstream> NodeHandler for SubstrateNodeHandler<TSubstream>
 where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 {
 	type InEvent = SubstrateInEvent;
 	type OutEvent = SubstrateOutEvent<TSubstream>;
 	type OutboundOpenInfo = ();
+	type Substream = TSubstream;
 
 	fn inject_substream(&mut self, substream: TSubstream, endpoint: NodeHandlerEndpoint<Self::OutboundOpenInfo>) {
 		// For listeners, propose all the possible upgrades.
 		if endpoint == NodeHandlerEndpoint::Listener {
 			let listener_upgrade = listener_upgrade!(self);
-			let upgrade = upgrade::apply(substream, listener_upgrade, Endpoint::Listener, &self.address);
+			let upgrade = upgrade::apply(substream, listener_upgrade, Endpoint::Listener);
 			self.upgrades_in_progress_listen.push(Box::new(upgrade) as Box<_>);
 			// Since we pushed to `upgrades_in_progress_listen`, we have to notify the task.
 			if let Some(task) = self.to_notify.take() {
@@ -338,26 +329,22 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					return;
 				};
 
-				// TODO: shouldn't be &self.address ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Kad => {
 				let wanted = upgrade::map(KadConnecConfig::new(), move |(c, s)| FinalUpgrade::Kad(c, s));
-				// TODO: shouldn't be &self.address ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Identify => {
 				let wanted = upgrade::map(identify::IdentifyProtocolConfig, move |i| FinalUpgrade::from(i));
-				// TODO: shouldn't be &self.address ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 			UpgradePurpose::Ping => {
-				let wanted = upgrade::map(ping::Ping::default(), move |p| FinalUpgrade::from(p));
-				// TODO: shouldn't be &self.address ; requires a change in libp2p
-				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer, &self.address);
+				let wanted = upgrade::map(ping::protocol::Ping::default(), move |p| FinalUpgrade::from(p));
+				let upgrade = upgrade::apply(substream, wanted, Endpoint::Dialer);
 				self.upgrades_in_progress_dial.push((purpose, Box::new(upgrade) as Box<_>));
 			}
 		};
@@ -733,6 +720,9 @@ where TSubstream: AsyncRead + AsyncWrite + Send + 'static,
 					},
 					// We don't care about Kademlia pings, they are unused.
 					Ok(Async::Ready(Some(KadIncomingRequest::PingPong))) => {},
+					// Other Kademlia messages are unimplemented.
+					Ok(Async::Ready(Some(KadIncomingRequest::GetProviders { .. }))) => {},
+					Ok(Async::Ready(Some(KadIncomingRequest::AddProvider { .. }))) => {},
 					Ok(Async::NotReady) => {
 						self.kademlia_substream = Some((controller, stream));
 						break;
@@ -847,16 +837,16 @@ enum FinalUpgrade<TSubstream> {
 	Kad(KadConnecController, Box<Stream<Item = KadIncomingRequest, Error = IoError> + Send>),
 	IdentifyListener(identify::IdentifySender<TSubstream>),
 	IdentifyDialer(identify::IdentifyInfo, Multiaddr),
-	PingDialer(ping::PingDialer<TSubstream, Instant>),
-	PingListener(ping::PingListener<TSubstream>),
+	PingDialer(ping::protocol::PingDialer<TSubstream, Instant>),
+	PingListener(ping::protocol::PingListener<TSubstream>),
 	Custom(RegisteredProtocolSubstream<TSubstream>),
 }
 
-impl<TSubstream> From<ping::PingOutput<TSubstream, Instant>> for FinalUpgrade<TSubstream> {
-	fn from(out: ping::PingOutput<TSubstream, Instant>) -> Self {
+impl<TSubstream> From<ping::protocol::PingOutput<TSubstream, Instant>> for FinalUpgrade<TSubstream> {
+	fn from(out: ping::protocol::PingOutput<TSubstream, Instant>) -> Self {
 		match out {
-			ping::PingOutput::Ponger(ponger) => FinalUpgrade::PingListener(ponger),
-			ping::PingOutput::Pinger(pinger) => FinalUpgrade::PingDialer(pinger),
+			ping::protocol::PingOutput::Ponger(ponger) => FinalUpgrade::PingListener(ponger),
+			ping::protocol::PingOutput::Pinger(pinger) => FinalUpgrade::PingDialer(pinger),
 		}
 	}
 }

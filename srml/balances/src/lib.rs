@@ -44,7 +44,7 @@ use rstd::{cmp, result};
 use codec::{Encode, Decode, Codec, Input, Output, HasCompact};
 use runtime_support::{StorageValue, StorageMap, Parameter};
 use runtime_support::dispatch::Result;
-use primitives::traits::{Zero, One, SimpleArithmetic, MakePayment, MaybeSerializeDebug,
+use primitives::traits::{Zero, One, SimpleArithmetic, MakePayment,
 	As, Lookup, Member, CheckedAdd, CheckedSub, CurrentHeight, BlockNumberToHash};
 use address::Address as RawAddress;
 use system::ensure_signed;
@@ -106,10 +106,10 @@ impl<AccountId> EnsureAccountLiquid<AccountId> for () {
 
 pub trait Trait: system::Trait {
 	/// The balance of an account.
-	type Balance: Parameter + MaybeSerializeDebug + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
+	type Balance: Parameter + Member + SimpleArithmetic + Codec + Default + Copy + As<Self::AccountIndex> + As<usize> + As<u64>;
 	/// Type used for storing an account's index; implies the maximum number of accounts the system
 	/// can hold.
-	type AccountIndex: Parameter + Member + MaybeSerializeDebug + Codec + Default + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
+	type AccountIndex: Parameter + Member + Codec + Default + SimpleArithmetic + As<u8> + As<u16> + As<u32> + As<u64> + As<usize> + Copy;
 	/// A function which is invoked when the free-balance has fallen below the existential deposit and
 	/// has been reduced to zero.
 	///

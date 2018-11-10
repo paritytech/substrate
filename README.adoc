@@ -227,6 +227,17 @@ Or you can join the BBQ Birch Testnet with:
 [source, shell]
 cargo run
 
+If you want to see the multi-node consensus algorithm in action locally, then
+you can create a local testnet. You'll need two terminals open. In one, run:
+
+[source, shell]
+cargo run -- --chain=local --validator --key Alice -d /tmp/alice --node-key 0000000000000000000000000000000000000000000000000000000000000001
+
+and in the other, run:
+
+[source, shell]
+cargo run -- --chain=local --validator --key Bob -d /tmp/bob --port 30334 --bootnodes /ip4/127.0.0.1/tcp/30333/p2p/QmQZ8TjTqeDj3ciwr93EJ95hxfDsb9pEYDizUAbWpigtQN
+
 include::doc/packages/packages.adoc[]
 
 == Documentation
