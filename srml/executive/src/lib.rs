@@ -295,7 +295,7 @@ mod tests {
 	}
 
 	// Workaround for https://github.com/rust-lang/rust/issues/26925 . Remove when sorted.
-	#[derive(Clone, Eq, PartialEq, Debug, Serialize, Deserialize)]
+	#[derive(Clone, Eq, PartialEq)]
 	pub struct Runtime;
 	impl system::Trait for Runtime {
 		type Origin = Origin;

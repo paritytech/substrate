@@ -37,7 +37,7 @@ impl<AccountId, Index, Call> traits::Applyable
 where
 	AccountId: Member + MaybeDisplay,
 	Index: Member + MaybeDisplay + SimpleArithmetic,
-	Call: Member 
+	Call: Member,
 {
 	type Index = Index;
 	type AccountId = AccountId;
