@@ -42,7 +42,7 @@ pub struct Header<Number, Hash: HashT, DigestItem> {
 	pub digest: Digest<DigestItem>,
 }
 
-// TODO: Remove Deserialize for Header once RPC no longer needs it
+// TODO: Remove Deserialize for Header once RPC no longer needs it #1098
 #[cfg(feature = "std")]
 impl<'a, Number: 'a, Hash: 'a + HashT, DigestItem: 'a> Deserialize<'a> for Header<Number, Hash, DigestItem> where
 	Header<Number, Hash, DigestItem>: Decode,

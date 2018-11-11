@@ -73,7 +73,7 @@ pub struct Block<Header, Extrinsic: MaybeSerialize> {
 	pub extrinsics: Vec<Extrinsic>,
 }
 
-// TODO: Remove Deserialize for Block once RPC no longer needs it
+// TODO: Remove Deserialize for Block once RPC no longer needs it #1098
 #[cfg(feature = "std")]
 impl<'a, Header: 'a, Extrinsic: 'a + MaybeSerialize> Deserialize<'a> for Block<Header, Extrinsic> where
 	Block<Header, Extrinsic>: Decode,
@@ -119,7 +119,7 @@ pub struct SignedBlock<Block> {
 	pub justification: Justification,
 }
 
-// TODO: Remove Deserialize for SignedBlock once RPC no longer needs it
+// TODO: Remove Deserialize for SignedBlock once RPC no longer needs it #1098
 #[cfg(feature = "std")]
 impl<'a, Block: BlockT,> Deserialize<'a> for SignedBlock<Block> where
 	Block::Header: 'a,
