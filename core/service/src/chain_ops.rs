@@ -67,9 +67,9 @@ pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut 
 		}
 		match client.block(&BlockId::number(block))? {
 			Some(block) => {
-/*				if json {
+				if json {
 					serde_json::to_writer(&mut output, &block).map_err(|e| format!("Eror writing JSON: {}", e))?;
-				} else*/ {
+				} else {
 					output.write(&block.encode())?;
 				}
 			},
