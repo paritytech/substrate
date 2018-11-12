@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Support code for the runtime.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(alloc))]
@@ -29,7 +27,7 @@ pub extern crate sr_std as rstd;
 extern crate sr_io as runtime_io;
 #[doc(hidden)]
 pub extern crate sr_primitives as runtime_primitives;
-extern crate substrate_metadata;
+extern crate srml_metadata;
 
 extern crate mashup;
 

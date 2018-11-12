@@ -14,7 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Balances: Handles balances.
+//! Balances: Handles setting and retrieval of free balance, 
+//! retrieving total balance, reserve and unreserve balance, 
+//! repatriating a reserved balance to a beneficiary account that exists,
+//! transfering a balance between accounts (when not reserved),
+//! slashing an account balance, account removal, rewards,
+//! lookup of an index to reclaim an account (when not balance not reserved),
+//! increasing total stake.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

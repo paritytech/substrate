@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
-//! TODO: Missing doc
-// end::description[]
+//! Substrate libp2p implementation of the ethcore network library
 
 #![recursion_limit = "128"]
 

@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Lowest-abstraction level for the Substrate runtime: just exports useful primitives from std
 //! or core/alloc to be used with any code that depends on the runtime.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(not(feature = "std"), feature(core_intrinsics))]

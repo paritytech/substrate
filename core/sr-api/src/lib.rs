@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! API's for interfacing with the runtime via native/wasm.
-// end::description[]
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
