@@ -192,19 +192,30 @@ macro_rules! decl_module {
 		$fn_vis:vis fn $fn_name:ident($origin:ident : T::Origin $(, $param_name:ident : $param:ty)* ) -> $result:ty { $( $impl:tt )* }
 		$($rest:tt)*
 	) => {
-		decl_module!(@normalize
-			$(#[$attr])*
-			pub struct $mod_type<$trait_instance: $trait_name>
-			for enum $call_type where origin: $origin_type, system = $system
-			{ $( $deposit_event )* }
-			{ $( $on_finalise )* }
-			[
-				$($t)*
-				$(#[doc = $doc_attr])*
-				$fn_vis fn $fn_name($origin $( , $param_name : $param )* ) -> $result { $( $impl )* }
-			]
-			$($rest)*
-		);
+		compile_error!("\
+First parameter of dispatch should be marked `origin` only, with no\n\
+type specified (a bit like `self`).\n\
+(For root-matching dispatches, ensure the first parameter does not use\n\
+the `T::Origin` type.)\
+")
+	};
+	(@normalize
+		$(#[$attr:meta])*
+		pub struct $mod_type:ident<$trait_instance:ident: $trait_name:ident>
+		for enum $call_type:ident where origin: $origin_type:ty, system = $system:ident
+		{ $( $deposit_event:tt )* }
+		{ $( $on_finalise:tt )* }
+		[ $($t:tt)* ]
+		$(#[doc = $doc_attr:tt])*
+		$fn_vis:vis fn $fn_name:ident(origin : $origin:ty $(, $param_name:ident : $param:ty)* ) -> $result:ty { $( $impl:tt )* }
+		$($rest:tt)*
+	) => {
+		compile_error!("\
+First parameter of dispatch should be marked `origin` only, with no\n\
+type specified (a bit like `self`).\n\
+(For root-matching dispatches, ensure the first parameter is not named\n\
+`origin`.)\
+")
 	};
 	(@normalize
 		$(#[$attr:meta])*

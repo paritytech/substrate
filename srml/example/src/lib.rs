@@ -34,7 +34,7 @@ extern crate substrate_primitives;
 // Needed for various traits. In our case, `OnFinalise`.
 extern crate sr_primitives;
 
-// Needed for deriving `Serialize` and `Deserialize` for various types.
+// Needed for deriving `Serialize` and `Deserialize` for `decl_storage`.
 // We only implement the serde traits for std builds - they're unneeded
 // in the wasm runtime.
 #[cfg(feature = "std")]
