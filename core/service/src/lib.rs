@@ -70,7 +70,6 @@ use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
 use runtime_primitives::generic::BlockId;
-use serde_json as json;
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -79,7 +78,7 @@ use codec::{Encode, Decode};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::ChainSpec;
+pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
@@ -381,7 +380,7 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 #[derive(Clone)]
 struct RpcConfig {
 	chain_name: String,
-	properties: serde_json::map::Map<String, json::Value>,
+	properties: Properties,
 	impl_name: &'static str,
 	impl_version: &'static str,
 }
@@ -399,7 +398,7 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 		Ok(self.chain_name.clone())
 	}
 
-	fn system_properties(&self) -> substrate_rpc::system::error::Result<json::map::Map<String, json::Value>> {
+	fn system_properties(&self) -> substrate_rpc::system::error::Result<Properties> {
 		Ok(self.properties.clone())
 	}
 }

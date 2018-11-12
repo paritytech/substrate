@@ -27,8 +27,8 @@ impl SystemApi for () {
 	fn system_chain(&self) -> Result<String> {
 		Ok("testchain".into())
 	}
-	fn system_properties(&self) -> Result<serde_json::Value> {
-		Ok(serde_json::Value::Object(serde_json::map::Map::new()))
+	fn system_properties(&self) -> Result<serde_json::map::Map<String, serde_json::Value>> {
+		Ok(serde_json::map::Map::new())
 	}
 }
 
@@ -60,6 +60,6 @@ fn system_chain_works() {
 fn system_properties_works() {
 	assert_eq!(
 		SystemApi::system_properties(&()).unwrap(),
-		serde_json::Value::Object(serde_json::map::Map::new())
+		serde_json::map::Map::new()
 	);
 }
