@@ -70,6 +70,6 @@ impl GenesisConfig {
 
 pub fn additional_storage_with_genesis(genesis_block: &::Block) -> HashMap<Vec<u8>, Vec<u8>> {
 	map![
-		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().0.to_vec()
+		twox_128(&b"latest"[..]).to_vec() => genesis_block.hash().as_fixed_bytes().to_vec()
 	]
 }

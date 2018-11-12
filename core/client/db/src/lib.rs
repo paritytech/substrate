@@ -354,7 +354,7 @@ struct StorageDb<Block: BlockT> {
 
 impl<Block: BlockT> state_machine::Storage<Blake2Hasher> for StorageDb<Block> {
 	fn get(&self, key: &H256) -> Result<Option<DBValue>, String> {
-		self.state_db.get(&key.0.into(), self).map(|r| r.map(|v| DBValue::from_slice(&v)))
+		self.state_db.get(key, self).map(|r| r.map(|v| DBValue::from_slice(&v)))
 			.map_err(|e| format!("Database backend error: {:?}", e))
 	}
 }
@@ -364,7 +364,7 @@ impl<Block: BlockT> state_db::HashDb for StorageDb<Block> {
 	type Hash = H256;
 
 	fn get(&self, key: &H256) -> Result<Option<Vec<u8>>, Self::Error> {
-		self.db.get(columns::STATE, &key[..]).map(|r| r.map(|v| v.to_vec()))
+		self.db.get(columns::STATE, key.as_bytes()).map(|r| r.map(|v| v.to_vec()))
 	}
 }
 
@@ -731,9 +731,9 @@ impl<Block> client::backend::Backend<Block, Blake2Hasher> for Backend<Block> whe
 			let mut changeset: state_db::ChangeSet<H256> = state_db::ChangeSet::default();
 			for (key, (val, rc)) in operation.updates.drain() {
 				if rc > 0 {
-					changeset.inserted.push((key.0.into(), val.to_vec()));
+					changeset.inserted.push((key, val.to_vec()));
 				} else if rc < 0 {
-					changeset.deleted.push(key.0.into());
+					changeset.deleted.push(key);
 				}
 			}
 			let number_u64 = number.as_();
@@ -1114,7 +1114,7 @@ mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			assert_eq!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
+			assert_eq!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -1148,7 +1148,7 @@ mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			assert_eq!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().unwrap(), &b"hello"[..]);
+			assert_eq!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().unwrap(), &b"hello"[..]);
 			hash
 		};
 
@@ -1180,12 +1180,12 @@ mod tests {
 
 			backend.commit_operation(op).unwrap();
 
-			assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
+			assert!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().is_none());
 		}
 
 		backend.finalize_block(BlockId::Number(1)).unwrap();
 		backend.finalize_block(BlockId::Number(2)).unwrap();
-		assert!(backend.storage.db.get(::columns::STATE, &key.0[..]).unwrap().is_none());
+		assert!(backend.storage.db.get(::columns::STATE, key.as_bytes()).unwrap().is_none());
 	}
 
 	#[test]

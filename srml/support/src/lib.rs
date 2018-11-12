@@ -34,7 +34,7 @@ extern crate mashup;
 #[cfg(test)]
 #[macro_use]
 extern crate pretty_assertions;
-#[cfg(test)]
+#[cfg(feature = "std")]
 #[macro_use]
 extern crate serde_derive;
 #[cfg(test)]
@@ -120,3 +120,6 @@ pub enum Void {}
 
 #[doc(hidden)]
 pub use mashup::*;
+
+#[cfg(feature = "std")]
+pub use serde_derive::*;

@@ -67,7 +67,7 @@ use parking_lot::{Mutex, RwLock};
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::generic::{BlockId, SignedBlock};
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -76,7 +76,7 @@ use codec::{Encode, Decode};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::ChainSpec;
+pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
@@ -122,8 +122,7 @@ impl<Components> Service<Components>
 	where
 		Components: components::Components,
 		<Components as components::Components>::Executor: std::clone::Clone,
-		txpool::ExHash<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
-		txpool::ExtrinsicFor<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
+		for<'de> SignedBlock<ComponentBlock<Components>>: ::serde::Deserialize<'de>,
 {
 	/// Creates a new service.
 	pub fn new(
@@ -138,10 +137,12 @@ impl<Components> Service<Components>
 		let executor = NativeExecutor::new();
 
 		let mut keystore = Keystore::open(config.keystore_path.as_str().into())?;
+
+		// This is meant to be for testing only
+		// FIXME: remove this - https://github.com/paritytech/substrate/issues/1063
 		for seed in &config.keys {
 			keystore.generate_from_seed(seed)?;
 		}
-
 		// Keep the public key for telemetry
 		let public_key = match keystore.contents()?.get(0) {
 			Some(public_key) => public_key.clone(),
@@ -234,6 +235,7 @@ impl<Components> Service<Components>
 		// RPC
 		let rpc_config = RpcConfig {
 			chain_name: config.chain_spec.name().to_string(),
+			properties: config.chain_spec.properties().clone(),
 			impl_name: config.impl_name,
 			impl_version: config.impl_version,
 		};
@@ -245,7 +247,7 @@ impl<Components> Service<Components>
 				let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
 				let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
 				let author = rpc::apis::author::Author::new(client.clone(), transaction_pool.clone(), subscriptions.clone());
-				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _, _>(
+				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _>(
 					state,
 					chain,
 					author,
@@ -377,6 +379,7 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 #[derive(Clone)]
 struct RpcConfig {
 	chain_name: String,
+	properties: Properties,
 	impl_name: &'static str,
 	impl_version: &'static str,
 }
@@ -392,6 +395,10 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok(self.chain_name.clone())
+	}
+
+	fn system_properties(&self) -> substrate_rpc::system::error::Result<Properties> {
+		Ok(self.properties.clone())
 	}
 }
 

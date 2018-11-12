@@ -478,7 +478,7 @@ pub mod tests {
 		assert!(local_checker.check_changes_proof(&request, remote_max + 1, remote_proof.clone()).is_err());
 
 		// check proof on local client using broken proof
-		remote_proof = local_roots_range.into_iter().map(|v| v.to_vec()).collect();
+		remote_proof = local_roots_range.into_iter().map(|v| v.as_bytes().to_vec()).collect();
 		assert!(local_checker.check_changes_proof(&request, remote_max, remote_proof).is_err());
 	}
 }

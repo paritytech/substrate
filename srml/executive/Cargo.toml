@@ -6,7 +6,6 @@ authors = ["Parity Technologies <admin@parity.io>"]
 [dependencies]
 hex-literal = "0.1.0"
 serde = { version = "1.0", default-features = false }
-serde_derive = { version = "1.0", optional = true }
 parity-codec = { version = "2.1", default-features = false }
 parity-codec-derive = { version = "2.1", default-features = false }
 sr-std = { path = "../../core/sr-std", default-features = false }
@@ -25,7 +24,6 @@ std = [
 	"sr-std/std",
 	"srml-support/std",
 	"serde/std",
-	"serde_derive",
 	"parity-codec/std",
 	"parity-codec-derive/std",
 	"sr-primitives/std",
