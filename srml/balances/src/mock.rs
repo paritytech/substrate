@@ -72,6 +72,7 @@ impl ExtBuilder {
 		self.existential_deposit = existential_deposit;
 		self
 	}
+	#[allow(dead_code)]
 	pub fn transfer_fee(mut self, transfer_fee: u64) -> Self {
 		self.transfer_fee = transfer_fee;
 		self

@@ -18,12 +18,7 @@
 
 use codec::{Decode, Encode};
 use substrate_primitives::H256;
-use super::{Header, DigestItem, UncheckedExtrinsic};
-
-type Block = super::Block<
-	Header<u64, ::traits::BlakeTwo256, DigestItem<H256, u32>>,
-	UncheckedExtrinsic<H256, u64, u64, ::Ed25519Signature>,
->;
+use super::DigestItem;
 
 #[test]
 fn system_digest_item_encoding() {
