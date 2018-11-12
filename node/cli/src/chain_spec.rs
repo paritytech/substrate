@@ -20,7 +20,7 @@ use primitives::{AuthorityId, ed25519};
 use node_primitives::AccountId;
 use node_runtime::{GenesisConfig, ConsensusConfig, CouncilSeatsConfig, CouncilVotingConfig, DemocracyConfig,
 	SessionConfig, StakingConfig, TimestampConfig, BalancesConfig, TreasuryConfig, UpgradeKeyConfig,
-	ContractConfig, Permill, Perbill};
+	ContractConfig, Permill, Perbill, GrandpaConfig};
 use substrate_service;
 
 const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
@@ -125,6 +125,9 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 		upgrade_key: Some(UpgradeKeyConfig {
 			key: endowed_accounts[0].clone(),
 		}),
+		grandpa: Some(GrandpaConfig {
+			authorities: vec![]
+		})
 	}
 }
 
@@ -227,6 +230,9 @@ fn testnet_genesis(initial_authorities: Vec<AuthorityId>, upgrade_key: AccountId
 		upgrade_key: Some(UpgradeKeyConfig {
 			key: upgrade_key,
 		}),
+		grandpa: Some(GrandpaConfig {
+			authorities: vec![]
+		})
 	}
 }
 

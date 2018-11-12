@@ -255,6 +255,7 @@ mod tests {
 			treasury: Some(Default::default()),
 			contract: Some(Default::default()),
 			upgrade_key: Some(Default::default()),
+			grandpa: Some(Default::default()),
 		}.build_storage().unwrap().0)
 	}
 
