@@ -21,10 +21,6 @@
 #[cfg(test)]
 extern crate substrate_primitives;
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 #[macro_use]
 extern crate parity_codec_derive;
 #[cfg_attr(not(feature = "std"), macro_use)]

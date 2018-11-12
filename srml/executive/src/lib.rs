@@ -20,10 +20,6 @@
 
 #[cfg(test)]
 #[macro_use]
-extern crate serde_derive;
-
-#[cfg(test)]
-#[macro_use]
 extern crate parity_codec_derive;
 
 #[cfg_attr(test, macro_use)]

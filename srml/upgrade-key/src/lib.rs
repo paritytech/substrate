@@ -25,9 +25,6 @@ extern crate sr_io;
 #[cfg(test)]
 extern crate substrate_primitives;
 extern crate sr_primitives;
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
 #[macro_use]
 extern crate parity_codec_derive;
 extern crate parity_codec as codec;
