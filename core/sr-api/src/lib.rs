@@ -456,12 +456,6 @@ decl_apis! {
 		fn metadata() -> Data;
 	}
 
-	/// The `OldTxQueue` api trait for interfering with the old transaction queue.
-	pub trait OldTxQueue {
-		fn account_nonce<AccountId, Index>(account: AccountId) -> Index;
-		fn lookup_address<Address, LookupId>(address: Address) -> Option<LookupId>;
-	}
-
 	/// The `TaggedTransactionQueue` api trait for interfering with the new transaction queue.
 	pub trait TaggedTransactionQueue<Block: BlockT> {
 		fn validate_transaction<TransactionValidity>(tx: <Block as BlockT>::Extrinsic) -> TransactionValidity;

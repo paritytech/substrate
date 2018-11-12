@@ -255,7 +255,7 @@ impl<V: 'static + Verifier<Block>> Peer<V> {
 					amount: 1,
 					nonce,
 				};
-				let signature = Keyring::from_raw_public(transfer.from.0).unwrap().sign(&transfer.encode()).into();
+				let signature = Keyring::from_raw_public(transfer.from.to_fixed_bytes()).unwrap().sign(&transfer.encode()).into();
 				builder.push(Extrinsic { transfer, signature }).unwrap();
 				nonce = nonce + 1;
 			});

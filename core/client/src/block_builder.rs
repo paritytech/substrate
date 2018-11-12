@@ -103,7 +103,7 @@ where
 					}
 					Err(e) => {
 						self.changes.discard_prospective();
-						Err(error::ErrorKind::ApplyExtinsicFailed(e).into())
+						Err(error::ErrorKind::ApplyExtrinsicFailed(e).into())
 					}
 				}
 			}

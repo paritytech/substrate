@@ -145,7 +145,7 @@ impl timestamp::Trait for Runtime {
 pub struct SessionKeyConversion;
 impl Convert<AccountId, SessionKey> for SessionKeyConversion {
 	fn convert(a: AccountId) -> SessionKey {
-		a.0.into()
+		a.to_fixed_bytes().into()
 	}
 }
 
@@ -226,7 +226,7 @@ pub type Header = generic::Header<BlockNumber, BlakeTwo256, Log>;
 /// Block type as expected by this runtime.
 pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 /// A Block signed with a Justification
-pub type SignedBlock = generic::SignedBlock<Header, UncheckedExtrinsic>;
+pub type SignedBlock = generic::SignedBlock<Block>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
 /// Unchecked extrinsic type as expected by this runtime.

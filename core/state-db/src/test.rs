@@ -62,8 +62,13 @@ impl TestDb {
 
 pub fn make_changeset(inserted: &[u64], deleted: &[u64]) -> ChangeSet<H256> {
 	ChangeSet {
-		inserted: inserted.iter().map(|v| (H256::from(*v), H256::from(*v).to_vec())).collect(),
-		deleted: deleted.iter().map(|v| H256::from(*v)).collect(),
+		inserted: inserted
+			.iter()
+			.map(|v| {
+				(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
+			})
+			.collect(),
+		deleted: deleted.iter().map(|v| H256::from_low_u64_be(*v)).collect(),
 	}
 }
 
@@ -76,7 +81,12 @@ pub fn make_commit(inserted: &[u64], deleted: &[u64]) -> CommitSet<H256> {
 
 pub fn make_db(inserted: &[u64]) -> TestDb {
 	TestDb {
-		data: inserted.iter().map(|v| (H256::from(*v), H256::from(*v).to_vec())).collect(),
+		data: inserted
+			.iter()
+			.map(|v| {
+				(H256::from_low_u64_be(*v), H256::from_low_u64_be(*v).as_bytes().to_vec())
+			})
+			.collect(),
 		meta: Default::default(),
 	}
 }

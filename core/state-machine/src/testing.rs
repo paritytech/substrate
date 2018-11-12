@@ -158,6 +158,6 @@ mod tests {
 		ext.set_storage(b"dog".to_vec(), b"puppy".to_vec());
 		ext.set_storage(b"dogglesworth".to_vec(), b"cat".to_vec());
 		const ROOT: [u8; 32] = hex!("0b41e488cccbd67d1f1089592c2c235f5c5399b053f7fe9152dd4b5f279914cd");
-		assert_eq!(ext.storage_root(), H256(ROOT));
+		assert_eq!(ext.storage_root(), H256::from(ROOT));
 	}
 }
