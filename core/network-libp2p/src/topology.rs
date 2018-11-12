@@ -245,12 +245,16 @@ impl NetTopology {
 	/// Adds addresses that a node says it is listening on.
 	///
 	/// The addresses are most likely to be valid.
+	///
+	/// Returns `true` if the topology has changed in some way. Returns `false` if calling this
+	/// method was a no-op.
 	#[inline]
 	pub fn add_self_reported_listen_addrs<I>(
 		&mut self,
 		peer_id: &PeerId,
 		addrs: I,
-	) where I: Iterator<Item = Multiaddr> {
+	) -> bool
+		where I: Iterator<Item = Multiaddr> {
 		self.add_discovered_addrs(peer_id, addrs.map(|a| (a, true)))
 	}
 
@@ -260,21 +264,28 @@ impl NetTopology {
 	///
 	/// For each address, incorporates a boolean. If true, that means we have some sort of hint
 	/// that this address can be reached.
+	///
+	/// Returns `true` if the topology has changed in some way. Returns `false` if calling this
+	/// method was a no-op.
 	#[inline]
 	pub fn add_kademlia_discovered_addrs<I>(
 		&mut self,
 		peer_id: &PeerId,
 		addrs: I,
-	) where I: Iterator<Item = (Multiaddr, bool)> {
+	) -> bool
+		where I: Iterator<Item = (Multiaddr, bool)> {
 		self.add_discovered_addrs(peer_id, addrs)
 	}
 
-	/// Inner implementaiton of the `add_*_discovered_addrs`.
+	/// Inner implementaiton of the `add_*_discovered_addrs` methods.
+	/// Returns `true` if the topology has changed in some way. Returns `false` if calling this
+	/// method was a no-op.
 	fn add_discovered_addrs<I>(
 		&mut self,
 		peer_id: &PeerId,
 		addrs: I,
-	) where I: Iterator<Item = (Multiaddr, bool)> {
+	) -> bool
+		where I: Iterator<Item = (Multiaddr, bool)> {
 		let mut addrs: Vec<_> = addrs.collect();
 		let now_systime = SystemTime::now();
 		let now = Instant::now();
@@ -290,6 +301,8 @@ impl NetTopology {
 			}
 			true
 		});
+
+		let mut anything_changed = false;
 
 		if !addrs.is_empty() {
 			trace!(
@@ -317,6 +330,7 @@ impl NetTopology {
 				}
 			}
 
+			anything_changed = true;
 			peer.addrs.push(Addr {
 				addr,
 				expires: now_systime + KADEMLIA_DISCOVERY_EXPIRATION,
@@ -329,6 +343,8 @@ impl NetTopology {
 				}),
 			});
 		}
+
+		anything_changed
 	}
 
 	/// Indicates the peer store that we're connected to this given address.
