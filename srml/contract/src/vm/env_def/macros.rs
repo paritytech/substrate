@@ -219,7 +219,7 @@ mod tests {
 	#[test]
 	fn macro_define_func() {
 		define_func!( <E: Ext> ext_gas (_ctx, amount: u32) => {
-			let amount = <<<E as Ext>::T as Trait>::Gas as As<u32>>::sa(amount);
+			let amount = <<E::T as Trait>::Gas as As<u32>>::sa(amount);
 			if !amount.is_zero() {
 				Ok(())
 			} else {
@@ -269,7 +269,7 @@ mod tests {
 	fn macro_define_env() {
 		define_env!(init_env, <E: Ext>,
 			ext_gas( _ctx, amount: u32 ) => {
-				let amount = <<<E as Ext>::T as Trait>::Gas as As<u32>>::sa(amount);
+				let amount = <<E::T as Trait>::Gas as As<u32>>::sa(amount);
 				if !amount.is_zero() {
 					Ok(())
 				} else {
