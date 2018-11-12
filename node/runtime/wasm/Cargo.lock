@@ -137,12 +137,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "hash-db"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#e61df32342920f602a9d8d71caa5117c779d3ff1"
+source = "git+https://github.com/paritytech/trie#99c1ca58ae26c8dec59ab0a0c957dd5e1f3243a0"
 
 [[package]]
 name = "hash256-std-hasher"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#e61df32342920f602a9d8d71caa5117c779d3ff1"
+source = "git+https://github.com/paritytech/trie#99c1ca58ae26c8dec59ab0a0c957dd5e1f3243a0"
 dependencies = [
  "crunchy 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -237,7 +237,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "memory-db"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#e61df32342920f602a9d8d71caa5117c779d3ff1"
+source = "git+https://github.com/paritytech/trie#99c1ca58ae26c8dec59ab0a0c957dd5e1f3243a0"
 dependencies = [
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
  "heapsize 0.4.2 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -941,7 +941,7 @@ dependencies = [
 [[package]]
 name = "trie-db"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#e61df32342920f602a9d8d71caa5117c779d3ff1"
+source = "git+https://github.com/paritytech/trie#99c1ca58ae26c8dec59ab0a0c957dd5e1f3243a0"
 dependencies = [
  "elastic-array 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
@@ -952,7 +952,7 @@ dependencies = [
 [[package]]
 name = "trie-root"
 version = "0.9.0"
-source = "git+https://github.com/paritytech/trie#e61df32342920f602a9d8d71caa5117c779d3ff1"
+source = "git+https://github.com/paritytech/trie#99c1ca58ae26c8dec59ab0a0c957dd5e1f3243a0"
 dependencies = [
  "hash-db 0.9.0 (git+https://github.com/paritytech/trie)",
 ]
