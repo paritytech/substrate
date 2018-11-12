@@ -38,25 +38,25 @@ pub trait Core<Block: BlockT>: 'static + Send + Sync + ConstructRuntimeApi<Block
 	fn execute_block(&self, at: &BlockId<Block>, block: &Block) -> Result<()>;
 	/// Initialise a block with the given header.
 	fn initialise_block(
-        &self,
-        at: &BlockId<Block>,
-        header: &<Block as BlockT>::Header
-    ) -> Result<()>;
+		&self,
+		at: &BlockId<Block>,
+		header: &<Block as BlockT>::Header
+	) -> Result<()>;
 }
 
 pub mod runtime {
 	use super::*;
 
-    /// The `Core` api trait that is mandantory for each runtime.
+	/// The `Core` api trait that is mandantory for each runtime.
 	/// This is the side that should be implemented for the `Runtime`.
-    pub trait Core<Block: BlockT> {
-    	/// Returns the version of the runtime.
-    	fn version() -> RuntimeVersion;
-    	/// Returns the authorities.
-    	fn authorities() -> Vec<AuthorityId>;
-    	/// Execute the given block.
-    	fn execute_block(block: Block);
-    	/// Initialise a block with the given header.
-    	fn initialise_block(header: <Block as BlockT>::Header);
-    }
+	pub trait Core<Block: BlockT> {
+		/// Returns the version of the runtime.
+		fn version() -> RuntimeVersion;
+		/// Returns the authorities.
+		fn authorities() -> Vec<AuthorityId>;
+		/// Execute the given block.
+		fn execute_block(block: Block);
+		/// Initialise a block with the given header.
+		fn initialise_block(header: <Block as BlockT>::Header);
+	}
 }
