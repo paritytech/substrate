@@ -1,13 +1,6 @@
 
 = Substrate CLI
 
-.Summary
-[source, toml]
-----
-include::Cargo.toml[lines=2..5]
-----
-
-.Description
 Substrate CLI library
 
 include::doc/shell-completion.adoc[]

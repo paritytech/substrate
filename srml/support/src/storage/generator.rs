@@ -53,7 +53,7 @@ pub use rstd::borrow::Borrow;
 #[doc(hidden)]
 pub use rstd::marker::PhantomData;
 
-pub use substrate_metadata::{
+pub use srml_metadata::{
 	DecodeDifferent, StorageMetadata, StorageFunctionMetadata,
 	StorageFunctionType, StorageFunctionModifier
 };

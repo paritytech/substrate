@@ -14,7 +14,6 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Generic Transaction Pool
 //!
 //! The pool is based on dependency graph between transactions
@@ -24,7 +23,6 @@
 //!
 //! TODO [ToDr]
 //! - [ ] Multi-threading (getting ready transactions should not block the pool)
-// end::description[]
 
 #![warn(missing_docs)]
 #![warn(unused_extern_crates)]

@@ -29,7 +29,6 @@
 //! ## Finalization
 //!
 //! This module should be hooked up to the finalization routine.
-//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 

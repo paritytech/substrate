@@ -14,12 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Substrate customizable serde serializer.
 //!
 //! The idea is that we can later change the implementation
 //! to something more compact, but for now we're using JSON.
-// end::description[]
 
 #![warn(missing_docs)]
 

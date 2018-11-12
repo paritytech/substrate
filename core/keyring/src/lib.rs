@@ -14,9 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-// tag::description[]
 //! Support code for the runtime. A set of test accounts.
-// end::description[]
 
 #[macro_use] extern crate hex_literal;
 #[macro_use] extern crate lazy_static;

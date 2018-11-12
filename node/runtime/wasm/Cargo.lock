@@ -703,6 +703,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "srml-metadata"
+version = "0.1.0"
+dependencies = [
+ "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
+ "serde_derive 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "srml-session"
 version = "0.1.0"
 dependencies = [
@@ -755,7 +765,7 @@ dependencies = [
  "sr-io 0.1.0",
  "sr-primitives 0.1.0",
  "sr-std 0.1.0",
- "substrate-metadata 0.1.0",
+ "srml-metadata 0.1.0",
 ]
 
 [[package]]
@@ -842,16 +852,6 @@ dependencies = [
  "hex-literal 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "substrate-primitives 0.1.0",
-]
-
-[[package]]
-name = "substrate-metadata"
-version = "0.1.0"
-dependencies = [
- "parity-codec 2.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "parity-codec-derive 2.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
- "serde_derive 1.0.79 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
