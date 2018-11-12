@@ -71,7 +71,7 @@ decl_apis! {
 	/// applied in the runtime after those N blocks have passed.
 	///
 	/// The consensus protocol will coordinate the handoff externally.
-	pub trait GrandpaApi<SessionKey, B: BlockT> {
+	pub trait GrandpaApi<Block: BlockT, SessionKey> {
 		/// Check a digest for pending changes.
 		/// Return `None` if there are no pending changes.
 		///
@@ -84,7 +84,7 @@ decl_apis! {
 		/// This should be a pure function: i.e. as long as the runtime can interpret
 		/// the digest type it should return the same result regardless of the current
 		/// state.
-		fn grandpa_pending_change(digest: DigestFor<B>) -> Option<ScheduledChange<NumberFor<B>>>;
+		fn grandpa_pending_change(digest: DigestFor<Block>) -> Option<ScheduledChange<NumberFor<Block>>>;
 
 		/// Get the current GRANDPA authorities and weights. This should not change except
 		/// for when changes are scheduled and the corresponding delay has passed.

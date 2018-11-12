@@ -245,13 +245,14 @@ impl<T: Trait> Module<T> {
 }
 
 impl<T: Trait> Module<T>
-	where system::DigestItemOf<T>: GrandpaChangeSignal<T::BlockNumber>,
+where
+	AuthorityId: std::convert::From<<T as Trait>::SessionKey>
 {
 	/// See if the digest contains any scheduled change.
-	pub fn scrape_digest_change(digest: &<T as system::Trait>::Digest)
+	pub fn scrape_digest_change(log: &Log<T>)
 		-> Option<ScheduledChange<T::BlockNumber>>
 	{
-		digest.logs().iter().filter_map(|log| log.as_signal()).next()
+		<Log<T> as GrandpaChangeSignal<T::BlockNumber>>::as_signal(log)
 	}
 }
 

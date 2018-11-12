@@ -64,12 +64,12 @@ use node_primitives::{
 	AccountId, AccountIndex, Balance, BlockNumber, Hash, Index,
 	SessionKey, Signature
 };
-use grandpa::fg_primitives::{GrandpaApi, ScheduledChange, id::*};
+use grandpa::fg_primitives::{runtime::GrandpaApi, ScheduledChange,  id::*};
 use runtime_api::{runtime::*, id::*};
 use runtime_primitives::ApplyResult;
 use runtime_primitives::transaction_validity::TransactionValidity;
 use runtime_primitives::generic;
-use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, DigestFor};
+use runtime_primitives::traits::{Convert, BlakeTwo256, Block as BlockT, DigestFor, NumberFor};
 use version::RuntimeVersion;
 use council::{motions as council_motions, voting as council_voting};
 #[cfg(feature = "std")]
@@ -221,22 +221,12 @@ construct_runtime!(
 		CouncilVoting: council_voting,
 		CouncilMotions: council_motions::{Module, Call, Storage, Event<T>, Origin},
 		CouncilSeats: council_seats::{Config<T>},
-		Grandpa: grandpa::{Module, Storage, Config<T>, Log(from_grandpa_log)},
+		Grandpa: grandpa::{Module, Storage, Config<T>, Log()},
 		Treasury: treasury,
 		Contract: contract::{Module, Call, Config<T>, Event<T>},
 		UpgradeKey: upgrade_key,
 	}
 );
-
-impl Log {
-	fn from_grandpa_log(&self)
-	fn as_grandpa_log(&self) -> Option<Grandpa::RawLog> {
-		match self.0 {
-			InternalLog::Grandpa(raw) => Some(raw),
-			_ => None,
-		}
-	}
-}
 
 /// The address format for describing accounts.
 pub use balances::address::Address as RawAddress;
@@ -310,9 +300,17 @@ impl_apis! {
 		}
 	}
 
-	impl GrandpaApi<SessionKey, Block> for Runtime {
-		fn grandpa_pending_change(digest: DigestFor<Block>) -> Option<ScheduledChange<Block::Number>> {
-			Grandpa::scrape_digest_change(&digest)
+	impl GrandpaApi<Block, SessionKey> for Runtime {
+		fn grandpa_pending_change(digest: DigestFor<Block>) -> Option<ScheduledChange<NumberFor<Block>>> {
+			for log in digest.logs.iter().filter_map(|l| match l {
+				Log(InternalLog::grandpa(grandpa_signal)) => Some(grandpa_signal),
+				_=> None
+			}) {
+				if let Some(change) = Grandpa::scrape_digest_change(log) {
+					return Some(change);
+				}
+			}
+			None
 		}
 
 		fn grandpa_authorities() -> Vec<(SessionKey, u64)> {
