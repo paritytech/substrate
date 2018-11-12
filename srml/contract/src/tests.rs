@@ -142,6 +142,7 @@ impl ExtBuilder {
 				gas_price: self.gas_price,
 				max_depth: 100,
 				block_gas_limit: self.block_gas_limit,
+				current_schedule: Default::default(),
 			}.build_storage()
 			.unwrap().0,
 		);
