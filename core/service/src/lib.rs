@@ -381,7 +381,7 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 #[derive(Clone)]
 struct RpcConfig {
 	chain_name: String,
-	properties: serde_json::Value,
+	properties: serde_json::map::Map<String, json::Value>,
 	impl_name: &'static str,
 	impl_version: &'static str,
 }
@@ -400,10 +400,7 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 	}
 
 	fn system_properties(&self) -> substrate_rpc::system::error::Result<json::map::Map<String, json::Value>> {
-		match self.properties {
-			serde_json::Value::Object(ref map) => Ok(map.clone()),
-			ref v => bail!(substrate_rpc::system::error::ErrorKind::InvalidPropertiesConfig(v.clone())),
-		}
+		Ok(self.properties.clone())
 	}
 }
 
