@@ -61,7 +61,7 @@ use runtime_support::dispatch::Result;
 use runtime_support::storage::StorageValue;
 use runtime_support::storage::unhashed::StorageVec;
 use primitives::traits::{
-	MaybeSerializeDebug, CurrentHeight, Digest, Convert,
+	MaybeSerializeDebug, CurrentHeight, Convert,
 };
 use substrate_primitives::AuthorityId;
 use system::ensure_signed;
@@ -246,7 +246,7 @@ impl<T: Trait> Module<T> {
 
 impl<T: Trait> Module<T>
 where
-	AuthorityId: std::convert::From<<T as Trait>::SessionKey>
+	AuthorityId: core::convert::From<<T as Trait>::SessionKey>
 {
 	/// See if the digest contains any scheduled change.
 	pub fn scrape_digest_change(log: &Log<T>)

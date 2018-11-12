@@ -17,6 +17,10 @@
 //! Primitives for GRANDPA integration, suitable for WASM compilation.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(not(feature = "std"), feature(alloc))]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
 
 extern crate substrate_primitives;
 extern crate sr_primitives;
@@ -30,6 +34,9 @@ extern crate sr_api;
 
 use substrate_primitives::AuthorityId;
 use sr_primitives::traits::{Block as BlockT, DigestFor, NumberFor};
+
+#[cfg(not(feature = "std"))]
+use alloc::vec::Vec;
 
 /// A scheduled change of authority set.
 #[cfg_attr(feature = "std", derive(Debug, PartialEq))]
