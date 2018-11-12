@@ -17,7 +17,7 @@ RUN cargo build --$PROFILE
 
 # ===== SECOND STAGE ======
 
-FROM alpine:3.8
+FROM alpine:edge
 LABEL maintainer="chevdor@gmail.com"
 LABEL description="This is the 2nd stage: a very small image where we copy the Substrate binary."
 ARG PROFILE=release
