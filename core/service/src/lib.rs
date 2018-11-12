@@ -78,7 +78,7 @@ use codec::{Encode, Decode};
 
 pub use self::error::{ErrorKind, Error};
 pub use config::{Configuration, Roles, PruningMode};
-pub use chain_spec::ChainSpec;
+pub use chain_spec::{ChainSpec, Properties};
 pub use transaction_pool::txpool::{self, Pool as TransactionPool, Options as TransactionPoolOptions, ChainApi, IntoPoolError};
 pub use client::ExecutionStrategy;
 
@@ -235,6 +235,7 @@ impl<Components> Service<Components>
 		// RPC
 		let rpc_config = RpcConfig {
 			chain_name: config.chain_spec.name().to_string(),
+			properties: config.chain_spec.properties().clone(),
 			impl_name: config.impl_name,
 			impl_version: config.impl_version,
 		};
@@ -378,6 +379,7 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 #[derive(Clone)]
 struct RpcConfig {
 	chain_name: String,
+	properties: Properties,
 	impl_name: &'static str,
 	impl_version: &'static str,
 }
@@ -393,6 +395,10 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok(self.chain_name.clone())
+	}
+
+	fn system_properties(&self) -> substrate_rpc::system::error::Result<Properties> {
+		Ok(self.properties.clone())
 	}
 }
 
