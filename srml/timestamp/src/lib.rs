@@ -39,10 +39,6 @@ extern crate sr_std as rstd;
 #[macro_use]
 extern crate srml_support as runtime_support;
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 #[cfg(test)]
 extern crate substrate_primitives;
 #[cfg(test)]

@@ -69,7 +69,7 @@ use parking_lot::{Mutex, RwLock};
 use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
-use runtime_primitives::generic::BlockId;
+use runtime_primitives::generic::{BlockId, SignedBlock};
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -124,8 +124,7 @@ impl<Components> Service<Components>
 	where
 		Components: components::Components,
 		<Components as components::Components>::Executor: std::clone::Clone,
-		txpool::ExHash<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
-		txpool::ExtrinsicFor<Components::TransactionPoolApi>: serde::de::DeserializeOwned + serde::Serialize,
+		for<'de> SignedBlock<ComponentBlock<Components>>: ::serde::Deserialize<'de>,
 {
 	/// Creates a new service.
 	pub fn new(
@@ -247,7 +246,7 @@ impl<Components> Service<Components>
 				let chain = rpc::apis::chain::Chain::new(client.clone(), subscriptions.clone());
 				let state = rpc::apis::state::State::new(client.clone(), subscriptions.clone());
 				let author = rpc::apis::author::Author::new(client.clone(), transaction_pool.clone(), subscriptions.clone());
-				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _, _>(
+				rpc::rpc_handler::<ComponentBlock<Components>, ComponentExHash<Components>, _, _, _, _>(
 					state,
 					chain,
 					author,
