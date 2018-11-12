@@ -23,7 +23,7 @@ use parking_lot::{Mutex, RwLock};
 use primitives::AuthorityId;
 use runtime_primitives::{
 	Justification,
-	generic::{BlockId, SignedBlock, Block as RuntimeBlock},
+	generic::{BlockId, SignedBlock},
 	transaction_validity::{TransactionValidity, TransactionTag},
 };
 use consensus::{ImportBlock, ImportResult, BlockOrigin};
@@ -775,11 +775,11 @@ impl<B, E, Block> Client<B, E, Block> where
 
 	/// Get full block by id.
 	pub fn block(&self, id: &BlockId<Block>)
-		-> error::Result<Option<SignedBlock<Block::Header, Block::Extrinsic>>>
+		-> error::Result<Option<SignedBlock<Block>>>
 	{
 		Ok(match (self.header(id)?, self.body(id)?, self.justification(id)?) {
 			(Some(header), Some(extrinsics), Some(justification)) =>
-				Some(SignedBlock { block: RuntimeBlock { header, extrinsics }, justification }),
+				Some(SignedBlock { block: Block::new(header, extrinsics), justification }),
 			_ => None,
 		})
 	}

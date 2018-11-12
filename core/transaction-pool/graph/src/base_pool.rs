@@ -23,6 +23,7 @@ use std::{
 	sync::Arc,
 };
 
+use serde::Serialize;
 use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
 	TransactionTag as Tag,
@@ -79,7 +80,7 @@ pub struct PruneStatus<Hash, Ex> {
 
 /// Immutable transaction
 #[cfg_attr(test, derive(Clone))]
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Transaction<Hash, Extrinsic> {
 	/// Raw extrinsic representing that transaction.
 	pub data: Extrinsic,
@@ -120,7 +121,7 @@ impl<Hash: hash::Hash + Eq, Ex> Default for BasePool<Hash, Ex> {
 	}
 }
 
-impl<Hash: hash::Hash + Member, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
+impl<Hash: hash::Hash + Member + Serialize, Ex: ::std::fmt::Debug> BasePool<Hash, Ex> {
 	/// Imports transaction to the pool.
 	///
 	/// The pool consists of two parts: Future and Ready.

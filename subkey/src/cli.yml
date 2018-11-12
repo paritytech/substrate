@@ -3,7 +3,7 @@ author: "Parity Team <admin@parity.io>"
 about: A substrate key utility
 subcommands:
   - restore:
-      about: Gets a SS58 public key from the provided seed phrase
+      about: Gets a public key and a SS58 address from the provided seed phrase
       args:
         - seed:
             index: 1

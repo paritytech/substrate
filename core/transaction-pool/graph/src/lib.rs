@@ -33,6 +33,7 @@ extern crate futures;
 extern crate parking_lot;
 extern crate sr_primitives;
 
+extern crate serde;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate log;
 #[macro_use] extern crate serde_derive;

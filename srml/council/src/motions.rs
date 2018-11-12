@@ -20,7 +20,7 @@ use rstd::prelude::*;
 use rstd::result;
 use codec::Compact;
 use substrate_primitives::u32_trait::Value as U32;
-use primitives::traits::{Hash, EnsureOrigin, MaybeSerializeDebug};
+use primitives::traits::{Hash, EnsureOrigin};
 use srml_support::dispatch::{Result, Dispatchable, Parameter};
 use srml_support::{StorageValue, StorageMap};
 use super::{Trait as CouncilTrait, Module as Council};
@@ -29,12 +29,12 @@ use system::{self, ensure_signed};
 /// Simple index type for proposal counting.
 pub type ProposalIndex = u32;
 
-pub trait Trait: CouncilTrait + MaybeSerializeDebug {
+pub trait Trait: CouncilTrait {
 	/// The outer origin type.
 	type Origin: From<Origin>;
 
 	/// The outer call dispatch type.
-	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait>::Origin> + MaybeSerializeDebug;
+	type Proposal: Parameter + Dispatchable<Origin=<Self as Trait>::Origin>;
 
 	/// The outer event type.
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
@@ -66,7 +66,6 @@ decl_event!(
 );
 
 decl_module! {
-	#[cfg_attr(feature = "std", serde(bound(deserialize = "<T as Trait>::Proposal: ::serde::de::DeserializeOwned")))]
 	pub struct Module<T: Trait> for enum Call where origin: <T as system::Trait>::Origin {
 		fn deposit_event() = default;
 		fn propose(origin, threshold: Compact<u32>, proposal: Box<<T as Trait>::Proposal>) -> Result {

@@ -18,8 +18,7 @@
 //! TODO: Missing doc
 // end::description[]
 
-#![recursion_limit="128"]
-#![type_length_limit = "268435456"]
+#![recursion_limit = "128"]
 
 extern crate parking_lot;
 extern crate fnv;
@@ -58,7 +57,8 @@ pub use custom_proto::RegisteredProtocol;
 pub use error::{Error, ErrorKind, DisconnectReason};
 pub use libp2p::{Multiaddr, multiaddr::Protocol, PeerId};
 pub use service_task::{start_service, Service, ServiceEvent};
-pub use traits::*;	// TODO: expand to actual items
+pub use traits::{NetworkConfiguration, NodeIndex, NodeId, NonReservedPeerMode};
+pub use traits::{ProtocolId, Secret, Severity};
 
 /// Check if node url is valid
 pub fn validate_node_url(url: &str) -> Result<(), Error> {

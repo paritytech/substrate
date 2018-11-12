@@ -21,6 +21,7 @@ use std::{
 	sync::Arc,
 };
 
+use serde::Serialize;
 use parking_lot::RwLock;
 use sr_primitives::traits::Member;
 use sr_primitives::transaction_validity::{
@@ -120,7 +121,7 @@ impl<Hash: hash::Hash + Eq, Ex> Default for ReadyTransactions<Hash, Ex> {
 	}
 }
 
-impl<Hash: hash::Hash + Member, Ex> ReadyTransactions<Hash, Ex> {
+impl<Hash: hash::Hash + Member + Serialize, Ex> ReadyTransactions<Hash, Ex> {
 	/// Borrows a map of tags that are provided by transactions in this queue.
 	pub fn provided_tags(&self) -> &HashMap<Tag, Hash> {
 		&self.provided_tags

@@ -58,10 +58,10 @@ fn main() {
 			seed[..len].copy_from_slice(&raw_seed[..len]);
 			let pair = Pair::from_seed(&seed);
 
-			println!("Seed 0x{} is account:\n    SS58: {}\n    Hex: 0x{}",
+			println!("Seed 0x{} is account:\n    Public key (hex): 0x{}\n    Address (SS58): {}",
 				HexDisplay::from(&seed),
-				pair.public().to_ss58check(),
-				HexDisplay::from(&pair.public().0)
+				HexDisplay::from(&pair.public().0),
+				pair.public().to_ss58check()
 			);
 		},
 		_ => print_usage(&matches),
