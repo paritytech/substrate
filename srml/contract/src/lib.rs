@@ -52,10 +52,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-#[cfg(feature = "std")]
-#[macro_use]
-extern crate serde_derive;
-
 #[macro_use]
 extern crate parity_codec_derive;
 

@@ -18,7 +18,6 @@
 
 use std::{self, io::{Read, Write}};
 use futures::Future;
-use serde_json;
 
 use runtime_primitives::generic::{SignedBlock, BlockId};
 use runtime_primitives::traits::{As, Block, Header};
@@ -34,7 +33,10 @@ use chain_spec::ChainSpec;
 
 /// Export a range of blocks to a binary stream.
 pub fn export_blocks<F, E, W>(config: FactoryFullConfiguration<F>, exit: E, mut output: W, from: FactoryBlockNumber<F>, to: Option<FactoryBlockNumber<F>>, json: bool) -> error::Result<()>
-	where F: ServiceFactory, E: Future<Item=(),Error=()> + Send + 'static, W: Write,
+	where
+	F: ServiceFactory,
+	E: Future<Item=(),Error=()> + Send + 'static,
+	W: Write,
 {
 	let client = new_client::<F>(&config)?;
 	let mut block = from;
@@ -104,14 +106,14 @@ pub fn import_blocks<F, E, R>(config: FactoryFullConfiguration<F>, exit: E, mut 
 		if exit_recv.try_recv().is_ok() {
 			break;
 		}
-		if let Some(signed) = SignedBlock::<<F::Block as Block>::Header, <F::Block as Block>::Extrinsic>::decode(&mut input) {
-			let header = signed.block.header;
+		if let Some(signed) = SignedBlock::<F::Block>::decode(&mut input) {
+			let (header, extrinsics) = signed.block.deconstruct();
 			let hash = header.hash();
 			let block  = message::BlockData::<F::Block> {
 				hash: hash,
 				justification: Some(signed.justification),
 				header: Some(header),
-				body: Some(signed.block.extrinsics),
+				body: Some(extrinsics),
 				receipt: None,
 				message_queue: None
 			};
