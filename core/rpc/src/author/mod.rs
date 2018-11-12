@@ -19,13 +19,12 @@
 use std::sync::Arc;
 
 use client::{self, Client};
-use codec::Decode;
+use codec::{Encode, Decode};
 use transaction_pool::{
 	txpool::{
 		ChainApi as PoolChainApi,
 		BlockHash,
 		ExHash,
-		ExtrinsicFor,
 		IntoPoolError,
 		Pool,
 		watcher::Status,
@@ -47,19 +46,16 @@ use self::error::Result;
 
 build_rpc_trait! {
 	/// Substrate authoring RPC API
-	pub trait AuthorApi<Hash, BlockHash, Extrinsic, PendingExtrinsics> {
+	pub trait AuthorApi<Hash, BlockHash> {
 		type Metadata;
 
-		/// Submit extrinsic for inclusion in block.
-		#[rpc(name = "author_submitRichExtrinsic")]
-		fn submit_rich_extrinsic(&self, Extrinsic) -> Result<Hash>;
 		/// Submit hex-encoded extrinsic for inclusion in block.
 		#[rpc(name = "author_submitExtrinsic")]
 		fn submit_extrinsic(&self, Bytes) -> Result<Hash>;
 
 		/// Returns all pending extrinsics, potentially grouped by sender.
 		#[rpc(name = "author_pendingExtrinsics")]
-		fn pending_extrinsics(&self) -> Result<PendingExtrinsics>;
+		fn pending_extrinsics(&self) -> Result<Vec<Bytes>>;
 
 		#[pubsub(name = "author_extrinsicUpdate")] {
 			/// Submit an extrinsic to watch.
@@ -103,7 +99,7 @@ impl<B, E, P> Author<B, E, P> where
 	}
 }
 
-impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<ExtrinsicFor<P>>> for Author<B, E, P> where
+impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>> for Author<B, E, P> where
 	B: client::backend::Backend<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	E: client::CallExecutor<<P as PoolChainApi>::Block, Blake2Hasher> + Send + Sync + 'static,
 	P: PoolChainApi + Sync + Send + 'static,
@@ -112,12 +108,8 @@ impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<ExtrinsicF
 {
 	type Metadata = ::metadata::Metadata;
 
-	fn submit_extrinsic(&self, xt: Bytes) -> Result<ExHash<P>> {
-		let dxt = Decode::decode(&mut &xt[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
-		self.submit_rich_extrinsic(dxt)
-	}
-
-	fn submit_rich_extrinsic(&self, xt: <<P as PoolChainApi>::Block as traits::Block>::Extrinsic) -> Result<ExHash<P>> {
+	fn submit_extrinsic(&self, ext: Bytes) -> Result<ExHash<P>> {
+		let xt = Decode::decode(&mut &ext[..]).ok_or(error::Error::from(error::ErrorKind::BadFormat))?;
 		let best_block_hash = self.client.info()?.chain.best_hash;
 		self.pool
 			.submit_one(&generic::BlockId::hash(best_block_hash), xt)
@@ -127,8 +119,8 @@ impl<B, E, P> AuthorApi<ExHash<P>, BlockHash<P>, ExtrinsicFor<P>, Vec<ExtrinsicF
 			)
 	}
 
-	fn pending_extrinsics(&self) -> Result<Vec<ExtrinsicFor<P>>> {
-		Ok(self.pool.ready().map(|tx| tx.data.clone()).collect())
+	fn pending_extrinsics(&self) -> Result<Vec<Bytes>> {
+		Ok(self.pool.ready().map(|tx| tx.data.encode().into()).collect())
 	}
 
 	fn watch_extrinsic(&self, _metadata: Self::Metadata, subscriber: pubsub::Subscriber<Status<ExHash<P>, BlockHash<P>>>, xt: Bytes) {

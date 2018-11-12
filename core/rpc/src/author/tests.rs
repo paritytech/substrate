@@ -71,11 +71,11 @@ fn submit_rich_transaction_should_not_cause_error() {
 	let h: H256 = hex!("fccc48291473c53746cd267cf848449edd7711ee6511fba96919d5f9f4859e4f").into();
 
 	assert_matches!(
-		AuthorApi::submit_rich_extrinsic(&p, uxt(Keyring::Alice, 0)),
+		AuthorApi::submit_extrinsic(&p, uxt(Keyring::Alice, 0).encode().into()),
 		Ok(h2) if h == h2
 	);
 	assert!(
-		AuthorApi::submit_rich_extrinsic(&p, uxt(Keyring::Alice, 0)).is_err()
+		AuthorApi::submit_extrinsic(&p, uxt(Keyring::Alice, 0).encode().into()).is_err()
 	);
 }
 
@@ -108,7 +108,7 @@ fn should_watch_extrinsic() {
 		let signature = Keyring::from_raw_public(tx.from.to_fixed_bytes()).unwrap().sign(&tx.encode()).into();
 		Extrinsic { transfer: tx, signature }
 	};
-	AuthorApi::submit_rich_extrinsic(&p, replacement).unwrap();
+	AuthorApi::submit_extrinsic(&p, replacement.encode().into()).unwrap();
 	let (res, data) = runtime.block_on(data.into_future()).unwrap();
 	assert_eq!(
 		res,
@@ -131,9 +131,9 @@ fn should_return_pending_extrinsics() {
 		subscriptions: Subscriptions::new(runtime.executor()),
 	};
 	let ex = uxt(Keyring::Alice, 0);
-	AuthorApi::submit_rich_extrinsic(&p, ex.clone()).unwrap();
+	AuthorApi::submit_extrinsic(&p, ex.encode().into()).unwrap();
  	assert_matches!(
 		p.pending_extrinsics(),
-		Ok(ref expected) if expected == &vec![ex]
+		Ok(ref expected) if *expected == vec![Bytes(ex.encode())]
 	);
 }
