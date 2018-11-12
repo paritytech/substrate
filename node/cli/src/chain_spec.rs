@@ -124,6 +124,7 @@ fn staging_testnet_config_genesis() -> GenesisConfig {
 			gas_price: 1 * MILLICENTS,
 			max_depth: 1024,
 			block_gas_limit: 10_000_000,
+			current_schedule: Default::default(),
 		}),
 		upgrade_key: Some(UpgradeKeyConfig {
 			key: endowed_accounts[0].clone(),
@@ -241,6 +242,7 @@ pub fn testnet_genesis(
 			gas_price: 1,
 			max_depth: 1024,
 			block_gas_limit: 10_000_000,
+			current_schedule: Default::default(),
 		}),
 		upgrade_key: Some(UpgradeKeyConfig {
 			key: upgrade_key,

@@ -16,7 +16,7 @@
 
 //! Environment definition of the wasm smart-contract runtime.
 
-use super::{BalanceOf, Config, CreateReceipt, Error, Ext};
+use super::{BalanceOf, Schedule, CreateReceipt, Error, Ext};
 use rstd::prelude::*;
 use codec::{Decode, Encode};
 use gas::{GasMeter, GasMeterResult};
@@ -41,7 +41,7 @@ pub(crate) struct Runtime<'a, 'data, E: Ext + 'a> {
 	input_data: &'data [u8],
 	output_data: &'data mut Vec<u8>,
 	scratch_buf: Vec<u8>,
-	config: &'a Config<E::T>,
+	schedule: &'a Schedule<<E::T as Trait>::Gas>,
 	memory: sandbox::Memory,
 	gas_meter: &'a mut GasMeter<E::T>,
 	special_trap: Option<SpecialTrap>,
@@ -51,7 +51,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 		ext: &'a mut E,
 		input_data: &'data [u8],
 		output_data: &'data mut Vec<u8>,
-		config: &'a Config<E::T>,
+		schedule: &'a Schedule<<E::T as Trait>::Gas>,
 		memory: sandbox::Memory,
 		gas_meter: &'a mut GasMeter<E::T>,
 	) -> Self {
@@ -60,7 +60,7 @@ impl<'a, 'data, E: Ext + 'a> Runtime<'a, 'data, E> {
 			input_data,
 			output_data,
 			scratch_buf: Vec::new(),
-			config,
+			schedule,
 			memory,
 			gas_meter,
 			special_trap: None,
@@ -117,7 +117,7 @@ fn read_sandbox_memory<E: Ext>(
 	ptr: u32,
 	len: u32,
 ) -> Result<Vec<u8>, sandbox::HostError> {
-	let price = (ctx.config.sandbox_data_read_cost)
+	let price = (ctx.schedule.sandbox_data_read_cost)
 		.checked_mul(&<GasOf<E> as As<u32>>::sa(len))
 		.ok_or(sandbox::HostError)?;
 	charge_gas(ctx.gas_meter, price)?;
@@ -169,7 +169,7 @@ define_env!(init_env, <E: Ext>,
 	//
 	// - amount: How much gas is used.
 	gas(ctx, amount: u32) => {
-		let amount = <<<E as Ext>::T as Trait>::Gas as As<u32>>::sa(amount);
+		let amount = <<E::T as Trait>::Gas as As<u32>>::sa(amount);
 		charge_gas(&mut ctx.gas_meter, amount)?;
 
 		Ok(())
@@ -257,7 +257,7 @@ define_env!(init_env, <E: Ext>,
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
-			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
+			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
 		};
 		let ext = &mut ctx.ext;
 		let scratch_buf = &mut ctx.scratch_buf;
@@ -316,7 +316,7 @@ define_env!(init_env, <E: Ext>,
 		let nested_gas_limit = if gas == 0 {
 			ctx.gas_meter.gas_left()
 		} else {
-			<<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(gas)
+			<<E::T as Trait>::Gas as As<u64>>::sa(gas)
 		};
 		let ext = &mut ctx.ext;
 		let create_outcome = ctx.gas_meter.with_nested(nested_gas_limit, |nested_meter| {
@@ -339,8 +339,8 @@ define_env!(init_env, <E: Ext>,
 	// Save a data buffer as a result of the execution, terminate the execution and return a
 	// successful result to the caller.
 	ext_return(ctx, data_ptr: u32, data_len: u32) => {
-		let data_len_in_gas = <<<E as Ext>::T as Trait>::Gas as As<u64>>::sa(data_len as u64);
-		let price = (ctx.config.return_data_per_byte_cost)
+		let data_len_in_gas = <<E::T as Trait>::Gas as As<u64>>::sa(data_len as u64);
+		let price = (ctx.schedule.return_data_per_byte_cost)
 			.checked_mul(&data_len_in_gas)
 			.ok_or(sandbox::HostError)?;
 
@@ -382,7 +382,7 @@ define_env!(init_env, <E: Ext>,
 
 		// Finally, perform the write.
 		write_sandbox_memory(
-			ctx.config.sandbox_data_write_cost,
+			ctx.schedule.sandbox_data_write_cost,
 			ctx.gas_meter,
 			&ctx.memory,
 			dest_ptr,
@@ -414,7 +414,7 @@ define_env!(init_env, <E: Ext>,
 
 		// Finally, perform the write.
 		write_sandbox_memory(
-			ctx.config.sandbox_data_write_cost,
+			ctx.schedule.sandbox_data_write_cost,
 			ctx.gas_meter,
 			&ctx.memory,
 			dest_ptr,
