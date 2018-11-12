@@ -88,7 +88,7 @@ struct ChainSpecFile {
 	pub telemetry_url: Option<String>,
 	pub protocol_id: Option<String>,
 	pub consensus_engine: Option<String>,
-	pub properties: Option<String>,
+	pub properties: Option<json::Value>,
 }
 
 /// A configuration of a chain. Can be used to build a genesis block.
@@ -131,8 +131,9 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		self.spec.consensus_engine.as_ref().map(String::as_str)
 	}
 
-	pub fn properties(&self) -> Option<&str> {
-		self.spec.properties.as_ref().map(String::as_str)
+	pub fn properties(&self) -> &json::Value {
+		// Return an empty JSON object if 'properties' not defined in config
+		self.spec.properties.as_ref().unwrap_or(&json::Value::Object(json::map::Map::new()))
 	}
 
 	/// Parse json content into a `ChainSpec`
@@ -163,7 +164,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 		telemetry_url: Option<&str>,
 		protocol_id: Option<&str>,
 		consensus_engine: Option<&str>,
-		properties: Option<&str>,
+		properties: Option<serde_json::Value>,
 	) -> Self
 	{
 		let spec = ChainSpecFile {
@@ -173,7 +174,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			telemetry_url: telemetry_url.map(str::to_owned),
 			protocol_id: protocol_id.map(str::to_owned),
 			consensus_engine: consensus_engine.map(str::to_owned),
-			properties: properties.map(str::to_owned),
+			properties: properties,
 		};
 		ChainSpec {
 			spec,

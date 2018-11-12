@@ -27,13 +27,25 @@ error_chain! {
 			description("not yet implemented"),
 			display("Method Not Implemented"),
 		}
+		/// Invalid system properties config
+		InvalidPropertiesConfig(v: serde_json::Value) {
+			description("invalid system properties config, expected JSON object"),
+			display("Invalid system properties config '{:?}', expected JSON object", v),
+		}
 	}
 }
+
+const ERROR: i64 = 4000;
 
 impl From<Error> for rpc::Error {
 	fn from(e: Error) -> Self {
 		match e {
 			Error(ErrorKind::Unimplemented, _) => errors::unimplemented(),
+			Error(ErrorKind::InvalidPropertiesConfig(v), _) => rpc::Error {
+				code: rpc::ErrorCode::ServerError(ERROR + 1),
+				message: format!("Invalid system properties config '{:?}', expected JSON object.", v),
+				data: None,
+			},
 			e => errors::internal(e),
 		}
 	}

@@ -70,6 +70,7 @@ use keystore::Store as Keystore;
 use client::BlockchainEvents;
 use runtime_primitives::traits::{Header, As};
 use runtime_primitives::generic::BlockId;
+use serde_json as json;
 use exit_future::Signal;
 #[doc(hidden)]
 pub use tokio::runtime::TaskExecutor;
@@ -236,6 +237,7 @@ impl<Components> Service<Components>
 		// RPC
 		let rpc_config = RpcConfig {
 			chain_name: config.chain_spec.name().to_string(),
+			properties: config.chain_spec.properties().clone(),
 			impl_name: config.impl_name,
 			impl_version: config.impl_version,
 		};
@@ -379,6 +381,7 @@ fn maybe_start_server<T, F>(address: Option<SocketAddr>, start: F) -> Result<Opt
 #[derive(Clone)]
 struct RpcConfig {
 	chain_name: String,
+	properties: serde_json::Value,
 	impl_name: &'static str,
 	impl_version: &'static str,
 }
@@ -394,6 +397,13 @@ impl substrate_rpc::system::SystemApi for RpcConfig {
 
 	fn system_chain(&self) -> substrate_rpc::system::error::Result<String> {
 		Ok(self.chain_name.clone())
+	}
+
+	fn system_properties(&self) -> substrate_rpc::system::error::Result<json::map::Map<String, json::Value>> {
+		match self.properties {
+			serde_json::Value::Object(ref map) => Ok(map.clone()),
+			ref v => bail!(substrate_rpc::system::error::ErrorKind::InvalidPropertiesConfig(v.clone())),
+		}
 	}
 }
 
