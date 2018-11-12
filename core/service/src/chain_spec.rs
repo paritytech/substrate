@@ -177,7 +177,7 @@ impl<G: RuntimeGenesis> ChainSpec<G> {
 			telemetry_url: telemetry_url.map(str::to_owned),
 			protocol_id: protocol_id.map(str::to_owned),
 			consensus_engine: consensus_engine.map(str::to_owned),
-			properties: properties,
+			properties,
 		};
 		ChainSpec {
 			spec,
