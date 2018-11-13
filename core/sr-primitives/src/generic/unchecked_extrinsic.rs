@@ -21,7 +21,7 @@ use std::fmt;
 
 use rstd::prelude::*;
 use codec::{Decode, Encode, Codec, Input, HasCompact};
-use traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup};
+use traits::{self, Member, SimpleArithmetic, MaybeDisplay, Lookup, Extrinsic};
 use super::CheckedExtrinsic;
 
 #[derive(PartialEq, Eq, Clone, Encode, Decode)]
@@ -73,11 +73,6 @@ where
 			function,
 		}
 	}
-
-	/// `true` if there is a signature.
-	pub fn is_signed(&self) -> bool {
-		self.signature.is_some()
-	}
 }
 
 impl<Address, Index, Signature, Call, AccountId, Context> traits::Checkable<Context>
@@ -110,6 +105,17 @@ where
 				function: self.function,
 			},
 		})
+	}
+}
+
+impl<
+	Address: Codec,
+	Index: HasCompact + Codec,
+	Signature: Codec,
+	Call,
+> Extrinsic for UncheckedExtrinsic<Address, Index, Call, Signature> {
+	fn is_signed(&self) -> Option<bool> {
+		Some(self.signature.is_some())
 	}
 }
 
