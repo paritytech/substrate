@@ -16,6 +16,8 @@
 
 //! Configuration for the networking layer of Substrate.
 
+pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration};
+
 use codec;
 
 /// Configuration for the Substrate-specific part of the networking layer.

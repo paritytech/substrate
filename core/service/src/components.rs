@@ -176,7 +176,7 @@ pub trait CreateNetworkParams<C: Components> {
 	fn create_network_params<S>(
 		client: Arc<Client<C::Backend, C::Executor, ComponentBlock<C>, C::RuntimeApi>>,
 		roles: network::config::Roles,
-		network_config: network::NetworkConfiguration,
+		network_config: network::config::NetworkConfiguration,
 		on_demand: Option<Arc<OnDemand<FactoryBlock<C::Factory>, NetworkService<C::Factory>>>>,
 		transaction_pool_adapter: TransactionPoolAdapter<C>,
 		specialization: S,
@@ -189,7 +189,7 @@ impl<T: Components> CreateNetworkParams<Self> for T where
 	fn create_network_params<S>(
 		client: Arc<Client<T::Backend, T::Executor, ComponentBlock<T>, T::RuntimeApi>>,
 		roles: network::config::Roles,
-		network_config: network::NetworkConfiguration,
+		network_config: network::config::NetworkConfiguration,
 		on_demand: Option<Arc<OnDemand<FactoryBlock<T::Factory>, NetworkService<T::Factory>>>>,
 		transaction_pool_adapter: TransactionPoolAdapter<T>,
 		specialization: S,
