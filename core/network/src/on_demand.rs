@@ -512,9 +512,10 @@ pub mod tests {
 	use client::{self, error::{ErrorKind as ClientErrorKind, Result as ClientResult}};
 	use client::light::fetcher::{Fetcher, FetchChecker, RemoteHeaderRequest,
 		RemoteCallRequest, RemoteReadRequest, RemoteChangesRequest};
+	use config::Roles;
 	use message;
 	use network_libp2p::NodeIndex;
-	use service::{Roles, ExecuteInContext};
+	use service::ExecuteInContext;
 	use test::TestIo;
 	use super::{REQUEST_TIMEOUT, OnDemand, OnDemandService};
 	use test_client::runtime::{changes_trie_config, Block, Header};

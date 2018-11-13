@@ -42,8 +42,6 @@ const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
 pub trait SyncProvider<B: BlockT>: Send + Sync {
 	/// Get sync status
 	fn status(&self) -> ProtocolStatus<B>;
-	/// Get this node id if available.
-	fn node_id(&self) -> Option<String>;
 }
 
 pub trait ExHashT: ::std::hash::Hash + Eq + ::std::fmt::Debug + Clone + Send + Sync + 'static {}
@@ -163,19 +161,6 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> SyncProvider<B> for 
 	fn status(&self) -> ProtocolStatus<B> {
 		self.handler.status()
 	}
-
-	fn node_id(&self) -> Option<String> {
-		let network = self.network.lock();
-		let ret = network
-			.listeners()
-			.next()
-			.map(|addr| {
-				let mut addr = addr.clone();
-				addr.append(Libp2pProtocol::P2p(network.peer_id().clone().into()));
-				addr.to_string()
-			});
-		ret
-	}
 }
 
 /// Trait for managing network
@@ -188,6 +173,8 @@ pub trait ManageNetwork: Send + Sync {
 	fn remove_reserved_peer(&self, peer: PeerId);
 	/// Add reserved peer
 	fn add_reserved_peer(&self, peer: String) -> Result<(), String>;
+	/// Returns a user-friendly identifier of our node.
+	fn node_id(&self) -> Option<String>;
 }
 
 impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ManageNetwork for Service<B, S, H> {
@@ -219,6 +206,19 @@ impl<B: BlockT + 'static, S: Specialization<B>, H: ExHashT> ManageNetwork for Se
 		let (addr, peer_id) = parse_str_addr(&peer).map_err(|e| format!("{:?}", e))?;
 		self.network.lock().add_reserved_peer(addr, peer_id);
 		Ok(())
+	}
+
+	fn node_id(&self) -> Option<String> {
+		let network = self.network.lock();
+		let ret = network
+			.listeners()
+			.next()
+			.map(|addr| {
+				let mut addr = addr.clone();
+				addr.append(Libp2pProtocol::P2p(network.peer_id().clone().into()));
+				addr.to_string()
+			});
+		ret
 	}
 }
 

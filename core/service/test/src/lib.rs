@@ -47,7 +47,8 @@ use service::{
 	Roles,
 	FactoryExtrinsic,
 };
-use network::{NetworkConfiguration, NonReservedPeerMode, Protocol, SyncProvider, ManageNetwork};
+use network::{Protocol, SyncProvider, ManageNetwork};
+use network::config::{NetworkConfiguration, NonReservedPeerMode};
 use sr_primitives::traits::As;
 use sr_primitives::generic::BlockId;
 use consensus::{ImportBlock, BlockImport};
