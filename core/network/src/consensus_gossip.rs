@@ -26,7 +26,7 @@ use runtime_primitives::traits::{Block as BlockT, Header as HeaderT, Hash, HashF
 use runtime_primitives::generic::BlockId;
 use message::generic::{Message, ConsensusMessage};
 use protocol::Context;
-use service::Roles;
+use config::Roles;
 use specialization::Specialization;
 use StatusMessage;
 use generic_message;

@@ -14,9 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Substrate.  If not, see <http://www.gnu.org/licenses/>.
 
-pub use service::Roles;
+use codec;
 
-/// Protocol configuration
+/// Configuration for the Substrate-specific part of the networking layer.
 #[derive(Clone)]
 pub struct ProtocolConfig {
 	/// Assigned roles.
@@ -28,5 +28,31 @@ impl Default for ProtocolConfig {
 		ProtocolConfig {
 			roles: Roles::FULL,
 		}
+	}
+}
+
+bitflags! {
+	/// Bitmask of the roles that a node fulfills.
+	pub struct Roles: u8 {
+		/// No network.
+		const NONE = 0b00000000;
+		/// Full node, does not participate in consensus.
+		const FULL = 0b00000001;
+		/// Light client node.
+		const LIGHT = 0b00000010;
+		/// Act as an authority
+		const AUTHORITY = 0b00000100;
+	}
+}
+
+impl codec::Encode for Roles {
+	fn encode_to<T: codec::Output>(&self, dest: &mut T) {
+		dest.push_byte(self.bits())
+	}
+}
+
+impl codec::Decode for Roles {
+	fn decode<I: codec::Input>(input: &mut I) -> Option<Self> {
+		Self::from_bits(input.read_byte()?)
 	}
 }

@@ -25,7 +25,7 @@ use network_libp2p::{start_service, Service as NetworkService, ServiceEvent as N
 use network_libp2p::{RegisteredProtocol, parse_str_addr, Protocol as Libp2pProtocol};
 use io::NetSyncIo;
 use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
-use config::{ProtocolConfig};
+use config::ProtocolConfig;
 use error::Error;
 use chain::Client;
 use specialization::Specialization;
@@ -39,32 +39,6 @@ pub type FetchFuture = oneshot::Receiver<Vec<u8>>;
 
 const TICK_TIMEOUT: Duration = Duration::from_millis(1000);
 const PROPAGATE_TIMEOUT: Duration = Duration::from_millis(5000);
-
-bitflags! {
-	/// Node roles bitmask.
-	pub struct Roles: u8 {
-		/// No network.
-		const NONE = 0b00000000;
-		/// Full node, does not participate in consensus.
-		const FULL = 0b00000001;
-		/// Light client node.
-		const LIGHT = 0b00000010;
-		/// Act as an authority
-		const AUTHORITY = 0b00000100;
-	}
-}
-
-impl ::codec::Encode for Roles {
-	fn encode_to<T: ::codec::Output>(&self, dest: &mut T) {
-		dest.push_byte(self.bits())
-	}
-}
-
-impl ::codec::Decode for Roles {
-	fn decode<I: ::codec::Input>(input: &mut I) -> Option<Self> {
-		Self::from_bits(input.read_byte()?)
-	}
-}
 
 /// Sync status
 pub trait SyncProvider<B: BlockT>: Send + Sync {
