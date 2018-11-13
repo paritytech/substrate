@@ -180,7 +180,7 @@ pub trait CreateNetworkParams<C: Components> {
 		on_demand: Option<Arc<OnDemand<FactoryBlock<C::Factory>, NetworkService<C::Factory>>>>,
 		transaction_pool_adapter: TransactionPoolAdapter<C>,
 		specialization: S,
-	) -> network::Params<ComponentBlock<C>, S, ComponentExHash<C>>;
+	) -> network::config::Params<ComponentBlock<C>, S, ComponentExHash<C>>;
 }
 
 impl<T: Components> CreateNetworkParams<Self> for T where
@@ -193,8 +193,8 @@ impl<T: Components> CreateNetworkParams<Self> for T where
 		on_demand: Option<Arc<OnDemand<FactoryBlock<T::Factory>, NetworkService<T::Factory>>>>,
 		transaction_pool_adapter: TransactionPoolAdapter<T>,
 		specialization: S,
-	) -> network::Params<ComponentBlock<T>, S, ComponentExHash<T>> {
-		network::Params {
+	) -> network::config::Params<ComponentBlock<T>, S, ComponentExHash<T>> {
+		network::config::Params {
 			config: network::config::ProtocolConfig { roles },
 			network_config,
 			chain: client,

@@ -18,7 +18,28 @@
 
 pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration};
 
+use chain::Client;
 use codec;
+use on_demand::OnDemandService;
+use runtime_primitives::traits::{Block as BlockT};
+use service::{ExHashT, TransactionPool};
+use std::sync::Arc;
+
+/// Service initialization parameters.
+pub struct Params<B: BlockT, S, H: ExHashT> {
+	/// Configuration.
+	pub config: ProtocolConfig,
+	/// Network layer configuration.
+	pub network_config: NetworkConfiguration,
+	/// Substrate relay chain access point.
+	pub chain: Arc<Client<B>>,
+	/// On-demand service reference.
+	pub on_demand: Option<Arc<OnDemandService<B>>>,
+	/// Transaction pool.
+	pub transaction_pool: Arc<TransactionPool<H, B>>,
+	/// Protocol specialization.
+	pub specialization: S,
+}
 
 /// Configuration for the Substrate-specific part of the networking layer.
 #[derive(Clone)]

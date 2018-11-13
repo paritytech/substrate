@@ -25,11 +25,9 @@ use network_libp2p::{start_service, Service as NetworkService, ServiceEvent as N
 use network_libp2p::{RegisteredProtocol, parse_str_addr, Protocol as Libp2pProtocol};
 use io::NetSyncIo;
 use protocol::{self, Protocol, ProtocolContext, Context, ProtocolStatus};
-use config::ProtocolConfig;
+use config::Params;
 use error::Error;
-use chain::Client;
 use specialization::Specialization;
-use on_demand::OnDemandService;
 use import_queue::ImportQueue;
 use runtime_primitives::traits::{Block as BlockT};
 use tokio::{runtime::Runtime, timer::Interval};
@@ -65,22 +63,6 @@ pub trait TransactionPool<H: ExHashT, B: BlockT>: Send + Sync {
 pub trait ExecuteInContext<B: BlockT>: Send + Sync {
 	/// Execute closure in network context.
 	fn execute_in_context<F: Fn(&mut Context<B>)>(&self, closure: F);
-}
-
-/// Service initialization parameters.
-pub struct Params<B: BlockT, S, H: ExHashT> {
-	/// Configuration.
-	pub config: ProtocolConfig,
-	/// Network layer configuration.
-	pub network_config: NetworkConfiguration,
-	/// Substrate relay chain access point.
-	pub chain: Arc<Client<B>>,
-	/// On-demand service reference.
-	pub on_demand: Option<Arc<OnDemandService<B>>>,
-	/// Transaction pool.
-	pub transaction_pool: Arc<TransactionPool<H, B>>,
-	/// Protocol specialization.
-	pub specialization: S,
 }
 
 /// Substrate network service. Handles network IO and manages connectivity.
