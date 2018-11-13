@@ -20,7 +20,7 @@ use std::net::SocketAddr;
 use transaction_pool;
 use chain_spec::ChainSpec;
 pub use client::ExecutionStrategy;
-pub use network::Roles;
+pub use network::config::Roles;
 pub use network::NetworkConfiguration;
 pub use client_db::PruningMode;
 use runtime_primitives::BuildStorage;

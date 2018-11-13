@@ -51,10 +51,10 @@ mod sync;
 #[macro_use]
 mod protocol;
 mod io;
-mod config;
 mod chain;
 mod blocks;
 mod on_demand;
+pub mod config;
 pub mod import_queue;
 pub mod consensus_gossip;
 pub mod error;
@@ -71,7 +71,6 @@ pub use sync::{Status as SyncStatus, SyncState};
 pub use network_libp2p::{NonReservedPeerMode, NetworkConfiguration, NodeIndex, ProtocolId, Severity, Protocol};
 pub use message::{generic as generic_message, RequestId, Status as StatusMessage};
 pub use error::Error;
-pub use config::{Roles, ProtocolConfig};
 pub use on_demand::{OnDemand, OnDemandService, RemoteResponse};
 #[doc(hidden)]
 pub use runtime_primitives::traits::Block as BlockT;
